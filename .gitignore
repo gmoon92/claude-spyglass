@@ -1,0 +1,46 @@
+/.metadata/
+/.project/
+/.gradle/
+
+!**/src/main/**
+!**/src/test/**
+
+**/target/**
+**/build/**
+**/.gradle/**
+
+### CLAUDE CODE ###
+**/.claude/.tmp/**
+**/settings.local.json
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+#out/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+### report ###
+**/build/report/**
+
+### Compiled binaries ###
+**/bin/
