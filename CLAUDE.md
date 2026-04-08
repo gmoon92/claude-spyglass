@@ -9,7 +9,7 @@
 
 ### 경로 변수
 
-- `PROJECT_ROOT`: ${CLAUDE_PROJECT_ROOT}, 현재 작업 중인 프로젝트의 루트 경로 (환경변수)
+- `PROJECT_ROOT`: ${CLAUDE_PROJECT_DIR}, 현재 작업 중인 프로젝트의 루트 경로 (환경변수)
 - `CLAUDE_DIR`: `<PROJECT_ROOT>/.claude/`
 - `CLAUDE_DOCS_DIR`: `<CLAUDE_DIR>/docs/`
 
