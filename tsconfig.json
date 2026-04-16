@@ -13,6 +13,7 @@
     "sourceMap": true,
     "outDir": "./dist",
     "rootDir": ".",
+    "jsx": "react-jsx",
     "types": ["bun", "node"]
   },
   "include": ["packages/**/*"],
