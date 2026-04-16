@@ -1,0 +1,251 @@
+/**
+ * Analysis Tab Component
+ *
+ * @description TOP 소모 요청, 통계 분석
+ */
+
+import React, { useState } from 'react';
+import { Box, Text, useInput } from 'ink';
+
+/**
+ * 분석 데이터
+ */
+export interface AnalysisData {
+  topRequests: Array<{
+    id: string;
+    type: string;
+    tool_name?: string;
+    tokens_total: number;
+    timestamp: number;
+  }>;
+  typeStats: Array<{
+    type: string;
+    count: number;
+    total_tokens: number;
+  }>;
+  toolStats: Array<{
+    tool_name: string;
+    call_count: number;
+    total_tokens: number;
+  }>;
+  hourlyStats: Array<{
+    hour: number;
+    request_count: number;
+    total_tokens: number;
+  }>;
+}
+
+/**
+ * Analysis Tab props
+ */
+export interface AnalysisTabProps {
+  data?: AnalysisData;
+}
+
+/**
+ * 토큰 형식화
+ */
+function formatTokens(tokens: number): string {
+  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
+  if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}K`;
+  return `${tokens}`;
+}
+
+/**
+ * 타입별 색상
+ */
+function getTypeColor(type: string): string {
+  switch (type) {
+    case 'prompt': return 'cyan';
+    case 'tool_call': return 'yellow';
+    case 'system': return 'gray';
+    default: return 'white';
+  }
+}
+
+/**
+ * Analysis Tab 컴포넌트
+ */
+export function AnalysisTab({ data }: AnalysisTabProps): JSX.Element {
+  const [activeSection, setActiveSection] = useState(0);
+
+  const sections = ['Overview', 'Top Requests', 'By Type', 'By Tool'];
+
+  // 키보드 핸들링
+  useInput((input, key) => {
+    if (key.leftArrow) {
+      setActiveSection(prev => Math.max(0, prev - 1));
+    } else if (key.rightArrow) {
+      setActiveSection(prev => Math.min(sections.length - 1, prev + 1));
+    }
+  });
+
+  if (!data) {
+    return (
+      <Box flexDirection="column" padding={2}>
+        <Text color="gray">No analysis data available.</Text>
+      </Box>
+    );
+  }
+
+  return (
+    <Box flexDirection="column" paddingX={2} paddingY={1}>
+      {/* 섹션 탭 */}
+      <Box marginBottom={1}>
+        {sections.map((section, index) => (
+          <Box key={section} paddingX={2} backgroundColor={index === activeSection ? 'blue' : undefined}>
+            <Text color={index === activeSection ? 'white' : 'gray'}>
+              {section}
+            </Text>
+          </Box>
+        ))}
+      </Box>
+
+      {/* 섹션 컨텐츠 */}
+      <Box flexDirection="column">
+        {activeSection === 0 && <OverviewSection data={data} />}
+        {activeSection === 1 && <TopRequestsSection requests={data.topRequests} />}
+        {activeSection === 2 && <ByTypeSection stats={data.typeStats} />}
+        {activeSection === 3 && <ByToolSection stats={data.toolStats} />}
+      </Box>
+
+      {/* 도움말 */}
+      <Box marginTop={1}>
+        <Text color="gray">←→ Switch Section | q Back</Text>
+      </Box>
+    </Box>
+  );
+}
+
+/**
+ * Overview 섹션
+ */
+function OverviewSection({ data }: { data: AnalysisData }): JSX.Element {
+  const totalRequests = data.typeStats.reduce((sum, s) => sum + s.count, 0);
+  const totalTokens = data.typeStats.reduce((sum, s) => sum + s.total_tokens, 0);
+  const avgTokens = totalRequests > 0 ? Math.round(totalTokens / totalRequests) : 0;
+
+  return (
+    <Box flexDirection="column">
+      <Text bold underline color="cyan">Summary</Text>
+      <Box flexDirection="row" marginY={1}>
+        <Box width="33%">
+          <Text color="gray">Total Requests</Text>
+          <Text bold>{totalRequests}</Text>
+        </Box>
+        <Box width="33%">
+          <Text color="gray">Total Tokens</Text>
+          <Text bold color="yellow">{formatTokens(totalTokens)}</Text>
+        </Box>
+        <Box width="33%">
+          <Text color="gray">Avg Tokens/Req</Text>
+          <Text bold>{formatTokens(avgTokens)}</Text>
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
+/**
+ * TOP Requests 섹션
+ */
+function TopRequestsSection({
+  requests,
+}: {
+  requests: AnalysisData['topRequests'];
+}): JSX.Element {
+  return (
+    <Box flexDirection="column">
+      <Text bold underline color="cyan">Top Token Consumers</Text>
+      <Box marginTop={1}>
+        <Box width="10%"><Text bold>#</Text></Box>
+        <Box width="30%"><Text bold>Type</Text></Box>
+        <Box width="40%"><Text bold>Tool/Model</Text></Box>
+        <Box width="20%" justifyContent="flex-end"><Text bold>Tokens</Text></Box>
+      </Box>
+      {requests.slice(0, 10).map((req, index) => (
+        <Box key={req.id} height={1}>
+          <Box width="10%"><Text color="gray">{index + 1}</Text></Box>
+          <Box width="30%">
+            <Text color={getTypeColor(req.type)}>{req.type}</Text>
+          </Box>
+          <Box width="40%">
+            <Text wrap="truncate">{req.tool_name || '-'}</Text>
+          </Box>
+          <Box width="20%" justifyContent="flex-end">
+            <Text color="yellow">{formatTokens(req.tokens_total)}</Text>
+          </Box>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+/**
+ * By Type 섹션
+ */
+function ByTypeSection({
+  stats,
+}: {
+  stats: AnalysisData['typeStats'];
+}): JSX.Element {
+  const totalTokens = stats.reduce((sum, s) => sum + s.total_tokens, 0);
+
+  return (
+    <Box flexDirection="column">
+      <Text bold underline color="cyan">Requests by Type</Text>
+      <Box marginTop={1}>
+        <Box width="30%"><Text bold>Type</Text></Box>
+        <Box width="20%"><Text bold>Count</Text></Box>
+        <Box width="25%" justifyContent="flex-end"><Text bold>Tokens</Text></Box>
+        <Box width="25%" justifyContent="flex-end"><Text bold>%</Text></Box>
+      </Box>
+      {stats.map(stat => {
+        const percentage = totalTokens > 0 ? (stat.total_tokens / totalTokens) * 100 : 0;
+        return (
+          <Box key={stat.type} height={1}>
+            <Box width="30%">
+              <Text color={getTypeColor(stat.type)}>{stat.type}</Text>
+            </Box>
+            <Box width="20%"><Text>{stat.count}</Text></Box>
+            <Box width="25%" justifyContent="flex-end">
+              <Text color="yellow">{formatTokens(stat.total_tokens)}</Text>
+            </Box>
+            <Box width="25%" justifyContent="flex-end">
+              <Text color="gray">{percentage.toFixed(1)}%</Text>
+            </Box>
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
+/**
+ * By Tool 섹션
+ */
+function ByToolSection({
+  stats,
+}: {
+  stats: AnalysisData['toolStats'];
+}): JSX.Element {
+  return (
+    <Box flexDirection="column">
+      <Text bold underline color="cyan">Top Tools</Text>
+      <Box marginTop={1}>
+        <Box width="40%"><Text bold>Tool</Text></Box>
+        <Box width="30%"><Text bold>Calls</Text></Box>
+        <Box width="30%" justifyContent="flex-end"><Text bold>Tokens</Text></Box>
+      </Box>
+      {stats.slice(0, 10).map(stat => (
+        <Box key={stat.tool_name} height={1}>
+          <Box width="40%"><Text color="yellow">{stat.tool_name}</Text></Box>
+          <Box width="30%"><Text>{stat.call_count}</Text></Box>
+          <Box width="30%" justifyContent="flex-end">
+            <Text color="cyan">{formatTokens(stat.total_tokens)}</Text>
+          </Box>
+        </Box>
+      ))}
+    </Box>
+  );
+}
