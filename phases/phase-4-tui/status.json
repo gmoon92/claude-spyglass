@@ -1,0 +1,42 @@
+{
+  "phase": "phase-4-tui-base",
+  "name": "TUI 기본 구조",
+  "status": "completed",
+  "started_at": "2026-04-17T12:00:00Z",
+  "completed_at": "2026-04-17T13:00:00Z",
+  "commit_hash": "TBD",
+  "tasks": [
+    {
+      "id": "4-1",
+      "name": "Ink 프로젝트 설정",
+      "status": "completed"
+    },
+    {
+      "id": "4-2",
+      "name": "기본 레이아웃 컴포넌트",
+      "status": "completed"
+    },
+    {
+      "id": "4-3",
+      "name": "탭 네비게이션 구현",
+      "status": "completed"
+    },
+    {
+      "id": "4-4",
+      "name": "키보드 핸들러",
+      "status": "completed"
+    },
+    {
+      "id": "4-5",
+      "name": "단위 테스트",
+      "status": "completed"
+    }
+  ],
+  "verification": {
+    "all_tests_passed": true,
+    "manual_verified": true
+  },
+  "blockers": [],
+  "notes": "TUI 기본 구조 완성, 탭 전환 및 키보드 핸들링 동작",
+  "next_steps": ["phase-5-tui-live 시작"]
+}
