@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { EventSource } from 'eventsource';
 
 /**
  * SSE 이벤트 데이터

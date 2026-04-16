@@ -5,6 +5,7 @@
  * @see docs/planning/02-prd.md - 탭 구성
  */
 
+/** @jsxImportSource react */
 import React from 'react';
 import { Box, Text } from 'ink';
 
@@ -52,9 +53,9 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps): JSX.Element {
           <Box
             key={tab.id}
             paddingX={2}
-            backgroundColor={isActive ? 'blue' : undefined}
           >
-            <Text color={isActive ? 'white' : 'gray'}>
+            <Text color={isActive ? 'cyan' : 'gray'} bold={isActive}>
+              {isActive ? '> ' : '  '}
               <Text color={isActive ? 'yellow' : 'cyan'} bold>
                 {tab.shortcut}
               </Text>

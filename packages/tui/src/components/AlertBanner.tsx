@@ -4,6 +4,7 @@
  * @description 상단 알림 배너 표시
  */
 
+/** @jsxImportSource react */
 import React from 'react';
 import { Box, Text } from 'ink';
 import type { AlertLevel, Alert } from '../hooks/useAlerts';
@@ -68,21 +69,22 @@ export function AlertBanner({ level, alert, onDismiss }: AlertBannerProps): JSX.
   return (
     <Box
       height={1}
-      backgroundColor={color}
+      borderStyle="round"
+      borderColor={color}
       paddingX={1}
     >
       <Box width="10%">
-        <Text color="white" bold>
+        <Text color={color} bold>
           {icon} {level.toUpperCase()}
         </Text>
       </Box>
       <Box width="80%">
-        <Text color="white" wrap="truncate">
+        <Text color={color} wrap="truncate">
           {alert.title}: {alert.message}
         </Text>
       </Box>
       <Box width="10%" justifyContent="flex-end">
-        <Text color="white">Press A to Ack</Text>
+        <Text color="gray">Press A to Ack</Text>
       </Box>
     </Box>
   );

@@ -5,6 +5,7 @@
  * @see docs/planning/02-prd.md - UI/UX 설계
  */
 
+/** @jsxImportSource react */
 import React from 'react';
 import { render } from 'ink';
 import { App } from './app';

@@ -4,6 +4,7 @@
  * @description TOP 소모 요청, 통계 분석
  */
 
+/** @jsxImportSource react */
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
@@ -93,9 +94,9 @@ export function AnalysisTab({ data }: AnalysisTabProps): JSX.Element {
       {/* 섹션 탭 */}
       <Box marginBottom={1}>
         {sections.map((section, index) => (
-          <Box key={section} paddingX={2} backgroundColor={index === activeSection ? 'blue' : undefined}>
-            <Text color={index === activeSection ? 'white' : 'gray'}>
-              {section}
+          <Box key={section} paddingX={2}>
+            <Text color={index === activeSection ? 'cyan' : 'gray'} bold={index === activeSection}>
+              {index === activeSection ? '> ' : '  '}{section}
             </Text>
           </Box>
         ))}

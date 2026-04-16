@@ -5,9 +5,14 @@
  * @see docs/planning/02-prd.md - 키보드 단축키
  */
 
-import { useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
 import { useInput, Key } from 'ink';
 import type { TabId } from '../components/TabBar';
+
+// 확장된 Key 타입 (ink 남아 name 속성)
+interface ExtendedKey extends Key {
+  name?: string;
+}
 
 /**
  * 키보드 핸들러 옵션
@@ -47,22 +52,42 @@ export function useKeyboard({
   useInput(
     useCallback(
       (input: string, key: Key) => {
-        // F1~F4 탭 전환
-        if (key.function) {
-          switch (input) {
-            case 'F1':
-              onTabChange('live');
-              return;
-            case 'F2':
-              onTabChange('history');
-              return;
-            case 'F3':
-              onTabChange('analysis');
-              return;
-            case 'F4':
-              onTabChange('settings');
-              return;
-          }
+        const extKey = key as ExtendedKey;
+
+        // F1~F4 탭 전환 (name 속성으로 확인)
+        if (extKey.name === 'f1') {
+          onTabChange('live');
+          return;
+        }
+        if (extKey.name === 'f2') {
+          onTabChange('history');
+          return;
+        }
+        if (extKey.name === 'f3') {
+          onTabChange('analysis');
+          return;
+        }
+        if (extKey.name === 'f4') {
+          onTabChange('settings');
+          return;
+        }
+
+        // 숫자 키 1~4로 탭 전환 (F키 대체)
+        if (input === '1' && !key.ctrl && !key.meta) {
+          onTabChange('live');
+          return;
+        }
+        if (input === '2' && !key.ctrl && !key.meta) {
+          onTabChange('history');
+          return;
+        }
+        if (input === '3' && !key.ctrl && !key.meta) {
+          onTabChange('analysis');
+          return;
+        }
+        if (input === '4' && !key.ctrl && !key.meta) {
+          onTabChange('settings');
+          return;
         }
 
         // q 키: 종료

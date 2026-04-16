@@ -4,11 +4,15 @@
  * @description spyglass TUI 메인 앱
  */
 
-import React, { useState } from 'react';
-import { Box } from 'ink';
+/** @jsxImportSource react */
+import React, { useState, useEffect } from 'react';
+import { Box, Text } from 'ink';
 import { Layout, Header, Sidebar, Main, Footer } from './components/Layout';
 import { TabBar, TabContent, TabId } from './components/TabBar';
 import { useKeyboard } from './hooks/useKeyboard';
+import { LiveTab } from './components/LiveTab';
+import { HistoryTab } from './components/HistoryTab';
+import { AnalysisTab } from './components/AnalysisTab';
 
 /**
  * 메인 앱
@@ -28,29 +32,30 @@ export function App(): JSX.Element {
     onSelectionChange: setSelectedIndex,
   });
 
+  // 세션 데이터 (임시 - 나중에 API 연동)
+  const [sessions, setSessions] = useState<Array<{
+    id: string;
+    project_name: string;
+    started_at: number;
+    total_tokens: number;
+  }>>([]);
+
   // 탭 컨텐츠
   const tabContents: Record<TabId, React.ReactNode> = {
-    live: (
-      <Box flexDirection="column" padding={1}>
-        <Box marginBottom={1}>
-          <Text color="cyan">Live Tab - Real-time Monitoring</Text>
-        </Box>
-        <Text color="gray">Press F1~F4 to switch tabs, q to quit</Text>
-      </Box>
-    ),
+    live: <LiveTab />,
     history: (
-      <Box flexDirection="column" padding={1}>
-        <Text color="cyan">History Tab - Past Sessions</Text>
-      </Box>
+      <HistoryTab
+        sessions={sessions}
+        onSessionSelect={(session) => {
+          console.log('Selected:', session);
+        }}
+      />
     ),
-    analysis: (
-      <Box flexDirection="column" padding={1}>
-        <Text color="cyan">Analysis Tab - Token Usage Stats</Text>
-      </Box>
-    ),
+    analysis: <AnalysisTab />,
     settings: (
       <Box flexDirection="column" padding={1}>
         <Text color="cyan">Settings Tab - Configuration</Text>
+        <Text color="gray">Server: http://localhost:9999</Text>
       </Box>
     ),
   };
@@ -69,6 +74,3 @@ export function App(): JSX.Element {
     />
   );
 }
-
-// React import 추가
-import { Text } from 'ink';

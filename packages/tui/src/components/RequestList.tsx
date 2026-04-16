@@ -4,6 +4,7 @@
  * @description 실시간 갱신되는 요청 리스트
  */
 
+/** @jsxImportSource react */
 import React from 'react';
 import { Box, Text } from 'ink';
 
@@ -106,28 +107,27 @@ export function RequestList({
             <Box
               key={req.id}
               height={1}
-              backgroundColor={isSelected ? 'blue' : undefined}
             >
               <Box width="15%">
-                <Text color={isSelected ? 'white' : 'gray'}>
-                  {formatTime(req.timestamp)}
+                <Text color={isSelected ? 'cyan' : 'gray'} bold={isSelected}>
+                  {isSelected ? '> ' : '  '}{formatTime(req.timestamp)}
                 </Text>
               </Box>
               <Box width="25%">
-                <Text color={isSelected ? 'white' : typeColor}>
+                <Text color={typeColor} bold={isSelected}>
                   {typeLabel}
                 </Text>
               </Box>
               <Box width="40%">
                 <Text
-                  color={isSelected ? 'white' : 'white'}
                   wrap="truncate"
+                  bold={isSelected}
                 >
                   {req.description || '-'}
                 </Text>
               </Box>
               <Box width="20%" justifyContent="flex-end">
-                <Text color={isSelected ? 'white' : 'yellow'}>
+                <Text color="yellow" bold={isSelected}>
                   {formatTokens(req.tokens_total)}
                 </Text>
               </Box>

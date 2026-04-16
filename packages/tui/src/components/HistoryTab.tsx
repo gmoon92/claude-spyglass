@@ -4,6 +4,7 @@
  * @description 과거 세션 목록 조회 및 필터링
  */
 
+/** @jsxImportSource react */
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 
@@ -125,30 +126,29 @@ export function HistoryTab({
             <Box
               key={session.id}
               height={1}
-              backgroundColor={isSelected ? 'blue' : undefined}
             >
               <Box width="25%">
-                <Text color={isSelected ? 'white' : 'cyan'} wrap="truncate">
-                  {session.project_name}
+                <Text color={isSelected ? 'cyan' : 'white'} wrap="truncate" bold={isSelected}>
+                  {isSelected ? '> ' : '  '}{session.project_name}
                 </Text>
               </Box>
               <Box width="25%">
-                <Text color={isSelected ? 'white' : 'gray'}>
+                <Text color={isSelected ? 'cyan' : 'gray'} bold={isSelected}>
                   {formatDate(session.started_at)}
                 </Text>
               </Box>
               <Box width="15%">
-                <Text color={isSelected ? 'white' : 'white'}>
+                <Text color={isSelected ? 'cyan' : 'white'} bold={isSelected}>
                   {formatDuration(session.started_at, session.ended_at)}
                 </Text>
               </Box>
               <Box width="20%" justifyContent="flex-end">
-                <Text color={isSelected ? 'white' : 'yellow'}>
+                <Text color={isSelected ? 'cyan' : 'yellow'} bold={isSelected}>
                   {formatTokens(session.total_tokens)}
                 </Text>
               </Box>
               <Box width="15%" justifyContent="flex-end">
-                <Text color={isSelected ? 'white' : isActive ? 'green' : 'gray'}>
+                <Text color={isSelected ? 'cyan' : isActive ? 'green' : 'gray'} bold={isSelected}>
                   {isActive ? '● Active' : '○ Ended'}
                 </Text>
               </Box>

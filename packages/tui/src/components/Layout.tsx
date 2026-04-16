@@ -5,8 +5,9 @@
  * @see docs/planning/02-prd.md - UI/UX 설계
  */
 
+/** @jsxImportSource react */
 import React from 'react';
-import { Box, Text, useStdoutDimensions } from 'ink';
+import { Box, Text, useStdout } from 'ink';
 
 // =============================================================================
 // Header
@@ -92,13 +93,13 @@ export function Sidebar({
             <Box
               key={session.id}
               paddingX={1}
-              backgroundColor={session.id === selectedId ? 'blue' : undefined}
             >
               <Text
-                color={session.id === selectedId ? 'white' : 'gray'}
+                color={session.id === selectedId ? 'cyan' : 'gray'}
                 wrap="truncate"
+                bold={session.id === selectedId}
               >
-                {session.project_name}
+                {session.id === selectedId ? '> ' : '  '}{session.project_name}
               </Text>
             </Box>
           ))
@@ -120,8 +121,9 @@ export interface MainProps {
 }
 
 export function Main({ children }: MainProps): JSX.Element {
-  const { columns, rows } = useStdoutDimensions();
-  const contentHeight = rows - 4; // Header(1) + Footer(1) + Borders(2)
+  const { stdout } = useStdout();
+  const rows = stdout?.rows || 24;
+  const contentHeight = Math.max(10, rows - 4); // Header(1) + Footer(1) + Borders(2)
 
   return (
     <Box flexDirection="column" flexGrow={1} height={contentHeight}>
@@ -186,7 +188,8 @@ export function Layout({
   main,
   footer,
 }: LayoutProps): JSX.Element {
-  const { rows } = useStdoutDimensions();
+  const { stdout } = useStdout();
+  const rows = stdout?.rows || 24;
 
   return (
     <Box flexDirection="column" height={rows}>

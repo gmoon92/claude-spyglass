@@ -5,8 +5,9 @@
  * @see docs/planning/02-prd.md - 실시간 토큰 카운터
  */
 
+/** @jsxImportSource react */
 import React, { useMemo } from 'react';
-import { Box, Text, useStdoutDimensions } from 'ink';
+import { Box, Text, useStdout } from 'ink';
 import { useStats } from '../hooks/useStats';
 import { useSSE } from '../hooks/useSSE';
 import { ProgressBar } from './ProgressBar';
@@ -15,7 +16,8 @@ import { ProgressBar } from './ProgressBar';
  * Live Tab 컴포넌트
  */
 export function LiveTab(): JSX.Element {
-  const { columns } = useStdoutDimensions();
+  const { stdout } = useStdout();
+  const columns = stdout?.columns || 80;
   const { data, isLoading, error } = useStats({ autoRefresh: true, interval: 3000 });
   const { status: sseStatus, lastMessage } = useSSE({ autoReconnect: true });
 
@@ -51,9 +53,13 @@ export function LiveTab(): JSX.Element {
       <Box flexDirection="column" padding={1}>
         <Text color="red">Error: {error}</Text>
         <Text color="gray">Make sure spyglass server is running on port 9999</Text>
+        <Text color="gray">API: http://localhost:9999/api/dashboard</Text>
       </Box>
     );
   }
+
+  // 디버깅: 데이터 상태 표시
+  const debugInfo = `Data: ${data ? 'OK' : 'null'}, Summary: ${data?.summary ? 'OK' : 'null'}`;
 
   const summary = data?.summary;
   const tokens = summary?.totalTokens || 0;
@@ -77,7 +83,7 @@ export function LiveTab(): JSX.Element {
 
         {/* 프로그레스 바 */}
         <Box marginY={1}>
-          <ProgressBar progress={progress} width={Math.min(50, columns - 20)} />
+          <ProgressBar progress={progress} width={Math.min(40, columns - 30)} />
         </Box>
 
         <Box>
@@ -125,6 +131,11 @@ export function LiveTab(): JSX.Element {
         ) : (
           <Text color="gray">No events yet...</Text>
         )}
+      </Box>
+
+      {/* 디버깅 정보 */}
+      <Box marginTop={1}>
+        <Text color="gray">Debug: {debugInfo}</Text>
       </Box>
     </Box>
   );

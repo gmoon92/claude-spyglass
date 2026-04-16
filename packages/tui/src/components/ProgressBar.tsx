@@ -4,6 +4,7 @@
  * @description 토큰 사용량 시각화 프로그레스 바
  */
 
+/** @jsxImportSource react */
 import React from 'react';
 import { Box, Text } from 'ink';
 
