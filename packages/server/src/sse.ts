@@ -72,7 +72,7 @@ function sendEvent(
   try {
     const data = JSON.stringify(event);
     const encoder = new TextEncoder();
-    const chunk = encoder.encode(`data: ${data}\n\n`);
+    const chunk = encoder.encode(`event: ${event.type}\ndata: ${data}\n\n`);
     controller.enqueue(chunk);
   } catch (error) {
     console.error('[SSE] Failed to send event:', error);

@@ -125,7 +125,8 @@ export function getSessionsWithFilter(
   const offsetClause = options.offset ? `OFFSET ${options.offset}` : '';
 
   const sql = `SELECT * FROM sessions ${whereClause} ORDER BY started_at DESC ${limitClause} ${offsetClause}`;
-  return db.query(sql).all(...params) as SessionQueryResult[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return db.query(sql).all(...params as any[]) as SessionQueryResult[];
 }
 
 /**
@@ -184,7 +185,8 @@ export function updateSession(
 
   values.push(id);
   const sql = `UPDATE sessions SET ${fields.join(', ')} WHERE id = ?`;
-  const result = db.run(sql, ...values);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = db.run(sql, ...values as any[]);
   return result.changes > 0;
 }
 
@@ -196,7 +198,8 @@ export function endSession(
   id: string,
   endedAt: number = Date.now()
 ): boolean {
-  const result = db.run(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = (db as any).run(
     'UPDATE sessions SET ended_at = ? WHERE id = ?',
     endedAt,
     id
@@ -212,7 +215,8 @@ export function updateSessionTokens(
   id: string,
   totalTokens: number
 ): boolean {
-  const result = db.run(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = (db as any).run(
     'UPDATE sessions SET total_tokens = ? WHERE id = ?',
     totalTokens,
     id
@@ -228,7 +232,8 @@ export function updateSessionTokens(
  * 세션 삭제 (연관된 requests도 CASCADE로 삭제됨)
  */
 export function deleteSession(db: Database, id: string): boolean {
-  const result = db.run('DELETE FROM sessions WHERE id = ?', id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = (db as any).run('DELETE FROM sessions WHERE id = ?', id);
   return result.changes > 0;
 }
 
@@ -237,7 +242,8 @@ export function deleteSession(db: Database, id: string): boolean {
  */
 export function deleteSessions(db: Database, ids: string[]): number {
   const placeholders = ids.map(() => '?').join(',');
-  const result = db.run(`DELETE FROM sessions WHERE id IN (${placeholders})`, ...ids);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = db.run(`DELETE FROM sessions WHERE id IN (${placeholders})`, ...ids as any[]);
   return result.changes;
 }
 
@@ -248,7 +254,8 @@ export function deleteOldSessions(
   db: Database,
   beforeTimestamp: number
 ): number {
-  const result = db.run(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = (db as any).run(
     'DELETE FROM sessions WHERE started_at < ?',
     beforeTimestamp
   );

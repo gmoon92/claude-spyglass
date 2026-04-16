@@ -5,7 +5,6 @@
  * @see docs/planning/03-adr.md - ADR-001 (글로벌 데몬)
  */
 
-import { Database } from 'bun:sqlite';
 import {
   SpyglassDatabase,
   getDatabase,
@@ -61,7 +60,7 @@ async function handleRequest(req: Request): Promise<Response> {
       const result = await collectHandler(req, db!);
       // 데이터 수신 후 SSE 브로드캐스트
       if (result.status === 200) {
-        broadcastUpdate({ type: 'new_request', timestamp: Date.now() });
+        broadcastUpdate({ type: 'new_request' });
       }
       return result;
     }
@@ -93,25 +92,18 @@ async function handleRequest(req: Request): Promise<Response> {
       );
     }
 
-    // 루트 경로
+    // 루트 경로 - 웹 대시보드
     if (path === '/') {
+      const webDir = new URL('../../web/index.html', import.meta.url);
+      const file = Bun.file(webDir);
+      if (await file.exists()) {
+        return new Response(file, {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        });
+      }
       return new Response(
-        JSON.stringify({
-          name: 'spyglass',
-          version: '0.1.0',
-          endpoints: {
-            collect: 'POST /collect',
-            events: 'GET /events',
-            api: '/api/*',
-            health: 'GET /health',
-          },
-        }),
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
-        }
+        JSON.stringify({ name: 'spyglass', version: '0.1.0' }),
+        { headers: { 'Content-Type': 'application/json' } }
       );
     }
 

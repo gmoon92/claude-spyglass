@@ -193,7 +193,8 @@ export function getRequestsWithFilter(
   const offsetClause = options.offset ? `OFFSET ${options.offset}` : '';
 
   const sql = `SELECT * FROM requests ${whereClause} ORDER BY timestamp DESC ${limitClause} ${offsetClause}`;
-  return db.query(sql).all(...params) as RequestQueryResult[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return db.query(sql).all(...params as any[]) as RequestQueryResult[];
 }
 
 /**
@@ -251,7 +252,8 @@ export function updateRequest(
 
   values.push(id);
   const sql = `UPDATE requests SET ${fields.join(', ')} WHERE id = ?`;
-  const result = db.run(sql, ...values);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = (db as any).run(sql, ...values);
   return result.changes > 0;
 }
 
@@ -263,7 +265,8 @@ export function updateRequest(
  * 요청 삭제
  */
 export function deleteRequest(db: Database, id: string): boolean {
-  const result = db.run('DELETE FROM requests WHERE id = ?', id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = (db as any).run('DELETE FROM requests WHERE id = ?', id);
   return result.changes > 0;
 }
 
@@ -274,7 +277,8 @@ export function deleteRequestsBySession(
   db: Database,
   sessionId: string
 ): number {
-  const result = db.run(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = (db as any).run(
     'DELETE FROM requests WHERE session_id = ?',
     sessionId
   );
@@ -288,7 +292,8 @@ export function deleteOldRequests(
   db: Database,
   beforeTimestamp: number
 ): number {
-  const result = db.run(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = (db as any).run(
     'DELETE FROM requests WHERE timestamp < ?',
     beforeTimestamp
   );
