@@ -11,6 +11,9 @@
     "./queries": "./src/queries.ts"
   },
   "dependencies": {},
+  "scripts": {
+    "test": "bun test src/__tests__"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   }
