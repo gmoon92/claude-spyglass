@@ -1,6 +1,6 @@
 # spyglass 최종 스펙 문서
 
-> Version: 0.1.0-MVP  
+> Version: 0.1.1  
 > Last Updated: 2026-04-17  
 > Status: ✅ 완료
 
@@ -13,7 +13,7 @@
 | 항목 | 내용 |
 |------|------|
 | **이름** | spyglass |
-| **버전** | 0.1.0-MVP |
+| **버전** | 0.1.1 |
 | **설명** | Claude Code 실행 과정 가시화 도구 - 토큰 누수 탐지 |
 | **개발 기간** | 2026-04-17 (1일) |
 | **개발 방식** | AI 순차 개발 (Claude Code) |
@@ -107,6 +107,7 @@
 | API Server | Bun HTTP | REST API 제공 | `packages/server/src/api.ts` |
 | SSE Server | Bun HTTP | 실시간 스트리밍 | `packages/server/src/sse.ts` |
 | TUI | Ink (React) | 터미널 UI | `packages/tui/src/` |
+| Web Dashboard | HTML + Canvas | 브라우저 대시보드 | `packages/web/index.html` |
 
 ---
 
@@ -365,10 +366,14 @@ Server-Sent Events 스트림을 연결합니다.
 
 **Event Format**:
 ```
+event: new_request
 data: {"type": "new_request", "timestamp": 1713312000000, "data": {...}}
 
+event: ping
 data: {"type": "ping", "timestamp": 1713312003000, "data": {"connections": 2}}
 ```
+
+> 변경 이력: 기존 `data: {...}\n\n` 단순 포맷에서 `event: type\ndata: {...}\n\n` named event 포맷으로 변경 (2026-04-17).
 
 **Event Types**:
 - `new_request`: 새 요청 수신
@@ -537,6 +542,8 @@ spyglass/
 │   │   │   ├── components/         # UI 컴포넌트
 │   │   │   └── hooks/              # 커스텀 훅
 │   │   └── package.json
+│   ├── web/                        # 웹 대시보드
+│   │   └── index.html              # 빌드 없는 단일 파일 대시보드
 │   └── types/                      # 공통 타입
 │       └── package.json
 ├── docs/                           # 문서
@@ -609,6 +616,9 @@ bun run packages/server/src/index.ts stop
 # TUI 실행
 bun run packages/tui/src/index.tsx
 
+# 웹 대시보드 접속 (서버 실행 후)
+open http://localhost:9999
+
 # 테스트
 bun test
 
@@ -661,13 +671,13 @@ bun test packages/server
 - [x] 히스토리/분석 탭
 - [x] 10K 토큰 알림
 
-### Phase 2 (예정)
+### Phase 2 (부분 완료)
 - [ ] 히트맵/타임라인 시각화
 - [ ] 동적 알림 임계값 (사용자 설정)
 - [ ] 데이터 날짜 필터
-- [ ] CSV/JSON 날짜
+- [ ] CSV/JSON 내보내기
 - [ ] ccflare 통합
-- [ ] 웹 대시보드 (기본)
+- [x] 웹 대시보드 (기본) — Canvas 기반 실시간 차트, SSE 연동 (2026-04-17)
 
 ### Phase 3 (예정)
 - [ ] 고급 웹 대시보드
@@ -675,6 +685,14 @@ bun test packages/server
 - [ ] 로드밸런싱
 - [ ] 고급 분석 (머신러닝)
 - [ ] 클라우드 동기화
+
+### Phase 8 (버그 수정 / 안정화, 2026-04-17 완료)
+- [x] macOS `date +%s%3N` 미지원 → python3 밀리초 타임스탬프로 교체
+- [x] `[[ -p /dev/stdin ]]` macOS 미동작 → `[[ ! -t 0 ]]`으로 교체
+- [x] `classify_request_type` Claude Code hook 포맷 지원 추가
+- [x] payload에서 `session_id` 자동 추출
+- [x] SSE 이벤트 포맷 → named event (`event: type\ndata: {...}`) 변경
+- [x] `GET /` → 웹 대시보드 HTML 서빙으로 변경
 
 ---
 
@@ -692,8 +710,9 @@ bun test packages/server
 | 날짜 | 버전 | 변경 내용 |
 |------|------|----------|
 | 2026-04-17 | 0.1.0-MVP | 초기 MVP 완료 |
+| 2026-04-17 | 0.1.1 | 웹 대시보드 추가 (`packages/web/index.html`), 훅 버그 수정 (macOS 호환), SSE named event 포맷 변경, `GET /` 웹 대시보드 서빙으로 변경 |
 
 ---
 
 *문서 작성: Claude Code*  
-*최종 업데이트: 2026-04-17*
+*최종 업데이트: 2026-04-17 (v0.1.1)*

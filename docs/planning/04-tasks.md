@@ -18,6 +18,7 @@ Phase 4: TUI 기본 구조 - 완료 후 커밋
 Phase 5: TUI Live 탭 - 완료 후 커밋
 Phase 6: TUI History/Analysis 탭 - 완료 후 커밋
 Phase 7: 알림 기능 - 완료 후 커밋
+Phase 8: 버그 수정 및 웹 대시보드 - 완료 후 커밋
 ```
 
 ### 2. 원자성 커밋
@@ -314,6 +315,53 @@ feat(phase-7): 토큰 누수 알림 기능
 
 ---
 
+### Phase 8: 버그 수정 및 웹 대시보드
+
+**목표:** macOS 호환성 버그 수정 및 빌드 없는 웹 대시보드 구현
+
+**기간:** 1일 (2026-04-17 완료)
+
+**Task 목록:**
+
+| ID | Task | 완료 기준 |
+|----|------|----------|
+| 8-1 | `date +%s%3N` macOS 미지원 → `python3` 밀리초 타임스탬프로 교체 | timestamp 정상 파싱, SyntaxError 해소 |
+| 8-2 | `[[ -p /dev/stdin ]]` macOS 미지원 → `[[ ! -t 0 ]]`으로 교체 | stdin 파이프 감지 정상 동작 |
+| 8-3 | `classify_request_type` PostToolUse 훅 `tool_name` 필드 미인식 수정 | 요청 타입 tool_call 정상 분류 |
+| 8-4 | `session_id` 미추출 ("unknown" 고정) 수정 | payload JSON에서 session_id 정상 추출 |
+| 8-5 | SSE 이벤트 포맷 수정: `data:` only → `event: type\ndata: {...}` | 브라우저 named event 정상 수신 |
+| 8-6 | TypeScript 오류 수정 (미사용 import, 잘못된 타입) | 빌드 오류 없음 |
+| 8-7 | 웹 대시보드 단일 파일(`packages/web/index.html`) 구현 | Canvas 차트·SSE 실시간 갱신 동작 |
+| 8-8 | 서버 `/` 라우트를 웹 대시보드 HTML 서빙으로 변경 | `GET /` 응답으로 index.html 반환 |
+
+**완료 커밋:**
+```
+fix(phase-8): macOS 호환성 버그 수정 및 웹 대시보드 구현
+
+- date +%s%3N → python3 밀리초 타임스탬프 교체 (macOS 호환)
+- [[ -p /dev/stdin ]] → [[ ! -t 0 ]] 교체 (macOS stdin 감지)
+- classify_request_type: PostToolUse tool_name 필드 인식 추가
+- session_id payload 추출 로직 추가
+- SSE 이벤트 포맷: event: type\ndata: {...}\n\n 으로 수정
+- TypeScript 미사용 import·잘못된 타입 수정
+- packages/web/index.html: Canvas 기반 단일 파일 웹 대시보드
+- 서버 / 라우트: 웹 대시보드 HTML 서빙
+```
+
+**산출물:**
+- `hooks/spyglass-collect.sh` (버그 수정)
+- `packages/server/src/index.ts` (SSE 포맷 수정, `/` 라우트 변경)
+- `packages/web/index.html` (신규: Canvas 실시간 대시보드)
+
+**웹 대시보드 주요 기능:**
+- Canvas 기반 실시간 타임라인 차트 (분 단위, 최근 30분)
+- Canvas 기반 타입 분포 도넛 차트 (prompt / tool_call / system)
+- SSE 실시간 자동 갱신
+- 요약 카드 4개, 프로젝트/툴 통계 테이블, 최근 요청 목록
+- 빌드 도구 없는 단일 파일 구성
+
+---
+
 ## 상태 관리 JSON 스키마
 
 ### 전체 진행 상황
@@ -524,7 +572,8 @@ git revert <commit-hash>
 | 5. TUI Live | 1.5일 | 7.5일 |
 | 6. TUI History | 1.5일 | 9일 |
 | 7. 알림 | 1일 | 10일 |
-| **버퍼** | **4일** | **14일 (2주)** |
+| 8. 버그 수정 및 웹 대시보드 | 1일 | 11일 |
+| **버퍼** | **3일** | **14일 (2주)** |
 
 **총 예상 기간: 2주**
 
@@ -539,4 +588,4 @@ git revert <commit-hash>
 ---
 
 *작성일: 2026-04-16*
-*업데이트: Phase 진행 상황에 따라 수동 업데이트*
+*업데이트: 2026-04-17 - Phase 8 (버그 수정 및 웹 대시보드) 추가*

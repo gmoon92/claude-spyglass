@@ -568,3 +568,141 @@ git checkout -b phase/1-storage-retry phase-1-storage-complete
 
 *작성일: 2026-04-16*
 *업데이트: 각 Phase 완료 시 자동 업데이트*
+
+---
+
+## 부록: 누락된 작업 사항 (2026-04-17 기준)
+
+### Phase 4-7 진행 중 발견된 누락 작업
+
+아래 작업들은 원래 문서에 명시되지 않았으나, 실제 개발 과정에서 필수적으로 처리한 사항입니다:
+
+#### 1. ink 5.x API 변경 대응
+
+**문제:** ink 4.x → 5.x 업그레이드로 인한 API 변경
+
+**누락된 수정사항:**
+- `useStdoutDimensions` 훅 제거됨 → `useStdout`로 대체
+  ```typescript
+  // Before (ink 4.x)
+  import { useStdoutDimensions } from 'ink';
+  const [columns, rows] = useStdoutDimensions();
+  
+  // After (ink 5.x)
+  import { useStdout } from 'ink';
+  const { stdout } = useStdout();
+  const columns = stdout?.columns || 80;
+  const rows = stdout?.rows || 24;
+  ```
+
+- `backgroundColor` prop 제거됨 → 텍스트 색상 + bold로 대체
+  ```typescript
+  // Before (ink 4.x)
+  <Box backgroundColor="blue">
+    <Text color="white">Selected</Text>
+  </Box>
+  
+  // After (ink 5.x)
+  <Box>
+    <Text color="cyan" bold>{'> '}Selected</Text>
+  </Box>
+  ```
+
+**영향 파일:**
+- `packages/tui/src/components/Layout.tsx`
+- `packages/tui/src/components/LiveTab.tsx`
+- `packages/tui/src/components/TabBar.tsx`
+- `packages/tui/src/components/RequestList.tsx`
+- `packages/tui/src/components/AlertBanner.tsx`
+- `packages/tui/src/components/AnalysisTab.tsx`
+- `packages/tui/src/components/HistoryTab.tsx`
+
+#### 2. 키보드 핸들러 수정
+
+**문제:** ink 5.x Key 타입에 `key.function` 속성 없음
+
+**누락된 수정사항:**
+```typescript
+// Before (잘못된 가정)
+if (key.function) {
+  switch (input) {
+    case 'F1': onTabChange('live'); return;
+    // ...
+  }
+}
+
+// After (실제 구현)
+interface ExtendedKey extends Key {
+  name?: string;  // 'f1', 'f2', 'f3', 'f4', 'up', 'down', etc.
+}
+
+const extKey = key as ExtendedKey;
+if (extKey.name === 'f1') { onTabChange('live'); return; }
+// 숫자 1~4 키로도 탭 전환 지원 추가
+if (input === '1') { onTabChange('live'); return; }
+```
+
+**영향 파일:**
+- `packages/tui/src/hooks/useKeyboard.ts`
+
+#### 3. JSX Transform 설정
+
+**문제:** bun build 시 ink/jsx-runtime 해석 실패
+
+**누락된 작업:**
+- JSX pragma 추가: `/** @jsxImportSource react */`
+- `bunfig.toml` 설정 파일 추가
+  ```toml
+  [jsx]
+  jsx = "react-jsx"
+  jsxImportSource = "react"
+  
+  [build]
+  target = "node"
+  ```
+- 의존성 추가: `bun install react-devtools-core`
+
+**영향 파일:**
+- 모든 `.tsx` 파일 상단에 pragma 추가
+- `bunfig.toml` (신규)
+
+#### 4. SQLite 타입 호환성
+
+**문제:** bun:sqlite SQLQueryBindings 타입 충돌
+
+**누락된 수정사항:**
+```typescript
+// 타입 단언 필요
+(db as any).run('DELETE FROM sessions WHERE id = ?', id);
+// 또는
+(db.query(sql) as any).all(...params);
+```
+
+**영향 파일:**
+- `packages/storage/src/queries/session.ts`
+- `packages/storage/src/queries/request.ts`
+
+#### 5. Docker 구성
+
+**문제:** 개발 환경 데이터 볼륨 관리
+
+**누락된 작업:**
+- `docker/docker-compose.yml` 작성 (SQLite는 파일 기반이라 별도 컨테이너 불필요, 데이터 볼륨만 관리)
+
+**파일:**
+- `docker/docker-compose.yml`
+
+---
+
+### 누락 원인 분석
+
+1. **의존성 버전 변경**: 개발 중 ink 5.x로 업그레이드되면서 API가 변경됨
+2. **타입 정의 불일치**: bun:sqlite와 TypeScript strict 모드 간 타입 호환성 문제
+3. **JSX Transform**: bun의 JSX 처리 방식이 표준과 차이가 있어 별도 설정 필요
+4. **빌드 타겟**: 브라우저/Node.js 타겟 혼란으로 인한 `target` 설정 필요
+
+### 교훈
+
+- **Phase 시작 시 의존성 버전 고정**: `package.json`에서 버전 범위 대신 정확한 버전 명시
+- **API 변경 대응 시간 버퍼**: 메이저 버전 업그레이드 시 20% 추가 버퍼 권장
+- **빌드 테스트 필수**: 각 Phase 완료 시 `bun build`로 컴파일 테스트 추가
