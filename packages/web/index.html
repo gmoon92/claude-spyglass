@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claude Spyglass — Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --card:      #1a1d27;
+      --card-alt:  #1f2235;
+      --border:    #2a2d3e;
+      --accent:    #7c6af7;
+      --accent-dim:#4c3fb0;
+      --text:      #e2e4ef;
+      --text-dim:  #7a7e99;
+      --text-mute: #4a4d66;
+      --green:     #4caf88;
+      --orange:    #f0a050;
+      --red:       #e05c6a;
+      --blue:      #5b9cf6;
+      --radius:    10px;
+      --gap:       16px;
+    }
+
+    body {
+      font-family: 'SF Mono','JetBrains Mono','Fira Code',ui-monospace,monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    /* HEADER */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .logo { font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; }
+    .logo span { color: var(--text); }
+
+    .badge-live {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(124,106,247,0.15); border: 1px solid rgba(124,106,247,0.4);
+      color: var(--accent); padding: 3px 10px; border-radius: 20px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+    }
+    .badge-live .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent); animation: pulse 1.8s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.4; transform: scale(0.8); }
+    }
+    .badge-live.disconnected { background: rgba(224,92,106,0.15); border-color: rgba(224,92,106,0.4); color: var(--red); }
+    .badge-live.disconnected .dot { background: var(--red); animation: none; }
+
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .last-updated { color: var(--text-dim); font-size: 11px; }
+
+    .btn-refresh {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--card); border: 1px solid var(--border); color: var(--text);
+      padding: 6px 14px; border-radius: var(--radius); cursor: pointer;
+      font-size: 12px; font-family: inherit; transition: background 0.15s, border-color 0.15s;
+    }
+    .btn-refresh:hover { background: var(--card-alt); border-color: var(--accent); color: var(--accent); }
+    .btn-refresh svg { width: 13px; height: 13px; transition: transform 0.4s ease; }
+    .btn-refresh.spinning svg { animation: spin 0.6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ERROR BANNER */
+    .error-banner {
+      display: none; align-items: center; gap: 10px;
+      background: rgba(224,92,106,0.12); border: 1px solid rgba(224,92,106,0.35);
+      color: var(--red); border-radius: var(--radius); padding: 12px 16px;
+      margin-bottom: 20px; font-size: 12px;
+    }
+    .error-banner.visible { display: flex; }
+    .error-banner .retry-btn {
+      margin-left: auto; background: none; border: 1px solid var(--red);
+      color: var(--red); padding: 3px 10px; border-radius: 6px;
+      cursor: pointer; font-family: inherit; font-size: 11px;
+    }
+    .error-banner .retry-btn:hover { background: rgba(224,92,106,0.15); }
+
+    /* SUMMARY CARDS */
+    .summary-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: var(--gap); margin-bottom: var(--gap);
+    }
+    @media (max-width: 900px) { .summary-grid { grid-template-columns: repeat(2,1fr); } }
+    @media (max-width: 480px) { .summary-grid { grid-template-columns: 1fr; } }
+
+    .stat-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 18px 20px;
+      position: relative; overflow: hidden; transition: border-color 0.15s;
+    }
+    .stat-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 2px; background: var(--accent); opacity: 0.5;
+    }
+    .stat-card.active::before { background: var(--green); opacity: 0.8; }
+    .stat-card:hover { border-color: var(--accent); }
+    .stat-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+    .stat-value { font-size: 28px; font-weight: 700; color: var(--text); letter-spacing: -1px; line-height: 1; }
+    .stat-card.active .stat-value { color: var(--green); }
+    .stat-icon { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); font-size: 26px; opacity: 0.12; }
+
+    /* CHARTS ROW */
+    .charts-row {
+      display: grid; grid-template-columns: 2fr 1fr;
+      gap: var(--gap); margin-bottom: var(--gap);
+    }
+    @media (max-width: 760px) { .charts-row { grid-template-columns: 1fr; } }
+
+    /* SECTION */
+    .section {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+    }
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      background: var(--card-alt);
+    }
+    .section-title { font-size: 11px; font-weight: 600; color: var(--text); text-transform: uppercase; letter-spacing: 0.6px; }
+    .section-count { font-size: 11px; color: var(--text-dim); }
+
+    /* CANVAS CHART */
+    .chart-wrap { padding: 12px 16px 8px; }
+    canvas { display: block; }
+
+    /* TYPE DONUT */
+    .donut-wrap {
+      padding: 16px; display: flex; align-items: center; gap: 20px;
+    }
+    .donut-canvas { flex-shrink: 0; }
+    .type-legend { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .legend-name { color: var(--text-dim); flex: 1; }
+    .legend-val  { color: var(--text); font-weight: 600; }
+    .legend-pct  { color: var(--text-mute); min-width: 32px; text-align: right; }
+
+    /* 2-col */
+    .two-col {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: var(--gap); margin-bottom: var(--gap);
+    }
+    @media (max-width: 760px) { .two-col { grid-template-columns: 1fr; } }
+
+    /* TABLE */
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left; padding: 9px 16px; font-size: 11px;
+      color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02); font-weight: 500;
+    }
+    td { padding: 8px 16px; font-size: 12px; color: var(--text); border-bottom: 1px solid rgba(42,45,62,0.5); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(124,106,247,0.04); }
+
+    .bar-cell { display: flex; align-items: center; gap: 8px; }
+    .bar-track { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; min-width: 60px; }
+    .bar-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.4s ease; }
+    .bar-label { font-size: 11px; color: var(--text-dim); min-width: 28px; text-align: right; }
+
+    .type-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.3px; }
+    .type-prompt    { background: rgba(124,106,247,0.18); color: #a99bf9; }
+    .type-tool_call { background: rgba(76,175,136,0.18);  color: #6dd8ab; }
+    .type-system    { background: rgba(240,160,80,0.18);  color: #f5b96a; }
+    .type-unknown   { background: rgba(122,126,153,0.15); color: var(--text-dim); }
+
+    .num { font-variant-numeric: tabular-nums; color: var(--text-dim); }
+    .num-hi { color: var(--accent); font-variant-numeric: tabular-nums; }
+    .sess-id { font-size: 11px; color: var(--text-mute); max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .table-empty { padding: 28px 16px; text-align: center; color: var(--text-mute); font-size: 12px; }
+
+    .skeleton {
+      display: inline-block; width: 80px; height: 12px;
+      background: linear-gradient(90deg, var(--border) 25%, var(--card-alt) 50%, var(--border) 75%);
+      background-size: 200% 100%; animation: shimmer 1.4s linear infinite; border-radius: 4px; vertical-align: middle;
+    }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    .footer { margin-top: 24px; text-align: center; color: var(--text-mute); font-size: 11px; }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">Claude<span>Spyglass</span></div>
+      <span class="badge-live" id="liveBadge"><span class="dot"></span>LIVE</span>
+    </div>
+    <div class="header-right">
+      <span class="last-updated" id="lastUpdated">—</span>
+      <button class="btn-refresh" id="btnRefresh" onclick="manualRefresh()">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M13.5 2.5A6.5 6.5 0 1 1 2.5 8"/><polyline points="0,5 2.5,8 5,5"/>
+        </svg>
+        새로고침
+      </button>
+    </div>
+  </header>
+
+  <!-- ERROR BANNER -->
+  <div class="error-banner" id="errorBanner">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <circle cx="8" cy="8" r="6.5"/><line x1="8" y1="5" x2="8" y2="9"/><circle cx="8" cy="11.5" r="0.6" fill="currentColor"/>
+    </svg>
+    <span id="errorMsg">서버에 연결할 수 없습니다.</span>
+    <button class="retry-btn" onclick="manualRefresh()">다시 시도</button>
+  </div>
+
+  <!-- SUMMARY CARDS -->
+  <div class="summary-grid">
+    <div class="stat-card">
+      <div class="stat-label">총 세션</div>
+      <div class="stat-value" id="statSessions"><span class="skeleton"></span></div>
+      <div class="stat-icon">⌨</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">총 요청</div>
+      <div class="stat-value" id="statRequests"><span class="skeleton"></span></div>
+      <div class="stat-icon">⚡</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">총 토큰</div>
+      <div class="stat-value" id="statTokens"><span class="skeleton"></span></div>
+      <div class="stat-icon">◎</div>
+    </div>
+    <div class="stat-card active">
+      <div class="stat-label">활성 세션</div>
+      <div class="stat-value" id="statActive"><span class="skeleton"></span></div>
+      <div class="stat-icon">●</div>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW -->
+  <div class="charts-row">
+    <!-- Timeline sparkline -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">요청 추이 (실시간)</span>
+        <span class="section-count" id="chartSubtitle">최근 30분</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="timelineChart" height="110"></canvas>
+      </div>
+    </div>
+
+    <!-- Type donut -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">타입 분포</span>
+        <span class="section-count" id="typeTotal">—</span>
+      </div>
+      <div class="donut-wrap">
+        <canvas class="donut-canvas" id="typeChart" width="110" height="110"></canvas>
+        <div class="type-legend" id="typeLegend">
+          <div class="table-empty" style="padding:0">로딩 중…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MIDDLE: 2-col tables -->
+  <div class="two-col">
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">프로젝트별 토큰</span>
+        <span class="section-count" id="projectCount">—</span>
+      </div>
+      <table>
+        <thead><tr><th>프로젝트</th><th>세션</th><th>토큰</th></tr></thead>
+        <tbody id="projectsBody"><tr><td colspan="3" class="table-empty"><span class="skeleton"></span></td></tr></tbody>
+      </table>
+    </div>
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">툴 사용 통계</span>
+        <span class="section-count" id="toolCount">—</span>
+      </div>
+      <table>
+        <thead><tr><th>툴</th><th>호출</th><th style="min-width:110px">비율</th></tr></thead>
+        <tbody id="toolsBody"><tr><td colspan="3" class="table-empty"><span class="skeleton"></span></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- BOTTOM: Requests -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title">최근 요청</span>
+      <span class="section-count" id="requestCount">—</span>
+    </div>
+    <table>
+      <thead><tr><th>시각</th><th>타입</th><th>툴</th><th>토큰</th><th>세션 ID</th></tr></thead>
+      <tbody id="requestsBody"><tr><td colspan="5" class="table-empty"><span class="skeleton"></span></td></tr></tbody>
+    </table>
+  </div>
+
+  <footer class="footer">Claude Spyglass — real-time Claude Code monitor</footer>
+
+  <script>
+    const API = '';  // same origin
+
+    // ── 색상 팔레트 ──────────────────────────────────────────────────
+    const COLORS = {
+      accent:  '#7c6af7',
+      green:   '#4caf88',
+      orange:  '#f0a050',
+      blue:    '#5b9cf6',
+      red:     '#e05c6a',
+      border:  '#2a2d3e',
+      card:    '#1a1d27',
+      textDim: '#7a7e99',
+    };
+    const TYPE_COLORS = {
+      prompt:    COLORS.accent,
+      tool_call: COLORS.green,
+      system:    COLORS.orange,
+    };
+
+    // ── 타임라인 데이터 (분 단위 버킷) ───────────────────────────────
+    const TIMELINE_BUCKETS = 30;
+    let timelineBuckets = Array(TIMELINE_BUCKETS).fill(0);
+    let lastBucketMinute = -1;
+
+    function nowMinute() { return Math.floor(Date.now() / 60000); }
+
+    function advanceBuckets() {
+      const cur = nowMinute();
+      if (lastBucketMinute === -1) { lastBucketMinute = cur; return; }
+      const diff = cur - lastBucketMinute;
+      if (diff <= 0) return;
+      const shift = Math.min(diff, TIMELINE_BUCKETS);
+      timelineBuckets = [...timelineBuckets.slice(shift), ...Array(shift).fill(0)];
+      lastBucketMinute = cur;
+    }
+
+    function recordRequest() {
+      advanceBuckets();
+      if (lastBucketMinute === -1) lastBucketMinute = nowMinute();
+      timelineBuckets[timelineBuckets.length - 1]++;
+    }
+
+    // ── Timeline Chart ────────────────────────────────────────────────
+    function drawTimeline() {
+      const canvas = document.getElementById('timelineChart');
+      if (!canvas) return;
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.parentElement.clientWidth - 32;  // padding 16*2
+      const h = 110;
+      canvas.width  = w * dpr;
+      canvas.height = h * dpr;
+      canvas.style.width  = w + 'px';
+      canvas.style.height = h + 'px';
+
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, w, h);
+
+      advanceBuckets();
+      const data = timelineBuckets;
+      const maxVal = Math.max(...data, 1);
+      const n = data.length;
+      const padL = 28, padR = 8, padT = 8, padB = 20;
+      const chartW = w - padL - padR;
+      const chartH = h - padT - padB;
+
+      // 그리드
+      ctx.strokeStyle = COLORS.border;
+      ctx.lineWidth = 0.5;
+      [0, 0.25, 0.5, 0.75, 1].forEach(t => {
+        const y = padT + chartH * (1 - t);
+        ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
+        if (t > 0) {
+          ctx.fillStyle = COLORS.textDim;
+          ctx.font = `10px monospace`;
+          ctx.textAlign = 'right';
+          ctx.fillText(Math.round(maxVal * t), padL - 4, y + 3);
+        }
+      });
+
+      // X 라벨 (현재 시각 기준)
+      ctx.fillStyle = COLORS.textDim;
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'center';
+      const curMin = nowMinute();
+      [0, Math.floor(n/2), n-1].forEach(i => {
+        const minsAgo = n - 1 - i;
+        const ts = new Date((curMin - minsAgo) * 60000);
+        const label = ts.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+        const x = padL + (i / (n - 1)) * chartW;
+        ctx.fillText(label, x, h - 4);
+      });
+
+      // 포인트 좌표
+      const pts = data.map((v, i) => ({
+        x: padL + (i / (n - 1)) * chartW,
+        y: padT + chartH * (1 - v / maxVal),
+      }));
+
+      // 채우기
+      const grad = ctx.createLinearGradient(0, padT, 0, padT + chartH);
+      grad.addColorStop(0,   'rgba(124,106,247,0.35)');
+      grad.addColorStop(1,   'rgba(124,106,247,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, padT + chartH);
+      pts.forEach(p => ctx.lineTo(p.x, p.y));
+      ctx.lineTo(pts[pts.length-1].x, padT + chartH);
+      ctx.closePath();
+      ctx.fill();
+
+      // 선
+      ctx.strokeStyle = COLORS.accent;
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+      ctx.stroke();
+
+      // 마지막 포인트 원
+      const last = pts[pts.length - 1];
+      ctx.beginPath();
+      ctx.arc(last.x, last.y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = COLORS.accent;
+      ctx.fill();
+      ctx.strokeStyle = COLORS.card;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 현재 값 레이블
+      if (data[data.length-1] > 0) {
+        ctx.fillStyle = COLORS.accent;
+        ctx.font = 'bold 11px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(data[data.length-1], last.x + 6, last.y + 4);
+      }
+    }
+
+    // ── Type Donut Chart ──────────────────────────────────────────────
+    let typeData = [];
+
+    function drawDonut() {
+      const canvas = document.getElementById('typeChart');
+      if (!canvas) return;
+      const dpr = window.devicePixelRatio || 1;
+      const size = 110;
+      canvas.width  = size * dpr;
+      canvas.height = size * dpr;
+      canvas.style.width  = size + 'px';
+      canvas.style.height = size + 'px';
+
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, size, size);
+
+      const cx = size / 2, cy = size / 2, r = 44, inner = 26;
+      const total = typeData.reduce((s, d) => s + d.count, 0) || 1;
+
+      if (typeData.length === 0) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.strokeStyle = COLORS.border;
+        ctx.lineWidth = (r - inner);
+        ctx.stroke();
+        return;
+      }
+
+      let startAngle = -Math.PI / 2;
+      typeData.forEach(d => {
+        const slice = (d.count / total) * Math.PI * 2;
+        const color = TYPE_COLORS[d.type] || COLORS.textDim;
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, startAngle, startAngle + slice);
+        ctx.arc(cx, cy, inner, startAngle + slice, startAngle, true);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+
+        startAngle += slice;
+      });
+
+      // 중앙 텍스트
+      ctx.fillStyle = '#e2e4ef';
+      ctx.font = `bold ${total >= 1000 ? 14 : 17}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(total >= 1000 ? (total/1000).toFixed(1)+'k' : total, cx, cy - 4);
+      ctx.fillStyle = COLORS.textDim;
+      ctx.font = '9px monospace';
+      ctx.fillText('total', cx, cy + 10);
+    }
+
+    function renderTypeLegend() {
+      const total = typeData.reduce((s, d) => s + d.count, 0) || 1;
+      const el = document.getElementById('typeLegend');
+      document.getElementById('typeTotal').textContent = `${total.toLocaleString('ko-KR')}건`;
+      if (!typeData.length) { el.innerHTML = '<div style="color:var(--text-mute);font-size:11px">데이터 없음</div>'; return; }
+      el.innerHTML = typeData.map(d => {
+        const color = TYPE_COLORS[d.type] || COLORS.textDim;
+        const pct = Math.round(d.count / total * 100);
+        return `<div class="legend-item">
+          <div class="legend-dot" style="background:${color}"></div>
+          <span class="legend-name">${d.type}</span>
+          <span class="legend-val">${d.count.toLocaleString('ko-KR')}</span>
+          <span class="legend-pct">${pct}%</span>
+        </div>`;
+      }).join('');
+    }
+
+    // ── Formatters ───────────────────────────────────────────────────
+    function fmt(n) { return (n ?? 0).toLocaleString('ko-KR'); }
+    function fmtToken(n) {
+      if (!n) return '—';
+      if (n >= 1_000_000) return (n/1_000_000).toFixed(1)+'M';
+      if (n >= 1_000)     return (n/1_000).toFixed(1)+'k';
+      return String(n);
+    }
+    function fmtTime(ts) {
+      if (!ts) return '—';
+      const d = new Date(ts < 1e12 ? ts*1000 : ts);
+      return d.toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    }
+    function fmtDate(ts) {
+      if (!ts) return '—';
+      const d = new Date(ts < 1e12 ? ts*1000 : ts);
+      const isSameDay = d.toDateString() === new Date().toDateString();
+      return isSameDay ? fmtTime(ts)
+        : d.toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'}) + ' ' + fmtTime(ts);
+    }
+    function typeBadge(type) {
+      const cls = ['prompt','tool_call','system'].includes(type) ? type : 'unknown';
+      return `<span class="type-badge type-${cls}">${cls}</span>`;
+    }
+    function escHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── Error / Status ───────────────────────────────────────────────
+    function showError(msg) {
+      document.getElementById('errorMsg').textContent = msg || '서버에 연결할 수 없습니다.';
+      document.getElementById('errorBanner').classList.add('visible');
+      const b = document.getElementById('liveBadge');
+      b.className = 'badge-live disconnected';
+      b.innerHTML = '<span class="dot"></span>OFFLINE';
+    }
+    function clearError() {
+      document.getElementById('errorBanner').classList.remove('visible');
+      const b = document.getElementById('liveBadge');
+      b.className = 'badge-live';
+      b.innerHTML = '<span class="dot"></span>LIVE';
+    }
+    function setLastUpdated() {
+      document.getElementById('lastUpdated').textContent = '업데이트: ' + new Date().toLocaleTimeString('ko-KR');
+    }
+
+    // ── Fetch Dashboard ───────────────────────────────────────────────
+    async function fetchDashboard() {
+      try {
+        const res = await fetch(`${API}/api/dashboard`, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        const d = json.data;
+
+        document.getElementById('statSessions').textContent = fmt(d.summary?.totalSessions ?? 0);
+        document.getElementById('statRequests').textContent = fmt(d.summary?.totalRequests ?? 0);
+        document.getElementById('statTokens').textContent   = fmtToken(d.summary?.totalTokens ?? 0);
+        document.getElementById('statActive').textContent   = fmt(d.summary?.activeSessions ?? 0);
+
+        renderProjects(d.projects || []);
+        renderTools(d.tools || []);
+
+        typeData = (d.types || []).sort((a,b) => b.count - a.count);
+        drawDonut();
+        renderTypeLegend();
+
+        clearError();
+        setLastUpdated();
+      } catch (err) {
+        showError(`대시보드 로드 실패: ${err.message}`);
+      }
+    }
+
+    // ── Fetch Requests ────────────────────────────────────────────────
+    async function fetchRequests() {
+      try {
+        const res = await fetch(`${API}/api/requests?limit=50`, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        renderRequests(json.data || []);
+      } catch {
+        document.getElementById('requestsBody').innerHTML =
+          '<tr><td colspan="5" class="table-empty" style="color:var(--red)">요청 목록 로드 실패</td></tr>';
+      }
+    }
+
+    // ── Renderers ────────────────────────────────────────────────────
+    function renderProjects(list) {
+      document.getElementById('projectCount').textContent = `${list.length}개`;
+      const body = document.getElementById('projectsBody');
+      if (!list.length) { body.innerHTML = '<tr><td colspan="3" class="table-empty">데이터 없음</td></tr>'; return; }
+      const maxT = Math.max(...list.map(p => p.total_tokens || 0), 1);
+      body.innerHTML = list.map(p => `<tr>
+        <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(p.project_name||'')}">${escHtml(p.project_name||'—')}</td>
+        <td class="num">${fmt(p.session_count)}</td>
+        <td><div class="bar-cell">
+          <div class="bar-track"><div class="bar-fill" style="width:${Math.round((p.total_tokens||0)/maxT*100)}%"></div></div>
+          <span class="bar-label num-hi">${fmtToken(p.total_tokens)}</span>
+        </div></td>
+      </tr>`).join('');
+    }
+
+    function renderTools(list) {
+      document.getElementById('toolCount').textContent = `${list.length}개`;
+      const body = document.getElementById('toolsBody');
+      if (!list.length) { body.innerHTML = '<tr><td colspan="3" class="table-empty">데이터 없음</td></tr>'; return; }
+      const maxC = Math.max(...list.map(t => t.count || 0), 1);
+      body.innerHTML = list.map(t => `<tr>
+        <td>${escHtml(t.tool_name||'—')}</td>
+        <td class="num num-hi">${fmt(t.count)}</td>
+        <td><div class="bar-cell">
+          <div class="bar-track"><div class="bar-fill" style="width:${Math.round((t.count||0)/maxC*100)}%;background:var(--green)"></div></div>
+          <span class="bar-label">${Math.round((t.count||0)/maxC*100)}%</span>
+        </div></td>
+      </tr>`).join('');
+    }
+
+    function renderRequests(list) {
+      document.getElementById('requestCount').textContent = `최근 ${list.length}건`;
+      const body = document.getElementById('requestsBody');
+      if (!list.length) { body.innerHTML = '<tr><td colspan="5" class="table-empty">데이터 없음</td></tr>'; return; }
+      body.innerHTML = list.map(r => `<tr>
+        <td class="num" style="white-space:nowrap">${fmtDate(r.timestamp)}</td>
+        <td>${typeBadge(r.type)}</td>
+        <td>${r.tool_name ? escHtml(r.tool_name) : '<span style="color:var(--text-mute)">—</span>'}</td>
+        <td class="num num-hi">${fmtToken(r.tokens_total)}</td>
+        <td><span class="sess-id" title="${escHtml(r.session_id||'')}">${escHtml(r.session_id ? r.session_id.slice(0,12)+'…' : '—')}</span></td>
+      </tr>`).join('');
+    }
+
+    // ── SSE ──────────────────────────────────────────────────────────
+    let sseSource = null;
+    let retryTimer = null;
+    let refreshDebounce = null;
+
+    function connectSSE() {
+      if (sseSource) { sseSource.close(); sseSource = null; }
+      try {
+        sseSource = new EventSource(`${API}/events`);
+
+        sseSource.addEventListener('new_request', () => {
+          recordRequest();
+          drawTimeline();
+          clearTimeout(refreshDebounce);
+          refreshDebounce = setTimeout(() => {
+            fetchDashboard();
+            fetchRequests();
+          }, 300);
+        });
+
+        sseSource.onopen = () => { clearError(); clearTimeout(retryTimer); };
+        sseSource.onerror = () => {
+          sseSource.close(); sseSource = null;
+          retryTimer = setTimeout(connectSSE, 5000);
+        };
+      } catch {
+        retryTimer = setTimeout(connectSSE, 5000);
+      }
+    }
+
+    // ── Manual Refresh ────────────────────────────────────────────────
+    function manualRefresh() {
+      const btn = document.getElementById('btnRefresh');
+      btn.classList.add('spinning');
+      Promise.all([fetchDashboard(), fetchRequests()]).finally(() => btn.classList.remove('spinning'));
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────
+    function init() {
+      lastBucketMinute = nowMinute();
+      drawTimeline();
+      drawDonut();
+      fetchDashboard();
+      fetchRequests();
+      connectSSE();
+
+      // 1분마다 버킷 진행 + 차트 갱신
+      setInterval(() => { advanceBuckets(); drawTimeline(); }, 60000);
+      // 리사이즈 대응
+      window.addEventListener('resize', () => { drawTimeline(); });
+    }
+
+    init();
+  </script>
+</body>
+</html>
