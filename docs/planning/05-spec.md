@@ -694,6 +694,18 @@ bun test packages/server
 - [x] SSE 이벤트 포맷 → named event (`event: type\ndata: {...}`) 변경
 - [x] `GET /` → 웹 대시보드 HTML 서빙으로 변경
 
+### Phase 9 (TUI 안정화, 2026-04-17 완료)
+- [x] ink 5.x API 변경 대응 — `useStdoutDimensions` → `useStdout` 마이그레이션
+- [x] `backgroundColor` prop 제거 — 텍스트 색상 + bold + `"> "` 접두어로 선택 상태 표시
+- [x] 키보드 핸들러 수정 — `key.function` 미지원 → `key.name`으로 F1~F4 감지
+- [x] JSX Transform 설정 — `/** @jsxImportSource react */` pragma 추가
+- [x] `bunfig.toml` 추가 — JSX 및 build target 설정
+- [x] `eventsource` 패키지 추가 — Bun SSE 지원
+- [x] `react-devtools-core` 의존성 추가 — ink 5.x 호환
+- [x] SQLite 타입 호환성 수정 — `SQLQueryBindings` 타입 단언
+- [x] TUI 빌드 테스트 완료 — `bun build packages/tui/src/index.tsx` 성공
+- [x] 서버 연동 테스트 완료 — API 데이터 수신 확인 (totalTokens: 5042)
+
 ---
 
 ## 11. 참고 문서
@@ -711,8 +723,9 @@ bun test packages/server
 |------|------|----------|
 | 2026-04-17 | 0.1.0-MVP | 초기 MVP 완료 |
 | 2026-04-17 | 0.1.1 | 웹 대시보드 추가 (`packages/web/index.html`), 훅 버그 수정 (macOS 호환), SSE named event 포맷 변경, `GET /` 웹 대시보드 서빙으로 변경 |
+| 2026-04-17 | 0.1.2 | TUI ink 5.x 호환성 수정 (useStdoutDimensions → useStdout, backgroundColor 제거), 키보드 핸들러 F1~F4 지원, JSX Transform 설정, eventsource 패키지 추가, SQLite 타입 단언 수정, Docker 구성 추가 |
 
 ---
 
 *문서 작성: Claude Code*  
-*최종 업데이트: 2026-04-17 (v0.1.1)*
+*최종 업데이트: 2026-04-17 (v0.1.2)*

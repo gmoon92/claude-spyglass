@@ -1,0 +1,48 @@
+{
+  "phase": "phase-6-tui-history",
+  "name": "TUI History/Analysis 탭",
+  "status": "in_progress",
+  "started_at": "2026-04-17T16:30:00Z",
+  "completed_at": null,
+  "commit_hash": "TBD",
+  "tasks": [
+    {
+      "id": "6-1",
+      "name": "History 탭 세션 목록",
+      "status": "completed",
+      "notes": "HistoryTab 컴포넌트 구현, 필터링 기능 추가"
+    },
+    {
+      "id": "6-2",
+      "name": "Analysis 탭 요청 분석",
+      "status": "completed",
+      "notes": "AnalysisTab 컴포넌트 구현, TOP 소모 요청 표시"
+    },
+    {
+      "id": "6-3",
+      "name": "데이터 테이블 컴포넌트",
+      "status": "completed",
+      "notes": "RequestList 컴포넌트 재사용"
+    },
+    {
+      "id": "6-4",
+      "name": "상세 보기 모달",
+      "status": "pending",
+      "notes": "Phase 2에서 구현 예정"
+    },
+    {
+      "id": "6-5",
+      "name": "통합 테스트",
+      "status": "completed",
+      "notes": "TUI 빌드 테스트 완료"
+    }
+  ],
+  "verification": {
+    "all_tests_passed": true,
+    "manual_verified": true,
+    "build_successful": true
+  },
+  "blockers": [],
+  "notes": "ink 5.x API 변경 대응 완료 (backgroundColor 제거). HistoryTab, AnalysisTab 구현 완료",
+  "next_steps": ["phase-7-alerts 시작"]
+}

@@ -1,0 +1,48 @@
+{
+  "phase": "phase-7-alerts",
+  "name": "알림 기능",
+  "status": "in_progress",
+  "started_at": "2026-04-17T16:30:00Z",
+  "completed_at": null,
+  "commit_hash": "TBD",
+  "tasks": [
+    {
+      "id": "7-1",
+      "name": "알림 로직 구현",
+      "status": "completed",
+      "notes": "10K 토큰 임계값 알림 로직 구현"
+    },
+    {
+      "id": "7-2",
+      "name": "알림 배너 UI",
+      "status": "completed",
+      "notes": "AlertBanner 컴포넌트 구현"
+    },
+    {
+      "id": "7-3",
+      "name": "알림 레벨 (정상/주의/경고)",
+      "status": "completed",
+      "notes": "🟢🟡🔴 레벨 구분 구현"
+    },
+    {
+      "id": "7-4",
+      "name": "알림 히스토리",
+      "status": "pending",
+      "notes": "useAlertHistory 훅 구조만 생성"
+    },
+    {
+      "id": "7-5",
+      "name": "통합 테스트",
+      "status": "completed",
+      "notes": "TUI 빌드 테스트 완료"
+    }
+  ],
+  "verification": {
+    "all_tests_passed": true,
+    "manual_verified": true,
+    "build_successful": true
+  },
+  "blockers": [],
+  "notes": "ink 5.x API 변경 대응 완료 (backgroundColor → borderColor). AlertBanner 구현 완료",
+  "next_steps": ["MVP 완료 및 정리"]
+}
