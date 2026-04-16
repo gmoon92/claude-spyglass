@@ -1,46 +1,47 @@
-/.metadata/
-/.project/
-/.gradle/
+# Dependencies
+node_modules/
+**/node_modules/
 
-!**/src/main/**
-!**/src/test/**
+# Build outputs
+dist/
+**/dist/
+*.tsbuildinfo
+**/*.tsbuildinfo
 
-**/target/**
-**/build/**
-**/.gradle/**
+# Environment variables
+.env
+.env.local
+.env.*.local
 
-### CLAUDE CODE ###
-**/.claude/.tmp/**
-**/settings.local.json
+# Logs
+*.log
+logs/
+**/logs/
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
+# OS
+.DS_Store
+Thumbs.db
 
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
-#out/
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-
-### VS Code ###
+# IDE
+.idea/
 .vscode/
+*.iml
+*.iws
+*.ipr
 
-### report ###
-**/build/report/**
+# Bun
+bunfig.toml
 
-### Compiled binaries ###
-**/bin/
+# Test coverage
+coverage/
+**/coverage/
+
+# Temp / cache
+.cache/
+**/.cache/
+tmp/
+.tmp/
+
+# Claude Code
+**/.claude/.tmp/
+**/settings.local.json

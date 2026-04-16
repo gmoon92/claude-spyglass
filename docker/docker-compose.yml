@@ -1,0 +1,27 @@
+# spyglass SQLite 개발 환경
+# macOS/Linux 호환
+
+version: '3.8'
+
+services:
+  # SQLite는 파일 기반 DB라 별도 서비스 불필요
+  # 데이터 볼륨만 관리
+  spyglass-data:
+    image: alpine:latest
+    container_name: spyglass-data
+    volumes:
+      - spyglass-data:/data
+    command: |
+      sh -c '
+        mkdir -p /data/.spyglass/logs
+        echo "spyglass data directory initialized"
+        echo "DB Path: /data/.spyglass/spyglass.db"
+        echo "Log Path: /data/.spyglass/logs/collect.log"
+        tail -f /dev/null
+      '
+    environment:
+      - TZ=Asia/Seoul
+
+volumes:
+  spyglass-data:
+    driver: local
