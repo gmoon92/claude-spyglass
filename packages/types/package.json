@@ -1,0 +1,10 @@
+{
+  "name": "@spyglass/types",
+  "version": "0.1.0",
+  "description": "Shared types for spyglass",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

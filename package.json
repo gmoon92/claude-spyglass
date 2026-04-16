@@ -1,0 +1,22 @@
+{
+  "name": "spyglass",
+  "version": "0.1.0",
+  "description": "Claude Code execution monitoring tool - token usage visualization",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run packages/server/src/index.ts",
+    "tui": "bun run packages/tui/src/index.tsx",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "latest",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "bun": ">=1.2.0"
+  }
+}

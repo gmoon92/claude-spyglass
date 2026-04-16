@@ -1,0 +1,17 @@
+{
+  "name": "@spyglass/storage",
+  "version": "0.1.0",
+  "description": "SQLite storage layer for spyglass",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema.ts",
+    "./connection": "./src/connection.ts",
+    "./queries": "./src/queries.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
