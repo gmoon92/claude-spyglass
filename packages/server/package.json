@@ -1,0 +1,20 @@
+{
+  "name": "@spyglass/server",
+  "version": "0.1.0",
+  "description": "HTTP server and API for spyglass",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./collect": "./src/collect.ts"
+  },
+  "scripts": {
+    "test": "bun test src/__tests__"
+  },
+  "dependencies": {
+    "@spyglass/storage": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

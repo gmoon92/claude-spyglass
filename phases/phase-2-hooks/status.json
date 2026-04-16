@@ -1,0 +1,42 @@
+{
+  "phase": "phase-2-hooks",
+  "name": "Hooks (데이터 수집)",
+  "status": "completed",
+  "started_at": "2026-04-17T10:00:00Z",
+  "completed_at": "2026-04-17T11:00:00Z",
+  "commit_hash": "TBD",
+  "tasks": [
+    {
+      "id": "2-1",
+      "name": "spyglass-collect.sh 스크립트 작성",
+      "status": "completed"
+    },
+    {
+      "id": "2-2",
+      "name": "/collect HTTP 엔드포인트 구현",
+      "status": "completed"
+    },
+    {
+      "id": "2-3",
+      "name": "토큰 파싱 로직 구현",
+      "status": "completed"
+    },
+    {
+      "id": "2-4",
+      "name": "요청 타입 분류",
+      "status": "completed"
+    },
+    {
+      "id": "2-5",
+      "name": "통합 테스트",
+      "status": "completed"
+    }
+  ],
+  "verification": {
+    "all_tests_passed": true,
+    "manual_verified": true
+  },
+  "blockers": [],
+  "notes": "훅 → 서버 → DB 플로우 완성",
+  "next_steps": ["phase-3-server 시작"]
+}
