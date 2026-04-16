@@ -79,7 +79,13 @@ parse_tokens_from_response() {
 classify_request_type() {
     local payload="$1"
 
-    # 툴 콜 확인
+    # Claude Code PostToolUse hook: "tool_name" 필드 존재
+    if echo "$payload" | grep -qE '"tool_name"\s*:\s*"[^"]+"'; then
+        echo "tool_call"
+        return
+    fi
+
+    # 기존 API 형식 툴 콜 확인
     if echo "$payload" | grep -qE '"type"\s*:\s*"(tool_use|tool_call|function)"' || \
        echo "$payload" | grep -qE '"tool_calls"'; then
         echo "tool_call"
@@ -92,14 +98,18 @@ classify_request_type() {
         return
     fi
 
-    # 기본은 프롬프트
     echo "prompt"
 }
 
-# 툴 이름 추출
+# 툴 이름 추출 (Claude Code hook의 "tool_name" 필드 우선)
 extract_tool_name() {
     local payload="$1"
-    local tool_name=$(echo "$payload" | grep -oE '"name"\s*:\s*"[^"]+"' | head -1 | cut -d'"' -f4)
+    local tool_name
+    # Claude Code PostToolUse: "tool_name": "Bash"
+    tool_name=$(echo "$payload" | grep -oE '"tool_name"\s*:\s*"[^"]+"' | head -1 | cut -d'"' -f4)
+    if [[ -z "$tool_name" ]]; then
+        tool_name=$(echo "$payload" | grep -oE '"name"\s*:\s*"[^"]+"' | head -1 | cut -d'"' -f4)
+    fi
     echo "${tool_name:-unknown}"
 }
 
@@ -150,9 +160,14 @@ main() {
 
     # 프로젝트명 확인 (환경변수 또는 현재 디렉토리)
     local project_name="${SPYGLASS_PROJECT:-$(basename "$(pwd)")}"
-    local session_id="${SPYGLASS_SESSION_ID:-unknown}"
+    # session_id: 환경변수 → payload JSON의 session_id 필드 → fallback
+    local session_id="${SPYGLASS_SESSION_ID:-}"
+    if [[ -z "$session_id" ]]; then
+        session_id=$(echo "$payload" | grep -oE '"session_id"\s*:\s*"[^"]+"' | head -1 | cut -d'"' -f4)
+    fi
+    session_id="${session_id:-unknown}"
     local timestamp
-    timestamp=$(date +%s%3N)  # 밀리초 단위 timestamp
+    timestamp=$(python3 -c 'import time; print(int(time.time() * 1000))' 2>/dev/null || echo "$(( $(date +%s) * 1000 ))")
 
     # 요청 ID 생성
     local request_id="${event_type:0:1}-${timestamp}-${RANDOM}"
@@ -260,7 +275,8 @@ fi
 # =============================================================================
 
 # stdin에서 payload 읽기 (훅에서 전달)
-if [[ -p /dev/stdin ]]; then
+# -p /dev/stdin 은 macOS에서 신뢰할 수 없으므로 TTY 체크 사용
+if [[ ! -t 0 ]]; then
     payload=$(cat)
     main "$@" "$payload"
 else
