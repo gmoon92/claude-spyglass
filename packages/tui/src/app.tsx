@@ -6,7 +6,6 @@
 
 /** @jsxImportSource react */
 import React, { useState } from 'react';
-import { Box, Text } from 'ink';
 import { Layout, Header, Sidebar, Main, Footer } from './components/Layout';
 import { TabBar, TabContent, TabId } from './components/TabBar';
 import { useKeyboard } from './hooks/useKeyboard';
@@ -15,6 +14,7 @@ import { useSessionList } from './hooks/useSessionList';
 import { LiveTab } from './components/LiveTab';
 import { HistoryTab } from './components/HistoryTab';
 import { AnalysisTab } from './components/AnalysisTab';
+import { SettingsTab } from './components/SettingsTab';
 
 const API_URL = 'http://localhost:9999';
 
@@ -54,12 +54,7 @@ export function App(): JSX.Element {
       />
     ),
     analysis: <AnalysisTab isActive={activeTab === 'analysis'} />,
-    settings: (
-      <Box flexDirection="column" padding={1}>
-        <Text color="cyan">Settings Tab - Configuration</Text>
-        <Text color="gray">Server: {API_URL}</Text>
-      </Box>
-    ),
+    settings: <SettingsTab isActive={activeTab === 'settings'} />,
   };
 
   return (
