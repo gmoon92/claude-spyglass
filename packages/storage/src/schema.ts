@@ -128,6 +128,7 @@ export interface Request {
   tokens_total: number;
   duration_ms: number;
   payload?: string;
+  source?: string | null;
   created_at?: number;
 }
 
@@ -138,7 +139,7 @@ export interface Request {
 /**
  * 테이블 스키마 정보 (마이그레이션/검증용)
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /**
  * v2 마이그레이션: tool_detail 컬럼 추가
@@ -180,6 +181,13 @@ SET turn_id = (
 )
 WHERE type IN ('tool_call', 'system')
   AND turn_id IS NULL;
+`;
+
+/**
+ * v4 마이그레이션: source 컬럼 추가
+ */
+export const MIGRATION_V4 = `
+ALTER TABLE requests ADD COLUMN source TEXT;
 `;
 
 export const SCHEMA_META = {

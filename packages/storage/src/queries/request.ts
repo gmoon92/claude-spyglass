@@ -26,14 +26,15 @@ export interface CreateRequestParams {
   tokens_total?: number;
   duration_ms?: number;
   payload?: string;
+  source?: string | null;
 }
 
 /** 요청 생성 SQL */
 const SQL_CREATE_REQUEST = `
   INSERT INTO requests (
     id, session_id, timestamp, type, tool_name, tool_detail, turn_id, model,
-    tokens_input, tokens_output, tokens_total, duration_ms, payload
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    tokens_input, tokens_output, tokens_total, duration_ms, payload, source
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 /**
@@ -57,7 +58,8 @@ export function createRequest(
     params.tokens_output ?? 0,
     params.tokens_total ?? 0,
     params.duration_ms ?? 0,
-    params.payload ?? null
+    params.payload ?? null,
+    params.source ?? null
   );
   return params.id;
 }
@@ -85,7 +87,8 @@ export function createRequests(
         item.tokens_output ?? 0,
         item.tokens_total ?? 0,
         item.duration_ms ?? 0,
-        item.payload ?? null
+        item.payload ?? null,
+        item.source ?? null
       );
     }
   });
@@ -318,6 +321,18 @@ export interface RequestStats {
   total_tokens: number;
   avg_tokens_per_request: number;
   avg_duration_ms: number;
+}
+
+/**
+ * prompt 타입의 평균 응답시간 (ms), duration_ms > 0 레코드만 집계
+ */
+export function getAvgPromptDurationMs(db: Database): number {
+  const row = db.query(`
+    SELECT AVG(duration_ms) as avg
+    FROM requests
+    WHERE type = 'prompt' AND duration_ms > 0
+  `).get() as { avg: number | null };
+  return row?.avg ?? 0;
 }
 
 /**

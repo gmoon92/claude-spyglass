@@ -109,6 +109,7 @@ export {
   getRequestStatsByType,
   getToolStats,
   getHourlyRequestStats,
+  getAvgPromptDurationMs,
   // 턴 집계
   getTurnsBySession,
   // 타입
