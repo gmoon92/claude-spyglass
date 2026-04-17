@@ -350,6 +350,13 @@ main() {
     fi
     tokens_total=$((tokens_input + tokens_output))
 
+    # 캐시 토큰 — 환경변수에서 캡처 (없으면 0)
+    local cache_creation_tokens="${CLAUDE_API_USAGE_CACHE_CREATION_INPUT_TOKENS:-0}"
+    local cache_read_tokens="${CLAUDE_API_USAGE_CACHE_READ_INPUT_TOKENS:-0}"
+    # 숫자가 아닌 값이 들어올 경우 0으로 보정
+    if ! [[ "$cache_creation_tokens" =~ ^[0-9]+$ ]]; then cache_creation_tokens=0; fi
+    if ! [[ "$cache_read_tokens" =~ ^[0-9]+$ ]]; then cache_read_tokens=0; fi
+
     # duration_ms — PreToolUse가 기록한 타임스탬프 파일로 측정
     local duration_ms=0
     local timing_dir="${HOME}/.spyglass/timing"
@@ -383,6 +390,8 @@ main() {
   "tokens_input": $tokens_input,
   "tokens_output": $tokens_output,
   "tokens_total": $tokens_total,
+  "cache_creation_tokens": $cache_creation_tokens,
+  "cache_read_tokens": $cache_read_tokens,
   "duration_ms": $duration_ms,
   "payload": $(echo "$payload" | jq -R -s '.' 2>/dev/null || echo '""'),
   "source": "claude-code-hook"
