@@ -87,29 +87,23 @@ export function useStats(options: UseStatsOptions = {}): UseStatsReturn {
     setError(null);
 
     try {
-      console.log('[useStats] Fetching from:', apiUrl);
       const response = await fetch(apiUrl, {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
       });
-
-      console.log('[useStats] Response status:', response.status);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
 
       const result = await response.json();
-      console.log('[useStats] Result success:', result.success);
 
       if (result.success) {
         setData(result.data);
-        console.log('[useStats] Data set:', JSON.stringify(result.data?.summary));
       } else {
         throw new Error(result.error || 'Unknown error');
       }
     } catch (err) {
-      console.error('[useStats] Error:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch stats');
     } finally {
       setIsLoading(false);

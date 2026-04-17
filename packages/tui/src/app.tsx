@@ -5,7 +5,7 @@
  */
 
 /** @jsxImportSource react */
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import { Layout, Header, Sidebar, Main, Footer } from './components/Layout';
 import { TabBar, TabContent, TabId } from './components/TabBar';
@@ -32,8 +32,7 @@ export function App(): JSX.Element {
     onSelectionChange: setSelectedIndex,
   });
 
-  // 세션 데이터 (임시 - 나중에 API 연동)
-  const [sessions, setSessions] = useState<Array<{
+  const [sessions] = useState<Array<{
     id: string;
     project_name: string;
     started_at: number;
@@ -46,9 +45,7 @@ export function App(): JSX.Element {
     history: (
       <HistoryTab
         sessions={sessions}
-        onSessionSelect={(session) => {
-          console.log('Selected:', session);
-        }}
+        onSessionSelect={() => {}}
       />
     ),
     analysis: <AnalysisTab />,

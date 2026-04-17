@@ -6,7 +6,7 @@
  */
 
 /** @jsxImportSource react */
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Box, Text, useStdout } from 'ink';
 import { useStats } from '../hooks/useStats';
 import { useSSE } from '../hooks/useSSE';
@@ -37,9 +37,6 @@ export function LiveTab(): JSX.Element {
     return `${tokens}`;
   };
 
-  // 세션 시간 계산 (예시)
-  const sessionDuration = '00:15:32';
-
   if (isLoading && !data) {
     return (
       <Box flexDirection="column" padding={1}>
@@ -57,9 +54,6 @@ export function LiveTab(): JSX.Element {
       </Box>
     );
   }
-
-  // 디버깅: 데이터 상태 표시
-  const debugInfo = `Data: ${data ? 'OK' : 'null'}, Summary: ${data?.summary ? 'OK' : 'null'}`;
 
   const summary = data?.summary;
   const tokens = summary?.totalTokens || 0;
@@ -100,7 +94,7 @@ export function LiveTab(): JSX.Element {
         </Box>
         <Box width="50%">
           <Text color="gray">Session Time: </Text>
-          <Text bold>{sessionDuration}</Text>
+          <Text bold>--:--:--</Text>
         </Box>
       </Box>
 
@@ -133,10 +127,6 @@ export function LiveTab(): JSX.Element {
         )}
       </Box>
 
-      {/* 디버깅 정보 */}
-      <Box marginTop={1}>
-        <Text color="gray">Debug: {debugInfo}</Text>
-      </Box>
     </Box>
   );
 }
