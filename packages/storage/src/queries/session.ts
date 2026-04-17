@@ -87,14 +87,29 @@ export function getSessionById(
 }
 
 /**
- * 모든 세션 조회 (최근순)
+ * 모든 세션 조회 (최근순, first_prompt_payload 포함, 날짜 필터 지원)
  */
 export function getAllSessions(
   db: Database,
-  limit: number = 100
+  limit: number = 100,
+  fromTs?: number,
+  toTs?: number
 ): SessionQueryResult[] {
-  return db.query('SELECT * FROM sessions ORDER BY started_at DESC LIMIT ?')
-    .all(limit) as SessionQueryResult[];
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+  if (fromTs) { conditions.push('s.started_at >= ?'); params.push(fromTs); }
+  if (toTs)   { conditions.push('s.started_at <= ?'); params.push(toTs); }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  return db.query(`
+    SELECT s.*,
+      (SELECT r.payload FROM requests r
+       WHERE r.session_id = s.id AND r.type = 'prompt'
+       ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload
+    FROM sessions s
+    ${where}
+    ORDER BY s.started_at DESC
+    LIMIT ?
+  `).all(...params, limit) as SessionQueryResult[];
 }
 
 /**

@@ -27,14 +27,17 @@ export interface CreateRequestParams {
   duration_ms?: number;
   payload?: string;
   source?: string | null;
+  cache_creation_tokens?: number;
+  cache_read_tokens?: number;
 }
 
 /** 요청 생성 SQL */
 const SQL_CREATE_REQUEST = `
   INSERT INTO requests (
     id, session_id, timestamp, type, tool_name, tool_detail, turn_id, model,
-    tokens_input, tokens_output, tokens_total, duration_ms, payload, source
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    tokens_input, tokens_output, tokens_total, duration_ms, payload, source,
+    cache_creation_tokens, cache_read_tokens
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 /**
@@ -44,8 +47,7 @@ export function createRequest(
   db: Database,
   params: CreateRequestParams
 ): string {
-  const stmt = db.prepare(SQL_CREATE_REQUEST);
-  stmt.run(
+  db.query(SQL_CREATE_REQUEST).run(
     params.id,
     params.session_id,
     params.timestamp,
@@ -59,7 +61,9 @@ export function createRequest(
     params.tokens_total ?? 0,
     params.duration_ms ?? 0,
     params.payload ?? null,
-    params.source ?? null
+    params.source ?? null,
+    params.cache_creation_tokens ?? 0,
+    params.cache_read_tokens ?? 0
   );
   return params.id;
 }
@@ -88,7 +92,9 @@ export function createRequests(
         item.tokens_total ?? 0,
         item.duration_ms ?? 0,
         item.payload ?? null,
-        item.source ?? null
+        item.source ?? null,
+        item.cache_creation_tokens ?? 0,
+        item.cache_read_tokens ?? 0
       );
     }
   });
@@ -126,15 +132,21 @@ export function getRequestById(
 }
 
 /**
- * 모든 요청 조회 (최근순)
+ * 모든 요청 조회 (최근순, 날짜 필터 지원)
  */
 export function getAllRequests(
   db: Database,
   limit: number = 100,
-  offset: number = 0
+  fromTs?: number,
+  toTs?: number
 ): RequestQueryResult[] {
-  return db.query('SELECT * FROM requests ORDER BY timestamp DESC LIMIT ? OFFSET ?')
-    .all(limit, offset) as RequestQueryResult[];
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+  if (fromTs) { conditions.push('timestamp >= ?'); params.push(fromTs); }
+  if (toTs)   { conditions.push('timestamp <= ?'); params.push(toTs); }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  return db.query(`SELECT * FROM requests ${where} ORDER BY timestamp DESC LIMIT ?`)
+    .all(...params, limit) as RequestQueryResult[];
 }
 
 /**

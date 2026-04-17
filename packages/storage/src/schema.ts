@@ -107,6 +107,7 @@ export interface Session {
   ended_at: number | null;
   total_tokens: number;
   created_at?: number;
+  first_prompt_payload?: string | null;
 }
 
 /**
@@ -132,6 +133,8 @@ export interface Request {
   duration_ms: number;
   payload?: string;
   source?: string | null;
+  cache_creation_tokens?: number;
+  cache_read_tokens?: number;
   created_at?: number;
 }
 
@@ -142,7 +145,7 @@ export interface Request {
 /**
  * 테이블 스키마 정보 (마이그레이션/검증용)
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 /**
  * v2 마이그레이션: tool_detail 컬럼 추가
@@ -191,6 +194,14 @@ WHERE type IN ('tool_call', 'system')
  */
 export const MIGRATION_V4 = `
 ALTER TABLE requests ADD COLUMN source TEXT;
+`;
+
+/**
+ * v5 마이그레이션: 캐시 토큰 컬럼 추가
+ */
+export const MIGRATION_V5 = `
+ALTER TABLE requests ADD COLUMN cache_creation_tokens INTEGER DEFAULT 0;
+ALTER TABLE requests ADD COLUMN cache_read_tokens INTEGER DEFAULT 0;
 `;
 
 export const SCHEMA_META = {
