@@ -57,6 +57,9 @@ CREATE INDEX IF NOT EXISTS idx_requests_type ON requests(type, timestamp DESC);
 
 -- 인덱스: 토큰 사용량 기준 상위 요청 조회
 CREATE INDEX IF NOT EXISTS idx_requests_tokens ON requests(tokens_total DESC);
+
+-- 인덱스: assignTurnId COUNT 쿼리 최적화 (session_id + type 복합)
+CREATE INDEX IF NOT EXISTS idx_requests_session_type ON requests(session_id, type);
 `;
 
 // =============================================================================
@@ -199,5 +202,6 @@ export const SCHEMA_META = {
     'idx_requests_session',
     'idx_requests_type',
     'idx_requests_tokens',
+    'idx_requests_session_type',
   ],
 } as const;
