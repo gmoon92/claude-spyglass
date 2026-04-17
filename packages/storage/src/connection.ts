@@ -15,12 +15,6 @@ import { INIT_SCHEMA, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, WAL_MODE_PRAGMAS
 /** 기본 데이터베이스 경로 */
 const DEFAULT_DB_PATH = `${process.env.HOME || process.env.USERPROFILE}/.spyglass/spyglass.db`;
 
-/** 연결 타임아웃 (ms) */
-const CONNECT_TIMEOUT_MS = 5000;
-
-/** 재시도 간격 (ms) */
-const RETRY_INTERVAL_MS = 100;
-
 // =============================================================================
 // 연결 설정 옵션
 // =============================================================================
@@ -114,7 +108,7 @@ export class SpyglassDatabase {
     for (const pragma of pragmas) {
       const trimmed = pragma.trim();
       if (trimmed) {
-        this.db.run(trimmed);
+        this.db.prepare(trimmed).run();
       }
     }
 
@@ -125,9 +119,21 @@ export class SpyglassDatabase {
     }
   }
 
+  /** 멀티 스테이트먼트 SQL 실행 (라인 주석 제거 후 세미콜론 분리) */
+  private execMulti(sql: string): void {
+    const stmts = sql
+      .replace(/--[^\n]*/g, '')
+      .split(';')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+    for (const stmt of stmts) {
+      this.db.prepare(stmt).run();
+    }
+  }
+
   /** 스키마 초기화 */
   private initializeSchema(): void {
-    this.db.exec(INIT_SCHEMA);
+    this.execMulti(INIT_SCHEMA);
     this.runMigrations();
   }
 
@@ -137,17 +143,17 @@ export class SpyglassDatabase {
 
     const hasToolDetail = cols.some(c => c.name === 'tool_detail');
     if (!hasToolDetail) {
-      this.db.exec(MIGRATION_V2);
+      this.db.prepare(MIGRATION_V2.trim()).run();
     }
 
     const hasTurnId = cols.some(c => c.name === 'turn_id');
     if (!hasTurnId) {
-      this.db.exec(MIGRATION_V3);
+      this.execMulti(MIGRATION_V3);
     }
 
     const hasSource = cols.some(c => c.name === 'source');
     if (!hasSource) {
-      this.db.exec(MIGRATION_V4);
+      this.db.prepare(MIGRATION_V4.trim()).run();
     }
   }
 
@@ -166,7 +172,7 @@ export class SpyglassDatabase {
 
   /** WAL 체크포인트 수행 */
   checkpoint(): void {
-    this.db.run('PRAGMA wal_checkpoint(TRUNCATE);');
+    this.db.prepare('PRAGMA wal_checkpoint(TRUNCATE);').run();
   }
 
   /** 데이터베이스 상태 정보 */
