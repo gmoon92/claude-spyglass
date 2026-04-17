@@ -118,7 +118,8 @@
 
     /* ─── LEFT PANEL ────────────────────────────────────────────────── */
     .left-panel {
-      display: flex; flex-direction: column;
+      display: grid;
+      grid-template-rows: 1fr 1fr auto;
       overflow: hidden; border-right: 1px solid var(--border);
       background: var(--surface);
     }
@@ -126,8 +127,9 @@
     .panel-section {
       display: flex; flex-direction: column;
       overflow: hidden; border-bottom: 1px solid var(--border);
+      min-height: 0;
     }
-    .panel-section.flex-section { flex: 1; min-height: 0; }
+    .panel-section.flex-section { min-height: 0; }
     .panel-section:last-child { border-bottom: none; }
 
     .panel-header {
@@ -145,7 +147,7 @@
     .panel-body::-webkit-scrollbar { width: 3px; }
     .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-    .tool-stats-section { flex: 0 0 auto; max-height: 160px; }
+    .tool-stats-section { max-height: 160px; }
     .tool-stats-section .panel-body { max-height: calc(160px - 29px); }
 
     /* ─── RIGHT PANEL ───────────────────────────────────────────────── */
@@ -361,6 +363,15 @@
     .tool-icon-agent   { color: var(--orange); }
     .tool-icon-default { color: var(--green); }
 
+    /* ─── TYPE FILTER ──────────────────────────────────────────────── */
+    .type-filter-btn {
+      background: none; border: 1px solid var(--border); color: var(--text-dim);
+      padding: 2px 8px; border-radius: 4px; cursor: pointer;
+      font-family: inherit; font-size: 10px; transition: color .12s, border-color .12s;
+    }
+    .type-filter-btn:hover { color: var(--text); border-color: var(--text-dim); }
+    .type-filter-btn.active { color: var(--accent); border-color: var(--accent); }
+
     /* ─── TURN BAR ─────────────────────────────────────────────────── */
     .turn-bar { display: flex; align-items: center; gap: 4px; flex-shrink: 0; width: 84px; }
     .turn-bar .bar-track { flex: 1; min-width: 36px; }
@@ -544,7 +555,15 @@
         <div class="view-section fill">
           <div class="view-section-header">
             <span class="panel-label">최근 요청</span>
-            <span class="panel-hint" id="requestCount">—</span>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div id="typeFilterBtns" style="display:flex;gap:4px">
+                <button class="type-filter-btn active" data-filter="all">All</button>
+                <button class="type-filter-btn" data-filter="prompt">prompt</button>
+                <button class="type-filter-btn" data-filter="tool_call">tool_call</button>
+                <button class="type-filter-btn" data-filter="system">system</button>
+              </div>
+              <span class="panel-hint" id="requestCount">—</span>
+            </div>
           </div>
           <div class="feed-body">
             <table>
@@ -555,6 +574,9 @@
                 <tr><td colspan="7" class="table-empty"><span class="skeleton"></span></td></tr>
               </tbody>
             </table>
+            <div style="padding:8px 12px;text-align:center">
+              <button id="loadMoreBtn" style="display:none;background:none;border:1px solid var(--border);color:var(--text-dim);padding:4px 16px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:11px">더 보기</button>
+            </div>
           </div>
         </div>
 
@@ -946,16 +968,50 @@
       }
     }
 
-    async function fetchRequests() {
+    async function fetchRequests(append = false) {
+      if (!append) { reqOffset = 0; }
       try {
-        const res = await fetch(`${API}/api/requests?limit=10`, { signal: AbortSignal.timeout(8000) });
+        let url;
+        if (reqFilter === 'all') {
+          url = `${API}/api/requests?limit=${REQ_PAGE}&offset=${reqOffset}`;
+        } else {
+          url = `${API}/api/requests/by-type/${encodeURIComponent(reqFilter)}?limit=${REQ_PAGE}&offset=${reqOffset}`;
+        }
+        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
-        renderRequests(json.data || []);
+        const list = json.data || [];
+        if (append) {
+          appendRequests(list);
+        } else {
+          renderRequests(list);
+        }
+        reqOffset += list.length;
+        const loadMoreBtn = document.getElementById('loadMoreBtn');
+        if (loadMoreBtn) {
+          loadMoreBtn.style.display = (list.length === REQ_PAGE && !isSSEConnected) ? '' : 'none';
+        }
       } catch {
-        document.getElementById('requestsBody').innerHTML =
-          `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty" style="color:var(--red)">요청 목록 로드 실패</td></tr>`;
+        if (!append) {
+          document.getElementById('requestsBody').innerHTML =
+            `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty" style="color:var(--red)">요청 목록 로드 실패</td></tr>`;
+        }
       }
+    }
+
+    function appendRequests(list) {
+      const body = document.getElementById('requestsBody');
+      if (!list.length) return;
+      const rows = list.map(r => `<tr>
+        <td class="num" style="white-space:nowrap">${fmtDate(r.timestamp)}</td>
+        <td>${typeBadge(r.type)}${promptPreview(r)}</td>
+        <td>${toolLabel(r)}</td>
+        <td class="num">${r.tokens_input > 0 ? fmtToken(r.tokens_input) : '—'}</td>
+        <td class="num">${r.tokens_output > 0 ? fmtToken(r.tokens_output) : '—'}</td>
+        <td class="num">${formatDuration(r.duration_ms)}</td>
+        <td><span class="sess-id" title="${escHtml(r.session_id || '')}">${escHtml(r.session_id ? r.session_id.slice(0, 12) + '…' : '—')}</span></td>
+      </tr>`).join('');
+      body.insertAdjacentHTML('beforeend', rows);
     }
 
     // ── Browser 상태 ─────────────────────────────────────────────────
@@ -963,6 +1019,12 @@
     let selectedSession = null;
     let allProjects = [];
     let allSessions = [];
+
+    // ── 최근 요청 필터/페이지네이션 상태 ──────────────────────────────
+    let reqFilter = 'all';
+    let reqOffset = 0;
+    const REQ_PAGE = 10;
+    let isSSEConnected = false;
 
     // ── UI 상태 ──────────────────────────────────────────────────────
     const uiState = { rightView: 'default', detailTab: 'flat', isTransitioning: false };
@@ -1037,6 +1099,7 @@
       }
       renderBrowserProjects();
       renderBrowserSessions();
+      fetchSessionsByProject(name);
     }
 
     // ── 세션 선택 ────────────────────────────────────────────────────
@@ -1232,12 +1295,23 @@
       }).join('');
     }
 
-    // ── 전체 세션 로드 ───────────────────────────────────────────────
+    // ── 전체 세션 로드 (초기/주기적 갱신용) ────────────────────────────
     async function fetchAllSessions() {
       try {
-        const res = await fetch(`${API}/api/sessions?limit=500`);
+        const res = await fetch(`${API}/api/sessions?limit=200`);
         const json = await res.json();
         allSessions = json.data || [];
+        renderBrowserSessions();
+      } catch { /* silent */ }
+    }
+
+    // ── 프로젝트별 세션 로드 (프로젝트 선택 시) ─────────────────────────
+    async function fetchSessionsByProject(projectName) {
+      try {
+        const res = await fetch(`${API}/api/projects/${encodeURIComponent(projectName)}/sessions?limit=200`);
+        const json = await res.json();
+        const others = allSessions.filter(s => s.project_name !== projectName);
+        allSessions = [...others, ...(json.data || [])];
         renderBrowserSessions();
       } catch { /* silent */ }
     }
@@ -1270,7 +1344,7 @@
     }
 
     function renderRequests(list) {
-      document.getElementById('requestCount').textContent = `최근 ${list.length}건`;
+      document.getElementById('requestCount').textContent = `${list.length}건`;
       const body = document.getElementById('requestsBody');
       if (!list.length) { body.innerHTML = `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty">데이터 없음</td></tr>`; return; }
       body.innerHTML = list.map(r => `<tr>
@@ -1306,19 +1380,21 @@
           refreshDebounce = setTimeout(() => {
             fetchDashboard();
             fetchRequests();
-            fetchAllSessions();
-            if (selectedSession) selectSession(selectedSession);
-          }, 300);
+          }, 2000);
         });
 
         sseSource.onopen = () => {
           clearError();
           clearTimeout(retryTimer);
+          isSSEConnected = true;
+          const loadMoreBtn = document.getElementById('loadMoreBtn');
+          if (loadMoreBtn) loadMoreBtn.style.display = 'none';
           fetchDashboard();
           fetchRequests();
           fetchAllSessions();
         };
         sseSource.onerror = () => {
+          isSSEConnected = false;
           sseSource.close(); sseSource = null;
           retryTimer = setTimeout(connectSSE, 5000);
         };
@@ -1348,6 +1424,19 @@
 
       // 에러 배너 다시 시도
       document.getElementById('retryBtn').addEventListener('click', manualRefresh);
+
+      // 타입 필터 버튼
+      document.getElementById('typeFilterBtns').addEventListener('click', e => {
+        const btn = e.target.closest('[data-filter]');
+        if (!btn) return;
+        reqFilter = btn.dataset.filter;
+        document.querySelectorAll('.type-filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        fetchRequests(false);
+      });
+
+      // 더 보기 버튼
+      document.getElementById('loadMoreBtn').addEventListener('click', () => fetchRequests(true));
 
       // 턴 아코디언 + 프롬프트 expand (이벤트 위임)
       document.getElementById('detailView').addEventListener('click', e => {
@@ -1396,6 +1485,7 @@
       initEventDelegation();
       initCharts();
       setInterval(() => { advanceBuckets(); drawTimeline(); }, 60000);
+      setInterval(() => fetchAllSessions(), 30000);
     }
 
     init();
