@@ -69,6 +69,7 @@ export function HistoryTab({
   isActive = false,
 }: HistoryTabProps): JSX.Element {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
 
   // 필터링된 세션
@@ -84,12 +85,17 @@ export function HistoryTab({
     } else if (key.downArrow) {
       setSelectedIndex(prev => Math.min(filteredSessions.length - 1, prev + 1));
     } else if (key.return && filteredSessions[selectedIndex]) {
-      onSessionSelect?.(filteredSessions[selectedIndex]);
-    } else if (input && !key.ctrl && !key.meta) {
-      // 검색 필터
-      if (input === '/') {
+      const session = filteredSessions[selectedIndex];
+      setSelectedSessionId(session.id);
+      onSessionSelect?.(session);
+    } else if (key.escape) {
+      if (selectedSessionId) {
+        setSelectedSessionId(null);
+      } else {
         setFilter('');
-      } else if (key.escape) {
+      }
+    } else if (input && !key.ctrl && !key.meta && !key.escape) {
+      if (input === '/') {
         setFilter('');
       } else if (input.length === 1) {
         setFilter(prev => prev + input);
@@ -122,37 +128,38 @@ export function HistoryTab({
         </Box>
       ) : (
         filteredSessions.map((session, index) => {
-          const isSelected = index === selectedIndex;
-          const isActive = !session.ended_at;
+          const isCursor = index === selectedIndex;
+          const isPinned = session.id === selectedSessionId;
+          const isRunning = !session.ended_at;
+          const color = isPinned ? 'cyan' : isCursor ? 'white' : 'gray';
+          const bold = isPinned || isCursor;
+          const prefix = isPinned ? '● ' : isCursor ? '> ' : '  ';
 
           return (
-            <Box
-              key={session.id}
-              height={1}
-            >
+            <Box key={session.id} height={1}>
               <Box width="25%">
-                <Text color={isSelected ? 'cyan' : 'white'} wrap="truncate" bold={isSelected}>
-                  {isSelected ? '> ' : '  '}{session.project_name}
+                <Text color={color} wrap="truncate" bold={bold}>
+                  {prefix}{session.project_name}
                 </Text>
               </Box>
               <Box width="25%">
-                <Text color={isSelected ? 'cyan' : 'gray'} bold={isSelected}>
+                <Text color={color} bold={bold}>
                   {formatDate(session.started_at)}
                 </Text>
               </Box>
               <Box width="15%">
-                <Text color={isSelected ? 'cyan' : 'white'} bold={isSelected}>
+                <Text color={color} bold={bold}>
                   {formatDuration(session.started_at, session.ended_at)}
                 </Text>
               </Box>
               <Box width="20%" justifyContent="flex-end">
-                <Text color={isSelected ? 'cyan' : 'yellow'} bold={isSelected}>
+                <Text color={isPinned ? 'cyan' : 'yellow'} bold={bold}>
                   {formatTokens(session.total_tokens)}
                 </Text>
               </Box>
               <Box width="15%" justifyContent="flex-end">
-                <Text color={isSelected ? 'cyan' : isActive ? 'green' : 'gray'} bold={isSelected}>
-                  {isActive ? '● Active' : '○ Ended'}
+                <Text color={isPinned ? 'cyan' : isRunning ? 'green' : 'gray'} bold={bold}>
+                  {isRunning ? '● Active' : '○ Ended'}
                 </Text>
               </Box>
             </Box>
@@ -162,7 +169,7 @@ export function HistoryTab({
 
       {/* 도움말 */}
       <Box marginTop={1}>
-        <Text color="gray">↑↓ Navigate | Enter Select | / Search | ESC Clear</Text>
+        <Text color="gray">↑↓ Navigate | Enter Select | / Search | ESC Deselect/Clear</Text>
       </Box>
     </Box>
   );
