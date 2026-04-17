@@ -15,7 +15,6 @@ import {
   getAllRequests,
   getRequestsBySession,
   getRequestsByType,
-  getRequestsWithFilter,
   getTopTokenRequests,
   getRequestStats,
   getRequestStatsBySession,
@@ -37,6 +36,7 @@ interface ApiResponse<T = unknown> {
     total?: number;
     page?: number;
     limit?: number;
+    offset?: number;
   };
 }
 
@@ -108,8 +108,9 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
   // GET /api/requests
   if (path === '/api/requests' && method === 'GET') {
     const limit = parseInt(url.searchParams.get('limit') || '100', 10);
-    const requests = getAllRequests(db, limit);
-    return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit } });
+    const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10));
+    const requests = getAllRequests(db, limit, offset);
+    return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit, offset } });
   }
 
   // GET /api/requests/top
@@ -124,8 +125,9 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
   if (path.match(/^\/api\/requests\/by-type\/[^\/]+$/) && method === 'GET') {
     const type = path.split('/')[4] as 'prompt' | 'tool_call' | 'system';
     const limit = parseInt(url.searchParams.get('limit') || '100', 10);
-    const requests = getRequestsByType(db, type, limit);
-    return jsonResponse({ success: true, data: requests });
+    const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10));
+    const requests = getRequestsByType(db, type, limit, offset);
+    return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit, offset } });
   }
 
   // GET /api/stats/sessions

@@ -130,10 +130,11 @@ export function getRequestById(
  */
 export function getAllRequests(
   db: Database,
-  limit: number = 100
+  limit: number = 100,
+  offset: number = 0
 ): RequestQueryResult[] {
-  return db.query('SELECT * FROM requests ORDER BY timestamp DESC LIMIT ?')
-    .all(limit) as RequestQueryResult[];
+  return db.query('SELECT * FROM requests ORDER BY timestamp DESC LIMIT ? OFFSET ?')
+    .all(limit, offset) as RequestQueryResult[];
 }
 
 /**
@@ -155,11 +156,12 @@ export function getRequestsBySession(
 export function getRequestsByType(
   db: Database,
   type: RequestType,
-  limit: number = 100
+  limit: number = 100,
+  offset: number = 0
 ): RequestQueryResult[] {
   return db.query(
-    'SELECT * FROM requests WHERE type = ? ORDER BY timestamp DESC LIMIT ?'
-  ).all(type, limit) as RequestQueryResult[];
+    'SELECT * FROM requests WHERE type = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?'
+  ).all(type, limit, offset) as RequestQueryResult[];
 }
 
 /**
@@ -583,5 +585,5 @@ export function getTurnsBySession(
     }
   }
 
-  return turnOrder.map(id => turnMap.get(id)!);
+  return turnOrder.map(id => turnMap.get(id)!).reverse();
 }
