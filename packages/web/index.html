@@ -296,7 +296,7 @@
     .prompt-expand-row td { padding: 0 !important; border-bottom: 1px solid var(--border); }
     .prompt-expand-box {
       background: rgba(217,119,87,0.05); border-left: 2px solid var(--accent);
-      padding: 8px 16px; max-height: 140px; overflow-y: auto;
+      padding: 8px 16px; max-height: 300px; overflow-y: auto;
       font-size: 11px; line-height: 1.7; color: var(--text-dim);
       white-space: pre-wrap; word-break: break-all;
     }
@@ -360,6 +360,31 @@
     .tool-icon { font-size: 13px; }
     .tool-icon-agent   { color: var(--orange); }
     .tool-icon-default { color: var(--green); }
+
+    /* ─── TURN BAR ─────────────────────────────────────────────────── */
+    .turn-bar { display: flex; align-items: center; gap: 4px; flex-shrink: 0; width: 84px; }
+    .turn-bar .bar-track { flex: 1; min-width: 36px; }
+    .turn-bar .bar-fill { background: var(--orange); }
+    .turn-bar .bar-label { font-size: 10px; color: var(--text-dim); min-width: 24px; text-align: right; }
+
+    /* ─── DETAIL AGGREGATE BADGES ────────────────────────────────────── */
+    .detail-agg-badges {
+      width: 100%; display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px;
+    }
+    .detail-agg-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 10px; color: var(--text-dim);
+      background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+      padding: 2px 8px; border-radius: 4px; white-space: nowrap;
+    }
+    .detail-agg-badge strong { color: var(--accent); }
+
+    /* ─── FLAT VIEW SUBTOTAL ─────────────────────────────────────────── */
+    .flat-subtotal td {
+      font-size: 11px; color: var(--text-dim); padding: 6px 12px;
+      border-top: 1px solid var(--border);
+      background: rgba(255,255,255,0.02) !important;
+    }
 
     /* ─── RESPONSIVE ────────────────────────────────────────────────── */
     @media (max-width: 768px) {
@@ -544,6 +569,7 @@
             <span class="detail-project" id="detailProject">—</span>
             <span class="detail-tokens" id="detailTokens"></span>
             <span class="detail-tokens" id="detailEndedAt" style="color:var(--text-muted)"></span>
+            <div class="detail-agg-badges" id="detailBadges" style="display:none"></div>
           </div>
           <button class="btn-close" id="btnCloseDetail">✕ 닫기</button>
         </div>
@@ -807,12 +833,37 @@
       if (type === 'prompt') html += `<span class="role-badge role-user">user</span>`;
       return html;
     }
+    function parseToolDetail(raw) {
+      if (!raw) return null;
+      // 1. JSON parse
+      try {
+        const obj = JSON.parse(raw);
+        if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+          return Object.entries(obj).slice(0, 3)
+            .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+            .join(' · ');
+        }
+      } catch {}
+      // 2. key=value lines
+      try {
+        const lines = raw.split('\n').filter(l => /^\w[\w\s]*=/.test(l.trim()));
+        if (lines.length) return lines.slice(0, 3).map(l => l.trim()).join(' · ');
+      } catch {}
+      // 3. raw fallback
+      return raw;
+    }
+
     function toolLabel(r) {
       const base = r.tool_name;
       if (!base) return '<span style="color:var(--text-dim)">—</span>';
-      const sub = r.tool_detail;
-      if (sub) return `<div class="tool-cell"><span class="tool-main">${escHtml(base)}</span><span class="tool-sub">${escHtml(sub)}</span></div>`;
-      return `<span class="tool-main">${escHtml(base)}</span>`;
+      const icon = toolIconHtml(base);
+      const parsed = parseToolDetail(r.tool_detail);
+      if (parsed) {
+        const truncated = parsed.length > 80 ? parsed.slice(0, 80) + '…' : parsed;
+        const subAttr = parsed.length > 80 ? ` title="${escHtml(parsed)}"` : '';
+        return `<div class="tool-cell"><span class="tool-main">${icon}${escHtml(base)}</span><span class="tool-sub"${subAttr}>${escHtml(truncated)}</span></div>`;
+      }
+      return `<span class="tool-main">${icon}${escHtml(base)}</span>`;
     }
 
     const FLAT_VIEW_COLS = 6;
@@ -840,12 +891,13 @@
       if (tr.dataset.expanded === rid) { delete tr.dataset.expanded; return; }
       tr.dataset.expanded = rid;
       const text = _promptCache[rid] || '';
-      const MAX = 500;
-      const display = text.length > MAX ? text.slice(0, MAX) + `\n…(총 ${text.length}자)` : text;
+      const display = text;
+      const lengthHint = text.length > 500 ? `\n─── 총 ${text.length.toLocaleString('ko-KR')}자 ───` : '';
+      const fullDisplay = display + lengthHint;
       const expandTr = document.createElement('tr');
       expandTr.dataset.expandFor = rid;
       expandTr.className = 'prompt-expand-row';
-      expandTr.innerHTML = `<td colspan="${FLAT_VIEW_COLS}"><div class="prompt-expand-box">${escHtml(display)}</div></td>`;
+      expandTr.innerHTML = `<td colspan="${FLAT_VIEW_COLS}"><div class="prompt-expand-box">${escHtml(fullDisplay)}</div></td>`;
       tr.after(expandTr);
     }
     function escHtml(s) {
@@ -1037,6 +1089,8 @@
       selectedSession = null;
       renderRightPanel();
       renderBrowserSessions();
+      const badgesEl = document.getElementById('detailBadges');
+      if (badgesEl) badgesEl.style.display = 'none';
     }
 
     // ── 세션 상세 렌더 ───────────────────────────────────────────────
@@ -1046,7 +1100,7 @@
         body.innerHTML = `<tr><td colspan="${FLAT_VIEW_COLS}" class="empty-hint">요청 데이터 없음</td></tr>`;
         return;
       }
-      body.innerHTML = list.map(r => `<tr>
+      const rows = list.map(r => `<tr>
         <td class="num" style="white-space:nowrap">${fmtDate(r.timestamp)}</td>
         <td>${typeBadge(r.type)}${r.model ? `<span class="model-badge">${escHtml(r.model)}</span>` : ''}${promptPreview(r)}</td>
         <td>${toolLabel(r)}</td>
@@ -1054,6 +1108,18 @@
         <td class="num">${r.tokens_output > 0 ? fmtToken(r.tokens_output) : '—'}</td>
         <td class="num">${formatDuration(r.duration_ms)}</td>
       </tr>`).join('');
+
+      const typeCounts = {};
+      list.forEach(r => { typeCounts[r.type] = (typeCounts[r.type] || 0) + 1; });
+      const subtotalParts = Object.entries(typeCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([type, count]) => {
+          const cls = ['prompt', 'tool_call', 'system'].includes(type) ? type : 'unknown';
+          return `<span class="type-badge type-${cls}">${type}</span>&nbsp;${count}건`;
+        }).join('&ensp;');
+      const subtotalRow = `<tr class="flat-subtotal"><td colspan="${FLAT_VIEW_COLS}" style="text-align:right">${subtotalParts}</td></tr>`;
+
+      body.innerHTML = rows + subtotalRow;
     }
 
     // ── 탭 전환 ──────────────────────────────────────────────────────
@@ -1081,16 +1147,48 @@
     // ── 턴 뷰 렌더 ──────────────────────────────────────────────────
     function renderTurnView(turns) {
       const container = document.getElementById('turnListBody');
+      const badgesEl  = document.getElementById('detailBadges');
+
       if (!turns.length) {
         container.innerHTML = '<div class="turn-row-empty">턴 데이터 없음</div>';
+        if (badgesEl) badgesEl.style.display = 'none';
         return;
       }
+
+      const sessionTotalTokens = turns.reduce((s, t) => s + (t.summary.total_tokens || 0), 0);
+
+      // 집계 배지
+      if (badgesEl && sessionTotalTokens > 0) {
+        const maxCostTurn = turns.reduce((a, b) =>
+          (a.summary.total_tokens > b.summary.total_tokens ? a : b));
+        const toolCountMap = {};
+        turns.forEach(t => t.tool_calls.forEach(tc => {
+          if (tc.tool_name) toolCountMap[tc.tool_name] = (toolCountMap[tc.tool_name] || 0) + 1;
+        }));
+        const topTool = Object.entries(toolCountMap).sort((a, b) => b[1] - a[1])[0];
+        let badgesHtml = `<span class="detail-agg-badge">최고 비용 Turn: <strong>T${maxCostTurn.turn_index}</strong> (${fmtToken(maxCostTurn.summary.total_tokens)})</span>`;
+        if (topTool) {
+          badgesHtml += `<span class="detail-agg-badge">최다 호출 Tool: <strong>${escHtml(topTool[0])}</strong> (${topTool[1]}회)</span>`;
+        }
+        badgesEl.innerHTML = badgesHtml;
+        badgesEl.style.display = 'flex';
+      } else if (badgesEl) {
+        badgesEl.style.display = 'none';
+      }
+
       container.innerHTML = turns.map(turn => {
         const toolCount  = turn.summary.tool_call_count;
         const tokIn      = turn.summary.tokens_input ?? 0;
         const tokOut     = turn.summary.tokens_output ?? 0;
         const durMs      = turn.prompt?.duration_ms ?? 0;
         const meta = `도구 ${toolCount}개 · IN ${fmtToken(tokIn)} / OUT ${fmtToken(tokOut)}${durMs > 0 ? ` · ⏱ ${formatDuration(durMs)}` : ''}`;
+
+        const barPct = sessionTotalTokens > 0
+          ? Math.round((turn.summary.total_tokens || 0) / sessionTotalTokens * 100)
+          : 0;
+        const barHtml = sessionTotalTokens > 0
+          ? `<div class="turn-bar"><div class="bar-track"><div class="bar-fill" style="width:${barPct}%"></div></div><span class="bar-label">${barPct}%</span></div>`
+          : '';
 
         const promptRow = turn.prompt ? `
           <div class="turn-row turn-row-prompt">
@@ -1112,8 +1210,8 @@
               <span class="tool-main">${escHtml(tc.tool_name || '—')}</span>
               ${tc.tool_detail ? `<span class="tool-sub">${escHtml(tc.tool_detail)}</span>` : ''}
             </div>
-            <span class="num">—</span>
-            <span class="num">${fmtToken(tc.tokens_total)}</span>
+            <span class="num">${tc.tokens_input > 0 ? fmtToken(tc.tokens_input) : '—'}</span>
+            <span class="num">${tc.tokens_output > 0 ? fmtToken(tc.tokens_output) : '—'}</span>
             <span class="num" style="color:var(--text-dim)">${formatDuration(tc.duration_ms)}</span>
             <span class="num" style="color:var(--text-dim)">${fmtTime(tc.timestamp)}</span>
           </div>`).join('');
@@ -1123,6 +1221,7 @@
             <span class="turn-badge">T${turn.turn_index}</span>
             <span class="turn-time">${fmtTime(turn.started_at)}</span>
             <span class="turn-meta">${meta}</span>
+            ${barHtml}
             <span class="turn-toggle">▸</span>
           </div>
           <div class="turn-children">
