@@ -10,19 +10,31 @@ import { Box, Text } from 'ink';
 import { Layout, Header, Sidebar, Main, Footer } from './components/Layout';
 import { TabBar, TabContent, TabId } from './components/TabBar';
 import { useKeyboard } from './hooks/useKeyboard';
+import { useStats } from './hooks/useStats';
+import { useSessionList } from './hooks/useSessionList';
 import { LiveTab } from './components/LiveTab';
 import { HistoryTab } from './components/HistoryTab';
 import { AnalysisTab } from './components/AnalysisTab';
+
+const API_URL = 'http://localhost:9999';
 
 /**
  * 메인 앱
  */
 export function App(): JSX.Element {
-  // 상태
   const [activeTab, setActiveTab] = useState<TabId>('live');
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  // 키보드 핸들러
+  const { data, isLoading, error } = useStats({
+    apiUrl: `${API_URL}/api/dashboard`,
+    autoRefresh: true,
+    interval: 5000,
+  });
+  const { sessions } = useSessionList({
+    apiUrl: `${API_URL}/api/sessions`,
+    interval: 5000,
+  });
+
   useKeyboard({
     activeTab,
     onTabChange: setActiveTab,
@@ -32,35 +44,28 @@ export function App(): JSX.Element {
     onSelectionChange: setSelectedIndex,
   });
 
-  const [sessions] = useState<Array<{
-    id: string;
-    project_name: string;
-    started_at: number;
-    total_tokens: number;
-  }>>([]);
-
-  // 탭 컨텐츠
   const tabContents: Record<TabId, React.ReactNode> = {
-    live: <LiveTab />,
+    live: <LiveTab data={data} isLoading={isLoading} error={error} />,
     history: (
       <HistoryTab
-        sessions={sessions}
+        sessions={sessions.map(s => ({ ...s, ended_at: s.ended_at ?? undefined }))}
         onSessionSelect={() => {}}
+        isActive={activeTab === 'history'}
       />
     ),
     analysis: <AnalysisTab />,
     settings: (
       <Box flexDirection="column" padding={1}>
         <Text color="cyan">Settings Tab - Configuration</Text>
-        <Text color="gray">Server: http://localhost:9999</Text>
+        <Text color="gray">Server: {API_URL}</Text>
       </Box>
     ),
   };
 
   return (
     <Layout
-      header={<Header title="spyglass" status="connected" sessionCount={0} />}
-      sidebar={<Sidebar sessions={[]} />}
+      header={<Header title="spyglass" status="connected" sessionCount={sessions.length} />}
+      sidebar={<Sidebar sessions={sessions} />}
       main={
         <Main>
           <TabBar activeTab={activeTab} onTabChange={setActiveTab} />

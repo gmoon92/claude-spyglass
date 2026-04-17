@@ -5,7 +5,7 @@
  */
 
 /** @jsxImportSource react */
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
 /**
@@ -26,6 +26,7 @@ export interface SessionItem {
 export interface HistoryTabProps {
   sessions?: SessionItem[];
   onSessionSelect?: (session: SessionItem) => void;
+  isActive?: boolean;
 }
 
 /**

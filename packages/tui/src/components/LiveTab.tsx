@@ -8,17 +8,22 @@
 /** @jsxImportSource react */
 import { useMemo } from 'react';
 import { Box, Text, useStdout } from 'ink';
-import { useStats } from '../hooks/useStats';
+import type { DashboardData } from '../hooks/useStats';
 import { useSSE } from '../hooks/useSSE';
 import { ProgressBar } from './ProgressBar';
+
+export interface LiveTabProps {
+  data: DashboardData | null;
+  isLoading: boolean;
+  error: string | null;
+}
 
 /**
  * Live Tab 컴포넌트
  */
-export function LiveTab(): JSX.Element {
+export function LiveTab({ data, isLoading, error }: LiveTabProps): JSX.Element {
   const { stdout } = useStdout();
   const columns = stdout?.columns || 80;
-  const { data, isLoading, error } = useStats({ autoRefresh: true, interval: 3000 });
   const { status: sseStatus, lastMessage } = useSSE({ autoReconnect: true });
 
   // SSE 상태 표시
