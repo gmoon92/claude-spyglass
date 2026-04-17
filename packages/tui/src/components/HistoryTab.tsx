@@ -66,6 +66,7 @@ function formatTokens(tokens: number): string {
 export function HistoryTab({
   sessions = [],
   onSessionSelect,
+  isActive = false,
 }: HistoryTabProps): JSX.Element {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [filter, setFilter] = useState('');
@@ -75,8 +76,9 @@ export function HistoryTab({
     s.project_name.toLowerCase().includes(filter.toLowerCase())
   );
 
-  // 키보드 핸들링
+  // 키보드 핸들링 — isActive 가드로 비활성 탭 이벤트 차단
   useInput((input, key) => {
+    if (!isActive) return;
     if (key.upArrow) {
       setSelectedIndex(prev => Math.max(0, prev - 1));
     } else if (key.downArrow) {

@@ -5,7 +5,7 @@
  */
 
 /** @jsxImportSource react */
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
 /**
@@ -41,6 +41,7 @@ export interface AnalysisData {
  */
 export interface AnalysisTabProps {
   data?: AnalysisData;
+  isActive?: boolean;
 }
 
 /**
@@ -67,13 +68,14 @@ function getTypeColor(type: string): string {
 /**
  * Analysis Tab 컴포넌트
  */
-export function AnalysisTab({ data }: AnalysisTabProps): JSX.Element {
+export function AnalysisTab({ data, isActive = false }: AnalysisTabProps): JSX.Element {
   const [activeSection, setActiveSection] = useState(0);
 
   const sections = ['Overview', 'Top Requests', 'By Type', 'By Tool'];
 
-  // 키보드 핸들링
-  useInput((input, key) => {
+  // 키보드 핸들링 — isActive 가드로 비활성 탭 이벤트 차단
+  useInput((_input, key) => {
+    if (!isActive) return;
     if (key.leftArrow) {
       setActiveSection(prev => Math.max(0, prev - 1));
     } else if (key.rightArrow) {

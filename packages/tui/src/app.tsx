@@ -53,7 +53,7 @@ export function App(): JSX.Element {
         isActive={activeTab === 'history'}
       />
     ),
-    analysis: <AnalysisTab />,
+    analysis: <AnalysisTab isActive={activeTab === 'analysis'} />,
     settings: (
       <Box flexDirection="column" padding={1}>
         <Text color="cyan">Settings Tab - Configuration</Text>
