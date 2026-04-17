@@ -111,10 +111,41 @@ function updateSessionTotalTokens(db: Database, payload: CollectPayload): void {
 // =============================================================================
 
 /**
+ * 세션 내 다음 turn_id 채번
+ * - prompt 타입 수신 시 호출
+ * - 포맷: "<session_id>-T<순번>" (1부터 시작)
+ */
+function assignTurnId(db: Database, sessionId: string): string {
+  const row = db.query(
+    `SELECT COUNT(*) as cnt FROM requests WHERE session_id = ? AND type = 'prompt'`
+  ).get(sessionId) as { cnt: number } | null;
+  const next = (row?.cnt ?? 0) + 1;
+  return `${sessionId}-T${next}`;
+}
+
+/**
+ * 현재 세션의 마지막 turn_id 조회 (tool_call 저장 시 사용)
+ */
+function getLastTurnId(db: Database, sessionId: string): string | null {
+  const row = db.query(
+    `SELECT turn_id FROM requests WHERE session_id = ? AND type = 'prompt' ORDER BY timestamp DESC LIMIT 1`
+  ).get(sessionId) as { turn_id: string } | null;
+  return row?.turn_id ?? null;
+}
+
+/**
  * 요청 데이터 저장
  */
 function saveRequest(db: Database, payload: CollectPayload): boolean {
   try {
+    let turnId: string | undefined;
+
+    if (payload.request_type === 'prompt') {
+      turnId = assignTurnId(db, payload.session_id);
+    } else {
+      turnId = getLastTurnId(db, payload.session_id) ?? undefined;
+    }
+
     createRequest(db, {
       id: payload.id,
       session_id: payload.session_id,
@@ -122,6 +153,7 @@ function saveRequest(db: Database, payload: CollectPayload): boolean {
       type: payload.request_type,
       tool_name: payload.tool_name,
       tool_detail: payload.tool_detail,
+      turn_id: turnId,
       model: payload.model,
       tokens_input: payload.tokens_input,
       tokens_output: payload.tokens_output,
