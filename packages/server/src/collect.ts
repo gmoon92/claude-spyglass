@@ -12,6 +12,7 @@ import {
   SpyglassDatabase,
   getDatabase,
 } from '@spyglass/storage';
+import { broadcastNewRequest } from './sse';
 
 // =============================================================================
 // 타입 정의
@@ -36,6 +37,8 @@ export interface CollectPayload {
   duration_ms?: number;
   payload?: string;
   source: string;
+  cache_creation_tokens?: number;
+  cache_read_tokens?: number;
 }
 
 /**
@@ -157,6 +160,8 @@ function saveRequest(db: Database, payload: CollectPayload): boolean {
       duration_ms: payload.duration_ms || 0,
       payload: payload.payload,
       source: payload.source || null,
+      cache_creation_tokens: payload.cache_creation_tokens ?? 0,
+      cache_read_tokens: payload.cache_read_tokens ?? 0,
     });
     return true;
   } catch (error) {

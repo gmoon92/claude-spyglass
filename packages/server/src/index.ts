@@ -12,7 +12,7 @@ import {
   getDefaultDbPath,
 } from '@spyglass/storage';
 import { collectHandler } from './collect';
-import { apiRouter } from './api';
+import { apiRouter, invalidateDashboardCache } from './api';
 import { sseRouter, broadcastUpdate } from './sse';
 
 // =============================================================================
@@ -58,8 +58,9 @@ async function handleRequest(req: Request): Promise<Response> {
     // /collect 엔드포인트
     if (path === '/collect') {
       const result = await collectHandler(req, db!);
-      // 데이터 수신 후 SSE 브로드캐스트
+      // 데이터 수신 후 캐시 무효화 + SSE 브로드캐스트
       if (result.status === 200) {
+        invalidateDashboardCache();
         broadcastUpdate({ type: 'new_request' });
       }
       return result;

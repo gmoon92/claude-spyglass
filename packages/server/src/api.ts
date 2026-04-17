@@ -41,6 +41,17 @@ interface ApiResponse<T = unknown> {
 }
 
 // =============================================================================
+// Dashboard 캐시
+// =============================================================================
+
+const DASHBOARD_CACHE_TTL = 30_000;
+let _dashboardCache: { data: unknown; ts: number } | null = null;
+
+export function invalidateDashboardCache(): void {
+  _dashboardCache = null;
+}
+
+// =============================================================================
 // 라우터
 // =============================================================================
 
@@ -55,7 +66,9 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
   // GET /api/sessions
   if (path === '/api/sessions' && method === 'GET') {
     const limit = parseInt(url.searchParams.get('limit') || '100', 10);
-    const sessions = getAllSessions(db, limit);
+    const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
+    const toTs = url.searchParams.get('to') ? parseInt(url.searchParams.get('to')!, 10) : undefined;
+    const sessions = getAllSessions(db, limit, fromTs, toTs);
     return jsonResponse({ success: true, data: sessions, meta: { total: sessions.length, limit } });
   }
 
@@ -108,9 +121,10 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
   // GET /api/requests
   if (path === '/api/requests' && method === 'GET') {
     const limit = parseInt(url.searchParams.get('limit') || '100', 10);
-    const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10));
-    const requests = getAllRequests(db, limit, offset);
-    return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit, offset } });
+    const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
+    const toTs = url.searchParams.get('to') ? parseInt(url.searchParams.get('to')!, 10) : undefined;
+    const requests = getAllRequests(db, limit, fromTs, toTs);
+    return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit } });
   }
 
   // GET /api/requests/top
@@ -164,6 +178,11 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
 
   // GET /api/dashboard
   if (path === '/api/dashboard' && method === 'GET') {
+    const now = Date.now();
+    if (_dashboardCache && now - _dashboardCache.ts < DASHBOARD_CACHE_TTL) {
+      return jsonResponse({ success: true, data: _dashboardCache.data });
+    }
+
     const sessionStats = getSessionStats(db);
     const requestStats = getRequestStats(db);
     const projectStats = getProjectStats(db, 5);
@@ -172,24 +191,23 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     const activeSessions = getActiveSessions(db);
     const avgDurationMs = Math.round(getAvgPromptDurationMs(db));
 
-    return jsonResponse({
-      success: true,
-      data: {
-        summary: {
-          totalSessions: sessionStats.total_sessions,
-          totalRequests: requestStats.total_requests,
-          totalTokens: requestStats.total_tokens,
-          activeSessions: activeSessions.length,
-          avgDurationMs,
-        },
-        sessions: sessionStats,
-        requests: requestStats,
-        projects: projectStats,
-        tools: toolStats,
-        types: typeStats,
-        active: activeSessions,
+    const data = {
+      summary: {
+        totalSessions: sessionStats.total_sessions,
+        totalRequests: requestStats.total_requests,
+        totalTokens: requestStats.total_tokens,
+        activeSessions: activeSessions.length,
+        avgDurationMs,
       },
-    });
+      sessions: sessionStats,
+      requests: requestStats,
+      projects: projectStats,
+      tools: toolStats,
+      types: typeStats,
+      active: activeSessions,
+    };
+    _dashboardCache = { data, ts: now };
+    return jsonResponse({ success: true, data });
   }
 
   // 404
