@@ -22,6 +22,7 @@ import {
   getRequestStatsByType,
   getToolStats,
   getTurnsBySession,
+  getAvgPromptDurationMs,
 } from '@spyglass/storage';
 
 // =============================================================================
@@ -167,6 +168,7 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     const toolStats = getToolStats(db, 5);
     const typeStats = getRequestStatsByType(db);
     const activeSessions = getActiveSessions(db);
+    const avgDurationMs = Math.round(getAvgPromptDurationMs(db));
 
     return jsonResponse({
       success: true,
@@ -176,6 +178,7 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
           totalRequests: requestStats.total_requests,
           totalTokens: requestStats.total_tokens,
           activeSessions: activeSessions.length,
+          avgDurationMs,
         },
         sessions: sessionStats,
         requests: requestStats,
