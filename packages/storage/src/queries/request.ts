@@ -19,6 +19,7 @@ export interface CreateRequestParams {
   type: RequestType;
   tool_name?: string;
   tool_detail?: string;
+  turn_id?: string;
   model?: string;
   tokens_input?: number;
   tokens_output?: number;
@@ -30,9 +31,9 @@ export interface CreateRequestParams {
 /** 요청 생성 SQL */
 const SQL_CREATE_REQUEST = `
   INSERT INTO requests (
-    id, session_id, timestamp, type, tool_name, tool_detail, model,
+    id, session_id, timestamp, type, tool_name, tool_detail, turn_id, model,
     tokens_input, tokens_output, tokens_total, duration_ms, payload
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 /**
@@ -50,6 +51,7 @@ export function createRequest(
     params.type,
     params.tool_name ?? null,
     params.tool_detail ?? null,
+    params.turn_id ?? null,
     params.model ?? null,
     params.tokens_input ?? 0,
     params.tokens_output ?? 0,
@@ -77,6 +79,7 @@ export function createRequests(
         item.type,
         item.tool_name ?? null,
         item.tool_detail ?? null,
+        item.turn_id ?? null,
         item.model ?? null,
         item.tokens_input ?? 0,
         item.tokens_output ?? 0,

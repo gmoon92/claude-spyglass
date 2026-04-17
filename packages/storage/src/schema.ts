@@ -121,6 +121,7 @@ export interface Request {
   type: RequestType;
   tool_name?: string;
   tool_detail?: string;
+  turn_id?: string;
   model?: string;
   tokens_input: number;
   tokens_output: number;
@@ -137,13 +138,48 @@ export interface Request {
 /**
  * 테이블 스키마 정보 (마이그레이션/검증용)
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /**
  * v2 마이그레이션: tool_detail 컬럼 추가
  */
 export const MIGRATION_V2 = `
 ALTER TABLE requests ADD COLUMN tool_detail TEXT;
+`;
+
+/**
+ * v3 마이그레이션: turn_id 컬럼 추가 + 기존 데이터 소급 적용
+ *
+ * turn_id 포맷: "<session_id>-T<순번>" (예: "abc123-T1")
+ * - prompt 레코드: 세션 내 순번으로 채번
+ * - tool_call/system 레코드: 직전 prompt의 turn_id 전파
+ */
+export const MIGRATION_V3 = `
+ALTER TABLE requests ADD COLUMN turn_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_requests_turn ON requests(turn_id);
+
+UPDATE requests
+SET turn_id = session_id || '-T' || ((
+  SELECT COUNT(*)
+  FROM requests r2
+  WHERE r2.session_id = requests.session_id
+    AND r2.type = 'prompt'
+    AND r2.timestamp < requests.timestamp
+) + 1)
+WHERE type = 'prompt';
+
+UPDATE requests
+SET turn_id = (
+  SELECT r2.turn_id
+  FROM requests r2
+  WHERE r2.session_id = requests.session_id
+    AND r2.type = 'prompt'
+    AND r2.timestamp <= requests.timestamp
+  ORDER BY r2.timestamp DESC
+  LIMIT 1
+)
+WHERE type IN ('tool_call', 'system')
+  AND turn_id IS NULL;
 `;
 
 export const SCHEMA_META = {

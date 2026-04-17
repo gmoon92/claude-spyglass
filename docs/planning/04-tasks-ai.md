@@ -706,3 +706,87 @@ if (input === '1') { onTabChange('live'); return; }
 - **Phase 시작 시 의존성 버전 고정**: `package.json`에서 버전 범위 대신 정확한 버전 명시
 - **API 변경 대응 시간 버퍼**: 메이저 버전 업그레이드 시 20% 추가 버퍼 권장
 - **빌드 테스트 필수**: 각 Phase 완료 시 `bun build`로 컴파일 테스트 추가
+
+---
+
+## Phase 12: 대화 턴 뷰 (Turn View)
+
+> 추가 일자: 2026-04-17  
+> 배경: 전문가 패널 회의(데이터 분석가·백엔드 설계자·UX/Frontend) 결과 채택
+
+**목표:**
+- 세션 내 요청을 "대화 턴" 단위로 묶어 Fiddler 스타일 stack 뷰 제공
+- 턴 = `UserPromptSubmit`(prompt) → 이후 연속 `PostToolUse`(tool_call) 묶음
+- 세션 상세 화면에 평면 뷰 ↔ 턴 뷰 탭 전환
+
+**설계 결정:**
+- DB: `requests` 테이블에 `turn_id TEXT` 컬럼 추가 (schema v3)
+- `turn_id` 포맷: `<session_id>-T<순번>` (예: `abc123-T1`, `abc123-T2`)
+- 기존 데이터 소급 적용: SQL 2-step UPDATE (prompt 채번 → tool_call 전파)
+- 신규 API: `GET /api/sessions/:id/turns`
+- main vs 서브에이전트 구분: `payload.agent_id` 유무
+
+**완료 조건:**
+
+| Task | 완료 조건 | 검증 방법 |
+|------|----------|----------|
+| 12-1 | turn_id 컬럼 생성 + 기존 데이터 소급 적용 | `sqlite3 DB "SELECT turn_id FROM requests LIMIT 5"` |
+| 12-2 | 신규 prompt 수신 시 turn_id 자동 채번 | 테스트 데이터 수집 후 turn_id 확인 |
+| 12-3 | `/api/sessions/:id/turns` 응답 검증 | `curl` 또는 Playwright API 호출 |
+| 12-4 | 대시보드 턴 뷰 렌더링 + 탭 전환 | Playwright 스크린샷 + DOM 검증 |
+
+### Task 목록
+
+| ID | Task | 담당 파일 |
+|----|------|---------|
+| 12-1 | schema v3: turn_id 컬럼 + 마이그레이션 + 소급 적용 | `schema.ts`, `connection.ts`, `queries/request.ts` |
+| 12-2 | collect.ts: prompt 수신 시 turn_id 자동 채번 | `server/collect.ts` |
+| 12-3 | getTurnsBySession() + `/api/sessions/:id/turns` | `queries/request.ts`, `api.ts` |
+| 12-4 | index.html: 탭 전환 UI + 턴 뷰 렌더러 | `packages/web/index.html` |
+
+### 커밋 순서
+
+```bash
+feat(phase-12-1): turn_id 컬럼 추가 및 기존 데이터 소급 적용 (schema v3)
+feat(phase-12-2): prompt 수신 시 turn_id 자동 채번
+feat(phase-12-3): getTurnsBySession 쿼리 및 /api/sessions/:id/turns API 추가
+feat(phase-12-4): 웹 대시보드 턴 뷰 — 탭 전환, accordion, 트리 렌더러
+
+git tag phase-12-turn-view-complete
+```
+
+### 턴 뷰 UI 스펙
+
+```
+▼ [Turn 2]  14:25:11  "코드 리뷰해줘."              45.2k tok
+  ├─ ◉ Bash       git status                        214 tok
+  ├─ ◎ Agent      general-purpose                  28.4k tok
+  └─ ◉ Read       CLAUDE.md                         2.1k tok
+```
+
+- `◉` 일반 tool_call, `◎` Agent/Skill (서브에이전트 계열)
+- 기본: 접힘 상태 / 클릭: 하위 tool_call 펼침
+- 탭: `[평면 뷰]` (기존) ↔ `[턴 뷰]` (신규)
+- 세션 전환 시 탭 상태 유지, 턴 펼침 상태 초기화
+
+### API 응답 구조
+
+```json
+GET /api/sessions/:id/turns
+{
+  "success": true,
+  "data": [
+    {
+      "turn_id": "abc-T1",
+      "turn_index": 1,
+      "started_at": 1713340000000,
+      "prompt": { "id": "...", "timestamp": ..., "tokens_total": 1220, "payload": "..." },
+      "tool_calls": [
+        { "id": "...", "tool_name": "Bash", "tool_detail": "git status", "tokens_total": 214 }
+      ],
+      "summary": { "tool_call_count": 1, "total_tokens": 1434, "duration_ms": 4200 }
+    }
+  ],
+  "meta": { "total": 5 }
+}
+```
