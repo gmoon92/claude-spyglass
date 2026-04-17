@@ -398,11 +398,10 @@ export function getRequestStatsByType(db: Database): TypeStats[] {
 }
 
 /**
- * 도구별 통계 (tool_call 타입만, tool_detail 포함)
+ * 도구별 통계 (tool_call 타입만, tool_name 단위 집계)
  */
 export interface ToolStats {
   tool_name: string;
-  tool_detail: string | null;
   call_count: number;
   total_tokens: number;
   avg_tokens: number;
@@ -415,13 +414,12 @@ export function getToolStats(
   return db.query(`
     SELECT
       tool_name,
-      tool_detail,
       COUNT(*) as call_count,
       COALESCE(SUM(tokens_total), 0) as total_tokens,
       COALESCE(AVG(tokens_total), 0) as avg_tokens
     FROM requests
     WHERE type = 'tool_call' AND tool_name IS NOT NULL
-    GROUP BY tool_name, tool_detail
+    GROUP BY tool_name
     ORDER BY call_count DESC
     LIMIT ?
   `).all(limit) as ToolStats[];
@@ -469,6 +467,8 @@ export interface TurnToolCall {
   timestamp: number;
   tool_name: string | null;
   tool_detail: string | null;
+  tokens_input: number;
+  tokens_output: number;
   tokens_total: number;
   duration_ms: number;
 }
@@ -567,6 +567,8 @@ export function getTurnsBySession(
         timestamp: row.timestamp,
         tool_name: row.tool_name,
         tool_detail: row.tool_detail,
+        tokens_input: row.tokens_input,
+        tokens_output: row.tokens_output,
         tokens_total: row.tokens_total,
         duration_ms: row.duration_ms,
       });
