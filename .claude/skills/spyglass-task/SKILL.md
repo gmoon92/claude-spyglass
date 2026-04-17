@@ -1,3 +1,11 @@
+---
+name: spyglass-task
+description: >
+  spyglass 프로젝트의 AI 개발 Task 문서 및 Phase 상태를 관리하는 스킬.
+  Task 완료 표시, Phase 상태 업데이트, 새 Phase Task 추가, 누락 작업 기록 시 사용.
+  "Task 완료", "Phase 상태 업데이트", "작업 추가", "Phase 진행" 요청에 트리거됩니다.
+---
+
 # spyglass-task
 
 AI 개발 Task 문서 관리 스킬
