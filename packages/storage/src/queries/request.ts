@@ -479,13 +479,18 @@ export interface TurnItem {
   prompt: {
     id: string;
     timestamp: number;
+    tokens_input: number;
+    tokens_output: number;
     tokens_total: number;
+    duration_ms: number;
     model: string | null;
     payload: string | null;
   } | null;
   tool_calls: TurnToolCall[];
   summary: {
     tool_call_count: number;
+    tokens_input: number;
+    tokens_output: number;
     total_tokens: number;
     duration_ms: number;
   };
@@ -502,7 +507,7 @@ export function getTurnsBySession(
 ): TurnItem[] {
   const rows = db.query(`
     SELECT id, type, tool_name, tool_detail, turn_id,
-           timestamp, tokens_total, duration_ms, model, payload
+           timestamp, tokens_input, tokens_output, tokens_total, duration_ms, model, payload
     FROM requests
     WHERE session_id = ? AND turn_id IS NOT NULL
     ORDER BY timestamp ASC
@@ -513,6 +518,8 @@ export function getTurnsBySession(
     tool_detail: string | null;
     turn_id: string;
     timestamp: number;
+    tokens_input: number;
+    tokens_output: number;
     tokens_total: number;
     duration_ms: number;
     model: string | null;
@@ -531,7 +538,7 @@ export function getTurnsBySession(
         started_at: row.timestamp,
         prompt: null,
         tool_calls: [],
-        summary: { tool_call_count: 0, total_tokens: 0, duration_ms: 0 },
+        summary: { tool_call_count: 0, tokens_input: 0, tokens_output: 0, total_tokens: 0, duration_ms: 0 },
       });
       turnOrder.push(row.turn_id);
     }
@@ -542,11 +549,16 @@ export function getTurnsBySession(
       turn.prompt = {
         id: row.id,
         timestamp: row.timestamp,
+        tokens_input: row.tokens_input,
+        tokens_output: row.tokens_output,
         tokens_total: row.tokens_total,
+        duration_ms: row.duration_ms,
         model: row.model,
         payload: row.payload,
       };
       turn.started_at = Math.min(turn.started_at, row.timestamp);
+      turn.summary.tokens_input += row.tokens_input;
+      turn.summary.tokens_output += row.tokens_output;
     } else {
       turn.tool_calls.push({
         id: row.id,
