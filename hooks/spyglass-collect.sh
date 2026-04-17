@@ -210,17 +210,38 @@ main() {
         model="\"$(extract_model "$payload")\""
     fi
 
-    # 토큰 정보 (실제로는 API 응답에서 추출, 여기서는 추정)
+    # 토큰 정보 — payload에서 직접 추출
     local tokens_input=0
     local tokens_output=0
     local tokens_total=0
 
-    # payload 길이 기반 추정 (실제 토큰은 서버에서 계산)
-    local payload_length=${#payload}
-    if [[ $payload_length -gt 0 ]]; then
-        # 대략적인 추정: 4자당 1토큰
+    local token_pair
+    token_pair=$(parse_tokens_from_response "$payload")
+    tokens_input=$(echo "$token_pair" | cut -d',' -f1)
+    tokens_output=$(echo "$token_pair" | cut -d',' -f2)
+
+    # 토큰이 0이면 payload 길이 기반 추정 (input만)
+    if [[ "$tokens_input" -eq 0 ]]; then
+        local payload_length=${#payload}
         tokens_input=$((payload_length / 4))
-        tokens_total=$tokens_input
+    fi
+    tokens_total=$((tokens_input + tokens_output))
+
+    # duration_ms — PreToolUse가 기록한 타임스탬프 파일로 측정
+    local duration_ms=0
+    local timing_dir="${HOME}/.spyglass/timing"
+    local timing_file="${timing_dir}/${session_id}"
+
+    if [[ "$event_type" == "prompt" ]]; then
+        # PreToolUse: 시작 타임스탬프 저장
+        mkdir -p "$timing_dir"
+        echo "$timestamp" > "$timing_file"
+    elif [[ "$event_type" == "tool" && -f "$timing_file" ]]; then
+        # PostToolUse: 경과 시간 계산 후 파일 삭제
+        local start_ts
+        start_ts=$(cat "$timing_file")
+        duration_ms=$((timestamp - start_ts))
+        rm -f "$timing_file"
     fi
 
     # JSON 데이터 구성
@@ -239,6 +260,7 @@ main() {
   "tokens_input": $tokens_input,
   "tokens_output": $tokens_output,
   "tokens_total": $tokens_total,
+  "duration_ms": $duration_ms,
   "payload": $(echo "$payload" | jq -R -s '.' 2>/dev/null || echo '""'),
   "source": "claude-code-hook"
 }
