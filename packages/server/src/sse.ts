@@ -62,6 +62,8 @@ function removeConnection(controller: ReadableStreamDefaultController<Uint8Array
 // 이벤트 전송
 // =============================================================================
 
+const encoder = new TextEncoder();
+
 /**
  * 단일 연결에 이벤트 전송
  */
@@ -71,7 +73,6 @@ function sendEvent(
 ): void {
   try {
     const data = JSON.stringify(event);
-    const encoder = new TextEncoder();
     const chunk = encoder.encode(`event: ${event.type}\ndata: ${data}\n\n`);
     controller.enqueue(chunk);
   } catch (error) {
@@ -140,13 +141,21 @@ export function broadcastSessionUpdate(sessionData: {
  * SSE 엔드포인트 핸들러
  */
 export function sseRouter(_req: Request): Response {
-  // ReadableStream 생성
+  let activeController: ReadableStreamDefaultController<Uint8Array> | null = null;
+  let pingInterval: ReturnType<typeof setInterval> | null = null;
+
+  const cleanup = () => {
+    if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
+    if (activeController) { removeConnection(activeController); activeController = null; }
+  };
+
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
+      activeController = controller;
       addConnection(controller);
 
       // 주기적 핑 (30초)
-      const pingInterval = setInterval(() => {
+      pingInterval = setInterval(() => {
         try {
           sendEvent(controller, {
             type: 'ping',
@@ -154,16 +163,9 @@ export function sseRouter(_req: Request): Response {
             data: { connections: connections.size },
           });
         } catch {
-          clearInterval(pingInterval);
-          removeConnection(controller);
+          cleanup();
         }
       }, 30000);
-
-      // 연결 종료 시 정리
-      const cleanup = () => {
-        clearInterval(pingInterval);
-        removeConnection(controller);
-      };
 
       // 스트림 종료 감지
       const originalClose = controller.close.bind(controller);
@@ -173,8 +175,8 @@ export function sseRouter(_req: Request): Response {
       };
     },
 
-    cancel(controller) {
-      removeConnection(controller);
+    cancel() {
+      cleanup();
     },
   });
 
