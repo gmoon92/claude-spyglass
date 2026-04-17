@@ -441,3 +441,120 @@ export function getHourlyRequestStats(
 
   return db.query(sql).all(...params) as HourlyStats[];
 }
+
+// =============================================================================
+// 턴 집계 (Turn View)
+// =============================================================================
+
+/** 턴 내 tool_call 항목 */
+export interface TurnToolCall {
+  id: string;
+  timestamp: number;
+  tool_name: string | null;
+  tool_detail: string | null;
+  tokens_total: number;
+  duration_ms: number;
+}
+
+/** 턴 항목 */
+export interface TurnItem {
+  turn_id: string;
+  turn_index: number;
+  started_at: number;
+  prompt: {
+    id: string;
+    timestamp: number;
+    tokens_total: number;
+    model: string | null;
+    payload: string | null;
+  } | null;
+  tool_calls: TurnToolCall[];
+  summary: {
+    tool_call_count: number;
+    total_tokens: number;
+    duration_ms: number;
+  };
+}
+
+/**
+ * 세션별 턴 목록 조회
+ * - turn_id 기준으로 prompt + tool_calls 그룹화
+ * - turn_index: 세션 내 순번 (1부터)
+ */
+export function getTurnsBySession(
+  db: Database,
+  sessionId: string
+): TurnItem[] {
+  const rows = db.query(`
+    SELECT id, type, tool_name, tool_detail, turn_id,
+           timestamp, tokens_total, duration_ms, model, payload
+    FROM requests
+    WHERE session_id = ? AND turn_id IS NOT NULL
+    ORDER BY timestamp ASC
+  `).all(sessionId) as Array<{
+    id: string;
+    type: string;
+    tool_name: string | null;
+    tool_detail: string | null;
+    turn_id: string;
+    timestamp: number;
+    tokens_total: number;
+    duration_ms: number;
+    model: string | null;
+    payload: string | null;
+  }>;
+
+  // turn_id 기준 그룹화
+  const turnMap = new Map<string, TurnItem>();
+  const turnOrder: string[] = [];
+
+  for (const row of rows) {
+    if (!turnMap.has(row.turn_id)) {
+      turnMap.set(row.turn_id, {
+        turn_id: row.turn_id,
+        turn_index: turnOrder.length + 1,
+        started_at: row.timestamp,
+        prompt: null,
+        tool_calls: [],
+        summary: { tool_call_count: 0, total_tokens: 0, duration_ms: 0 },
+      });
+      turnOrder.push(row.turn_id);
+    }
+
+    const turn = turnMap.get(row.turn_id)!;
+
+    if (row.type === 'prompt') {
+      turn.prompt = {
+        id: row.id,
+        timestamp: row.timestamp,
+        tokens_total: row.tokens_total,
+        model: row.model,
+        payload: row.payload,
+      };
+      turn.started_at = Math.min(turn.started_at, row.timestamp);
+    } else {
+      turn.tool_calls.push({
+        id: row.id,
+        timestamp: row.timestamp,
+        tool_name: row.tool_name,
+        tool_detail: row.tool_detail,
+        tokens_total: row.tokens_total,
+        duration_ms: row.duration_ms,
+      });
+    }
+
+    turn.summary.total_tokens += row.tokens_total;
+  }
+
+  // summary 최종 집계
+  for (const turn of turnMap.values()) {
+    turn.summary.tool_call_count = turn.tool_calls.length;
+    if (turn.tool_calls.length > 0) {
+      const last = turn.tool_calls[turn.tool_calls.length - 1];
+      const first = turn.started_at;
+      turn.summary.duration_ms = last.timestamp + last.duration_ms - first;
+    }
+  }
+
+  return turnOrder.map(id => turnMap.get(id)!);
+}

@@ -109,6 +109,8 @@ export {
   getRequestStatsByType,
   getToolStats,
   getHourlyRequestStats,
+  // 턴 집계
+  getTurnsBySession,
   // 타입
   type CreateRequestParams,
   type UpdateRequestParams,
@@ -118,4 +120,6 @@ export {
   type TypeStats,
   type ToolStats,
   type HourlyStats,
+  type TurnItem,
+  type TurnToolCall,
 } from './queries/request';

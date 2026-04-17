@@ -21,6 +21,7 @@ import {
   getRequestStatsBySession,
   getRequestStatsByType,
   getToolStats,
+  getTurnsBySession,
 } from '@spyglass/storage';
 
 // =============================================================================
@@ -57,7 +58,35 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     return jsonResponse({ success: true, data: sessions, meta: { total: sessions.length, limit } });
   }
 
-  // GET /api/sessions/:id
+  // GET /api/sessions/active
+  if (path === '/api/sessions/active' && method === 'GET') {
+    const sessions = getActiveSessions(db);
+    return jsonResponse({ success: true, data: sessions });
+  }
+
+  // GET /api/sessions/:id/requests
+  if (path.match(/^\/api\/sessions\/[^\/]+\/requests$/) && method === 'GET') {
+    const sessionId = path.split('/')[3];
+    const limit = parseInt(url.searchParams.get('limit') || '100', 10);
+    const requests = getRequestsBySession(db, sessionId, limit);
+    return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit } });
+  }
+
+  // GET /api/sessions/:id/stats
+  if (path.match(/^\/api\/sessions\/[^\/]+\/stats$/) && method === 'GET') {
+    const sessionId = path.split('/')[3];
+    const stats = getRequestStatsBySession(db, sessionId);
+    return jsonResponse({ success: true, data: stats });
+  }
+
+  // GET /api/sessions/:id/turns
+  if (path.match(/^\/api\/sessions\/[^\/]+\/turns$/) && method === 'GET') {
+    const sessionId = path.split('/')[3];
+    const turns = getTurnsBySession(db, sessionId);
+    return jsonResponse({ success: true, data: turns, meta: { total: turns.length } });
+  }
+
+  // GET /api/sessions/:id  (반드시 하위 경로 라우트 뒤에 위치)
   if (path.startsWith('/api/sessions/') && method === 'GET') {
     const id = path.replace('/api/sessions/', '');
     const session = getSessionById(db, id);
@@ -65,12 +94,6 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
       return jsonResponse({ success: false, error: 'Session not found' }, 404);
     }
     return jsonResponse({ success: true, data: session });
-  }
-
-  // GET /api/sessions/active
-  if (path === '/api/sessions/active' && method === 'GET') {
-    const sessions = getActiveSessions(db);
-    return jsonResponse({ success: true, data: sessions });
   }
 
   // GET /api/projects/:name/sessions
@@ -94,14 +117,6 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     const sessionId = url.searchParams.get('session_id') || undefined;
     const requests = getTopTokenRequests(db, limit, sessionId);
     return jsonResponse({ success: true, data: requests });
-  }
-
-  // GET /api/sessions/:id/requests
-  if (path.match(/^\/api\/sessions\/[^\/]+\/requests$/) && method === 'GET') {
-    const sessionId = path.split('/')[3];
-    const limit = parseInt(url.searchParams.get('limit') || '100', 10);
-    const requests = getRequestsBySession(db, sessionId, limit);
-    return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit } });
   }
 
   // GET /api/requests/by-type/:type
@@ -141,13 +156,6 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
   // GET /api/stats/by-type
   if (path === '/api/stats/by-type' && method === 'GET') {
     const stats = getRequestStatsByType(db);
-    return jsonResponse({ success: true, data: stats });
-  }
-
-  // GET /api/sessions/:id/stats
-  if (path.match(/^\/api\/sessions\/[^\/]+\/stats$/) && method === 'GET') {
-    const sessionId = path.split('/')[3];
-    const stats = getRequestStatsBySession(db, sessionId);
     return jsonResponse({ success: true, data: stats });
   }
 
