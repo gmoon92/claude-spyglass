@@ -8,7 +8,6 @@ import type { Database } from 'bun:sqlite';
 import {
   createSession,
   getSessionById,
-  updateSessionTokens,
   createRequest,
   SpyglassDatabase,
   getDatabase,
@@ -95,15 +94,12 @@ function ensureSession(db: Database, payload: CollectPayload): boolean {
  * 세션 토큰 업데이트
  */
 function updateSessionTotalTokens(db: Database, payload: CollectPayload): void {
-  const { session_id, tokens_total } = payload;
-
-  // 현재 세션 정보 조회
-  const session = getSessionById(db, session_id);
-  if (!session) return;
-
-  // 토큰 누적
-  const newTotal = (session.total_tokens || 0) + tokens_total;
-  updateSessionTokens(db, session_id, newTotal);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (db as any).run(
+    'UPDATE sessions SET total_tokens = total_tokens + ? WHERE id = ?',
+    payload.tokens_total,
+    payload.session_id
+  );
 }
 
 // =============================================================================
