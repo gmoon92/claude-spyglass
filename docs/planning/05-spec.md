@@ -1,6 +1,6 @@
 # spyglass 최종 스펙 문서
 
-> Version: 0.1.1  
+> Version: 0.1.5  
 > Last Updated: 2026-04-17  
 > Status: ✅ 완료
 
@@ -632,6 +632,28 @@ bun run typecheck
 - **로그**: `~/.spyglass/logs/collect.log`
 - **PID 파일**: `~/.spyglass/server.pid`
 
+### 8.4 collect.log 포맷
+
+```
+[YYYY-MM-DD HH:MM:SS] [INFO] Event: {event_type}, Type: {request_type}, Tool: {tool_detail}, Project: {project_name}
+```
+
+`Tool` 필드는 `request_type`이 `tool_call`일 때만 출력되며, 툴 종류에 따라 세분화됩니다:
+
+| tool_name | 로그 출력 예시 |
+|-----------|--------------|
+| `Skill` | `Tool: Skill(redmine)` |
+| `Agent` | `Tool: Agent(pm)` |
+| 그 외 | `Tool: Read`, `Tool: Bash`, `Tool: Edit` 등 |
+
+```
+# 예시
+[14:25:08] [INFO] Event: tool, Type: tool_call, Tool: Skill(redmine), Project: rv-iso
+[14:25:09] [INFO] Event: tool, Type: tool_call, Tool: Agent(pm), Project: rv-iso
+[14:25:10] [INFO] Event: tool, Type: tool_call, Tool: Read, Project: rv-iso
+[14:25:11] [INFO] Event: prompt, Type: prompt, Project: rv-iso
+```
+
 ---
 
 ## 9. 테스트 스펙
@@ -724,8 +746,11 @@ bun test packages/server
 | 2026-04-17 | 0.1.0-MVP | 초기 MVP 완료 |
 | 2026-04-17 | 0.1.1 | 웹 대시보드 추가 (`packages/web/index.html`), 훅 버그 수정 (macOS 호환), SSE named event 포맷 변경, `GET /` 웹 대시보드 서빙으로 변경 |
 | 2026-04-17 | 0.1.2 | TUI ink 5.x 호환성 수정 (useStdoutDimensions → useStdout, backgroundColor 제거), 키보드 핸들러 F1~F4 지원, JSX Transform 설정, eventsource 패키지 추가, SQLite 타입 단언 수정, Docker 구성 추가 |
+| 2026-04-17 | 0.1.3 | collect.log 포맷 개선 — tool_name 상세 포함, Skill(name)/Agent(subagent_type) 세분화 출력 |
+| 2026-04-17 | 0.1.4 | 웹 대시보드 개선 — 프로젝트/세션 브라우저를 최근 요청 위로 이동, 최근 요청 노출 한도 10건 |
+| 2026-04-17 | 0.1.5 | 웹 대시보드 UI 통합 — "프로젝트별 토큰" 별도 테이블 제거, 브라우저 그리드 프로젝트 행에 세션 수·토큰 바 통합 표시 |
 
 ---
 
 *문서 작성: Claude Code*  
-*최종 업데이트: 2026-04-17 (v0.1.2)*
+*최종 업데이트: 2026-04-17 (v0.1.5)*

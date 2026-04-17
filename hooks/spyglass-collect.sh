@@ -113,6 +113,18 @@ extract_tool_name() {
     echo "${tool_name:-unknown}"
 }
 
+# Skill 이름 추출 (tool_input.skill)
+extract_skill_name() {
+    local payload="$1"
+    echo "$payload" | grep -oE '"skill"\s*:\s*"[^"]+"' | head -1 | cut -d'"' -f4
+}
+
+# Agent 타입 추출 (tool_input.subagent_type)
+extract_subagent_type() {
+    local payload="$1"
+    echo "$payload" | grep -oE '"subagent_type"\s*:\s*"[^"]+"' | head -1 | cut -d'"' -f4
+}
+
 # 모델명 추출
 extract_model() {
     local payload="$1"
@@ -179,9 +191,11 @@ main() {
     # 툴/모델 정보 추출
     local tool_name="null"
     local model="null"
+    local raw_tool_name=""
 
     if [[ "$request_type" == "tool_call" ]]; then
-        tool_name="\"$(extract_tool_name "$payload")\""
+        raw_tool_name=$(extract_tool_name "$payload")
+        tool_name="\"$raw_tool_name\""
     elif [[ "$request_type" == "prompt" ]]; then
         model="\"$(extract_model "$payload")\""
     fi
@@ -220,8 +234,22 @@ main() {
 EOF
 )
 
-    # 로그 기록
-    info "Event: $event_type, Type: $request_type, Project: $project_name"
+    # 로그 기록 (툴 상세 포함)
+    local log_tool_detail=""
+    if [[ "$request_type" == "tool_call" ]]; then
+        if [[ "$raw_tool_name" == "Skill" ]]; then
+            local skill_name
+            skill_name=$(extract_skill_name "$payload")
+            log_tool_detail=", Tool: Skill(${skill_name:-unknown})"
+        elif [[ "$raw_tool_name" == "Agent" ]]; then
+            local subagent_type
+            subagent_type=$(extract_subagent_type "$payload")
+            log_tool_detail=", Tool: Agent(${subagent_type:-general})"
+        else
+            log_tool_detail=", Tool: $raw_tool_name"
+        fi
+    fi
+    info "Event: $event_type, Type: $request_type${log_tool_detail}, Project: $project_name"
 
     # spyglass 서버로 전송
     send_to_spyglass "$json_data"

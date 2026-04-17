@@ -196,6 +196,50 @@
     @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
     .footer { margin-top: 24px; text-align: center; color: var(--text-mute); font-size: 11px; }
+
+    /* BROWSER */
+    .browser-grid {
+      display: grid; grid-template-columns: 320px 1fr;
+      gap: 0; margin-bottom: var(--gap);
+      border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+    }
+    .browser-pane { background: var(--card); }
+    .browser-pane + .browser-pane { border-left: 1px solid var(--border); }
+    .browser-pane-header {
+      padding: 10px 14px; background: var(--card-alt);
+      border-bottom: 1px solid var(--border);
+      font-size: 11px; font-weight: 600; color: var(--text);
+      text-transform: uppercase; letter-spacing: 0.6px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .browser-pane-header .pane-hint { color: var(--text-mute); font-weight: 400; letter-spacing: 0; text-transform: none; }
+    .browser-list { max-height: 260px; overflow-y: auto; }
+    .browser-list::-webkit-scrollbar { width: 4px; }
+    .browser-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    tr.clickable { cursor: pointer; }
+    tr.clickable:hover td { background: rgba(124,106,247,0.08); }
+    tr.row-selected td { background: rgba(124,106,247,0.16) !important; }
+    tr.row-selected td:first-child { border-left: 2px solid var(--accent); padding-left: 14px; }
+
+    .empty-hint { padding: 24px 16px; text-align: center; color: var(--text-mute); font-size: 12px; }
+
+    /* SESSION DETAIL */
+    .detail-section { margin-bottom: var(--gap); display: none; }
+    .detail-section.visible { display: block; }
+    .detail-header-bar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; background: var(--card-alt);
+      border-bottom: 1px solid var(--border); flex-wrap: wrap;
+    }
+    .detail-session-id { font-size: 11px; color: var(--accent); font-family: monospace; }
+    .detail-project    { font-size: 11px; color: var(--text-dim); }
+    .detail-tokens     { margin-left: auto; font-size: 12px; color: var(--text); }
+    .btn-close-detail {
+      background: none; border: 1px solid var(--border); color: var(--text-dim);
+      padding: 2px 9px; border-radius: 5px; cursor: pointer; font-size: 11px; font-family: inherit;
+    }
+    .btn-close-detail:hover { border-color: var(--red); color: var(--red); }
   </style>
 </head>
 <body>
@@ -278,28 +322,66 @@
     </div>
   </div>
 
-  <!-- MIDDLE: 2-col tables -->
-  <div class="two-col">
-    <div class="section">
-      <div class="section-header">
-        <span class="section-title">프로젝트별 토큰</span>
-        <span class="section-count" id="projectCount">—</span>
-      </div>
-      <table>
-        <thead><tr><th>프로젝트</th><th>세션</th><th>토큰</th></tr></thead>
-        <tbody id="projectsBody"><tr><td colspan="3" class="table-empty"><span class="skeleton"></span></td></tr></tbody>
-      </table>
+  <!-- MIDDLE: 툴 사용 통계 (단독) -->
+  <div class="section" style="margin-bottom:var(--gap)">
+    <div class="section-header">
+      <span class="section-title">툴 사용 통계</span>
+      <span class="section-count" id="toolCount">—</span>
     </div>
-    <div class="section">
-      <div class="section-header">
-        <span class="section-title">툴 사용 통계</span>
-        <span class="section-count" id="toolCount">—</span>
+    <table>
+      <thead><tr><th>툴</th><th>호출</th><th style="min-width:110px">비율</th></tr></thead>
+      <tbody id="toolsBody"><tr><td colspan="3" class="table-empty"><span class="skeleton"></span></td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- BROWSER: 프로젝트 & 세션 -->
+  <div class="browser-grid">
+    <!-- 프로젝트 목록 -->
+    <div class="browser-pane">
+      <div class="browser-pane-header">
+        프로젝트
+        <span class="pane-hint">클릭하여 세션 조회</span>
       </div>
-      <table>
-        <thead><tr><th>툴</th><th>호출</th><th style="min-width:110px">비율</th></tr></thead>
-        <tbody id="toolsBody"><tr><td colspan="3" class="table-empty"><span class="skeleton"></span></td></tr></tbody>
-      </table>
+      <div class="browser-list">
+        <table>
+          <thead><tr><th>프로젝트</th><th style="text-align:right">세션</th><th style="text-align:right">토큰</th><th style="width:16px"></th></tr></thead>
+          <tbody id="browserProjectsBody">
+            <tr><td colspan="4" class="empty-hint"><span class="skeleton"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
+    <!-- 세션 목록 -->
+    <div class="browser-pane">
+      <div class="browser-pane-header">
+        세션
+        <span class="pane-hint" id="sessionPaneHint">프로젝트를 선택하세요</span>
+      </div>
+      <div class="browser-list">
+        <table>
+          <thead><tr><th>세션 ID</th><th>시작</th><th>토큰</th><th>상태</th></tr></thead>
+          <tbody id="browserSessionsBody">
+            <tr><td colspan="4" class="empty-hint">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 세션 요청 상세 -->
+  <div class="section detail-section" id="detailSection">
+    <div class="section-header detail-header-bar">
+      <span class="detail-session-id" id="detailSessionId">—</span>
+      <span class="detail-project" id="detailProject">—</span>
+      <span class="detail-tokens" id="detailTokens">—</span>
+      <button class="btn-close-detail" onclick="closeDetail()">✕ 닫기</button>
+    </div>
+    <table>
+      <thead><tr><th>시각</th><th>타입</th><th>툴</th><th>토큰</th></tr></thead>
+      <tbody id="detailRequestsBody">
+        <tr><td colspan="4" class="empty-hint">—</td></tr>
+      </tbody>
+    </table>
   </div>
 
   <!-- BOTTOM: Requests -->
@@ -603,7 +685,7 @@
     // ── Fetch Requests ────────────────────────────────────────────────
     async function fetchRequests() {
       try {
-        const res = await fetch(`${API}/api/requests?limit=50`, { signal: AbortSignal.timeout(8000) });
+        const res = await fetch(`${API}/api/requests?limit=10`, { signal: AbortSignal.timeout(8000) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         renderRequests(json.data || []);
@@ -613,20 +695,131 @@
       }
     }
 
+    // ── Browser 상태 ─────────────────────────────────────────────────
+    let selectedProject = null;
+    let selectedSession = null;
+    let allProjects = [];
+    let allSessions = [];
+
+    // ── Browser: 프로젝트 목록 렌더 (세션수·토큰 인라인) ────────────
+    function renderBrowserProjects() {
+      const body = document.getElementById('browserProjectsBody');
+      if (!allProjects.length) {
+        body.innerHTML = '<tr><td colspan="4" class="empty-hint">데이터 없음</td></tr>';
+        return;
+      }
+      const maxT = Math.max(...allProjects.map(p => p.total_tokens || 0), 1);
+      body.innerHTML = allProjects.map(p => {
+        const isSelected = selectedProject === p.project_name;
+        const pct = Math.round((p.total_tokens || 0) / maxT * 100);
+        return `<tr class="clickable${isSelected ? ' row-selected' : ''}" onclick="selectProject('${escHtml(p.project_name)}')">
+          <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(p.project_name||'')}">
+            ${escHtml(p.project_name||'—')}
+          </td>
+          <td class="num" style="text-align:right;white-space:nowrap">${fmt(p.session_count)}</td>
+          <td style="text-align:right;white-space:nowrap">
+            <div class="bar-cell" style="justify-content:flex-end;gap:6px">
+              <div class="bar-track" style="min-width:48px"><div class="bar-fill" style="width:${pct}%"></div></div>
+              <span class="bar-label num-hi" style="min-width:36px">${fmtToken(p.total_tokens)}</span>
+            </div>
+          </td>
+          <td style="color:var(--text-mute);font-size:11px;padding-left:0">›</td>
+        </tr>`;
+      }).join('');
+    }
+
+    // ── Browser: 세션 목록 렌더 ──────────────────────────────────────
+    function renderBrowserSessions() {
+      const body = document.getElementById('browserSessionsBody');
+      const hint = document.getElementById('sessionPaneHint');
+      if (!selectedProject) {
+        body.innerHTML = '<tr><td colspan="4" class="empty-hint">—</td></tr>';
+        hint.textContent = '프로젝트를 선택하세요';
+        return;
+      }
+      const list = allSessions.filter(s => s.project_name === selectedProject);
+      hint.textContent = `${list.length}개`;
+      if (!list.length) {
+        body.innerHTML = '<tr><td colspan="4" class="empty-hint">세션 없음</td></tr>';
+        return;
+      }
+      body.innerHTML = list.map(s => {
+        const isSelected = selectedSession === s.id;
+        const isActive = !s.ended_at;
+        const shortId = s.id.slice(0, 8) + '…';
+        return `<tr class="clickable${isSelected ? ' row-selected' : ''}" onclick="selectSession('${escHtml(s.id)}')">
+          <td><span class="sess-id" title="${escHtml(s.id)}">${escHtml(shortId)}</span></td>
+          <td class="num" style="white-space:nowrap">${fmtDate(s.started_at)}</td>
+          <td class="num-hi" style="white-space:nowrap">${fmtToken(s.total_tokens)}</td>
+          <td style="white-space:nowrap"><span style="color:${isActive ? 'var(--green)' : 'var(--text-mute)'}">${isActive ? '● 활성' : '○ 종료'}</span></td>
+        </tr>`;
+      }).join('');
+    }
+
+    // ── Browser: 프로젝트 선택 ───────────────────────────────────────
+    function selectProject(name) {
+      selectedProject = name;
+      selectedSession = null;
+      closeDetail();
+      renderBrowserProjects();
+      renderBrowserSessions();
+    }
+
+    // ── Browser: 세션 선택 → 상세 로드 ──────────────────────────────
+    async function selectSession(id) {
+      selectedSession = id;
+      renderBrowserSessions();
+      const session = allSessions.find(s => s.id === id);
+      try {
+        const res = await fetch(`${API}/api/requests?session_id=${encodeURIComponent(id)}&limit=200`);
+        const json = await res.json();
+        renderDetailRequests(session, json.data || []);
+      } catch {
+        renderDetailRequests(session, []);
+      }
+    }
+
+    // ── 세션 상세 렌더 ───────────────────────────────────────────────
+    function renderDetailRequests(session, list) {
+      const section = document.getElementById('detailSection');
+      section.classList.add('visible');
+      document.getElementById('detailSessionId').textContent = session ? session.id : '—';
+      document.getElementById('detailProject').textContent   = session ? `📁 ${session.project_name}` : '';
+      document.getElementById('detailTokens').textContent    = session ? `토큰 합계: ${fmtToken(session.total_tokens)}` : '';
+      const body = document.getElementById('detailRequestsBody');
+      if (!list.length) {
+        body.innerHTML = '<tr><td colspan="4" class="empty-hint">요청 데이터 없음</td></tr>';
+        return;
+      }
+      body.innerHTML = list.map(r => `<tr>
+        <td class="num" style="white-space:nowrap">${fmtDate(r.timestamp)}</td>
+        <td>${typeBadge(r.type)}</td>
+        <td>${r.tool_name ? escHtml(r.tool_name) : '<span style="color:var(--text-mute)">—</span>'}</td>
+        <td class="num num-hi">${fmtToken(r.tokens_total)}</td>
+      </tr>`).join('');
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function closeDetail() {
+      selectedSession = null;
+      document.getElementById('detailSection').classList.remove('visible');
+      renderBrowserSessions();
+    }
+
+    // ── 전체 세션 로드 (Browser용) ───────────────────────────────────
+    async function fetchAllSessions() {
+      try {
+        const res = await fetch(`${API}/api/sessions?limit=500`);
+        const json = await res.json();
+        allSessions = json.data || [];
+        renderBrowserSessions();
+      } catch { /* silent */ }
+    }
+
     // ── Renderers ────────────────────────────────────────────────────
     function renderProjects(list) {
-      document.getElementById('projectCount').textContent = `${list.length}개`;
-      const body = document.getElementById('projectsBody');
-      if (!list.length) { body.innerHTML = '<tr><td colspan="3" class="table-empty">데이터 없음</td></tr>'; return; }
-      const maxT = Math.max(...list.map(p => p.total_tokens || 0), 1);
-      body.innerHTML = list.map(p => `<tr>
-        <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(p.project_name||'')}">${escHtml(p.project_name||'—')}</td>
-        <td class="num">${fmt(p.session_count)}</td>
-        <td><div class="bar-cell">
-          <div class="bar-track"><div class="bar-fill" style="width:${Math.round((p.total_tokens||0)/maxT*100)}%"></div></div>
-          <span class="bar-label num-hi">${fmtToken(p.total_tokens)}</span>
-        </div></td>
-      </tr>`).join('');
+      allProjects = list;
+      renderBrowserProjects();
     }
 
     function renderTools(list) {
@@ -674,6 +867,7 @@
           refreshDebounce = setTimeout(() => {
             fetchDashboard();
             fetchRequests();
+            fetchAllSessions();
           }, 300);
         });
 
@@ -701,6 +895,7 @@
       drawDonut();
       fetchDashboard();
       fetchRequests();
+      fetchAllSessions();
       connectSSE();
 
       // 1분마다 버킷 진행 + 차트 갱신
