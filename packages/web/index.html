@@ -253,6 +253,59 @@
       padding: 2px 9px; border-radius: 5px; cursor: pointer; font-size: 11px; font-family: inherit;
     }
     .btn-close-detail:hover { border-color: var(--red); color: var(--red); }
+
+    /* VIEW TAB BAR */
+    .view-tab-bar {
+      display: flex; align-items: center; gap: 0;
+      padding: 0 16px; border-bottom: 1px solid var(--border);
+      background: var(--card-alt);
+    }
+    .view-tab {
+      background: none; border: none; border-bottom: 2px solid transparent;
+      color: var(--text-dim); padding: 8px 14px; font-family: inherit;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+      text-transform: uppercase; cursor: pointer; transition: color 0.15s, border-color 0.15s;
+    }
+    .view-tab:hover { color: var(--text); }
+    .view-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* TURN VIEW */
+    .turn-list { padding: 8px 0; }
+    .turn-item { border-bottom: 1px solid var(--border); }
+    .turn-item:last-child { border-bottom: none; }
+    .turn-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 16px; cursor: pointer; user-select: none;
+      transition: background 0.12s;
+    }
+    .turn-header:hover { background: rgba(124,106,247,0.06); }
+    .turn-badge {
+      display: inline-block; padding: 1px 7px; border-radius: 4px;
+      background: rgba(124,106,247,0.2); color: var(--accent);
+      font-size: 10px; font-weight: 700; letter-spacing: 0.5px; flex-shrink: 0;
+    }
+    .turn-time  { font-size: 11px; color: var(--text-mute); white-space: nowrap; }
+    .turn-meta  { flex: 1; font-size: 11px; color: var(--text-dim); }
+    .turn-tokens { font-size: 11px; color: var(--accent); font-weight: 600; white-space: nowrap; }
+    .turn-toggle { font-size: 11px; color: var(--text-mute); transition: transform 0.2s; }
+    .turn-item.open .turn-toggle { transform: rotate(90deg); }
+    .turn-item.open .turn-header { background: rgba(124,106,247,0.04); }
+    .turn-children { display: none; padding: 4px 0 8px; }
+    .turn-item.open .turn-children { display: block; }
+    .turn-row {
+      display: grid; grid-template-columns: 28px 1fr 60px 60px 80px;
+      align-items: center; padding: 5px 16px 5px 32px; font-size: 12px;
+    }
+    .turn-row:hover { background: rgba(124,106,247,0.04); }
+    .turn-row-prompt {
+      background: rgba(124,106,247,0.05); border-left: 2px solid var(--accent);
+      margin: 0 16px 4px; border-radius: 4px; padding-left: 12px;
+    }
+    .turn-row-tool { margin: 0 16px; }
+    .turn-row-empty { color: var(--text-mute); font-size: 11px; padding: 8px 32px; }
+    .tool-icon { font-size: 13px; }
+    .tool-icon-agent   { color: var(--orange); }
+    .tool-icon-default { color: var(--green); }
   </style>
 </head>
 <body>
@@ -389,12 +442,23 @@
       <span class="detail-tokens" id="detailTokens">—</span>
       <button class="btn-close-detail" onclick="closeDetail()">✕ 닫기</button>
     </div>
-    <table>
-      <thead><tr><th>시각</th><th>타입</th><th>툴</th><th>토큰</th></tr></thead>
-      <tbody id="detailRequestsBody">
-        <tr><td colspan="4" class="empty-hint">—</td></tr>
-      </tbody>
-    </table>
+    <div class="view-tab-bar">
+      <button class="view-tab active" id="tabFlat" onclick="setDetailView('flat')">플랫</button>
+      <button class="view-tab" id="tabTurn" onclick="setDetailView('turn')">턴 뷰</button>
+    </div>
+    <div id="detailFlatView">
+      <table>
+        <thead><tr><th>시각</th><th>타입</th><th>툴</th><th>토큰</th></tr></thead>
+        <tbody id="detailRequestsBody">
+          <tr><td colspan="4" class="empty-hint">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="detailTurnView" style="display:none">
+      <div id="turnListBody">
+        <div class="turn-row-empty">로딩 중…</div>
+      </div>
+    </div>
   </div>
 
   <!-- BOTTOM: Requests -->
@@ -820,11 +884,16 @@
       renderBrowserSessions();
       const session = allSessions.find(s => s.id === id);
       try {
-        const res = await fetch(`${API}/api/requests?session_id=${encodeURIComponent(id)}&limit=200`);
-        const json = await res.json();
-        renderDetailRequests(session, json.data || []);
+        const [reqRes, turnRes] = await Promise.all([
+          fetch(`${API}/api/sessions/${encodeURIComponent(id)}/requests?limit=200`),
+          fetch(`${API}/api/sessions/${encodeURIComponent(id)}/turns`),
+        ]);
+        const [reqJson, turnJson] = await Promise.all([reqRes.json(), turnRes.json()]);
+        renderDetailRequests(session, reqJson.data || []);
+        renderTurnView(turnJson.data || []);
       } catch {
         renderDetailRequests(session, []);
+        renderTurnView([]);
       }
     }
 
@@ -853,6 +922,89 @@
       selectedSession = null;
       document.getElementById('detailSection').classList.remove('visible');
       renderBrowserSessions();
+    }
+
+    // ── 턴 뷰 탭 전환 ────────────────────────────────────────────────
+    function setDetailView(tab) {
+      document.getElementById('detailFlatView').style.display  = tab === 'flat' ? '' : 'none';
+      document.getElementById('detailTurnView').style.display  = tab === 'turn' ? '' : 'none';
+      document.getElementById('tabFlat').classList.toggle('active', tab === 'flat');
+      document.getElementById('tabTurn').classList.toggle('active', tab === 'turn');
+    }
+
+    // ── 턴 아코디언 토글 ─────────────────────────────────────────────
+    function toggleTurn(turnId) {
+      const el = document.querySelector(`[data-turn-id="${CSS.escape(turnId)}"]`);
+      if (el) el.classList.toggle('open');
+    }
+
+    // ── 도구 아이콘 (Agent/Skill = ◎, 일반 = ◉) ───────────────────
+    function toolIconHtml(toolName) {
+      const isAgent = toolName && /^(Agent|Skill|Task)/.test(toolName);
+      return isAgent
+        ? '<span class="tool-icon tool-icon-agent">◎</span>'
+        : '<span class="tool-icon tool-icon-default">◉</span>';
+    }
+
+    // ── 턴 뷰 렌더 ──────────────────────────────────────────────────
+    function renderTurnView(turns) {
+      const container = document.getElementById('turnListBody');
+      if (!turns.length) {
+        container.innerHTML = '<div class="turn-row-empty">턴 데이터 없음</div>';
+        return;
+      }
+      container.innerHTML = turns.map(turn => {
+        const toolCount = turn.summary.tool_call_count;
+        const totalTok  = turn.summary.total_tokens;
+        const meta = `도구 ${toolCount}개 · ${fmtToken(totalTok)} 토큰`;
+
+        const promptPreviewText = (() => {
+          if (!turn.prompt?.payload) return '';
+          try {
+            const p = JSON.parse(turn.prompt.payload);
+            const t = p?.prompt ?? p?.content ?? '';
+            return t ? escHtml(t.slice(0, 80).replace(/\n/g, ' ')) + (t.length > 80 ? '…' : '') : '';
+          } catch { return ''; }
+        })();
+
+        const promptRow = turn.prompt ? `
+          <div class="turn-row turn-row-prompt">
+            <span></span>
+            <div class="tool-cell">
+              <span class="tool-main"><span class="type-badge type-prompt">prompt</span><span class="role-badge role-user">user</span></span>
+              ${promptPreviewText ? `<span class="tool-sub">${promptPreviewText}</span>` : ''}
+            </div>
+            <span class="num">${fmtToken(turn.prompt.tokens_total)}</span>
+            <span></span>
+            <span class="num" style="color:var(--text-mute)">${fmtTime(turn.prompt.timestamp)}</span>
+          </div>` : '';
+
+        const toolRows = turn.tool_calls.map(tc => `
+          <div class="turn-row turn-row-tool">
+            <span>${toolIconHtml(tc.tool_name)}</span>
+            <div class="tool-cell">
+              <span class="tool-main">${escHtml(tc.tool_name || '—')}</span>
+              ${tc.tool_detail ? `<span class="tool-sub">${escHtml(tc.tool_detail)}</span>` : ''}
+            </div>
+            <span class="num">${fmtToken(tc.tokens_total)}</span>
+            <span class="num" style="color:var(--text-mute)">${tc.duration_ms ? tc.duration_ms + 'ms' : '—'}</span>
+            <span class="num" style="color:var(--text-mute)">${fmtTime(tc.timestamp)}</span>
+          </div>`).join('');
+
+        return `<div class="turn-item" data-turn-id="${escHtml(turn.turn_id)}">
+          <div class="turn-header" onclick="toggleTurn('${escHtml(turn.turn_id)}')">
+            <span class="turn-badge">T${turn.turn_index}</span>
+            <span class="turn-time">${fmtTime(turn.started_at)}</span>
+            <span class="turn-meta">${meta}</span>
+            <span class="turn-tokens">${fmtToken(totalTok)}</span>
+            <span class="turn-toggle">▸</span>
+          </div>
+          <div class="turn-children">
+            ${promptRow}
+            ${toolRows || '<div class="turn-row-empty">도구 호출 없음</div>'}
+          </div>
+        </div>`;
+      }).join('');
     }
 
     // ── 전체 세션 로드 (Browser용) ───────────────────────────────────
