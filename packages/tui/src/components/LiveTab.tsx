@@ -6,12 +6,20 @@
  */
 
 /** @jsxImportSource react */
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { Box, Text, useStdout } from 'ink';
 import type { DashboardData } from '../hooks/useStats';
 import { useSSE } from '../hooks/useSSE';
 import { ProgressBar } from './ProgressBar';
 import { SessionTimer } from './SessionTimer';
+
+interface RecentRequest {
+  id: string;
+  type: string;
+  tool_name?: string | null;
+  tokens_total: number;
+  timestamp: number;
+}
 
 export interface LiveTabProps {
   data: DashboardData | null;
@@ -22,10 +30,57 @@ export interface LiveTabProps {
 /**
  * Live Tab 컴포넌트
  */
+const API_URL = 'http://localhost:9999';
+const MAX_RECENT = 20;
+
+function formatType(type: string): string {
+  if (type === 'prompt') return 'P';
+  if (type === 'tool_call') return 'T';
+  if (type === 'system') return 'S';
+  return type.slice(0, 1).toUpperCase();
+}
+
+function typeColor(type: string): string {
+  if (type === 'prompt') return 'cyan';
+  if (type === 'tool_call') return 'yellow';
+  return 'gray';
+}
+
 export function LiveTab({ data, isLoading, error }: LiveTabProps): JSX.Element {
   const { stdout } = useStdout();
   const columns = stdout?.columns || 80;
-  const { status: sseStatus, lastMessage } = useSSE({ autoReconnect: true });
+  const { status: sseStatus, messages, lastMessage } = useSSE({ autoReconnect: true });
+  const [recentRequests, setRecentRequests] = useState<RecentRequest[]>([]);
+  const prevStatusRef = useRef<string>(sseStatus);
+
+  const fetchRecent = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/requests?limit=${MAX_RECENT}`);
+      const json = await res.json() as { success: boolean; data?: RecentRequest[] };
+      if (json.success && json.data) {
+        setRecentRequests(json.data.slice(0, MAX_RECENT));
+      }
+    } catch {
+      // 조용히 실패
+    }
+  }, []);
+
+  // SSE new_request 이벤트 수신 시 re-fetch
+  const newReqCount = messages.filter(m => m.type === 'new_request').length;
+  useEffect(() => {
+    if (newReqCount > 0) fetchRecent();
+  }, [newReqCount, fetchRecent]);
+
+  // 재연결 감지 시 re-fetch
+  useEffect(() => {
+    if (prevStatusRef.current !== 'connected' && sseStatus === 'connected') {
+      fetchRecent();
+    }
+    prevStatusRef.current = sseStatus;
+  }, [sseStatus, fetchRecent]);
+
+  // 초기 로드
+  useEffect(() => { fetchRecent(); }, [fetchRecent]);
 
   // SSE 상태 표시
   const statusColor = sseStatus === 'connected' ? 'green' : sseStatus === 'connecting' ? 'yellow' : 'red';
@@ -123,16 +178,28 @@ export function LiveTab({ data, isLoading, error }: LiveTabProps): JSX.Element {
         </Box>
       </Box>
 
-      {/* 최근 이벤트 */}
+      {/* 실시간 요청 목록 */}
       <Box flexDirection="column" marginTop={1}>
-        <Text color="gray" underline>Recent Event</Text>
-        {lastMessage ? (
-          <Box>
-            <Text color="cyan">{lastMessage.type}</Text>
-            <Text color="gray"> - {new Date(lastMessage.timestamp).toLocaleTimeString()}</Text>
-          </Box>
+        <Text color="gray" underline>Recent Requests ({recentRequests.length})</Text>
+        {recentRequests.length === 0 ? (
+          <Text color="gray">No requests yet...</Text>
         ) : (
-          <Text color="gray">No events yet...</Text>
+          recentRequests.slice(0, 8).map(req => (
+            <Box key={req.id} height={1}>
+              <Box width="4%">
+                <Text color={typeColor(req.type)} bold>{formatType(req.type)}</Text>
+              </Box>
+              <Box width="50%">
+                <Text color="white" wrap="truncate">{req.tool_name || '—'}</Text>
+              </Box>
+              <Box width="26%" justifyContent="flex-end">
+                <Text color="yellow">{req.tokens_total.toLocaleString()}</Text>
+              </Box>
+              <Box width="20%" justifyContent="flex-end">
+                <Text color="gray">{new Date(req.timestamp).toLocaleTimeString()}</Text>
+              </Box>
+            </Box>
+          ))
         )}
       </Box>
 
