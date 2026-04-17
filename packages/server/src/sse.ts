@@ -109,9 +109,20 @@ export function broadcastUpdate(event: Omit<SSEEvent, 'timestamp'>): void {
  * 새 요청 알림 브로드캐스트
  */
 export function broadcastNewRequest(requestData: {
+  id: string;
   session_id: string;
+  type: string;
   request_type: string;
+  tool_name?: string | null;
+  tool_detail?: string | null;
+  tokens_input: number;
+  tokens_output: number;
   tokens_total: number;
+  duration_ms: number;
+  model?: string | null;
+  timestamp: number;
+  payload?: string | null;
+  session_total_tokens: number;
 }): void {
   broadcastUpdate({
     type: 'new_request',

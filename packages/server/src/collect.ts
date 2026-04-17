@@ -210,6 +210,25 @@ export function handleCollect(
   if (saved) {
     // 세션 토큰 업데이트
     updateSessionTotalTokens(db, payload);
+
+    // 업데이트된 세션 total_tokens 조회 후 SSE 브로드캐스트
+    const updatedSession = getSessionById(db, payload.session_id);
+    broadcastNewRequest({
+      id: payload.id,
+      session_id: payload.session_id,
+      type: payload.request_type,
+      request_type: payload.request_type,
+      tool_name: payload.tool_name ?? null,
+      tool_detail: payload.tool_detail ?? null,
+      tokens_input: payload.tokens_input,
+      tokens_output: payload.tokens_output,
+      tokens_total: payload.tokens_total,
+      duration_ms: payload.duration_ms || 0,
+      model: payload.model ?? null,
+      timestamp: payload.timestamp,
+      payload: payload.payload ?? null,
+      session_total_tokens: updatedSession?.total_tokens ?? payload.tokens_total,
+    });
   }
 
   return {
