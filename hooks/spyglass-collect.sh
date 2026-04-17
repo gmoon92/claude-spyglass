@@ -125,6 +125,133 @@ extract_subagent_type() {
     echo "$payload" | grep -oE '"subagent_type"\s*:\s*"[^"]+"' | head -1 | cut -d'"' -f4
 }
 
+# 툴별 tool_detail 추출 (tool_name + tool_input JSON 기반)
+# Claude Code PostToolUse hook: payload에 "tool_name"과 "tool_input" 필드가 있음
+extract_tool_detail() {
+    local tool_name="$1"
+    local payload="$2"
+
+    # tool_input 오브젝트를 JSON으로 추출 (python3 우선, fallback: grep)
+    local tool_input
+    tool_input=$(python3 -c "
+import sys, json, re
+try:
+    data = json.loads(sys.stdin.read())
+    ti = data.get('tool_input', {})
+    print(json.dumps(ti))
+except:
+    print('{}')
+" 2>/dev/null <<< "$payload" || echo '{}')
+
+    local detail=""
+
+    case "$tool_name" in
+        Read)
+            # file_path 추출
+            detail=$(python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    print(d.get('file_path', ''))
+except:
+    print('')
+" 2>/dev/null <<< "$tool_input" || echo "")
+            ;;
+        Bash)
+            # command 앞 80자 추출
+            detail=$(python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    cmd = d.get('command', '')
+    print(cmd[:80])
+except:
+    print('')
+" 2>/dev/null <<< "$tool_input" || echo "")
+            ;;
+        Edit|MultiEdit)
+            # file_path 추출
+            detail=$(python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    print(d.get('file_path', ''))
+except:
+    print('')
+" 2>/dev/null <<< "$tool_input" || echo "")
+            ;;
+        Write)
+            # file_path 추출
+            detail=$(python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    print(d.get('file_path', ''))
+except:
+    print('')
+" 2>/dev/null <<< "$tool_input" || echo "")
+            ;;
+        Glob)
+            # pattern 추출 (path가 있으면 "pattern in path" 형태로)
+            detail=$(python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    pattern = d.get('pattern', '')
+    path = d.get('path', '')
+    if path:
+        print(f'{pattern} in {path}')
+    else:
+        print(pattern)
+except:
+    print('')
+" 2>/dev/null <<< "$tool_input" || echo "")
+            ;;
+        Grep)
+            # pattern + path 추출
+            detail=$(python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    pattern = d.get('pattern', '')
+    path = d.get('path', '')
+    if path:
+        print(f'{pattern} in {path}')
+    else:
+        print(pattern)
+except:
+    print('')
+" 2>/dev/null <<< "$tool_input" || echo "")
+            ;;
+        Skill)
+            detail=$(extract_skill_name "$payload")
+            ;;
+        Agent)
+            detail=$(extract_subagent_type "$payload")
+            ;;
+        TodoRead|TodoWrite)
+            # 특별한 detail 없음 — tool_name 자체가 충분
+            detail=""
+            ;;
+        WebFetch|WebSearch)
+            # url 또는 query 추출
+            detail=$(python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    print(d.get('url', '') or d.get('query', ''))
+except:
+    print('')
+" 2>/dev/null <<< "$tool_input" || echo "")
+            ;;
+        *)
+            detail=""
+            ;;
+    esac
+
+    echo "$detail"
+}
+
 # 모델명 추출
 extract_model() {
     local payload="$1"
@@ -198,11 +325,7 @@ main() {
     if [[ "$request_type" == "tool_call" ]]; then
         raw_tool_name=$(extract_tool_name "$payload")
         tool_name="\"$raw_tool_name\""
-        if [[ "$raw_tool_name" == "Skill" ]]; then
-            raw_tool_detail=$(extract_skill_name "$payload")
-        elif [[ "$raw_tool_name" == "Agent" ]]; then
-            raw_tool_detail=$(extract_subagent_type "$payload")
-        fi
+        raw_tool_detail=$(extract_tool_detail "$raw_tool_name" "$payload")
         if [[ -n "$raw_tool_detail" ]]; then
             tool_detail="\"$raw_tool_detail\""
         fi
