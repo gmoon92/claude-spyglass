@@ -37,9 +37,11 @@ export interface DashboardData {
     totalRequests: number;
     totalTokens: number;
     activeSessions: number;
+    avgDurationMs?: number;
   };
   sessions: SessionStats;
   requests: RequestStats;
+  active?: Array<{ id: string; started_at: number; ended_at: number | null }>;
 }
 
 /**

@@ -11,6 +11,7 @@ import { Box, Text, useStdout } from 'ink';
 import type { DashboardData } from '../hooks/useStats';
 import { useSSE } from '../hooks/useSSE';
 import { ProgressBar } from './ProgressBar';
+import { SessionTimer } from './SessionTimer';
 
 export interface LiveTabProps {
   data: DashboardData | null;
@@ -99,7 +100,10 @@ export function LiveTab({ data, isLoading, error }: LiveTabProps): JSX.Element {
         </Box>
         <Box width="50%">
           <Text color="gray">Session Time: </Text>
-          <Text bold>--:--:--</Text>
+          {data?.active?.[0]
+            ? <SessionTimer startedAt={data.active[0].started_at} endedAt={data.active[0].ended_at ?? undefined} />
+            : <Text bold>--:--:--</Text>
+          }
         </Box>
       </Box>
 
