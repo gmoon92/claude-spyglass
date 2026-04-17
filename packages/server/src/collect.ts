@@ -29,6 +29,7 @@ export interface CollectPayload {
   event_type: string;
   request_type: 'prompt' | 'tool_call' | 'system';
   tool_name?: string;
+  tool_detail?: string;
   model?: string;
   tokens_input: number;
   tokens_output: number;
@@ -120,6 +121,7 @@ function saveRequest(db: Database, payload: CollectPayload): boolean {
       timestamp: payload.timestamp,
       type: payload.request_type,
       tool_name: payload.tool_name,
+      tool_detail: payload.tool_detail,
       model: payload.model,
       tokens_input: payload.tokens_input,
       tokens_output: payload.tokens_output,

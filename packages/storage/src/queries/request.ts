@@ -18,6 +18,7 @@ export interface CreateRequestParams {
   timestamp: number;
   type: RequestType;
   tool_name?: string;
+  tool_detail?: string;
   model?: string;
   tokens_input?: number;
   tokens_output?: number;
@@ -29,9 +30,9 @@ export interface CreateRequestParams {
 /** 요청 생성 SQL */
 const SQL_CREATE_REQUEST = `
   INSERT INTO requests (
-    id, session_id, timestamp, type, tool_name, model,
+    id, session_id, timestamp, type, tool_name, tool_detail, model,
     tokens_input, tokens_output, tokens_total, duration_ms, payload
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 /**
@@ -48,6 +49,7 @@ export function createRequest(
     params.timestamp,
     params.type,
     params.tool_name ?? null,
+    params.tool_detail ?? null,
     params.model ?? null,
     params.tokens_input ?? 0,
     params.tokens_output ?? 0,
@@ -74,6 +76,7 @@ export function createRequests(
         item.timestamp,
         item.type,
         item.tool_name ?? null,
+        item.tool_detail ?? null,
         item.model ?? null,
         item.tokens_input ?? 0,
         item.tokens_output ?? 0,
@@ -375,10 +378,11 @@ export function getRequestStatsByType(db: Database): TypeStats[] {
 }
 
 /**
- * 도구별 통계 (tool_call 타입만)
+ * 도구별 통계 (tool_call 타입만, tool_detail 포함)
  */
 export interface ToolStats {
   tool_name: string;
+  tool_detail: string | null;
   call_count: number;
   total_tokens: number;
   avg_tokens: number;
@@ -386,18 +390,19 @@ export interface ToolStats {
 
 export function getToolStats(
   db: Database,
-  limit: number = 10
+  limit: number = 20
 ): ToolStats[] {
   return db.query(`
     SELECT
       tool_name,
+      tool_detail,
       COUNT(*) as call_count,
-      SUM(tokens_total) as total_tokens,
-      AVG(tokens_total) as avg_tokens
+      COALESCE(SUM(tokens_total), 0) as total_tokens,
+      COALESCE(AVG(tokens_total), 0) as avg_tokens
     FROM requests
     WHERE type = 'tool_call' AND tool_name IS NOT NULL
-    GROUP BY tool_name
-    ORDER BY total_tokens DESC
+    GROUP BY tool_name, tool_detail
+    ORDER BY call_count DESC
     LIMIT ?
   `).all(limit) as ToolStats[];
 }

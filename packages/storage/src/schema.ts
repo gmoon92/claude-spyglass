@@ -120,6 +120,7 @@ export interface Request {
   timestamp: number;
   type: RequestType;
   tool_name?: string;
+  tool_detail?: string;
   model?: string;
   tokens_input: number;
   tokens_output: number;
@@ -136,7 +137,14 @@ export interface Request {
 /**
  * 테이블 스키마 정보 (마이그레이션/검증용)
  */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
+
+/**
+ * v2 마이그레이션: tool_detail 컬럼 추가
+ */
+export const MIGRATION_V2 = `
+ALTER TABLE requests ADD COLUMN tool_detail TEXT;
+`;
 
 export const SCHEMA_META = {
   version: SCHEMA_VERSION,

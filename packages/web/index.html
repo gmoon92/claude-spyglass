@@ -182,6 +182,19 @@
     .type-tool_call { background: rgba(76,175,136,0.18);  color: #6dd8ab; }
     .type-system    { background: rgba(240,160,80,0.18);  color: #f5b96a; }
     .type-unknown   { background: rgba(122,126,153,0.15); color: var(--text-dim); }
+    .role-badge { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 9px; font-weight: 600; letter-spacing: 0.3px; margin-left: 4px; vertical-align: middle; }
+    .role-user { background: rgba(91,156,246,0.18); color: #8ab8f8; }
+
+    .tool-cell { display: flex; flex-direction: column; gap: 1px; }
+    .tool-main { font-size: 12px; color: var(--text); }
+    .tool-sub  { font-size: 10px; color: var(--text-mute); font-style: italic; }
+
+    .prompt-preview { font-size: 10px; color: var(--text-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; cursor: pointer; display: block; margin-top: 2px; }
+    .prompt-preview:hover { color: var(--text-dim); text-decoration: underline dotted; }
+    .prompt-expand-row td { padding: 0 !important; border-bottom: 1px solid var(--border); }
+    .prompt-expand-box { background: rgba(124,106,247,0.05); border-left: 2px solid var(--accent); padding: 10px 16px; max-height: 160px; overflow-y: auto; font-size: 11px; line-height: 1.7; color: var(--text-dim); white-space: pre-wrap; word-break: break-all; }
+    .prompt-expand-box::-webkit-scrollbar { width: 3px; }
+    .prompt-expand-box::-webkit-scrollbar-thumb { background: var(--border); }
 
     .num { font-variant-numeric: tabular-nums; color: var(--text-dim); }
     .num-hi { color: var(--accent); font-variant-numeric: tabular-nums; }
@@ -631,7 +644,43 @@
     }
     function typeBadge(type) {
       const cls = ['prompt','tool_call','system'].includes(type) ? type : 'unknown';
-      return `<span class="type-badge type-${cls}">${cls}</span>`;
+      let html = `<span class="type-badge type-${cls}">${cls}</span>`;
+      if (type === 'prompt') html += `<span class="role-badge role-user">user</span>`;
+      return html;
+    }
+    function toolLabel(r) {
+      const base = r.tool_name;
+      if (!base) return '<span style="color:var(--text-mute)">—</span>';
+      const sub = r.tool_detail;
+      if (sub) return `<div class="tool-cell"><span class="tool-main">${escHtml(base)}</span><span class="tool-sub">${escHtml(sub)}</span></div>`;
+      return `<span class="tool-main">${escHtml(base)}</span>`;
+    }
+    const _promptCache = {};
+    function promptPreview(r) {
+      if (r.type !== 'prompt' || !r.payload) return '';
+      try {
+        const p = typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
+        const text = p?.prompt ?? p?.content ?? '';
+        if (!text) return '';
+        _promptCache[r.id] = text;
+        const preview = text.slice(0, 60).replace(/\n/g, ' ');
+        return `<span class="prompt-preview" onclick="togglePromptExpand(event,'${escHtml(r.id)}')" title="클릭하여 전체 보기">${escHtml(preview)}${text.length > 60 ? '…' : ''}</span>`;
+      } catch { return ''; }
+    }
+    function togglePromptExpand(ev, rid) {
+      ev.stopPropagation();
+      const tr = ev.target.closest('tr');
+      document.querySelectorAll('[data-expand-for]').forEach(el => el.remove());
+      if (tr.dataset.expanded === rid) { delete tr.dataset.expanded; return; }
+      tr.dataset.expanded = rid;
+      const text = _promptCache[rid] || '';
+      const MAX = 500;
+      const display = text.length > MAX ? text.slice(0, MAX) + `\n…(총 ${text.length}자)` : text;
+      const expandTr = document.createElement('tr');
+      expandTr.dataset.expandFor = rid;
+      expandTr.className = 'prompt-expand-row';
+      expandTr.innerHTML = `<td colspan="5"><div class="prompt-expand-box">${escHtml(display)}</div></td>`;
+      tr.after(expandTr);
     }
     function escHtml(s) {
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -793,8 +842,8 @@
       }
       body.innerHTML = list.map(r => `<tr>
         <td class="num" style="white-space:nowrap">${fmtDate(r.timestamp)}</td>
-        <td>${typeBadge(r.type)}</td>
-        <td>${r.tool_name ? escHtml(r.tool_name) : '<span style="color:var(--text-mute)">—</span>'}</td>
+        <td>${typeBadge(r.type)}${promptPreview(r)}</td>
+        <td>${toolLabel(r)}</td>
         <td class="num num-hi">${fmtToken(r.tokens_total)}</td>
       </tr>`).join('');
       section.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -826,13 +875,16 @@
       document.getElementById('toolCount').textContent = `${list.length}개`;
       const body = document.getElementById('toolsBody');
       if (!list.length) { body.innerHTML = '<tr><td colspan="3" class="table-empty">데이터 없음</td></tr>'; return; }
-      const maxC = Math.max(...list.map(t => t.count || 0), 1);
+      const maxC = Math.max(...list.map(t => t.call_count || 0), 1);
       body.innerHTML = list.map(t => `<tr>
-        <td>${escHtml(t.tool_name||'—')}</td>
-        <td class="num num-hi">${fmt(t.count)}</td>
+        <td><div class="tool-cell">
+          <span class="tool-main">${escHtml(t.tool_name||'—')}</span>
+          ${t.tool_detail ? `<span class="tool-sub">${escHtml(t.tool_detail)}</span>` : ''}
+        </div></td>
+        <td class="num num-hi">${fmt(t.call_count)}</td>
         <td><div class="bar-cell">
-          <div class="bar-track"><div class="bar-fill" style="width:${Math.round((t.count||0)/maxC*100)}%;background:var(--green)"></div></div>
-          <span class="bar-label">${Math.round((t.count||0)/maxC*100)}%</span>
+          <div class="bar-track"><div class="bar-fill" style="width:${Math.round((t.call_count||0)/maxC*100)}%;background:var(--green)"></div></div>
+          <span class="bar-label">${Math.round((t.call_count||0)/maxC*100)}%</span>
         </div></td>
       </tr>`).join('');
     }
@@ -843,8 +895,8 @@
       if (!list.length) { body.innerHTML = '<tr><td colspan="5" class="table-empty">데이터 없음</td></tr>'; return; }
       body.innerHTML = list.map(r => `<tr>
         <td class="num" style="white-space:nowrap">${fmtDate(r.timestamp)}</td>
-        <td>${typeBadge(r.type)}</td>
-        <td>${r.tool_name ? escHtml(r.tool_name) : '<span style="color:var(--text-mute)">—</span>'}</td>
+        <td>${typeBadge(r.type)}${promptPreview(r)}</td>
+        <td>${toolLabel(r)}</td>
         <td class="num num-hi">${fmtToken(r.tokens_total)}</td>
         <td><span class="sess-id" title="${escHtml(r.session_id||'')}">${escHtml(r.session_id ? r.session_id.slice(0,12)+'…' : '—')}</span></td>
       </tr>`).join('');

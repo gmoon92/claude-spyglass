@@ -190,12 +190,22 @@ main() {
 
     # 툴/모델 정보 추출
     local tool_name="null"
+    local tool_detail="null"
     local model="null"
     local raw_tool_name=""
+    local raw_tool_detail=""
 
     if [[ "$request_type" == "tool_call" ]]; then
         raw_tool_name=$(extract_tool_name "$payload")
         tool_name="\"$raw_tool_name\""
+        if [[ "$raw_tool_name" == "Skill" ]]; then
+            raw_tool_detail=$(extract_skill_name "$payload")
+        elif [[ "$raw_tool_name" == "Agent" ]]; then
+            raw_tool_detail=$(extract_subagent_type "$payload")
+        fi
+        if [[ -n "$raw_tool_detail" ]]; then
+            tool_detail="\"$raw_tool_detail\""
+        fi
     elif [[ "$request_type" == "prompt" ]]; then
         model="\"$(extract_model "$payload")\""
     fi
@@ -224,6 +234,7 @@ main() {
   "event_type": "$event_type",
   "request_type": "$request_type",
   "tool_name": $tool_name,
+  "tool_detail": $tool_detail,
   "model": $model,
   "tokens_input": $tokens_input,
   "tokens_output": $tokens_output,
@@ -237,14 +248,8 @@ EOF
     # 로그 기록 (툴 상세 포함)
     local log_tool_detail=""
     if [[ "$request_type" == "tool_call" ]]; then
-        if [[ "$raw_tool_name" == "Skill" ]]; then
-            local skill_name
-            skill_name=$(extract_skill_name "$payload")
-            log_tool_detail=", Tool: Skill(${skill_name:-unknown})"
-        elif [[ "$raw_tool_name" == "Agent" ]]; then
-            local subagent_type
-            subagent_type=$(extract_subagent_type "$payload")
-            log_tool_detail=", Tool: Agent(${subagent_type:-general})"
+        if [[ -n "$raw_tool_detail" ]]; then
+            log_tool_detail=", Tool: ${raw_tool_name}(${raw_tool_detail})"
         else
             log_tool_detail=", Tool: $raw_tool_name"
         fi
