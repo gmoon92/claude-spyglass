@@ -160,6 +160,7 @@ function saveRequest(db: Database, payload: CollectPayload): boolean {
       tokens_total: payload.tokens_total,
       duration_ms: payload.duration_ms || 0,
       payload: payload.payload,
+      source: payload.source || null,
     });
     return true;
   } catch (error) {
