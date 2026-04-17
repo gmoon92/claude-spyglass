@@ -347,7 +347,7 @@
     .turn-children { display: none; padding: 4px 0 6px; }
     .turn-item.open .turn-children { display: block; }
     .turn-row {
-      display: grid; grid-template-columns: 28px 1fr 60px 60px 80px;
+      display: grid; grid-template-columns: 28px 1fr 50px 50px 70px 80px;
       align-items: center; padding: 5px 16px 5px 32px; font-size: 12px;
     }
     .turn-row:hover { background: rgba(217,119,87,0.04); }
@@ -414,6 +414,10 @@
       <span class="stat-label">활성</span>
       <span class="stat-value" id="statActive"><span class="skeleton"></span></span>
     </div>
+    <div class="stat-card">
+      <span class="stat-label">평균 응답시간</span>
+      <span class="stat-value" id="statAvgDuration"><span class="skeleton"></span></span>
+    </div>
   </div>
 
   <!-- MAIN LAYOUT -->
@@ -475,9 +479,9 @@
         </div>
         <div class="panel-body">
           <table>
-            <thead><tr><th>툴</th><th>호출</th><th style="min-width:80px">비율</th></tr></thead>
+            <thead><tr><th>툴</th><th>호출</th><th>평균토큰</th><th style="min-width:80px">비율</th></tr></thead>
             <tbody id="toolsBody">
-              <tr><td colspan="3" class="table-empty"><span class="skeleton"></span></td></tr>
+              <tr><td colspan="4" class="table-empty"><span class="skeleton"></span></td></tr>
             </tbody>
           </table>
         </div>
@@ -520,10 +524,10 @@
           <div class="feed-body">
             <table>
               <thead>
-                <tr><th>시각</th><th>타입</th><th>툴</th><th>토큰</th><th>세션</th></tr>
+                <tr><th>시각</th><th>타입</th><th>툴</th><th>IN</th><th>OUT</th><th>응답시간</th><th>세션</th></tr>
               </thead>
               <tbody id="requestsBody">
-                <tr><td colspan="5" class="table-empty"><span class="skeleton"></span></td></tr>
+                <tr><td colspan="7" class="table-empty"><span class="skeleton"></span></td></tr>
               </tbody>
             </table>
           </div>
@@ -539,6 +543,7 @@
             <span class="detail-session-id" id="detailSessionId">—</span>
             <span class="detail-project" id="detailProject">—</span>
             <span class="detail-tokens" id="detailTokens"></span>
+            <span class="detail-tokens" id="detailEndedAt" style="color:var(--text-muted)"></span>
           </div>
           <button class="btn-close" id="btnCloseDetail">✕ 닫기</button>
         </div>
@@ -552,9 +557,9 @@
 
         <div id="detailFlatView" class="detail-content">
           <table>
-            <thead><tr><th>시각</th><th>타입</th><th>툴</th><th>토큰</th></tr></thead>
+            <thead><tr><th>시각</th><th>타입</th><th>툴</th><th>IN</th><th>OUT</th><th>응답시간</th></tr></thead>
             <tbody id="detailRequestsBody">
-              <tr><td colspan="4" class="empty-hint">—</td></tr>
+              <tr><td colspan="6" class="empty-hint">—</td></tr>
             </tbody>
           </table>
         </div>
@@ -773,6 +778,11 @@
 
     // ── Formatters ───────────────────────────────────────────────────
     function fmt(n) { return (n ?? 0).toLocaleString('ko-KR'); }
+    function formatDuration(ms) {
+      if (ms === null || ms === undefined || isNaN(ms) || ms <= 0) return '—';
+      if (ms < 1000) return `${ms}ms`;
+      return `${(ms / 1000).toFixed(1)}s`;
+    }
     function fmtToken(n) {
       if (!n) return '—';
       if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
@@ -805,21 +815,24 @@
       return `<span class="tool-main">${escHtml(base)}</span>`;
     }
 
+    const FLAT_VIEW_COLS = 6;
+    const RECENT_REQ_COLS = 7;
+
     const PROMPT_CACHE_MAX = 500;
     const _promptCache = {};
-    function promptPreview(r) {
-      if (r.type !== 'prompt' || !r.payload) return '';
+    function promptPreview(r, maxLen = 60) {
+      if (!r.payload) return '';
       try {
         const p = typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
-        const text = p?.prompt ?? p?.content ?? '';
+        const text = p?.prompt ?? p?.content ?? p?.tool_input ?? (typeof p === 'string' ? p : '');
         if (!text) return '';
         if (Object.keys(_promptCache).length >= PROMPT_CACHE_MAX) {
           const oldest = Object.keys(_promptCache)[0];
           delete _promptCache[oldest];
         }
         _promptCache[r.id] = text;
-        const preview = text.slice(0, 60).replace(/\n/g, ' ');
-        return `<span class="prompt-preview" data-expand-id="${escHtml(r.id)}" title="클릭하여 전체 보기">${escHtml(preview)}${text.length > 60 ? '…' : ''}</span>`;
+        const preview = text.slice(0, maxLen).replace(/\n/g, ' ');
+        return `<span class="prompt-preview" data-expand-id="${escHtml(r.id)}" title="클릭하여 전체 보기">${escHtml(preview)}${text.length > maxLen ? '…' : ''}</span>`;
       } catch { return ''; }
     }
     function togglePromptExpand(rid, tr) {
@@ -832,7 +845,7 @@
       const expandTr = document.createElement('tr');
       expandTr.dataset.expandFor = rid;
       expandTr.className = 'prompt-expand-row';
-      expandTr.innerHTML = `<td colspan="5"><div class="prompt-expand-box">${escHtml(display)}</div></td>`;
+      expandTr.innerHTML = `<td colspan="${FLAT_VIEW_COLS}"><div class="prompt-expand-box">${escHtml(display)}</div></td>`;
       tr.after(expandTr);
     }
     function escHtml(s) {
@@ -864,10 +877,11 @@
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         const d = json.data;
-        document.getElementById('statSessions').textContent = fmt(d.summary?.totalSessions ?? 0);
-        document.getElementById('statRequests').textContent = fmt(d.summary?.totalRequests ?? 0);
-        document.getElementById('statTokens').textContent   = fmtToken(d.summary?.totalTokens ?? 0);
-        document.getElementById('statActive').textContent   = fmt(d.summary?.activeSessions ?? 0);
+        document.getElementById('statSessions').textContent    = fmt(d.summary?.totalSessions ?? 0);
+        document.getElementById('statRequests').textContent    = fmt(d.summary?.totalRequests ?? 0);
+        document.getElementById('statTokens').textContent      = fmtToken(d.summary?.totalTokens ?? 0);
+        document.getElementById('statActive').textContent      = fmt(d.summary?.activeSessions ?? 0);
+        document.getElementById('statAvgDuration').textContent = formatDuration(d.summary?.avgDurationMs ?? 0);
         renderProjects(d.projects || []);
         renderTools(d.tools || []);
         typeData = (d.types || []).sort((a, b) => b.count - a.count);
@@ -888,7 +902,7 @@
         renderRequests(json.data || []);
       } catch {
         document.getElementById('requestsBody').innerHTML =
-          '<tr><td colspan="5" class="table-empty" style="color:var(--red)">요청 목록 로드 실패</td></tr>';
+          `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty" style="color:var(--red)">요청 목록 로드 실패</td></tr>`;
       }
     }
 
@@ -994,6 +1008,9 @@
       document.getElementById('detailSessionId').textContent = session ? session.id : id;
       document.getElementById('detailProject').textContent   = session ? `📁 ${session.project_name}` : '';
       document.getElementById('detailTokens').textContent    = session ? `${fmtToken(session.total_tokens)} tokens` : '';
+      document.getElementById('detailEndedAt').textContent   = session?.ended_at
+        ? `종료: ${new Date(session.ended_at < 1e12 ? session.ended_at * 1000 : session.ended_at).toLocaleTimeString()}`
+        : '';
 
       try {
         const [reqRes, turnRes] = await Promise.all([
@@ -1024,14 +1041,16 @@
     function renderDetailRequests(list) {
       const body = document.getElementById('detailRequestsBody');
       if (!list.length) {
-        body.innerHTML = '<tr><td colspan="4" class="empty-hint">요청 데이터 없음</td></tr>';
+        body.innerHTML = `<tr><td colspan="${FLAT_VIEW_COLS}" class="empty-hint">요청 데이터 없음</td></tr>`;
         return;
       }
       body.innerHTML = list.map(r => `<tr>
         <td class="num" style="white-space:nowrap">${fmtDate(r.timestamp)}</td>
-        <td>${typeBadge(r.type)}${promptPreview(r)}</td>
+        <td>${typeBadge(r.type)}${r.model ? `<span class="model-badge">${escHtml(r.model)}</span>` : ''}${promptPreview(r)}</td>
         <td>${toolLabel(r)}</td>
-        <td class="num num-hi">${fmtToken(r.tokens_total)}</td>
+        <td class="num">${r.tokens_input > 0 ? fmtToken(r.tokens_input) : '—'}</td>
+        <td class="num">${r.tokens_output > 0 ? fmtToken(r.tokens_output) : '—'}</td>
+        <td class="num">${formatDuration(r.duration_ms)}</td>
       </tr>`).join('');
     }
 
@@ -1065,28 +1084,22 @@
         return;
       }
       container.innerHTML = turns.map(turn => {
-        const toolCount = turn.summary.tool_call_count;
-        const totalTok  = turn.summary.total_tokens;
-        const meta = `도구 ${toolCount}개 · ${fmtToken(totalTok)} 토큰`;
-
-        const promptPreviewText = (() => {
-          if (!turn.prompt?.payload) return '';
-          try {
-            const p = JSON.parse(turn.prompt.payload);
-            const t = p?.prompt ?? p?.content ?? '';
-            return t ? escHtml(t.slice(0, 80).replace(/\n/g, ' ')) + (t.length > 80 ? '…' : '') : '';
-          } catch { return ''; }
-        })();
+        const toolCount  = turn.summary.tool_call_count;
+        const tokIn      = turn.summary.tokens_input ?? 0;
+        const tokOut     = turn.summary.tokens_output ?? 0;
+        const durMs      = turn.prompt?.duration_ms ?? 0;
+        const meta = `도구 ${toolCount}개 · IN ${fmtToken(tokIn)} / OUT ${fmtToken(tokOut)}${durMs > 0 ? ` · ⏱ ${formatDuration(durMs)}` : ''}`;
 
         const promptRow = turn.prompt ? `
           <div class="turn-row turn-row-prompt">
             <span></span>
             <div class="tool-cell">
               <span class="tool-main"><span class="type-badge type-prompt">prompt</span><span class="role-badge role-user">user</span>${turn.prompt.model ? `<span class="model-badge">${escHtml(turn.prompt.model)}</span>` : ''}</span>
-              ${promptPreviewText ? `<span class="tool-sub">${promptPreviewText}</span>` : ''}
+              ${promptPreview(turn.prompt, 80) ? `<span class="tool-sub">${promptPreview(turn.prompt, 80)}</span>` : ''}
             </div>
-            <span class="num">${fmtToken(turn.prompt.tokens_total)}</span>
-            <span></span>
+            <span class="num">${turn.prompt.tokens_input > 0 ? fmtToken(turn.prompt.tokens_input) : '—'}</span>
+            <span class="num">${turn.prompt.tokens_output > 0 ? fmtToken(turn.prompt.tokens_output) : '—'}</span>
+            <span class="num" style="color:var(--text-dim)">${formatDuration(turn.prompt.duration_ms)}</span>
             <span class="num" style="color:var(--text-dim)">${fmtTime(turn.prompt.timestamp)}</span>
           </div>` : '';
 
@@ -1097,8 +1110,9 @@
               <span class="tool-main">${escHtml(tc.tool_name || '—')}</span>
               ${tc.tool_detail ? `<span class="tool-sub">${escHtml(tc.tool_detail)}</span>` : ''}
             </div>
+            <span class="num">—</span>
             <span class="num">${fmtToken(tc.tokens_total)}</span>
-            <span class="num" style="color:var(--text-dim)">${tc.duration_ms ? tc.duration_ms + 'ms' : '—'}</span>
+            <span class="num" style="color:var(--text-dim)">${formatDuration(tc.duration_ms)}</span>
             <span class="num" style="color:var(--text-dim)">${fmtTime(tc.timestamp)}</span>
           </div>`).join('');
 
@@ -1107,7 +1121,6 @@
             <span class="turn-badge">T${turn.turn_index}</span>
             <span class="turn-time">${fmtTime(turn.started_at)}</span>
             <span class="turn-meta">${meta}</span>
-            <span class="turn-tokens">${fmtToken(totalTok)}</span>
             <span class="turn-toggle">▸</span>
           </div>
           <div class="turn-children">
@@ -1147,6 +1160,7 @@
           ${t.tool_detail ? `<span class="tool-sub">${escHtml(t.tool_detail)}</span>` : ''}
         </div></td>
         <td class="num num-hi">${fmt(t.call_count)}</td>
+        <td class="num">${t.avg_tokens > 0 ? fmtToken(Math.round(t.avg_tokens)) : '—'}</td>
         <td><div class="bar-cell">
           <div class="bar-track"><div class="bar-fill" style="width:${Math.round((t.call_count || 0) / maxC * 100)}%;background:var(--green)"></div></div>
           <span class="bar-label">${Math.round((t.call_count || 0) / maxC * 100)}%</span>
@@ -1157,12 +1171,14 @@
     function renderRequests(list) {
       document.getElementById('requestCount').textContent = `최근 ${list.length}건`;
       const body = document.getElementById('requestsBody');
-      if (!list.length) { body.innerHTML = '<tr><td colspan="5" class="table-empty">데이터 없음</td></tr>'; return; }
+      if (!list.length) { body.innerHTML = `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty">데이터 없음</td></tr>`; return; }
       body.innerHTML = list.map(r => `<tr>
         <td class="num" style="white-space:nowrap">${fmtDate(r.timestamp)}</td>
         <td>${typeBadge(r.type)}${promptPreview(r)}</td>
         <td>${toolLabel(r)}</td>
-        <td class="num num-hi">${fmtToken(r.tokens_total)}</td>
+        <td class="num">${r.tokens_input > 0 ? fmtToken(r.tokens_input) : '—'}</td>
+        <td class="num">${r.tokens_output > 0 ? fmtToken(r.tokens_output) : '—'}</td>
+        <td class="num">${formatDuration(r.duration_ms)}</td>
         <td><span class="sess-id" title="${escHtml(r.session_id || '')}">${escHtml(r.session_id ? r.session_id.slice(0, 12) + '…' : '—')}</span></td>
       </tr>`).join('');
     }
