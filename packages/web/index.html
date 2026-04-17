@@ -397,11 +397,21 @@
       background: rgba(255,255,255,0.02) !important;
     }
 
+    /* ─── DATE FILTER ──────────────────────────────────────────────── */
+    .date-filter { display: flex; gap: 4px; align-items: center; }
+    .filter-btn {
+      background: none; border: 1px solid var(--border);
+      color: var(--text-dim); padding: 3px 10px; border-radius: 5px;
+      cursor: pointer; font-family: inherit; font-size: 10px;
+      font-weight: 600; letter-spacing: 0.3px; transition: all .15s;
+    }
+    .filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .filter-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+
     /* ─── RESPONSIVE ────────────────────────────────────────────────── */
     @media (max-width: 768px) {
       .main-layout { grid-template-columns: 1fr; grid-template-rows: 180px 1fr; }
-      .left-panel  { border-right: none; border-bottom: 1px solid var(--border); flex-direction: row; }
-      .panel-section.flex-section { flex: 1; }
+      .left-panel  { grid-template-rows: none; grid-template-columns: 1fr 1fr; border-right: none; border-bottom: 1px solid var(--border); }
       .tool-stats-section { display: none; }
       .charts-inner { grid-template-columns: 1fr; }
       .donut-section { border-left: none; border-top: 1px solid var(--border); }
@@ -419,6 +429,11 @@
     <div class="header-left">
       <div class="logo">Claude<span>Spyglass</span></div>
       <span class="badge-live" id="liveBadge"><span class="dot"></span>LIVE</span>
+    </div>
+    <div class="date-filter" id="dateFilter">
+      <button class="filter-btn active" data-range="all">전체</button>
+      <button class="filter-btn" data-range="today">오늘</button>
+      <button class="filter-btn" data-range="week">이번주</button>
     </div>
     <span class="last-updated" id="lastUpdated">—</span>
   </header>
@@ -973,9 +988,9 @@
       try {
         let url;
         if (reqFilter === 'all') {
-          url = `${API}/api/requests?limit=${REQ_PAGE}&offset=${reqOffset}`;
+          url = buildQuery(`${API}/api/requests`, { limit: REQ_PAGE, offset: reqOffset });
         } else {
-          url = `${API}/api/requests/by-type/${encodeURIComponent(reqFilter)}?limit=${REQ_PAGE}&offset=${reqOffset}`;
+          url = buildQuery(`${API}/api/requests/by-type/${encodeURIComponent(reqFilter)}`, { limit: REQ_PAGE, offset: reqOffset });
         }
         const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1014,6 +1029,23 @@
       body.insertAdjacentHTML('beforeend', rows);
     }
 
+    function prependRequest(r) {
+      const body = document.getElementById('requestsBody');
+      // 현재 행 수가 10개 이상이면 마지막 제거
+      while (body.rows.length >= 10) body.deleteRow(body.rows.length - 1);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="num" style="white-space:nowrap">${fmtDate(r.timestamp)}</td>
+        <td>${typeBadge(r.type)}${promptPreview(r)}</td>
+        <td>${toolLabel(r)}</td>
+        <td class="num">${r.tokens_input > 0 ? fmtToken(r.tokens_input) : '—'}</td>
+        <td class="num">${r.tokens_output > 0 ? fmtToken(r.tokens_output) : '—'}</td>
+        <td class="num">${formatDuration(r.duration_ms)}</td>
+        <td><span class="sess-id" title="${escHtml(r.session_id || '')}">${escHtml(r.session_id ? r.session_id.slice(0, 12) + '…' : '—')}</span></td>
+      `;
+      body.insertBefore(tr, body.firstChild);
+    }
+
     // ── Browser 상태 ─────────────────────────────────────────────────
     let selectedProject = null;
     let selectedSession = null;
@@ -1025,6 +1057,29 @@
     let reqOffset = 0;
     const REQ_PAGE = 10;
     let isSSEConnected = false;
+
+    // ── 날짜 필터 상태 ───────────────────────────────────────────────
+    let activeRange = 'all';
+
+    function getDateRange() {
+      const now = Date.now();
+      if (activeRange === 'today') {
+        const start = new Date(); start.setHours(0,0,0,0);
+        return { from: start.getTime(), to: now };
+      }
+      if (activeRange === 'week') {
+        const start = new Date(); start.setDate(start.getDate() - 7); start.setHours(0,0,0,0);
+        return { from: start.getTime(), to: now };
+      }
+      return {};
+    }
+
+    function buildQuery(base, extra = {}) {
+      const range = getDateRange();
+      const params = new URLSearchParams({ ...range, ...extra });
+      const qs = params.toString();
+      return qs ? `${base}?${qs}` : base;
+    }
 
     // ── UI 상태 ──────────────────────────────────────────────────────
     const uiState = { rightView: 'default', detailTab: 'flat', isTransitioning: false };
@@ -1059,6 +1114,15 @@
       }).join('');
     }
 
+    function extractFirstPrompt(payload) {
+      if (!payload) return '';
+      try {
+        const p = typeof payload === 'string' ? JSON.parse(payload) : payload;
+        const text = p?.prompt ?? p?.content ?? (typeof p === 'string' ? p : '');
+        return text ? text.slice(0, 40).replace(/\n/g, ' ') : '';
+      } catch { return ''; }
+    }
+
     // ── Browser: 세션 렌더 ──────────────────────────────────────────
     function renderBrowserSessions() {
       const body = document.getElementById('browserSessionsBody');
@@ -1080,9 +1144,13 @@
         const isSelected = selectedSession === s.id;
         const isActive = !s.ended_at;
         const shortId = s.id.slice(0, 8) + '…';
+        const preview = extractFirstPrompt(s.first_prompt_payload);
         return `<tr class="clickable${isSelected ? ' row-selected' : ''}" data-session-id="${escHtml(s.id)}">
           <td><span class="sess-id" title="${escHtml(s.id)}">${escHtml(shortId)}</span></td>
-          <td class="num" style="white-space:nowrap;font-size:11px">${fmtDate(s.started_at)}</td>
+          <td class="num" style="white-space:nowrap;font-size:11px">
+            ${fmtDate(s.started_at)}
+            ${preview ? `<div style="font-size:10px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px" title="${escHtml(preview)}">${escHtml(preview)}</div>` : ''}
+          </td>
           <td class="num-hi" style="white-space:nowrap">${fmtToken(s.total_tokens)}</td>
           <td style="white-space:nowrap"><span style="color:${isActive ? 'var(--green)' : 'var(--text-dim)'}; font-size:11px">${isActive ? '● 활성' : '○ 종료'}</span></td>
         </tr>`;
@@ -1156,6 +1224,11 @@
       if (badgesEl) badgesEl.style.display = 'none';
     }
 
+    function cacheHitBadge(r) {
+      if (!r.cache_read_tokens || r.cache_read_tokens <= 0) return '';
+      return `<span class="role-badge" style="background:rgba(96,165,250,0.18);color:#93c5fd" title="캐시 히트">⚡${fmtToken(r.cache_read_tokens)}</span>`;
+    }
+
     // ── 세션 상세 렌더 ───────────────────────────────────────────────
     function renderDetailRequests(list) {
       const body = document.getElementById('detailRequestsBody');
@@ -1165,7 +1238,7 @@
       }
       const rows = list.map(r => `<tr>
         <td class="num" style="white-space:nowrap">${fmtDate(r.timestamp)}</td>
-        <td>${typeBadge(r.type)}${r.model ? `<span class="model-badge">${escHtml(r.model)}</span>` : ''}${promptPreview(r)}</td>
+        <td>${typeBadge(r.type)}${r.model ? `<span class="model-badge">${escHtml(r.model)}</span>` : ''}${cacheHitBadge(r)}${promptPreview(r)}</td>
         <td>${toolLabel(r)}</td>
         <td class="num">${r.tokens_input > 0 ? fmtToken(r.tokens_input) : '—'}</td>
         <td class="num">${r.tokens_output > 0 ? fmtToken(r.tokens_output) : '—'}</td>
@@ -1298,7 +1371,7 @@
     // ── 전체 세션 로드 (초기/주기적 갱신용) ────────────────────────────
     async function fetchAllSessions() {
       try {
-        const res = await fetch(`${API}/api/sessions?limit=200`);
+        const res = await fetch(buildQuery(`${API}/api/sessions`, { limit: 500 }));
         const json = await res.json();
         allSessions = json.data || [];
         renderBrowserSessions();
@@ -1373,14 +1446,32 @@
       try {
         sseSource = new EventSource(`${API}/events`);
 
-        sseSource.addEventListener('new_request', () => {
+        sseSource.addEventListener('new_request', (e) => {
           recordRequest();
           drawTimeline();
+
+          // 이벤트 데이터로 증분 업데이트
+          try {
+            const evt = JSON.parse(e.data);
+            const req = evt.data;
+
+            // allSessions의 해당 세션 total_tokens 직접 업데이트
+            const sess = allSessions.find(s => s.id === req.session_id);
+            if (sess) {
+              sess.total_tokens = req.session_total_tokens;
+              renderBrowserSessions();
+            }
+
+            // 요청 피드 상단에 새 행 prepend (최대 10개 유지)
+            prependRequest(req);
+
+            // 열려있는 세션 상세 뷰 갱신
+            if (selectedSession === req.session_id) selectSession(selectedSession);
+          } catch { /* silent */ }
+
+          // 요약 통계만 디바운스 갱신
           clearTimeout(refreshDebounce);
-          refreshDebounce = setTimeout(() => {
-            fetchDashboard();
-            fetchRequests();
-          }, 2000);
+          refreshDebounce = setTimeout(() => fetchDashboard(), 1000);
         });
 
         sseSource.onopen = () => {
@@ -1424,6 +1515,16 @@
 
       // 에러 배너 다시 시도
       document.getElementById('retryBtn').addEventListener('click', manualRefresh);
+
+      // 날짜 필터 버튼
+      document.getElementById('dateFilter').addEventListener('click', e => {
+        const btn = e.target.closest('[data-range]');
+        if (!btn) return;
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        activeRange = btn.dataset.range;
+        fetchDashboard(); fetchRequests(); fetchAllSessions();
+      });
 
       // 타입 필터 버튼
       document.getElementById('typeFilterBtns').addEventListener('click', e => {
