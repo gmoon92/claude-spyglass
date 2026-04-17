@@ -15,7 +15,7 @@
       "args": [
         "@playwright/mcp@latest",
         "--output-dir",
-        "${CLAUDE_TMP_DIR}/playwright-output"
+        ".claude/.tmp/playwright-output"
       ]
     },
     "context7": {
