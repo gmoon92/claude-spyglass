@@ -7,41 +7,16 @@
 /** @jsxImportSource react */
 import { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
+import { useAnalysis } from '../hooks/useAnalysis';
+import type { AnalysisResult } from '../hooks/useAnalysis';
 
-/**
- * 분석 데이터
- */
-export interface AnalysisData {
-  topRequests: Array<{
-    id: string;
-    type: string;
-    tool_name?: string;
-    tokens_total: number;
-    timestamp: number;
-  }>;
-  typeStats: Array<{
-    type: string;
-    count: number;
-    total_tokens: number;
-  }>;
-  toolStats: Array<{
-    tool_name: string;
-    call_count: number;
-    total_tokens: number;
-  }>;
-  hourlyStats: Array<{
-    hour: number;
-    request_count: number;
-    total_tokens: number;
-  }>;
-}
 
 /**
  * Analysis Tab props
  */
 export interface AnalysisTabProps {
-  data?: AnalysisData;
   isActive?: boolean;
+  apiUrl?: string;
 }
 
 /**
@@ -68,8 +43,9 @@ function getTypeColor(type: string): string {
 /**
  * Analysis Tab 컴포넌트
  */
-export function AnalysisTab({ data, isActive = false }: AnalysisTabProps): JSX.Element {
+export function AnalysisTab({ isActive = false, apiUrl }: AnalysisTabProps): JSX.Element {
   const [activeSection, setActiveSection] = useState(0);
+  const { data, loading } = useAnalysis({ apiUrl });
 
   const sections = ['Overview', 'Top Requests', 'By Type', 'By Tool'];
 
@@ -83,7 +59,15 @@ export function AnalysisTab({ data, isActive = false }: AnalysisTabProps): JSX.E
     }
   });
 
-  if (!data) {
+  if (loading && !data) {
+    return (
+      <Box flexDirection="column" padding={2}>
+        <Text color="yellow">Loading analysis data...</Text>
+      </Box>
+    );
+  }
+
+  if (!data || (!data.topRequests.length && !data.typeStats.length && !data.toolStats.length)) {
     return (
       <Box flexDirection="column" padding={2}>
         <Text color="gray">No analysis data available.</Text>
@@ -112,9 +96,16 @@ export function AnalysisTab({ data, isActive = false }: AnalysisTabProps): JSX.E
         {activeSection === 3 && <ByToolSection stats={data.toolStats} />}
       </Box>
 
+      {/* 오류 인라인 표시 */}
+      {(data.errors.top || data.errors.type || data.errors.tool) && (
+        <Box marginTop={1}>
+          <Text color="red" dimColor>일부 데이터 로드 실패 — 재시도 중</Text>
+        </Box>
+      )}
+
       {/* 도움말 */}
       <Box marginTop={1}>
-        <Text color="gray">←→ Switch Section | q Back</Text>
+        <Text color="gray">←→ Switch Section</Text>
       </Box>
     </Box>
   );
@@ -123,7 +114,7 @@ export function AnalysisTab({ data, isActive = false }: AnalysisTabProps): JSX.E
 /**
  * Overview 섹션
  */
-function OverviewSection({ data }: { data: AnalysisData }): JSX.Element {
+function OverviewSection({ data }: { data: AnalysisResult }): JSX.Element {
   const totalRequests = data.typeStats.reduce((sum, s) => sum + s.count, 0);
   const totalTokens = data.typeStats.reduce((sum, s) => sum + s.total_tokens, 0);
   const avgTokens = totalRequests > 0 ? Math.round(totalTokens / totalRequests) : 0;
@@ -155,7 +146,7 @@ function OverviewSection({ data }: { data: AnalysisData }): JSX.Element {
 function TopRequestsSection({
   requests,
 }: {
-  requests: AnalysisData['topRequests'];
+  requests: AnalysisResult['topRequests'];
 }): JSX.Element {
   return (
     <Box flexDirection="column">
@@ -190,7 +181,7 @@ function TopRequestsSection({
 function ByTypeSection({
   stats,
 }: {
-  stats: AnalysisData['typeStats'];
+  stats: AnalysisResult['typeStats'];
 }): JSX.Element {
   const totalTokens = stats.reduce((sum, s) => sum + s.total_tokens, 0);
 
@@ -230,7 +221,7 @@ function ByTypeSection({
 function ByToolSection({
   stats,
 }: {
-  stats: AnalysisData['toolStats'];
+  stats: AnalysisResult['toolStats'];
 }): JSX.Element {
   return (
     <Box flexDirection="column">
