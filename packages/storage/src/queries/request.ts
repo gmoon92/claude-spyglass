@@ -352,7 +352,15 @@ export function getAvgPromptDurationMs(db: Database): number {
 /**
  * 전체 요청 통계
  */
-export function getRequestStats(db: Database): RequestStats {
+export function getRequestStats(db: Database, fromTs?: number, toTs?: number): RequestStats {
+  const conditions: string[] = [];
+  const params: number[] = [];
+
+  if (fromTs) { conditions.push('timestamp >= ?'); params.push(fromTs); }
+  if (toTs) { conditions.push('timestamp <= ?'); params.push(toTs); }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
   return db.query(`
     SELECT
       COUNT(*) as total_requests,
@@ -362,7 +370,8 @@ export function getRequestStats(db: Database): RequestStats {
       COALESCE(AVG(tokens_total), 0) as avg_tokens_per_request,
       COALESCE(AVG(duration_ms), 0) as avg_duration_ms
     FROM requests
-  `).get() as RequestStats;
+    ${whereClause}
+  `).get(...params) as RequestStats;
 }
 
 /**
@@ -396,7 +405,15 @@ export interface TypeStats {
 /**
  * 요청 타입별 통계
  */
-export function getRequestStatsByType(db: Database): TypeStats[] {
+export function getRequestStatsByType(db: Database, fromTs?: number, toTs?: number): TypeStats[] {
+  const conditions: string[] = [];
+  const params: number[] = [];
+
+  if (fromTs) { conditions.push('timestamp >= ?'); params.push(fromTs); }
+  if (toTs) { conditions.push('timestamp <= ?'); params.push(toTs); }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
   return db.query(`
     SELECT
       type,
@@ -404,9 +421,10 @@ export function getRequestStatsByType(db: Database): TypeStats[] {
       SUM(tokens_total) as total_tokens,
       AVG(tokens_total) as avg_tokens
     FROM requests
+    ${whereClause}
     GROUP BY type
     ORDER BY total_tokens DESC
-  `).all() as TypeStats[];
+  `).all(...params) as TypeStats[];
 }
 
 /**
@@ -421,8 +439,18 @@ export interface ToolStats {
 
 export function getToolStats(
   db: Database,
-  limit: number = 20
+  limit: number = 20,
+  fromTs?: number,
+  toTs?: number
 ): ToolStats[] {
+  const conditions: string[] = ["type = 'tool_call'", 'tool_name IS NOT NULL'];
+  const params: (number | string)[] = [];
+
+  if (fromTs) { conditions.push('timestamp >= ?'); params.push(fromTs); }
+  if (toTs) { conditions.push('timestamp <= ?'); params.push(toTs); }
+
+  params.push(limit.toString());
+
   return db.query(`
     SELECT
       tool_name,
@@ -430,11 +458,11 @@ export function getToolStats(
       COALESCE(SUM(tokens_total), 0) as total_tokens,
       COALESCE(AVG(tokens_total), 0) as avg_tokens
     FROM requests
-    WHERE type = 'tool_call' AND tool_name IS NOT NULL
+    WHERE ${conditions.join(' AND ')}
     GROUP BY tool_name
     ORDER BY call_count DESC
     LIMIT ?
-  `).all(limit) as ToolStats[];
+  `).all(...params) as ToolStats[];
 }
 
 /**

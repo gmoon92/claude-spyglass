@@ -150,18 +150,28 @@ export function getSessionsWithFilter(
 export function getSessionsByProject(
   db: Database,
   projectName: string,
-  limit: number = 100
+  limit: number = 100,
+  fromTs?: number,
+  toTs?: number
 ): SessionQueryResult[] {
+  const conditions: string[] = ['s.project_name = ?'];
+  const params: (string | number)[] = [projectName];
+
+  if (fromTs) { conditions.push('s.started_at >= ?'); params.push(fromTs); }
+  if (toTs) { conditions.push('s.started_at <= ?'); params.push(toTs); }
+
+  params.push(limit.toString());
+
   return db.query(`
     SELECT s.*,
       (SELECT r.payload FROM requests r
        WHERE r.session_id = s.id AND r.type = 'prompt'
        ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload
     FROM sessions s
-    WHERE s.project_name = ?
+    WHERE ${conditions.join(' AND ')}
     ORDER BY s.started_at DESC
     LIMIT ?
-  `).all(projectName, limit) as SessionQueryResult[];
+  `).all(...params) as SessionQueryResult[];
 }
 
 /**
@@ -300,7 +310,15 @@ export interface SessionStats {
 /**
  * 전체 세션 통계
  */
-export function getSessionStats(db: Database): SessionStats {
+export function getSessionStats(db: Database, fromTs?: number, toTs?: number): SessionStats {
+  const conditions: string[] = [];
+  const params: number[] = [];
+
+  if (fromTs) { conditions.push('started_at >= ?'); params.push(fromTs); }
+  if (toTs) { conditions.push('started_at <= ?'); params.push(toTs); }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
   const result = db.query(`
     SELECT
       COUNT(*) as total_sessions,
@@ -308,7 +326,8 @@ export function getSessionStats(db: Database): SessionStats {
       COALESCE(AVG(total_tokens), 0) as avg_tokens_per_session,
       COUNT(CASE WHEN ended_at IS NULL THEN 1 END) as active_sessions
     FROM sessions
-  `).get() as SessionStats;
+    ${whereClause}
+  `).get(...params) as SessionStats;
 
   return result;
 }
@@ -324,16 +343,28 @@ export interface ProjectStats {
 
 export function getProjectStats(
   db: Database,
-  limit: number = 10
+  limit: number = 10,
+  fromTs?: number,
+  toTs?: number
 ): ProjectStats[] {
+  const conditions: string[] = [];
+  const params: (number | string)[] = [];
+
+  if (fromTs) { conditions.push('started_at >= ?'); params.push(fromTs); }
+  if (toTs) { conditions.push('started_at <= ?'); params.push(toTs); }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  params.push(limit.toString());
+
   return db.query(`
     SELECT
       project_name,
       COUNT(*) as session_count,
       SUM(total_tokens) as total_tokens
     FROM sessions
+    ${whereClause}
     GROUP BY project_name
     ORDER BY total_tokens DESC
     LIMIT ?
-  `).all(limit) as ProjectStats[];
+  `).all(...params) as ProjectStats[];
 }
