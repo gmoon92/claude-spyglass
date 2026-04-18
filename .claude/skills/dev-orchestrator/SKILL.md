@@ -23,7 +23,7 @@ description: >
 기능(feature)별 디렉토리로 관리합니다.
 
 ```
-docs/{feature-name}/
+.claude/docs/plans/{feature-name}/
 ├── plan.md      # 입력 계획 문서
 ├── adr.md       # 전문가 회의 산출 ADR
 └── tasks.md     # 원자성 커밋 작업 목록

@@ -1,36 +1,44 @@
 ---
 name: doc-adr
 description: >
-  현행 Architecture Decision Records(docs/adr.md)를 관리하는 스킬.
-  새로운 기술 결정 기록, ADR 상태 변경, ADR 목록 조회 시 사용.
+  기능별 Architecture Decision Records(adr.md)를 관리하는 스킬.
+  개발 착수 전 기술 결정을 기록하고, ADR 상태 변경 시 사용.
   "ADR 추가", "아키텍처 결정 기록", "기술 결정 문서화" 요청에 트리거됩니다.
   docs/planning/03-adr.md는 초기 개발 레거시로 수정하지 않습니다.
 ---
 
 # doc-adr
 
-현행 Architecture Decision Records 관리 스킬
+기능별 Architecture Decision Records 관리 스킬
 
 ## 개요
 
-프로젝트의 아키텍처 결정을 기록하고 관리합니다.
+기능(feature) 개발 착수 전 기술 결정을 기록합니다.
+프로젝트 전체 아키텍처 문서는 `doc-spec` 스킬(`docs/architecture.md`)을 사용하세요.
 
 ## 문서 위치
 
-`docs/adr.md`
+`.claude/docs/plans/<feature>/adr.md`
+
+```
+.claude/docs/plans/
+└── <feature>/
+    ├── plan.md      # 개발 계획
+    ├── adr.md       # 기술 결정 (본 스킬 관리)
+    └── tasks.md     # 작업 목록
+```
 
 > `docs/planning/03-adr.md`는 초기 개발 레거시 — 수정 금지
 
 ## ADR 형식
 
 ```markdown
-## ADR-XXX: {제목}
+## ADR-001: {제목}
 
 ### 상태
-**제안됨** (YYYY-MM-DD)
+**결정됨** (YYYY-MM-DD)
 
 ### 배경
-
 {문제 상황과 맥락}
 
 ### 고려한 옵션
@@ -41,33 +49,22 @@ description: >
 | B | ... | ... | ... |
 
 ### 결정
-
 {채택된 결정}
 
 ### 이유
-
 1. {이유 1}
 2. {이유 2}
-
-### 대안 채택 시 영향
-
-- {대안 A 선택 시}: {영향}
-- {대안 B 선택 시}: {영향}
 ```
 
 ## 관례
 
-1. **번호**: 순차적 부여 (ADR-001, ADR-002, ...)
-2. **제목**: 명사구 형태 (예: "SSE 스트리밍 프로토콜 선택")
-3. **상태 표기**: 한글 사용
-   - `제안됨` → `결정됨` / `반려됨`
-   - `결정됨` → `대체됨` (새 ADR로 대체 시)
-4. **날짜**: `YYYY-MM-DD` 형식
+1. **번호**: feature 내에서 순차 부여 (ADR-001, ADR-002, ...)
+2. **상태**: `제안됨` → `결정됨` / `반려됨` → `대체됨`
+3. **날짜**: `YYYY-MM-DD`
+4. **커밋**: `docs(<feature>): ADR 작성 — {제목}`
 
 ## 새 ADR 추가 절차
 
-1. `docs/adr.md` 파일의 "결정 요약" 표 위에 새 ADR 섹션 추가
-2. 기존 ADR 번호에서 +1하여 번호 부여
-3. 위 형식을 따라 모든 섹션 작성
-4. "결정 요약" 표에 새 행 추가
-5. 커밋: `docs(adr): ADR-{번호} {제목} 추가`
+1. `.claude/docs/plans/<feature>/adr.md` 열기 (없으면 생성)
+2. 위 형식으로 ADR 섹션 추가
+3. 커밋

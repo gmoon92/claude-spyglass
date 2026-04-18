@@ -1,49 +1,71 @@
 ---
 name: doc-planning
 description: >
-  계획 문서(ADR, Spec)를 관리하는 스킬.
-  ADR 추가/수정, Spec 현행화 작업 시 사용.
-  "ADR 작성", "스펙 업데이트" 등의 요청에 트리거됩니다.
-  docs/planning/ 하위 문서는 초기 개발 레거시로 수정하지 않습니다.
+  기능(feature) 개발 착수 전 계획 문서(plan.md)를 작성하는 스킬.
+  "개발 계획 작성", "plan 문서 만들어줘", "feature 계획" 요청에 트리거됩니다.
+  복잡한 개발은 dev-orchestrator 스킬(전문가 회의 → ADR → tasks 포함)을 사용하세요.
 ---
 
 # doc-planning
 
-현행 계획 문서(ADR, Spec)를 관리하는 스킬
+기능별 개발 계획 문서 관리 스킬
 
 ## 개요
 
-프로젝트의 현행 문서를 관리합니다. 각 문서별 전용 스킬을 사용합니다.
+기능(feature) 개발 착수 전 계획 문서를 작성합니다.
 
-| 문서 유형 | 파일 | 담당 스킬 | 비고 |
-|-----------|------|-----------|------|
-| ADR | `docs/adr.md` | doc-adr | 현행 |
-| Spec | `docs/spec.md` | doc-spec | 현행 |
-
-> **`docs/planning/` 하위 파일은 초기 개발 레거시 — 수정 금지**
-> (01-overview-plan.md, 02-prd.md, 03-adr.md, 04-tasks*.md, 05-spec.md)
-
-## 파일 구조
+## 문서 구조
 
 ```
-docs/
-├── spec.md          ← 현행 스펙 (doc-spec 스킬 관리)
-├── adr.md           ← 현행 ADR (doc-adr 스킬 관리)
-└── planning/        ← 초기 개발 레거시 (수정 금지)
-    ├── 01-overview-plan.md
-    ├── 02-prd.md
-    ├── 03-adr.md
-    ├── 04-tasks-ai.md
-    └── 05-spec.md
+.claude/docs/plans/<feature>/   ← 기능별 개발 전 작업 문서
+├── plan.md                      # 개발 계획 (본 스킬)
+├── adr.md                       # 기술 결정 (doc-adr 스킬)
+└── tasks.md                     # 작업 목록 (doc-tasks 스킬)
+
+.claude/docs/research/           ← 기술 조사/비교 분석
+docs/architecture.md             ← 프로젝트 전체 아키텍처 (doc-spec 스킬)
+docs/planning/                   ← 초기 개발 레거시 (수정 금지)
 ```
 
-## 사용법
+## 스킬 역할 분담
 
-- ADR 작업 → **doc-adr** 스킬
-- Spec 작업 → **doc-spec** 스킬
+| 문서 | 스킬 | 위치 |
+|------|------|------|
+| 아키텍처 | `doc-spec` | `docs/architecture.md` |
+| 기능별 ADR | `doc-adr` | `.claude/docs/plans/<feature>/adr.md` |
+| 기능별 Tasks | `doc-tasks` | `.claude/docs/plans/<feature>/tasks.md` |
+| 기능별 Plan | `doc-planning` | `.claude/docs/plans/<feature>/plan.md` |
+| 전체 오케스트레이션 | `dev-orchestrator` | 위 3종 일괄 생성 |
+
+## plan.md 형식
+
+```markdown
+# <feature> 개발 계획
+
+> Feature: <feature-name>
+> 작성일: YYYY-MM-DD
+> 작성자: Claude Code
+
+## 목표
+
+<무엇을 왜 만드는가>
+
+## 범위
+
+- 포함: ...
+- 제외: ...
+
+## 단계별 계획
+
+### 1단계: ...
+### 2단계: ...
+
+## 완료 기준
+
+- [ ] ...
+```
 
 ## 관례
 
-1. **날짜 형식**: `YYYY-MM-DD`
-2. **상태 표시**: `✅ 완료` | `🔄 진행 중` | `⏳ 예정`
-3. **커밋 메시지**: `docs(adr|spec): 설명`
+- `<feature>`: kebab-case
+- 커밋: `docs(<feature>): 개발 계획 작성`
