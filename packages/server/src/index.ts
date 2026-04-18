@@ -339,7 +339,11 @@ if (import.meta.main) {
           const deadline = Date.now() + 5000;
           while (Date.now() < deadline) {
             await new Promise(resolve => setTimeout(resolve, 100));
-            try { process.kill(pidToKill!, 0); } catch { break; }
+            try { process.kill(pidToKill!, 0); } catch {
+              // 프로세스 종료 후 포트 해제 대기 (OS 레벨 정리 시간)
+              await new Promise(resolve => setTimeout(resolve, 500));
+              break;
+            }
           }
         } catch {}
       }
