@@ -5,7 +5,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { createEvent, type ClaudeEvent } from '@spyglass/storage';
+import { createEvent, endSession, type ClaudeEvent } from '@spyglass/storage';
 
 export interface RawHookPayload {
   hook_event_name: string;
@@ -48,6 +48,11 @@ export async function eventsCollectHandler(req: Request, db: Database): Promise<
 
   try {
     createEvent(db, event);
+
+    if (event.event_type === 'SessionEnd') {
+      endSession(db, event.session_id, event.timestamp);
+    }
+
     return json({ success: true, event_id: event.event_id });
   } catch (error) {
     console.error('[Events] Failed to save event:', error);
