@@ -444,6 +444,16 @@
     .filter-btn:hover { border-color: var(--accent); color: var(--accent); }
     .filter-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 
+    /* ─── SCROLL LOCK BANNER ───────────────────────────────────────── */
+    .scroll-lock-banner {
+      position: sticky; top: 0; z-index: 10; display: none;
+      padding: 5px 12px; text-align: center; cursor: pointer;
+      background: var(--accent-dim); border-bottom: 1px solid rgba(217,119,87,0.3);
+      color: var(--accent); font-size: 11px; font-weight: 600; user-select: none;
+    }
+    .scroll-lock-banner.visible { display: block; }
+    .scroll-lock-banner:hover { background: rgba(217,119,87,0.2); }
+
     /* ─── RESPONSIVE ────────────────────────────────────────────────── */
     @media (max-width: 768px) {
       .main-layout { grid-template-columns: 1fr; grid-template-rows: 180px 1fr; }
@@ -611,7 +621,8 @@
               <span class="panel-hint" id="requestCount">—</span>
             </div>
           </div>
-          <div class="feed-body">
+          <div class="feed-body" id="feedBody">
+            <div class="scroll-lock-banner" id="scrollLockBanner"></div>
             <table>
               <thead>
                 <tr><th>시각</th><th>타입</th><th>툴</th><th style="text-align:right">입력</th><th title="출력 토큰 (현재 미수집)" style="cursor:help;text-align:right">출력</th><th style="text-align:right">응답시간</th><th>세션</th></tr>
@@ -1106,12 +1117,50 @@
       body.insertAdjacentHTML('beforeend', rows);
     }
 
+    // ── Scroll Lock 상태 (ADR-006) ───────────────────────────────────
+    let scrollLockNewCount = 0;
+
+    function updateScrollLockBanner() {
+      const banner = document.getElementById('scrollLockBanner');
+      if (!banner) return;
+      if (scrollLockNewCount > 0) {
+        banner.textContent = `↓ 새 요청 ${scrollLockNewCount}개 — 클릭하여 최신으로 이동`;
+        banner.classList.add('visible');
+      } else {
+        banner.classList.remove('visible');
+      }
+    }
+
+    function jumpToLatest() {
+      const feedBody = document.getElementById('feedBody');
+      if (feedBody) feedBody.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollLockNewCount = 0;
+      updateScrollLockBanner();
+    }
+
     function prependRequest(r) {
-      const body = document.getElementById('requestsBody');
+      const body     = document.getElementById('requestsBody');
+      const feedBody = document.getElementById('feedBody');
+      const isNearTop = !feedBody || feedBody.scrollTop < 80;
+
+      const prevScrollTop    = feedBody ? feedBody.scrollTop    : 0;
+      const prevScrollHeight = feedBody ? feedBody.scrollHeight : 0;
+
       while (body.rows.length >= 10) body.deleteRow(body.rows.length - 1);
       const tmp = document.createElement('tbody');
       tmp.innerHTML = makeRequestRow(r, { showSession: true });
       body.insertBefore(tmp.firstElementChild, body.firstChild);
+
+      if (!isNearTop && feedBody) {
+        // 삽입된 높이만큼 scrollTop 보정하여 시각 위치 고정
+        const addedHeight = feedBody.scrollHeight - prevScrollHeight;
+        feedBody.scrollTop = prevScrollTop + addedHeight;
+        scrollLockNewCount++;
+        updateScrollLockBanner();
+      } else {
+        scrollLockNewCount = 0;
+        updateScrollLockBanner();
+      }
     }
 
     // ── Browser 상태 ─────────────────────────────────────────────────
@@ -1585,6 +1634,8 @@
         sseSource.onerror = () => {
           isSSEConnected = false;
           sseSource.close(); sseSource = null;
+          scrollLockNewCount = 0;
+          updateScrollLockBanner();
           retryTimer = setTimeout(connectSSE, 5000);
         };
       } catch {
@@ -1613,6 +1664,9 @@
 
       // 에러 배너 다시 시도
       document.getElementById('retryBtn').addEventListener('click', manualRefresh);
+
+      // scroll lock 배너 클릭 → 최신으로 이동
+      document.getElementById('scrollLockBanner').addEventListener('click', jumpToLatest);
 
       // 날짜 필터 버튼
       document.getElementById('dateFilter').addEventListener('click', e => {
