@@ -108,6 +108,18 @@ async function handleRequest(req: Request): Promise<Response> {
       );
     }
 
+    // 정적 파일 서빙 (favicon 등 packages/web/ 하위 파일)
+    if (/^\/(favicon\.svg|favicon\.ico)/.test(path)) {
+      const fileName = path.split('?')[0].slice(1);
+      const staticFile = new URL(`../../web/${fileName}`, import.meta.url);
+      const file = Bun.file(staticFile);
+      if (await file.exists()) {
+        const ext = fileName.split('.').pop();
+        const mime = ext === 'svg' ? 'image/svg+xml' : 'image/x-icon';
+        return new Response(file, { headers: { 'Content-Type': mime } });
+      }
+    }
+
     // 404
     return new Response(
       JSON.stringify({ error: 'Not found', path }),
@@ -273,6 +285,55 @@ if (import.meta.main) {
         console.error('[Server] Failed to stop:', error);
         process.exit(1);
       }
+      break;
+    }
+
+    case 'restart': {
+      const fs = require('fs');
+      const { execSync } = require('child_process');
+
+      // PID 파일 또는 포트 점유 프로세스 종료
+      let pidToKill: number | null = null;
+      if (fs.existsSync(pidFile)) {
+        pidToKill = parseInt(fs.readFileSync(pidFile, 'utf-8'), 10);
+        fs.unlinkSync(pidFile);
+      } else {
+        try {
+          const out = execSync(`lsof -ti :${PORT}`, { encoding: 'utf-8' }).trim();
+          if (out) pidToKill = parseInt(out, 10);
+        } catch {}
+      }
+
+      if (pidToKill) {
+        try {
+          process.kill(pidToKill, 'SIGTERM');
+          console.log(`[Server] Stopped (PID: ${pidToKill})`);
+          // 프로세스가 완전히 종료될 때까지 대기
+          const deadline = Date.now() + 5000;
+          while (Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            try { process.kill(pidToKill!, 0); } catch { break; }
+          }
+        } catch {}
+      }
+
+      startServer();
+      fs.mkdirSync(`${process.env.HOME}/.spyglass`, { recursive: true });
+      fs.writeFileSync(pidFile, process.pid.toString());
+      console.log(`[Server] Restarted (PID: ${process.pid})`);
+
+      process.on('SIGINT', async () => {
+        console.log('\n[Server] Shutting down...');
+        await stopServer();
+        if (fs.existsSync(pidFile)) fs.unlinkSync(pidFile);
+        process.exit(0);
+      });
+
+      process.on('SIGTERM', async () => {
+        await stopServer();
+        process.exit(0);
+      });
+
       break;
     }
 

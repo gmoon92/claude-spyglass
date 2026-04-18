@@ -6,7 +6,9 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run packages/server/src/index.ts",
+    "dev": "bun run packages/server/src/index.ts restart",
+    "stop": "bun run packages/server/src/index.ts stop",
+    "status": "bun run packages/server/src/index.ts status",
     "tui": "bun run packages/tui/src/index.tsx",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
