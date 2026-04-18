@@ -1,7 +1,7 @@
 ---
 name: doc-spec
 description: >
-  프로젝트 아키텍처 문서(${CLAUDE_PROJECT_DIR}/docs/architecture.md)를 관리하는 스킬.
+  프로젝트 아키텍처 문서(docs/architecture.md)를 관리하는 스킬.
   시스템 구조 변경, API 변경 반영, 기술 스택 업데이트, 변경 이력 추가 시 사용.
   "아키텍처 문서 업데이트", "버전 올리기", "API 스펙 수정" 요청에 트리거됩니다.
   docs/planning/ 하위는 초기 개발 레거시로 수정하지 않습니다.
@@ -18,9 +18,9 @@ description: >
 
 ## 문서 위치
 
-`${CLAUDE_PROJECT_DIR}/docs/architecture.md`
+`docs/architecture.md`
 
-> `${CLAUDE_PROJECT_DIR}/docs/planning/05-spec.md`는 초기 개발 레거시 — 수정 금지
+> `docs/planning/05-spec.md`는 초기 개발 레거시 — 수정 금지
 
 ## 아키텍처 문서 구조
 

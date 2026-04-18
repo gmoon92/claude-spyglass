@@ -14,11 +14,11 @@ description: >
 ## 개요
 
 기능(feature) 개발 착수 전 기술 결정을 기록합니다.
-프로젝트 전체 아키텍처 문서는 `doc-spec` 스킬(`${CLAUDE_PROJECT_DIR}/docs/architecture.md`)을 사용하세요.
+프로젝트 전체 아키텍처 문서는 `doc-spec` 스킬(`docs/architecture.md`)을 사용하세요.
 
 ## 문서 위치
 
-`${CLAUDE_PROJECT_DIR}/.claude/docs/plans/<feature>/adr.md`
+`.claude/docs/plans/<feature>/adr.md`
 
 ```
 .claude/docs/plans/
@@ -28,7 +28,7 @@ description: >
     └── tasks.md     # 작업 목록
 ```
 
-> `${CLAUDE_PROJECT_DIR}/docs/planning/03-adr.md`는 초기 개발 레거시 — 수정 금지
+> `docs/planning/03-adr.md`는 초기 개발 레거시 — 수정 금지
 
 ## ADR 형식
 
@@ -65,6 +65,6 @@ description: >
 
 ## 새 ADR 추가 절차
 
-1. `${CLAUDE_PROJECT_DIR}/.claude/docs/plans/<feature>/adr.md` 열기 (없으면 생성)
+1. `.claude/docs/plans/<feature>/adr.md` 열기 (없으면 생성)
 2. 위 형식으로 ADR 섹션 추가
 3. 커밋

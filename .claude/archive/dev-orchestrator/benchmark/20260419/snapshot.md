@@ -38,7 +38,7 @@ description: >
 
 ### Phase 0: 계획 분석
 
-`${CLAUDE_PROJECT_DIR}/.claude/docs/plans/{feature}/plan.md`를 읽고 다음을 파악합니다:
+`docs/{feature}/plan.md`를 읽고 다음을 파악합니다:
 
 - **프로젝트 유형**: 웹 서비스 / CLI / 라이브러리 / 데이터 파이프라인 등
 - **기술 스택**: 언어, 프레임워크, DB, 인프라
@@ -72,7 +72,7 @@ description: >
 전문가 2-3명을 **동시에** 서브에이전트로 실행합니다.
 
 각 서브에이전트에 전달하는 내용:
-- `${CLAUDE_PROJECT_DIR}/.claude/docs/plans/{feature}/plan.md` 전체 내용
+- `docs/{feature}/plan.md` 전체 내용
 - 해당 전문가의 페르소나 (역할, 전문 영역, 관점)
 - 회의 프로토콜 (`references/meeting-protocol.md` 내용 요약)
 
@@ -82,15 +82,15 @@ description: >
 3. **권고 결정사항**: 채택을 권장하는 기술/방법론/패턴
 4. **대안 분석**: 주요 결정마다 대안과 트레이드오프
 
-모든 전문가 응답이 완료되면 합성하여 `${CLAUDE_PROJECT_DIR}/.claude/docs/plans/{feature}/adr.md`를 작성합니다.
+모든 전문가 응답이 완료되면 합성하여 `docs/{feature}/adr.md`를 작성합니다.
 ADR 형식은 `references/meeting-protocol.md`를 따릅니다.
 
 ---
 
 ### Phase 3: 원자성 작업 분해
 
-`${CLAUDE_PROJECT_DIR}/.claude/docs/plans/{feature}/plan.md`와 `${CLAUDE_PROJECT_DIR}/.claude/docs/plans/{feature}/adr.md`를 기반으로
-`${CLAUDE_PROJECT_DIR}/.claude/docs/plans/{feature}/tasks.md`를 작성합니다.
+`docs/{feature}/plan.md`와 `docs/{feature}/adr.md`를 기반으로
+`docs/{feature}/tasks.md`를 작성합니다.
 
 원자성 분해 원칙:
 - **하나의 태스크 = 하나의 커밋** (git bisect 가능)
@@ -113,7 +113,7 @@ ADR 형식은 `references/meeting-protocol.md`를 따릅니다.
 - **검증 가능성**: 각 태스크의 완료 기준이 명확한가
 - **위험도**: 롤백이 필요할 수 있는 고위험 태스크 식별
 
-검토 결과는 `${CLAUDE_PROJECT_DIR}/.claude/docs/plans/{feature}/review-{reviewer}.md`로 저장합니다.
+검토 결과는 `docs/{feature}/review-{reviewer}.md`로 저장합니다.
 
 **검토 결과 처리:**
 - 두 검토자 모두 승인 → Phase 5 진행

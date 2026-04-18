@@ -31,10 +31,10 @@ docs/planning/                   ← 초기 개발 레거시 (수정 금지)
 
 | 문서 | 스킬 | 위치 |
 |------|------|------|
-| 아키텍처 | `doc-spec` | `${CLAUDE_PROJECT_DIR}/docs/architecture.md` |
-| 기능별 ADR | `doc-adr` | `${CLAUDE_PROJECT_DIR}/.claude/docs/plans/<feature>/adr.md` |
-| 기능별 Tasks | `doc-tasks` | `${CLAUDE_PROJECT_DIR}/.claude/docs/plans/<feature>/tasks.md` |
-| 기능별 Plan | `doc-planning` | `${CLAUDE_PROJECT_DIR}/.claude/docs/plans/<feature>/plan.md` |
+| 아키텍처 | `doc-spec` | `docs/architecture.md` |
+| 기능별 ADR | `doc-adr` | `.claude/docs/plans/<feature>/adr.md` |
+| 기능별 Tasks | `doc-tasks` | `.claude/docs/plans/<feature>/tasks.md` |
+| 기능별 Plan | `doc-planning` | `.claude/docs/plans/<feature>/plan.md` |
 | 전체 오케스트레이션 | `dev-orchestrator` | 위 3종 일괄 생성 |
 
 ## plan.md 형식

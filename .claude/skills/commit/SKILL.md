@@ -8,6 +8,7 @@ description: |
   - "git 커밋해줘"
   - "커밋 메시지 작성해줘"
 user-invocable: true
+model: haiku
 ---
 
 # Git commit

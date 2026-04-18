@@ -17,7 +17,7 @@ feature 단위 Task 문서 관리 스킬
 
 ## 문서 위치
 
-feature별로 `${CLAUDE_PROJECT_DIR}/.claude/docs/plans/<feature>/tasks.md`에 저장합니다.
+feature별로 `.claude/docs/plans/<feature>/tasks.md`에 저장합니다.
 
 ```
 .claude/docs/plans/

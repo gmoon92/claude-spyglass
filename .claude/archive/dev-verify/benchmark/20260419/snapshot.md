@@ -19,7 +19,7 @@ dev-orchestrator로 구현된 기능을 검증합니다.
 
 ## 문서 위치
 
-`${CLAUDE_PROJECT_DIR}/.claude/docs/plans/<feature>/verify.md` — 검증 보고서 (본 스킬이 생성)
+`.claude/docs/plans/<feature>/verify.md` — 검증 보고서 (본 스킬이 생성)
 
 ---
 
@@ -27,7 +27,7 @@ dev-orchestrator로 구현된 기능을 검증합니다.
 
 ### Phase 0: 문서 분석
 
-`${CLAUDE_PROJECT_DIR}/.claude/docs/plans/<feature>/`의 문서를 읽어 검증 항목을 추출합니다.
+`.claude/docs/plans/<feature>/`의 문서를 읽어 검증 항목을 추출합니다.
 
 | 문서 | 추출 항목 |
 |------|----------|
@@ -125,7 +125,7 @@ GET http://localhost:9999/api/dashboard 로 서버 동작 여부 먼저 확인.
    - `mcp__playwright__browser_take_screenshot` — 시각적 증거 캡처
 4. 각 요구사항의 통과/실패 여부와 스크린샷 경로를 기록
 
-스크린샷은 `${CLAUDE_PROJECT_DIR}/.claude/docs/plans/<feature>/screenshots/` 에 저장합니다.
+스크린샷은 `.claude/docs/plans/<feature>/screenshots/` 에 저장합니다.
 
 ---
 
@@ -199,6 +199,6 @@ GET http://localhost:9999/api/dashboard 로 서버 동작 여부 먼저 확인.
 ## 관례
 
 - feature 이름: kebab-case
-- 검증 문서: `${CLAUDE_PROJECT_DIR}/.claude/docs/plans/<feature>/verify.md`
-- 스크린샷: `${CLAUDE_PROJECT_DIR}/.claude/docs/plans/<feature>/screenshots/`
+- 검증 문서: `.claude/docs/plans/<feature>/verify.md`
+- 스크린샷: `.claude/docs/plans/<feature>/screenshots/`
 - 커밋: `docs(<feature>): 검증 보고서 작성`
