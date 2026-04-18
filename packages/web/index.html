@@ -970,18 +970,17 @@
     const RECENT_REQ_COLS = 7;
 
     const PROMPT_CACHE_MAX = 500;
-    const _promptCache = {};
+    const _promptCache = new Map(); // Map: 삽입 순서 보장 (ADR-005)
     function promptPreview(r, maxLen = 60) {
       if (!r.payload) return '';
       try {
         const p = typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
         const text = p?.prompt ?? p?.content ?? p?.tool_input ?? (typeof p === 'string' ? p : '');
         if (!text) return '';
-        if (Object.keys(_promptCache).length >= PROMPT_CACHE_MAX) {
-          const oldest = Object.keys(_promptCache)[0];
-          delete _promptCache[oldest];
+        if (_promptCache.size >= PROMPT_CACHE_MAX) {
+          _promptCache.delete(_promptCache.keys().next().value);
         }
-        _promptCache[r.id] = text;
+        _promptCache.set(r.id, text);
         const preview = text.slice(0, maxLen).replace(/\n/g, ' ');
         return `<span class="prompt-preview" data-expand-id="${escHtml(r.id)}" title="클릭하여 전체 보기">${escHtml(preview)}${text.length > maxLen ? '…' : ''}</span>`;
       } catch { return ''; }
@@ -990,7 +989,7 @@
       document.querySelectorAll('[data-expand-for]').forEach(el => el.remove());
       if (tr.dataset.expanded === rid) { delete tr.dataset.expanded; return; }
       tr.dataset.expanded = rid;
-      const text = _promptCache[rid] || '';
+      const text = _promptCache.get(rid) || '';
       const display = text;
       const lengthHint = text.length > 500 ? `\n─── 총 ${text.length.toLocaleString('ko-KR')}자 ───` : '';
       const fullDisplay = display + lengthHint;
