@@ -1003,7 +1003,7 @@
     // ── Fetch ─────────────────────────────────────────────────────────
     async function fetchDashboard() {
       try {
-        const res = await fetch(`${API}/api/dashboard`, { signal: AbortSignal.timeout(8000) });
+        const res = await fetch(buildQuery(`${API}/api/dashboard`), { signal: AbortSignal.timeout(8000) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         const d = json.data;
@@ -1454,7 +1454,7 @@
     // ── 프로젝트별 세션 로드 (프로젝트 선택 시) ─────────────────────────
     async function fetchSessionsByProject(projectName) {
       try {
-        const res = await fetch(`${API}/api/projects/${encodeURIComponent(projectName)}/sessions?limit=200`);
+        const res = await fetch(buildQuery(`${API}/api/projects/${encodeURIComponent(projectName)}/sessions`, { limit: 200 }));
         const json = await res.json();
         const others = allSessions.filter(s => s.project_name !== projectName);
         allSessions = [...others, ...(json.data || [])];
@@ -1590,6 +1590,14 @@
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         activeRange = btn.dataset.range;
+
+        // 차트 부제목 동적 변경
+        const subtitles = { all: '전체 기간', today: '오늘', week: '이번 주' };
+        const chartSubtitle = document.getElementById('chartSubtitle');
+        if (chartSubtitle && subtitles[activeRange]) {
+          chartSubtitle.textContent = subtitles[activeRange];
+        }
+
         fetchDashboard(); fetchRequests(); fetchAllSessions();
       });
 
