@@ -1007,16 +1007,20 @@
     }
 
     // ── 맥락 미리보기 (tool_call/system/prompt 공통, ADR-005) ──────────
-    function contextPreview(r, maxLen = 50) {
-      const text = getContextText(r);
-      if (!text) return '';
+    function contextPreview(r, maxLen = 60) {
+      const rawText = getContextText(r);         // 확장 패널용 원본 (항상 raw)
+      if (!rawText) return '';
       if (_promptCache.size >= PROMPT_CACHE_MAX) {
         _promptCache.delete(_promptCache.keys().next().value);
       }
-      _promptCache.set(r.id, text);
-      const flat    = text.replace(/\n/g, ' ');
+      _promptCache.set(r.id, rawText);           // 캐시는 항상 raw 저장
+      // 미리보기: tool_call은 parseToolDetail 결과, 나머지는 raw
+      const displayText = r.type === 'tool_call'
+        ? (parseToolDetail(rawText) ?? rawText)
+        : rawText;
+      const flat    = displayText.replace(/\n/g, ' ');
       const display = flat.slice(0, maxLen);
-      const tooltip = text.length > 200 ? text.slice(0, 200) + `… (총 ${text.length.toLocaleString('ko-KR')}자)` : text;
+      const tooltip = rawText.length > 200 ? rawText.slice(0, 200) + `… (총 ${rawText.length.toLocaleString('ko-KR')}자)` : rawText;
       return `<span class="prompt-preview" data-expand-id="${escHtml(r.id)}" title="${escHtml(tooltip)}">${escHtml(display)}${flat.length > maxLen ? '…' : ''}</span>`;
     }
     function parseToolDetail(raw) {
