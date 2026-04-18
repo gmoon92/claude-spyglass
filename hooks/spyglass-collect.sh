@@ -290,8 +290,9 @@ except:
 # 모델명 추출
 extract_model() {
     local payload="$1"
-    local model=$(echo "$payload" | grep -oE '"model"\s*:\s*"[^"]+"' | head -1 | cut -d'"' -f4)
-    echo "${model:-claude-sonnet}"
+    local model
+    model=$(jq -r '.message.model // empty' <<< "$payload" 2>/dev/null)
+    echo "${model:-}"
 }
 
 # =============================================================================
