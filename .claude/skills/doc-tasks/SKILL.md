@@ -1,90 +1,75 @@
 ---
 name: doc-tasks
 description: >
-  AI 개발 Task 문서 및 Phase 상태를 관리하는 스킬.
-  Task 완료 표시, Phase 상태 업데이트, 새 Phase Task 추가, 누락 작업 기록 시 사용.
-  "Task 완료", "Phase 상태 업데이트", "작업 추가", "Phase 진행" 요청에 트리거됩니다.
+  feature 단위 Task 문서를 관리하는 스킬.
+  Task 완료 표시, 새 Task 추가, 누락 작업 기록 시 사용.
+  "Task 완료", "작업 추가", "tasks 업데이트" 요청에 트리거됩니다.
+  docs/planning/04-tasks*.md는 초기 개발 레거시로 수정하지 않습니다.
 ---
 
 # doc-tasks
 
-AI 개발 Task 문서 관리 스킬
+feature 단위 Task 문서 관리 스킬
 
 ## 개요
 
-프로젝트의 AI 순차 개발 Task를 관리합니다。
+개발 작업을 feature 단위로 기록하고 관리합니다.
 
 ## 문서 위치
 
-- **Task 문서**: `docs/planning/04-tasks-ai.md`
-- **Phase 상태**: `phases/phase-{N}-{name}/status.json`
+feature별로 `.claude/docs/<feature>/tasks.md`에 저장합니다.
+
+```
+.claude/docs/
+└── <feature>/
+    ├── plan.md       # 계획 (dev-orchestrator 스킬이 생성)
+    ├── adr.md        # 기술 결정 (dev-orchestrator 스킬이 생성)
+    └── tasks.md      # 작업 목록 (본 스킬 관리)
+```
+
+> `docs/planning/04-tasks-ai.md`, `04-tasks.md`는 초기 개발 레거시 — 수정 금지
+
+## Task 문서 형식
+
+```markdown
+# <feature> Tasks
+
+> Feature: <feature-name>
+> 시작일: YYYY-MM-DD
+> 상태: 진행 중 / 완료
+
+## Tasks
+
+- [x] Task 1 설명
+- [x] Task 2 설명
+- [ ] Task 3 설명 (진행 중)
+- [ ] Task 4 설명
+
+## 완료 기준
+
+- ...
+```
 
 ## 사용법
 
 ### Task 완료 표시
 
-```
-@ doc-tasks:complete {phase-id} {task-id}
-```
+해당 feature의 `tasks.md`를 열고 완료된 항목을 `[x]`로 변경합니다.
 
-예시:
-```
-@ doc-tasks:complete phase-5 5-2
-```
-
-### Phase 상태 업데이트
+### 새 Task 추가
 
 ```
-@ doc-tasks:phase-status {phase-id} {status}
-```
-
-상태: `pending` | `in_progress` | `completed`
-
-### 새 Phase Task 추가
-
-```
-@ doc-tasks:add {phase-id} {task-name} {estimated-hours}
+@ doc-tasks:add <feature> <task-description>
 ```
 
 ### 누락 작업 기록
 
 ```
-@ doc-tasks:appendix {description}
-```
-
-개발 중 발견된 누락 작업을 부록에 추가합니다.
-
-## Task ID 규칙
-
-- 형식: `{phase-number}-{task-number}`
-- 예시: `5-1`, `5-2`, `6-3`
-
-## Phase 상태 파일 구조
-
-```json
-{
-  "phase": "phase-5-tui-live",
-  "name": "TUI Live 탭",
-  "status": "completed",
-  "tasks": [
-    {
-      "id": "5-1",
-      "name": "SSE 클라이언트 연결",
-      "status": "completed",
-      "notes": ""
-    }
-  ],
-  "verification": {
-    "all_tests_passed": true,
-    "manual_verified": true
-  }
-}
+@ doc-tasks:appendix <feature> <description>
 ```
 
 ## 커밋 컨벤션
 
 ```
-feat(phase-{N}-{task-id}): 설명
-test(phase-{N}-{task-id}): 설명
-docs(phase-{N}): 설명
+docs(<feature>): tasks 업데이트 — <변경 내용>
 ```

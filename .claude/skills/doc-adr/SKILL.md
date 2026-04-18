@@ -1,22 +1,25 @@
 ---
 name: doc-adr
 description: >
-  Architecture Decision Records(ADR)를 관리하는 스킬.
+  현행 Architecture Decision Records(docs/adr.md)를 관리하는 스킬.
   새로운 기술 결정 기록, ADR 상태 변경, ADR 목록 조회 시 사용.
   "ADR 추가", "아키텍처 결정 기록", "기술 결정 문서화" 요청에 트리거됩니다.
+  docs/planning/03-adr.md는 초기 개발 레거시로 수정하지 않습니다.
 ---
 
 # doc-adr
 
-Architecture Decision Records (ADR) 관리 스킬
+현행 Architecture Decision Records 관리 스킬
 
 ## 개요
 
-프로젝트의 아키텍처 결정을 기록하고 관리합니다。
+프로젝트의 아키텍처 결정을 기록하고 관리합니다.
 
 ## 문서 위치
 
-`docs/planning/03-adr.md`
+`docs/adr.md`
+
+> `docs/planning/03-adr.md`는 초기 개발 레거시 — 수정 금지
 
 ## ADR 형식
 
@@ -63,7 +66,8 @@ Architecture Decision Records (ADR) 관리 스킬
 
 ## 새 ADR 추가 절차
 
-1. `docs/planning/03-adr.md` 파일 하단에 새 ADR 섹션 추가
+1. `docs/adr.md` 파일의 "결정 요약" 표 위에 새 ADR 섹션 추가
 2. 기존 ADR 번호에서 +1하여 번호 부여
 3. 위 형식을 따라 모든 섹션 작성
-4. 커밋: `docs(adr): ADR-{번호} {제목} 추가`
+4. "결정 요약" 표에 새 행 추가
+5. 커밋: `docs(adr): ADR-{번호} {제목} 추가`
