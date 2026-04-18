@@ -69,6 +69,65 @@
 
 ---
 
+## ADR-004: `.error-banner` display:none → max-height:0 전환 + `.main-layout` 명시적 행
+
+### 상태
+**결정됨** (2026-04-18) — 2차 전문가 회의
+
+### 배경
+
+1차 수정(ADR-001~003) 후 테스트 결과, 프로젝트 전환 시 왼쪽 패널 전체 높이가 달라지는 문제가 발견됐다:
+- rv-iso (세션 10개): mainLayout=643.5px ← 정상
+- test (세션 2개): mainLayout=516px ← 비정상
+
+측정으로 진짜 원인 파악:
+```
+body gridTemplateRows: "52px 42.5px 476px 195.5px 0px"
+```
+`.error-banner`가 `display:none`으로 grid에서 제외되어 body 5개 트랙에 visible 자식이 4개만 배치됨. 결과:
+- Row 1 (auto): header=52px
+- Row 2 (auto): summary-strip=42.5px  ← error-banner 건너뜀
+- Row 3 (auto): main-layout=476px  ← **auto 트랙에 배치됨!**
+- Row 4 (1fr): footer=195.5px  ← 1fr을 footer가 차지
+- Row 5 (auto): 0px
+
+`.main-layout`이 `1fr` 트랙이 아닌 `auto` 트랙에 배치되어 콘텐츠 기반으로 높이가 결정됨.
+
+### 고려한 옵션
+
+| 옵션 | 설명 | 장점 | 단점 |
+|------|------|------|------|
+| A: `display:none` → `max-height:0` | grid 참여 유지하며 시각적 숨김 | 근본 원인 해결, grid 순서 보존 | max-height transition 필요 시 추가 작업 |
+| B: `grid-row: 4` 명시 | main-layout 위치 강제 지정 | 단순 | 행 번호 하드코딩, 구조 변경 시 취약 |
+| C: error-banner를 body 밖으로 이동 | 구조적 해결 | 명확 | HTML 구조 변경 필요, 영향 범위 큼 |
+
+### 결정
+
+두 가지를 함께 적용:
+1. `.error-banner`: `display:none` 제거 → `display:flex; max-height:0; overflow:hidden`으로 교체. `.visible` 시 `max-height:60px`
+2. `.main-layout`: `grid-template-rows: 1fr` 추가 (내부 fr 계산에 definite height 제공)
+
+### 이유
+
+1. `display:none`은 grid layout에서 요소를 완전히 제거해 형제 요소의 grid 배치가 어긋남 — 이것이 실제 근본 원인 (2차 전문가 회의 공통 진단)
+2. `max-height:0; overflow:hidden`은 시각적으로 숨기면서 grid 참여를 유지해 형제 배치 안정 (아키텍트)
+3. `.main-layout`에 `grid-template-rows:1fr`을 추가해 내부 `.left-panel`이 definite 높이를 가질 수 있게 함 (프론트엔드)
+4. 수정 후 전체 측정값: `"52px 0px 42.5px 643.5px 28px"` — main-layout이 1fr 트랙(643.5px)에 정확히 배치됨 ✓
+
+### 결과 검증
+
+3개 프로젝트 전환 후 측정:
+- rv-iso: mainLayout=644px, leftPanel=644px ✓
+- claude-code-system: mainLayout=644px, leftPanel=644px ✓
+- test: mainLayout=644px, leftPanel=644px ✓
+
+### 대안 채택 시 영향
+
+- 옵션 B: 행 번호가 하드코딩되어 error-banner 외 다른 자식 추가 시 깨질 수 있음
+- 옵션 C: HTML 구조 변경으로 JS 이벤트 핸들러, CSS 선택자 등 영향 범위 큼
+
+---
+
 ## ADR-003: 반응형 처리 범위 한정
 
 ### 상태
