@@ -287,12 +287,22 @@ except:
     echo "$detail"
 }
 
-# 모델명 추출
+# 모델명 추출 — transcript의 마지막 assistant 메시지에서 추출 (payload에는 model 필드 없음)
 extract_model() {
-    local payload="$1"
-    local model
-    model=$(jq -r '.message.model // empty' <<< "$payload" 2>/dev/null)
-    echo "${model:-}"
+    local transcript_path="$1"
+    if [[ -z "$transcript_path" || ! -f "$transcript_path" ]]; then
+        echo ""
+        return
+    fi
+    grep '"type":"assistant"' "$transcript_path" 2>/dev/null | tail -1 | \
+        python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    print(d.get('message', {}).get('model', ''))
+except:
+    print('')
+" 2>/dev/null || echo ""
 }
 
 # =============================================================================
@@ -340,7 +350,8 @@ send_raw_event() {
 
 main() {
     local event_type="${1:-unknown}"
-    local payload="${2:-{}}"
+    local payload="${2}"
+    [[ -z "${payload:-}" ]] && payload="{}"
 
     # 프로젝트명 확인 (환경변수 또는 현재 디렉토리)
     local project_name="${SPYGLASS_PROJECT:-$(basename "$(pwd)")}"
@@ -368,8 +379,6 @@ main() {
     if [[ "$request_type" == "tool_call" ]]; then
         raw_tool_name=$(extract_tool_name "$payload")
         raw_tool_detail=$(extract_tool_detail "$raw_tool_name" "$payload")
-    elif [[ "$request_type" == "prompt" ]]; then
-        raw_model=$(extract_model "$payload")
     fi
 
     # 토큰 정보 — transcript_path JSONL에서 마지막 assistant 메시지 usage 추출
@@ -392,6 +401,10 @@ except:
     if [[ -n "$transcript_path" && -f "$transcript_path" ]]; then
         local usage
         usage=$(extract_usage_from_transcript "$transcript_path")
+        # 모델명은 transcript에서 추출 (모든 이벤트 유형에서 공통 적용)
+        if [[ "$request_type" == "prompt" ]]; then
+            raw_model=$(extract_model "$transcript_path")
+        fi
         tokens_input=$(echo "$usage"         | cut -d',' -f1)
         tokens_output=$(echo "$usage"        | cut -d',' -f2)
         cache_creation_tokens=$(echo "$usage" | cut -d',' -f3)
