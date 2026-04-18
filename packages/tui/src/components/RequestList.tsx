@@ -5,8 +5,8 @@
  */
 
 /** @jsxImportSource react */
-import React from 'react';
 import { Box, Text } from 'ink';
+import { RequestTypeFormatter, TokenFormatter, TimeFormatter } from '../formatters';
 
 /**
  * 요청 아이템
@@ -30,47 +30,6 @@ export interface RequestListProps {
   selectedIndex?: number;
 }
 
-/**
- * 요청 타입에 따른 색상
- */
-function getTypeColor(type: string): string {
-  switch (type) {
-    case 'prompt':
-      return 'cyan';
-    case 'tool_call':
-      return 'yellow';
-    case 'system':
-      return 'gray';
-    default:
-      return 'white';
-  }
-}
-
-/**
- * 타입 레이블
- */
-function getTypeLabel(type: string, toolName?: string): string {
-  if (type === 'tool_call' && toolName) {
-    return `Tool:${toolName}`;
-  }
-  return type.charAt(0).toUpperCase() + type.slice(1);
-}
-
-/**
- * 시간 포맷 (HH:MM:SS)
- */
-function formatTime(timestamp: number): string {
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString('en-US', { hour12: false });
-}
-
-/**
- * 토큰 형식화
- */
-function formatTokens(tokens: number): string {
-  if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}K`;
-  return `${tokens}`;
-}
 
 /**
  * 요청 리스트 컴포넌트
@@ -100,8 +59,8 @@ export function RequestList({
       ) : (
         displayRequests.map((req, index) => {
           const isSelected = index === selectedIndex;
-          const typeColor = getTypeColor(req.type);
-          const typeLabel = getTypeLabel(req.type, req.tool_name);
+          const typeColor = RequestTypeFormatter.getColor(req.type);
+          const typeLabel = RequestTypeFormatter.formatDisplay(req.type, req.tool_name);
 
           return (
             <Box
@@ -110,7 +69,7 @@ export function RequestList({
             >
               <Box width="15%">
                 <Text color={isSelected ? 'cyan' : 'gray'} bold={isSelected}>
-                  {isSelected ? '> ' : '  '}{formatTime(req.timestamp)}
+                  {isSelected ? '> ' : '  '}{TimeFormatter.formatTime24h(req.timestamp)}
                 </Text>
               </Box>
               <Box width="25%">
@@ -128,7 +87,7 @@ export function RequestList({
               </Box>
               <Box width="20%" justifyContent="flex-end">
                 <Text color="yellow" bold={isSelected}>
-                  {formatTokens(req.tokens_total)}
+                  {TokenFormatter.format(req.tokens_total)}
                 </Text>
               </Box>
             </Box>

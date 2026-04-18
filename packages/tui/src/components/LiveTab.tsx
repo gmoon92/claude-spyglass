@@ -12,6 +12,7 @@ import type { DashboardData } from '../hooks/useStats';
 import { useSSE } from '../hooks/useSSE';
 import { ProgressBar } from './ProgressBar';
 import { SessionTimer } from './SessionTimer';
+import { RequestTypeFormatter, TokenFormatter } from '../formatters';
 
 interface RecentRequest {
   id: string;
@@ -32,19 +33,6 @@ export interface LiveTabProps {
  */
 const API_URL = 'http://localhost:9999';
 const MAX_RECENT = 20;
-
-function formatType(type: string): string {
-  if (type === 'prompt') return 'P';
-  if (type === 'tool_call') return 'T';
-  if (type === 'system') return 'S';
-  return type.slice(0, 1).toUpperCase();
-}
-
-function typeColor(type: string): string {
-  if (type === 'prompt') return 'cyan';
-  if (type === 'tool_call') return 'yellow';
-  return 'gray';
-}
 
 export function LiveTab({ data, isLoading, error }: LiveTabProps): JSX.Element {
   const { stdout } = useStdout();
@@ -91,13 +79,6 @@ export function LiveTab({ data, isLoading, error }: LiveTabProps): JSX.Element {
     return new Date().toLocaleTimeString();
   }, [lastMessage?.timestamp]);
 
-  // 토큰 형식화 (1000 -> 1K)
-  const formatTokens = (tokens: number): string => {
-    if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
-    if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}K`;
-    return `${tokens}`;
-  };
-
   if (isLoading && !data) {
     return (
       <Box flexDirection="column" padding={1}>
@@ -133,7 +114,7 @@ export function LiveTab({ data, isLoading, error }: LiveTabProps): JSX.Element {
       <Box flexDirection="column" marginY={1} borderStyle="round" borderColor="cyan" paddingX={2} paddingY={1}>
         <Box>
           <Text color="gray">Total Tokens: </Text>
-          <Text bold color="cyan">{formatTokens(tokens)}</Text>
+          <Text bold color="cyan">{TokenFormatter.format(tokens)}</Text>
         </Box>
 
         {/* 프로그레스 바 */}
@@ -142,7 +123,7 @@ export function LiveTab({ data, isLoading, error }: LiveTabProps): JSX.Element {
         </Box>
 
         <Box>
-          <Text color="gray">{formatTokens(tokens)} / {formatTokens(maxTokens)}</Text>
+          <Text color="gray">{TokenFormatter.format(tokens)} / {TokenFormatter.format(maxTokens)}</Text>
           <Text color="gray"> ({progress.toFixed(1)}%)</Text>
         </Box>
       </Box>
@@ -187,7 +168,7 @@ export function LiveTab({ data, isLoading, error }: LiveTabProps): JSX.Element {
           recentRequests.slice(0, 8).map(req => (
             <Box key={req.id} height={1}>
               <Box width="4%">
-                <Text color={typeColor(req.type)} bold>{formatType(req.type)}</Text>
+                <Text color={RequestTypeFormatter.getColor(req.type)} bold>{RequestTypeFormatter.getLabel(req.type)}</Text>
               </Box>
               <Box width="50%">
                 <Text color="white" wrap="truncate">{req.tool_name || '—'}</Text>

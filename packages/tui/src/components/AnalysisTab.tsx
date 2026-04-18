@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { useAnalysis } from '../hooks/useAnalysis';
 import type { AnalysisResult } from '../hooks/useAnalysis';
+import { RequestTypeFormatter, TokenFormatter } from '../formatters';
 
 
 /**
@@ -19,26 +20,6 @@ export interface AnalysisTabProps {
   apiUrl?: string;
 }
 
-/**
- * 토큰 형식화
- */
-function formatTokens(tokens: number): string {
-  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
-  if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}K`;
-  return `${tokens}`;
-}
-
-/**
- * 타입별 색상
- */
-function getTypeColor(type: string): string {
-  switch (type) {
-    case 'prompt': return 'cyan';
-    case 'tool_call': return 'yellow';
-    case 'system': return 'gray';
-    default: return 'white';
-  }
-}
 
 /**
  * Analysis Tab 컴포넌트
@@ -129,11 +110,11 @@ function OverviewSection({ data }: { data: AnalysisResult }): JSX.Element {
         </Box>
         <Box width="33%">
           <Text color="gray">Total Tokens</Text>
-          <Text bold color="yellow">{formatTokens(totalTokens)}</Text>
+          <Text bold color="yellow">{TokenFormatter.format(totalTokens)}</Text>
         </Box>
         <Box width="33%">
           <Text color="gray">Avg Tokens/Req</Text>
-          <Text bold>{formatTokens(avgTokens)}</Text>
+          <Text bold>{TokenFormatter.format(avgTokens)}</Text>
         </Box>
       </Box>
     </Box>
@@ -161,13 +142,13 @@ function TopRequestsSection({
         <Box key={req.id} height={1}>
           <Box width="10%"><Text color="gray">{index + 1}</Text></Box>
           <Box width="30%">
-            <Text color={getTypeColor(req.type)}>{req.type}</Text>
+            <Text color={RequestTypeFormatter.getColor(req.type)}>{req.type}</Text>
           </Box>
           <Box width="40%">
             <Text wrap="truncate">{req.tool_name || '-'}</Text>
           </Box>
           <Box width="20%" justifyContent="flex-end">
-            <Text color="yellow">{formatTokens(req.tokens_total)}</Text>
+            <Text color="yellow">{TokenFormatter.format(req.tokens_total)}</Text>
           </Box>
         </Box>
       ))}
@@ -199,11 +180,11 @@ function ByTypeSection({
         return (
           <Box key={stat.type} height={1}>
             <Box width="30%">
-              <Text color={getTypeColor(stat.type)}>{stat.type}</Text>
+              <Text color={RequestTypeFormatter.getColor(stat.type)}>{stat.type}</Text>
             </Box>
             <Box width="20%"><Text>{stat.count}</Text></Box>
             <Box width="25%" justifyContent="flex-end">
-              <Text color="yellow">{formatTokens(stat.total_tokens)}</Text>
+              <Text color="yellow">{TokenFormatter.format(stat.total_tokens)}</Text>
             </Box>
             <Box width="25%" justifyContent="flex-end">
               <Text color="gray">{percentage.toFixed(1)}%</Text>
@@ -236,7 +217,7 @@ function ByToolSection({
           <Box width="40%"><Text color="yellow">{stat.tool_name}</Text></Box>
           <Box width="30%"><Text>{stat.call_count}</Text></Box>
           <Box width="30%" justifyContent="flex-end">
-            <Text color="cyan">{formatTokens(stat.total_tokens)}</Text>
+            <Text color="cyan">{TokenFormatter.format(stat.total_tokens)}</Text>
           </Box>
         </Box>
       ))}

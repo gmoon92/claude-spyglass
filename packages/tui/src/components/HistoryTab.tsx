@@ -8,6 +8,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 
+import { RequestTypeFormatter, TokenFormatter, TimeFormatter } from '../formatters';
+
 const API_URL = 'http://localhost:9999';
 
 export interface SessionItem {
@@ -36,41 +38,6 @@ export interface HistoryTabProps {
   isActive?: boolean;
 }
 
-function formatDate(timestamp: number): string {
-  const date = new Date(timestamp);
-  return date.toLocaleDateString() + ' ' + date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-}
-
-function formatTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
-
-function formatDuration(startedAt: number, endedAt?: number): string {
-  const end = endedAt || Date.now();
-  const ms = end - startedAt;
-  const minutes = Math.floor(ms / 60000);
-  const hours = Math.floor(minutes / 60);
-  if (hours > 0) return `${hours}h ${minutes % 60}m`;
-  return `${minutes}m`;
-}
-
-function formatTokens(tokens: number): string {
-  if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}K`;
-  return `${tokens}`;
-}
-
-function typeColor(type: string): string {
-  if (type === 'prompt') return 'cyan';
-  if (type === 'tool_call') return 'yellow';
-  return 'gray';
-}
-
-function typeLabel(type: string): string {
-  if (type === 'prompt') return 'P';
-  if (type === 'tool_call') return 'T';
-  if (type === 'system') return 'S';
-  return type.slice(0, 1).toUpperCase();
-}
 
 export function HistoryTab({
   sessions = [],
@@ -195,13 +162,13 @@ export function HistoryTab({
                 <Text color={color} wrap="truncate" bold={bold}>{prefix}{session.project_name}</Text>
               </Box>
               <Box width="25%">
-                <Text color={color} bold={bold}>{formatDate(session.started_at)}</Text>
+                <Text color={color} bold={bold}>{TimeFormatter.formatDate(session.started_at)}</Text>
               </Box>
               <Box width="15%">
-                <Text color={color} bold={bold}>{formatDuration(session.started_at, session.ended_at)}</Text>
+                <Text color={color} bold={bold}>{TimeFormatter.formatDuration(session.started_at, session.ended_at)}</Text>
               </Box>
               <Box width="20%" justifyContent="flex-end">
-                <Text color={isPinned ? 'cyan' : 'yellow'} bold={bold}>{formatTokens(session.total_tokens)}</Text>
+                <Text color={isPinned ? 'cyan' : 'yellow'} bold={bold}>{TokenFormatter.format(session.total_tokens)}</Text>
               </Box>
               <Box width="15%" justifyContent="flex-end">
                 <Text color={isPinned ? 'cyan' : isRunning ? 'green' : 'gray'} bold={bold}>
@@ -222,7 +189,7 @@ export function HistoryTab({
   const detailView = selectedSession ? (
     <Box flexDirection="column" paddingX={isSplit ? 1 : 0}>
       <Text bold color="cyan" wrap="truncate">{selectedSession.project_name}</Text>
-      <Text color="gray">{formatDate(selectedSession.started_at)} · {formatDuration(selectedSession.started_at, selectedSession.ended_at)}</Text>
+      <Text color="gray">{TimeFormatter.formatDate(selectedSession.started_at)} · {TimeFormatter.formatDuration(selectedSession.started_at, selectedSession.ended_at)}</Text>
 
       {detailError && <Box marginTop={1}><Text color="red">{detailError}</Text></Box>}
 
@@ -239,16 +206,16 @@ export function HistoryTab({
           {detailRequests.slice(0, 15).map(req => (
             <Box key={req.id} height={1}>
               <Box width="15%">
-                <Text color={typeColor(req.type)} bold>{typeLabel(req.type)}</Text>
+                <Text color={RequestTypeFormatter.getColor(req.type)} bold>{RequestTypeFormatter.getLabel(req.type)}</Text>
               </Box>
               <Box width="35%">
                 <Text wrap="truncate" color="white">{req.tool_name || '—'}</Text>
               </Box>
               <Box width="30%" justifyContent="flex-end">
-                <Text color="yellow">{formatTokens(req.tokens_total)}</Text>
+                <Text color="yellow">{TokenFormatter.format(req.tokens_total)}</Text>
               </Box>
               <Box width="20%" justifyContent="flex-end">
-                <Text color="gray">{formatTime(req.timestamp)}</Text>
+                <Text color="gray">{TimeFormatter.formatTime(req.timestamp)}</Text>
               </Box>
             </Box>
           ))}
@@ -261,7 +228,7 @@ export function HistoryTab({
               <Box marginTop={1}>
                 {Object.entries(counts).map(([t, c]) => (
                   <Box key={t} marginRight={2}>
-                    <Text color={typeColor(t)}>{t}: {c}</Text>
+                    <Text color={RequestTypeFormatter.getColor(t)}>{t}: {c}</Text>
                   </Box>
                 ))}
               </Box>
