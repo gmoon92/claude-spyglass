@@ -61,98 +61,54 @@ bun run tui
 
 ### 훅 설정
 
-spyglass는 Claude Code의 `UserPromptSubmit`과 `PostToolUse` 훅을 통해 데이터를 수집합니다.
+spyglass는 Claude Code의 훅을 통해 데이터를 수집합니다. 모든 이벤트는 `hook_event_name` 필드로 자동 분류됩니다.
 
-#### 방식 1: 글로벌 설정 (권장)
+**수집 경로:**
+- `UserPromptSubmit`, `PostToolUse` → `/collect` (토큰/세션 집계)
+- `SessionStart`, `SessionEnd`, `Stop`, 기타 → `/events` (raw 이벤트 저장)
 
-모든 프로젝트에서 spyglass 데이터 수집을 활성화하려면 **글로벌 설정**을 사용하세요:
+#### 글로벌 설정 (권장)
 
-```bash
-# spyglass 저장소 경로 설정 (절대 경로 사용)
-SPYGLASS_DIR="/path/to/claude-spyglass"
-
-# 글로벌 settings.json 경로
-GLOBAL_SETTINGS="$HOME/.claude/settings.json"
-
-# 백업 생성
-cp "$GLOBAL_SETTINGS" "$GLOBAL_SETTINGS.backup.$(date +%Y%m%d)"
-
-# 훅 설정 추가
-cat >> "$GLOBAL_SETTINGS" << EOF
-{
-  "hooks": {
-    "UserPromptSubmit": [{
-      "hooks": [{
-        "type": "command",
-        "command": "bash ${SPYGLASS_DIR}/hooks/spyglass-collect.sh prompt",
-        "async": true,
-        "timeout": 1
-      }]
-    }],
-    "PostToolUse": [{
-      "hooks": [{
-        "type": "command",
-        "command": "bash ${SPYGLASS_DIR}/hooks/spyglass-collect.sh tool",
-        "async": true,
-        "timeout": 1
-      }]
-    }]
-  }
-}
-EOF
-```
-
-#### 방식 2: 프로젝트별 설정
-
-특정 프로젝트에서만 데이터 수집을 원한다면 해당 프로젝트의 `.claude/settings.json`에 추가하세요:
+모든 프로젝트에서 자동으로 수집되도록 **글로벌 설정**(`~/.claude/settings.json`)을 사용하세요:
 
 ```json
 {
+  "env": {
+    "SPYGLASS_DIR": "/절대경로/claude-spyglass"
+  },
   "hooks": {
-    "UserPromptSubmit": [{
-      "hooks": [{
-        "type": "command",
-        "command": "bash /absolute/path/to/spyglass/hooks/spyglass-collect.sh prompt",
-        "async": true,
-        "timeout": 1
-      }]
-    }],
-    "PostToolUse": [{
-      "hooks": [{
-        "type": "command",
-        "command": "bash /absolute/path/to/spyglass/hooks/spyglass-collect.sh tool",
-        "async": true,
-        "timeout": 1
-      }]
-    }]
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "async": true, "timeout": 1}]}],
+    "PostToolUse":      [{"hooks": [{"type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "async": true, "timeout": 1}]}],
+    "SessionStart":     [{"hooks": [{"type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "async": true, "timeout": 1}]}],
+    "Stop":             [{"hooks": [{"type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "async": true, "timeout": 1}]}],
+    "SessionEnd":       [{"hooks": [{"type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "async": true, "timeout": 1}]}]
   }
 }
 ```
+
+> **필수**: `SPYGLASS_DIR`을 실제 설치 경로로 변경하세요.  
+> **참고**: `type: "command"` 필드가 없으면 Claude Code가 훅을 무시합니다.
 
 #### 환경변수 설정 (선택)
 
 | 변수 | 설명 | 기본값 |
 |------|------|--------|
+| `SPYGLASS_DIR` | spyglass 설치 경로 | 필수 |
 | `SPYGLASS_HOST` | spyglass 서버 호스트 | `localhost` |
 | `SPYGLASS_PORT` | spyglass 서버 포트 | `9999` |
 | `SPYGLASS_PROJECT` | 프로젝트명 (수동 지정) | 현재 디렉토리명 |
 | `SPYGLASS_TIMEOUT` | HTTP 요청 타임아웃 (초) | `1` |
-
-글로벌 환경변수 설정 예시:
-
-```bash
-# ~/.zshrc 또는 ~/.bashrc에 추가
-export SPYGLASS_HOST="localhost"
-export SPYGLASS_PORT="9999"
-```
 
 #### 설치 확인
 
 훅 설정 후 Claude Code를 재시작하고, 다음 명령어로 데이터 수집 여부를 확인하세요:
 
 ```bash
-# spyglass 로그 확인
+# 수집 로그 실시간 확인
 tail -f ~/.spyglass/logs/collect.log
+
+# raw 이벤트 로그 확인
+tail -f ~/.spyglass/logs/hook-raw.jsonl
 
 # TUI에서 실시간 확인
 bun run tui
@@ -249,16 +205,20 @@ bun run tui
 
 | 메서드 | 엔드포인트 | 설명 |
 |--------|-----------|------|
-| POST | `/collect` | 훅 데이터 수집 |
-| GET | `/events` | SSE 스트리밍 |
+| POST | `/collect` | UserPromptSubmit/PostToolUse 수집 (토큰 집계) |
+| POST | `/events` | raw hook payload 수집 (claude_events 저장) |
+| GET | `/events` | SSE 실시간 스트리밍 |
 | GET | `/api/sessions` | 세션 목록 |
 | GET | `/api/sessions/:id` | 세션 상세 |
 | GET | `/api/sessions/active` | 활성 세션 |
+| GET | `/api/sessions/:id/events` | 세션별 이벤트 |
 | GET | `/api/requests` | 요청 목록 |
 | GET | `/api/requests/top` | TOP 토큰 요청 |
 | GET | `/api/stats/sessions` | 세션 통계 |
 | GET | `/api/stats/requests` | 요청 통계 |
 | GET | `/api/stats/projects` | 프로젝트별 통계 |
+| GET | `/api/events` | 최근 이벤트 목록 |
+| GET | `/api/events/stats` | 이벤트 타입별 통계 |
 | GET | `/api/dashboard` | 통합 대시보드 |
 | GET | `/health` | 헬스체크 |
 

@@ -1,0 +1,288 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: ClaudeSpyglass
+      - generic [ref=e5]: LIVE
+    - generic [ref=e7]:
+      - button "전체" [ref=e8] [cursor=pointer]
+      - button "오늘" [ref=e9] [cursor=pointer]
+      - button "이번주" [ref=e10] [cursor=pointer]
+    - generic [ref=e11]: 오후 3:43:21
+  - generic:
+    - img [ref=e12]
+    - generic [ref=e15]: 서버에 연결할 수 없습니다.
+    - button "다시 시도" [ref=e16] [cursor=pointer]
+  - generic [ref=e17]:
+    - generic [ref=e18]:
+      - generic [ref=e19]: 총 세션
+      - generic [ref=e20]: "16"
+    - generic [ref=e21]:
+      - generic [ref=e22]: 총 요청
+      - generic [ref=e23]: "514"
+    - generic [ref=e24]:
+      - generic [ref=e25]: 총 토큰
+      - generic [ref=e26]: 737.9k
+    - generic [ref=e27]:
+      - generic [ref=e28]: 활성
+      - generic [ref=e29]: "16"
+    - generic [ref=e30]:
+      - generic [ref=e31]: 평균 응답시간
+      - generic [ref=e32]: 1.6s
+  - generic [ref=e33]:
+    - complementary [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - generic [ref=e37]: 프로젝트
+          - generic [ref=e38]: 클릭하여 세션 조회
+        - table [ref=e40]:
+          - rowgroup [ref=e41]:
+            - row "이름 세션 토큰" [ref=e42]:
+              - columnheader "이름" [ref=e43]
+              - columnheader "세션" [ref=e44]
+              - columnheader "토큰" [ref=e45]
+          - rowgroup [ref=e46]:
+            - row "rv-iso 12 737.8k" [ref=e47] [cursor=pointer]:
+              - cell "rv-iso" [ref=e48]
+              - cell "12" [ref=e49]
+              - cell "737.8k" [ref=e50]:
+                - generic [ref=e54]: 737.8k
+            - row "claude-code-system 2 83" [ref=e55] [cursor=pointer]:
+              - cell "claude-code-system" [ref=e56]
+              - cell "2" [ref=e57]
+              - cell "83" [ref=e58]:
+                - generic [ref=e62]: "83"
+            - row "test 2 45" [ref=e63] [cursor=pointer]:
+              - cell "test" [ref=e64]
+              - cell "2" [ref=e65]
+              - cell "45" [ref=e66]:
+                - generic [ref=e70]: "45"
+      - generic [ref=e71]:
+        - generic [ref=e72]:
+          - generic [ref=e73]: 세션
+          - generic [ref=e74]: 프로젝트를 선택하세요
+        - table [ref=e76]:
+          - rowgroup [ref=e77]:
+            - row "—" [ref=e78]:
+              - cell "—" [ref=e79]
+      - generic [ref=e80]:
+        - generic [ref=e81]:
+          - generic [ref=e82]: 툴 통계 (전체)
+          - generic [ref=e83]: 5개
+        - table [ref=e85]:
+          - rowgroup [ref=e86]:
+            - row "툴 호출 평균토큰 호출 비율" [ref=e87]:
+              - columnheader "툴" [ref=e88]
+              - columnheader "호출" [ref=e89]
+              - columnheader "평균토큰" [ref=e90]
+              - columnheader "호출 비율" [ref=e91]
+          - rowgroup [ref=e92]:
+            - row "Read 150 1.5k 100%" [ref=e93]:
+              - cell "Read" [ref=e94]:
+                - generic [ref=e96]: Read
+              - cell "150" [ref=e97]
+              - cell "1.5k" [ref=e98]
+              - cell "100%" [ref=e99]:
+                - generic [ref=e103]: 100%
+            - row "Bash 137 361 91%" [ref=e104]:
+              - cell "Bash" [ref=e105]:
+                - generic [ref=e107]: Bash
+              - cell "137" [ref=e108]
+              - cell "361" [ref=e109]
+              - cell "91%" [ref=e110]:
+                - generic [ref=e114]: 91%
+            - row "Edit 84 4.0k 56%" [ref=e115]:
+              - cell "Edit" [ref=e116]:
+                - generic [ref=e118]: Edit
+              - cell "84" [ref=e119]
+              - cell "4.0k" [ref=e120]
+              - cell "56%" [ref=e121]:
+                - generic [ref=e125]: 56%
+            - row "Glob 20 282 13%" [ref=e126]:
+              - cell "Glob" [ref=e127]:
+                - generic [ref=e129]: Glob
+              - cell "20" [ref=e130]
+              - cell "282" [ref=e131]
+              - cell "13%" [ref=e132]:
+                - generic [ref=e136]: 13%
+            - row "Agent 12 2.5k 8%" [ref=e137]:
+              - cell "Agent" [ref=e138]:
+                - generic [ref=e140]: Agent
+              - cell "12" [ref=e141]
+              - cell "2.5k" [ref=e142]
+              - cell "8%" [ref=e143]:
+                - generic [ref=e147]: 8%
+    - main [ref=e148]:
+      - generic [ref=e149]:
+        - generic [ref=e150]:
+          - generic [ref=e151]:
+            - generic [ref=e152]: 요청 추이 (실시간)
+            - generic [ref=e153]: 최근 30분
+          - generic [ref=e157]:
+            - generic [ref=e160]:
+              - generic [ref=e161]:
+                - generic [ref=e163]: tool_call
+                - generic [ref=e164]: "455"
+                - generic [ref=e165]: 89%
+              - generic [ref=e166]:
+                - generic [ref=e168]: prompt
+                - generic [ref=e169]: "59"
+                - generic [ref=e170]: 11%
+            - generic [ref=e171]: 514건
+        - generic [ref=e172]:
+          - generic [ref=e173]:
+            - generic [ref=e174]: 최근 요청
+            - generic [ref=e175]:
+              - generic [ref=e176]:
+                - button "All" [ref=e177] [cursor=pointer]
+                - button "prompt" [ref=e178] [cursor=pointer]
+                - button "tool_call" [ref=e179] [cursor=pointer]
+                - button "system" [ref=e180] [cursor=pointer]
+              - generic [ref=e181]: 10건
+          - table [ref=e183]:
+            - rowgroup [ref=e184]:
+              - row "시각 타입 툴 입력 출력 응답시간 세션" [ref=e185]:
+                - columnheader "시각" [ref=e186]
+                - columnheader "타입" [ref=e187]
+                - columnheader "툴" [ref=e188]
+                - columnheader "입력" [ref=e189]
+                - columnheader "출력" [ref=e190]
+                - columnheader "응답시간" [ref=e191]
+                - columnheader "세션" [ref=e192]
+            - rowgroup [ref=e193]:
+              - row "오후 03:43 · 방금 tool_call ◉Edit 518 — 135.3s 1fa0870f-c9e…" [ref=e194]:
+                - cell "오후 03:43 · 방금" [ref=e195]
+                - cell "tool_call" [ref=e196]:
+                  - generic [ref=e197]: tool_call
+                - cell "◉Edit" [ref=e198]:
+                  - generic [ref=e199]: ◉Edit
+                - cell "518" [ref=e200]
+                - cell "—" [ref=e201]
+                - cell "135.3s" [ref=e202]
+                - cell "1fa0870f-c9e…" [ref=e203]:
+                  - generic "1fa0870f-c9ee-4b2c-94f3-283a8586703b" [ref=e204]: 1fa0870f-c9e…
+              - row "오후 03:41 · 2분 전 prompt user claude-sonnet — 83 — — 1fa0870f-c9e…" [ref=e205]:
+                - cell "오후 03:41 · 2분 전" [ref=e206]
+                - cell "prompt user claude-sonnet" [ref=e207]:
+                  - generic [ref=e208]: prompt
+                  - generic [ref=e209]: user
+                  - generic [ref=e210]: claude-sonnet
+                - cell "—" [ref=e211]
+                - cell "83" [ref=e212]
+                - cell "—" [ref=e213]
+                - cell "—" [ref=e214]
+                - cell "1fa0870f-c9e…" [ref=e215]:
+                  - generic "1fa0870f-c9ee-4b2c-94f3-283a8586703b" [ref=e216]: 1fa0870f-c9e…
+              - row "오후 03:40 · 3분 전 prompt user claude-sonnet — 103 — — 1fa0870f-c9e…" [ref=e217]:
+                - cell "오후 03:40 · 3분 전" [ref=e218]
+                - cell "prompt user claude-sonnet" [ref=e219]:
+                  - generic [ref=e220]: prompt
+                  - generic [ref=e221]: user
+                  - generic [ref=e222]: claude-sonnet
+                - cell "—" [ref=e223]
+                - cell "103" [ref=e224]
+                - cell "—" [ref=e225]
+                - cell "—" [ref=e226]
+                - cell "1fa0870f-c9e…" [ref=e227]:
+                  - generic "1fa0870f-c9ee-4b2c-94f3-283a8586703b" [ref=e228]: 1fa0870f-c9e…
+              - row "오후 03:19 · 24분 전 tool_call ◉Edit 5.3k — — adffa5d7-44c…" [ref=e229]:
+                - cell "오후 03:19 · 24분 전" [ref=e230]
+                - cell "tool_call" [ref=e231]:
+                  - generic [ref=e232]: tool_call
+                - cell "◉Edit" [ref=e233]:
+                  - generic [ref=e234]: ◉Edit
+                - cell "5.3k" [ref=e235]
+                - cell "—" [ref=e236]
+                - cell "—" [ref=e237]
+                - cell "adffa5d7-44c…" [ref=e238]:
+                  - generic "adffa5d7-44ce-4a03-b4ce-20ac68360d45" [ref=e239]: adffa5d7-44c…
+              - row "오후 03:18 · 24분 전 tool_call ◉Read 350 — — adffa5d7-44c…" [ref=e240]:
+                - cell "오후 03:18 · 24분 전" [ref=e241]
+                - cell "tool_call" [ref=e242]:
+                  - generic [ref=e243]: tool_call
+                - cell "◉Read" [ref=e244]:
+                  - generic [ref=e245]: ◉Read
+                - cell "350" [ref=e246]
+                - cell "—" [ref=e247]
+                - cell "—" [ref=e248]
+                - cell "adffa5d7-44c…" [ref=e249]:
+                  - generic "adffa5d7-44ce-4a03-b4ce-20ac68360d45" [ref=e250]: adffa5d7-44c…
+              - row "오후 03:17 · 25분 전 tool_call ◉Read 330 — — adffa5d7-44c…" [ref=e251]:
+                - cell "오후 03:17 · 25분 전" [ref=e252]
+                - cell "tool_call" [ref=e253]:
+                  - generic [ref=e254]: tool_call
+                - cell "◉Read" [ref=e255]:
+                  - generic [ref=e256]: ◉Read
+                - cell "330" [ref=e257]
+                - cell "—" [ref=e258]
+                - cell "—" [ref=e259]
+                - cell "adffa5d7-44c…" [ref=e260]:
+                  - generic "adffa5d7-44ce-4a03-b4ce-20ac68360d45" [ref=e261]: adffa5d7-44c…
+              - row "오후 03:17 · 25분 전 tool_call ◉Read 456 — 6.3s adffa5d7-44c…" [ref=e262]:
+                - cell "오후 03:17 · 25분 전" [ref=e263]
+                - cell "tool_call" [ref=e264]:
+                  - generic [ref=e265]: tool_call
+                - cell "◉Read" [ref=e266]:
+                  - generic [ref=e267]: ◉Read
+                - cell "456" [ref=e268]
+                - cell "—" [ref=e269]
+                - cell "6.3s" [ref=e270]
+                - cell "adffa5d7-44c…" [ref=e271]:
+                  - generic "adffa5d7-44ce-4a03-b4ce-20ac68360d45" [ref=e272]: adffa5d7-44c…
+              - row "오후 03:17 · 25분 전 prompt user claude-sonnet — 126 — — adffa5d7-44c…" [ref=e273]:
+                - cell "오후 03:17 · 25분 전" [ref=e274]
+                - cell "prompt user claude-sonnet" [ref=e275]:
+                  - generic [ref=e276]: prompt
+                  - generic [ref=e277]: user
+                  - generic [ref=e278]: claude-sonnet
+                - cell "—" [ref=e279]
+                - cell "126" [ref=e280]
+                - cell "—" [ref=e281]
+                - cell "—" [ref=e282]
+                - cell "adffa5d7-44c…" [ref=e283]:
+                  - generic "adffa5d7-44ce-4a03-b4ce-20ac68360d45" [ref=e284]: adffa5d7-44c…
+              - row "오후 03:06 · 36분 전 prompt user claude-sonnet — 84 — — adffa5d7-44c…" [ref=e285]:
+                - cell "오후 03:06 · 36분 전" [ref=e286]
+                - cell "prompt user claude-sonnet" [ref=e287]:
+                  - generic [ref=e288]: prompt
+                  - generic [ref=e289]: user
+                  - generic [ref=e290]: claude-sonnet
+                - cell "—" [ref=e291]
+                - cell "84" [ref=e292]
+                - cell "—" [ref=e293]
+                - cell "—" [ref=e294]
+                - cell "adffa5d7-44c…" [ref=e295]:
+                  - generic "adffa5d7-44ce-4a03-b4ce-20ac68360d45" [ref=e296]: adffa5d7-44c…
+              - row "오후 03:04 · 38분 전 tool_call ◉Edit 4.2k — — adffa5d7-44c…" [ref=e297]:
+                - cell "오후 03:04 · 38분 전" [ref=e298]
+                - cell "tool_call" [ref=e299]:
+                  - generic [ref=e300]: tool_call
+                - cell "◉Edit" [ref=e301]:
+                  - generic [ref=e302]: ◉Edit
+                - cell "4.2k" [ref=e303]
+                - cell "—" [ref=e304]
+                - cell "—" [ref=e305]
+                - cell "adffa5d7-44c…" [ref=e306]:
+                  - generic "adffa5d7-44ce-4a03-b4ce-20ac68360d45" [ref=e307]: adffa5d7-44c…
+      - generic:
+        - generic:
+          - generic:
+            - generic: —
+            - generic: —
+          - button "닫기"
+        - generic:
+          - button "플랫"
+          - button "턴 뷰"
+        - generic:
+          - table:
+            - rowgroup:
+              - row "시각 타입 툴 입력 출력 응답시간":
+                - columnheader "시각"
+                - columnheader "타입"
+                - columnheader "툴"
+                - columnheader "입력"
+                - columnheader "출력"
+                - columnheader "응답시간"
+            - rowgroup:
+              - row "데이터 없음":
+                - cell "데이터 없음"
+  - contentinfo [ref=e309]: Claude Spyglass — real-time Claude Code monitor
