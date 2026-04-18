@@ -1072,20 +1072,6 @@
       } catch { return ''; }
     }
 
-    function promptPreview(r, maxLen = 60) {
-      const text = extractPromptText(r);
-      if (!text) return '';
-      if (_promptCache.size >= PROMPT_CACHE_MAX) {
-        _promptCache.delete(_promptCache.keys().next().value);
-      }
-      _promptCache.set(r.id, text);
-      const flat    = text.replace(/\n/g, ' ');
-      const display = flat.slice(0, maxLen);
-      const tooltip = text.length > 200
-        ? text.slice(0, 200) + `… (총 ${text.length.toLocaleString('ko-KR')}자)`
-        : text;
-      return `<span class="prompt-preview" data-expand-id="${escHtml(r.id)}" title="${escHtml(tooltip)}">${escHtml(display)}${flat.length > maxLen ? '…' : ''}</span>`;
-    }
     // cols: 호출 컨텍스트(최근 요청 vs 플랫 뷰)에 따라 다른 colspan (ADR-005)
     function togglePromptExpand(rid, tr, cols) {
       document.querySelectorAll('[data-expand-for]').forEach(el => el.remove());
