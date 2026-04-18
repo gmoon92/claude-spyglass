@@ -42,34 +42,49 @@ bun install
 ### 서버 실행
 
 ```bash
-# 데몬으로 실행
-bun run packages/server/src/index.ts start
+# 데몬으로 실행 (개발 모드)
+bun run dev
 
 # 상태 확인
-bun run packages/server/src/index.ts status
+bun run status
 
 # 서버 종료
-bun run packages/server/src/index.ts stop
+bun run stop
 ```
 
 ### TUI 실행
 
 ```bash
 # 터미널 UI 실행
-bun run packages/tui/src/index.tsx
+bun run tui
 ```
 
 ### 훅 설정
 
-Claude Code `settings.json`에 훅을 추가하세요:
+spyglass는 Claude Code의 `UserPromptSubmit`과 `PostToolUse` 훅을 통해 데이터를 수집합니다.
 
-```json
+#### 방식 1: 글로벌 설정 (권장)
+
+모든 프로젝트에서 spyglass 데이터 수집을 활성화하려면 **글로벌 설정**을 사용하세요:
+
+```bash
+# spyglass 저장소 경로 설정 (절대 경로 사용)
+SPYGLASS_DIR="/path/to/claude-spyglass"
+
+# 글로벌 settings.json 경로
+GLOBAL_SETTINGS="$HOME/.claude/settings.json"
+
+# 백업 생성
+cp "$GLOBAL_SETTINGS" "$GLOBAL_SETTINGS.backup.$(date +%Y%m%d)"
+
+# 훅 설정 추가
+cat >> "$GLOBAL_SETTINGS" << EOF
 {
   "hooks": {
     "UserPromptSubmit": [{
       "hooks": [{
         "type": "command",
-        "command": "bash /path/to/spyglass/hooks/spyglass-collect.sh prompt",
+        "command": "bash ${SPYGLASS_DIR}/hooks/spyglass-collect.sh prompt",
         "async": true,
         "timeout": 1
       }]
@@ -77,13 +92,70 @@ Claude Code `settings.json`에 훅을 추가하세요:
     "PostToolUse": [{
       "hooks": [{
         "type": "command",
-        "command": "bash /path/to/spyglass/hooks/spyglass-collect.sh tool",
+        "command": "bash ${SPYGLASS_DIR}/hooks/spyglass-collect.sh tool",
         "async": true,
         "timeout": 1
       }]
     }]
   }
 }
+EOF
+```
+
+#### 방식 2: 프로젝트별 설정
+
+특정 프로젝트에서만 데이터 수집을 원한다면 해당 프로젝트의 `.claude/settings.json`에 추가하세요:
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [{
+      "hooks": [{
+        "type": "command",
+        "command": "bash /absolute/path/to/spyglass/hooks/spyglass-collect.sh prompt",
+        "async": true,
+        "timeout": 1
+      }]
+    }],
+    "PostToolUse": [{
+      "hooks": [{
+        "type": "command",
+        "command": "bash /absolute/path/to/spyglass/hooks/spyglass-collect.sh tool",
+        "async": true,
+        "timeout": 1
+      }]
+    }]
+  }
+}
+```
+
+#### 환경변수 설정 (선택)
+
+| 변수 | 설명 | 기본값 |
+|------|------|--------|
+| `SPYGLASS_HOST` | spyglass 서버 호스트 | `localhost` |
+| `SPYGLASS_PORT` | spyglass 서버 포트 | `9999` |
+| `SPYGLASS_PROJECT` | 프로젝트명 (수동 지정) | 현재 디렉토리명 |
+| `SPYGLASS_TIMEOUT` | HTTP 요청 타임아웃 (초) | `1` |
+
+글로벌 환경변수 설정 예시:
+
+```bash
+# ~/.zshrc 또는 ~/.bashrc에 추가
+export SPYGLASS_HOST="localhost"
+export SPYGLASS_PORT="9999"
+```
+
+#### 설치 확인
+
+훅 설정 후 Claude Code를 재시작하고, 다음 명령어로 데이터 수집 여부를 확인하세요:
+
+```bash
+# spyglass 로그 확인
+tail -f ~/.spyglass/logs/collect.log
+
+# TUI에서 실시간 확인
+bun run tui
 ```
 
 ---

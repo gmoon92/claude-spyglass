@@ -1,7 +1,7 @@
 # spyglass 최종 스펙 문서
 
-> Version: 0.1.7  
-> Last Updated: 2026-04-17  
+> Version: 0.1.9  
+> Last Updated: 2026-04-18  
 > Status: ✅ 완료
 
 ---
@@ -13,7 +13,7 @@
 | 항목 | 내용 |
 |------|------|
 | **이름** | spyglass |
-| **버전** | 0.1.1 |
+| **버전** | 0.1.9 |
 | **설명** | Claude Code 실행 과정 가시화 도구 - 토큰 누수 탐지 |
 | **개발 기간** | 2026-04-17 (1일) |
 | **개발 방식** | AI 순차 개발 (Claude Code) |
@@ -160,18 +160,34 @@
 | timestamp | INTEGER | NOT NULL | 요청 타임스탬프 (ms) |
 | type | TEXT | NOT NULL, CHECK | 요청 타입 (prompt/tool_call/system) |
 | tool_name | TEXT | NULL | 도구명 (tool_call인 경우) |
+| tool_detail | TEXT | NULL | 도구 상세 (파일경로, 명령어 등) |
+| turn_id | TEXT | NULL | 턴 ID (`<session_id>-T<순번>`) |
 | model | TEXT | NULL | 모델명 (prompt인 경우) |
 | tokens_input | INTEGER | DEFAULT 0 | 입력 토큰 |
 | tokens_output | INTEGER | DEFAULT 0 | 출력 토큰 |
 | tokens_total | INTEGER | DEFAULT 0 | 총 토큰 |
 | duration_ms | INTEGER | DEFAULT 0 | 처리 시간 (ms) |
 | payload | TEXT | NULL | 추가 데이터 (JSON) |
+| source | TEXT | NULL | 데이터 출처 (claude-code-hook) |
+| cache_creation_tokens | INTEGER | DEFAULT 0 | 캐시 생성 토큰 (v5) |
+| cache_read_tokens | INTEGER | DEFAULT 0 | 캐시 읽기 토큰 (v5) |
 | created_at | INTEGER | DEFAULT CURRENT_TIMESTAMP | 생성 시간 |
 
 **인덱스**:
 - `idx_requests_session` (session_id, timestamp DESC)
 - `idx_requests_type` (type, timestamp DESC)
 - `idx_requests_tokens` (tokens_total DESC)
+- `idx_requests_session_type` (session_id, type)
+
+**스키마 마이그레이션 이력**:
+
+| 버전 | 변경 내용 |
+|------|----------|
+| v1 | 초기 스키마 |
+| v2 | tool_detail 컬럼 추가 |
+| v3 | turn_id 컬럼 추가 + 기존 데이터 소급 적용 |
+| v4 | source 컬럼 추가 |
+| v5 | cache_creation_tokens, cache_read_tokens 추가 |
 
 ### 3.3 타입 정의
 
@@ -193,12 +209,17 @@ interface Request {
   timestamp: number;
   type: 'prompt' | 'tool_call' | 'system';
   tool_name?: string;
+  tool_detail?: string;
+  turn_id?: string;
   model?: string;
   tokens_input: number;
   tokens_output: number;
   tokens_total: number;
   duration_ms: number;
   payload?: string;
+  source?: string;
+  cache_creation_tokens: number;
+  cache_read_tokens: number;
   created_at?: number;
 }
 ```
@@ -226,6 +247,8 @@ interface Request {
   "tokens_input": 100,
   "tokens_output": 50,
   "tokens_total": 150,
+  "cache_creation_tokens": 1941,
+  "cache_read_tokens": 85020,
   "source": "claude-code-hook"
 }
 ```
@@ -600,6 +623,7 @@ main
 | `SPYGLASS_PORT` | `9999` | 서버 포트 |
 | `SPYGLASS_DB_PATH` | `~/.spyglass/spyglass.db` | 데이터베이스 경로 |
 | `SPYGLASS_LOG_DIR` | `~/.spyglass/logs` | 로그 디렉토리 |
+| `SPYGLASS_RETENTION_DAYS` | `90` | 세션 데이터 보존 기간 (일), 서버 시작 시 초과분 자동 삭제 |
 
 ### 8.2 실행 명령어
 
@@ -728,6 +752,13 @@ bun test packages/server
 - [x] TUI 빌드 테스트 완료 — `bun build packages/tui/src/index.tsx` 성공
 - [x] 서버 연동 테스트 완료 — API 데이터 수신 확인 (totalTokens: 5042)
 
+### Phase 10 (데이터 신뢰성 P0 수정, 2026-04-18 완료)
+- [x] **토큰 수집 방식 전면 교체** — `CLAUDE_API_USAGE_*` 환경변수는 Claude Code에 존재하지 않음 확인 → transcript JSONL 파싱으로 교체
+- [x] `extract_usage_from_transcript()` 구현 — `transcript_path` JSONL에서 마지막 assistant 메시지의 `usage` 파싱
+- [x] `output_tokens` 정상화 — 기존 항상 0이던 문제 해결
+- [x] `cache_creation_tokens` / `cache_read_tokens` 정상화 — ⚡ 캐시 배지 정상 표시
+- [x] 서버 시작 시 데이터 보존 정책 자동 실행 — `SPYGLASS_RETENTION_DAYS` (기본 90일) + `PRAGMA VACUUM`
+
 ---
 
 ## 11. 참고 문서
@@ -751,8 +782,10 @@ bun test packages/server
 | 2026-04-17 | 0.1.5 | 웹 대시보드 UI 통합 — "프로젝트별 토큰" 별도 테이블 제거, 브라우저 그리드 프로젝트 행에 세션 수·토큰 바 통합 표시 |
 | 2026-04-17 | 0.1.6 | 툴 세부 이름(tool_detail) DB 저장 및 대시보드 표시, 프롬프트 내용 accordion 표시, user role 배지 추가 |
 | 2026-04-17 | 0.1.7 | 대화 턴 뷰 추가 — turn_id 컬럼(schema v3), turn 자동 채번, 피들러 스타일 아코디언 UI (prompt+tool_calls 그룹화, Agent/Skill 아이콘 구분) |
+| 2026-04-18 | 0.1.8 | 토큰 수집 방식 교체 — `CLAUDE_API_USAGE_*` 환경변수가 Claude Code에 존재하지 않음 확인, transcript JSONL 파싱으로 전면 교체, `output_tokens`·`cache_creation_tokens`·`cache_read_tokens` 정상화 |
+| 2026-04-18 | 0.1.9 | 서버 시작 시 데이터 보존 정책 자동 실행 — `runStartupMaintenance()` 추가, `SPYGLASS_RETENTION_DAYS` 환경변수(기본 90일), `PRAGMA VACUUM` 자동 수행 |
 
 ---
 
 *문서 작성: Claude Code*  
-*최종 업데이트: 2026-04-17 (v0.1.7)*
+*최종 업데이트: 2026-04-18 (v0.1.9)*
