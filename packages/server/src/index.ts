@@ -15,7 +15,7 @@ import {
 import { collectHandler } from './collect';
 import { eventsCollectHandler } from './events';
 import { apiRouter, invalidateDashboardCache } from './api';
-import { sseRouter, broadcastUpdate } from './sse';
+import { sseRouter } from './sse';
 
 // =============================================================================
 // 설정
@@ -83,11 +83,8 @@ async function handleRequest(req: Request): Promise<Response> {
     // /collect 엔드포인트
     if (path === '/collect') {
       const result = await collectHandler(req, db!);
-      // 데이터 수신 후 캐시 무효화 + SSE 브로드캐스트
-      if (result.status === 200) {
-        invalidateDashboardCache();
-        broadcastUpdate({ type: 'new_request' });
-      }
+      // 캐시 무효화 (SSE 브로드캐스트는 collectHandler 내부 broadcastNewRequest가 담당)
+      if (result.status === 200) invalidateDashboardCache();
       return result;
     }
 

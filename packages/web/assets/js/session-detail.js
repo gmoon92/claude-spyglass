@@ -14,7 +14,9 @@ export function getDetailRequests()   { return _detailAllRequests; }
 export function getDetailTurns()      { return _detailAllTurns; }
 
 export function renderDetailRequests(list) {
-  const body = document.getElementById('detailRequestsBody');
+  const body     = document.getElementById('detailRequestsBody');
+  const scrollEl = document.getElementById('detailFlatView');
+  const savedScroll = scrollEl?.scrollTop ?? 0;
 
   // SSE 갱신 시 열린 프롬프트 확장 행 보존
   const expandedFor = body.querySelector('[data-expand-for]')?.dataset.expandFor ?? null;
@@ -32,6 +34,9 @@ export function renderDetailRequests(list) {
     .join('&ensp;');
   const subtotalRow = `<tr class="flat-subtotal"><td colspan="${FLAT_VIEW_COLS}" style="text-align:right">${subtotalParts}</td></tr>`;
   body.innerHTML = rows + subtotalRow;
+
+  // 스크롤 위치 복원
+  if (scrollEl && savedScroll) scrollEl.scrollTop = savedScroll;
 
   // 프롬프트 확장 상태 복원 (캐시에 텍스트가 남아 있고 행이 여전히 존재할 때)
   if (expandedFor && _promptCache.has(expandedFor)) {
@@ -79,9 +84,11 @@ export function toggleTurn(turnId) {
 }
 
 export function renderTurnView(turns, badgeTurns) {
-  const container = document.getElementById('turnListBody');
-  const badgesEl  = document.getElementById('detailBadges');
-  const bTurns    = (badgeTurns && badgeTurns.length) ? badgeTurns : turns;
+  const container   = document.getElementById('turnListBody');
+  const scrollEl    = document.getElementById('detailTurnView');
+  const savedScroll = scrollEl?.scrollTop ?? 0;
+  const badgesEl    = document.getElementById('detailBadges');
+  const bTurns      = (badgeTurns && badgeTurns.length) ? badgeTurns : turns;
   const sessionTotalTokens = bTurns.reduce((s, t) => s + (t.summary.total_tokens || 0), 0);
 
   // SSE 갱신 전 UI 상태 캡처
