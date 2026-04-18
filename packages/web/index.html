@@ -512,17 +512,10 @@
         </div>
         <div class="panel-body">
           <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>시작</th>
-                <th>토큰</th>
-                <th>상태</th>
-              </tr>
-            </thead>
             <tbody id="browserSessionsBody">
               <tr><td colspan="4" class="empty-hint">—</td></tr>
             </tbody>
+
           </table>
         </div>
       </div>
@@ -850,7 +843,7 @@
     function fmt(n) { return (n ?? 0).toLocaleString('ko-KR'); }
     function formatDuration(ms) {
       if (ms === null || ms === undefined || isNaN(ms) || ms <= 0) return '—';
-      if (ms < 1000) return `${ms}ms`;
+      if (ms < 1000) return `${Math.round(ms)}ms`;
       return `${(ms / 1000).toFixed(1)}s`;
     }
     function fmtToken(n) {
@@ -858,6 +851,17 @@
       if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
       if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'k';
       return String(n);
+    }
+    function fmtRelative(ts) {
+      if (!ts) return '';
+      const d = new Date(ts < 1e12 ? ts * 1000 : ts);
+      const diffMs = Date.now() - d.getTime();
+      const diffMin = Math.floor(diffMs / 60000);
+      if (diffMin < 1) return '방금';
+      if (diffMin < 60) return `${diffMin}분 전`;
+      const diffH = Math.floor(diffMin / 60);
+      if (diffH < 24) return `${diffH}시간 전`;
+      return `${Math.floor(diffH / 24)}일 전`;
     }
     function fmtTime(ts) {
       if (!ts) return '—';
@@ -977,7 +981,7 @@
         document.getElementById('statRequests').textContent    = fmt(d.summary?.totalRequests ?? 0);
         document.getElementById('statTokens').textContent      = fmtToken(d.summary?.totalTokens ?? 0);
         document.getElementById('statActive').textContent      = fmt(d.summary?.activeSessions ?? 0);
-        document.getElementById('statAvgDuration').textContent = formatDuration(d.summary?.avgDurationMs ?? 0);
+        document.getElementById('statAvgDuration').textContent = formatDuration(d.summary?.avgDurationMs || d.requests?.avg_duration_ms || 0);
         renderProjects(d.projects || []);
         renderTools(d.tools || []);
         typeData = (d.types || []).sort((a, b) => b.count - a.count);
@@ -1150,16 +1154,19 @@
       body.innerHTML = list.map(s => {
         const isSelected = selectedSession === s.id;
         const isActive = !s.ended_at;
-        const shortId = s.id.slice(0, 8) + '…';
+        const shortId = s.id.slice(0, 8);
         const preview = extractFirstPrompt(s.first_prompt_payload);
+        const rel = fmtRelative(s.started_at);
         return `<tr class="clickable${isSelected ? ' row-selected' : ''}" data-session-id="${escHtml(s.id)}">
-          <td><span class="sess-id" title="${escHtml(s.id)}">${escHtml(shortId)}</span></td>
-          <td class="num" style="white-space:nowrap;font-size:11px">
-            ${fmtDate(s.started_at)}
-            ${preview ? `<div style="font-size:10px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px" title="${escHtml(preview)}">${escHtml(preview)}</div>` : ''}
+          <td colspan="4" style="padding:5px 10px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+              <span class="sess-id" title="${escHtml(s.id)}" style="font-size:11px;color:var(--accent)">${escHtml(shortId)}</span>
+              <span style="font-size:10px;color:var(--text-dim);white-space:nowrap">${rel}</span>
+              <span style="font-size:10px;color:var(--text-dim);white-space:nowrap">${fmtToken(s.total_tokens)}</span>
+              <span style="font-size:10px;white-space:nowrap;color:${isActive ? 'var(--green)' : 'var(--text-dim)'}">${isActive ? '●' : '○'}</span>
+            </div>
+            ${preview ? `<div style="font-size:10px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px" title="${escHtml(preview)}">${escHtml(preview)}</div>` : ''}
           </td>
-          <td class="num-hi" style="white-space:nowrap">${fmtToken(s.total_tokens)}</td>
-          <td style="white-space:nowrap"><span style="color:${isActive ? 'var(--green)' : 'var(--text-dim)'}; font-size:11px">${isActive ? '● 활성' : '○ 종료'}</span></td>
         </tr>`;
       }).join('');
     }
@@ -1198,7 +1205,7 @@
 
       const session = allSessions.find(s => s.id === id);
       document.getElementById('detailSessionId').textContent = session ? session.id : id;
-      document.getElementById('detailProject').textContent   = session ? `📁 ${session.project_name}` : '';
+      document.getElementById('detailProject').textContent   = session ? session.project_name : '';
       document.getElementById('detailTokens').textContent    = session ? `${fmtToken(session.total_tokens)} tokens` : '';
       document.getElementById('detailEndedAt').textContent   = session?.ended_at
         ? `종료: ${new Date(session.ended_at < 1e12 ? session.ended_at * 1000 : session.ended_at).toLocaleTimeString()}`
