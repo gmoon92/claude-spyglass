@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Claude Spyglass</title>
   <style>
@@ -78,11 +78,12 @@
 
     /* ─── ERROR BANNER ──────────────────────────────────────────────── */
     .error-banner {
-      display: none; align-items: center; gap: 10px;
-      background: rgba(239,68,68,0.08); border-bottom: 1px solid rgba(239,68,68,0.25);
-      color: var(--red); padding: 10px 20px; font-size: 12px; flex-shrink: 0;
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(239,68,68,0.08);
+      color: var(--red); font-size: 12px; flex-shrink: 0;
+      max-height: 0; overflow: hidden; padding: 0 20px;
     }
-    .error-banner.visible { display: flex; }
+    .error-banner.visible { max-height: 60px; padding: 10px 20px; border-bottom: 1px solid rgba(239,68,68,0.25); }
     .retry-btn {
       margin-left: auto; background: none; border: 1px solid var(--red);
       color: var(--red); padding: 3px 10px; border-radius: 6px;
@@ -114,6 +115,7 @@
     .main-layout {
       display: grid;
       grid-template-columns: var(--left-panel-width) 1fr;
+      grid-template-rows: 1fr;
       overflow: hidden;
       min-height: 0;
     }
