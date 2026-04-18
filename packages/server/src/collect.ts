@@ -12,6 +12,7 @@ import {
   SpyglassDatabase,
   getDatabase,
 } from '@spyglass/storage';
+import type { Request as DbRequest } from '@spyglass/storage';
 import { broadcastNewRequest } from './sse';
 
 // =============================================================================
@@ -147,12 +148,89 @@ function extractPreview(payload: CollectPayload): string | null {
 }
 
 /**
- * 요청 데이터 저장
+ * payload JSON에서 tool_use_id 추출
  */
-function saveRequest(db: Database, payload: CollectPayload): boolean {
+function extractToolUseId(payloadStr?: string): string | null {
+  if (!payloadStr) return null;
   try {
-    let turnId: string | undefined;
+    const raw = JSON.parse(payloadStr) as Record<string, unknown>;
+    return typeof raw.tool_use_id === 'string' ? raw.tool_use_id : null;
+  } catch {
+    return null;
+  }
+}
 
+/**
+ * tool_use_id 기준으로 pre_tool 레코드 조회
+ */
+function findPreToolRecord(db: Database, sessionId: string, toolUseId: string): DbRequest | null {
+  return db.query(
+    "SELECT * FROM requests WHERE session_id = ? AND tool_use_id = ? AND event_type = 'pre_tool' LIMIT 1"
+  ).get(sessionId, toolUseId) as DbRequest | null;
+}
+
+/**
+ * pre_tool 레코드를 post_tool 데이터로 UPDATE (Upsert merge)
+ * - 토큰, 소요 시간, payload, event_type을 'tool'로 갱신
+ * - tool_name, tool_detail은 pre_tool에서 이미 저장된 값 유지
+ */
+function mergePostToolIntoPreTool(
+  db: Database,
+  preToolId: string,
+  payload: CollectPayload
+): boolean {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = (db as any).run(
+    `UPDATE requests
+     SET duration_ms = ?,
+         tokens_input = ?,
+         tokens_output = ?,
+         tokens_total = ?,
+         cache_creation_tokens = ?,
+         cache_read_tokens = ?,
+         payload = ?,
+         event_type = 'tool'
+     WHERE id = ?`,
+    payload.duration_ms || 0,
+    payload.tokens_input,
+    payload.tokens_output,
+    payload.tokens_total,
+    payload.cache_creation_tokens ?? 0,
+    payload.cache_read_tokens ?? 0,
+    payload.payload ?? null,
+    preToolId
+  );
+  return result.changes > 0;
+}
+
+/**
+ * 요청 데이터 저장
+ *
+ * tool_call 이벤트의 Upsert 패턴:
+ *  - event_type='pre_tool': tool_use_id와 함께 INSERT (타이밍 기록용)
+ *  - event_type='tool': 동일 tool_use_id의 pre_tool 레코드가 있으면 UPDATE, 없으면 INSERT
+ *
+ * @returns { saved: boolean, wasUpsert: boolean }
+ *   wasUpsert=true: post_tool이 pre_tool을 덮어씀 → session 토큰 재계산 필요
+ */
+function saveRequest(db: Database, payload: CollectPayload): { saved: boolean; wasUpsert: boolean } {
+  try {
+    const toolUseId = extractToolUseId(payload.payload);
+    const isPostTool = payload.event_type === 'tool' && payload.request_type === 'tool_call';
+
+    // PostToolUse: 기존 pre_tool 레코드 Upsert 시도
+    if (isPostTool && toolUseId) {
+      const preToolRecord = findPreToolRecord(db, payload.session_id, toolUseId);
+      if (preToolRecord) {
+        const merged = mergePostToolIntoPreTool(db, preToolRecord.id, payload);
+        if (merged) {
+          return { saved: true, wasUpsert: true };
+        }
+      }
+    }
+
+    // 일반 INSERT (pre_tool 또는 pre_tool 레코드를 못 찾은 post_tool, 또는 tool_call 외 타입)
+    let turnId: string | undefined;
     if (payload.request_type === 'prompt') {
       turnId = assignTurnId(db, payload.session_id);
     } else {
@@ -177,11 +255,13 @@ function saveRequest(db: Database, payload: CollectPayload): boolean {
       cache_creation_tokens: payload.cache_creation_tokens ?? 0,
       cache_read_tokens: payload.cache_read_tokens ?? 0,
       preview: extractPreview(payload) ?? undefined,
+      tool_use_id: toolUseId,
+      event_type: payload.event_type || null,
     });
-    return true;
+    return { saved: true, wasUpsert: false };
   } catch (error) {
     console.error('[Collect] Failed to save request:', error);
-    return false;
+    return { saved: false, wasUpsert: false };
   }
 }
 
@@ -220,30 +300,42 @@ export function handleCollect(
   }
 
   // 요청 저장
-  const saved = saveRequest(db, payload);
+  const { saved, wasUpsert } = saveRequest(db, payload);
 
   if (saved) {
-    // 세션 토큰 업데이트
-    updateSessionTotalTokens(db, payload);
+    if (wasUpsert) {
+      // Upsert(pre_tool → tool 병합): pre_tool에서 이미 0 토큰이 카운트됐을 수 있음.
+      // pre_tool은 tokens_total=0이므로 단순히 post_tool 토큰을 더하면 됨.
+      updateSessionTotalTokens(db, payload);
+    } else if (payload.event_type !== 'pre_tool') {
+      // 일반 INSERT (pre_tool 제외): 세션 토큰 업데이트
+      // pre_tool은 토큰 0이므로 세션 카운트에서 제외
+      updateSessionTotalTokens(db, payload);
+    }
 
-    // 업데이트된 세션 total_tokens 조회 후 SSE 브로드캐스트
-    const updatedSession = getSessionById(db, payload.session_id);
-    broadcastNewRequest({
-      id: payload.id,
-      session_id: payload.session_id,
-      type: payload.request_type,
-      request_type: payload.request_type,
-      tool_name: payload.tool_name ?? null,
-      tool_detail: payload.tool_detail ?? null,
-      tokens_input: payload.tokens_input,
-      tokens_output: payload.tokens_output,
-      tokens_total: payload.tokens_total,
-      duration_ms: payload.duration_ms || 0,
-      model: payload.model ?? null,
-      timestamp: payload.timestamp,
-      payload: payload.payload ?? null,
-      session_total_tokens: updatedSession?.total_tokens ?? payload.tokens_total,
-    });
+    // pre_tool은 SSE 브로드캐스트 제외:
+    //   PreToolUse 시점엔 토큰·응답이 없는 미완성 레코드이며,
+    //   PostToolUse에서 Upsert(갱신) 또는 별도 INSERT(event_type='tool')로 완성됨.
+    //   브로드캐스트하면 실시간 피드에 동일 tool_call이 2건으로 중복 노출됨.
+    if (payload.event_type !== 'pre_tool') {
+      const updatedSession = getSessionById(db, payload.session_id);
+      broadcastNewRequest({
+        id: payload.id,
+        session_id: payload.session_id,
+        type: payload.request_type,
+        request_type: payload.request_type,
+        tool_name: payload.tool_name ?? null,
+        tool_detail: payload.tool_detail ?? null,
+        tokens_input: payload.tokens_input,
+        tokens_output: payload.tokens_output,
+        tokens_total: payload.tokens_total,
+        duration_ms: payload.duration_ms || 0,
+        model: payload.model ?? null,
+        timestamp: payload.timestamp,
+        payload: payload.payload ?? null,
+        session_total_tokens: updatedSession?.total_tokens ?? payload.tokens_total,
+      });
+    }
   }
 
   return {
