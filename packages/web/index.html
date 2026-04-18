@@ -971,19 +971,30 @@
 
     const PROMPT_CACHE_MAX = 500;
     const _promptCache = new Map(); // Map: 삽입 순서 보장 (ADR-005)
-    function promptPreview(r, maxLen = 60) {
+
+    // r.preview → r.payload 파싱 순서로 텍스트 추출 (ADR-004)
+    function extractPromptText(r) {
+      if (r.preview && typeof r.preview === 'string' && r.preview.trim()) return r.preview;
       if (!r.payload) return '';
       try {
         const p = typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
-        const text = p?.prompt ?? p?.content ?? p?.tool_input ?? (typeof p === 'string' ? p : '');
-        if (!text) return '';
-        if (_promptCache.size >= PROMPT_CACHE_MAX) {
-          _promptCache.delete(_promptCache.keys().next().value);
-        }
-        _promptCache.set(r.id, text);
-        const preview = text.slice(0, maxLen).replace(/\n/g, ' ');
-        return `<span class="prompt-preview" data-expand-id="${escHtml(r.id)}" title="클릭하여 전체 보기">${escHtml(preview)}${text.length > maxLen ? '…' : ''}</span>`;
+        return p?.prompt ?? p?.content ?? p?.tool_input ?? (typeof p === 'string' ? p : '') ?? '';
       } catch { return ''; }
+    }
+
+    function promptPreview(r, maxLen = 60) {
+      const text = extractPromptText(r);
+      if (!text) return '';
+      if (_promptCache.size >= PROMPT_CACHE_MAX) {
+        _promptCache.delete(_promptCache.keys().next().value);
+      }
+      _promptCache.set(r.id, text);
+      const flat    = text.replace(/\n/g, ' ');
+      const display = flat.slice(0, maxLen);
+      const tooltip = text.length > 200
+        ? text.slice(0, 200) + `… (총 ${text.length.toLocaleString('ko-KR')}자)`
+        : text;
+      return `<span class="prompt-preview" data-expand-id="${escHtml(r.id)}" title="${escHtml(tooltip)}">${escHtml(display)}${flat.length > maxLen ? '…' : ''}</span>`;
     }
     function togglePromptExpand(rid, tr) {
       document.querySelectorAll('[data-expand-for]').forEach(el => el.remove());
@@ -1178,7 +1189,8 @@
       }
       try {
         const p = typeof payload === 'string' ? JSON.parse(payload) : payload;
-        const text = p?.prompt ?? p?.content ?? (typeof p === 'string' ? p : '');
+        // preview 필드 우선 사용 (ADR-004)
+        const text = p?.preview ?? p?.prompt ?? p?.content ?? (typeof p === 'string' ? p : '');
         return text ? clean(text) : '';
       } catch {
         const m = typeof payload === 'string' && payload.match(/"prompt"\s*:\s*"((?:[^"\\]|\\.)*)"/);
