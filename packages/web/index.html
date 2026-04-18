@@ -24,6 +24,7 @@
       --blue:        #60a5fa;
       --left-panel-width: 280px;
       --tool-stats-height: 160px;
+      --project-panel-height: 215px;
     }
 
     body {
@@ -123,7 +124,7 @@
     /* ─── LEFT PANEL ────────────────────────────────────────────────── */
     .left-panel {
       display: grid;
-      grid-template-rows: 1fr 1fr var(--tool-stats-height);
+      grid-template-rows: var(--project-panel-height) 1fr var(--tool-stats-height);
       overflow: hidden; border-right: 1px solid var(--border);
       background: var(--surface);
     }
