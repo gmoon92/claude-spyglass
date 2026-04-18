@@ -259,10 +259,29 @@ except:
 " 2>/dev/null <<< "$tool_input" || echo "")
             ;;
         Skill)
-            detail=$(extract_skill_name "$payload")
+            # args 앞 80자 추출
+            detail=$(python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    args = d.get('args', '')
+    print(args[:80])
+except:
+    print('')
+" 2>/dev/null <<< "$tool_input" || echo "")
             ;;
         Agent)
-            detail=$(extract_subagent_type "$payload")
+            # description 우선, 없으면 prompt 앞 80자
+            detail=$(python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    desc   = d.get('description', '')
+    prompt = d.get('prompt', '')
+    print(desc if desc else prompt[:80])
+except:
+    print('')
+" 2>/dev/null <<< "$tool_input" || echo "")
             ;;
         TodoRead|TodoWrite)
             # 특별한 detail 없음 — tool_name 자체가 충분
@@ -580,8 +599,12 @@ except:
         # 기존 가공 파이프라인: 프롬프트 처리
         main "prompt" "$payload"
         ;;
+      "PreToolUse")
+        # 도구 실행 시작: 타이밍 파일 생성 (duration_ms 측정용)
+        main "pre_tool" "$payload"
+        ;;
       "PostToolUse")
-        # 기존 가공 파이프라인: 도구 결과 처리
+        # 기존 가공 파이프라인: 도구 결과 처리 (PreToolUse 타임스탬프 차이로 duration_ms 계산)
         main "tool" "$payload"
         ;;
       "")
