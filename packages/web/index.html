@@ -1227,7 +1227,7 @@
       detailIdEl.textContent = id.slice(0, 8) + '…';
       detailIdEl.title = id;
       document.getElementById('detailProject').textContent   = session ? session.project_name : '';
-      document.getElementById('detailTokens').textContent    = session ? `${fmtToken(session.total_tokens)} tokens` : '';
+      document.getElementById('detailTokens').textContent    = session ? `${fmtToken(session.total_tokens)} 토큰` : '';
       document.getElementById('detailEndedAt').textContent   = session?.ended_at
         ? `종료: ${new Date(session.ended_at < 1e12 ? session.ended_at * 1000 : session.ended_at).toLocaleTimeString()}`
         : '';
@@ -1347,12 +1347,13 @@
         badgesEl.style.display = 'none';
       }
 
-      container.innerHTML = turns.map(turn => {
+      container.innerHTML = turns.slice().reverse().map(turn => {
         const toolCount  = turn.summary.tool_call_count;
         const tokIn      = turn.summary.tokens_input ?? 0;
         const tokOut     = turn.summary.tokens_output ?? 0;
         const durMs      = turn.prompt?.duration_ms ?? 0;
-        const meta = `도구 ${toolCount}개 · IN ${fmtToken(tokIn)} / OUT ${fmtToken(tokOut)}${durMs > 0 ? ` · ⏱ ${formatDuration(durMs)}` : ''}`;
+        const outPart    = tokOut > 0 ? ` / OUT ${fmtToken(tokOut)}` : '';
+        const meta = `도구 ${toolCount}개 · IN ${fmtToken(tokIn)}${outPart}${durMs > 0 ? ` · ⏱ ${formatDuration(durMs)}` : ''}`;
 
         const barPct = sessionTotalTokens > 0
           ? Math.round((turn.summary.total_tokens || 0) / sessionTotalTokens * 100)
@@ -1406,7 +1407,7 @@
     // ── 전체 세션 로드 (초기/주기적 갱신용) ────────────────────────────
     async function fetchAllSessions() {
       try {
-        const res = await fetch(buildQuery(`${API}/api/sessions`, { limit: 500 }));
+        const res = await fetch(buildQuery(`${API}/api/sessions`, { limit: 500, ...getDateRange() }));
         const json = await res.json();
         allSessions = json.data || [];
         renderBrowserSessions();
