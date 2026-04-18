@@ -262,6 +262,7 @@
     .type-badge {
       display: inline-block; padding: 1px 6px; border-radius: 4px;
       font-size: 10px; font-weight: 600; letter-spacing: 0.2px;
+      min-width: 20px; text-align: center; cursor: default;
     }
     .type-prompt    { background: var(--type-prompt-bg);    color: var(--type-prompt-color); }
     .type-tool_call { background: var(--type-tool_call-bg); color: var(--type-tool_call-color); }
@@ -921,9 +922,14 @@
       return isSameDay ? fmtTime(ts)
         : d.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' }) + ' ' + fmtTime(ts);
     }
+    // 타입별 약어 (TUI RequestTypeFormatter와 동일, ADR-002)
+    const TYPE_ABBR = { prompt: 'P', tool_call: 'T', system: 'S' };
+
     function typeBadge(type) {
-      const cls = ['prompt', 'tool_call', 'system'].includes(type) ? type : 'unknown';
-      let html = `<span class="type-badge type-${cls}">${cls}</span>`;
+      const known = ['prompt', 'tool_call', 'system'];
+      const cls  = known.includes(type) ? type : 'unknown';
+      const abbr = TYPE_ABBR[type] ?? (type ? type.slice(0, 1).toUpperCase() : '?');
+      let html = `<span class="type-badge type-${cls}" title="${escHtml(type)}">${abbr}</span>`;
       if (type === 'prompt') html += `<span class="mini-badge role-badge role-user">user</span>`;
       return html;
     }
@@ -1337,10 +1343,8 @@
       list.forEach(r => { typeCounts[r.type] = (typeCounts[r.type] || 0) + 1; });
       const subtotalParts = Object.entries(typeCounts)
         .sort((a, b) => b[1] - a[1])
-        .map(([type, count]) => {
-          const cls = ['prompt', 'tool_call', 'system'].includes(type) ? type : 'unknown';
-          return `<span class="type-badge type-${cls}">${type}</span>&nbsp;${count}건`;
-        }).join('&ensp;');
+        .map(([type, count]) => `${typeBadge(type)}&nbsp;${count}건`)
+        .join('&ensp;');
       const subtotalRow = `<tr class="flat-subtotal"><td colspan="${FLAT_VIEW_COLS}" style="text-align:right">${subtotalParts}</td></tr>`;
 
       body.innerHTML = rows + subtotalRow;
@@ -1419,7 +1423,7 @@
           <div class="turn-row turn-row-prompt">
             <span></span>
             <div class="tool-cell">
-              <span class="tool-main"><span class="type-badge type-prompt">prompt</span><span class="mini-badge role-badge role-user">user</span>${turn.prompt.model ? `<span class="mini-badge model-badge">${escHtml(turn.prompt.model)}</span>` : ''}${cacheHitBadge(turn.prompt)}</span>
+              <span class="tool-main">${typeBadge(turn.prompt?.type || 'prompt')}${turn.prompt.model ? `<span class="mini-badge model-badge">${escHtml(turn.prompt.model)}</span>` : ''}${cacheHitBadge(turn.prompt)}</span>
               ${promptPreview(turn.prompt, 80) ? `<span class="tool-sub">${promptPreview(turn.prompt, 80)}</span>` : ''}
             </div>
             <span class="num cell-token">${turn.prompt.tokens_input > 0 ? fmtToken(turn.prompt.tokens_input) : '—'}</span>
