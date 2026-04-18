@@ -136,6 +136,8 @@ export interface Request {
   cache_creation_tokens?: number;
   cache_read_tokens?: number;
   preview?: string | null;
+  tool_use_id?: string | null;
+  event_type?: string | null;
   created_at?: number;
 }
 
@@ -146,7 +148,7 @@ export interface Request {
 /**
  * 테이블 스키마 정보 (마이그레이션/검증용)
  */
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 /**
  * v2 마이그레이션: tool_detail 컬럼 추가
@@ -234,6 +236,26 @@ CREATE INDEX IF NOT EXISTS idx_events_session_time ON claude_events(session_id, 
 CREATE INDEX IF NOT EXISTS idx_events_type_time ON claude_events(event_type, timestamp);
 `;
 
+/**
+ * v8 마이그레이션: tool_use_id 컬럼 추가 (Pre/Post 페어링 키)
+ *                  event_type 컬럼 추가 ('pre_tool' | 'tool' | null)
+ *
+ * Upsert 패턴:
+ *  - PreToolUse → event_type='pre_tool' INSERT
+ *  - PostToolUse → event_type='tool' → 동일 tool_use_id의 pre_tool 레코드 UPDATE
+ *
+ * 기존 데이터 역추출:
+ *  - id LIKE 'p-%' AND type='tool_call' → event_type='pre_tool'
+ *  - id LIKE 't-%' AND type='tool_call' → event_type='tool'
+ */
+export const MIGRATION_V8 = `
+ALTER TABLE requests ADD COLUMN tool_use_id TEXT DEFAULT NULL;
+ALTER TABLE requests ADD COLUMN event_type TEXT DEFAULT NULL;
+UPDATE requests SET event_type = 'pre_tool' WHERE id LIKE 'p-%' AND type = 'tool_call';
+UPDATE requests SET event_type = 'tool' WHERE id LIKE 't-%' AND type = 'tool_call';
+CREATE INDEX IF NOT EXISTS idx_requests_tool_use_id ON requests(tool_use_id) WHERE tool_use_id IS NOT NULL;
+`;
+
 export const SCHEMA_META = {
   version: SCHEMA_VERSION,
   tables: ['sessions', 'requests', 'claude_events'],
@@ -246,5 +268,6 @@ export const SCHEMA_META = {
     'idx_requests_session_type',
     'idx_events_session_time',
     'idx_events_type_time',
+    'idx_requests_tool_use_id',
   ],
 } as const;

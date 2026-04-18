@@ -30,6 +30,8 @@ export interface CreateRequestParams {
   cache_creation_tokens?: number;
   cache_read_tokens?: number;
   preview?: string | null;
+  tool_use_id?: string | null;
+  event_type?: string | null;
 }
 
 /** 요청 생성 SQL */
@@ -37,8 +39,8 @@ const SQL_CREATE_REQUEST = `
   INSERT INTO requests (
     id, session_id, timestamp, type, tool_name, tool_detail, turn_id, model,
     tokens_input, tokens_output, tokens_total, duration_ms, payload, source,
-    cache_creation_tokens, cache_read_tokens, preview
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    cache_creation_tokens, cache_read_tokens, preview, tool_use_id, event_type
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 /**
@@ -65,7 +67,9 @@ export function createRequest(
     params.source ?? null,
     params.cache_creation_tokens ?? 0,
     params.cache_read_tokens ?? 0,
-    params.preview ?? null
+    params.preview ?? null,
+    params.tool_use_id ?? null,
+    params.event_type ?? null
   );
   return params.id;
 }
@@ -97,7 +101,9 @@ export function createRequests(
         item.source ?? null,
         item.cache_creation_tokens ?? 0,
         item.cache_read_tokens ?? 0,
-        item.preview ?? null
+        item.preview ?? null,
+        item.tool_use_id ?? null,
+        item.event_type ?? null
       );
     }
   });
@@ -143,11 +149,11 @@ export function getAllRequests(
   fromTs?: number,
   toTs?: number
 ): RequestQueryResult[] {
-  const conditions: string[] = [];
+  const conditions: string[] = ["(event_type IS NULL OR event_type != 'pre_tool')"];
   const params: (string | number)[] = [];
   if (fromTs) { conditions.push('timestamp >= ?'); params.push(fromTs); }
   if (toTs)   { conditions.push('timestamp <= ?'); params.push(toTs); }
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const where = `WHERE ${conditions.join(' AND ')}`;
   return db.query(`SELECT * FROM requests ${where} ORDER BY timestamp DESC LIMIT ?`)
     .all(...params, limit) as RequestQueryResult[];
 }
@@ -161,7 +167,7 @@ export function getRequestsBySession(
   limit: number = 100
 ): RequestQueryResult[] {
   return db.query(
-    'SELECT * FROM requests WHERE session_id = ? ORDER BY timestamp DESC LIMIT ?'
+    "SELECT * FROM requests WHERE session_id = ? AND (event_type IS NULL OR event_type != 'pre_tool') ORDER BY timestamp DESC LIMIT ?"
   ).all(sessionId, limit) as RequestQueryResult[];
 }
 
@@ -175,7 +181,7 @@ export function getRequestsByType(
   offset: number = 0
 ): RequestQueryResult[] {
   return db.query(
-    'SELECT * FROM requests WHERE type = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?'
+    "SELECT * FROM requests WHERE type = ? AND (event_type IS NULL OR event_type != 'pre_tool') ORDER BY timestamp DESC LIMIT ? OFFSET ?"
   ).all(type, limit, offset) as RequestQueryResult[];
 }
 
@@ -356,14 +362,13 @@ export function getAvgPromptDurationMs(db: Database): number {
  * 전체 요청 통계
  */
 export function getRequestStats(db: Database, fromTs?: number, toTs?: number): RequestStats {
-  const conditions: string[] = [];
+  const conditions: string[] = ["(event_type IS NULL OR event_type != 'pre_tool')"];
   const params: number[] = [];
 
   if (fromTs) { conditions.push('timestamp >= ?'); params.push(fromTs); }
   if (toTs) { conditions.push('timestamp <= ?'); params.push(toTs); }
 
-  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
+  const whereClause = `WHERE ${conditions.join(' AND ')}`;
   return db.query(`
     SELECT
       COUNT(*) as total_requests,
@@ -446,7 +451,7 @@ export function getToolStats(
   fromTs?: number,
   toTs?: number
 ): ToolStats[] {
-  const conditions: string[] = ["type = 'tool_call'", 'tool_name IS NOT NULL'];
+  const conditions: string[] = ["type = 'tool_call'", 'tool_name IS NOT NULL', "(event_type IS NULL OR event_type != 'pre_tool')"];
   const params: (number | string)[] = [];
 
   if (fromTs) { conditions.push('timestamp >= ?'); params.push(fromTs); }
@@ -552,9 +557,11 @@ export function getTurnsBySession(
 ): TurnItem[] {
   const rows = db.query(`
     SELECT id, type, tool_name, tool_detail, turn_id,
-           timestamp, tokens_input, tokens_output, tokens_total, duration_ms, model, payload
+           timestamp, tokens_input, tokens_output, tokens_total, duration_ms, model, payload,
+           event_type
     FROM requests
     WHERE session_id = ? AND turn_id IS NOT NULL
+      AND (event_type IS NULL OR event_type != 'pre_tool')
     ORDER BY timestamp ASC
   `).all(sessionId) as Array<{
     id: string;
@@ -569,6 +576,7 @@ export function getTurnsBySession(
     duration_ms: number;
     model: string | null;
     payload: string | null;
+    event_type: string | null;
   }>;
 
   // turn_id 기준 그룹화
