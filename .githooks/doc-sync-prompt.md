@@ -16,10 +16,10 @@
 ## 현행화 대상 문서 및 규칙
 
 > **중요**: `docs/planning/` 하위 파일은 초기 개발 레거시입니다. **절대 수정하지 마세요.**
-> 자동 현행화 대상은 `docs/spec.md`, `README.md` 입니다.
-> `docs/adr.md`는 기술 결정 시 `doc-adr` 스킬로 **수동** 관리합니다. 건드리지 마세요.
+> 자동 현행화 대상은 `docs/architecture.md`, `README.md` 입니다.
+> 기능별 ADR/plan/tasks는 `.claude/docs/plans/<feature>/`에서 `doc-adr` 스킬로 **수동** 관리합니다. 건드리지 마세요.
 
-### 1. `docs/spec.md` — 현행 스펙 문서 (항상 검토)
+### 1. `docs/architecture.md` — 현행 아키텍처 문서 (항상 검토)
 
 **현행화 항목:**
 - `Version`: 루트 `package.json`의 version과 동기화
@@ -35,7 +35,7 @@
 
 **현행화 항목:**
 - 버전 badge: `package.json`의 version 값과 동기화
-- **기능 목록**: `docs/spec.md`의 내용과 일치하는지 확인
+- **기능 목록**: `docs/architecture.md`의 내용과 일치하는지 확인
 - **설치/실행 방법**: `package.json`의 scripts와 일치하는지 확인
 - **주의**: README의 전체적인 톤과 스타일은 유지하세요.
 
@@ -47,7 +47,7 @@
 2. `packages/storage/src/schema.ts` 읽기 → 현재 스키마 파악
 3. `hooks/spyglass-collect.sh` 읽기 → 현재 훅 동작 파악
 4. 루트 `package.json` 읽기 → 현재 버전 파악
-5. `docs/spec.md`, `README.md` 각각 읽고 → 변경이 필요한 항목만 수정 (Edit 도구 사용)
+5. `docs/architecture.md`, `README.md` 각각 읽고 → 변경이 필요한 항목만 수정 (Edit 도구 사용)
 
 변경이 필요 없는 항목은 건드리지 마세요.
 `docs/adr.md`는 절대 수정하지 마세요.
