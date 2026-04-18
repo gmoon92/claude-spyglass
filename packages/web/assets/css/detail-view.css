@@ -1,0 +1,60 @@
+/* ── DETAIL HEADER ──────────────────────────────────────────────────────── */
+.detail-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px; background: var(--surface-alt);
+  border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap;
+}
+.detail-meta { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
+.detail-session-id { font-size: 11px; color: var(--accent); font-family: monospace; }
+.detail-project    { font-size: 11px; color: var(--text-muted); }
+.detail-tokens     { font-size: 11px; color: var(--text); margin-left: auto; }
+.btn-close {
+  background: none; border: 1px solid var(--border); color: var(--text-dim);
+  padding: 3px 10px; border-radius: 5px; cursor: pointer;
+  font-size: 11px; font-family: inherit; flex-shrink: 0;
+}
+.btn-close:hover { border-color: var(--red); color: var(--red); }
+
+/* ── TAB BAR ────────────────────────────────────────────────────────────── */
+.view-tab-bar {
+  display: flex; align-items: center;
+  padding: 0 16px; border-bottom: 1px solid var(--border);
+  background: var(--surface-alt); flex-shrink: 0;
+}
+.view-tab {
+  background: none; border: none; border-bottom: 2px solid transparent;
+  color: var(--text-dim); padding: 8px 14px; font-family: inherit;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
+  text-transform: uppercase; cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.view-tab:hover { color: var(--text); }
+.view-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── DETAIL CONTENT ─────────────────────────────────────────────────────── */
+.detail-loading {
+  padding: 20px 16px; text-align: center;
+  color: var(--text-dim); font-size: 12px; flex-shrink: 0;
+}
+.detail-content { flex: 1; overflow-y: auto; min-height: 0; }
+.detail-content::-webkit-scrollbar { width: 3px; }
+.detail-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── AGGREGATE BADGES ───────────────────────────────────────────────────── */
+.detail-agg-badges {
+  width: 100%; display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px;
+}
+.detail-agg-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; color: var(--text-dim);
+  background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+  padding: 2px 8px; border-radius: 4px; white-space: nowrap;
+}
+.detail-agg-badge strong { color: var(--accent); }
+
+/* ── FLAT VIEW SUBTOTAL ─────────────────────────────────────────────────── */
+.flat-subtotal td {
+  font-size: 11px; color: var(--text-dim); padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  background: rgba(255,255,255,0.02) !important;
+}

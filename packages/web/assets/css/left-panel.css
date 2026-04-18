@@ -1,0 +1,53 @@
+/* ── LEFT PANEL ─────────────────────────────────────────────────────────── */
+.left-panel {
+  display: grid;
+  grid-template-rows: var(--project-panel-height) 1fr var(--tool-stats-height);
+  overflow: hidden; border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.panel-section {
+  display: flex; flex-direction: column;
+  overflow: hidden; border-bottom: 1px solid var(--border); min-height: 0;
+}
+.panel-section.flex-section { min-height: 0; }
+.panel-section:last-child { border-bottom: none; }
+
+.panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px; background: var(--surface-alt);
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.panel-label { font-size: 10px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; }
+.panel-hint  { font-size: 10px; color: var(--text-dim); }
+
+.panel-body { flex: 1; overflow-y: auto; min-height: 0; }
+.panel-body::-webkit-scrollbar { width: 3px; }
+.panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.tool-stats-section { max-height: var(--tool-stats-height); }
+.tool-stats-section .panel-body { max-height: calc(var(--tool-stats-height) - 29px); }
+
+/* ── BAR CELLS ──────────────────────────────────────────────────────────── */
+.bar-cell  { display: flex; align-items: center; gap: 8px; }
+.bar-track { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; min-width: 40px; }
+.bar-fill  { height: 100%; background: var(--accent); border-radius: 2px; transition: width .4s ease; }
+.bar-label { font-size: 11px; color: var(--text-dim); min-width: 28px; text-align: right; }
+
+/* ── SESSION ROW ────────────────────────────────────────────────────────── */
+.sess-id {
+  font-size: 11px; color: var(--text-muted);
+  max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: inline-block;
+}
+.sess-row-cell { min-height: 36px; }
+
+.sess-row-header  { display: flex; align-items: center; gap: 6px; }
+.sess-row-time    { font-size: 10px; color: var(--text-dim); white-space: nowrap; flex-shrink: 0; }
+.sess-row-tokens  { font-size: 10px; color: var(--text-dim); white-space: nowrap; margin-left: auto; }
+.sess-row-status  { font-size: 10px; white-space: nowrap; color: var(--text-dim); flex-shrink: 0; }
+.sess-row-status.active { color: var(--green); }
+.sess-row-preview {
+  font-size: 10px; color: var(--text-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;
+}

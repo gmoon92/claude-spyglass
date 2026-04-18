@@ -1,0 +1,287 @@
+// 진입점 — 초기화, 이벤트 위임, SSE, selectProject/Session
+import { initTypeColors, recordRequest, drawTimeline, drawDonut, advanceBuckets, initBuckets } from './chart.js';
+import { togglePromptExpand, makeRequestRow } from './renderers.js';
+import { clearError, updateScrollLockBanner, jumpToLatest, addScrollLockCount, resetScrollLockCount } from './infra.js';
+import {
+  getSelectedSession,
+  setSelectedProject, setSelectedSession,
+  getAllSessions, renderBrowserProjects, renderBrowserSessions, showSkeletonSessions,
+} from './left-panel.js';
+import {
+  setDetailFilter, applyDetailFilter, setDetailView, toggleTurn,
+  refreshDetailSession, loadSessionDetail,
+} from './session-detail.js';
+import {
+  fetchDashboard, fetchRequests, fetchAllSessions, fetchSessionsByProject,
+  setActiveRange, setReqFilter, setIsSSEConnected,
+} from './api.js';
+import { fmtToken, fmtDate } from './formatters.js';
+
+// ── UI 상태 ──────────────────────────────────────────────────────────────────
+const uiState = { rightView: 'default', detailTab: 'flat', isTransitioning: false };
+
+function renderRightPanel() {
+  const isDetail = uiState.rightView === 'detail';
+  document.getElementById('defaultView').classList.toggle('active', !isDetail);
+  document.getElementById('detailView').classList.toggle('active', isDetail);
+}
+
+// ── 프로젝트 선택 ────────────────────────────────────────────────────────────
+function selectProject(name) {
+  setSelectedProject(name);
+  setSelectedSession(null);
+  if (uiState.rightView === 'detail') {
+    uiState.rightView = 'default';
+    renderRightPanel();
+  }
+  renderBrowserProjects();
+  document.getElementById('sessionPaneHint').textContent = `${name} · …`;
+  showSkeletonSessions();
+  fetchSessionsByProject(name);
+}
+
+// ── 세션 선택 ────────────────────────────────────────────────────────────────
+async function selectSession(id) {
+  if (uiState.isTransitioning) return;
+  setSelectedSession(id);
+  renderBrowserSessions();
+
+  uiState.rightView   = 'detail';
+  uiState.detailTab   = 'flat';
+  uiState.isTransitioning = true;
+  renderRightPanel();
+
+  document.getElementById('detailLoading').style.display  = 'block';
+  document.getElementById('detailFlatView').style.display = 'none';
+  document.getElementById('detailTurnView').style.display = 'none';
+
+  document.getElementById('detailView').addEventListener(
+    'transitionend',
+    () => { uiState.isTransitioning = false; },
+    { once: true }
+  );
+
+  const session    = getAllSessions().find(s => s.id === id);
+  const detailIdEl = document.getElementById('detailSessionId');
+  detailIdEl.textContent = id.slice(0, 8) + '…';
+  detailIdEl.title       = id;
+  document.getElementById('detailProject').textContent  = session ? session.project_name : '';
+  document.getElementById('detailTokens').textContent   = session ? `총 ${fmtToken(session.total_tokens)} 토큰` : '';
+  document.getElementById('detailEndedAt').textContent  = session?.ended_at
+    ? `종료: ${fmtDate(session.ended_at)}`
+    : '';
+
+  setDetailFilter('all');
+  document.querySelectorAll('#detailTypeFilterBtns .type-filter-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.detailFilter === 'all');
+  });
+
+  try {
+    await loadSessionDetail(id);
+  } catch {
+    applyDetailFilter();
+  }
+
+  document.getElementById('detailLoading').style.display = 'none';
+  setDetailView(uiState.detailTab);
+}
+
+// ── 세션 상세 닫기 ───────────────────────────────────────────────────────────
+function closeDetail() {
+  uiState.rightView = 'default';
+  setSelectedSession(null);
+  renderRightPanel();
+  renderBrowserSessions();
+  const badgesEl = document.getElementById('detailBadges');
+  if (badgesEl) badgesEl.style.display = 'none';
+}
+
+// ── prependRequest ───────────────────────────────────────────────────────────
+function prependRequest(r) {
+  const body      = document.getElementById('requestsBody');
+  const feedBody  = document.getElementById('feedBody');
+  const isNearTop = !feedBody || feedBody.scrollTop < 80;
+
+  const prevScrollTop    = feedBody ? feedBody.scrollTop    : 0;
+  const prevScrollHeight = feedBody ? feedBody.scrollHeight : 0;
+
+  while (body.rows.length >= 10) body.deleteRow(body.rows.length - 1);
+  const tmp = document.createElement('tbody');
+  tmp.innerHTML = makeRequestRow(r, { showSession: true });
+  body.insertBefore(tmp.firstElementChild, body.firstChild);
+
+  if (!isNearTop && feedBody) {
+    const addedHeight = feedBody.scrollHeight - prevScrollHeight;
+    feedBody.scrollTop = prevScrollTop + addedHeight;
+    addScrollLockCount();
+    updateScrollLockBanner();
+  } else {
+    resetScrollLockCount();
+    updateScrollLockBanner();
+  }
+}
+
+// ── 수동 갱신 ────────────────────────────────────────────────────────────────
+function manualRefresh() {
+  Promise.all([fetchDashboard(), fetchRequests(), fetchAllSessions()]);
+}
+
+// ── SSE ──────────────────────────────────────────────────────────────────────
+let sseSource       = null;
+let retryTimer      = null;
+let refreshDebounce = null;
+
+function connectSSE() {
+  if (sseSource) { sseSource.close(); sseSource = null; }
+  try {
+    sseSource = new EventSource('/events');
+
+    sseSource.addEventListener('new_request', (e) => {
+      recordRequest();
+      drawTimeline();
+      try {
+        const evt = JSON.parse(e.data);
+        const req = evt.data;
+        const sess = getAllSessions().find(s => s.id === req.session_id);
+        if (sess) {
+          sess.total_tokens = req.session_total_tokens;
+          // 해당 세션 행의 토큰만 직접 갱신 — full re-render 방지
+          const sessRow = document.querySelector(`[data-session-id="${CSS.escape(req.session_id)}"]`);
+          const tokEl   = sessRow?.querySelector('.sess-row-tokens');
+          if (tokEl) tokEl.textContent = fmtToken(req.session_total_tokens);
+          else renderBrowserSessions();
+        }
+        prependRequest(req);
+        if (getSelectedSession() === req.session_id) refreshDetailSession(req.session_id);
+      } catch { /* silent */ }
+
+      clearTimeout(refreshDebounce);
+      refreshDebounce = setTimeout(() => fetchDashboard(), 1000);
+    });
+
+    sseSource.onopen = () => {
+      clearError();
+      clearTimeout(retryTimer);
+      setIsSSEConnected(true);
+      const loadMoreBtn = document.getElementById('loadMoreBtn');
+      if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+      fetchDashboard();
+      fetchRequests();
+      fetchAllSessions();
+    };
+
+    sseSource.onerror = () => {
+      setIsSSEConnected(false);
+      sseSource.close(); sseSource = null;
+      resetScrollLockCount();
+      updateScrollLockBanner();
+      retryTimer = setTimeout(connectSSE, 5000);
+    };
+  } catch {
+    retryTimer = setTimeout(connectSSE, 5000);
+  }
+}
+
+// ── 이벤트 위임 ──────────────────────────────────────────────────────────────
+function initEventDelegation() {
+  document.querySelector('.left-panel').addEventListener('click', e => {
+    const projRow = e.target.closest('[data-project]');
+    if (projRow) { selectProject(projRow.dataset.project); return; }
+    const sessRow = e.target.closest('[data-session-id]');
+    if (sessRow)  { selectSession(sessRow.dataset.sessionId); }
+  });
+
+  document.getElementById('btnCloseDetail').addEventListener('click', closeDetail);
+
+  document.getElementById('detailTabBar').addEventListener('click', e => {
+    const tab = e.target.closest('[data-tab]');
+    if (tab) { uiState.detailTab = tab.dataset.tab; setDetailView(tab.dataset.tab); }
+  });
+
+  document.getElementById('retryBtn').addEventListener('click', manualRefresh);
+  document.getElementById('scrollLockBanner').addEventListener('click', jumpToLatest);
+
+  document.getElementById('dateFilter').addEventListener('click', e => {
+    const btn = e.target.closest('[data-range]');
+    if (!btn) return;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    setActiveRange(btn.dataset.range);
+    const subtitles = { all: '전체 기간', today: '오늘', week: '이번 주' };
+    const chartSubtitle = document.getElementById('chartSubtitle');
+    if (chartSubtitle && subtitles[btn.dataset.range]) {
+      chartSubtitle.textContent = subtitles[btn.dataset.range];
+    }
+    fetchDashboard(); fetchRequests(); fetchAllSessions();
+  });
+
+  document.getElementById('typeFilterBtns').addEventListener('click', e => {
+    const btn = e.target.closest('[data-filter]');
+    if (!btn) return;
+    setReqFilter(btn.dataset.filter);
+    document.querySelectorAll('#typeFilterBtns .type-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    fetchRequests(false);
+  });
+
+  document.getElementById('loadMoreBtn').addEventListener('click', () => fetchRequests(true));
+
+  document.getElementById('detailTypeFilterBtns').addEventListener('click', e => {
+    const btn = e.target.closest('[data-detail-filter]');
+    if (!btn) return;
+    setDetailFilter(btn.dataset.detailFilter);
+    document.querySelectorAll('#detailTypeFilterBtns .type-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    applyDetailFilter();
+  });
+
+  document.getElementById('detailView').addEventListener('click', e => {
+    const turnBtn  = e.target.closest('[data-toggle-turn]');
+    if (turnBtn) { toggleTurn(turnBtn.dataset.toggleTurn); return; }
+    const promptEl = e.target.closest('[data-expand-id]');
+    if (promptEl) {
+      const container = promptEl.closest('tr') || promptEl.closest('.turn-row');
+      if (container) togglePromptExpand(promptEl.dataset.expandId, container);
+    }
+  });
+
+  document.getElementById('defaultView').addEventListener('click', e => {
+    const promptEl = e.target.closest('[data-expand-id]');
+    if (promptEl) {
+      const tr = promptEl.closest('tr');
+      if (tr) togglePromptExpand(promptEl.dataset.expandId, tr);
+    }
+  });
+}
+
+// ── Canvas ResizeObserver ─────────────────────────────────────────────────────
+function initCharts() {
+  let _rafId = null;
+  const timelineWrap = document.querySelector('#timelineChart').parentElement;
+  if ('ResizeObserver' in window) {
+    new ResizeObserver(() => {
+      cancelAnimationFrame(_rafId);
+      _rafId = requestAnimationFrame(() => drawTimeline());
+    }).observe(timelineWrap);
+  } else {
+    window.addEventListener('resize', drawTimeline);
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+function init() {
+  initTypeColors();
+  initBuckets();
+  drawTimeline();
+  drawDonut();
+  fetchDashboard();
+  fetchRequests();
+  fetchAllSessions();
+  connectSSE();
+  initEventDelegation();
+  initCharts();
+  setInterval(() => { advanceBuckets(); drawTimeline(); }, 60000);
+  setInterval(() => fetchAllSessions(), 30000);
+}
+
+document.addEventListener('DOMContentLoaded', init);

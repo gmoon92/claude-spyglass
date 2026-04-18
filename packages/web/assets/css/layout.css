@@ -1,0 +1,40 @@
+/* ── BODY ───────────────────────────────────────────────────────────────── */
+body {
+  font-family: 'SF Mono','JetBrains Mono','Fira Code',ui-monospace,monospace;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── MAIN LAYOUT ────────────────────────────────────────────────────────── */
+.main-layout {
+  display: grid;
+  grid-template-columns: var(--left-panel-width) 1fr;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── FOOTER ─────────────────────────────────────────────────────────────── */
+.footer {
+  text-align: center; color: var(--text-dim); font-size: 10px;
+  padding: 6px; border-top: 1px solid var(--border); flex-shrink: 0;
+}
+
+/* ── RESPONSIVE ─────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .main-layout { grid-template-columns: 1fr; grid-template-rows: 180px 1fr; }
+  .left-panel  { grid-template-rows: none; grid-template-columns: 1fr 1fr; border-right: none; border-bottom: 1px solid var(--border); }
+  .tool-stats-section { display: none; }
+  .charts-inner { grid-template-columns: 1fr; }
+  .donut-section { border-left: none; border-top: 1px solid var(--border); }
+}
+@media (max-width: 480px) {
+  .summary-strip { flex-direction: column; gap: 1px; }
+  .stat-card { padding: 6px 12px; }
+}

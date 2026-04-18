@@ -1,0 +1,48 @@
+/* ── TABLE BASE ─────────────────────────────────────────────────────────── */
+table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+th {
+  text-align: left; padding: 5px 8px; font-size: 10px;
+  color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface); font-weight: 500;
+  position: sticky; top: 0; z-index: 2;
+}
+td {
+  padding: 4px 8px; font-size: 12px; color: var(--text);
+  border-bottom: 1px solid rgba(39,39,39,0.6); vertical-align: middle;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(217,119,87,0.04); }
+
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: rgba(217,119,87,0.07); }
+tr.row-selected td { background: var(--accent-dim) !important; }
+tr.row-selected td:first-child { border-left: 2px solid var(--accent); padding-left: 10px; }
+
+.table-empty { padding: 20px 12px; text-align: center; color: var(--text-dim); font-size: 11px; }
+
+/* ── SEMANTIC CELL CLASSES ──────────────────────────────────────────────── */
+td.cell-time  { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+td.cell-token { text-align: right; font-variant-numeric: tabular-nums; }
+td.cell-sess  { max-width: 120px; }
+
+/* ── ROW TYPE BORDER (ADR-006) ──────────────────────────────────────────── */
+tr[data-type="prompt"]    td:first-child { border-left: 2px solid var(--type-prompt-color);    padding-left: 6px; }
+tr[data-type="tool_call"] td:first-child { border-left: 2px solid var(--type-tool_call-color); padding-left: 6px; }
+tr[data-type="system"]    td:first-child { border-left: 2px solid var(--type-system-color);    padding-left: 6px; }
+tr.row-selected td:first-child { border-left: 2px solid var(--accent) !important; padding-left: 6px !important; }
+
+/* ── PROMPT EXPAND ──────────────────────────────────────────────────────── */
+.prompt-expand-row td { padding: 0 !important; border-bottom: 1px solid var(--border); }
+.prompt-expand-box {
+  background: rgba(217,119,87,0.05); border-left: 2px solid var(--accent);
+  padding: 8px 16px; max-height: 400px; overflow-y: auto;
+  font-size: 11px; line-height: 1.7; color: var(--text-dim);
+  white-space: pre-wrap; word-break: break-all; position: relative;
+}
+.expand-copy-btn {
+  float: right; background: none; border: 1px solid var(--border);
+  color: var(--text-dim); padding: 2px 8px; border-radius: 4px;
+  cursor: pointer; font-size: 10px; font-family: inherit; margin-bottom: 4px;
+}
+.expand-copy-btn:hover { color: var(--text); border-color: var(--text-dim); }

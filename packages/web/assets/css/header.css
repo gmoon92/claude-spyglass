@@ -1,0 +1,57 @@
+/* ── HEADER ─────────────────────────────────────────────────────────────── */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px; height: 52px;
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.logo { font-size: 16px; font-weight: 800; color: var(--accent); letter-spacing: -0.5px; }
+.logo span { color: var(--text); }
+
+/* ── LIVE BADGE ─────────────────────────────────────────────────────────── */
+.badge-live {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--accent-dim); border: 1px solid rgba(217,119,87,0.35);
+  color: var(--accent); padding: 3px 10px; border-radius: 20px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.6px;
+}
+.badge-live .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); animation: pulse 1.8s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.8); }
+}
+.badge-live.disconnected {
+  background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.35); color: var(--red);
+}
+.badge-live.disconnected .dot { background: var(--red); animation: none; }
+
+.last-updated { color: var(--text-dim); font-size: 11px; }
+
+/* ── ERROR BANNER ───────────────────────────────────────────────────────── */
+.error-banner {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(239,68,68,0.08);
+  color: var(--red); font-size: 12px; flex-shrink: 0;
+  max-height: 0; overflow: hidden; padding: 0 20px;
+}
+.error-banner.visible { max-height: 60px; padding: 10px 20px; border-bottom: 1px solid rgba(239,68,68,0.25); }
+.retry-btn {
+  margin-left: auto; background: none; border: 1px solid var(--red);
+  color: var(--red); padding: 3px 10px; border-radius: 6px;
+  cursor: pointer; font-family: inherit; font-size: 11px;
+}
+.retry-btn:hover { background: rgba(239,68,68,0.12); }
+
+/* ── DATE FILTER ────────────────────────────────────────────────────────── */
+.date-filter { display: flex; gap: 4px; align-items: center; }
+.filter-btn {
+  background: none; border: 1px solid var(--border);
+  color: var(--text-dim); padding: 3px 10px; border-radius: 5px;
+  cursor: pointer; font-family: inherit; font-size: 10px;
+  font-weight: 600; letter-spacing: 0.3px; transition: all .15s;
+}
+.filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+.filter-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }

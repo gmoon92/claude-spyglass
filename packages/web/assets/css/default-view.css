@@ -1,0 +1,59 @@
+/* ── RIGHT PANEL / CONTENT SWITCHER ─────────────────────────────────────── */
+.right-panel { display: flex; flex-direction: column; overflow: hidden; }
+
+.content-switcher { position: relative; flex: 1; overflow: hidden; min-height: 0; }
+
+.right-view {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; overflow: hidden;
+  opacity: 0; transform: translateX(6px);
+  transition: opacity .18s ease, transform .18s ease;
+  pointer-events: none;
+}
+.right-view.active { opacity: 1; transform: translateX(0); pointer-events: auto; }
+
+/* ── VIEW SECTIONS ──────────────────────────────────────────────────────── */
+.view-section { border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.view-section.fill { flex: 1; display: flex; flex-direction: column; min-height: 0; border-bottom: none; }
+.view-section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 16px; background: var(--surface-alt);
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.chart-wrap { padding: 12px 16px 8px; }
+canvas { display: block; }
+
+.feed-body { flex: 1; overflow-y: auto; min-height: 0; }
+.feed-body::-webkit-scrollbar { width: 3px; }
+.feed-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── CHARTS ─────────────────────────────────────────────────────────────── */
+.charts-inner { display: grid; grid-template-columns: 2fr 1fr; gap: 0; }
+.donut-section { border-left: 1px solid var(--border); }
+.donut-wrap { padding: 12px 16px; display: flex; align-items: center; gap: 16px; }
+.donut-canvas { flex-shrink: 0; }
+.type-legend  { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.legend-item  { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.legend-dot   { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.legend-name  { color: var(--text-dim); flex: 1; }
+.legend-val   { color: var(--text); font-weight: 600; }
+.legend-pct   { color: var(--text-dim); min-width: 28px; text-align: right; }
+
+/* ── TYPE FILTER ────────────────────────────────────────────────────────── */
+.type-filter-btn {
+  background: none; border: 1px solid var(--border); color: var(--text-dim);
+  padding: 2px 8px; border-radius: 4px; cursor: pointer;
+  font-family: inherit; font-size: 10px; transition: color .12s, border-color .12s;
+}
+.type-filter-btn:hover { color: var(--text); border-color: var(--text-dim); }
+.type-filter-btn.active { color: var(--accent); border-color: var(--accent); }
+
+/* ── SCROLL LOCK BANNER ─────────────────────────────────────────────────── */
+.scroll-lock-banner {
+  position: sticky; top: 0; z-index: 10; display: none;
+  padding: 5px 12px; text-align: center; cursor: pointer;
+  background: var(--accent-dim); border-bottom: 1px solid rgba(217,119,87,0.3);
+  color: var(--accent); font-size: 11px; font-weight: 600; user-select: none;
+}
+.scroll-lock-banner.visible { display: block; }
+.scroll-lock-banner:hover { background: rgba(217,119,87,0.2); }

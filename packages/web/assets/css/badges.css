@@ -1,0 +1,62 @@
+/* ── TYPE BADGES ────────────────────────────────────────────────────────── */
+.type-badge {
+  display: inline-block; padding: 1px 6px; border-radius: 4px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.2px;
+  min-width: 20px; text-align: center; cursor: default;
+}
+.type-prompt    { background: var(--type-prompt-bg);    color: var(--type-prompt-color); }
+.type-tool_call { background: var(--type-tool_call-bg); color: var(--type-tool_call-color); }
+.type-system    { background: var(--type-system-bg);    color: var(--type-system-color); }
+.type-unknown   { background: rgba(80,80,80,0.2);       color: var(--text-muted); }
+
+.role-badge { margin-left: 4px; }
+.role-user  { background: rgba(96,165,250,0.18); color: #93c5fd; }
+
+.model-badge { margin-left: 4px; background: rgba(217,119,87,0.15); color: var(--accent); }
+
+/* ── MINI BADGE (ADR-R10-002) ───────────────────────────────────────────── */
+.mini-badge {
+  display: inline-block; padding: 1px 5px; border-radius: 3px;
+  font-size: 9px; font-weight: 600; letter-spacing: 0.3px;
+  vertical-align: middle; margin-left: 2px; white-space: nowrap;
+}
+.badge-cache  { background: rgba(96,165,250,0.18); color: #93c5fd; }
+.badge-error  { background: rgba(239,68,68,0.18);  color: #f87171; }
+
+/* ── TOOL RESPONSE HINT ─────────────────────────────────────────────────── */
+.tool-response-hint {
+  font-size: 10px; color: var(--text-dim); font-style: normal;
+  margin-left: 2px; white-space: nowrap;
+}
+
+/* ── NUMERIC ────────────────────────────────────────────────────────────── */
+.num    { font-variant-numeric: tabular-nums; color: var(--text-dim); }
+.num-hi { color: var(--accent); font-variant-numeric: tabular-nums; }
+
+/* ── TOOL CELL ──────────────────────────────────────────────────────────── */
+.tool-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tool-main { font-size: 12px; color: var(--text); min-width: 0; overflow: hidden; }
+.tool-sub  { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* tool-sub 안의 prompt-preview: block→inline으로 변환해 hint와 동일 줄에 표시 */
+.tool-sub .prompt-preview { display: inline; max-width: none; margin-top: 0; white-space: inherit; }
+
+/* ── ACTION CELL ────────────────────────────────────────────────────────── */
+.cell-action { overflow: hidden; }
+.action-cell-inner { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; overflow: hidden; }
+.action-name { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.action-model    { color: var(--text-dim); font-size: 11px; }
+.action-sub-name { color: var(--text-dim); font-size: 10px; }
+
+/* ── MESSAGE CELL ───────────────────────────────────────────────────────── */
+td.cell-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.cell-msg .prompt-preview { max-width: none; display: inline; cursor: pointer; }
+.cell-msg-empty { color: var(--text-dim); cursor: default; }
+tr[data-type="tool_call"] td.cell-msg .prompt-preview { font-family: monospace; font-size: 11px; }
+
+/* ── PROMPT PREVIEW (inline) ────────────────────────────────────────────── */
+.prompt-preview {
+  font-size: 10px; color: var(--text-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 200px; cursor: pointer; display: block; margin-top: 2px;
+}
+.prompt-preview:hover { color: var(--text-muted); text-decoration: underline dotted; }
