@@ -1444,16 +1444,20 @@
       return `<span class="mini-badge badge-cache" title="캐시 히트">⚡${fmtToken(r.cache_read_tokens)}</span>`;
     }
 
-    // ── 단일 요청 행 렌더러 (ADR-R6-001, ADR-004) ────────────────────
+    // ── 단일 요청 행 렌더러 (ADR-R6-001, ADR-004, ADR-009) ──────────
     function makeRequestRow(r, opts = {}) {
       const fmtTs = opts.fmtTime || fmtTimestamp;
       const sessTd = opts.showSession
         ? `<td class="cell-sess"><span class="sess-id" title="${escHtml(r.session_id||'')}">${r.session_id ? r.session_id.slice(0,12)+'…' : '—'}</span></td>`
         : '';
-      const preview = contextPreview(r);
+      const msgPreview = contextPreview(r);
+      const msgHtml = msgPreview
+        ? msgPreview
+        : `<span class="cell-msg-empty" aria-label="메시지 없음">—</span>`;
       return `<tr data-type="${escHtml(r.type||'')}">
         <td class="cell-time num">${fmtTs(r.timestamp)}</td>
-        <td class="cell-action">${makeActionCell(r)}${preview ? `<span class="action-preview">${preview}</span>` : ''}</td>
+        <td class="cell-action">${makeActionCell(r)}</td>
+        <td class="cell-msg">${msgHtml}</td>
         <td class="cell-token num">${r.tokens_input > 0 ? fmtToken(r.tokens_input) : '—'}</td>
         <td class="cell-token num">${r.tokens_output > 0 ? fmtToken(r.tokens_output) : '—'}</td>
         <td class="cell-token num">${formatDuration(r.duration_ms)}</td>
