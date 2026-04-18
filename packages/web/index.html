@@ -1098,7 +1098,7 @@
       const expandTr = document.createElement('tr');
       expandTr.dataset.expandFor = rid;
       expandTr.className = 'prompt-expand-row';
-      expandTr.innerHTML = `<td colspan="${colCount}"><div class="prompt-expand-box">${escHtml(fullDisplay)}</div></td>`;
+      expandTr.innerHTML = `<td colspan="${colCount}"><div class="prompt-expand-box"><button class="expand-copy-btn" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent).then(()=>{this.textContent='✓복사됨';setTimeout(()=>{this.textContent='복사'},1500)})">복사</button><pre style="margin:0;white-space:pre-wrap;word-break:break-all">${escHtml(fullDisplay)}</pre></div></td>`;
       tr.after(expandTr);
     }
     function escHtml(s) {
