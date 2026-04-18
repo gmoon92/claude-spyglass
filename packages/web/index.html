@@ -1025,11 +1025,15 @@
       }
     }
 
+    function fmtTimestamp(ts) {
+      const rel = fmtRelative(ts);
+      return `<span style="white-space:nowrap">${fmtDate(ts)}</span>${rel ? `<br><span style="font-size:10px;color:var(--text-dim)">${rel}</span>` : ''}`;
+    }
     function appendRequests(list) {
       const body = document.getElementById('requestsBody');
       if (!list.length) return;
       const rows = list.map(r => `<tr>
-        <td class="num" style="white-space:nowrap">${fmtDate(r.timestamp)}</td>
+        <td class="num" style="white-space:nowrap">${fmtTimestamp(r.timestamp)}</td>
         <td>${typeBadge(r.type)}${promptPreview(r)}</td>
         <td>${toolLabel(r)}</td>
         <td class="num">${r.tokens_input > 0 ? fmtToken(r.tokens_input) : '—'}</td>
@@ -1046,7 +1050,7 @@
       while (body.rows.length >= 10) body.deleteRow(body.rows.length - 1);
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td class="num" style="white-space:nowrap">${fmtDate(r.timestamp)}</td>
+        <td class="num" style="white-space:nowrap">${fmtTimestamp(r.timestamp)}</td>
         <td>${typeBadge(r.type)}${promptPreview(r)}</td>
         <td>${toolLabel(r)}</td>
         <td class="num">${r.tokens_input > 0 ? fmtToken(r.tokens_input) : '—'}</td>
@@ -1146,7 +1150,7 @@
       const list = allSessions
         .filter(s => s.project_name === selectedProject)
         .sort((a, b) => (b.started_at || 0) - (a.started_at || 0));
-      hint.textContent = `${list.length}개`;
+      hint.textContent = `${selectedProject} · ${list.length}개`;
       if (!list.length) {
         body.innerHTML = '<tr><td colspan="4" class="empty-hint">세션 없음</td></tr>';
         return;
@@ -1180,7 +1184,11 @@
         renderRightPanel();
       }
       renderBrowserProjects();
-      renderBrowserSessions();
+      // 즉시 스켈레톤 표시
+      const hint = document.getElementById('sessionPaneHint');
+      hint.textContent = `${name} · …`;
+      document.getElementById('browserSessionsBody').innerHTML =
+        '<tr><td colspan="4" class="table-empty"><span class="skeleton"></span></td></tr>'.repeat(3);
       fetchSessionsByProject(name);
     }
 
@@ -1204,7 +1212,9 @@
       detailEl.addEventListener('transitionend', () => { uiState.isTransitioning = false; }, { once: true });
 
       const session = allSessions.find(s => s.id === id);
-      document.getElementById('detailSessionId').textContent = session ? session.id : id;
+      const detailIdEl = document.getElementById('detailSessionId');
+      detailIdEl.textContent = id.slice(0, 8) + '…';
+      detailIdEl.title = id;
       document.getElementById('detailProject').textContent   = session ? session.project_name : '';
       document.getElementById('detailTokens').textContent    = session ? `${fmtToken(session.total_tokens)} tokens` : '';
       document.getElementById('detailEndedAt').textContent   = session?.ended_at
@@ -1440,7 +1450,7 @@
       const body = document.getElementById('requestsBody');
       if (!list.length) { body.innerHTML = `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty">데이터 없음</td></tr>`; return; }
       body.innerHTML = list.map(r => `<tr>
-        <td class="num" style="white-space:nowrap">${fmtDate(r.timestamp)}</td>
+        <td class="num" style="white-space:nowrap">${fmtTimestamp(r.timestamp)}</td>
         <td>${typeBadge(r.type)}${promptPreview(r)}</td>
         <td>${toolLabel(r)}</td>
         <td class="num">${r.tokens_input > 0 ? fmtToken(r.tokens_input) : '—'}</td>
