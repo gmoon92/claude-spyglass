@@ -283,8 +283,8 @@
     .tool-sub  { font-size: 10px; color: var(--text-dim); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     /* ─── ACTION CELL (행위 통합 셀) ─────────────────────────────────── */
-    .cell-action { overflow: hidden; }
-    .action-cell-inner { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; overflow: hidden; }
+    .cell-action { display: flex; align-items: center; gap: 4px; overflow: hidden; }
+    .action-cell-inner { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; max-width: 100%; overflow: hidden; }
     .action-name { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .action-model { color: var(--text-dim); font-size: 11px; }
 
@@ -341,8 +341,8 @@
     td.cell-sess  { max-width:120px; }
 
     /* ─── ACTION PREVIEW (맥락 미리보기 서브텍스트) ─────────────────── */
-    .action-preview { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .action-preview .prompt-preview { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .action-preview { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-dim); font-size: 11px; }
+    .action-preview .prompt-preview { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     /* ─── ROW TYPE BORDER (ADR-006) ─────────────────────────────────── */
     tr[data-type="prompt"]    td:first-child { border-left: 2px solid var(--type-prompt-color); padding-left: 6px; }
@@ -649,9 +649,9 @@
                 <tr><th>시각</th><th>행위</th><th style="text-align:right">입력</th><th title="출력 토큰 (현재 미수집)" style="cursor:help;text-align:right">출력</th><th style="text-align:right">응답시간</th><th>세션</th></tr>
               </thead>
               <tbody id="requestsBody">
-                <tr><td colspan="6" class="table-empty"><span class="skeleton"></span></td></tr>
-                <tr><td colspan="6" class="table-empty"><span class="skeleton"></span></td></tr>
-                <tr><td colspan="6" class="table-empty"><span class="skeleton"></span></td></tr>
+                <tr><td colspan="7" class="table-empty"><span class="skeleton"></span></td></tr>
+                <tr><td colspan="7" class="table-empty"><span class="skeleton"></span></td></tr>
+                <tr><td colspan="7" class="table-empty"><span class="skeleton"></span></td></tr>
               </tbody>
             </table>
             <div style="padding:8px 12px;text-align:center">
@@ -692,7 +692,7 @@
             </colgroup>
             <thead><tr><th>시각</th><th>행위</th><th style="text-align:right">입력</th><th title="출력 토큰 (현재 미수집)" style="cursor:help;text-align:right">출력</th><th style="text-align:right">응답시간</th></tr></thead>
             <tbody id="detailRequestsBody">
-              <tr><td colspan="5" class="table-empty">데이터 없음</td></tr>
+              <tr><td colspan="6" class="table-empty">데이터 없음</td></tr>
             </tbody>
           </table>
         </div>
@@ -1042,8 +1042,8 @@
       return `<span class="tool-main">${icon}${escHtml(base)}</span>`;
     }
 
-    const FLAT_VIEW_COLS = 5;
-    const RECENT_REQ_COLS = 6;
+    const FLAT_VIEW_COLS = 6;
+    const RECENT_REQ_COLS = 7;
 
     const PROMPT_CACHE_MAX = 500;
     const _promptCache = new Map(); // Map: 삽입 순서 보장 (ADR-005)
