@@ -135,6 +135,7 @@ export interface Request {
   source?: string | null;
   cache_creation_tokens?: number;
   cache_read_tokens?: number;
+  preview?: string | null;
   created_at?: number;
 }
 
@@ -145,7 +146,7 @@ export interface Request {
 /**
  * 테이블 스키마 정보 (마이그레이션/검증용)
  */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 /**
  * v2 마이그레이션: tool_detail 컬럼 추가
@@ -202,6 +203,13 @@ ALTER TABLE requests ADD COLUMN source TEXT;
 export const MIGRATION_V5 = `
 ALTER TABLE requests ADD COLUMN cache_creation_tokens INTEGER DEFAULT 0;
 ALTER TABLE requests ADD COLUMN cache_read_tokens INTEGER DEFAULT 0;
+`;
+
+/**
+ * v7 마이그레이션: requests에 preview 컬럼 추가 (프롬프트 내용 미리보기)
+ */
+export const MIGRATION_V7 = `
+ALTER TABLE requests ADD COLUMN preview TEXT;
 `;
 
 /**

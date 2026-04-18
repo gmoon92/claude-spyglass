@@ -29,6 +29,7 @@ export interface CreateRequestParams {
   source?: string | null;
   cache_creation_tokens?: number;
   cache_read_tokens?: number;
+  preview?: string | null;
 }
 
 /** 요청 생성 SQL */
@@ -36,8 +37,8 @@ const SQL_CREATE_REQUEST = `
   INSERT INTO requests (
     id, session_id, timestamp, type, tool_name, tool_detail, turn_id, model,
     tokens_input, tokens_output, tokens_total, duration_ms, payload, source,
-    cache_creation_tokens, cache_read_tokens
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    cache_creation_tokens, cache_read_tokens, preview
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 /**
@@ -63,7 +64,8 @@ export function createRequest(
     params.payload ?? null,
     params.source ?? null,
     params.cache_creation_tokens ?? 0,
-    params.cache_read_tokens ?? 0
+    params.cache_read_tokens ?? 0,
+    params.preview ?? null
   );
   return params.id;
 }
@@ -94,7 +96,8 @@ export function createRequests(
         item.payload ?? null,
         item.source ?? null,
         item.cache_creation_tokens ?? 0,
-        item.cache_read_tokens ?? 0
+        item.cache_read_tokens ?? 0,
+        item.preview ?? null
       );
     }
   });
