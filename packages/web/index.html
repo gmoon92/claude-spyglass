@@ -237,15 +237,15 @@
     }
 
     /* ─── TABLE ─────────────────────────────────────────────────────── */
-    table { width: 100%; border-collapse: collapse; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     th {
-      text-align: left; padding: 7px 12px; font-size: 10px;
+      text-align: left; padding: 5px 8px; font-size: 10px;
       color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px;
       border-bottom: 1px solid var(--border);
       background: rgba(255,255,255,0.02); font-weight: 500;
     }
     td {
-      padding: 6px 12px; font-size: 12px; color: var(--text);
+      padding: 4px 8px; font-size: 12px; color: var(--text);
       border-bottom: 1px solid rgba(39,39,39,0.6); vertical-align: middle;
     }
     tr:last-child td { border-bottom: none; }
@@ -278,9 +278,15 @@
     }
 
     /* ─── TOOL / BARS ───────────────────────────────────────────────── */
-    .tool-cell { display: flex; flex-direction: column; gap: 1px; }
+    .tool-cell { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
     .tool-main { font-size: 12px; color: var(--text); }
-    .tool-sub  { font-size: 10px; color: var(--text-dim); font-style: italic; }
+    .tool-sub  { font-size: 10px; color: var(--text-dim); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* ─── ACTION CELL (행위 통합 셀) ─────────────────────────────────── */
+    .cell-action { overflow: hidden; }
+    .action-cell-inner { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; overflow: hidden; }
+    .action-name { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .action-model { color: var(--text-dim); font-size: 11px; }
 
     .bar-cell  { display: flex; align-items: center; gap: 8px; }
     .bar-track { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; min-width: 40px; }
@@ -330,9 +336,19 @@
     .badge-cache { background:rgba(96,165,250,0.18); color:#93c5fd; }
 
     /* ─── TABLE CELL SEMANTIC CLASSES ───────────────────────────────── */
-    td.cell-time  { white-space:nowrap; }
+    td.cell-time  { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     td.cell-token { text-align:right; font-variant-numeric:tabular-nums; }
     td.cell-sess  { max-width:120px; }
+
+    /* ─── ACTION PREVIEW (맥락 미리보기 서브텍스트) ─────────────────── */
+    .action-preview { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .action-preview .prompt-preview { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* ─── ROW TYPE BORDER (ADR-006) ─────────────────────────────────── */
+    tr[data-type="prompt"]    td:first-child { border-left: 2px solid var(--type-prompt-color); padding-left: 6px; }
+    tr[data-type="tool_call"] td:first-child { border-left: 2px solid var(--type-tool_call-color); padding-left: 6px; }
+    tr[data-type="system"]    td:first-child { border-left: 2px solid var(--type-system-color); padding-left: 6px; }
+    tr.row-selected td:first-child { border-left: 2px solid var(--accent) !important; padding-left: 6px !important; }
 
     /* ─── SESSION ROW ───────────────────────────────────────────────── */
     .sess-row-header {
@@ -385,7 +401,7 @@
     .turn-children { display: none; padding: 4px 0 6px; }
     .turn-item.open .turn-children { display: block; }
     .turn-row {
-      display: grid; grid-template-columns: 28px 1fr 56px 56px 72px 80px;
+      display: grid; grid-template-columns: 28px minmax(140px, 1fr) 56px 56px 72px 80px;
       align-items: center; padding: 5px 16px 5px 32px; font-size: 12px;
     }
     .turn-row:hover { background: rgba(217,119,87,0.04); }
@@ -624,13 +640,18 @@
           <div class="feed-body" id="feedBody">
             <div class="scroll-lock-banner" id="scrollLockBanner"></div>
             <table>
+              <colgroup>
+                <col style="width:130px">
+                <col style="width:auto">
+                <col style="width:58px"><col style="width:58px"><col style="width:72px"><col style="width:96px">
+              </colgroup>
               <thead>
-                <tr><th>시각</th><th>타입</th><th>툴</th><th style="text-align:right">입력</th><th title="출력 토큰 (현재 미수집)" style="cursor:help;text-align:right">출력</th><th style="text-align:right">응답시간</th><th>세션</th></tr>
+                <tr><th>시각</th><th>행위</th><th style="text-align:right">입력</th><th title="출력 토큰 (현재 미수집)" style="cursor:help;text-align:right">출력</th><th style="text-align:right">응답시간</th><th>세션</th></tr>
               </thead>
               <tbody id="requestsBody">
-                <tr><td colspan="7" class="table-empty"><span class="skeleton"></span></td></tr>
-                <tr><td colspan="7" class="table-empty"><span class="skeleton"></span></td></tr>
-                <tr><td colspan="7" class="table-empty"><span class="skeleton"></span></td></tr>
+                <tr><td colspan="6" class="table-empty"><span class="skeleton"></span></td></tr>
+                <tr><td colspan="6" class="table-empty"><span class="skeleton"></span></td></tr>
+                <tr><td colspan="6" class="table-empty"><span class="skeleton"></span></td></tr>
               </tbody>
             </table>
             <div style="padding:8px 12px;text-align:center">
@@ -664,9 +685,14 @@
 
         <div id="detailFlatView" class="detail-content">
           <table>
-            <thead><tr><th>시각</th><th>타입</th><th>툴</th><th style="text-align:right">입력</th><th title="출력 토큰 (현재 미수집)" style="cursor:help;text-align:right">출력</th><th style="text-align:right">응답시간</th></tr></thead>
+            <colgroup>
+              <col style="width:130px">
+              <col style="width:auto">
+              <col style="width:58px"><col style="width:58px"><col style="width:72px">
+            </colgroup>
+            <thead><tr><th>시각</th><th>행위</th><th style="text-align:right">입력</th><th title="출력 토큰 (현재 미수집)" style="cursor:help;text-align:right">출력</th><th style="text-align:right">응답시간</th></tr></thead>
             <tbody id="detailRequestsBody">
-              <tr><td colspan="6" class="table-empty">데이터 없음</td></tr>
+              <tr><td colspan="5" class="table-empty">데이터 없음</td></tr>
             </tbody>
           </table>
         </div>
@@ -940,9 +966,48 @@
       const known = ['prompt', 'tool_call', 'system'];
       const cls  = known.includes(type) ? type : 'unknown';
       const abbr = TYPE_ABBR[type] ?? (type ? type.slice(0, 1).toUpperCase() : '?');
-      let html = `<span class="type-badge type-${cls}" title="${escHtml(type)}">${abbr}</span>`;
+      let html = `<span class="type-badge type-${cls}" title="${escHtml(type)}" aria-label="${escHtml(type)}">${abbr}</span>`;
       if (type === 'prompt') html += `<span class="mini-badge role-badge role-user">user</span>`;
       return html;
+    }
+
+    // ── 행위 통합 셀 (ADR-004) ────────────────────────────────────────
+    // 타입 배지 + 식별자(툴명/모델명)를 하나의 내용물로 반환 (래퍼 태그는 호출부에서)
+    function makeActionCell(r) {
+      const badge = typeBadge(r.type);
+      let extras = '';
+      let identifier = '';
+      if (r.type === 'tool_call' && r.tool_name) {
+        const icon = toolIconHtml(r.tool_name);
+        identifier = `<span class="action-name">${icon}${escHtml(r.tool_name)}</span>`;
+      } else if (r.type === 'prompt') {
+        if (r.model) identifier = `<span class="action-name action-model">${escHtml(r.model)}</span>`;
+        extras = cacheHitBadge(r);
+      }
+      return `<span class="action-cell-inner">${badge}${identifier}${extras}</span>`;
+    }
+
+    // ── 맥락 텍스트 출처 (타입별 우선순위, ADR-005) ──────────────────
+    function getContextText(r) {
+      if (!r) return null;
+      if (r.type === 'tool_call') return r.tool_detail || null;
+      if (r.type === 'prompt')   return r.preview || extractPromptText(r) || null;
+      if (r.type === 'system')   return extractPromptText(r) || null;
+      return null;
+    }
+
+    // ── 맥락 미리보기 (tool_call/system/prompt 공통, ADR-005) ──────────
+    function contextPreview(r, maxLen = 50) {
+      const text = getContextText(r);
+      if (!text) return '';
+      if (_promptCache.size >= PROMPT_CACHE_MAX) {
+        _promptCache.delete(_promptCache.keys().next().value);
+      }
+      _promptCache.set(r.id, text);
+      const flat    = text.replace(/\n/g, ' ');
+      const display = flat.slice(0, maxLen);
+      const tooltip = text.length > 200 ? text.slice(0, 200) + `… (총 ${text.length.toLocaleString('ko-KR')}자)` : text;
+      return `<span class="prompt-preview" data-expand-id="${escHtml(r.id)}" title="${escHtml(tooltip)}">${escHtml(display)}${flat.length > maxLen ? '…' : ''}</span>`;
     }
     function parseToolDetail(raw) {
       if (!raw) return null;
@@ -977,8 +1042,8 @@
       return `<span class="tool-main">${icon}${escHtml(base)}</span>`;
     }
 
-    const FLAT_VIEW_COLS = 6;
-    const RECENT_REQ_COLS = 7;
+    const FLAT_VIEW_COLS = 5;
+    const RECENT_REQ_COLS = 6;
 
     const PROMPT_CACHE_MAX = 500;
     const _promptCache = new Map(); // Map: 삽입 순서 보장 (ADR-005)
@@ -1007,18 +1072,19 @@
         : text;
       return `<span class="prompt-preview" data-expand-id="${escHtml(r.id)}" title="${escHtml(tooltip)}">${escHtml(display)}${flat.length > maxLen ? '…' : ''}</span>`;
     }
-    function togglePromptExpand(rid, tr) {
+    // cols: 호출 컨텍스트(최근 요청 vs 플랫 뷰)에 따라 다른 colspan (ADR-005)
+    function togglePromptExpand(rid, tr, cols) {
       document.querySelectorAll('[data-expand-for]').forEach(el => el.remove());
       if (tr.dataset.expanded === rid) { delete tr.dataset.expanded; return; }
       tr.dataset.expanded = rid;
       const text = _promptCache.get(rid) || '';
-      const display = text;
       const lengthHint = text.length > 500 ? `\n─── 총 ${text.length.toLocaleString('ko-KR')}자 ───` : '';
-      const fullDisplay = display + lengthHint;
+      const fullDisplay = text + lengthHint;
+      const colCount = cols ?? tr.closest('table')?.querySelector('thead tr')?.children?.length ?? FLAT_VIEW_COLS;
       const expandTr = document.createElement('tr');
       expandTr.dataset.expandFor = rid;
       expandTr.className = 'prompt-expand-row';
-      expandTr.innerHTML = `<td colspan="${FLAT_VIEW_COLS}"><div class="prompt-expand-box">${escHtml(fullDisplay)}</div></td>`;
+      expandTr.innerHTML = `<td colspan="${colCount}"><div class="prompt-expand-box">${escHtml(fullDisplay)}</div></td>`;
       tr.after(expandTr);
     }
     function escHtml(s) {
@@ -1364,25 +1430,16 @@
       return `<span class="mini-badge badge-cache" title="캐시 히트">⚡${fmtToken(r.cache_read_tokens)}</span>`;
     }
 
-    // ── 타입 셀: 배지 + 모델 + 캐시 + 미리보기 (ADR-R6-002) ─────────
-    function makeTypeCell(r) {
-      let html = typeBadge(r.type);
-      if (r.model) html += `<span class="mini-badge model-badge">${escHtml(r.model)}</span>`;
-      html += cacheHitBadge(r);
-      html += promptPreview(r);
-      return html;
-    }
-
-    // ── 단일 요청 행 렌더러 (ADR-R6-001) ─────────────────────────────
+    // ── 단일 요청 행 렌더러 (ADR-R6-001, ADR-004) ────────────────────
     function makeRequestRow(r, opts = {}) {
       const fmtTs = opts.fmtTime || fmtTimestamp;
       const sessTd = opts.showSession
         ? `<td class="cell-sess"><span class="sess-id" title="${escHtml(r.session_id||'')}">${r.session_id ? r.session_id.slice(0,12)+'…' : '—'}</span></td>`
         : '';
-      return `<tr>
+      const preview = contextPreview(r);
+      return `<tr data-type="${escHtml(r.type||'')}">
         <td class="cell-time num">${fmtTs(r.timestamp)}</td>
-        <td>${makeTypeCell(r)}</td>
-        <td>${toolLabel(r)}</td>
+        <td class="cell-action">${makeActionCell(r)}${preview ? `<span class="action-preview">${preview}</span>` : ''}</td>
         <td class="cell-token num">${r.tokens_input > 0 ? fmtToken(r.tokens_input) : '—'}</td>
         <td class="cell-token num">${r.tokens_output > 0 ? fmtToken(r.tokens_output) : '—'}</td>
         <td class="cell-token num">${formatDuration(r.duration_ms)}</td>
@@ -1479,31 +1536,38 @@
           ? `<div class="turn-bar"><div class="bar-track"><div class="bar-fill" style="width:${barPct}%"></div></div><span class="bar-label">${barPct}%</span></div>`
           : '';
 
-        const promptRow = turn.prompt ? `
-          <div class="turn-row turn-row-prompt">
+        // TurnItem.prompt / TurnToolCall 에는 type 필드가 없으므로 명시적으로 주입
+        const promptData = turn.prompt ? { ...turn.prompt, type: 'prompt' } : null;
+        const promptPreviewHtml = promptData ? contextPreview(promptData, 80) : '';
+        const promptRow = promptData ? `
+          <div class="turn-row turn-row-prompt" data-type="prompt">
             <span></span>
             <div class="tool-cell">
-              <span class="tool-main">${typeBadge(turn.prompt?.type || 'prompt')}${turn.prompt.model ? `<span class="mini-badge model-badge">${escHtml(turn.prompt.model)}</span>` : ''}${cacheHitBadge(turn.prompt)}</span>
-              ${promptPreview(turn.prompt, 80) ? `<span class="tool-sub">${promptPreview(turn.prompt, 80)}</span>` : ''}
+              <span class="tool-main">${makeActionCell(promptData)}</span>
+              ${promptPreviewHtml ? `<span class="tool-sub">${promptPreviewHtml}</span>` : ''}
             </div>
-            <span class="num cell-token">${turn.prompt.tokens_input > 0 ? fmtToken(turn.prompt.tokens_input) : '—'}</span>
-            <span class="num cell-token">${turn.prompt.tokens_output > 0 ? fmtToken(turn.prompt.tokens_output) : '—'}</span>
-            <span class="num cell-token" style="color:var(--text-dim)">${formatDuration(turn.prompt.duration_ms)}</span>
-            <span class="num cell-time" style="color:var(--text-dim)">${fmtDate(turn.prompt.timestamp)}</span>
+            <span class="num cell-token">${promptData.tokens_input > 0 ? fmtToken(promptData.tokens_input) : '—'}</span>
+            <span class="num cell-token">${promptData.tokens_output > 0 ? fmtToken(promptData.tokens_output) : '—'}</span>
+            <span class="num cell-token" style="color:var(--text-dim)">${formatDuration(promptData.duration_ms)}</span>
+            <span class="num cell-time" style="color:var(--text-dim)">${fmtDate(promptData.timestamp)}</span>
           </div>` : '';
 
-        const toolRows = turn.tool_calls.map(tc => `
-          <div class="turn-row turn-row-tool">
-            <span>${toolIconHtml(tc.tool_name)}</span>
+        const toolRows = turn.tool_calls.map(tc => {
+          const tcData = { ...tc, type: 'tool_call' };
+          const tcPreview = contextPreview(tcData, 60);
+          return `
+          <div class="turn-row turn-row-tool" data-type="tool_call">
+            <span></span>
             <div class="tool-cell">
-              <span class="tool-main">${escHtml(tc.tool_name || '—')}</span>
-              ${tc.tool_detail ? `<span class="tool-sub">${escHtml(tc.tool_detail)}</span>` : ''}
+              <span class="tool-main">${makeActionCell(tcData)}</span>
+              ${tcPreview ? `<span class="tool-sub">${tcPreview}</span>` : ''}
             </div>
             <span class="num cell-token">${tc.tokens_input > 0 ? fmtToken(tc.tokens_input) : '—'}</span>
             <span class="num cell-token">${tc.tokens_output > 0 ? fmtToken(tc.tokens_output) : '—'}</span>
             <span class="num cell-token" style="color:var(--text-dim)">${formatDuration(tc.duration_ms)}</span>
             <span class="num cell-time" style="color:var(--text-dim)">${fmtDate(tc.timestamp)}</span>
-          </div>`).join('');
+          </div>`;
+        }).join('');
 
         return `<div class="turn-item" data-turn-id="${escHtml(turn.turn_id)}">
           <div class="turn-header" data-toggle-turn="${escHtml(turn.turn_id)}">
@@ -1557,18 +1621,21 @@
       document.getElementById('toolCount').textContent = `${list.length}개`;
       const body = document.getElementById('toolsBody');
       const maxC = Math.max(...list.map(t => t.call_count || 0), 1);
-      body.innerHTML = list.map(t => `<tr>
-        <td><div class="tool-cell">
-          <span class="tool-main">${escHtml(t.tool_name || '—')}</span>
-          ${t.tool_detail ? `<span class="tool-sub">${escHtml(t.tool_detail)}</span>` : ''}
-        </div></td>
-        <td class="num num-hi cell-token">${fmt(t.call_count)}</td>
-        <td class="num cell-token">${t.avg_tokens > 0 ? fmtToken(Math.round(t.avg_tokens)) : '—'}</td>
-        <td><div class="bar-cell">
-          <div class="bar-track"><div class="bar-fill" style="width:${Math.round((t.call_count || 0) / maxC * 100)}%;background:var(--green)"></div></div>
-          <span class="bar-label">${Math.round((t.call_count || 0) / maxC * 100)}%</span>
-        </div></td>
-      </tr>`).join('');
+      body.innerHTML = list.map(t => {
+        const detailText = t.tool_detail ? (t.tool_detail.length > 50 ? t.tool_detail.slice(0, 50) + '…' : t.tool_detail) : '';
+        return `<tr>
+          <td><div class="tool-cell">
+            <span class="tool-main">${toolIconHtml(t.tool_name)}${escHtml(t.tool_name || '—')}</span>
+            ${detailText ? `<span class="tool-sub" title="${escHtml(t.tool_detail)}">${escHtml(detailText)}</span>` : ''}
+          </div></td>
+          <td class="num num-hi cell-token">${fmt(t.call_count)}</td>
+          <td class="num cell-token">${t.avg_tokens > 0 ? fmtToken(Math.round(t.avg_tokens)) : '—'}</td>
+          <td><div class="bar-cell">
+            <div class="bar-track"><div class="bar-fill" style="width:${Math.round((t.call_count || 0) / maxC * 100)}%;background:var(--green)"></div></div>
+            <span class="bar-label">${Math.round((t.call_count || 0) / maxC * 100)}%</span>
+          </div></td>
+        </tr>`;
+      }).join('');
     }
 
     function renderRequests(list) {
