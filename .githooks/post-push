@@ -71,11 +71,8 @@ echo "$FULL_PROMPT" | claude -p --dangerously-skip-permissions 2>&1
 
 # ─── 변경된 문서 커밋 & 푸시 ─────────────────────────────────────────────────
 DOC_CHANGED=$(git diff --name-only -- \
-  docs/planning/05-spec.md \
-  docs/planning/04-tasks.md \
-  docs/planning/04-tasks-ai.md \
-  docs/planning/03-adr.md \
-  docs/planning/02-prd.md \
+  docs/spec.md \
+  docs/adr.md \
   README.md 2>/dev/null || echo "")
 
 if [[ -n "$DOC_CHANGED" ]]; then
@@ -83,11 +80,8 @@ if [[ -n "$DOC_CHANGED" ]]; then
   echo "$DOC_CHANGED" | sed 's/^/  - /'
 
   git add \
-    docs/planning/05-spec.md \
-    docs/planning/04-tasks.md \
-    docs/planning/04-tasks-ai.md \
-    docs/planning/03-adr.md \
-    docs/planning/02-prd.md \
+    docs/spec.md \
+    docs/adr.md \
     README.md 2>/dev/null || true
 
   git commit -m "docs: 소스 변경에 따른 문서 현행화 [skip-doc-sync]" 2>/dev/null || true
