@@ -25,6 +25,14 @@
       --left-panel-width: 280px;
       --tool-stats-height: 160px;
       --project-panel-height: 215px;
+
+      /* ── 타입별 색상 SSoT (ADR-003) ── */
+      --type-prompt-color:     #e8a07a;
+      --type-prompt-bg:        rgba(217,119,87,0.18);
+      --type-tool_call-color:  #6ee7a0;
+      --type-tool_call-bg:     rgba(74,222,128,0.15);
+      --type-system-color:     #fbbf24;
+      --type-system-bg:        rgba(245,158,11,0.15);
     }
 
     body {
@@ -255,10 +263,10 @@
       display: inline-block; padding: 1px 6px; border-radius: 4px;
       font-size: 10px; font-weight: 600; letter-spacing: 0.2px;
     }
-    .type-prompt    { background: rgba(217,119,87,0.18); color: #e8a07a; }
-    .type-tool_call { background: rgba(74,222,128,0.15); color: #6ee7a0; }
-    .type-system    { background: rgba(245,158,11,0.15); color: #fbbf24; }
-    .type-unknown   { background: rgba(80,80,80,0.2);    color: var(--text-muted); }
+    .type-prompt    { background: var(--type-prompt-bg);    color: var(--type-prompt-color); }
+    .type-tool_call { background: var(--type-tool_call-bg); color: var(--type-tool_call-color); }
+    .type-system    { background: var(--type-system-bg);    color: var(--type-system-color); }
+    .type-unknown   { background: rgba(80,80,80,0.2);       color: var(--text-muted); }
 
     .role-badge { margin-left:4px; }
     .role-user  { background: rgba(96,165,250,0.18); color: #93c5fd; }
@@ -678,11 +686,19 @@
       card:    '#161616',
       textDim: '#888888',
     };
+    // CSS 변수에서 읽어 Canvas 차트와 색상 SSoT 동기화 (ADR-003)
+    // init() 내 initTypeColors() 호출 전 fallback으로 동작
     const TYPE_COLORS = {
       prompt:    COLORS.accent,
       tool_call: COLORS.green,
       system:    COLORS.orange,
     };
+    function initTypeColors() {
+      const s = getComputedStyle(document.documentElement);
+      TYPE_COLORS.prompt    = s.getPropertyValue('--type-prompt-color').trim()    || COLORS.accent;
+      TYPE_COLORS.tool_call = s.getPropertyValue('--type-tool_call-color').trim() || COLORS.green;
+      TYPE_COLORS.system    = s.getPropertyValue('--type-system-color').trim()    || COLORS.orange;
+    }
 
     // ── 스켈레톤 행 표준화 (ADR-R8-001) ─────────────────────────────
     function makeSkeletonRows(cols, count = 2) {
@@ -1651,6 +1667,7 @@
 
     // ── Init ──────────────────────────────────────────────────────────
     function init() {
+      initTypeColors();
       lastBucketMinute = nowMinute();
       drawTimeline();
       drawDonut();
