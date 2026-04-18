@@ -11,7 +11,8 @@
     "status": "bun run packages/server/src/index.ts status",
     "tui": "bun run packages/tui/src/index.tsx",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepare": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
     "@types/bun": "latest",

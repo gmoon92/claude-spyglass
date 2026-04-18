@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# post-push: git push 완료 후 프로덕트 소스 변경 시 문서를 자동 현행화합니다.
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+SCRIPT_DIR="$REPO_ROOT/.githooks"
+
+# ─── 무한 루프 방지 ───────────────────────────────────────────────────────────
+LAST_MSG=$(git log -1 --format="%s" 2>/dev/null || echo "")
+if [[ "$LAST_MSG" == *"[skip-doc-sync]"* ]]; then
+  echo "[doc-sync] 문서 현행화 커밋 감지 — 스킵"
+  exit 0
+fi
+
+# ─── 프로덕트 소스 변경 여부 확인 ────────────────────────────────────────────
+CHANGED=$(git diff HEAD~1 --name-only 2>/dev/null || git show --name-only --pretty=format: HEAD 2>/dev/null || echo "")
+PRODUCT_CHANGED=false
+
+while IFS= read -r file; do
+  if [[ "$file" == packages/* ]] || [[ "$file" == hooks/* ]]; then
+    PRODUCT_CHANGED=true
+    break
+  fi
+done <<< "$CHANGED"
+
+if [[ "$PRODUCT_CHANGED" == "false" ]]; then
+  echo "[doc-sync] 프로덕트 소스 변경 없음 — 스킵"
+  exit 0
+fi
+
+# ─── claude CLI 확인 ──────────────────────────────────────────────────────────
+if ! command -v claude &>/dev/null; then
+  echo "[doc-sync] ⚠️  claude CLI를 찾을 수 없습니다. PATH를 확인하세요."
+  exit 0
+fi
+
+# ─── 현행화 프롬프트 동적 생성 ────────────────────────────────────────────────
+DIFF_STAT=$(git diff HEAD~1 --stat 2>/dev/null | head -40 || echo "(변경 통계 없음)")
+DIFF_DETAIL=$(git diff HEAD~1 -- 'packages/**' 'hooks/**' 2>/dev/null | head -200 || echo "(diff 없음)")
+RECENT_COMMITS=$(git log -5 --format="%h %as %s" 2>/dev/null || echo "")
+
+PROMPT_BASE=$(cat "$SCRIPT_DIR/doc-sync-prompt.md")
+
+FULL_PROMPT="${PROMPT_BASE}
+
+---
+
+## 현재 변경 정보 (자동 삽입)
+
+### 변경된 파일 통계
+\`\`\`
+${DIFF_STAT}
+\`\`\`
+
+### 최근 5개 커밋
+\`\`\`
+${RECENT_COMMITS}
+\`\`\`
+
+### 소스 diff (packages/, hooks/ 한정, 최대 200줄)
+\`\`\`diff
+${DIFF_DETAIL}
+\`\`\`
+"
+
+# ─── claude headless 실행 ─────────────────────────────────────────────────────
+echo "[doc-sync] 🔄 문서 현행화 시작 (claude -p 실행)..."
+cd "$REPO_ROOT"
+
+echo "$FULL_PROMPT" | claude -p --dangerously-skip-permissions 2>&1
+
+# ─── 변경된 문서 커밋 & 푸시 ─────────────────────────────────────────────────
+DOC_CHANGED=$(git diff --name-only -- \
+  docs/planning/05-spec.md \
+  docs/planning/04-tasks.md \
+  docs/planning/04-tasks-ai.md \
+  docs/planning/03-adr.md \
+  docs/planning/02-prd.md \
+  README.md 2>/dev/null || echo "")
+
+if [[ -n "$DOC_CHANGED" ]]; then
+  echo "[doc-sync] 📝 변경된 문서:"
+  echo "$DOC_CHANGED" | sed 's/^/  - /'
+
+  git add \
+    docs/planning/05-spec.md \
+    docs/planning/04-tasks.md \
+    docs/planning/04-tasks-ai.md \
+    docs/planning/03-adr.md \
+    docs/planning/02-prd.md \
+    README.md 2>/dev/null || true
+
+  git commit -m "docs: 소스 변경에 따른 문서 현행화 [skip-doc-sync]" 2>/dev/null || true
+  git push 2>/dev/null || true
+
+  echo "[doc-sync] ✅ 문서 현행화 완료 및 push"
+else
+  echo "[doc-sync] ✅ 문서 변경 없음 (현행화 불필요)"
+fi
