@@ -152,8 +152,16 @@ export function getSessionsByProject(
   projectName: string,
   limit: number = 100
 ): SessionQueryResult[] {
-  return db.query('SELECT * FROM sessions WHERE project_name = ? ORDER BY started_at DESC LIMIT ?')
-    .all(projectName, limit) as SessionQueryResult[];
+  return db.query(`
+    SELECT s.*,
+      (SELECT r.payload FROM requests r
+       WHERE r.session_id = s.id AND r.type = 'prompt'
+       ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload
+    FROM sessions s
+    WHERE s.project_name = ?
+    ORDER BY s.started_at DESC
+    LIMIT ?
+  `).all(projectName, limit) as SessionQueryResult[];
 }
 
 /**
