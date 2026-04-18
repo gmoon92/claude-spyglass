@@ -584,7 +584,7 @@
           <div class="feed-body">
             <table>
               <thead>
-                <tr><th>시각</th><th>타입</th><th>툴</th><th>IN</th><th>OUT</th><th>응답시간</th><th>세션</th></tr>
+                <tr><th>시각</th><th>타입</th><th>툴</th><th>IN</th><th title="출력 토큰 (현재 미수집)" style="cursor:help">OUT</th><th>응답시간</th><th>세션</th></tr>
               </thead>
               <tbody id="requestsBody">
                 <tr><td colspan="7" class="table-empty"><span class="skeleton"></span></td></tr>
@@ -1029,9 +1029,11 @@
     function fmtTimestamp(ts) {
       if (!ts) return '—';
       const d = new Date(ts < 1e12 ? ts * 1000 : ts);
+      const isToday = d.toDateString() === new Date().toDateString();
       const time = d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+      const prefix = isToday ? '' : d.toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' }) + ' ';
       const rel = fmtRelative(ts);
-      return rel ? `${time} · ${rel}` : time;
+      return rel ? `${prefix}${time} · ${rel}` : `${prefix}${time}`;
     }
     function appendRequests(list) {
       const body = document.getElementById('requestsBody');
@@ -1119,7 +1121,7 @@
       const maxT = Math.max(...allProjects.map(p => p.total_tokens || 0), 1);
       body.innerHTML = allProjects.map(p => {
         const isSelected = selectedProject === p.project_name;
-        const pct = Math.round((p.total_tokens || 0) / maxT * 100);
+        const pct = Math.max(1, Math.round((p.total_tokens || 0) / maxT * 100));
         return `<tr class="clickable${isSelected ? ' row-selected' : ''}" data-project="${escHtml(p.project_name)}">
           <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(p.project_name || '')}">${escHtml(p.project_name || '—')}</td>
           <td class="num" style="text-align:right">${fmt(p.session_count)}</td>
@@ -1227,7 +1229,7 @@
       detailIdEl.textContent = id.slice(0, 8) + '…';
       detailIdEl.title = id;
       document.getElementById('detailProject').textContent   = session ? session.project_name : '';
-      document.getElementById('detailTokens').textContent    = session ? `${fmtToken(session.total_tokens)} 토큰` : '';
+      document.getElementById('detailTokens').textContent    = session ? `입력 ${fmtToken(session.total_tokens)}` : '';
       document.getElementById('detailEndedAt').textContent   = session?.ended_at
         ? `종료: ${new Date(session.ended_at < 1e12 ? session.ended_at * 1000 : session.ended_at).toLocaleTimeString()}`
         : '';
