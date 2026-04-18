@@ -20,6 +20,7 @@ interface RecentRequest {
   tool_name?: string | null;
   tokens_total: number;
   timestamp: number;
+  preview?: string | null;
 }
 
 export interface LiveTabProps {
@@ -166,19 +167,26 @@ export function LiveTab({ data, isLoading, error }: LiveTabProps): JSX.Element {
           <Text color="gray">No requests yet...</Text>
         ) : (
           recentRequests.slice(0, 8).map(req => (
-            <Box key={req.id} height={1}>
-              <Box width="4%">
-                <Text color={RequestTypeFormatter.getColor(req.type)} bold>{RequestTypeFormatter.getLabel(req.type)}</Text>
+            <Box key={req.id} flexDirection="column">
+              <Box height={1}>
+                <Box width="4%">
+                  <Text color={RequestTypeFormatter.getColor(req.type)} bold>{RequestTypeFormatter.getLabel(req.type)}</Text>
+                </Box>
+                <Box width="50%">
+                  <Text color="white" wrap="truncate">{req.tool_name || '—'}</Text>
+                </Box>
+                <Box width="26%" justifyContent="flex-end">
+                  <Text color="yellow">{TokenFormatter.format(req.tokens_total)}</Text>
+                </Box>
+                <Box width="20%" justifyContent="flex-end">
+                  <Text color="gray">{new Date(req.timestamp).toLocaleTimeString()}</Text>
+                </Box>
               </Box>
-              <Box width="50%">
-                <Text color="white" wrap="truncate">{req.tool_name || '—'}</Text>
-              </Box>
-              <Box width="26%" justifyContent="flex-end">
-                <Text color="yellow">{req.tokens_total.toLocaleString()}</Text>
-              </Box>
-              <Box width="20%" justifyContent="flex-end">
-                <Text color="gray">{new Date(req.timestamp).toLocaleTimeString()}</Text>
-              </Box>
+              {req.preview && (
+                <Box height={1} paddingLeft={1}>
+                  <Text color="gray" wrap="truncate">↳ {req.preview}</Text>
+                </Box>
+              )}
             </Box>
           ))
         )}

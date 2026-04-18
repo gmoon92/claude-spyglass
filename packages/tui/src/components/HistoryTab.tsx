@@ -30,6 +30,7 @@ interface SessionRequest {
   tokens_total: number;
   duration_ms: number;
   timestamp: number;
+  preview?: string | null;
 }
 
 export interface HistoryTabProps {
@@ -198,24 +199,25 @@ export function HistoryTab({
       ) : (
         <Box flexDirection="column" marginTop={1}>
           <Box height={1}>
-            <Box width="15%"><Text bold color="gray">Type</Text></Box>
-            <Box width="35%"><Text bold color="gray">Tool</Text></Box>
-            <Box width="30%" justifyContent="flex-end"><Text bold color="gray">Tokens</Text></Box>
-            <Box width="20%" justifyContent="flex-end"><Text bold color="gray">Time</Text></Box>
+            <Box width="10%"><Text bold color="gray">Type</Text></Box>
+            <Box width="30%"><Text bold color="gray">Tool / Description</Text></Box>
+            <Box width="35%"><Text bold color="gray">Preview</Text></Box>
+            <Box width="25%" justifyContent="flex-end"><Text bold color="gray">Tokens · Time</Text></Box>
           </Box>
           {detailRequests.slice(0, 15).map(req => (
             <Box key={req.id} height={1}>
-              <Box width="15%">
+              <Box width="10%">
                 <Text color={RequestTypeFormatter.getColor(req.type)} bold>{RequestTypeFormatter.getLabel(req.type)}</Text>
               </Box>
-              <Box width="35%">
+              <Box width="30%">
                 <Text wrap="truncate" color="white">{req.tool_name || '—'}</Text>
               </Box>
-              <Box width="30%" justifyContent="flex-end">
-                <Text color="yellow">{TokenFormatter.format(req.tokens_total)}</Text>
+              <Box width="35%">
+                <Text wrap="truncate" color="gray">{req.preview || ''}</Text>
               </Box>
-              <Box width="20%" justifyContent="flex-end">
-                <Text color="gray">{TimeFormatter.formatTime(req.timestamp)}</Text>
+              <Box width="25%" justifyContent="flex-end">
+                <Text color="yellow">{TokenFormatter.format(req.tokens_total)}</Text>
+                <Text color="gray"> {TimeFormatter.formatTime(req.timestamp)}</Text>
               </Box>
             </Box>
           ))}
