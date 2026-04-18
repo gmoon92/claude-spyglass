@@ -10,6 +10,7 @@ import {
   getDatabase,
   closeDatabase,
   getDefaultDbPath,
+  deleteOldSessions,
 } from '@spyglass/storage';
 import { collectHandler } from './collect';
 import { apiRouter, invalidateDashboardCache } from './api';
@@ -30,6 +31,29 @@ const DB_PATH = process.env.SPGLASS_DB_PATH || getDefaultDbPath();
 /** 서버 인스턴스 */
 let server: ReturnType<typeof Bun.serve> | null = null;
 let db: SpyglassDatabase | null = null;
+
+// =============================================================================
+// 유지보수
+// =============================================================================
+
+/**
+ * 서버 시작 시 오래된 데이터 정리 및 DB 압축
+ * SPYGLASS_RETENTION_DAYS 환경변수로 보존 기간 설정 (기본: 90일)
+ */
+function runStartupMaintenance(database: SpyglassDatabase): void {
+  const retentionDays = parseInt(process.env.SPYGLASS_RETENTION_DAYS ?? '90', 10);
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+
+  try {
+    const deleted = deleteOldSessions(database.instance, cutoff);
+    database.instance.run('PRAGMA VACUUM');
+    if (deleted > 0) {
+      console.log(`[Maintenance] Deleted ${deleted} sessions older than ${retentionDays} days`);
+    }
+  } catch (err) {
+    console.warn('[Maintenance] Cleanup failed:', err);
+  }
+}
 
 // =============================================================================
 // 라우팅
@@ -171,6 +195,9 @@ export function startServer(options: {
   // 데이터베이스 연결
   db = getDatabase({ dbPath });
   console.log(`[Server] Database connected: ${dbPath}`);
+
+  // 시작 시 유지보수 (오래된 데이터 정리)
+  runStartupMaintenance(db);
 
   // 서버 시작
   server = Bun.serve({
