@@ -60,16 +60,35 @@ json_get() {
     echo "$json" | grep -oE "\"$key\"\s*:\s*(\"[^\"]*\"|[0-9]+|true|false|null)" | cut -d: -f2- | sed 's/^\s*"//;s/"$//'
 }
 
-# 입력/출력 토큰 추출 (API 응답에서)
-parse_tokens_from_response() {
-    local response="$1"
-    local input_tokens=$(echo "$response" | grep -oE '"input_tokens"\s*:\s*[0-9]+' | grep -oE '[0-9]+' || echo "0")
-    local output_tokens=$(echo "$response" | grep -oE '"output_tokens"\s*:\s*[0-9]+' | grep -oE '[0-9]+' || echo "0")
+# transcript JSONL에서 마지막 assistant 메시지의 usage 추출
+# 출력: "input_tokens,output_tokens,cache_creation_tokens,cache_read_tokens"
+# Claude Code 소스 확인 결과: CLAUDE_API_USAGE_* 환경변수는 존재하지 않음.
+# transcript_path의 JSONL 파일이 유일한 신뢰 가능한 토큰 데이터 소스.
+extract_usage_from_transcript() {
+    local transcript_path="$1"
+    if [[ -z "$transcript_path" || ! -f "$transcript_path" ]]; then
+        echo "0,0,0,0"
+        return
+    fi
 
-    if [[ -z "$input_tokens" ]]; then input_tokens="0"; fi
-    if [[ -z "$output_tokens" ]]; then output_tokens="0"; fi
+    local result
+    result=$(grep '"type":"assistant"' "$transcript_path" 2>/dev/null | tail -1 \
+      | python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    u = d.get('message', {}).get('usage', {})
+    print('{},{},{},{}'.format(
+        u.get('input_tokens', 0),
+        u.get('output_tokens', 0),
+        u.get('cache_creation_input_tokens', 0),
+        u.get('cache_read_input_tokens', 0)
+    ))
+except:
+    print('0,0,0,0')
+" 2>/dev/null || echo "0,0,0,0")
 
-    echo "${input_tokens:-0},${output_tokens:-0}"
+    echo "${result:-0,0,0,0}"
 }
 
 # =============================================================================
@@ -333,29 +352,38 @@ main() {
         model="\"$(extract_model "$payload")\""
     fi
 
-    # 토큰 정보 — payload에서 직접 추출
+    # 토큰 정보 — transcript_path JSONL에서 마지막 assistant 메시지 usage 추출
     local tokens_input=0
     local tokens_output=0
     local tokens_total=0
+    local cache_creation_tokens=0
+    local cache_read_tokens=0
 
-    local token_pair
-    token_pair=$(parse_tokens_from_response "$payload")
-    tokens_input=$(echo "$token_pair" | cut -d',' -f1)
-    tokens_output=$(echo "$token_pair" | cut -d',' -f2)
+    local transcript_path
+    transcript_path=$(echo "$payload" | python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    print(d.get('transcript_path', ''))
+except:
+    print('')
+" 2>/dev/null || echo "")
 
-    # 토큰이 0이면 payload 길이 기반 추정 (input만)
+    if [[ -n "$transcript_path" && -f "$transcript_path" ]]; then
+        local usage
+        usage=$(extract_usage_from_transcript "$transcript_path")
+        tokens_input=$(echo "$usage"         | cut -d',' -f1)
+        tokens_output=$(echo "$usage"        | cut -d',' -f2)
+        cache_creation_tokens=$(echo "$usage" | cut -d',' -f3)
+        cache_read_tokens=$(echo "$usage"     | cut -d',' -f4)
+    fi
+
+    # transcript에서 input_tokens를 얻지 못한 경우 payload 길이 기반 추정 (fallback)
     if [[ "$tokens_input" -eq 0 ]]; then
         local payload_length=${#payload}
         tokens_input=$((payload_length / 4))
     fi
     tokens_total=$((tokens_input + tokens_output))
-
-    # 캐시 토큰 — 환경변수에서 캡처 (없으면 0)
-    local cache_creation_tokens="${CLAUDE_API_USAGE_CACHE_CREATION_INPUT_TOKENS:-0}"
-    local cache_read_tokens="${CLAUDE_API_USAGE_CACHE_READ_INPUT_TOKENS:-0}"
-    # 숫자가 아닌 값이 들어올 경우 0으로 보정
-    if ! [[ "$cache_creation_tokens" =~ ^[0-9]+$ ]]; then cache_creation_tokens=0; fi
-    if ! [[ "$cache_read_tokens" =~ ^[0-9]+$ ]]; then cache_read_tokens=0; fi
 
     # duration_ms — PreToolUse가 기록한 타임스탬프 파일로 측정
     local duration_ms=0
