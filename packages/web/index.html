@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Claude Spyglass</title>
   <style>
@@ -22,6 +23,7 @@
       --red:         #ef4444;
       --blue:        #60a5fa;
       --left-panel-width: 280px;
+      --tool-stats-height: 160px;
     }
 
     body {
@@ -119,7 +121,7 @@
     /* ─── LEFT PANEL ────────────────────────────────────────────────── */
     .left-panel {
       display: grid;
-      grid-template-rows: 1fr 1fr auto;
+      grid-template-rows: 1fr 1fr var(--tool-stats-height);
       overflow: hidden; border-right: 1px solid var(--border);
       background: var(--surface);
     }
@@ -147,8 +149,8 @@
     .panel-body::-webkit-scrollbar { width: 3px; }
     .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-    .tool-stats-section { max-height: 160px; }
-    .tool-stats-section .panel-body { max-height: calc(160px - 29px); }
+    .tool-stats-section { max-height: var(--tool-stats-height); }
+    .tool-stats-section .panel-body { max-height: calc(var(--tool-stats-height) - 29px); }
 
     /* ─── RIGHT PANEL ───────────────────────────────────────────────── */
     .right-panel { position: relative; overflow: hidden; }
@@ -532,6 +534,8 @@
           <table>
             <thead><tr><th>툴</th><th>호출</th><th>평균토큰</th><th style="min-width:80px">비율</th></tr></thead>
             <tbody id="toolsBody">
+              <tr><td colspan="4" class="table-empty"><span class="skeleton"></span></td></tr>
+              <tr><td colspan="4" class="table-empty"><span class="skeleton"></span></td></tr>
               <tr><td colspan="4" class="table-empty"><span class="skeleton"></span></td></tr>
             </tbody>
           </table>
@@ -1396,9 +1400,14 @@
     }
 
     function renderTools(list) {
-      const section = document.getElementById('toolStatsSection');
-      if (!list.length) { section.style.display = 'none'; return; }
-      section.style.display = '';
+      if (!list.length) {
+        document.getElementById('toolCount').textContent = '—';
+        document.getElementById('toolsBody').innerHTML =
+          '<tr><td colspan="4" class="table-empty"><span class="skeleton"></span></td></tr>' +
+          '<tr><td colspan="4" class="table-empty"><span class="skeleton"></span></td></tr>' +
+          '<tr><td colspan="4" class="table-empty"><span class="skeleton"></span></td></tr>';
+        return;
+      }
       document.getElementById('toolCount').textContent = `${list.length}개`;
       const body = document.getElementById('toolsBody');
       const maxC = Math.max(...list.map(t => t.call_count || 0), 1);
