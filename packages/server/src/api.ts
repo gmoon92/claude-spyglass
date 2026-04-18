@@ -22,6 +22,10 @@ import {
   getToolStats,
   getTurnsBySession,
   getAvgPromptDurationMs,
+  getRecentEvents,
+  getEventsBySession,
+  getEventsByType,
+  getEventStats,
 } from '@spyglass/storage';
 
 // =============================================================================
@@ -215,6 +219,35 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     };
     _dashboardCache = { key: cacheKey, data, ts: now };
     return jsonResponse({ success: true, data });
+  }
+
+  // GET /api/events
+  if (path === '/api/events' && method === 'GET') {
+    const limit = parseInt(url.searchParams.get('limit') || '100', 10);
+    const events = getRecentEvents(db, limit);
+    return jsonResponse({ success: true, data: events, meta: { total: events.length, limit } });
+  }
+
+  // GET /api/events/by-type/:type
+  if (path.match(/^\/api\/events\/by-type\/[^\/]+$/) && method === 'GET') {
+    const eventType = path.split('/')[4];
+    const limit = parseInt(url.searchParams.get('limit') || '100', 10);
+    const events = getEventsByType(db, eventType, limit);
+    return jsonResponse({ success: true, data: events, meta: { total: events.length, limit } });
+  }
+
+  // GET /api/events/stats
+  if (path === '/api/events/stats' && method === 'GET') {
+    const stats = getEventStats(db);
+    return jsonResponse({ success: true, data: stats });
+  }
+
+  // GET /api/sessions/:id/events
+  if (path.match(/^\/api\/sessions\/[^\/]+\/events$/) && method === 'GET') {
+    const sessionId = path.split('/')[3];
+    const limit = parseInt(url.searchParams.get('limit') || '100', 10);
+    const events = getEventsBySession(db, sessionId, limit);
+    return jsonResponse({ success: true, data: events, meta: { total: events.length, limit } });
   }
 
   // 404

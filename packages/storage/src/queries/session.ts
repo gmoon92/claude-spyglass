@@ -19,9 +19,9 @@ export interface CreateSessionParams {
   total_tokens?: number;
 }
 
-/** 세션 생성 SQL */
+/** 세션 생성 SQL (중복 session_id는 무시 — 재시작/동시 요청 안전) */
 const SQL_CREATE_SESSION = `
-  INSERT INTO sessions (id, project_name, started_at, total_tokens)
+  INSERT OR IGNORE INTO sessions (id, project_name, started_at, total_tokens)
   VALUES (?, ?, ?, ?)
 `;
 

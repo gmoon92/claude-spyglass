@@ -145,7 +145,7 @@ export interface Request {
 /**
  * 테이블 스키마 정보 (마이그레이션/검증용)
  */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 /**
  * v2 마이그레이션: tool_detail 컬럼 추가
@@ -204,9 +204,31 @@ ALTER TABLE requests ADD COLUMN cache_creation_tokens INTEGER DEFAULT 0;
 ALTER TABLE requests ADD COLUMN cache_read_tokens INTEGER DEFAULT 0;
 `;
 
+/**
+ * v6 마이그레이션: claude_events 테이블 추가 (raw hook payload 전체 수집)
+ */
+export const MIGRATION_V6 = `
+CREATE TABLE IF NOT EXISTS claude_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT NOT NULL UNIQUE,
+    event_type TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    transcript_path TEXT,
+    cwd TEXT,
+    agent_id TEXT,
+    agent_type TEXT,
+    timestamp INTEGER NOT NULL,
+    payload TEXT NOT NULL DEFAULT '{}',
+    schema_version INTEGER DEFAULT 1
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_session_time ON claude_events(session_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_events_type_time ON claude_events(event_type, timestamp);
+`;
+
 export const SCHEMA_META = {
   version: SCHEMA_VERSION,
-  tables: ['sessions', 'requests'],
+  tables: ['sessions', 'requests', 'claude_events'],
   indexes: [
     'idx_sessions_started_at',
     'idx_sessions_project',
@@ -214,5 +236,7 @@ export const SCHEMA_META = {
     'idx_requests_type',
     'idx_requests_tokens',
     'idx_requests_session_type',
+    'idx_events_session_time',
+    'idx_events_type_time',
   ],
 } as const;

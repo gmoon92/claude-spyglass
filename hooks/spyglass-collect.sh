@@ -14,12 +14,14 @@ set -euo pipefail
 
 SPYGLASS_HOST="${SPYGLASS_HOST:-localhost}"
 SPYGLASS_PORT="${SPYGLASS_PORT:-9999}"
-SPYGLASS_ENDPOINT="http://${SPYGLASS_HOST}:${SPYGLASS_PORT}/collect"
+SPYGLASS_COLLECT_ENDPOINT="http://${SPYGLASS_HOST}:${SPYGLASS_PORT}/collect"
+SPYGLASS_EVENTS_ENDPOINT="http://${SPYGLASS_HOST}:${SPYGLASS_PORT}/events"
 SPYGLASS_TIMEOUT="${SPYGLASS_TIMEOUT:-1}"
 
 # 로그 설정
 SPYGLASS_LOG_DIR="${HOME}/.spyglass/logs"
 SPYGLASS_LOG_FILE="${SPYGLASS_LOG_DIR}/collect.log"
+SPYGLASS_RAW_LOG="${SPYGLASS_LOG_DIR}/hook-raw.jsonl"
 
 # =============================================================================
 # 유틸리티 함수
@@ -96,8 +98,22 @@ except:
 # =============================================================================
 
 classify_request_type() {
-    local payload="$1"
+    local event_type="$1"
+    local payload="$2"
 
+    # 이벤트 타입 기반 분류 (Claude Code hook_event_name 기준)
+    case "$event_type" in
+        pre_tool|tool|tool_failure)
+            echo "tool_call"
+            return
+            ;;
+        prompt|session_start|session_end|stop|permission_request|permission_denied)
+            echo "prompt"
+            return
+            ;;
+    esac
+
+    # Payload 기반 fallback 분류
     # Claude Code PostToolUse hook: "tool_name" 필드 존재
     if echo "$payload" | grep -qE '"tool_name"\s*:\s*"[^"]+"'; then
         echo "tool_call"
@@ -284,6 +300,7 @@ extract_model() {
 
 send_to_spyglass() {
     local json_data="$1"
+    local endpoint="${2:-$SPYGLASS_COLLECT_ENDPOINT}"
 
     # 비동기로 전송 (백그라운드)
     (
@@ -295,17 +312,25 @@ send_to_spyglass() {
             -H "Content-Type: application/json" \
             -d "$json_data" \
             --max-time "$SPYGLASS_TIMEOUT" \
-            "$SPYGLASS_ENDPOINT" 2>/dev/null || echo -e "\n000")
+            "$endpoint" 2>/dev/null || echo -e "\n000")
 
         http_code=$(echo "$response" | tail -1)
 
         if [[ "$http_code" != "200" && "$http_code" != "201" && "$http_code" != "000" ]]; then
-            error "Failed to send data: HTTP $http_code"
+            error "Failed to send data: HTTP $http_code (endpoint=$endpoint)"
         fi
     ) &
 
-    # 백그라운드 프로세스 ID 저장 (필요시 wait으로 대기)
     echo $!
+}
+
+# raw hook payload를 /events로 전송 (기존 가공 파이프라인 미사용 이벤트용)
+send_raw_event() {
+    local payload="$1"
+    ensure_log_dir
+    # 로그 파일에 기록 (데이터 구조 파악 및 fallback용)
+    echo "$payload" >> "$SPYGLASS_RAW_LOG"
+    send_to_spyglass "$payload" "$SPYGLASS_EVENTS_ENDPOINT"
 }
 
 # =============================================================================
@@ -332,24 +357,18 @@ main() {
 
     # 타입 분류
     local request_type
-    request_type=$(classify_request_type "$payload")
+    request_type=$(classify_request_type "$event_type" "$payload")
 
     # 툴/모델 정보 추출
-    local tool_name="null"
-    local tool_detail="null"
-    local model="null"
     local raw_tool_name=""
     local raw_tool_detail=""
+    local raw_model=""
 
     if [[ "$request_type" == "tool_call" ]]; then
         raw_tool_name=$(extract_tool_name "$payload")
-        tool_name="\"$raw_tool_name\""
         raw_tool_detail=$(extract_tool_detail "$raw_tool_name" "$payload")
-        if [[ -n "$raw_tool_detail" ]]; then
-            tool_detail="\"$raw_tool_detail\""
-        fi
     elif [[ "$request_type" == "prompt" ]]; then
-        model="\"$(extract_model "$payload")\""
+        raw_model=$(extract_model "$payload")
     fi
 
     # 토큰 정보 — transcript_path JSONL에서 마지막 assistant 메시지 usage 추출
@@ -385,47 +404,85 @@ except:
     fi
     tokens_total=$((tokens_input + tokens_output))
 
-    # duration_ms — PreToolUse가 기록한 타임스탬프 파일로 측정
+    # duration_ms — 이벤트 타입별 타이밍 측정
     local duration_ms=0
     local timing_dir="${HOME}/.spyglass/timing"
     local timing_file="${timing_dir}/${session_id}"
 
-    if [[ "$event_type" == "prompt" ]]; then
-        # PreToolUse: 시작 타임스탬프 저장
-        mkdir -p "$timing_dir"
-        echo "$timestamp" > "$timing_file"
-    elif [[ "$event_type" == "tool" && -f "$timing_file" ]]; then
-        # PostToolUse: 경과 시간 계산 후 파일 삭제
-        local start_ts
-        start_ts=$(cat "$timing_file")
-        duration_ms=$((timestamp - start_ts))
-        rm -f "$timing_file"
-    fi
+    case "$event_type" in
+        pre_tool)
+            # PreToolUse: 시작 타임스탬프 저장
+            mkdir -p "$timing_dir"
+            echo "$timestamp" > "$timing_file"
+            ;;
+        tool|tool_failure)
+            # PostToolUse/PostToolUseFailure: 경과 시간 계산 후 파일 삭제
+            if [[ -f "$timing_file" ]]; then
+                local start_ts
+                start_ts=$(cat "$timing_file")
+                duration_ms=$((timestamp - start_ts))
+                rm -f "$timing_file"
+            fi
+            ;;
+        session_start)
+            # 세션 시작: 세션 타이밍 파일 생성
+            mkdir -p "$timing_dir"
+            echo "$timestamp" > "${timing_file}.session"
+            ;;
+        session_end)
+            # 세션 종료: 세션 지속 시간 계산
+            if [[ -f "${timing_file}.session" ]]; then
+                local session_start_ts
+                session_start_ts=$(cat "${timing_file}.session")
+                duration_ms=$((timestamp - session_start_ts))
+                rm -f "${timing_file}.session"
+            fi
+            ;;
+    esac
 
-    # JSON 데이터 구성
+    # JSON 데이터 구성 (jq --arg 로 특수문자 안전 이스케이프)
     local json_data
-    json_data=$(cat <<EOF
-{
-  "id": "$request_id",
-  "session_id": "$session_id",
-  "project_name": "$project_name",
-  "timestamp": $timestamp,
-  "event_type": "$event_type",
-  "request_type": "$request_type",
-  "tool_name": $tool_name,
-  "tool_detail": $tool_detail,
-  "model": $model,
-  "tokens_input": $tokens_input,
-  "tokens_output": $tokens_output,
-  "tokens_total": $tokens_total,
-  "cache_creation_tokens": $cache_creation_tokens,
-  "cache_read_tokens": $cache_read_tokens,
-  "duration_ms": $duration_ms,
-  "payload": $(echo "$payload" | jq -R -s '.' 2>/dev/null || echo '""'),
-  "source": "claude-code-hook"
-}
-EOF
-)
+    json_data=$(jq -n \
+        --arg     id             "$request_id" \
+        --arg     session_id     "$session_id" \
+        --arg     project_name   "$project_name" \
+        --argjson timestamp      "$timestamp" \
+        --arg     event_type     "$event_type" \
+        --arg     request_type   "$request_type" \
+        --arg     tool_name      "$raw_tool_name" \
+        --arg     tool_detail    "$raw_tool_detail" \
+        --arg     model          "$raw_model" \
+        --argjson tokens_input   "$tokens_input" \
+        --argjson tokens_output  "$tokens_output" \
+        --argjson tokens_total   "$tokens_total" \
+        --argjson cache_creation "$cache_creation_tokens" \
+        --argjson cache_read     "$cache_read_tokens" \
+        --argjson duration_ms    "$duration_ms" \
+        --arg     payload_str    "$payload" \
+        '{
+            id:                    $id,
+            session_id:            $session_id,
+            project_name:          $project_name,
+            timestamp:             $timestamp,
+            event_type:            $event_type,
+            request_type:          $request_type,
+            tool_name:             (if $tool_name   != "" then $tool_name   else null end),
+            tool_detail:           (if $tool_detail != "" then $tool_detail else null end),
+            model:                 (if $model       != "" then $model       else null end),
+            tokens_input:          $tokens_input,
+            tokens_output:         $tokens_output,
+            tokens_total:          $tokens_total,
+            cache_creation_tokens: $cache_creation,
+            cache_read_tokens:     $cache_read,
+            duration_ms:           $duration_ms,
+            payload:               $payload_str,
+            source:                "claude-code-hook"
+        }' 2>/dev/null)
+
+    if [[ -z "$json_data" ]]; then
+        error "JSON 빌드 실패: event=$event_type session=$session_id"
+        exit 0
+    fi
 
     # 로그 기록 (툴 상세 포함)
     local log_tool_detail=""
@@ -493,7 +550,35 @@ fi
 # -p /dev/stdin 은 macOS에서 신뢰할 수 없으므로 TTY 체크 사용
 if [[ ! -t 0 ]]; then
     payload=$(cat)
-    main "$@" "$payload"
+
+    # hook_event_name 필드로 Claude Code 와일드카드 훅 여부 판별
+    hook_event=$(python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    print(d.get('hook_event_name', ''))
+except:
+    print('')
+" 2>/dev/null <<< "$payload" || echo "")
+
+    case "$hook_event" in
+      "UserPromptSubmit")
+        # 기존 가공 파이프라인: 프롬프트 처리
+        main "prompt" "$payload"
+        ;;
+      "PostToolUse")
+        # 기존 가공 파이프라인: 도구 결과 처리
+        main "tool" "$payload"
+        ;;
+      "")
+        # hook_event_name 없음: 레거시 인수 방식 (기존 개별 이벤트 훅)
+        main "$@" "$payload"
+        ;;
+      *)
+        # 그 외 모든 이벤트: raw payload를 /events로 전송
+        send_raw_event "$payload"
+        ;;
+    esac
 else
     main "$@"
 fi

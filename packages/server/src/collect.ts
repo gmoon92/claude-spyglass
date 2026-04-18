@@ -61,24 +61,19 @@ const activeSessions = new Set<string>();
 
 /**
  * 세션 확인 및 생성
+ * INSERT OR IGNORE 사용으로 동시 요청/서버 재시작에도 FK 오류 없음
  */
 function ensureSession(db: Database, payload: CollectPayload): boolean {
   const { session_id, project_name, timestamp } = payload;
 
-  // 이미 활성 세션인지 확인
+  // 인메모리 캐시 히트: DB에도 실제 존재하는지 검증
   if (activeSessions.has(session_id)) {
-    return true;
+    if (getSessionById(db, session_id)) return true;
+    activeSessions.delete(session_id); // 스테일 캐시 제거
   }
 
-  // DB에서 세션 확인
-  const existing = getSessionById(db, session_id);
-  if (existing) {
-    activeSessions.add(session_id);
-    return true;
-  }
-
-  // 새 세션 생성
   try {
+    // INSERT OR IGNORE: 이미 존재하면 무시, 없으면 생성 — 항상 세션이 DB에 존재
     createSession(db, {
       id: session_id,
       project_name,
@@ -88,7 +83,7 @@ function ensureSession(db: Database, payload: CollectPayload): boolean {
     activeSessions.add(session_id);
     return true;
   } catch (error) {
-    console.error('[Collect] Failed to create session:', error);
+    console.error('[Collect] Failed to ensure session:', error);
     return false;
   }
 }

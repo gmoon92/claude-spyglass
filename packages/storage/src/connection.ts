@@ -6,7 +6,7 @@
  */
 
 import { Database } from 'bun:sqlite';
-import { INIT_SCHEMA, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5, WAL_MODE_PRAGMAS } from './schema';
+import { INIT_SCHEMA, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5, MIGRATION_V6, WAL_MODE_PRAGMAS } from './schema';
 
 // =============================================================================
 // 설정 상수
@@ -159,6 +159,12 @@ export class SpyglassDatabase {
     const hasCacheTokens = cols.some(c => c.name === 'cache_creation_tokens');
     if (!hasCacheTokens) {
       this.execMulti(MIGRATION_V5);
+    }
+
+    const tables = this.db.query("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>;
+    const hasEventsTable = tables.some(t => t.name === 'claude_events');
+    if (!hasEventsTable) {
+      this.execMulti(MIGRATION_V6);
     }
   }
 

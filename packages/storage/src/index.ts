@@ -124,3 +124,16 @@ export {
   type TurnItem,
   type TurnToolCall,
 } from './queries/request';
+
+// =============================================================================
+// ClaudeEvent CRUD
+// =============================================================================
+
+export {
+  createEvent,
+  getEventsBySession,
+  getEventsByType,
+  getRecentEvents,
+  getEventStats,
+  type ClaudeEvent,
+} from './queries/event';

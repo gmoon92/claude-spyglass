@@ -13,6 +13,7 @@ import {
   deleteOldSessions,
 } from '@spyglass/storage';
 import { collectHandler } from './collect';
+import { eventsCollectHandler } from './events';
 import { apiRouter, invalidateDashboardCache } from './api';
 import { sseRouter, broadcastUpdate } from './sse';
 
@@ -90,8 +91,11 @@ async function handleRequest(req: Request): Promise<Response> {
       return result;
     }
 
-    // /events SSE 엔드포인트
+    // /events: POST = raw hook 수집, GET = SSE 스트림
     if (path === '/events') {
+      if (req.method === 'POST') {
+        return eventsCollectHandler(req, db!.instance);
+      }
       return sseRouter(req);
     }
 
