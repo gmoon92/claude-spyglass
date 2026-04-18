@@ -165,7 +165,7 @@ export function sseRouter(_req: Request): Response {
       activeController = controller;
       addConnection(controller);
 
-      // 주기적 핑 (30초)
+      // 주기적 핑 (8초) — Bun idleTimeout 전에 연결 유지
       pingInterval = setInterval(() => {
         try {
           sendEvent(controller, {
@@ -176,7 +176,7 @@ export function sseRouter(_req: Request): Response {
         } catch {
           cleanup();
         }
-      }, 30000);
+      }, 8000);
 
       // 스트림 종료 감지
       const originalClose = controller.close.bind(controller);

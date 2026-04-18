@@ -208,6 +208,7 @@ export function startServer(options: {
     port,
     hostname: host,
     fetch: handleRequest,
+    idleTimeout: 0,  // SSE 연결 유지: Bun 기본값 10초 비활성화
   });
 
   console.log(`[Server] Running on http://${host}:${port}`);
