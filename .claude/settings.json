@@ -5,7 +5,26 @@
     "CLAUDE_TMP_DIR": ".claude/.tmp",
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "ENABLE_LSP_TOOL": "1",
-    "MCP_TIMEOUT": "5000"
+    "MCP_TIMEOUT": "5000",
+    "SPYGLASS_DIR": "/Users/moongyeom/IdeaProjects/claude-spyglass"
+  },
+  "hooks": {
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "async": true, "timeout": 1}]}],
+    "PostToolUse": [{"hooks": [{"type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "async": true, "timeout": 1}]}],
+    "SessionStart": [{"hooks": [{"type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "async": true, "timeout": 1}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "async": true, "timeout": 1}]}],
+    "SessionEnd": [{"hooks": [{"type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "async": true, "timeout": 1}]}]
+  },
+  "extraKnownMarketplaces": {
+    "spyglass-local": {
+      "source": {
+        "source": "directory",
+        "path": "."
+      }
+    }
+  },
+  "enabledPlugins": {
+    "typescript-lsp@spyglass-local": true
   },
   "permissions": {
     "defaultMode": "acceptEdits",
