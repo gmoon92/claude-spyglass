@@ -45,7 +45,7 @@ interface ApiResponse<T = unknown> {
 // =============================================================================
 
 const DASHBOARD_CACHE_TTL = 30_000;
-let _dashboardCache: { data: unknown; ts: number } | null = null;
+let _dashboardCache: { key: string; data: unknown; ts: number } | null = null;
 
 export function invalidateDashboardCache(): void {
   _dashboardCache = null;
@@ -114,7 +114,9 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
   if (path.match(/^\/api\/projects\/[^\/]+\/sessions$/) && method === 'GET') {
     const projectName = path.split('/')[3];
     const limit = parseInt(url.searchParams.get('limit') || '100', 10);
-    const sessions = getSessionsByProject(db, projectName, limit);
+    const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
+    const toTs = url.searchParams.get('to') ? parseInt(url.searchParams.get('to')!, 10) : undefined;
+    const sessions = getSessionsByProject(db, projectName, limit, fromTs, toTs);
     return jsonResponse({ success: true, data: sessions, meta: { total: sessions.length, limit } });
   }
 
@@ -179,15 +181,20 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
   // GET /api/dashboard
   if (path === '/api/dashboard' && method === 'GET') {
     const now = Date.now();
-    if (_dashboardCache && now - _dashboardCache.ts < DASHBOARD_CACHE_TTL) {
+    const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
+    const toTs = url.searchParams.get('to') ? parseInt(url.searchParams.get('to')!, 10) : undefined;
+
+    // 캐시 키에 날짜 범위 포함
+    const cacheKey = `${fromTs || 'all'}-${toTs || 'all'}`;
+    if (_dashboardCache && _dashboardCache.key === cacheKey && now - _dashboardCache.ts < DASHBOARD_CACHE_TTL) {
       return jsonResponse({ success: true, data: _dashboardCache.data });
     }
 
-    const sessionStats = getSessionStats(db);
-    const requestStats = getRequestStats(db);
-    const projectStats = getProjectStats(db, 5);
-    const toolStats = getToolStats(db, 5);
-    const typeStats = getRequestStatsByType(db);
+    const sessionStats = getSessionStats(db, fromTs, toTs);
+    const requestStats = getRequestStats(db, fromTs, toTs);
+    const projectStats = getProjectStats(db, 5, fromTs, toTs);
+    const toolStats = getToolStats(db, 5, fromTs, toTs);
+    const typeStats = getRequestStatsByType(db, fromTs, toTs);
     const activeSessions = getActiveSessions(db);
     const avgDurationMs = Math.round(getAvgPromptDurationMs(db));
 
@@ -206,7 +213,7 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
       types: typeStats,
       active: activeSessions,
     };
-    _dashboardCache = { data, ts: now };
+    _dashboardCache = { key: cacheKey, data, ts: now };
     return jsonResponse({ success: true, data });
   }
 
