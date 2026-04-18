@@ -289,6 +289,7 @@
       max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       display: inline-block;
     }
+    .sess-row-cell { min-height: 36px; }
 
     .num    { font-variant-numeric: tabular-nums; color: var(--text-dim); }
     .num-hi { color: var(--accent); font-variant-numeric: tabular-nums; }
@@ -523,7 +524,7 @@
       <!-- 툴 통계 -->
       <div class="panel-section tool-stats-section" id="toolStatsSection">
         <div class="panel-header">
-          <span class="panel-label">툴 통계</span>
+          <span class="panel-label">툴 통계 <span style="font-weight:400;opacity:0.6">(전체)</span></span>
           <span class="panel-hint" id="toolCount">—</span>
         </div>
         <div class="panel-body">
@@ -1026,8 +1027,11 @@
     }
 
     function fmtTimestamp(ts) {
+      if (!ts) return '—';
+      const d = new Date(ts < 1e12 ? ts * 1000 : ts);
+      const time = d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
       const rel = fmtRelative(ts);
-      return `<span style="white-space:nowrap">${fmtDate(ts)}</span>${rel ? `<br><span style="font-size:10px;color:var(--text-dim)">${rel}</span>` : ''}`;
+      return rel ? `${time} · ${rel}` : time;
     }
     function appendRequests(list) {
       const body = document.getElementById('requestsBody');
@@ -1131,11 +1135,18 @@
 
     function extractFirstPrompt(payload) {
       if (!payload) return '';
+      function clean(text) {
+        return text.replace(/<[^>]+>/g, '').replace(/[\n\r]+/g, ' ').trim().slice(0, 60);
+      }
       try {
         const p = typeof payload === 'string' ? JSON.parse(payload) : payload;
         const text = p?.prompt ?? p?.content ?? (typeof p === 'string' ? p : '');
-        return text ? text.slice(0, 40).replace(/\n/g, ' ') : '';
-      } catch { return ''; }
+        return text ? clean(text) : '';
+      } catch {
+        const m = typeof payload === 'string' && payload.match(/"prompt"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+        if (m) return clean(m[1].replace(/\\n/g, ' '));
+        return '';
+      }
     }
 
     // ── Browser: 세션 렌더 ──────────────────────────────────────────
@@ -1162,7 +1173,7 @@
         const preview = extractFirstPrompt(s.first_prompt_payload);
         const rel = fmtRelative(s.started_at);
         return `<tr class="clickable${isSelected ? ' row-selected' : ''}" data-session-id="${escHtml(s.id)}">
-          <td colspan="4" style="padding:5px 10px">
+          <td colspan="4" class="sess-row-cell" style="padding:5px 10px">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
               <span class="sess-id" title="${escHtml(s.id)}" style="font-size:11px;color:var(--accent)">${escHtml(shortId)}</span>
               <span style="font-size:10px;color:var(--text-dim);white-space:nowrap">${rel}</span>
