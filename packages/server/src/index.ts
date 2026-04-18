@@ -136,7 +136,26 @@ async function handleRequest(req: Request): Promise<Response> {
       );
     }
 
-    // 정적 파일 서빙 (favicon 등 packages/web/ 하위 파일)
+    // 정적 자산 서빙 (/assets/ prefix → packages/web/assets/)
+    if (path.startsWith('/assets/')) {
+      const safePath = path.split('?')[0].replace(/\.\./g, '');
+      const staticFile = new URL(`../../web${safePath}`, import.meta.url);
+      const file = Bun.file(staticFile);
+      if (await file.exists()) {
+        const ext = safePath.split('.').pop() ?? '';
+        const mimeMap: Record<string, string> = {
+          js:  'application/javascript',
+          css: 'text/css',
+          svg: 'image/svg+xml',
+          ico: 'image/x-icon',
+        };
+        return new Response(file, {
+          headers: { 'Content-Type': mimeMap[ext] ?? 'application/octet-stream' },
+        });
+      }
+    }
+
+    // favicon 서빙 (하위 호환)
     if (/^\/(favicon\.svg|favicon\.ico)/.test(path)) {
       const fileName = path.split('?')[0].slice(1);
       const staticFile = new URL(`../../web/${fileName}`, import.meta.url);
