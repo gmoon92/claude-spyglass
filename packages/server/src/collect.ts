@@ -39,6 +39,7 @@ export interface CollectPayload {
   source: string;
   cache_creation_tokens?: number;
   cache_read_tokens?: number;
+  preview?: string;
 }
 
 /**
@@ -128,6 +129,24 @@ function getLastTurnId(db: Database, sessionId: string): string | null {
 }
 
 /**
+ * prompt 타입 요청의 사용자 입력 텍스트를 100자로 축약하여 반환
+ */
+function extractPreview(payload: CollectPayload): string | null {
+  if (payload.request_type !== 'prompt') return null;
+  // hook payload JSON에서 prompt 필드 추출
+  if (payload.payload) {
+    try {
+      const raw = JSON.parse(payload.payload) as Record<string, unknown>;
+      const text = typeof raw.prompt === 'string' ? raw.prompt : null;
+      if (text) return text.slice(0, 100);
+    } catch {
+      // JSON 파싱 실패 시 무시
+    }
+  }
+  return null;
+}
+
+/**
  * 요청 데이터 저장
  */
 function saveRequest(db: Database, payload: CollectPayload): boolean {
@@ -157,6 +176,7 @@ function saveRequest(db: Database, payload: CollectPayload): boolean {
       source: payload.source || null,
       cache_creation_tokens: payload.cache_creation_tokens ?? 0,
       cache_read_tokens: payload.cache_read_tokens ?? 0,
+      preview: extractPreview(payload) ?? undefined,
     });
     return true;
   } catch (error) {
