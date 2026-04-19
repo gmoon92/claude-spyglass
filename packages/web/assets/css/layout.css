@@ -20,6 +20,19 @@ body {
   min-height: 0;
 }
 
+/* ── LEFT PANEL HIDDEN ──────────────────────────────────────────────────── */
+.main-layout.left-panel-hidden {
+  grid-template-columns: 1fr;
+}
+
+.main-layout.left-panel-hidden .left-panel {
+  display: none;
+}
+
+.main-layout.left-panel-hidden .panel-resize-handle {
+  display: none;
+}
+
 /* ── FOOTER ─────────────────────────────────────────────────────────────── */
 .footer {
   text-align: center; color: var(--text-dim); font-size: 10px;
