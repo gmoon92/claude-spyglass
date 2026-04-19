@@ -130,21 +130,7 @@ spyglass 포지셔닝:
 "외부 SaaS를 사용할 수 없는 엔터프라이즈 환경을 위한"
 ```
 
-### 2. ccflare와의 통합
-
-```typescript
-// ccflare 연동 API
-// spyglass 데이터를 ccflare로 전송
-export async function syncToCcflare(data: SpyglassData) {
-  await fetch('https://api.ccflare.dev/v1/ingest', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${CCFLARE_API_KEY}` },
-    body: JSON.stringify(data)
-  });
-}
-```
-
-### 3. 고유 기능 개발
+### 2. 고유 기능 개발
 
 ```typescript
 // Claude Code가 제공하지 않는 기능
@@ -153,6 +139,8 @@ export async function syncToCcflare(data: SpyglassData) {
 // 3. Tool 체인 최적화 제안
 // 4. CLAUDE.md 효과 분석
 ```
+
+> ccflare와의 연동/통합은 제품 방향성에서 제외되었습니다 (2026-04-20 결정). 근거: 로컬 중심 포지셔닝 유지, 외부 SaaS 의존 회피.
 
 ---
 

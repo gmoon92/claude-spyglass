@@ -722,7 +722,6 @@ bun test packages/server
 - [ ] 동적 알림 임계값 (사용자 설정)
 - [ ] 데이터 날짜 필터
 - [ ] CSV/JSON 내보내기
-- [ ] ccflare 통합
 - [x] 웹 대시보드 (기본) — Canvas 기반 실시간 차트, SSE 연동 (2026-04-17)
 
 ### Phase 3 (예정)
