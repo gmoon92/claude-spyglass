@@ -9,13 +9,13 @@ th {
 }
 td {
   padding: 4px 8px; font-size: 12px; color: var(--text);
-  border-bottom: 1px solid rgba(39,39,39,0.6); vertical-align: middle;
+  border-bottom: 1px solid var(--border); vertical-align: middle;
 }
 tr:last-child td { border-bottom: none; }
-tr:hover td { background: rgba(217,119,87,0.04); }
+tr:hover td { background: var(--accent-bg-light); }
 
 tr.clickable { cursor: pointer; }
-tr.clickable:hover td { background: rgba(217,119,87,0.07); }
+tr.clickable:hover td { background: var(--accent-bg-medium); }
 tr.row-selected td { background: var(--accent-dim) !important; }
 tr.row-selected td:first-child { border-left: 2px solid var(--accent); padding-left: 10px; }
 
@@ -25,7 +25,7 @@ tr.row-selected td:first-child { border-left: 2px solid var(--accent); padding-l
 td.cell-time   { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 td.cell-token  { text-align: right; font-variant-numeric: tabular-nums; }
 td.cell-sess   { max-width: 120px; }
-td.cell-target { overflow: hidden; }
+td.cell-target { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 td.cell-model  { overflow: hidden; font-size: 11px; color: var(--text-dim); white-space: nowrap; text-overflow: ellipsis; }
 .target-cell-inner { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; overflow: hidden; }
 .model-name    { font-size: 11px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -42,14 +42,14 @@ tr.row-selected td:first-child { border-left: 2px solid var(--accent) !important
 /* ── PROMPT EXPAND ──────────────────────────────────────────────────────── */
 .prompt-expand-row td { padding: 0 !important; border-bottom: 1px solid var(--border); }
 .prompt-expand-box {
-  background: rgba(217,119,87,0.05); border-left: 2px solid var(--accent);
+  background: var(--accent-bg-light); border-left: 2px solid var(--accent);
   padding: 8px 16px; max-height: 400px; overflow-y: auto;
   font-size: 11px; line-height: 1.7; color: var(--text-dim);
   white-space: pre-wrap; word-break: break-all; position: relative;
 }
 .expand-copy-btn {
   float: right; background: none; border: 1px solid var(--border);
-  color: var(--text-dim); padding: 2px 8px; border-radius: 4px;
+  color: var(--text-dim); padding: 2px 8px; border-radius: var(--radius-sm);
   cursor: pointer; font-size: 10px; font-family: inherit; margin-bottom: 4px;
 }
 .expand-copy-btn:hover { color: var(--text); border-color: var(--text-dim); }

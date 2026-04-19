@@ -16,9 +16,12 @@
   --orange:      #f59e0b;
   --red:         #ef4444;
   --blue:        #60a5fa;
-  --left-panel-width:      280px;
-  --tool-stats-height:     160px;
-  --project-panel-height:  215px;
+  --left-panel-width:          280px;
+  --tool-stats-height:         160px;
+  --project-panel-height:      215px;
+  --panel-resize-min:          180px;
+  --panel-resize-max:          480px;
+  --panel-resize-handle-width: 4px;
 
   /* ── 타입별 색상 SSoT (ADR-003) — 임의 수정 금지 ── */
   --type-prompt-color:     #e8a07a;
@@ -27,4 +30,16 @@
   --type-tool_call-bg:     rgba(74,222,128,0.15);
   --type-system-color:     #fbbf24;
   --type-system-bg:        rgba(245,158,11,0.15);
+
+  /* ── Accent 배경 계층 (log-page-ux-fix ADR-003) ── */
+  --accent-bg-light:  rgba(217,119,87,0.04);  /* 일반 행 hover */
+  --accent-bg-medium: rgba(217,119,87,0.07);  /* clickable 행 hover */
+
+  /* ── 역할 배지 배경 ── */
+  --blue-bg-light: rgba(96,165,250,0.18);   /* role/cache 배지 */
+  --red-bg-light:  rgba(239,68,68,0.18);    /* error 배지 */
+
+  /* ── Border Radius 토큰 ── */
+  --radius-sm: 4px;
+  --radius-md: 6px;
 }

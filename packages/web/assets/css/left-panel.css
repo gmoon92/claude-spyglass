@@ -1,9 +1,30 @@
 /* ── LEFT PANEL ─────────────────────────────────────────────────────────── */
 .left-panel {
+  position: relative;
   display: grid;
   grid-template-rows: var(--project-panel-height) 1fr var(--tool-stats-height);
   overflow: hidden; border-right: 1px solid var(--border);
   background: var(--surface);
+}
+
+/* ── PANEL RESIZE HANDLE ────────────────────────────────────────────────── */
+.panel-resize-handle {
+  position: absolute;
+  top: 0; right: 0;
+  width: var(--panel-resize-handle-width);
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s;
+}
+.panel-resize-handle:hover,
+.panel-resize-handle.dragging {
+  background: var(--accent);
+  opacity: 0.5;
+}
+@media (max-width: 768px) {
+  .panel-resize-handle { display: none; }
 }
 
 .panel-section {
@@ -24,6 +45,13 @@
 .panel-body { flex: 1; overflow-y: auto; min-height: 0; }
 .panel-body::-webkit-scrollbar { width: 3px; }
 .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── PROJECT NAME CELL ──────────────────────────────────────────────────── */
+.cell-proj-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .tool-stats-section { max-height: var(--tool-stats-height); }
 .tool-stats-section .panel-body { max-height: calc(var(--tool-stats-height) - 29px); }

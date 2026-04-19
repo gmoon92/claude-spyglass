@@ -1,6 +1,6 @@
 /* ── TYPE BADGES ────────────────────────────────────────────────────────── */
 .type-badge {
-  display: inline-block; padding: 2px 7px; border-radius: 4px;
+  display: inline-block; padding: 2px 7px; border-radius: var(--radius-sm);
   font-size: 10px; font-weight: 600; letter-spacing: 0.05em;
   min-width: 72px; text-align: center; cursor: default; white-space: nowrap;
 }
@@ -10,19 +10,31 @@
 .type-unknown   { background: rgba(80,80,80,0.2);       color: var(--text-muted); }
 
 .role-badge { margin-left: 4px; }
-.role-user  { background: rgba(96,165,250,0.18); color: #93c5fd; }
+.role-user  { background: var(--blue-bg-light); color: #93c5fd; }
 
 .model-badge { margin-left: 4px; background: rgba(217,119,87,0.15); color: var(--accent); }
 
 /* ── MINI BADGE (ADR-R10-002) ───────────────────────────────────────────── */
 .mini-badge {
-  display: inline-block; padding: 1px 5px; border-radius: 3px;
+  display: inline-block; padding: 1px 5px; border-radius: var(--radius-sm);
   font-size: 9px; font-weight: 600; letter-spacing: 0.3px;
   vertical-align: middle; margin-left: 2px; white-space: nowrap;
 }
-.badge-cache   { background: rgba(96,165,250,0.18); color: #93c5fd; }
-.badge-error   { background: rgba(239,68,68,0.18);  color: #f87171; }
-.badge-running { background: rgba(251,191,36,0.15); color: #fbbf24; }
+.badge-cache   { background: var(--blue-bg-light); color: #93c5fd; }
+.badge-error   { background: var(--red-bg-light);  color: #f87171; }
+.badge-spike   { background: rgba(251,191,36,.15);  color: #fbbf24; }
+.badge-loop    { background: rgba(147,197,253,.12); color: #7dd3fc; }
+.badge-slow    { background: rgba(248,113,113,.12); color: #f87171; }
+
+/* ── RUNNING ICON ANIMATION ─────────────────────────────────────────────── */
+@keyframes tool-running-pulse {
+  0%, 100% { opacity: 1;   transform: scale(1);    }
+  50%       { opacity: 0.35; transform: scale(1.3); }
+}
+.tool-icon-running {
+  display: inline-block;
+  animation: tool-running-pulse 1.4s ease-in-out infinite;
+}
 
 /* ── TOOL RESPONSE HINT ─────────────────────────────────────────────────── */
 .tool-response-hint {
@@ -40,7 +52,7 @@
   z-index: 9999;
   background: var(--surface-alt);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 10px 14px;
   min-width: 220px;
   pointer-events: none;
@@ -59,6 +71,29 @@
 .cache-tooltip-value.read  { color: var(--blue); }
 .cache-tooltip-value.write { color: var(--orange); }
 .cache-tooltip-cost { color: var(--text-dim); font-size: 10px; margin-left: 4px; }
+
+/* ── STAT TOOLTIP ───────────────────────────────────────────────────────── */
+.stat-tooltip {
+  position: fixed;
+  z-index: 9999;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  min-width: 200px;
+  max-width: 280px;
+  pointer-events: none;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+.stat-tooltip-title {
+  font-size: 10px; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+}
+.stat-tooltip-desc { color: var(--text-dim); }
+[data-stat-tooltip] { cursor: help; }
 
 /* ── TOOL ICON COLOR ────────────────────────────────────────────────────── */
 .tool-icon-tool  { color: var(--type-tool_call-color); }

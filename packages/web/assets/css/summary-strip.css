@@ -2,6 +2,7 @@
 .summary-strip {
   display: flex; gap: 1px; background: var(--border);
   border-bottom: 1px solid var(--border); flex-shrink: 0;
+  overflow: hidden;
 }
 .stat-card {
   flex: 1; display: flex; align-items: center; gap: 10px;
@@ -17,3 +18,11 @@
   letter-spacing: -0.5px; color: var(--text);
 }
 .stat-card.active .stat-value { color: var(--green); }
+.stat-value.is-alert           { color: var(--red); }
+
+/* ── 구분선: 활동 지표 / 비용·성능 지표 경계 ─────────────────────────────── */
+.stat-divider {
+  width: 1px; align-self: stretch;
+  background: var(--border);
+  flex-shrink: 0; margin: 0;
+}
