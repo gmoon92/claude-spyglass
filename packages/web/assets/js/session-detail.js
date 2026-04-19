@@ -105,8 +105,8 @@ export function renderTurnView(turns, badgeTurns) {
       if (tc.tool_name) toolCountMap[tc.tool_name] = (toolCountMap[tc.tool_name] || 0) + 1;
     }));
     const topTool = Object.entries(toolCountMap).sort((a, b) => b[1] - a[1])[0];
-    let badgesHtml = `<span class="detail-agg-badge">최고 비용 Turn: <strong>T${maxCostTurn.turn_index}</strong> (${fmtToken(maxCostTurn.summary.total_tokens)})</span>`;
-    if (topTool) badgesHtml += `<span class="detail-agg-badge">최다 호출 Tool: <strong>${escHtml(topTool[0])}</strong> (${topTool[1]}회)</span>`;
+    let badgesHtml = `<span class="detail-agg-badge" title="이 세션에서 토큰을 가장 많이 소비한 턴">최고 비용 Turn: <strong>T${maxCostTurn.turn_index}</strong> (${fmtToken(maxCostTurn.summary.total_tokens)})</span>`;
+    if (topTool) badgesHtml += `<span class="detail-agg-badge" title="이 세션에서 가장 많이 호출된 도구">최다 호출 Tool: <strong>${escHtml(topTool[0])}</strong> (${topTool[1]}회)</span>`;
     badgesEl.innerHTML     = badgesHtml;
     badgesEl.style.display = 'flex';
   } else if (badgesEl) {
@@ -125,6 +125,7 @@ export function renderTurnView(turns, badgeTurns) {
     const durMs     = turn.prompt?.duration_ms ?? 0;
     const outPart   = tokOut > 0 ? ` / OUT ${fmtToken(tokOut)}` : '';
     const meta      = `도구 ${toolCount}개 · IN ${fmtToken(tokIn)}${outPart}${durMs > 0 ? ` · ⏱ ${formatDuration(durMs)}` : ''}`;
+    const metaTitle = `도구: 이 턴에서 실행된 tool_call 수\nIN: 이 턴의 입력 토큰 합계${tokOut > 0 ? `\nOUT: 이 턴의 출력 토큰 합계` : ''}${durMs > 0 ? `\n⏱: 사용자 프롬프트의 LLM 응답 시간` : ''}`;
     const barPct    = sessionTotalTokens > 0
       ? Math.round((turn.summary.total_tokens || 0) / sessionTotalTokens * 100)
       : 0;
@@ -170,7 +171,7 @@ export function renderTurnView(turns, badgeTurns) {
       <div class="turn-header" data-toggle-turn="${escHtml(turn.turn_id)}">
         <span class="turn-badge">T${turn.turn_index}</span>
         <span class="turn-time">${fmtTime(turn.started_at)}</span>
-        <span class="turn-meta">${meta}</span>
+        <span class="turn-meta" title="${escHtml(metaTitle)}">${meta}</span>
         ${barHtml}
         <span class="turn-toggle">▸</span>
       </div>

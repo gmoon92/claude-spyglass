@@ -20,6 +20,7 @@ import { initColResize } from './col-resize.js';
 import { initPanelResize } from './panel-resize.js';
 import { initCacheTooltip } from './cache-tooltip.js';
 import { initStatTooltip } from './stat-tooltip.js';
+import { initCachePanelTooltip } from './cache-panel-tooltip.js';
 
 // ── localStorage ─────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'spyglass:lastProject';
@@ -360,6 +361,7 @@ function init() {
   initPanelResize(document.querySelector('.left-panel'), document.querySelector('.panel-resize-handle'));
   initCacheTooltip();
   initStatTooltip();
+  initCachePanelTooltip();
   setInterval(() => { advanceBuckets(); drawTimeline(); }, 60000);
   setInterval(() => fetchAllSessions(), 30000);
 }

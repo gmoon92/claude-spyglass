@@ -93,7 +93,8 @@
   text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
 }
 .stat-tooltip-desc { color: var(--text-dim); }
-[data-stat-tooltip] { cursor: help; }
+[data-stat-tooltip],
+[data-cache-panel-tooltip] { cursor: help; }
 
 /* ── TOOL ICON COLOR ────────────────────────────────────────────────────── */
 .tool-icon-tool  { color: var(--type-tool_call-color); }
