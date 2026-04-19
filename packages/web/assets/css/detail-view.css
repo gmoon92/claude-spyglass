@@ -10,12 +10,25 @@
 .detail-project    { font-size: 11px; color: var(--text-muted); flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .detail-tokens     { font-size: 11px; color: var(--text); margin-left: auto; flex-shrink: 0; white-space: nowrap; }
 .detail-ended-at   { font-size: 11px; color: var(--text-muted); flex-shrink: 0; white-space: nowrap; }
-.btn-close {
-  background: none; border: 1px solid var(--border); color: var(--text-dim);
-  padding: 3px 10px; border-radius: 5px; cursor: pointer;
-  font-size: 11px; font-family: inherit; flex-shrink: 0;
+/* ── DETAIL ACTIONS (버튼 그룹) ─────────────────────────────────────────── */
+/* ── 토글 버튼 (접기/펼치기) ──────────────────────────────────────────── */
+.btn-toggle {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  background: none; border: none; border-radius: var(--radius-sm);
+  color: var(--text-dim); cursor: pointer; flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
 }
-.btn-close:hover { border-color: var(--red); color: var(--red); }
+.btn-toggle:hover { background: var(--accent-dim); color: var(--accent); }
+.btn-toggle svg   { transition: transform 0.2s ease; display: block; }
+
+/* ── COLLAPSED 상태 ───────────────────────────────────────────────────── */
+/* context-chart-section 접기는 .context-chart-section--collapsed 클래스로 처리 (ADR-001) */
+/* 탭바·컨트롤바·콘텐츠는 항상 표시 (ADR-002) */
+.detail-collapsed .detail-header {
+  cursor: pointer;
+}
+.detail-collapsed .btn-toggle svg { transform: rotate(180deg); }
 
 /* ── TAB BAR ────────────────────────────────────────────────────────────── */
 .view-tab-bar {

@@ -10,10 +10,25 @@
 }
 
 /* ── 섹션 컨테이너 ──────────────────────────────────────────────────────── */
+/* grid-template-rows 방식으로 부드러운 접기/펼치기 구현 (ADR-001) */
 .context-chart-section {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.3s ease-in-out;
   border-bottom: 1px solid var(--border);
   background: var(--surface-alt);
   flex-shrink: 0;
+}
+
+.context-chart-section--collapsed {
+  grid-template-rows: 0fr;
+  border-bottom: none;
+}
+
+/* ── 내부 래퍼 (overflow 클립 담당) ────────────────────────────────────── */
+.context-chart-inner {
+  overflow: hidden;
+  min-height: 0;
 }
 
 /* ── 헤더 (레이블 + 인디케이터) ─────────────────────────────────────────── */
@@ -51,6 +66,21 @@
   height: 80px;
   /* Chart.js responsive 모드가 부모 width에 맞추므로 고정 height만 지정 */
 }
+
+/* ── 캔버스 숨김 (빈 상태 표시 시) ─────────────────────────────────────── */
+#contextGrowthChart.context-chart-hidden { display: none; }
+
+/* ── 빈 상태 (데이터 없음) ──────────────────────────────────────────────── */
+.context-chart-empty {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  height: 80px;
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.3px;
+}
+.context-chart-empty--visible { display: flex; }
 
 /* ── 푸터 (턴 레이블 / 상태 메시지) ────────────────────────────────────── */
 .context-chart-footer {

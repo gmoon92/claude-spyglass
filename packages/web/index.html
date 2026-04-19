@@ -278,17 +278,26 @@
               <span class="detail-ended-at" id="detailEndedAt"></span>
               <div class="detail-agg-badges detail-agg-badges--hidden" id="detailBadges"></div>
             </div>
-            <button class="btn-close" id="btnCloseDetail">닫기</button>
+            <button class="btn-toggle" id="btnToggleDetail" title="접기 / 펼치기" aria-label="접기">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
           </div>
 
           <!-- Context Growth Chart -->
-          <div class="context-chart-section" style="display:none" data-ctx-tooltip="context-growth">
-            <div class="context-chart-header">
-              <span class="context-chart-label">Context Growth</span>
-              <span id="ctxUsageIndicator"></span>
+          <div class="context-chart-section" data-ctx-tooltip="context-growth">
+            <div class="context-chart-inner">
+              <div class="context-chart-header">
+                <span class="context-chart-label">Context Growth</span>
+                <span id="ctxUsageIndicator"></span>
+              </div>
+              <canvas id="contextGrowthChart"></canvas>
+              <div class="context-chart-empty" id="contextChartEmpty">
+                <span class="context-chart-empty-text">컨텍스트 데이터 없음</span>
+              </div>
+              <div class="context-chart-footer"></div>
             </div>
-            <canvas id="contextGrowthChart"></canvas>
-            <div class="context-chart-footer"></div>
           </div>
 
           <div class="view-tab-bar" id="detailTabBar">

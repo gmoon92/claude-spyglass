@@ -5,6 +5,7 @@ const WARN_RATIO     = 0.80;    // 경고 임계값
 let _canvas = null;
 let _footer = null;
 let _indicator = null;
+let _empty = null;
 
 function getCssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -21,23 +22,30 @@ function getColors() {
   };
 }
 
+function setEmptyState(isEmpty) {
+  if (_canvas)    _canvas.classList.toggle('context-chart-hidden', isEmpty);
+  if (_empty)     _empty.classList.toggle('context-chart-empty--visible', isEmpty);
+}
+
 export function initContextChart() {
   _canvas    = document.getElementById('contextGrowthChart');
   _footer    = document.querySelector('.context-chart-footer');
   _indicator = document.getElementById('ctxUsageIndicator');
+  _empty     = document.getElementById('contextChartEmpty');
 }
 
 export function renderContextChart(turns) {
   if (!_canvas) return;
-  const section = _canvas.closest('.context-chart-section');
 
-  // 유효 데이터가 하나라도 있는지 확인 (섹션 표시 여부 판단)
+  // 유효 데이터가 하나라도 있는지 확인 (빈 상태 표시 여부 판단)
   const hasValid = (turns || []).some(t => t.prompt && (t.prompt.context_tokens > 0 || t.prompt.tokens_input > 0));
   if (!hasValid) {
-    if (section) section.style.display = 'none';
+    setEmptyState(true);
+    if (_indicator) { _indicator.textContent = ''; _indicator.className = ''; }
+    if (_footer)    _footer.textContent = '';
     return;
   }
-  if (section) section.style.display = '';
+  setEmptyState(false);
 
   // ctx=0인 턴도 포함 — 성장 곡선의 시작점으로 표시 (필터 없이 prompt 있는 모든 턴 사용)
   const sorted = (turns || []).filter(t => t.prompt).slice().sort((a, b) => a.turn_index - b.turn_index);
@@ -134,8 +142,7 @@ function fmtK(n) {
 
 export function clearContextChart() {
   if (!_canvas) return;
-  const section = _canvas.closest('.context-chart-section');
-  if (section) section.style.display = 'none';
+  setEmptyState(true);
   if (_indicator) { _indicator.textContent = ''; _indicator.className = ''; }
   if (_footer)    _footer.textContent = '';
 }

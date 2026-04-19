@@ -90,6 +90,7 @@ async function selectSession(id) {
 
   uiState.rightView = 'detail';
   uiState.detailTab = 'flat';
+  document.getElementById('detailView').classList.remove('detail-collapsed');
   renderRightPanel();
 
   document.getElementById('detailLoading').style.display = 'block';
@@ -131,14 +132,16 @@ async function selectSession(id) {
   }
 }
 
-// ── 세션 상세 닫기 ───────────────────────────────────────────────────────────
-function closeDetail() {
-  uiState.rightView = 'default';
-  setSelectedSession(null);
-  renderRightPanel();
-  renderBrowserSessions();
-  const badgesEl = document.getElementById('detailBadges');
-  if (badgesEl) badgesEl.classList.add('detail-agg-badges--hidden');
+// ── 세션 상세 접기/펼치기 토글 ───────────────────────────────────────────────
+function toggleDetailCollapse() {
+  const detailView = document.getElementById('detailView');
+  const btn = document.getElementById('btnToggleDetail');
+  const chartSection = detailView.querySelector('.context-chart-section');
+  detailView.classList.toggle('detail-collapsed');
+  const collapsed = detailView.classList.contains('detail-collapsed');
+  // context-chart-section 만 접기/펼치기 (ADR-002: 탭바·컨트롤바·콘텐츠는 항상 표시)
+  if (chartSection) chartSection.classList.toggle('context-chart-section--collapsed', collapsed);
+  if (btn) btn.setAttribute('aria-label', collapsed ? '펼치기' : '접기');
 }
 
 // ── prependRequest ───────────────────────────────────────────────────────────
@@ -252,7 +255,15 @@ function initEventDelegation() {
     if (sessRow)  { selectSession(sessRow.dataset.sessionId); }
   });
 
-  document.getElementById('btnCloseDetail').addEventListener('click', closeDetail);
+  document.getElementById('btnToggleDetail').addEventListener('click', toggleDetailCollapse);
+
+  // 접힌 상태에서 헤더 클릭 시 펼치기 (버튼 영역 클릭은 각 버튼이 처리)
+  document.querySelector('#detailView .detail-header').addEventListener('click', e => {
+    const detailView = document.getElementById('detailView');
+    if (!detailView.classList.contains('detail-collapsed')) return;
+    if (e.target.closest('#btnToggleDetail')) return;
+    toggleDetailCollapse();
+  });
 
   document.getElementById('detailTabBar').addEventListener('click', e => {
     const tab = e.target.closest('[data-tab]');
