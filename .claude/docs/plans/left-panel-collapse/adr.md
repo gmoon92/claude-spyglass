@@ -1,34 +1,53 @@
 # left-panel-collapse ADR
 
-## ADR-001: Grid Row Height 제어 방식
+## ADR-001: Flex 레이아웃으로 변환하여 collapse 구현 (수정됨)
 
 ### 상태
-**결정됨** (2026-04-20)
+**결정됨** (2026-04-20, **재검토 2026-04-20**)
 
 ### 배경
-`.left-panel`이 `grid-template-rows: var(--project-panel-height) 1fr var(--tool-stats-height)`로 3개 섹션의 높이를 고정함. 섹션 하나를 접으면 해당 row가 헤더 높이(약 29px)로 축소돼야 다른 섹션이 공간을 차지할 수 있음. 이를 위해 두 가지 방식 검토:
+초기 결정(옵션 C)에서 `.left-panel`이 `display: grid`였고 `grid-template-rows: 215px 1fr 160px`로 고정되어 있었음. Grid children에 적용한 `flex: 0 0 auto` 속성은 **flex 속성이므로 grid 컨텍스트에서 무시됨**. 결과적으로:
+- 접힌 섹션의 grid row가 여전히 원래 높이 유지 (215px 또는 160px)
+- 빈 공간만 남아 접기 기능이 무용지물
 
 ### 고려한 옵션
 
 | 옵션 | 설명 | 장점 | 단점 |
 |------|------|------|------|
-| A: grid-rows auto로 변경 | CSS에서 `grid-template-rows: auto 1fr auto`로 고정 | 간단함. 접기/펼치기가 자동으로 작동 | 마지막 row(tool-stats-height = 150px)가 콘텐츠 크기로 가변되어 UX 일관성 감소 |
-| B: JS에서 CSS 변수 제어 | 접힘 상태에 따라 JS에서 `--project-panel-height` 등을 동적으로 갱신 | 정확한 높이 제어. 기존 변수 활용 가능 | 복잡함. 상태 관리 필요 |
-| C: 접힘 시 row 높이를 고정값으로 지정 | CSS에서 `.panel-section--collapsed`일 때만 높이 제약 설정 | 중간 난이도. 안정적 | grid 제어가 복잡할 수 있음 |
+| A: grid-rows auto로 변경 | CSS에서 `grid-template-rows: auto 1fr auto`로 고정 | 간단함. 접기/펼치기가 자동으로 작동 | 마지막 row가 콘텐츠 크기로 가변되어 UX 일관성 감소 |
+| B: JS에서 CSS 변수 제어 | 접힘 상태에 따라 JS에서 `--project-panel-height` 등을 동적으로 갱신 | 정확한 높이 제어. 기존 변수 활용 가능 | 복잡함. 상태 관리 필요. panel-resize.js와 충돌 위험 |
+| C (초기): Grid children에 flex 속성 | `.panel-section--collapsed { flex: 0 0 auto; }` 추가 | **실제로는 작동하지 않음** (flex 속성은 grid 자식에 무시됨) | **채택 불가** |
+| D (최종): `.left-panel`을 flex로 변환 | `display: flex; flex-direction: column` + 각 섹션에 `flex: 0 0 [고정값]` 또는 `flex: 1 1 0` | **Flex 속성이 정상 작동**. 간단하고 명확함. 다른 모듈과 충돌 없음 | 초기 설계 변경 필요 |
 
-### 결정
-**옵션 C: 접힘 시 row 높이를 고정값(약 29px)으로 설정**
+### 최종 결정
+**옵션 D: `.left-panel`을 `display: flex`로 변환하고 각 섹션의 flex basis 설정**
+
+### 변경 사항
+1. `.left-panel`: `display: grid` → `display: flex; flex-direction: column`
+2. `grid-template-rows` 제거
+3. 각 섹션의 flex basis 설정:
+   - `#panelProjects`: `flex: 0 0 var(--project-panel-height)` (215px 고정)
+   - `#panelSessions`: `flex: 1 1 0` (남은 공간 모두 차지)
+   - `#panelTools`: `flex: 0 0 var(--tool-stats-height)` (160px 고정)
+4. `.panel-section--collapsed`: `flex: 0 0 auto` (이제 정상 작동 → 헤더 높이만 차지)
 
 ### 이유
-1. **명시적 제어**: CSS와 JS 클래스로 높이를 명확하게 제어할 수 있음
-2. **UX 일관성**: 기존의 3-row grid 레이아웃을 유지하면서 필요할 때만 축소
-3. **성능**: JS에서 CSS 변수를 매번 갱신할 필요 없음
-4. **유지보수**: 상태 관리가 간단 (클래스 토글만으로 충분)
+1. **정확한 동작**: Flex 속성이 grid가 아닌 flex children에서 정상 작동
+2. **간결성**: 초기 결정보다 구현이 더 단순함
+3. **확장성**: 향후 섹션 추가 시 flex basis 추가만으로 충분
+4. **호환성**: `panel-resize.js`는 너비만 제어하므로 충돌 없음
 
 ### 구현 방식
-- `.panel-section--collapsed`인 경우, 해당 `.panel-section`의 `min-height`를 29px로 제약
-- 또는 `flex` 기반 `.panel-section`에서 `flex: 0 0 29px`로 설정
-- `.panel-body`는 `display: none`으로 숨김
+```css
+.left-panel {
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+#panelProjects { flex: 0 0 var(--project-panel-height); }
+#panelSessions { flex: 1 1 0; }
+#panelTools { flex: 0 0 var(--tool-stats-height); }
+.panel-section--collapsed { flex: 0 0 auto; }
+```
 
 ---
 

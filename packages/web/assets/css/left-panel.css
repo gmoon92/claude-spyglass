@@ -1,8 +1,7 @@
 /* ── LEFT PANEL ─────────────────────────────────────────────────────────── */
 .left-panel {
   position: relative;
-  display: grid;
-  grid-template-rows: var(--project-panel-height) 1fr var(--tool-stats-height);
+  display: flex; flex-direction: column;
   overflow: hidden; border-right: 1px solid var(--border);
   background: var(--surface);
 }
@@ -31,8 +30,16 @@
   display: flex; flex-direction: column;
   overflow: hidden; border-bottom: 1px solid var(--border); min-height: 0;
 }
-.panel-section.flex-section { min-height: 0; }
+/* 각 섹션의 flex basis 설정 (프로젝트: 215px, 세션: 남은 공간, 툴 통계: 160px) */
+#panelProjects { flex: 0 0 var(--project-panel-height); }
+#panelSessions { flex: 1 1 0; }
+#panelTools { flex: 0 0 var(--tool-stats-height); }
 .panel-section:last-child { border-bottom: none; }
+
+/* COLLAPSED 상태에서는 모든 섹션이 헤더 높이만 차지 (ID 선택자보다 높은 특이도) */
+#panelProjects.panel-section--collapsed { flex: 0 0 auto; }
+#panelSessions.panel-section--collapsed { flex: 0 0 auto; }
+#panelTools.panel-section--collapsed { flex: 0 0 auto; }
 
 .panel-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -61,8 +68,6 @@
 /* ── COLLAPSED 상태 ───────────────────────────────────────────────────── */
 .panel-section--collapsed .panel-body { display: none; }
 .panel-section--collapsed .btn-panel-toggle svg { transform: rotate(180deg); }
-.panel-section--collapsed { flex: 0 0 auto; }
-.panel-section--collapsed .panel-section { min-height: unset; }
 
 .panel-body { flex: 1; overflow-y: auto; min-height: 0; }
 .panel-body::-webkit-scrollbar { width: 3px; }
@@ -75,8 +80,7 @@
   white-space: nowrap;
 }
 
-.tool-stats-section { max-height: var(--tool-stats-height); }
-.tool-stats-section .panel-body { max-height: calc(var(--tool-stats-height) - 29px); }
+/* tool-stats-section은 flex 레이아웃에서 자동으로 높이 제어됨 */
 
 /* ── BAR CELLS ──────────────────────────────────────────────────────────── */
 .bar-cell  { display: flex; align-items: center; gap: 8px; }
