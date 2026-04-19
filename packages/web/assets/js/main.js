@@ -3,9 +3,9 @@ import { initTypeColors, recordRequest, drawTimeline, drawDonut, advanceBuckets,
 import { togglePromptExpand, makeRequestRow } from './renderers.js';
 import { clearError, updateScrollLockBanner, jumpToLatest, addScrollLockCount, resetScrollLockCount } from './infra.js';
 import {
-  getSelectedSession,
+  getSelectedProject, getSelectedSession,
   setSelectedProject, setSelectedSession,
-  getAllSessions, renderBrowserProjects, renderBrowserSessions, showSkeletonSessions,
+  getAllSessions, getAllProjects, renderBrowserProjects, renderBrowserSessions, showSkeletonSessions,
 } from './left-panel.js';
 import {
   setDetailFilter, applyDetailFilter, setDetailView, toggleTurn,
@@ -20,6 +20,9 @@ import { initColResize } from './col-resize.js';
 import { initPanelResize } from './panel-resize.js';
 import { initCacheTooltip } from './cache-tooltip.js';
 
+// ── localStorage ─────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'spyglass:lastProject';
+
 // ── UI 상태 ──────────────────────────────────────────────────────────────────
 const uiState = { rightView: 'default', detailTab: 'flat', isTransitioning: false };
 
@@ -29,8 +32,27 @@ function renderRightPanel() {
   document.getElementById('detailView').classList.toggle('active', isDetail);
 }
 
+// ── 자동 프로젝트 활성화 ──────────────────────────────────────────────────────
+function autoActivateProject() {
+  if (getSelectedProject()) return;
+  const projects = getAllProjects();
+  if (!projects.length) return;
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved && projects.some(p => p.project_name === saved)) {
+    selectProject(saved);
+    return;
+  }
+  const sessions = getAllSessions();
+  if (sessions.length) {
+    const latest = sessions.reduce((a, b) => ((a.started_at || 0) > (b.started_at || 0) ? a : b));
+    if (latest.project_name) { selectProject(latest.project_name); return; }
+  }
+  selectProject(projects[0].project_name);
+}
+
 // ── 프로젝트 선택 ────────────────────────────────────────────────────────────
 function selectProject(name) {
+  localStorage.setItem(STORAGE_KEY, name);
   setSelectedProject(name);
   setSelectedSession(null);
   if (uiState.rightView === 'detail') {
@@ -300,7 +322,7 @@ function init() {
   drawDonut();
   fetchDashboard();
   fetchRequests();
-  fetchAllSessions();
+  fetchAllSessions().then(() => autoActivateProject());
   connectSSE();
   initEventDelegation();
   initCharts();
