@@ -22,7 +22,7 @@
 }
 .badge-cache   { background: var(--blue-bg-light); color: var(--blue-text); }
 .badge-error   { background: var(--red-bg-light);  color: var(--red-text); }
-.badge-spike   { background: var(--yellow-bg-light);  color: #fbbf24; }
+.badge-spike   { background: var(--yellow-bg-light);  color: var(--type-system-color); }
 .badge-loop    { background: var(--sky-bg-light);   color: var(--sky-text); }
 .badge-slow    { background: var(--red-bg-light);   color: var(--red-text); }
 
@@ -95,11 +95,12 @@
 .stat-tooltip-desc { color: var(--text-dim); }
 [data-stat-tooltip],
 [data-cache-panel-tooltip],
-[data-ctx-tooltip] { cursor: help; }
+[data-ctx-tooltip],
+[data-mini-badge-tooltip] { cursor: help; }
 
 /* ── TOOL ICON COLOR ────────────────────────────────────────────────────── */
 .tool-icon-tool  { color: var(--type-tool_call-color); }
-.tool-icon-agent { color: var(--blue); }
+.tool-icon-agent { color: var(--orange); }
 
 /* ── TARGET ROLE BADGE (prompt/system row) ──────────────────────────────── */
 .target-role-badge {

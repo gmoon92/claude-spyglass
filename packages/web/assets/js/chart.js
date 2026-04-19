@@ -8,6 +8,7 @@ const COLORS = {
   red:     '#ef4444',
   border:  '#272727',
   card:    '#161616',
+  text:    '#e8e8e8',
   textDim: '#888888',
 };
 
@@ -180,7 +181,7 @@ export function drawDonut() {
     startAngle += slice;
   });
 
-  ctx.fillStyle    = '#e8e8e8';
+  ctx.fillStyle    = COLORS.text;
   ctx.font         = `bold ${total >= 1000 ? 12 : 15}px monospace`;
   ctx.textAlign    = 'center';
   ctx.textBaseline = 'middle';

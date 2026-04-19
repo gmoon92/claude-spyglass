@@ -7,21 +7,48 @@ const PAD_BOT   = 8;
 const MIN_BAR_W = 3;    // 0ms 툴도 최소 이 너비로 표시
 const DIAMOND_R = 4;    // duration=0 다이아몬드 마커 반경
 
-const TOOL_COLORS = {
-  Agent:     '#60a5fa',
-  Skill:     '#60a5fa',
-  Task:      '#a78bfa',
-  Read:      '#34d399',
-  Write:     '#34d399',
-  Edit:      '#34d399',
-  MultiEdit: '#34d399',
-  Bash:      '#fb923c',
-  Grep:      '#fbbf24',
-  Glob:      '#fbbf24',
-  WebSearch: '#f472b6',
-  WebFetch:  '#f472b6',
-  default:   '#94a3b8',
+// CSS 변수와 동기화 (tool-color-tokens ADR-001). initToolColors()로 덮어씀.
+export const TOOL_COLORS = {
+  Agent:     '#f59e0b',  // --tool-agent (var(--orange))
+  Skill:     '#f59e0b',  // --tool-agent
+  Task:      '#60a5fa',  // --tool-task  (var(--blue))
+  Read:      '#34d399',  // --tool-fs
+  Write:     '#34d399',  // --tool-fs
+  Edit:      '#34d399',  // --tool-fs
+  MultiEdit: '#34d399',  // --tool-fs
+  Bash:      '#fb923c',  // --tool-bash
+  Grep:      '#fbbf24',  // --tool-search
+  Glob:      '#fbbf24',  // --tool-search
+  WebSearch: '#f472b6',  // --tool-web
+  WebFetch:  '#f472b6',  // --tool-web
+  default:   '#94a3b8',  // --tool-default
 };
+
+// CSS 변수 → TOOL_COLORS 동기화 (chart.js initTypeColors() 동일 패턴)
+export function initToolColors() {
+  const s   = getComputedStyle(document.documentElement);
+  const get = v => s.getPropertyValue(v).trim();
+  const agent  = get('--tool-agent')   || TOOL_COLORS.Agent;
+  const task   = get('--tool-task')    || TOOL_COLORS.Task;
+  const fs     = get('--tool-fs')      || TOOL_COLORS.Read;
+  const bash   = get('--tool-bash')    || TOOL_COLORS.Bash;
+  const search = get('--tool-search')  || TOOL_COLORS.Grep;
+  const web    = get('--tool-web')     || TOOL_COLORS.WebSearch;
+  const def    = get('--tool-default') || TOOL_COLORS.default;
+  TOOL_COLORS.Agent     = agent;
+  TOOL_COLORS.Skill     = agent;
+  TOOL_COLORS.Task      = task;
+  TOOL_COLORS.Read      = fs;
+  TOOL_COLORS.Write     = fs;
+  TOOL_COLORS.Edit      = fs;
+  TOOL_COLORS.MultiEdit = fs;
+  TOOL_COLORS.Bash      = bash;
+  TOOL_COLORS.Grep      = search;
+  TOOL_COLORS.Glob      = search;
+  TOOL_COLORS.WebSearch = web;
+  TOOL_COLORS.WebFetch  = web;
+  TOOL_COLORS.default   = def;
+}
 
 function toolColor(toolName) {
   if (!toolName) return TOOL_COLORS.default;
@@ -62,6 +89,9 @@ export function initGantt() {
   _hint   = document.getElementById('ganttHint');
   _legend = document.getElementById('ganttLegend');
   _scroll = document.getElementById('ganttScroll');
+
+  // CSS 변수 → TOOL_COLORS 동기화 (ADR-001)
+  initToolColors();
 
   // G1: tooltip DOM 1회 생성
   if (!_tooltip) {
@@ -327,7 +357,7 @@ export function renderGantt(turns, turnAnomalyMap = new Map()) {
     ctx.font = '10px monospace';
     ctx.textAlign = 'right';
     if (hasAnomaly) {
-      ctx.fillStyle = '#f59e0b';
+      ctx.fillStyle = TOOL_COLORS.Agent;  // --tool-agent (amber) — anomaly 경고 마커
       ctx.fillText(`T${turn.turn_index}⚠`, LABEL_W - 2, y + ROW_H / 2 + 3);
     } else {
       ctx.fillStyle = textDim;

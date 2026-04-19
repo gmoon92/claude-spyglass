@@ -59,14 +59,14 @@
   transition: width 0.3s ease;
 }
 
-.ts-bar-dur  { background: #fb923c; opacity: 0.75; }
-.ts-bar-call { background: #60a5fa; opacity: 0.75; }
-.ts-bar-tok  { background: #a78bfa; opacity: 0.75; }
+.ts-bar-dur  { background: var(--orange);  opacity: 0.75; }
+.ts-bar-call { background: var(--blue);    opacity: 0.75; }
+.ts-bar-tok  { background: var(--purple);  opacity: 0.75; }
 
 .ts-val {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-  color: var(--text-primary, #ccc);
+  color: var(--text);
   text-align: right;
   white-space: nowrap;
 }

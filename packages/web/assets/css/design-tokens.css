@@ -16,6 +16,8 @@
   --orange:      #f59e0b;
   --red:         #ef4444;
   --blue:        #60a5fa;
+  --purple:      #a78bfa;   /* 현재 미사용 — Gantt/카드뷰 Task 색상은 --tool-task(--blue)로 통일됨 */
+  --pink:        #f472b6;   /* WebSearch/WebFetch 전용 */
   --left-panel-width:          280px;
   --tool-stats-height:         160px;
   --project-panel-height:      215px;
@@ -58,6 +60,15 @@
   /* ── 기타 배지 ── */
   --unknown-bg: rgba(80,80,80,0.2);           /* type-unknown 배지 */
   --model-badge-bg: rgba(217,119,87,0.15);    /* model-badge 배경 */
+
+  /* ── 도구 색상 토큰 (tool-color-tokens ADR-001) — Gantt/카드뷰 공용 ── */
+  --tool-agent:   var(--orange);  /* Agent, Skill — AI 능동 위임 */
+  --tool-task:    var(--blue);    /* Task — 작업 단위 */
+  --tool-fs:      #34d399;        /* Read, Write, Edit, MultiEdit — 파일시스템 */
+  --tool-bash:    #fb923c;        /* Bash — 시스템 명령 실행 */
+  --tool-search:  #fbbf24;        /* Grep, Glob — 검색 */
+  --tool-web:     #f472b6;        /* WebSearch, WebFetch — 웹 */
+  --tool-default: #94a3b8;        /* 그 외 기본값 */
 
   /* ── Border Radius 토큰 ── */
   --radius-sm: 4px;

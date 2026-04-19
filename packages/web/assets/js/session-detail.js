@@ -1,8 +1,8 @@
 // 세션 상세 뷰 모듈
 import { escHtml, fmtToken, fmtDate, fmtTime, formatDuration } from './formatters.js';
-import { makeRequestRow, typeBadge, makeActionCell, contextPreview, toolStatusBadge, toolResponseHint, FLAT_VIEW_COLS, togglePromptExpand, _promptCache } from './renderers.js';
+import { makeRequestRow, typeBadge, contextPreview, toolStatusBadge, toolResponseHint, toolIconHtml, targetInnerHtml, FLAT_VIEW_COLS, togglePromptExpand, _promptCache } from './renderers.js';
 import { renderContextChart, clearContextChart } from './context-chart.js';
-import { renderGantt, clearGantt } from './turn-gantt.js';
+import { renderGantt, clearGantt, TOOL_COLORS } from './turn-gantt.js';
 import { loadToolStats, clearToolStats } from './tool-stats.js';
 import { detectAnomalies } from './anomaly.js';
 
@@ -181,11 +181,12 @@ export function renderTurnView(turns, badgeTurns) {
 
     const promptData       = turn.prompt ? { ...turn.prompt, type: 'prompt' } : null;
     const promptPreviewHtml = promptData ? contextPreview(promptData, 80) : '';
+    const promptTarget     = promptData ? targetInnerHtml(promptData).html : '';
     const promptRow        = promptData ? `
       <div class="turn-row turn-row-prompt" data-type="prompt">
         <span></span>
         <div class="tool-cell">
-          <span class="tool-main">${makeActionCell(promptData)}</span>
+          <span class="tool-main">${promptTarget}</span>
           ${promptPreviewHtml ? `<span class="tool-sub">${promptPreviewHtml}</span>` : ''}
         </div>
         <span class="num cell-token">${promptData.tokens_input  > 0 ? fmtToken(promptData.tokens_input)  : '—'}</span>
@@ -199,11 +200,12 @@ export function renderTurnView(turns, badgeTurns) {
       const tcPreview   = contextPreview(tcData, 60);
       const hint        = toolResponseHint(tcData);
       const statusBadge = toolStatusBadge(tcData);
+      const tcTarget    = targetInnerHtml(tcData).html;
       return `
       <div class="turn-row turn-row-tool" data-type="tool_call">
         <span>${statusBadge}</span>
         <div class="tool-cell">
-          <span class="tool-main">${makeActionCell(tcData)}</span>
+          <span class="tool-main">${tcTarget}</span>
           <span class="tool-sub">${tcPreview || ''}${hint ? `${tcPreview ? ' ' : ''}<span class="tool-response-hint">${escHtml(hint)}</span>` : ''}</span>
         </div>
         <span class="num cell-token">${tc.tokens_input  > 0 ? fmtToken(tc.tokens_input)  : '—'}</span>
@@ -271,24 +273,28 @@ export function renderTurnCards(turns) {
       : '';
 
     // 도구 흐름 chip (연속 중복 압축)
-    const toolSeq = turn.tool_calls.map(tc => tc.tool_name || '?');
+    // Agent/Skill 계열은 agentName(tool_detail)까지 압축 키에 포함하여 서로 다른 에이전트를 구분
     const compressed = [];
-    for (const name of toolSeq) {
-      if (compressed.length && compressed[compressed.length - 1].name === name) {
-        compressed[compressed.length - 1].count++;
+    for (const tc of turn.tool_calls) {
+      const name      = tc.tool_name || '?';
+      const isAgent   = /^(Agent|Skill|Task)/.test(name);
+      const agentName = isAgent ? (tc.tool_detail || '') : '';
+      const key       = name + '|' + agentName;
+      const last      = compressed[compressed.length - 1];
+      if (compressed.length && last.key === key) {
+        last.count++;
       } else {
-        compressed.push({ name, count: 1 });
+        compressed.push({ key, name, count: 1, isAgent, agentName });
       }
     }
-    const chipColors = {
-      Agent: '#60a5fa', Skill: '#60a5fa', Task: '#a78bfa',
-      Read: '#34d399', Write: '#34d399', Edit: '#34d399', MultiEdit: '#34d399',
-      Bash: '#fb923c', Grep: '#fbbf24', Glob: '#fbbf24',
-      WebSearch: '#f472b6', WebFetch: '#f472b6',
-    };
-    const chips = compressed.map(({ name, count }) => {
-      const base = name.split('__').pop();
-      const color = chipColors[base] || '#94a3b8';
+    const chips = compressed.map(({ name, count, isAgent, agentName }) => {
+      const base  = name.split('__').pop();
+      const color = TOOL_COLORS[base] || TOOL_COLORS.default;
+      if (isAgent && agentName) {
+        const countSuffix = count > 1 ? `×${count}` : '';
+        const fullLabel   = agentName + (countSuffix ? ` ${countSuffix}` : '');
+        return `<span class="tool-chip agent-chip" style="border-color:${color};color:${color}" title="${escHtml(fullLabel)}">${toolIconHtml(base)}<span class="agent-chip-name">${escHtml(agentName)}</span>${countSuffix ? `<span>${escHtml(countSuffix)}</span>` : ''}</span>`;
+      }
       const label = count > 1 ? `${base}×${count}` : base;
       return `<span class="tool-chip" style="border-color:${color};color:${color}">${escHtml(label)}</span>`;
     }).join('<span class="chip-arrow">→</span>');

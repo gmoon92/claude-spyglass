@@ -92,15 +92,17 @@ export function makeActionCell(r) {
   return typeBadge(r.type);
 }
 
-export function makeTargetCell(r) {
+// Target 컬럼 내부 HTML (td 래퍼 없음) — 테이블/그리드 공용 재사용.
+// 반환값: { html, empty } — empty=true면 호출자가 "—" 같은 빈 placeholder를 자유롭게 감쌈.
+export function targetInnerHtml(r) {
   if (r.type === 'prompt') {
-    return `<td class="cell-target"><span class="target-role-badge role-badge-user"><span class="role-icon">◉</span>user</span></td>`;
+    return { html: `<span class="target-role-badge role-badge-user"><span class="role-icon">◉</span>user</span>`, empty: false };
   }
   if (r.type === 'system') {
-    return `<td class="cell-target"><span class="target-role-badge role-badge-system"><span class="role-icon">◉</span>system</span></td>`;
+    return { html: `<span class="target-role-badge role-badge-system"><span class="role-icon">◉</span>system</span>`, empty: false };
   }
   if (r.type !== 'tool_call' || !r.tool_name) {
-    return `<td class="cell-target cell-empty">—</td>`;
+    return { html: '—', empty: true };
   }
   const inProgress = r.event_type === 'pre_tool';
   const icon = toolIconHtml(r.tool_name, r.event_type); // event_type 직접 전달
@@ -111,7 +113,14 @@ export function makeTargetCell(r) {
     nameHtml = `<span class="action-name">${icon}${escHtml(r.tool_name)}</span>`;
   }
   const statusBadge = inProgress ? '' : toolStatusBadge(r);
-  return `<td class="cell-target"><span class="target-cell-inner">${nameHtml}${statusBadge}</span></td>`;
+  return { html: `<span class="target-cell-inner">${nameHtml}${statusBadge}</span>`, empty: false };
+}
+
+export function makeTargetCell(r) {
+  const { html, empty } = targetInnerHtml(r);
+  return empty
+    ? `<td class="cell-target cell-empty">${html}</td>`
+    : `<td class="cell-target">${html}</td>`;
 }
 
 export function makeModelCell(r) {
@@ -227,7 +236,7 @@ export function togglePromptExpand(rid, container, cols) {
 
 function anomalyBadgesHtml(flags) {
   if (!flags || flags.size === 0) return '';
-  return [...flags].map(f => `<span class="mini-badge badge-${f}">${f}</span>`).join('');
+  return [...flags].map(f => `<span class="mini-badge badge-${f}" data-mini-badge-tooltip="${f}">${f}</span>`).join('');
 }
 
 export function makeRequestRow(r, opts = {}) {
@@ -242,7 +251,7 @@ export function makeRequestRow(r, opts = {}) {
     : `<span class="cell-msg-empty" aria-label="메시지 없음">—</span>`;
 
   const spikeLoopBadges = flags ? anomalyBadgesHtml(new Set([...flags].filter(f => f !== 'slow'))) : '';
-  const slowBadge       = flags && flags.has('slow') ? `<span class="mini-badge badge-slow">slow</span>` : '';
+  const slowBadge       = flags && flags.has('slow') ? `<span class="mini-badge badge-slow" data-mini-badge-tooltip="slow">slow</span>` : '';
 
   return `<tr data-type="${escHtml(r.type||'')}" data-request-id="${escHtml(r.id||'')}">
     <td class="cell-time num">${fmtTs(r.timestamp)}</td>
