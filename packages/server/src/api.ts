@@ -146,7 +146,9 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     const type = path.split('/')[4] as 'prompt' | 'tool_call' | 'system';
     const limit = parseInt(url.searchParams.get('limit') || '100', 10);
     const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10));
-    const requests = getRequestsByType(db, type, limit, offset);
+    const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
+    const toTs   = url.searchParams.get('to')   ? parseInt(url.searchParams.get('to')!,   10) : undefined;
+    const requests = getRequestsByType(db, type, limit, offset, fromTs, toTs);
     return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit, offset } });
   }
 

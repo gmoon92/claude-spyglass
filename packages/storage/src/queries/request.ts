@@ -178,11 +178,18 @@ export function getRequestsByType(
   db: Database,
   type: RequestType,
   limit: number = 100,
-  offset: number = 0
+  offset: number = 0,
+  fromTs?: number,
+  toTs?: number
 ): RequestQueryResult[] {
+  const conditions = ["type = ?", "(event_type IS NULL OR event_type != 'pre_tool')"];
+  const params: (string | number)[] = [type];
+  if (fromTs !== undefined) { conditions.push('timestamp >= ?'); params.push(fromTs); }
+  if (toTs   !== undefined) { conditions.push('timestamp <= ?'); params.push(toTs); }
+  params.push(limit, offset);
   return db.query(
-    "SELECT * FROM requests WHERE type = ? AND (event_type IS NULL OR event_type != 'pre_tool') ORDER BY timestamp DESC LIMIT ? OFFSET ?"
-  ).all(type, limit, offset) as RequestQueryResult[];
+    `SELECT * FROM requests WHERE ${conditions.join(' AND ')} ORDER BY timestamp DESC LIMIT ? OFFSET ?`
+  ).all(...params) as RequestQueryResult[];
 }
 
 /**
