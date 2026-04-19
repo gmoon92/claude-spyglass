@@ -127,6 +127,7 @@ grep -n 'transitionend\|isTransitioning' packages/web/assets/js/main.js
 - [ ] `selectSession` 내 `try/finally` 블록에서 `isTransitioning = false` 설정
 - [ ] `detailLoading.style.display = 'none'`이 finally 블록에 위치
 - [ ] `setDetailView` 호출이 finally 블록에 위치
+- [ ] `selectSession` 호출부(`initEventDelegation`) await 없이 호출해도 Promise가 올바르게 동작 확인
 
 ### 롤백 방법
 
@@ -146,7 +147,7 @@ git revert HEAD
 
 1. `main.js` import에 `getReqFilter` 추가
 2. `prependRequest` 신규 행 삽입 후 스크롤 조정 완료 이후 `feed:updated` dispatch
-3. `prependRequest` 인플레이스 업데이트(`existing`) 분기에서도 `feed:updated` dispatch
+3. `prependRequest` 인플레이스 업데이트(`existing`) 분기에서도 `feed:updated` dispatch — 가시성 재평가는 하지 않음 (ADR-005)
 4. `applyFeedSearch`의 `display: ''` 복구 로직에 유형 필터 상태 확인 추가
 
 ### 구현 범위
@@ -234,15 +235,17 @@ git revert HEAD
 
 ### 검증 시나리오
 
-1. **Bug 1 검증**: 세션 클릭 → 닫기 → 다시 클릭 → SSE 이벤트가 오는 중에도 정상 동작
-2. **Bug 2 검증**: 검색어 입력 → SSE 대기 → 검색 조건 불일치 행 미노출 확인
-3. **Bug 3 검증**: 유형 필터 선택(예: `tool_call`) → SSE 대기 → 다른 타입 행 미노출 확인
-4. **충돌 검증**: 검색어 + 유형 필터 동시 활성화 → SSE 대기 → 양쪽 조건 모두 만족하는 행만 노출 → 검색어 지웠을 때 유형 필터 유지 확인
+1. **Bug 1 기본**: 세션 클릭 → 닫기 → 다시 클릭 → SSE 이벤트가 오는 중에도 정상 동작
+2. **Bug 1 스트레스**: 세션을 빠르게 연속 클릭 → isTransitioning 레이스 컨디션 없음 확인
+3. **Bug 2 검증**: 검색어 입력 → SSE 대기 → 검색 조건 불일치 행 미노출 확인
+4. **Bug 3 검증**: 유형 필터 선택(예: `tool_call`) → SSE 대기 → 다른 타입 행 미노출 확인
+5. **필터 충돌 검증**: 검색어 + 유형 필터 동시 활성화 → SSE 대기 → 양쪽 조건 만족 행만 노출 → 검색어 지웠을 때 유형 필터 유지 확인
+6. **회귀 검증**: 유형 필터 없는 상태(전체)에서 검색 단독 동작 → 기존과 동일하게 동작
 
 ### 완료 기준
 
-- [ ] Bug 1 시나리오 통과
-- [ ] Bug 2 시나리오 통과
-- [ ] Bug 3 시나리오 통과
-- [ ] 검색+유형 필터 동시 충돌 없음
-- [ ] 기존 기능(세션 상세 진입, 검색 초기화, 필터 해제) 회귀 없음
+- [ ] 시나리오 1·2 통과 (isTransitioning stuck 재현 불가)
+- [ ] 시나리오 3 통과 (SSE 중 검색 필터 적용)
+- [ ] 시나리오 4 통과 (SSE 중 유형 필터 적용)
+- [ ] 시나리오 5 통과 (두 필터 AND 조건 충돌 없음)
+- [ ] 시나리오 6 통과 (회귀 없음)
