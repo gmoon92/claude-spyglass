@@ -104,10 +104,11 @@ export function getAllSessions(
     SELECT s.*,
       (SELECT r.payload FROM requests r
        WHERE r.session_id = s.id AND r.type = 'prompt'
-       ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload
+       ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload,
+      (SELECT MAX(r.timestamp) FROM requests r WHERE r.session_id = s.id) as last_activity_at
     FROM sessions s
     ${where}
-    ORDER BY s.started_at DESC
+    ORDER BY (s.ended_at IS NULL) DESC, last_activity_at DESC, s.started_at DESC
     LIMIT ?
   `).all(...params, limit) as SessionQueryResult[];
 }
@@ -166,10 +167,11 @@ export function getSessionsByProject(
     SELECT s.*,
       (SELECT r.payload FROM requests r
        WHERE r.session_id = s.id AND r.type = 'prompt'
-       ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload
+       ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload,
+      (SELECT MAX(r.timestamp) FROM requests r WHERE r.session_id = s.id) as last_activity_at
     FROM sessions s
     WHERE ${conditions.join(' AND ')}
-    ORDER BY s.started_at DESC
+    ORDER BY (s.ended_at IS NULL) DESC, last_activity_at DESC, s.started_at DESC
     LIMIT ?
   `).all(...params) as SessionQueryResult[];
 }

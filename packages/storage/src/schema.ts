@@ -108,6 +108,7 @@ export interface Session {
   total_tokens: number;
   created_at?: number;
   first_prompt_payload?: string | null;
+  last_activity_at?: number | null;
 }
 
 /**

@@ -48,7 +48,15 @@ export function renderBrowserSessions() {
   }
   const list = _allSessions
     .filter(s => s.project_name === _selectedProject)
-    .sort((a, b) => (b.started_at || 0) - (a.started_at || 0));
+    .sort((a, b) => {
+      const aActive = a.ended_at == null ? 1 : 0;
+      const bActive = b.ended_at == null ? 1 : 0;
+      if (bActive !== aActive) return bActive - aActive;
+      const aLast = a.last_activity_at || a.started_at || 0;
+      const bLast = b.last_activity_at || b.started_at || 0;
+      if (bLast !== aLast) return bLast - aLast;
+      return (b.started_at || 0) - (a.started_at || 0);
+    });
   hint.textContent = `${_selectedProject} · ${list.length}개`;
   if (!list.length) {
     body.innerHTML = '<tr><td colspan="4" class="table-empty">세션 없음</td></tr>';
