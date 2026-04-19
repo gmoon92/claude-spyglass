@@ -6,7 +6,8 @@
  */
 
 import { Database } from 'bun:sqlite';
-import { INIT_SCHEMA, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5, MIGRATION_V6, MIGRATION_V7, MIGRATION_V8, MIGRATION_V9, MIGRATION_V10, WAL_MODE_PRAGMAS } from './schema';
+import { INIT_SCHEMA, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5, MIGRATION_V6, MIGRATION_V7, MIGRATION_V8, MIGRATION_V9, MIGRATION_V10, MIGRATION_V12, WAL_MODE_PRAGMAS } from './schema';
+import fs from 'fs';
 
 // =============================================================================
 // 설정 상수
@@ -72,8 +73,50 @@ export class SpyglassDatabase {
       this.initializeSchema();
     }
 
+    // 파일 권한 강화 (스키마 초기화 후)
+    this.applyFilePermissions();
+
     if (this.options.debug) {
       console.log(`[SpyglassDB] Connected: ${this.options.dbPath}`);
+    }
+  }
+
+  /** 파일 권한 강화 (chmod) */
+  private applyFilePermissions(): void {
+    try {
+      // DB 파일이 존재해야만 권한 변경 가능
+      if (!fs.existsSync(this.options.dbPath)) {
+        return;
+      }
+
+      // DB 파일 권한: 600 (소유자만 읽기/쓰기)
+      const dbDir = this.options.dbPath.substring(0, this.options.dbPath.lastIndexOf('/'));
+
+      try {
+        fs.chmodSync(this.options.dbPath, 0o600);
+      } catch (error) {
+        // 개별 파일 권한 변경 실패는 무시 (발생 가능: /tmp, readonly fs 등)
+        if (this.options.debug) {
+          console.warn(`[SpyglassDB] Could not chmod DB file: ${error}`);
+        }
+      }
+
+      // 상위 디렉토리 권한: 700 (소유자만 접근)
+      try {
+        fs.chmodSync(dbDir, 0o700);
+      } catch (error) {
+        // 디렉토리 권한 변경 실패도 무시 (발생 가능: /tmp, readonly fs 등)
+        if (this.options.debug) {
+          console.warn(`[SpyglassDB] Could not chmod DB dir: ${error}`);
+        }
+      }
+
+      if (this.options.debug) {
+        console.log(`[SpyglassDB] Attempted to apply file permissions: ${this.options.dbPath} (600), ${dbDir} (700)`);
+      }
+    } catch (error) {
+      // 예기치 않은 에러는 경고만 하고 진행
+      console.warn(`[SpyglassDB] Warning: Failed to set file permissions: ${error}`);
     }
   }
 
@@ -189,6 +232,27 @@ export class SpyglassDatabase {
     if (currentVersion.user_version < 10) {
       this.execMulti(MIGRATION_V10);
       this.db.prepare('PRAGMA user_version = 10').run();
+    }
+
+    // V12: timestamp 인덱스 + visible_requests VIEW
+    if (currentVersion.user_version < 12) {
+      try {
+        // 인덱스 생성
+        this.db.prepare('CREATE INDEX IF NOT EXISTS idx_requests_timestamp ON requests(timestamp DESC)').run();
+        // VIEW 생성 (별도 실행)
+        this.db.prepare('DROP VIEW IF EXISTS visible_requests').run();
+        this.db.prepare(
+          `CREATE VIEW visible_requests AS
+           SELECT * FROM requests
+           WHERE event_type IS NULL
+              OR event_type != 'pre_tool'
+              OR tool_name = 'Agent'`
+        ).run();
+        this.db.prepare('PRAGMA user_version = 12').run();
+      } catch (error) {
+        console.error('[SpyglassDB] Error applying V12 migration:', error);
+        throw error;
+      }
     }
   }
 
