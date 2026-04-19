@@ -9,6 +9,7 @@
     "dev": "bun run packages/server/src/index.ts restart",
     "stop": "bun run packages/server/src/index.ts stop",
     "status": "bun run packages/server/src/index.ts status",
+    "doctor": "bun run packages/server/src/cli.ts doctor",
     "tui": "bun run packages/tui/src/index.tsx",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
