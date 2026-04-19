@@ -5,7 +5,7 @@
 
 ---
 
-## 최종 현행화: 2026-04-19 (context-chart-toggle)
+## 최종 현행화: 2026-04-20 (summary-strip-ux)
 
 ## 파일 구조
 
@@ -445,6 +445,30 @@ grid-template-columns: 28px minmax(140px,1fr) 56px 56px 72px 80px
 
 `.stat-divider` — `1px solid var(--border)`, `align-self: stretch` (ADR-001)
 
+### 상태 클래스 (summary-strip-ux)
+
+**활성 세션 있을 때**: `.stat-card.is-active-indicator`
+- 녹색 dot (6px, shadow) + 미세 배경 틴트 (rgba(74,222,128,0.05))
+- 조건: `activeSessions > 0`
+- 적용 카드: `#activeCard`
+
+**오류율 > 0%**: `.stat-card.is-error`
+- 값 텍스트 빨간색 (var(--red))
+- 조건: `errorRate > 0`
+- 적용 카드: 오류율 카드
+
+**오류율 > 1%**: `.stat-card.is-critical`
+- 카드 테두리 강조 (var(--red-border))
+- 배경 그래디언트 (var(--red-bg-subtle))
+- 조건: `errorRate > 1` (1% 초과)
+- 적용 카드: 오류율 카드
+
+**소스 필드 및 적용 로직**: `api.js` 함수 `fetchDashboard()`
+- activeSessions: `d.summary?.activeSessions` → `is-active-indicator` 토글
+- errorRate: `d.summary?.errorRate` → `is-error`, `is-critical` 토글
+- 기존 `active` 클래스와 동시 적용 (중복 제거 없음 — CSS 우선순위 관리)
+
+
 ### 우측 그룹 — 비용·성능 지표
 
 | 카드 | DOM ID | 값 포맷 | 경고 조건 |
@@ -452,7 +476,7 @@ grid-template-columns: 28px minmax(140px,1fr) 56px 56px 72px 80px
 | 오늘 비용 | `stat-cost` | `$X.XX` | — |
 | 캐시 절약 | `stat-cache-savings` | `$X.XX` | — |
 | P95 응답시간 | `stat-p95` | `Xms` / `X.Xs` | — |
-| 오류율 | `stat-error-rate` | `X.X%` | > 5% → `.is-alert` (red) |
+| 오류율 | `stat-error-rate` | `X.X%` | > 0% → `.is-error` (red text); > 1% → `.is-critical` (red border+bg) |
 
 - 서버 필드 미수신 시 초기값 `--` 유지
 - 소스 필드: `d.summary.costUsd`, `cacheSavingsUsd`, `p95DurationMs`, `errorRate`
@@ -490,6 +514,8 @@ grid-template-columns: 28px minmax(140px,1fr) 56px 56px 72px 80px
 | 2026-04-19 | 2-0-1 | Context Growth 차트 항상 표시: inline display:none 제거, 빈 상태(.context-chart-empty) 추가, JS 클래스 토글 방식으로 전환 | detail-ux-improvements |
 | 2026-04-19 | 2-0 | 접기/펼치기 + 닫기 버튼 분리: .detail-actions 그룹, SVG chevron 토글(rotate), SVG ✕ 닫기, .detail-collapsed CSS 클래스 상태, 접힌 헤더 클릭 펼치기 | detail-collapse-toggle |
 | 2026-04-19 | 2-0-1 | 접기 범위 축소: 차트 영역만 접기/펼치기 (탭바·컨트롤바·콘텐츠는 항상 표시). grid-template-rows 전환 애니메이션(0.3s ease-in-out), .context-chart-inner 래퍼 추가 | context-chart-toggle |
+| 2026-04-20 | 5 | Summary Strip 상태 클래스 추가: is-active-indicator (활성 세션), is-error (오류 > 0%), is-critical (오류 > 1%) | summary-strip-ux |
+
 
 ---
 
