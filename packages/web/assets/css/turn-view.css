@@ -41,6 +41,129 @@
 .turn-row-tool  { margin: 0 16px; }
 .turn-row-empty { color: var(--text-dim); font-size: 11px; padding: 8px 32px; }
 
+/* ── TURN VIEW TOOLBAR ──────────────────────────────────────────────────── */
+.turn-view-toolbar {
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.turn-view-toggle {
+  padding: 2px 10px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.turn-view-toggle.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* ── CARD CONTAINER ─────────────────────────────────────────────────────── */
+#turnCardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  overflow-y: auto;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.turn-card-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+/* ── CARD ───────────────────────────────────────────────────────────────── */
+.turn-card {
+  background: var(--bg-row, rgba(255,255,255,0.03));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  transition: border-color 0.15s;
+}
+
+.turn-card:hover {
+  border-color: var(--accent);
+}
+
+/* ── CARD HEADER ────────────────────────────────────────────────────────── */
+.turn-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 18px;
+}
+
+.turn-card-index {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+  min-width: 24px;
+}
+
+.turn-card-preview {
+  font-size: 11px;
+  color: var(--text-primary, #ccc);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── COMPLEXITY BADGE ───────────────────────────────────────────────────── */
+.turn-complexity {
+  font-size: 10px;
+  white-space: nowrap;
+  margin-left: auto;
+}
+.turn-complexity.mid  { color: #fb923c; }
+.turn-complexity.high { color: #ef4444; }
+
+/* ── TOOL FLOW ──────────────────────────────────────────────────────────── */
+.turn-card-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  min-height: 20px;
+}
+
+.tool-chip {
+  font-size: 10px;
+  padding: 1px 6px;
+  border: 1px solid;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.chip-arrow {
+  font-size: 10px;
+  color: var(--text-dim);
+  padding: 0 1px;
+}
+
+/* ── CARD FOOTER ────────────────────────────────────────────────────────── */
+.turn-card-footer {
+  display: flex;
+  gap: 12px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
 /* ── TOOL ICONS ─────────────────────────────────────────────────────────── */
 .tool-icon { font-size: 13px; }
 .tool-icon-agent   { color: var(--orange); }

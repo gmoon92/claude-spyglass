@@ -75,6 +75,7 @@ export function initGantt() {
   if (_canvas) {
     _canvas.addEventListener('mousemove', _onGanttMouseMove);
     _canvas.addEventListener('mouseleave', _onGanttMouseLeave);
+    _canvas.addEventListener('click', _onGanttClick);
   }
 
   // 페이지 네비게이션 버튼 이벤트 등록
@@ -293,25 +294,22 @@ export function renderGantt(turns, turnAnomalyMap = new Map()) {
   const chartW = W - LABEL_W - 8; // 오른쪽 패딩 8px
   const toDW = (dur) => Math.max((dur / maxTurnDur) * chartW, MIN_BAR_W);
 
-  // 배경 격자선 (4등분)
+  // G8: 동적 시간 눈금 계산
   const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--ctx-chart-line-grid').trim() || 'rgba(255,255,255,0.04)';
-  ctx.strokeStyle = gridColor;
-  ctx.lineWidth = 1;
-  for (let g = 1; g < 4; g++) {
-    const x = LABEL_W + (chartW / 4) * g;
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-  }
-
-  // 시간 축 레이블 (시작/중간/끝)
   const textDim = getComputedStyle(document.documentElement).getPropertyValue('--text-dim').trim() || 'rgba(255,255,255,0.35)';
+  const ticks = _calcTicks(maxTurnDur);
   ctx.fillStyle = textDim;
   ctx.font = '9px monospace';
-  ctx.textAlign = 'left';
-  ctx.fillText('0', LABEL_W + 2, H - 2);
-  ctx.textAlign = 'center';
-  ctx.fillText(fmtDur(maxTurnDur / 2), LABEL_W + chartW / 2, H - 2);
-  ctx.textAlign = 'right';
-  ctx.fillText(fmtDur(maxTurnDur), LABEL_W + chartW - 2, H - 2);
+  ticks.forEach(t => {
+    const x = LABEL_W + (t / maxTurnDur) * chartW;
+    // 격자선
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H - 10); ctx.stroke();
+    // 레이블
+    ctx.textAlign = x < LABEL_W + 20 ? 'left' : x > LABEL_W + chartW - 20 ? 'right' : 'center';
+    ctx.fillText(fmtDur(t), x, H - 2);
+  });
 
   // 각 턴 렌더링
   rows.forEach((turn, rowIdx) => {
@@ -334,6 +332,15 @@ export function renderGantt(turns, turnAnomalyMap = new Map()) {
     } else {
       ctx.fillStyle = textDim;
       ctx.fillText(`T${turn.turn_index}`, LABEL_W - 6, y + ROW_H / 2 + 3);
+    }
+
+    // G4: Prompt 구간 오버레이 — 툴 바보다 먼저 그림
+    if (turn.prompt && (turn.prompt.duration_ms || 0) > 0) {
+      const promptTs  = turn.prompt.timestamp || turnStart;
+      const promptX   = toX(promptTs);
+      const promptW   = toDW(turn.prompt.duration_ms);
+      ctx.fillStyle   = 'rgba(255,255,255,0.07)';
+      ctx.fillRect(promptX, y, promptW, ROW_H);
     }
 
     // G3: 같은 턴 내 tokens_input 최댓값 계산
@@ -460,6 +467,41 @@ function _drawDiamond(ctx, cx, cy, r) {
   ctx.lineTo(cx,     cy + r); // 하
   ctx.lineTo(cx - r, cy);     // 좌
   ctx.closePath();
+}
+
+// G7: Gantt 클릭 핸들러 — 턴뷰 연동
+function _onGanttClick(e) {
+  if (!_canvas) return;
+  const rect = _canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  for (const item of _hitMap) {
+    let hit = false;
+    if (item.isDiamond) {
+      const hr = DIAMOND_R + 2;
+      hit = mx >= item.x - hr && mx <= item.x + hr && my >= item.y - hr && my <= item.y + hr;
+    } else {
+      hit = mx >= item.x && mx <= item.x + item.w && my >= item.y && my <= item.y + item.h;
+    }
+    if (hit) {
+      document.dispatchEvent(new CustomEvent('gantt:turnClick', {
+        detail: { turnId: item.turn.turn_id }
+      }));
+      break;
+    }
+  }
+}
+
+// G8: 동적 눈금 단위 계산 헬퍼
+function _calcTicks(totalMs, chartW) {
+  // 원하는 눈금 개수: 5~8
+  const targets = [1, 2, 5, 10, 20, 50, 100, 200, 500,
+                   1000, 2000, 5000, 10000, 30000, 60000, 120000, 300000];
+  let unit = targets.find(t => totalMs / t <= 8 && totalMs / t >= 3) || totalMs;
+  const ticks = [];
+  for (let t = 0; t <= totalMs; t += unit) ticks.push(t);
+  return ticks;
 }
 
 function roundRect(ctx, x, y, w, h, r) {

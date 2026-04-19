@@ -14,6 +14,7 @@ let _detailAllRequests    = [];
 let _detailAllTurns       = [];
 let _detailSearchQuery    = '';
 let _detailTurnAnomalyMap = new Map();
+let _turnViewMode         = 'list'; // 'list' | 'card'
 
 export function getDetailFilter()     { return _detailFilter; }
 export function setDetailFilter(f)    { _detailFilter = f; }
@@ -75,7 +76,11 @@ export function applyDetailFilter() {
     : _detailFilter === 'tool_call'               ? _detailAllTurns.filter(t => t.tool_calls.length > 0)
     : _detailFilter === 'prompt'                  ? _detailAllTurns.filter(t => !!t.prompt)
     : [];
-  renderTurnView(turnFiltered, _detailAllTurns);
+  if (_turnViewMode === 'card') {
+    renderTurnCards(turnFiltered);
+  } else {
+    renderTurnView(turnFiltered, _detailAllTurns);
+  }
   renderContextChart(_detailAllTurns);
 
   // 이상 감지 맵 빌드 (turn_id 기준으로 집계)
@@ -238,6 +243,77 @@ export function renderTurnView(turns, badgeTurns) {
   if (scrollEl && savedScroll) scrollEl.scrollTop = savedScroll;
 }
 
+export function setTurnViewMode(mode) {
+  _turnViewMode = mode;
+  applyDetailFilter();
+}
+
+export function renderTurnCards(turns) {
+  const container = document.getElementById('turnCardBody');
+  if (!container) return;
+  if (!turns.length) {
+    container.innerHTML = '<div class="turn-card-empty">턴 데이터 없음</div>';
+    return;
+  }
+
+  container.innerHTML = turns.slice().reverse().map(turn => {
+    // 복잡도 배지
+    const toolCount = turn.summary.tool_call_count;
+    const complexBadge = toolCount > 15
+      ? '<span class="turn-complexity high">🔺 복잡</span>'
+      : toolCount > 5
+      ? '<span class="turn-complexity mid">◆ 중간</span>'
+      : '';
+
+    // prompt preview
+    const promptText = turn.prompt?.preview
+      ? escHtml(turn.prompt.preview.slice(0, 60)) + (turn.prompt.preview.length > 60 ? '…' : '')
+      : '';
+
+    // 도구 흐름 chip (연속 중복 압축)
+    const toolSeq = turn.tool_calls.map(tc => tc.tool_name || '?');
+    const compressed = [];
+    for (const name of toolSeq) {
+      if (compressed.length && compressed[compressed.length - 1].name === name) {
+        compressed[compressed.length - 1].count++;
+      } else {
+        compressed.push({ name, count: 1 });
+      }
+    }
+    const chipColors = {
+      Agent: '#60a5fa', Skill: '#60a5fa', Task: '#a78bfa',
+      Read: '#34d399', Write: '#34d399', Edit: '#34d399', MultiEdit: '#34d399',
+      Bash: '#fb923c', Grep: '#fbbf24', Glob: '#fbbf24',
+      WebSearch: '#f472b6', WebFetch: '#f472b6',
+    };
+    const chips = compressed.map(({ name, count }) => {
+      const base = name.split('__').pop();
+      const color = chipColors[base] || '#94a3b8';
+      const label = count > 1 ? `${base}×${count}` : base;
+      return `<span class="tool-chip" style="border-color:${color};color:${color}">${escHtml(label)}</span>`;
+    }).join('<span class="chip-arrow">→</span>');
+
+    // 푸터 메트릭
+    const tokIn  = fmtToken(turn.summary.tokens_input  || 0);
+    const tokOut = fmtToken(turn.summary.tokens_output || 0);
+    const dur    = formatDuration(turn.prompt?.duration_ms || 0);
+
+    return `<div class="turn-card">
+      <div class="turn-card-header">
+        <span class="turn-card-index">T${turn.turn_index}</span>
+        ${promptText ? `<span class="turn-card-preview">${promptText}</span>` : ''}
+        ${complexBadge}
+      </div>
+      ${chips ? `<div class="turn-card-flow">${chips}</div>` : ''}
+      <div class="turn-card-footer">
+        <span>IN ${tokIn}</span>
+        <span>OUT ${tokOut}</span>
+        ${turn.prompt?.duration_ms ? `<span>⏱ ${dur}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
 export async function refreshDetailSession(sessionId) {
   if (!sessionId) return;
   try {
@@ -289,5 +365,15 @@ export function initDetailSearch() {
     clear.classList.remove('visible');
     applyDetailFilter();
     input.focus();
+  });
+}
+
+// G7: Gantt 클릭 → 턴뷰 연동 이벤트 리스너 등록
+export function initGanttNavigation() {
+  document.addEventListener('gantt:turnClick', (e) => {
+    const { turnId } = e.detail;
+    setDetailView('turn');
+    // 약간의 딜레이로 DOM 렌더링 후 펼침
+    requestAnimationFrame(() => toggleTurn(turnId));
   });
 }

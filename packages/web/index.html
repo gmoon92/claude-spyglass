@@ -335,9 +335,14 @@
           </div>
 
           <div id="detailTurnView" class="detail-content" style="display:none">
+            <div class="turn-view-toolbar">
+              <button class="turn-view-toggle active" id="btnTurnList" data-view="list">목록</button>
+              <button class="turn-view-toggle" id="btnTurnCard" data-view="card">카드</button>
+            </div>
             <div id="turnListBody">
               <div class="turn-row-empty">로딩 중…</div>
             </div>
+            <div id="turnCardBody" style="display:none"></div>
           </div>
 
           <div id="detailToolsView" class="detail-content" style="display:none"></div>

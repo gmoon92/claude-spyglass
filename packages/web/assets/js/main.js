@@ -9,7 +9,8 @@ import {
 } from './left-panel.js';
 import {
   setDetailFilter, applyDetailFilter, setDetailView, toggleTurn,
-  refreshDetailSession, loadSessionDetail, initDetailSearch,
+  refreshDetailSession, loadSessionDetail, initDetailSearch, initGanttNavigation,
+  setTurnViewMode,
 } from './session-detail.js';
 import {
   fetchDashboard, fetchRequests, fetchAllSessions, fetchSessionsByProject,
@@ -318,6 +319,21 @@ function initEventDelegation() {
     applyDetailFilter();
   });
 
+  document.getElementById('btnTurnList')?.addEventListener('click', () => {
+    setTurnViewMode('list');
+    document.getElementById('btnTurnList')?.classList.add('active');
+    document.getElementById('btnTurnCard')?.classList.remove('active');
+    document.getElementById('turnListBody').style.display = '';
+    document.getElementById('turnCardBody').style.display = 'none';
+  });
+  document.getElementById('btnTurnCard')?.addEventListener('click', () => {
+    setTurnViewMode('card');
+    document.getElementById('btnTurnCard')?.classList.add('active');
+    document.getElementById('btnTurnList')?.classList.remove('active');
+    document.getElementById('turnListBody').style.display = 'none';
+    document.getElementById('turnCardBody').style.display = '';
+  });
+
   document.getElementById('detailView').addEventListener('click', e => {
     const turnBtn  = e.target.closest('[data-toggle-turn]');
     if (turnBtn) { toggleTurn(turnBtn.dataset.toggleTurn); return; }
@@ -385,6 +401,7 @@ function init() {
   initGantt();
   initToolStats();
   initDetailSearch();
+  initGanttNavigation();
   setInterval(() => { advanceBuckets(); drawTimeline(); }, 60000);
   setInterval(() => fetchAllSessions(), 30000);
 }
