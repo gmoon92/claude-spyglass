@@ -249,8 +249,6 @@ function connectSSE() {
 // ── 이벤트 위임 ──────────────────────────────────────────────────────────────
 function initEventDelegation() {
   document.querySelector('.left-panel').addEventListener('click', e => {
-    const toggleBtn = e.target.closest('[data-panel]');
-    if (toggleBtn) { togglePanelSection(toggleBtn.dataset.panel); return; }
     const projRow = e.target.closest('[data-project]');
     if (projRow) { selectProject(projRow.dataset.project); return; }
     const sessRow = e.target.closest('[data-session-id]');
@@ -377,48 +375,27 @@ function initEventDelegation() {
   });
 }
 
-// ── 왼쪽 패널 섹션 접기/펼치기 ────────────────────────────────────────────────
-const PANEL_STATE_KEY = 'left-panel-state';
 
-function getPanelState() {
-  try {
-    return JSON.parse(localStorage.getItem(PANEL_STATE_KEY) || '{}');
-  } catch {
-    return {};
+// ── LEFT PANEL COLLAPSE TOGGLE ─────────────────────────────────────────────
+const PANEL_HIDDEN_KEY = 'left-panel-hidden';
+
+function savePanelHiddenState(isHidden) {
+  localStorage.setItem(PANEL_HIDDEN_KEY, JSON.stringify(isHidden));
+}
+
+function restorePanelHiddenState() {
+  const isHidden = JSON.parse(localStorage.getItem(PANEL_HIDDEN_KEY) || 'false');
+  const mainLayout = document.querySelector('.main-layout');
+  if (isHidden) {
+    mainLayout.classList.add('left-panel-hidden');
   }
 }
 
-function savePanelState(state) {
-  localStorage.setItem(PANEL_STATE_KEY, JSON.stringify(state));
-}
-
-function togglePanelSection(panelId) {
-  const section = document.getElementById(`panel${panelId.charAt(0).toUpperCase() + panelId.slice(1)}`);
-  const btn = section?.querySelector('.btn-panel-toggle');
-  if (!section || !btn) return;
-
-  const isCollapsed = section.classList.contains('panel-section--collapsed');
-  section.classList.toggle('panel-section--collapsed');
-
-  const newState = getPanelState();
-  newState[panelId] = !isCollapsed;
-  savePanelState(newState);
-
-  btn.setAttribute('aria-label', isCollapsed ? '접기' : '펼치기');
-}
-
-function restorePanelState() {
-  const state = getPanelState();
-  Object.entries(state).forEach(([panelId, isCollapsed]) => {
-    if (isCollapsed) {
-      const section = document.getElementById(`panel${panelId.charAt(0).toUpperCase() + panelId.slice(1)}`);
-      if (section) {
-        section.classList.add('panel-section--collapsed');
-        const btn = section.querySelector('.btn-panel-toggle');
-        if (btn) btn.setAttribute('aria-label', '펼치기');
-      }
-    }
-  });
+function toggleLeftPanel() {
+  const mainLayout = document.querySelector('.main-layout');
+  mainLayout.classList.toggle('left-panel-hidden');
+  const isHidden = mainLayout.classList.contains('left-panel-hidden');
+  savePanelHiddenState(isHidden);
 }
 
 // ── Canvas ResizeObserver ─────────────────────────────────────────────────────
@@ -446,7 +423,8 @@ function init() {
   fetchCacheStats();
   fetchAllSessions().then(() => autoActivateProject());
   connectSSE();
-  restorePanelState();
+  restorePanelHiddenState();
+  document.getElementById('btnPanelCollapse').addEventListener('click', toggleLeftPanel);
   initEventDelegation();
   initCharts();
   initColResize(document.querySelector('#feedBody table'));
