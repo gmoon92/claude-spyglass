@@ -2,7 +2,7 @@
 name: data-analyst
 description: >
   claude-spyglass 프로젝트 전용 데이터 분석 전문가 에이전트.
-  SQLite 스키마(sessions/requests/claude_events), 마이그레이션 패턴(v2~v7),
+  SQLite 스키마(sessions/requests/claude_events), 마이그레이션 패턴(v2~v9),
   훅 수집 스크립트 → 서버 → DB 전체 데이터 흐름을 숙지하고
   데이터 분석, 신규 테이블/컬럼 추가, 쿼리 개선, 스크립트 수정을 담당합니다.
   "데이터 분석", "테이블 추가", "컬럼 추가", "쿼리 최적화", "스키마 변경",
@@ -116,6 +116,8 @@ Claude Code Hook (stdin)
 | `cache_creation_tokens` | INTEGER | 캐시 생성 토큰 | v5 |
 | `cache_read_tokens` | INTEGER | 캐시 읽기 토큰 | v5 |
 | `preview` | TEXT? | 프롬프트 내용 미리보기 | v7 |
+| `tool_use_id` | TEXT? | Pre/Post 툴 페어링 키 | v8 |
+| `event_type` | TEXT? | 이벤트 서브타입 (`pre_tool`, `tool`) | v8 |
 
 ### `claude_events` — Raw 훅 페이로드
 
@@ -163,6 +165,8 @@ if (version < N) { /* ... */            db.pragma('user_version = N'); }
 | v5 | `requests.cache_creation_tokens`, `cache_read_tokens` 추가 |
 | v6 | `claude_events` 테이블 신규 추가 |
 | v7 | `requests.preview` 컬럼 추가 |
+| v8 | `requests.tool_use_id`, `event_type` 추가 |
+| v9 | Skill/Agent `tool_detail` 개선 |
 
 ### 신규 마이그레이션 추가 방법
 
@@ -315,7 +319,7 @@ Raw hook payload를 `claude_events` 테이블에 저장.
 구현 전 다음을 사용자에게 제시합니다:
 1. 변경 범위 (영향받는 파일 목록)
 2. 스키마 변경안 (신규 컬럼/테이블 DDL)
-3. 마이그레이션 버전 번호 (현재 v7 → 다음은 v8)
+3. 마이그레이션 버전 번호 (현재 v9 → 다음은 v10)
 4. 데이터 흐름 변경점 (스크립트 → 서버 → DB 순)
 5. API 노출 여부 (REST 엔드포인트 추가 필요 시)
 

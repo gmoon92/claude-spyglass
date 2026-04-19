@@ -9,9 +9,10 @@
 ```css
 :root {
   /* 강조 */
-  --accent:       #d97757;
-  --accent-dim:   rgba(217, 119, 87, 0.1);
-  --accent-hover: rgba(217, 119, 87, 0.15);
+  --accent:            #d97757;
+  --accent-dim:        rgba(217,119,87,0.1);   /* 선택 행 배경 */
+  --accent-bg-light:   rgba(217,119,87,0.04);  /* 일반 행 hover, 확장 패널 */
+  --accent-bg-medium:  rgba(217,119,87,0.07);  /* clickable 행 hover */
 
   /* 배경 레이어 (깊이 순) */
   --bg:           #0f0f0f;   /* 최하층 */
@@ -19,6 +20,14 @@
   --surface-alt:  #1c1c1c;   /* 헤더/푸터 */
   --border:       #272727;
   --border-light: #333;
+
+  /* 역할 배지 배경 */
+  --blue-bg-light: rgba(96,165,250,0.18);   /* role/cache 배지 */
+  --red-bg-light:  rgba(239,68,68,0.18);    /* error 배지 */
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
 
   /* 텍스트 위계 */
   --text:         #e8e8e8;
@@ -138,8 +147,9 @@ font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
 
 ```css
 th { font-size: 10px; color: var(--text-dim); text-transform: uppercase; padding: 4px 8px; }
-td { font-size: 12px; padding: 4px 8px; }
-tr:hover   { background: var(--accent-dim); cursor: pointer; }
+td { font-size: 12px; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+tr:hover td          { background: var(--accent-bg-light); }   /* 일반 행 */
+tr.clickable:hover td { background: var(--accent-bg-medium); } /* 클릭 가능 행 */
 tr.selected { border-left: 2px solid var(--accent); }
 ```
 
@@ -192,7 +202,7 @@ tr[data-type="system"]    td:first-child { border-left: 2px solid var(--type-sys
 
 ```css
 .prompt-expand-box {
-  background: rgba(217,119,87,0.05);
+  background: var(--accent-bg-light);   /* rgba(217,119,87,0.04) */
   border-left: 2px solid var(--accent);
   padding: 8px 16px;
   font-size: 11px;

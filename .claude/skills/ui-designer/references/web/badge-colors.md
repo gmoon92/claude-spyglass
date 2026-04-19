@@ -105,10 +105,23 @@ const cls   = isAgent ? 'tool-icon-agent' : 'tool-icon-tool';
 
 `badges.css`의 `.mini-badge` 계열.
 
-| 배지 | 클래스 | 색상 | 용도 |
-|------|--------|------|------|
-| 캐시 히트 | `.badge-cache` | `#93c5fd` (blue-300) | cache_read_tokens > 0 |
-| 에러 | `.badge-error` | `#f87171` (red-400) | 요청 에러 표시 |
+| 배지 | 클래스 | 배경 토큰 | 텍스트 색상 | 용도 |
+|------|--------|----------|------------|------|
+| 캐시 히트 | `.badge-cache` | `--blue-bg-light` | `#93c5fd` (blue-300) | cache_read_tokens > 0 |
+| 에러 | `.badge-error` | `--red-bg-light` | `#f87171` (red-400) | 요청 에러 표시 |
+
+`.role-user` 배지 배경도 `--blue-bg-light` 동일 토큰 사용.
+
+---
+
+## Border Radius 규칙
+
+| 컴포넌트 | 토큰 | 값 |
+|----------|------|-----|
+| `.type-badge` | `--radius-sm` | 4px |
+| `.mini-badge` | `--radius-sm` | 4px |
+| `.expand-copy-btn` | `--radius-sm` | 4px |
+| `.cache-tooltip` | `--radius-md` | 6px |
 
 ---
 
@@ -118,3 +131,4 @@ const cls   = isAgent ? 'tool-icon-agent' : 'tool-icon-tool';
 2. **타입 색상은 `--type-*` 변수** — `design-tokens.css`의 ADR-003 선언 참조
 3. **파란색은 `--blue`** — 에이전트/캐시 공용, role-badge-user에는 사용하지 않음
 4. **새 배지 추가 시** — `design-tokens.css`에 변수 먼저 추가 → `badges.css`에 클래스 추가
+5. **border-radius는 `--radius-sm`/`--radius-md` 토큰** — 직접 px 값 사용 금지

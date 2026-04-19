@@ -5,7 +5,7 @@
 
 ---
 
-## 최종 현행화: 2026-04-19
+## 최종 현행화: 2026-04-19 (command-center-strip)
 
 ## 파일 구조
 
@@ -321,19 +321,37 @@ grid-template-columns: 28px minmax(140px,1fr) 56px 56px 72px 80px
 
 ---
 
-## 화면 5 — 요약 스트립
+## 화면 5 — 요약 스트립 (Command Center)
 
 **DOM ID**: `.summary-strip`
 **높이**: 40px
 **상태**: ✅ 현행
 
-| 카드 | 값 포맷 |
-|------|---------|
-| 총 세션 | 숫자 |
-| 총 요청 | 숫자 |
-| 총 토큰 | fmtToken (k/M) |
-| 활성 세션 | 숫자 |
-| 평균 응답시간 | formatDuration |
+### 좌측 그룹 — 활동 지표
+
+| 카드 | DOM ID | 값 포맷 |
+|------|--------|---------|
+| 총 세션 | `statSessions` | 숫자 |
+| 총 요청 | `statRequests` | 숫자 |
+| 총 토큰 | `statTokens` | fmtToken (k/M) |
+| 활성 세션 | `statActive` | 숫자 (`active` 클래스 토글) |
+| 평균 응답시간 | `statAvgDuration` | formatDuration |
+
+### 구분선
+
+`.stat-divider` — `1px solid var(--border)`, `align-self: stretch` (ADR-001)
+
+### 우측 그룹 — 비용·성능 지표
+
+| 카드 | DOM ID | 값 포맷 | 경고 조건 |
+|------|--------|---------|----------|
+| 오늘 비용 | `stat-cost` | `$X.XX` | — |
+| 캐시 절약 | `stat-cache-savings` | `$X.XX` | — |
+| P95 응답시간 | `stat-p95` | `Xms` / `X.Xs` | — |
+| 오류율 | `stat-error-rate` | `X.X%` | > 5% → `.is-alert` (red) |
+
+- 서버 필드 미수신 시 초기값 `--` 유지
+- 소스 필드: `d.summary.costUsd`, `cacheSavingsUsd`, `p95DurationMs`, `errorRate`
 
 ---
 
@@ -353,6 +371,13 @@ grid-template-columns: 28px minmax(140px,1fr) 56px 56px 72px 80px
 | 2026-04-19 | 3 | 패널 너비 리사이즈 핸들 추가 (드래그 + 더블클릭 Auto-fit) | left-panel-resize |
 | 2026-04-19 | 1-2, 2-1 | 테이블 컬럼 핸들 더블클릭 Auto-fit 추가 (col-resize.js) | left-panel-resize |
 | 2026-04-19 | 3-1 | 프로젝트 이름 컬럼 max-width:120px 제거 → .cell-proj-name CSS 클래스로 전환, colgroup 추가 | proj-name-truncation-fix |
+| 2026-04-19 | 5 | summary strip → Command Center: 구분선 + 비용·성능 지표 4개 추가 | command-center-strip |
+| 2026-04-19 | 1-2, 2-1 | cell-target ellipsis 버그 수정 (text-overflow + white-space 추가) | log-page-ux-fix |
+| 2026-04-19 | 1-2, 2-1 | 확장 패널 총글자수 힌트 제거 (복사 부작용 해소, ADR-002) | log-page-ux-fix |
+| 2026-04-19 | 전체 | CSS 하드코딩 rgba → 토큰 교체 (table.css 3곳, badges.css 3곳, turn-view.css 3곳) | log-page-ux-fix |
+| 2026-04-19 | 전체 | design-tokens.css 신규 토큰 6종: --accent-bg-light/medium, --blue/red-bg-light, --radius-sm/md | log-page-ux-fix |
+| 2026-04-19 | 전체 | badges.css border-radius 불일치 해소 → --radius-sm/--radius-md 일관 적용 | log-page-ux-fix |
+| 2026-04-19 | 1-2, 2-1 | Model 컬럼 'synthetic' 값을 '—'로 표시 (낶부 마커 숨김) | synthetic-model-display |
 
 ---
 
