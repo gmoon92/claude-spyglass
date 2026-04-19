@@ -35,7 +35,9 @@ TUI에서는 Ink `color` prop으로 동일 값 사용.
 | `--green` | `#4ade80` | 성공, 활성, 연결됨 |
 | `--orange` | `#f59e0b` | 경고, 부분 완료 |
 | `--red` | `#ef4444` | 에러, 실패 |
-| `--blue` | `#60a5fa` | 정보 |
+| `--blue` | `#60a5fa` | 정보, Agent/Skill/Task 아이콘 |
+| `--purple` | `#a78bfa` | Gantt/카드뷰 Task 전용 (--blue 통일 검토 중) |
+| `--pink` | `#f472b6` | WebSearch/WebFetch 전용 |
 | `--blue-bg-light` | `rgba(96,165,250,0.18)` | role/cache 배지 배경 |
 | `--red-bg-light` | `rgba(239,68,68,0.18)` | error/slow 배지 배경 |
 | `--yellow-bg-light` | `rgba(251,191,36,0.15)` | spike 배지 배경 |

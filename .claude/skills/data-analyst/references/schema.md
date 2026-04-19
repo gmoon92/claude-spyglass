@@ -2,7 +2,7 @@
 
 **파일**: `packages/storage/src/schema.ts`  
 **DB 경로**: `~/.spyglass/spyglass.db` (env: `SPYGLASS_DB_PATH`)  
-**현재 버전**: v9
+**현재 버전**: v11
 
 ---
 
@@ -104,6 +104,8 @@ CREATE TABLE IF NOT EXISTS requests (
   preview     TEXT,                        -- v7
   tool_use_id TEXT,                        -- v8
   event_type  TEXT,                        -- v8
+  tokens_confidence TEXT DEFAULT 'high',   -- v11
+  tokens_source     TEXT DEFAULT 'transcript', -- v11
   created_at  INTEGER DEFAULT (strftime('%s', 'now')),
   FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
@@ -139,6 +141,8 @@ CREATE INDEX idx_requests_tool_use_id  ON requests(tool_use_id) WHERE tool_use_i
 | `preview` | TEXT? | v7 | 프롬프트 내용 미리보기 |
 | `tool_use_id` | TEXT? | v8 | Pre/Post 툴 페어링 키 |
 | `event_type` | TEXT? | v8 | 이벤트 서브타입 (`pre_tool`, `tool`) |
+| `tokens_confidence` | TEXT | v11 | `'high'`(정상) / `'error'`(parseTranscript 실패) |
+| `tokens_source` | TEXT | v11 | `'transcript'`(정상 추출) / `'unavailable'`(파일 없음·파싱 실패) |
 
 **tool_detail 포맷**
 
@@ -167,11 +171,11 @@ CREATE INDEX idx_requests_tool_use_id  ON requests(tool_use_id) WHERE tool_use_i
 
 ---
 
-### claude_events (v6)
+### claude_events (v6, v11 정규화)
 
-| 목적 | Claude Code 훅의 원본 페이로드 보관 |
-|------|----------------------------------|
-| 레코드 수 (참고) | 157개 |
+| 목적 | Claude Code 훅의 원본 페이로드 + 정규화 필드 보관 |
+|------|--------------------------------------------|
+| 수집 범위 | 27개 HOOK_EVENTS 전체 (2026-04-20~ 확장) |
 
 ```sql
 CREATE TABLE IF NOT EXISTS claude_events (
@@ -185,21 +189,44 @@ CREATE TABLE IF NOT EXISTS claude_events (
   agent_type     TEXT,
   timestamp      INTEGER NOT NULL,
   payload        TEXT    NOT NULL DEFAULT '{}',
-  schema_version INTEGER DEFAULT 1
+  schema_version INTEGER DEFAULT 1,
+  -- v11 정규화 컬럼
+  permission_mode   TEXT,     -- SessionStart, PermissionRequest
+  source            TEXT,     -- SessionStart (startup|resume|compact)
+  end_reason        TEXT,     -- SessionEnd, Stop (reason 필드 매핑)
+  model             TEXT,     -- Stop, SessionStart (claude-opus-4-7 등)
+  stop_hook_active  INTEGER,  -- Stop (boolean → 0/1)
+  task_id           TEXT,     -- TaskCreated/Completed (tool_use_id 또는 task_id)
+  task_subject      TEXT,     -- TaskCreated (description 또는 subject)
+  notification_type TEXT      -- Notification
 );
 
 CREATE INDEX idx_events_session_time ON claude_events(session_id, timestamp);
 CREATE INDEX idx_events_type_time    ON claude_events(event_type, timestamp);
 ```
 
-**이벤트 타입 분포 (참고)**
+**27개 이벤트 → 정규화 컬럼 매핑 (v11)**
 
-| 이벤트 타입 | 개수 | 설명 |
-|------------|------|------|
-| Stop | 108 | 세션 중단 |
-| SessionStart | 26 | 세션 시작 |
-| SessionEnd | 22 | 세션 종료 |
-| PreToolUse | 1 | 도구 사용 시작 (예외적 기록) |
+| event_type | 사용 컬럼 | payload 전용 필드 |
+|---|---|---|
+| SessionStart | source, permission_mode, model | transcript_path, agents, mcp_servers |
+| SessionEnd | end_reason, model | (간단) |
+| Stop | end_reason, model, stop_hook_active | (간단) |
+| StopFailure | end_reason | error |
+| TaskCreated | task_id, task_subject | description, prompt, agent_type |
+| TaskCompleted | task_id | success, output_path |
+| SubagentStart | agent_id, agent_type | (기본 필드만) |
+| SubagentStop | agent_id, end_reason | (기본 필드만) |
+| Notification | notification_type | title, message |
+| PermissionRequest | permission_mode | tool_name, tool_input |
+| PermissionDenied | permission_mode | tool_name, reason |
+| PreCompact / PostCompact | (기본 필드만) | messages_count, before/after |
+| InstructionsLoaded | (기본 필드만) | files |
+| WorktreeCreate / WorktreeRemove | cwd | path |
+| CwdChanged / FileChanged | cwd | old_cwd, path |
+| UserPromptSubmit | — (→ requests로 이동) | prompt |
+| PreToolUse | — (타이밍 파일) | tool_name |
+| PostToolUse / PostToolUseFailure | — (→ requests) | tool_name, result |
 
 **이벤트 → 저장 위치 매핑**
 
@@ -207,8 +234,8 @@ CREATE INDEX idx_events_type_time    ON claude_events(event_type, timestamp);
 |--------|-----------|------------|
 | UserPromptSubmit | /collect | requests |
 | PreToolUse | 타이밍 파일만 | 없음 (의도적) |
-| PostToolUse | /collect | requests |
-| SessionStart / SessionEnd / Stop | /events | claude_events |
+| PostToolUse / PostToolUseFailure | /collect | requests |
+| 나머지 23개 훅 | /events | claude_events |
 
 ---
 
@@ -225,6 +252,8 @@ CREATE INDEX idx_events_type_time    ON claude_events(event_type, timestamp);
 | v7 | `requests.preview` 컬럼 추가 |
 | v8 | `requests.tool_use_id`, `event_type` 추가 |
 | v9 | Skill/Agent `tool_detail` 개선 |
+| v10 | (기존 확장 — 상세 생략) |
+| v11 | `requests`에 `tokens_confidence`, `tokens_source` / `claude_events`에 정규화 컬럼 8개 (`permission_mode`, `source`, `end_reason`, `model`, `stop_hook_active`, `task_id`, `task_subject`, `notification_type`) |
 
 ## 마이그레이션 코드 패턴
 

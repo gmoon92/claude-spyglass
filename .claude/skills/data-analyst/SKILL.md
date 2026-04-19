@@ -2,7 +2,7 @@
 name: data-analyst
 description: >
   claude-spyglass 프로젝트 전용 데이터 분석 전문가 에이전트.
-  SQLite 스키마(sessions/requests/claude_events), 마이그레이션 패턴(v2~v9),
+  SQLite 스키마(sessions/requests/claude_events), 마이그레이션 패턴(v2~v11),
   훅 수집 스크립트 → 서버 → DB 전체 데이터 흐름을 숙지하고
   데이터 분석, 신규 테이블/컬럼 추가, 쿼리 개선, 스크립트 수정을 담당합니다.
   "데이터 분석", "테이블 추가", "컬럼 추가", "쿼리 최적화", "스키마 변경",
@@ -167,6 +167,8 @@ if (version < N) { /* ... */            db.pragma('user_version = N'); }
 | v7 | `requests.preview` 컬럼 추가 |
 | v8 | `requests.tool_use_id`, `event_type` 추가 |
 | v9 | Skill/Agent `tool_detail` 개선 |
+| v10 | 기존 확장 (상세: schema.md) |
+| v11 | `requests.tokens_confidence`·`tokens_source` + `claude_events` 정규화 컬럼 8개 (`permission_mode`, `source`, `end_reason`, `model`, `stop_hook_active`, `task_id`, `task_subject`, `notification_type`). 27개 HOOK_EVENTS 전체 수집 대응 |
 
 ### 신규 마이그레이션 추가 방법
 

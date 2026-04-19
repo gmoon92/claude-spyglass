@@ -5,7 +5,7 @@
 
 ---
 
-## 최종 현행화: 2026-04-20 (summary-strip-ux)
+## 최종 현행화: 2026-04-20 (summary-strip-ux + turn-card-agent-name)
 
 ## 파일 구조
 
@@ -515,7 +515,7 @@ grid-template-columns: 28px minmax(140px,1fr) 56px 56px 72px 80px
 | 2026-04-19 | 2-0 | 접기/펼치기 + 닫기 버튼 분리: .detail-actions 그룹, SVG chevron 토글(rotate), SVG ✕ 닫기, .detail-collapsed CSS 클래스 상태, 접힌 헤더 클릭 펼치기 | detail-collapse-toggle |
 | 2026-04-19 | 2-0-1 | 접기 범위 축소: 차트 영역만 접기/펼치기 (탭바·컨트롤바·콘텐츠는 항상 표시). grid-template-rows 전환 애니메이션(0.3s ease-in-out), .context-chart-inner 래퍼 추가 | context-chart-toggle |
 | 2026-04-20 | 5 | Summary Strip 상태 클래스 추가: is-active-indicator (활성 세션), is-error (오류 > 0%), is-critical (오류 > 1%) | summary-strip-ux |
-
+| 2026-04-20 | 2-3 (card) | 턴 카드 chip에서 Agent/Skill 호출 시 서브에이전트명 표기: .agent-chip 클래스 + .agent-chip-name (max-width:10ch ellipsis) + toolIconHtml() 재사용, 압축 키 name+agentName 복합으로 변경 | turn-card-agent-name |
 
 ---
 

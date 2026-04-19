@@ -1,6 +1,5 @@
 ---
 name: data-engineer
-model: claude-sonnet-4-6
 description: >
   claude-spyglass 데이터 레이어 전담 에이전트.
   SQLite 스키마 변경, 마이그레이션 추가, 쿼리 개선, 훅 스크립트 수정 요청을

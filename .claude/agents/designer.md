@@ -1,6 +1,5 @@
 ---
 name: designer
-model: claude-sonnet-4-6
 description: >
   claude-spyglass UI/UX 전담 디자이너 에이전트.
   웹 대시보드와 TUI의 디자인·CSS·레이아웃·화면 설계 요청을

@@ -58,6 +58,8 @@
   --orange:       #f59e0b;
   --red:          #ef4444;
   --blue:         #60a5fa;
+  --purple:       #a78bfa;   /* Gantt/카드뷰 보라 (Task — --blue 통일 검토 중) */
+  --pink:         #f472b6;   /* WebSearch/WebFetch 전용 */
 
   /* 타입 색상 (ADR-003 SSoT) */
   --type-prompt-color:    #e8a07a;
