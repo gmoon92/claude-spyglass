@@ -146,6 +146,17 @@ bun run tui
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### Command Center Strip
+
+화면 상단 summary strip에서 아래 4개 지표를 실시간으로 확인할 수 있습니다:
+
+| 지표 | 설명 |
+|------|------|
+| **COST** | 오늘 API 실사용 비용 (USD) — model별 단가 × tokens 계산 |
+| **SAVED** | 프롬프트 캐시로 절약한 금액 (USD) |
+| **P95** | tool_call 응답시간 P95 (95번째 백분위) |
+| **ERR** | tool_call 오류율 (%) |
+
 ---
 
 ## ⌨️ 키보드 단축키
@@ -260,6 +271,25 @@ bun run tui
 | TUI | Ink (React) | 5.2.0 |
 | 저장소 | SQLite (WAL) | 3.40+ |
 | 통신 | HTTP + SSE | - |
+
+---
+
+## 📝 최근 변경사항
+
+### Skill/Agent 이름 표시 개선 (2024-04-19)
+
+**문제**: 대시보드에서 Skill 호출 시 `Skill(인자내용)` 형태로 표시되어 어떤 스킬인지 파악하기 어려움
+
+**해결**: 
+- **훅 스크립트 수정** (`hooks/spyglass-collect.sh`): Skill 호출 시 `skill` 필드 우선 추출
+  - 기존: `tool_detail`에 `args` 저장 → `Skill(#266234)`
+  - 개선: `tool_detail`에 스킬 이름 저장 → `Skill(backend-workflow)`
+- **기존 데이터 마이그레이션**: 31개 Skill 레코드 업데이트 완료
+
+**결과**:
+- **행위 컬럼**: 스킬 이름 표시 (예: `Skill(backend-workflow)`)
+- **메시지 컬럼**: args 내용 그대로 표시 (예: `#266234`)
+- Agent도 동일한 패턴으로 description 우선 표시
 
 ---
 
