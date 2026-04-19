@@ -35,7 +35,7 @@
 .turn-row .cell-time  { text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .turn-row:hover { background: var(--accent-bg-light); }
 .turn-row-prompt {
-  background: rgba(255,255,255,0.02); border-left: 2px solid var(--text-dim);
+  background: var(--white-bg-subtle); border-left: 2px solid var(--text-dim);
   margin: 0 16px 4px; border-radius: 4px; padding-left: 12px;
 }
 .turn-row-tool  { margin: 0 16px; }

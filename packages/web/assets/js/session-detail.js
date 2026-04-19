@@ -210,10 +210,12 @@ export async function refreshDetailSession(sessionId) {
   } catch { /* silent */ }
 }
 
-export async function loadSessionDetail(sessionId) {
+export async function loadSessionDetail(sessionId, opts = {}) {
+  const { signal } = opts;
+  const fetchOpts = signal ? { signal } : {};
   const [reqRes, turnRes] = await Promise.all([
-    fetch(`${API}/api/sessions/${encodeURIComponent(sessionId)}/requests?limit=200`),
-    fetch(`${API}/api/sessions/${encodeURIComponent(sessionId)}/turns`),
+    fetch(`${API}/api/sessions/${encodeURIComponent(sessionId)}/requests?limit=200`, fetchOpts),
+    fetch(`${API}/api/sessions/${encodeURIComponent(sessionId)}/turns`, fetchOpts),
   ]);
   const [reqJson, turnJson] = await Promise.all([reqRes.json(), turnRes.json()]);
   _detailAllRequests = reqJson.data  || [];

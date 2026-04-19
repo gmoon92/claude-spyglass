@@ -11,7 +11,7 @@
 /* ── LIVE BADGE ─────────────────────────────────────────────────────────── */
 .badge-live {
   display: inline-flex; align-items: center; gap: 6px;
-  background: var(--accent-dim); border: 1px solid rgba(217,119,87,0.35);
+  background: var(--accent-dim); border: 1px solid var(--accent-border);
   color: var(--accent); padding: 3px 10px; border-radius: 20px;
   font-size: 10px; font-weight: 700; letter-spacing: 0.6px;
 }
@@ -24,7 +24,7 @@
   50%      { opacity: 0.4; transform: scale(0.8); }
 }
 .badge-live.disconnected {
-  background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.35); color: var(--red);
+  background: var(--red-dim); border-color: var(--red-border); color: var(--red);
 }
 .badge-live.disconnected .dot { background: var(--red); animation: none; }
 
@@ -33,17 +33,17 @@
 /* ── ERROR BANNER ───────────────────────────────────────────────────────── */
 .error-banner {
   display: flex; align-items: center; gap: 10px;
-  background: rgba(239,68,68,0.08);
+  background: var(--red-bg-subtle);
   color: var(--red); font-size: 12px; flex-shrink: 0;
   max-height: 0; overflow: hidden; padding: 0 20px;
 }
-.error-banner.visible { max-height: 60px; padding: 10px 20px; border-bottom: 1px solid rgba(239,68,68,0.25); }
+.error-banner.visible { max-height: 60px; padding: 10px 20px; border-bottom: 1px solid var(--red-border); }
 .retry-btn {
   margin-left: auto; background: none; border: 1px solid var(--red);
   color: var(--red); padding: 3px 10px; border-radius: 6px;
   cursor: pointer; font-family: inherit; font-size: 11px;
 }
-.retry-btn:hover { background: rgba(239,68,68,0.12); }
+.retry-btn:hover { background: var(--red-dim); }
 
 /* ── DATE FILTER ────────────────────────────────────────────────────────── */
 .date-filter { display: flex; gap: 4px; align-items: center; }

@@ -7,12 +7,12 @@
 .type-prompt    { background: var(--type-prompt-bg);    color: var(--type-prompt-color); }
 .type-tool_call { background: var(--type-tool_call-bg); color: var(--type-tool_call-color); }
 .type-system    { background: var(--type-system-bg);    color: var(--type-system-color); }
-.type-unknown   { background: rgba(80,80,80,0.2);       color: var(--text-muted); }
+.type-unknown   { background: var(--unknown-bg);       color: var(--text-muted); }
 
 .role-badge { margin-left: 4px; }
-.role-user  { background: var(--blue-bg-light); color: #93c5fd; }
+.role-user  { background: var(--blue-bg-light); color: var(--blue-text); }
 
-.model-badge { margin-left: 4px; background: rgba(217,119,87,0.15); color: var(--accent); }
+.model-badge { margin-left: 4px; background: var(--model-badge-bg); color: var(--accent); }
 
 /* ── MINI BADGE (ADR-R10-002) ───────────────────────────────────────────── */
 .mini-badge {
@@ -20,11 +20,11 @@
   font-size: 9px; font-weight: 600; letter-spacing: 0.3px;
   vertical-align: middle; margin-left: 2px; white-space: nowrap;
 }
-.badge-cache   { background: var(--blue-bg-light); color: #93c5fd; }
-.badge-error   { background: var(--red-bg-light);  color: #f87171; }
-.badge-spike   { background: rgba(251,191,36,.15);  color: #fbbf24; }
-.badge-loop    { background: rgba(147,197,253,.12); color: #7dd3fc; }
-.badge-slow    { background: rgba(248,113,113,.12); color: #f87171; }
+.badge-cache   { background: var(--blue-bg-light); color: var(--blue-text); }
+.badge-error   { background: var(--red-bg-light);  color: var(--red-text); }
+.badge-spike   { background: var(--yellow-bg-light);  color: #fbbf24; }
+.badge-loop    { background: var(--sky-bg-light);   color: var(--sky-text); }
+.badge-slow    { background: var(--red-bg-light);   color: var(--red-text); }
 
 /* ── RUNNING ICON ANIMATION ─────────────────────────────────────────────── */
 @keyframes tool-running-pulse {

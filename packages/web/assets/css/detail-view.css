@@ -47,7 +47,7 @@
 .detail-agg-badge {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 10px; color: var(--text-dim);
-  background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+  background: var(--white-bg-subtle); border: 1px solid var(--border);
   padding: 2px 8px; border-radius: 4px; white-space: nowrap;
 }
 .detail-agg-badge strong { color: var(--accent); }
@@ -56,5 +56,5 @@
 .flat-subtotal td {
   font-size: 11px; color: var(--text-dim); padding: 6px 12px;
   border-top: 1px solid var(--border);
-  background: rgba(255,255,255,0.02) !important;
+  background: var(--white-bg-subtle) !important;
 }

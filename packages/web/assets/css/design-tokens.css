@@ -37,7 +37,27 @@
 
   /* ── 역할 배지 배경 ── */
   --blue-bg-light: rgba(96,165,250,0.18);   /* role/cache 배지 */
-  --red-bg-light:  rgba(239,68,68,0.18);    /* error 배지 */
+  --red-bg-light:  rgba(239,68,68,0.18);    /* error/slow 배지 */
+  --yellow-bg-light: rgba(251,191,36,0.15); /* spike 배지 */
+  --sky-bg-light: rgba(147,197,253,0.12);   /* loop 배지 */
+
+  /* ── 뱃지 텍스트 색상 ── */
+  --blue-text: #93c5fd;   /* role-user, cache 배지 */
+  --red-text:  #f87171;   /* error, slow 배지 */
+  --sky-text:  #7dd3fc;   /* loop 배지 */
+
+  /* ── 강조색 계열 (alpha 변형) ── */
+  --accent-border: rgba(217,119,87,0.35); /* border 강조 (LIVE 배지) */
+  --red-dim:       rgba(239,68,68,0.1);   /* error subtle 배경 (disconnected) */
+  --red-border:    rgba(239,68,68,0.35);  /* error border */
+  --red-bg-subtle: rgba(239,68,68,0.08);  /* error 배너 배경 */
+
+  /* ── 흰색 계열 (subtle 배경) ── */
+  --white-bg-subtle: rgba(255,255,255,0.02);  /* 약한 강조 배경 */
+
+  /* ── 기타 배지 ── */
+  --unknown-bg: rgba(80,80,80,0.2);           /* type-unknown 배지 */
+  --model-badge-bg: rgba(217,119,87,0.15);    /* model-badge 배경 */
 
   /* ── Border Radius 토큰 ── */
   --radius-sm: 4px;
