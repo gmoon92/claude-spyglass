@@ -1,164 +1,278 @@
-# left-panel-collapse ADR
+# left-panel-collapse ADR (재작업)
 
-## ADR-001: Flex 레이아웃으로 변환하여 collapse 구현 (수정됨)
+## ADR-001: IDE 스타일 전체 패널 숨김 vs 섹션별 토글 (대체됨)
 
 ### 상태
-**결정됨** (2026-04-20, **재검토 2026-04-20**)
+**대체됨** (2026-04-20)
 
 ### 배경
-초기 결정(옵션 C)에서 `.left-panel`이 `display: grid`였고 `grid-template-rows: 215px 1fr 160px`로 고정되어 있었음. Grid children에 적용한 `flex: 0 0 auto` 속성은 **flex 속성이므로 grid 컨텍스트에서 무시됨**. 결과적으로:
-- 접힌 섹션의 grid row가 여전히 원래 높이 유지 (215px 또는 160px)
-- 빈 공간만 남아 접기 기능이 무용지물
+초기 요구사항 해석이 잘못되어, 3개 섹션을 각각 접는 기능으로 구현함.
+사용자의 정확한 요구사항: **전체 왼쪽 패널을 좌우로 접어서 완전히 숨기는 기능** (IDE 사이드바 패턴)
 
-### 고려한 옵션
+### 이전 결정
+- 옵션 D: 섹션별 토글 (`.left-panel`을 flex로 변환 후 각 섹션의 flex basis 설정)
+- 섹션별 토글 버튼 3개 추가
+- localStorage에 `left-panel-state` JSON 객체로 3개 섹션 상태 저장
 
-| 옵션 | 설명 | 장점 | 단점 |
-|------|------|------|------|
-| A: grid-rows auto로 변경 | CSS에서 `grid-template-rows: auto 1fr auto`로 고정 | 간단함. 접기/펼치기가 자동으로 작동 | 마지막 row가 콘텐츠 크기로 가변되어 UX 일관성 감소 |
-| B: JS에서 CSS 변수 제어 | 접힘 상태에 따라 JS에서 `--project-panel-height` 등을 동적으로 갱신 | 정확한 높이 제어. 기존 변수 활용 가능 | 복잡함. 상태 관리 필요. panel-resize.js와 충돌 위험 |
-| C (초기): Grid children에 flex 속성 | `.panel-section--collapsed { flex: 0 0 auto; }` 추가 | **실제로는 작동하지 않음** (flex 속성은 grid 자식에 무시됨) | **채택 불가** |
-| D (최종): `.left-panel`을 flex로 변환 | `display: flex; flex-direction: column` + 각 섹션에 `flex: 0 0 [고정값]` 또는 `flex: 1 1 0` | **Flex 속성이 정상 작동**. 간단하고 명확함. 다른 모듈과 충돌 없음 | 초기 설계 변경 필요 |
-
-### 최종 결정
-**옵션 D: `.left-panel`을 `display: flex`로 변환하고 각 섹션의 flex basis 설정**
-
-### 변경 사항
-1. `.left-panel`: `display: grid` → `display: flex; flex-direction: column`
-2. `grid-template-rows` 제거
-3. 각 섹션의 flex basis 설정:
-   - `#panelProjects`: `flex: 0 0 var(--project-panel-height)` (215px 고정)
-   - `#panelSessions`: `flex: 1 1 0` (남은 공간 모두 차지)
-   - `#panelTools`: `flex: 0 0 var(--tool-stats-height)` (160px 고정)
-4. `.panel-section--collapsed`: `flex: 0 0 auto` (이제 정상 작동 → 헤더 높이만 차지)
-
-### 이유
-1. **정확한 동작**: Flex 속성이 grid가 아닌 flex children에서 정상 작동
-2. **간결성**: 초기 결정보다 구현이 더 단순함
-3. **확장성**: 향후 섹션 추가 시 flex basis 추가만으로 충분
-4. **호환성**: `panel-resize.js`는 너비만 제어하므로 충돌 없음
-
-### 구현 방식
-```css
-.left-panel {
-  display: flex; flex-direction: column;
-  overflow: hidden;
-}
-#panelProjects { flex: 0 0 var(--project-panel-height); }
-#panelSessions { flex: 1 1 0; }
-#panelTools { flex: 0 0 var(--tool-stats-height); }
-.panel-section--collapsed { flex: 0 0 auto; }
-```
+### 취소 사유
+1. **요구사항 오해**: 섹션별이 아닌 전체 패널 토글이 필요함
+2. **구현 롤백 필요**: HTML/CSS/JS의 섹션별 토글 코드 전부 제거
+3. **새로운 설계**: 토글 버튼 1개, localStorage 키 1개로 단순화
 
 ---
 
-## ADR-002: 토글 버튼 위치 및 마크업
+## ADR-001: 왼쪽 패널 전체 숨김 메커니즘
 
 ### 상태
 **결정됨** (2026-04-20)
 
 ### 배경
-3개 섹션 중:
-- 프로젝트: `<span class="panel-hint">클릭하여 세션 조회</span>` → 제거 예정
-- 세션: `<span class="panel-hint" id="sessionPaneHint">프로젝트를 선택하세요</span>` → 동적 상태 텍스트 (유지 필수)
-- 툴 통계: `<span class="panel-hint" id="toolCount">—</span>` → 동적 카운트 (유지 필수)
-
-요구사항은 "hint가 있으면 hint 옆에, 없으면 단독" 배치.
+사용자가 필요에 따라 왼쪽 패널 전체를 숨기고 오른쪽 메인 컨텐츠 영역을 최대한 활용할 수 있어야 함.
+현재 레이아웃: `.main-layout { display: grid; grid-template-columns: var(--left-panel-width) 1fr; }`
 
 ### 고려한 옵션
 
 | 옵션 | 설명 | 장점 | 단점 |
 |------|------|------|------|
-| A: 항상 hint 제거, 토글 버튼만 배치 | `.panel-hint` 삭제 후 `<button class="btn-panel-toggle">` 추가 | 간단함. 모든 섹션 일관됨 | 세션·툴 통계의 동적 상태 텍스트 손실 (요구사항 위반) |
-| B: hint 유지, 토글 버튼을 flex 오른쪽에 배치 | `<div class="panel-header-right"><span class="panel-hint">...</span><button>...</button></div>` 구조 | 동적 텍스트 유지. 요구사항 충족 | 마크업 변경 범위 커짐 |
-| C: hint는 있는 곳만 유지, 없는 곳(프로젝트)만 버튼 추가 | 프로젝트 hint만 제거, 토글 버튼 추가. 다른 2개는 hint 옆에 버튼 추가 | 최소 변경. 유지보수 용이 | 3개 섹션의 마크업 구조가 약간 다름 |
+| A: grid-template-columns 동적 변경 | 숨김: `1fr`, 펼침: `var(--left-panel-width) 1fr` | 표준적. 다른 레이아웃 변경 없음 | CSS 클래스 토글로 제어 필요 |
+| B: .left-panel에 display:none | 숨김: `.left-panel { display: none; }`, grid는 유지 | 간단함 | grid-template-columns 여전히 2열인데 첫 열 비어있음 (비효율) |
+| C: transform: translateX | 숨김: `translate(-100%)`, 스크롤 가능 | 애니메이션 부드러움 | 패널 영역이 DOM에 남아 마우스 이벤트 가로챌 수 있음 |
+| D: position absolute + 오버레이 | 패널을 absolute로 변경, 숨김 시 left:-100% | 모바일 친화적. 오버레이 패턴 | desktop 데스크톱에서 불필요한 복잡성 |
 
 ### 결정
-**옵션 B: flex 레이아웃으로 hint와 토글 버튼을 오른쪽 영역에 배치**
+**옵션 A: grid-template-columns 동적 변경 + .left-panel-hidden 클래스 토글**
 
 ### 이유
-1. **일관성**: 모든 섹션의 마크업 구조가 동일
-2. **요구사항 충족**: 동적 텍스트 유지 + 토글 버튼 배치
-3. **유연성**: 향후 헤더에 추가 요소가 필요할 때 확장 가능
-4. **레이아웃 안정성**: flexbox `justify-content: space-between`으로 간단하게 정렬
+1. **표준 패턴**: IDE(VS Code, WebStorm 등)의 사이드바 토글 방식과 동일
+2. **효율성**: 숨겨진 상태에서 오른쪽 패널이 전체 너비 차지
+3. **간결성**: CSS 클래스 하나로 제어 가능
+4. **레이아웃 안정성**: grid 구조 유지, 다른 모듈과 충돌 없음
 
 ### 구현 방식
+
+**CSS (layout.css)**
+```css
+.main-layout {
+  display: grid;
+  grid-template-columns: var(--left-panel-width) 1fr;
+}
+
+.main-layout.left-panel-hidden {
+  grid-template-columns: 1fr;
+}
+
+.main-layout.left-panel-hidden .left-panel {
+  display: none;
+}
+```
+
+**HTML (index.html .header-left에 추가)**
 ```html
-<div class="panel-header">
-  <span class="panel-label">프로젝트</span>
-  <div class="panel-header-right">
-    <span class="panel-hint">클릭하여 세션 조회</span> <!-- 또는 없음 -->
-    <button class="btn-panel-toggle" aria-label="접기">...</button>
-  </div>
+<button class="btn-panel-collapse" id="btnPanelCollapse" 
+        title="왼쪽 패널 숨기기" aria-label="왼쪽 패널 숨기기">
+  <svg>...</svg>
+</button>
+```
+
+**JavaScript (main.js)**
+```javascript
+function toggleLeftPanel() {
+  const mainLayout = document.querySelector('.main-layout');
+  mainLayout.classList.toggle('left-panel-hidden');
+  savePanelHiddenState(mainLayout.classList.contains('left-panel-hidden'));
+}
+
+function savePanelHiddenState(isHidden) {
+  localStorage.setItem('left-panel-hidden', JSON.stringify(isHidden));
+}
+
+function restorePanelHiddenState() {
+  const isHidden = JSON.parse(localStorage.getItem('left-panel-hidden') || 'false');
+  const mainLayout = document.querySelector('.main-layout');
+  if (isHidden) {
+    mainLayout.classList.add('left-panel-hidden');
+  }
+}
+
+// 초기화 (페이지 로드 시)
+restorePanelHiddenState();
+document.getElementById('btnPanelCollapse').addEventListener('click', toggleLeftPanel);
+```
+
+---
+
+## ADR-002: 토글 버튼 배치 위치
+
+### 상태
+**결정됨** (2026-04-20)
+
+### 배경
+토글 버튼이 `.left-panel` 안에 있으면, 패널을 숨겼을 때 버튼에 접근 불가능.
+다시 펼치는 방법이 없어지는 UX 문제 발생.
+
+### 고려한 옵션
+
+| 옵션 | 설명 | 장점 | 단점 |
+|------|------|------|------|
+| A: .header 왼쪽 끝 (.header-left 내부) | 항상 보임. IDE 표준 패턴 | 항상 접근 가능. 다시 펼칠 수 있음. 가장 일반적 | 헤더가 약간 복잡해짐 |
+| B: .right-panel 최상단 왼쪽 | 오른쪽 패널에 통합 | 오른쪽 컨텐츠와 함께 제어 | 헤더와 분리되어 UI 불일치 |
+| C: 숨겨진 상태에서만 보이는 플로팅 버튼 | 숨김: floating 우측 하단, 펼침: 헤더 왼쪽 | 세련됨. 숨겨진 상태 강조 | 구현 복잡. 두 위치에 버튼 유지 필요 |
+
+### 결정
+**옵션 A: .header-left 내부에 배치**
+
+### 이유
+1. **접근성**: 항상 버튼이 보이므로 다시 펼칠 수 있음
+2. **표준성**: VS Code, WebStorm 등 IDE의 사이드바 토글 버튼 위치와 동일
+3. **일관성**: 헤더에 통합되어 다른 컨트롤(로고, 필터)과 함께 배치
+4. **구현 단순**: 기존 헤더 구조에 버튼 추가만으로 충분
+
+### 구현 위치
+```html
+<div class="header-left">
+  <div class="logo">Claude<span>Spyglass</span></div>
+  <button class="btn-panel-collapse" id="btnPanelCollapse" ...></button>
+  <!-- 기타 헤더 요소 -->
 </div>
 ```
 
 ---
 
-## ADR-003: 토글 버튼 스타일 및 인터랙션
+## ADR-003: 토글 버튼 아이콘 스타일
 
 ### 상태
 **결정됨** (2026-04-20)
 
 ### 배경
-이미 존재하는 detail-view의 `.btn-toggle` 스타일(lines 15-31)을 참고하여 왼쪽 패널용 토글 버튼도 동일 UX 패턴을 적용할 것 (화살표 회전, hover 액센트 컬러).
+사용자가 버튼의 현재 상태(패널 열림/닫힘)를 시각적으로 인식해야 함.
+아이콘이 상태에 따라 변해야 명확함.
 
 ### 고려한 옵션
 
 | 옵션 | 설명 | 장점 | 단점 |
 |------|------|------|------|
-| A: detail-view의 `.btn-toggle` 클래스 재사용 | 같은 클래스 이름 사용 | 코드 중복 없음 | 의미가 명확하지 않을 수 있음 (좌측 vs 우측 패널) |
-| B: `.btn-panel-toggle` 새 클래스 생성 | 왼쪽 패널 전용 클래스 이름 | 명확한 의도. 향후 커스터마이제이션 용이 | 스타일 약간 중복 |
-| C: CSS 변수로 공통 스타일 추상화 | `.btn-toggle-base` + `--btn-toggle-icon-size` 등 | 최대 재사용성 | 오버엔지니어링 위험 |
+| A: 햄버거 메뉴 아이콘 (≡) | 숨김: 그대로, 펼침: 다른 아이콘 | 친숙함. 모바일 표준 | 좌우 패널 토글 의도 명확하지 않음 |
+| B: 좌우 화살표 (‹ › 또는 ‹‹ ››) | 왼쪽 화살표: 패널 숨김, 오른쪽 화살표: 패널 펼침 | 방향성 명확. 상태 일치 | 회전 애니메이션보다 2개 아이콘 필요 |
+| C: 세로 막대 + 화살표 (┃‹ / ┃›) | 왼쪽 막대: 패널 경계, 화살표: 방향 | IDE 스타일. 명확함 | SVG 약간 복잡 |
+| D: Chevron left/right (‹ › 회전) | 펼침: ›, 숨김: ‹ (회전 또는 아이콘 변경) | 간단. 최소 SVG | 상태 변화가 눈에 띄지 않을 수 있음 |
 
 ### 결정
-**옵션 B: `.btn-panel-toggle` 새 클래스 이름 사용, detail-view의 스타일 패턴 모방**
+**옵션 C: 세로 막대 + 화살표 조합 (IDE 스타일)**
 
 ### 이유
-1. **명확성**: left-panel 컨텍스트에서 역할이 명확함
-2. **유지보수**: 향후 left-panel 토글과 detail-view 토글의 스타일을 다르게 조정할 필요가 생길 때 독립적 수정 가능
-3. **코드 의도**: 같은 패턴이지만 다른 클래스명으로 의도를 명시
+1. **명확성**: 세로 막대로 패널 경계를 나타내고, 화살표로 펼침/숨김 상태 표현
+2. **표준성**: VS Code, WebStorm의 사이드바 토글 아이콘과 유사
+3. **시각적 피드백**: 아이콘이 변해서 상태 변화를 명확히 나타냄
+4. **일관성**: 현재 detail-view의 화살표(`<` 방향) 패턴과 유사
 
 ### 구현 방식
-- CSS: left-panel.css에 `.btn-panel-toggle` 추가 (detail-view.css의 `.btn-toggle` 스타일 참조)
-- SVG: 같은 `<` 화살표 (또는 `˅` 느낌의 회전)
-- 상태: `.panel-section--collapsed`일 때 `transform: rotate(180deg)`
+
+```html
+<!-- 펼침 상태 (패널 보임) -->
+<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+  <path d="M2 2 L2 12" stroke="currentColor" stroke-width="1.5"/>
+  <path d="M5 7 L2 10 L5 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+</svg>
+
+<!-- 숨김 상태 (패널 숨겨짐) -->
+<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+  <path d="M2 2 L2 12" stroke="currentColor" stroke-width="1.5"/>
+  <path d="M5 7 L2 4 L5 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+</svg>
+```
+
+또는 CSS `transform: rotate()`으로 단일 SVG 회전 제어 가능.
 
 ---
 
-## ADR-004: localStorage 키 네이밍 및 상태 포맷
+## ADR-004: 토글 상태 저장소 및 키 네이밍
 
 ### 상태
 **결정됨** (2026-04-20)
 
 ### 배경
-3개 섹션의 접힘 상태를 localStorage에 저장하여 페이지 새로고침 후에도 유지해야 함.
+사용자가 패널을 숨긴 후 페이지를 새로고침했을 때도 숨김 상태가 유지되어야 함.
 
 ### 고려한 옵션
 
 | 옵션 | 설명 | 장점 | 단점 |
 |------|------|------|------|
-| A: 개별 키 3개 | `left-panel-collapsed-projects`, `-sessions`, `-tools` (JSON: `{collapsed: true/false}`) | 섹션별 독립 제어 가능 | localStorage 키 3개 필요 |
-| B: 단일 JSON 객체 | `left-panel-state` (JSON: `{projects: boolean, sessions: boolean, tools: boolean}`) | 한 번에 로드/저장. 관리 간단 | 부분 업데이트 시 전체 객체 파싱 필요 |
-| C: 비트 플래그 | `left-panel-collapsed` (숫자: 0b101 = projects, tools 접힘) | 공간 효율적 | 디버깅 어려움. 가독성 낮음 |
+| A: localStorage boolean 문자열 | `localStorage.setItem('left-panel-hidden', 'true')` | 간단함. 직관적 | 타입 변환 필요 |
+| B: localStorage JSON boolean | `localStorage.setItem('left-panel-hidden', JSON.stringify(true))` | 명확함. 확장성 있음 | 약간의 파싱 오버헤드 |
+| C: sessionStorage | 탭/윈도우 닫으면 초기화 | 임시 상태에 적합 | 사용자 선호도 미반영 (문제) |
+| D: IndexedDB | 복잡한 상태 저장 | 대용량 데이터 가능 | 오버엔지니어링 |
 
 ### 결정
-**옵션 B: 단일 JSON 객체 `left-panel-state`에 3개 섹션 상태 포함**
+**옵션 B: localStorage + JSON.stringify/parse, 키명: `left-panel-hidden`**
 
 ### 이유
-1. **관리 간편**: 한 번의 localStorage 쿼리로 모든 상태 로드
-2. **확장성**: 향후 새 섹션 추가 시 객체 키만 추가하면 됨
-3. **성능**: 개별 키 3개보다 단일 파싱이 효율적
+1. **간결성**: 단일 boolean 값만 저장
+2. **확장성**: 향후 구조 확장 필요 시 JSON 객체로 전환 용이
+3. **표준성**: 다른 UI 상태 저장과 일관성 유지
+4. **영속성**: localStorage는 브라우저 재시작 후에도 유지됨
 
 ### 구현 방식
-```javascript
-// 저장
-const state = {
-  projects: false,  // collapsed 여부
-  sessions: false,
-  tools: true       // 예: 툴 통계 접혀있음
-};
-localStorage.setItem('left-panel-state', JSON.stringify(state));
 
-// 로드
-const state = JSON.parse(localStorage.getItem('left-panel-state') || '{}');
+```javascript
+const PANEL_HIDDEN_KEY = 'left-panel-hidden';
+
+function savePanelHiddenState(isHidden) {
+  localStorage.setItem(PANEL_HIDDEN_KEY, JSON.stringify(isHidden));
+}
+
+function restorePanelHiddenState() {
+  const isHidden = JSON.parse(localStorage.getItem(PANEL_HIDDEN_KEY) || 'false');
+  return isHidden;
+}
 ```
+
+---
+
+## ADR-005: Resize Handle과 토글 상태의 상호작용
+
+### 상태
+**결정됨** (2026-04-20)
+
+### 배경
+`.panel-resize-handle`은 현재 `.left-panel`의 오른쪽 가장자리에 위치.
+패널을 숨길 때 resize handle도 함께 숨겨져야 하며, 그렇지 않으면:
+1. 사용자가 실수로 resize를 시도할 수 있음
+2. 오른쪽 패널 콘텐츠와 겹칠 수 있음
+
+### 고려한 옵션
+
+| 옵션 | 설명 | 장점 | 단점 |
+|------|------|------|------|
+| A: resize handle도 display:none | 패널 숨김 시 자동 숨겨짐 | 간단함. CSS로 충분 | 특별한 로직 불필요 |
+| B: resize handle은 보임, 비활성화 | 시각적 표시 유지, pointer-events:none | 패널 상태 표시 가능 | 불필요한 UI 요소 |
+| C: JavaScript에서 명시적 제어 | toggle 함수에서 handle의 visibility 제어 | 명확한 의도 | 코드 증가 |
+
+### 결정
+**옵션 A: CSS로 자동 처리 (`.main-layout.left-panel-hidden .panel-resize-handle { display: none; }`)**
+
+### 이유
+1. **간결성**: CSS 추가 규칙으로 충분
+2. **자동성**: JavaScript 로직 추가 없음
+3. **일관성**: `.left-panel` 전체를 숨기므로 handle도 자동 숨겨짐
+
+### 구현 방식
+
+```css
+.main-layout.left-panel-hidden .panel-resize-handle {
+  display: none;
+}
+```
+
+---
+
+## 최종 정리
+
+| 항목 | 결정 |
+|------|------|
+| 토글 범위 | 전체 왼쪽 패널 (섹션별 아님) |
+| 메커니즘 | grid-template-columns 동적 변경 + .left-panel-hidden 클래스 |
+| 버튼 위치 | .header-left 내부 |
+| 버튼 아이콘 | 세로 막대 + 화살표 (상태에 따라 변함) |
+| 저장소 | localStorage, 키: left-panel-hidden, 값: JSON boolean |
+| Resize handle | 패널 숨김 시 함께 display:none |
+| 이전 구현 | 섹션별 토글 코드 완전 롤백 |
