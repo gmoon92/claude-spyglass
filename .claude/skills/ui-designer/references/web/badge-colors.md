@@ -23,7 +23,7 @@
 .type-prompt    /* 주황: var(--type-prompt-bg) bg, var(--type-prompt-color) text */
 .type-tool_call /* 초록: var(--type-tool_call-bg) bg, var(--type-tool_call-color) text */
 .type-system    /* 노랑: var(--type-system-bg) bg, var(--type-system-color) text */
-.type-unknown   /* 회색: rgba(80,80,80,0.2) bg, var(--text-muted) text */
+.type-unknown   /* 회색: var(--unknown-bg) bg, var(--text-muted) text */
 ```
 
 ---
@@ -109,7 +109,7 @@ const cls   = isAgent ? 'tool-icon-agent' : 'tool-icon-tool';
 |------|--------|----------|-------------|-----------|------|
 | 캐시 히트 | `.badge-cache` | `--blue-bg-light` | `--blue-text` | #93c5fd | cache_read_tokens > 0 |
 | 에러 | `.badge-error` | `--red-bg-light` | `--red-text` | #f87171 | 요청 에러 표시 |
-| 토큰 스파이크 | `.badge-spike` | `--yellow-bg-light` | `--orange` | #f59e0b | 세션 평균 대비 2배 초과 |
+| 토큰 스파이크 | `.badge-spike` | `--yellow-bg-light` | `#fbbf24` (하드코딩) | #fbbf24 | 세션 평균 대비 2배 초과 |
 | 루프 감지 | `.badge-loop` | `--sky-bg-light` | `--sky-text` | #7dd3fc | 동일 툴 연속 3회+ 호출 |
 | 느린 실행 | `.badge-slow` | `--red-bg-light` | `--red-text` | #f87171 | duration_ms > P95 |
 

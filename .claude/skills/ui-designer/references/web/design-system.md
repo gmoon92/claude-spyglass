@@ -32,12 +32,17 @@
   --sky-text:  #7dd3fc;   /* loop 배지 */
 
   /* 강조색 계열 (alpha 변형) */
-  --accent-border: rgba(217,119,87,0.3);  /* border 강조 */
-  --red-dim:       rgba(239,68,68,0.1);   /* error subtle 배경 */
+  --accent-border: rgba(217,119,87,0.35); /* border 강조 (LIVE 배지) */
+  --red-dim:       rgba(239,68,68,0.1);   /* error subtle 배경 (disconnected) */
   --red-border:    rgba(239,68,68,0.35);  /* error border */
+  --red-bg-subtle: rgba(239,68,68,0.08);  /* error 배너 배경 */
 
   /* 흰색 계열 (subtle 배경) */
-  --white-bg-subtle: rgba(255,255,255,0.03);  /* 약한 강조 배경 */
+  --white-bg-subtle: rgba(255,255,255,0.02);  /* 약한 강조 배경 */
+
+  /* 기타 배지 */
+  --unknown-bg: rgba(80,80,80,0.2);           /* type-unknown 배지 */
+  --model-badge-bg: rgba(217,119,87,0.15);    /* model-badge 배경 */
 
   /* Border Radius */
   --radius-sm: 4px;

@@ -5,15 +5,15 @@
 
 ---
 
-## 최종 현행화: 2026-04-19 (command-center-strip)
+## 최종 현행화: 2026-04-19 (tooltip-supplement)
 
 ## 파일 구조
 
 ```
 packages/web/
-├── index.html                  ← HTML 마크업 전용 (261줄)
+├── index.html                  ← HTML 마크업 전용 (330줄)
 └── assets/
-    ├── css/                    ← 컴포넌트별 CSS 분리 (11개 파일)
+    ├── css/                    ← 컴포넌트별 CSS 분리 (12개 파일)
     │   ├── design-tokens.css   ← :root 변수 SSoT (ADR-003)
     │   ├── layout.css
     │   ├── header.css
@@ -22,10 +22,11 @@ packages/web/
     │   ├── default-view.css
     │   ├── detail-view.css
     │   ├── table.css
-    │   ├── badges.css
+    │   ├── badges.css          ← .cache-tooltip / .stat-tooltip 포함
     │   ├── skeleton.css
+    │   ├── cache-panel.css
     │   └── turn-view.css
-    └── js/                     ← native ESM 모듈 (8개 파일)
+    └── js/                     ← native ESM 모듈 (15개 파일)
         ├── main.js             ← 진입점
         ├── formatters.js
         ├── chart.js
@@ -33,7 +34,15 @@ packages/web/
         ├── infra.js
         ├── left-panel.js
         ├── session-detail.js
-        └── api.js
+        ├── api.js
+        ├── cache-tooltip.js    ← Cache 셀 hover 툴팁
+        ├── stat-tooltip.js     ← Summary Strip stat-card hover 툴팁
+        ├── cache-panel-tooltip.js ← Cache Intelligence Panel hover 툴팁
+        ├── cache-panel.js
+        ├── anomaly.js
+        ├── panel-resize.js
+        ├── col-resize.js
+        └── resize-utils.js
 ```
 
 ---
@@ -378,6 +387,7 @@ grid-template-columns: 28px minmax(140px,1fr) 56px 56px 72px 80px
 | 2026-04-19 | 전체 | design-tokens.css 신규 토큰 6종: --accent-bg-light/medium, --blue/red-bg-light, --radius-sm/md | log-page-ux-fix |
 | 2026-04-19 | 전체 | badges.css border-radius 불일치 해소 → --radius-sm/--radius-md 일관 적용 | log-page-ux-fix |
 | 2026-04-19 | 1-2, 2-1 | Model 컬럼 'synthetic' 값을 '—'로 표시 (낶부 마커 숨김) | synthetic-model-display |
+| 2026-04-19 | 전체 | 툴팁 보완: Cache Panel 3섹션(hover), turn-meta/detail-agg-badge(title), liveBadge/날짜필터/타입필터(title) | tooltip-supplement |
 
 ---
 
