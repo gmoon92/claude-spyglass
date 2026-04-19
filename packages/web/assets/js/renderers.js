@@ -23,7 +23,7 @@ export function toolIconHtml(toolName) {
   const isAgent = toolName && /^(Agent|Skill|Task)/.test(toolName);
   return isAgent
     ? '<span class="tool-icon tool-icon-agent">◎</span>'
-    : '<span class="tool-icon tool-icon-default">◉</span>';
+    : '<span class="tool-icon tool-icon-tool">◉</span>';
 }
 
 // payload에서 tool_response 추출
@@ -91,6 +91,12 @@ export function makeActionCell(r) {
 }
 
 export function makeTargetCell(r) {
+  if (r.type === 'prompt') {
+    return `<td class="cell-target"><span class="target-role-badge role-badge-user"><span class="role-icon">◉</span>user</span></td>`;
+  }
+  if (r.type === 'system') {
+    return `<td class="cell-target"><span class="target-role-badge role-badge-system"><span class="role-icon">◉</span>system</span></td>`;
+  }
   if (r.type !== 'tool_call' || !r.tool_name) {
     return `<td class="cell-target cell-empty">—</td>`;
   }
@@ -105,7 +111,7 @@ export function makeTargetCell(r) {
 }
 
 export function makeModelCell(r) {
-  if (r.type !== 'prompt' || !r.model) {
+  if (!r.model) {
     return `<td class="cell-model cell-empty">—</td>`;
   }
   return `<td class="cell-model"><span class="model-name">${escHtml(r.model)}</span></td>`;
