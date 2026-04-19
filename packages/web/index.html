@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="/assets/css/table.css">
   <link rel="stylesheet" href="/assets/css/badges.css">
   <link rel="stylesheet" href="/assets/css/skeleton.css">
+  <link rel="stylesheet" href="/assets/css/cache-panel.css">
   <link rel="stylesheet" href="/assets/css/turn-view.css">
 </head>
 <body>
@@ -46,25 +47,42 @@
 
   <!-- SUMMARY STRIP -->
   <div class="summary-strip">
-    <div class="stat-card">
+    <div class="stat-card" data-stat-tooltip="sessions">
       <span class="stat-label">총 세션</span>
       <span class="stat-value" id="statSessions"><span class="skeleton"></span></span>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" data-stat-tooltip="requests">
       <span class="stat-label">총 요청</span>
       <span class="stat-value" id="statRequests"><span class="skeleton"></span></span>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" data-stat-tooltip="tokens">
       <span class="stat-label">총 토큰</span>
       <span class="stat-value" id="statTokens"><span class="skeleton"></span></span>
     </div>
-    <div class="stat-card" id="activeCard">
+    <div class="stat-card" id="activeCard" data-stat-tooltip="active">
       <span class="stat-label">활성</span>
       <span class="stat-value" id="statActive"><span class="skeleton"></span></span>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" data-stat-tooltip="avg-duration">
       <span class="stat-label">평균 응답시간</span>
       <span class="stat-value" id="statAvgDuration"><span class="skeleton"></span></span>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat-card" data-stat-tooltip="cost">
+      <span class="stat-label">cost</span>
+      <span class="stat-value" id="stat-cost">--</span>
+    </div>
+    <div class="stat-card" data-stat-tooltip="saved">
+      <span class="stat-label">saved</span>
+      <span class="stat-value" id="stat-cache-savings">--</span>
+    </div>
+    <div class="stat-card" data-stat-tooltip="p95">
+      <span class="stat-label">p95</span>
+      <span class="stat-value" id="stat-p95">--</span>
+    </div>
+    <div class="stat-card" data-stat-tooltip="err">
+      <span class="stat-label">err</span>
+      <span class="stat-value" id="stat-error-rate">--</span>
     </div>
   </div>
 
@@ -158,6 +176,41 @@
               </div>
             </div>
             <div style="padding:0 12px 8px;font-size:10px;color:var(--text-dim);text-align:center" id="typeTotal">—</div>
+          </div>
+
+          <!-- Cache Intelligence Panel -->
+          <div class="cache-panel" id="cachePanel">
+            <div class="cache-section">
+              <span class="cache-panel-label">Hit Rate</span>
+              <div class="cache-bar-wrap">
+                <div class="cache-bar-fill" id="cacheHitFill" style="width:0%"></div>
+              </div>
+              <span class="cache-bar-pct" id="cacheHitPct">--</span>
+            </div>
+            <div class="cache-section">
+              <div class="cache-cost-rows">
+                <div class="cache-cost-item">
+                  <span class="cache-cost-label">without cache</span>
+                  <span class="cache-cost-value" id="cacheCostWithout">--</span>
+                </div>
+                <div class="cache-cost-item is-actual">
+                  <span class="cache-cost-label">actual cost</span>
+                  <span class="cache-cost-value" id="cacheCostActual">--</span>
+                </div>
+                <div class="cache-cost-item is-saved">
+                  <span class="cache-cost-label">saved</span>
+                  <span class="cache-cost-value" id="cacheCostSaved">--</span>
+                </div>
+              </div>
+            </div>
+            <div class="cache-section">
+              <span class="cache-panel-label">Creation / Read</span>
+              <div class="cache-ratio-wrap">
+                <div class="cache-ratio-creation" id="cacheRatioCreate" style="width:0%"></div>
+                <div class="cache-ratio-read" id="cacheRatioRead" style="width:0%"></div>
+              </div>
+              <span class="cache-ratio-label" id="cacheRatioLabel">--</span>
+            </div>
           </div>
         </div>
       </div>
