@@ -962,6 +962,18 @@ export function getTurnsBySession(
       const first = turn.started_at;
       turn.summary.duration_ms = last.timestamp + last.duration_ms - first;
     }
+
+    // prompt 행에 context_tokens가 없으면 tool_call의 최대 cache_read_tokens로 보완
+    // (UserPromptSubmit 훅처럼 LLM 응답 전 수집된 경우 token 정보가 0임)
+    if (turn.prompt && turn.prompt.context_tokens === 0 && turn.tool_calls.length > 0) {
+      const maxCacheRead = Math.max(...(rows
+        .filter(r => r.turn_id === turn.turn_id && r.type !== 'prompt')
+        .map(r => (r.cache_read_tokens || 0) + (r.cache_creation_tokens || 0))
+      ));
+      if (maxCacheRead > 0) {
+        turn.prompt.context_tokens = maxCacheRead;
+      }
+    }
   }
 
   return turnOrder.map(id => turnMap.get(id)!).reverse();
