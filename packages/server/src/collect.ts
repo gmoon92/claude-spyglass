@@ -99,11 +99,21 @@ export const toolTimingMap = new Map<string, number>();
 // transcript 파싱
 // =============================================================================
 
+/**
+ * 토큰 수집 결과 (신뢰도 정보 포함)
+ */
+export interface TokenResult {
+  value: number | null;
+  confidence: 'high' | 'error';
+  source: 'transcript' | 'unavailable';
+  error?: string;
+}
+
 interface TranscriptUsage {
-  inputTokens: number;
-  outputTokens: number;
-  cacheCreationTokens: number;
-  cacheReadTokens: number;
+  inputTokens: TokenResult;
+  outputTokens: TokenResult;
+  cacheCreationTokens: TokenResult;
+  cacheReadTokens: TokenResult;
   model: string;
 }
 
@@ -113,14 +123,33 @@ interface TranscriptUsage {
  * transcript_path의 JSONL은 각 라인이 독립적인 JSON 객체.
  * 마지막 type='assistant' 라인에서 message.usage, message.model 추출.
  *
+ * 반환 형식:
+ *  - 파일 미존재: inputTokens/outputTokens의 value: null, confidence: 'error', error: 'NOT_FOUND'
+ *  - JSON 파싱 실패: error: 'PARSE_ERROR'
+ *  - usage 필드 부재: error: 'NO_USAGE'
+ *  - 성공: value: n, confidence: 'high', source: 'transcript'
+ *
  * bash의 extract_usage_from_transcript() + extract_model() 대체.
  */
 export function parseTranscript(transcriptPath: string): TranscriptUsage {
+  const errorResult = (err: string): TokenResult => ({
+    value: null,
+    confidence: 'error',
+    source: 'unavailable',
+    error: err,
+  });
+
+  const successResult = (value: number): TokenResult => ({
+    value,
+    confidence: 'high',
+    source: 'transcript',
+  });
+
   const defaultResult: TranscriptUsage = {
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheCreationTokens: 0,
-    cacheReadTokens: 0,
+    inputTokens: errorResult('NOT_FOUND'),
+    outputTokens: errorResult('NOT_FOUND'),
+    cacheCreationTokens: errorResult('NOT_FOUND'),
+    cacheReadTokens: errorResult('NOT_FOUND'),
     model: '',
   };
 
@@ -140,20 +169,36 @@ export function parseTranscript(transcriptPath: string): TranscriptUsage {
         if (!message) continue;
 
         const usage = message.usage as Record<string, unknown> | undefined;
+        if (!usage) {
+          return {
+            inputTokens: errorResult('NO_USAGE'),
+            outputTokens: errorResult('NO_USAGE'),
+            cacheCreationTokens: errorResult('NO_USAGE'),
+            cacheReadTokens: errorResult('NO_USAGE'),
+            model: (message.model as string) ?? '',
+          };
+        }
+
         return {
-          inputTokens: (usage?.input_tokens as number) ?? 0,
-          outputTokens: (usage?.output_tokens as number) ?? 0,
-          cacheCreationTokens: (usage?.cache_creation_input_tokens as number) ?? 0,
-          cacheReadTokens: (usage?.cache_read_input_tokens as number) ?? 0,
+          inputTokens: successResult((usage?.input_tokens as number) ?? 0),
+          outputTokens: successResult((usage?.output_tokens as number) ?? 0),
+          cacheCreationTokens: successResult((usage?.cache_creation_input_tokens as number) ?? 0),
+          cacheReadTokens: successResult((usage?.cache_read_input_tokens as number) ?? 0),
           model: (message.model as string) ?? '',
         };
       } catch {
-        // 개별 라인 파싱 실패 → 다음 라인으로
-        continue;
+        // 개별 라인 파싱 실패 → PARSE_ERROR로 반환
+        return {
+          inputTokens: errorResult('PARSE_ERROR'),
+          outputTokens: errorResult('PARSE_ERROR'),
+          cacheCreationTokens: errorResult('PARSE_ERROR'),
+          cacheReadTokens: errorResult('PARSE_ERROR'),
+          model: '',
+        };
       }
     }
   } catch {
-    // 파일 읽기 실패 (파일 없음 등) → 기본값 반환
+    // 파일 읽기 실패 (파일 없음 등) → NOT_FOUND 반환
   }
 
   return defaultResult;
@@ -688,8 +733,8 @@ export async function rawCollectHandler(req: Request, db: SpyglassDatabase): Pro
       : null;
 
     const requestId = `tool-${now}-${randomUUID().slice(0, 8)}`;
-    const tokensInput = transcriptData?.inputTokens ?? 0;
-    const tokensOutput = transcriptData?.outputTokens ?? 0;
+    const tokensInput = transcriptData?.inputTokens.value ?? 0;
+    const tokensOutput = transcriptData?.outputTokens.value ?? 0;
 
     const collectPayload: CollectPayload = {
       id: requestId,
@@ -707,8 +752,8 @@ export async function rawCollectHandler(req: Request, db: SpyglassDatabase): Pro
       duration_ms,
       payload: JSON.stringify(raw),
       source: 'claude-code-hook',
-      cache_creation_tokens: transcriptData?.cacheCreationTokens ?? 0,
-      cache_read_tokens: transcriptData?.cacheReadTokens ?? 0,
+      cache_creation_tokens: transcriptData?.cacheCreationTokens.value ?? 0,
+      cache_read_tokens: transcriptData?.cacheReadTokens.value ?? 0,
     };
 
     const result = handleCollect(db.instance, collectPayload);
@@ -723,8 +768,8 @@ export async function rawCollectHandler(req: Request, db: SpyglassDatabase): Pro
     const transcriptData = transcript_path ? parseTranscript(transcript_path) : null;
 
     const requestId = `prompt-${now}-${randomUUID().slice(0, 8)}`;
-    const tokensInput = transcriptData?.inputTokens ?? 0;
-    const tokensOutput = transcriptData?.outputTokens ?? 0;
+    const tokensInput = transcriptData?.inputTokens.value ?? 0;
+    const tokensOutput = transcriptData?.outputTokens.value ?? 0;
 
     const collectPayload: CollectPayload = {
       id: requestId,
@@ -741,8 +786,8 @@ export async function rawCollectHandler(req: Request, db: SpyglassDatabase): Pro
       tokens_total: tokensInput + tokensOutput,
       payload: JSON.stringify(raw),
       source: 'claude-code-hook',
-      cache_creation_tokens: transcriptData?.cacheCreationTokens ?? 0,
-      cache_read_tokens: transcriptData?.cacheReadTokens ?? 0,
+      cache_creation_tokens: transcriptData?.cacheCreationTokens.value ?? 0,
+      cache_read_tokens: transcriptData?.cacheReadTokens.value ?? 0,
     };
 
     const result = handleCollect(db.instance, collectPayload);
