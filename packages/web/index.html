@@ -105,10 +105,16 @@
       <div class="panel-resize-handle" title="드래그: 너비 조절 · 더블클릭: 콘텐츠 너비에 맞춤"></div>
 
       <!-- 프로젝트 -->
-      <div class="panel-section flex-section">
+      <div class="panel-section flex-section" id="panelProjects">
         <div class="panel-header">
           <span class="panel-label">프로젝트</span>
-          <span class="panel-hint">클릭하여 세션 조회</span>
+          <div class="panel-header-right">
+            <button class="btn-panel-toggle" data-panel="projects" title="접기 / 펼치기" aria-label="접기">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
         </div>
         <div class="panel-body">
           <table>
@@ -133,10 +139,17 @@
       </div>
 
       <!-- 세션 -->
-      <div class="panel-section flex-section">
+      <div class="panel-section flex-section" id="panelSessions">
         <div class="panel-header">
           <span class="panel-label">세션</span>
-          <span class="panel-hint" id="sessionPaneHint">프로젝트를 선택하세요</span>
+          <div class="panel-header-right">
+            <span class="panel-hint" id="sessionPaneHint">프로젝트를 선택하세요</span>
+            <button class="btn-panel-toggle" data-panel="sessions" title="접기 / 펼치기" aria-label="접기">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
         </div>
         <div class="panel-body">
           <table>
@@ -148,10 +161,17 @@
       </div>
 
       <!-- 툴 통계 -->
-      <div class="panel-section tool-stats-section" id="toolStatsSection">
+      <div class="panel-section tool-stats-section" id="panelTools">
         <div class="panel-header">
           <span class="panel-label">툴 통계 <span style="font-weight:400;opacity:0.6">(전체)</span></span>
-          <span class="panel-hint" id="toolCount">—</span>
+          <div class="panel-header-right">
+            <span class="panel-hint" id="toolCount">—</span>
+            <button class="btn-panel-toggle" data-panel="tools" title="접기 / 펼치기" aria-label="접기">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
         </div>
         <div class="panel-body">
           <table>

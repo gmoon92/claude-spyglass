@@ -42,6 +42,28 @@
 .panel-label { font-size: 10px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; }
 .panel-hint  { font-size: 10px; color: var(--text-dim); }
 
+/* ── PANEL HEADER RIGHT (토글 버튼 영역) ─────────────────────────────── */
+.panel-header-right {
+  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+}
+
+/* ── PANEL TOGGLE BUTTON ──────────────────────────────────────────────– */
+.btn-panel-toggle {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  background: none; border: none; border-radius: var(--radius-sm);
+  color: var(--text-dim); cursor: pointer; flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-panel-toggle:hover { background: var(--accent-dim); color: var(--accent); }
+.btn-panel-toggle svg   { transition: transform 0.2s ease; display: block; }
+
+/* ── COLLAPSED 상태 ───────────────────────────────────────────────────── */
+.panel-section--collapsed .panel-body { display: none; }
+.panel-section--collapsed .btn-panel-toggle svg { transform: rotate(180deg); }
+.panel-section--collapsed { flex: 0 0 auto; }
+.panel-section--collapsed .panel-section { min-height: unset; }
+
 .panel-body { flex: 1; overflow-y: auto; min-height: 0; }
 .panel-body::-webkit-scrollbar { width: 3px; }
 .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
