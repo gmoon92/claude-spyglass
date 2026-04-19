@@ -22,6 +22,9 @@ import {
   getToolStats,
   getTurnsBySession,
   getAvgPromptDurationMs,
+  getTodayStripStats,
+  getP95DurationMs,
+  getCacheStats,
   getRecentEvents,
   getEventsBySession,
   getEventsByType,
@@ -41,6 +44,7 @@ interface ApiResponse<T = unknown> {
     page?: number;
     limit?: number;
     offset?: number;
+    p95DurationMs?: number;
   };
 }
 
@@ -130,7 +134,8 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
     const toTs = url.searchParams.get('to') ? parseInt(url.searchParams.get('to')!, 10) : undefined;
     const requests = getAllRequests(db, limit, fromTs, toTs);
-    return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit } });
+    const p95DurationMs = getP95DurationMs(db, fromTs, toTs);
+    return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit, p95DurationMs } });
   }
 
   // GET /api/requests/top
@@ -184,6 +189,20 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     return jsonResponse({ success: true, data: stats });
   }
 
+  // GET /api/stats/strip — 오늘 Command Center Strip 지표 (cost, cache savings, P95, error rate)
+  if (path === '/api/stats/strip' && method === 'GET') {
+    const stats = getTodayStripStats(db);
+    return jsonResponse({ success: true, data: stats });
+  }
+
+  // GET /api/stats/cache — 캐시 히트율·절약 금액 집계
+  if (path === '/api/stats/cache' && method === 'GET') {
+    const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
+    const toTs   = url.searchParams.get('to')   ? parseInt(url.searchParams.get('to')!,   10) : undefined;
+    const stats = getCacheStats(db, fromTs, toTs);
+    return jsonResponse({ success: true, data: stats });
+  }
+
   // GET /api/dashboard
   if (path === '/api/dashboard' && method === 'GET') {
     const now = Date.now();
@@ -202,7 +221,9 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     const toolStats = getToolStats(db, 5, fromTs, toTs);
     const typeStats = getRequestStatsByType(db, fromTs, toTs);
     const activeSessions = getActiveSessions(db);
-    const avgDurationMs = Math.round(getAvgPromptDurationMs(db));
+    const _avgRaw = getAvgPromptDurationMs(db);
+    const avgDurationMs = _avgRaw > 0 ? Math.round(_avgRaw) : null;
+    const stripStats = getTodayStripStats(db);
 
     const data = {
       summary: {
@@ -211,6 +232,10 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
         totalTokens: requestStats.total_tokens,
         activeSessions: activeSessions.length,
         avgDurationMs,
+        costUsd: stripStats.cost_usd,
+        cacheSavingsUsd: stripStats.cache_savings_usd,
+        p95DurationMs: stripStats.p95_duration_ms,
+        errorRate: stripStats.error_rate,
       },
       sessions: sessionStats,
       requests: requestStats,

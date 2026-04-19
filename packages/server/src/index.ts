@@ -12,7 +12,7 @@ import {
   getDefaultDbPath,
   deleteOldSessions,
 } from '@spyglass/storage';
-import { collectHandler } from './collect';
+import { rawCollectHandler } from './collect';
 import { eventsCollectHandler } from './events';
 import { apiRouter, invalidateDashboardCache } from './api';
 import { sseRouter } from './sse';
@@ -80,10 +80,10 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   try {
-    // /collect 엔드포인트
+    // /collect 엔드포인트 — raw Claude Code hook payload 수신 후 서버에서 정제
     if (path === '/collect') {
-      const result = await collectHandler(req, db!);
-      // 캐시 무효화 (SSE 브로드캐스트는 collectHandler 내부 broadcastNewRequest가 담당)
+      const result = await rawCollectHandler(req, db!);
+      // 캐시 무효화 (SSE 브로드캐스트는 handleCollect 내부 broadcastNewRequest가 담당)
       if (result.status === 200) invalidateDashboardCache();
       return result;
     }

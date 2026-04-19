@@ -443,7 +443,7 @@ function mergePostToolIntoPreTool(
  * @returns { saved: boolean, wasUpsert: boolean }
  *   wasUpsert=true: post_tool이 pre_tool을 덮어씀 → session 토큰 재계산 필요
  */
-function saveRequest(db: Database, payload: CollectPayload): { saved: boolean; wasUpsert: boolean } {
+function saveRequest(db: Database, payload: CollectPayload): { saved: boolean; wasUpsert: boolean; savedId?: string } {
   try {
     const toolUseId = extractToolUseId(payload.payload);
     const isPostTool = payload.event_type === 'tool' && payload.request_type === 'tool_call';
@@ -454,7 +454,8 @@ function saveRequest(db: Database, payload: CollectPayload): { saved: boolean; w
       if (preToolRecord) {
         const merged = mergePostToolIntoPreTool(db, preToolRecord.id, payload);
         if (merged) {
-          return { saved: true, wasUpsert: true };
+          // savedId: DB에 실제 저장된 id(pre-xxx) — SSE 브로드캐스트 일관성 보장
+          return { saved: true, wasUpsert: true, savedId: preToolRecord.id };
         }
       }
     }
@@ -533,7 +534,7 @@ export function handleCollect(
   }
 
   // 요청 저장
-  const { saved, wasUpsert } = saveRequest(db, payload);
+  const { saved, wasUpsert, savedId } = saveRequest(db, payload);
 
   if (saved) {
     if (wasUpsert) {
@@ -553,7 +554,7 @@ export function handleCollect(
     if (payload.event_type !== 'pre_tool') {
       const updatedSession = getSessionById(db, payload.session_id);
       broadcastNewRequest({
-        id: payload.id,
+        id: savedId ?? payload.id, // upsert 시 DB의 실제 id(pre-xxx) 사용 → fetchRequests와 id 일치
         session_id: payload.session_id,
         type: payload.request_type,
         request_type: payload.request_type,
