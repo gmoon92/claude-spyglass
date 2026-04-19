@@ -1,9 +1,15 @@
 /**
  * Collector API - /collect 엔드포인트
  *
- * @description 훅에서 전송된 데이터를 수신하여 SQLite에 저장
+ * @description 훅에서 전송된 raw payload를 수신하여 정제 후 SQLite에 저장
+ *
+ * 변경 이력:
+ *  - v1: CollectPayload(가공된 데이터) 수신
+ *  - v2: ClaudeHookPayload(raw hook payload) 수신 → 서버에서 정제
  */
 
+import { readFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import type { Database } from 'bun:sqlite';
 import {
   createSession,
@@ -20,7 +26,28 @@ import { broadcastNewRequest } from './sse';
 // =============================================================================
 
 /**
- * 훅에서 수신되는 데이터 형식
+ * Claude Code 훅이 stdin으로 전달하는 raw payload 구조
+ * hook_event_name 기반으로 필드가 달라짐
+ */
+export interface ClaudeHookPayload {
+  hook_event_name: string;   // UserPromptSubmit | PreToolUse | PostToolUse | ...
+  session_id: string;
+  transcript_path?: string;
+  cwd?: string;
+  tool_name?: string;
+  tool_input?: Record<string, unknown>;
+  tool_response?: unknown;
+  tool_use_id?: string;
+  permission_mode?: string;
+  agent_id?: string;
+  agent_type?: string;
+  // UserPromptSubmit 전용
+  prompt?: string;
+}
+
+/**
+ * handleCollect() 내부에서 사용하는 가공된 데이터 형식
+ * (기존 CollectPayload 유지 — 저장 로직과의 인터페이스)
  */
 export interface CollectPayload {
   id: string;
@@ -52,6 +79,194 @@ export interface CollectResult {
   session_id: string;
   saved: boolean;
   error?: string;
+}
+
+// =============================================================================
+// 인메모리 타이밍 맵
+// =============================================================================
+
+/**
+ * PreToolUse → PostToolUse duration_ms 측정용 인메모리 맵
+ * 키: tool_use_id (Claude Code가 보장하는 Pre/Post 쌍 고유 식별자)
+ * 값: PreToolUse 수신 timestamp (ms)
+ *
+ * ADR-002: 파일 기반(~/.spyglass/timing/{session_id}) → 인메모리 Map으로 교체
+ * - tool_use_id 키 사용으로 병렬 도구 실행 시 충돌 없음
+ */
+export const toolTimingMap = new Map<string, number>();
+
+// =============================================================================
+// transcript 파싱
+// =============================================================================
+
+interface TranscriptUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  model: string;
+}
+
+/**
+ * transcript JSONL 파일에서 마지막 assistant 메시지의 usage + model 추출
+ *
+ * transcript_path의 JSONL은 각 라인이 독립적인 JSON 객체.
+ * 마지막 type='assistant' 라인에서 message.usage, message.model 추출.
+ *
+ * bash의 extract_usage_from_transcript() + extract_model() 대체.
+ */
+export function parseTranscript(transcriptPath: string): TranscriptUsage {
+  const defaultResult: TranscriptUsage = {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheCreationTokens: 0,
+    cacheReadTokens: 0,
+    model: '',
+  };
+
+  if (!transcriptPath) return defaultResult;
+
+  try {
+    const content = readFileSync(transcriptPath, 'utf-8');
+    const lines = content.split('\n').filter(line => line.trim());
+
+    // 마지막 assistant 메시지 탐색 (뒤에서 앞으로)
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        const entry = JSON.parse(lines[i]) as Record<string, unknown>;
+        if (entry.type !== 'assistant') continue;
+
+        const message = entry.message as Record<string, unknown> | undefined;
+        if (!message) continue;
+
+        const usage = message.usage as Record<string, unknown> | undefined;
+        return {
+          inputTokens: (usage?.input_tokens as number) ?? 0,
+          outputTokens: (usage?.output_tokens as number) ?? 0,
+          cacheCreationTokens: (usage?.cache_creation_input_tokens as number) ?? 0,
+          cacheReadTokens: (usage?.cache_read_input_tokens as number) ?? 0,
+          model: (message.model as string) ?? '',
+        };
+      } catch {
+        // 개별 라인 파싱 실패 → 다음 라인으로
+        continue;
+      }
+    }
+  } catch {
+    // 파일 읽기 실패 (파일 없음 등) → 기본값 반환
+  }
+
+  return defaultResult;
+}
+
+// =============================================================================
+// tool_detail 추출
+// =============================================================================
+
+/**
+ * 도구별 파라미터 요약 문자열 반환
+ *
+ * bash의 extract_tool_detail() 대체.
+ * tool_input은 ClaudeHookPayload.tool_input 필드.
+ */
+export function extractToolDetail(
+  toolName: string,
+  toolInput: Record<string, unknown>
+): string | null {
+  if (!toolInput) return null;
+
+  switch (toolName) {
+    case 'Read':
+    case 'Edit':
+    case 'MultiEdit':
+    case 'Write': {
+      const fp = toolInput.file_path as string | undefined;
+      return fp || null;
+    }
+
+    case 'Bash': {
+      const cmd = toolInput.command as string | undefined;
+      if (!cmd) return null;
+      return cmd.slice(0, 80);
+    }
+
+    case 'Glob': {
+      const pattern = (toolInput.pattern as string) ?? '';
+      const path = toolInput.path as string | undefined;
+      if (!pattern) return null;
+      return path ? `${pattern} in ${path}` : pattern;
+    }
+
+    case 'Grep': {
+      const pattern = (toolInput.pattern as string) ?? '';
+      const path = toolInput.path as string | undefined;
+      if (!pattern) return null;
+      return path ? `${pattern} in ${path}` : pattern;
+    }
+
+    case 'Skill': {
+      const skill = toolInput.skill as string | undefined;
+      if (skill) return skill.slice(0, 80);
+      const args = toolInput.args as string | undefined;
+      return args ? args.slice(0, 80) : null;
+    }
+
+    case 'Agent': {
+      const subagentType = toolInput.subagent_type as string | undefined;
+      if (subagentType) return subagentType;
+      const desc = toolInput.description as string | undefined;
+      if (desc) return desc.slice(0, 80);
+      const prompt = toolInput.prompt as string | undefined;
+      return prompt ? prompt.slice(0, 80) : null;
+    }
+
+    case 'WebFetch': {
+      const url = toolInput.url as string | undefined;
+      return url || null;
+    }
+
+    case 'WebSearch': {
+      const query = toolInput.query as string | undefined;
+      return query || null;
+    }
+
+    case 'ToolSearch': {
+      const query = toolInput.query as string | undefined;
+      return query ? query.slice(0, 80) : null;
+    }
+
+    default: {
+      // mcp__* 공통: 첫 번째 의미 있는 문자열 필드 반환
+      if (toolName.startsWith('mcp__')) {
+        const firstStr = Object.values(toolInput).find(v => typeof v === 'string' && v.length > 2);
+        return firstStr ? (firstStr as string).slice(0, 80) : null;
+      }
+      return null;
+    }
+  }
+}
+
+// =============================================================================
+// 이벤트 분류
+// =============================================================================
+
+/**
+ * hook_event_name → request_type 분류
+ *
+ * bash의 classify_request_type() 대체.
+ */
+export function classifyRequestType(
+  hookEventName: string
+): 'prompt' | 'tool_call' | 'system' {
+  switch (hookEventName) {
+    case 'UserPromptSubmit':
+      return 'prompt';
+    case 'PreToolUse':
+    case 'PostToolUse':
+      return 'tool_call';
+    default:
+      return 'system';
+  }
 }
 
 // =============================================================================
@@ -188,6 +403,7 @@ function mergePostToolIntoPreTool(
          tokens_total = ?,
          cache_creation_tokens = ?,
          cache_read_tokens = ?,
+         model = COALESCE(?, model),
          payload = ?,
          event_type = 'tool'
      WHERE id = ?`,
@@ -197,6 +413,7 @@ function mergePostToolIntoPreTool(
     payload.tokens_total,
     payload.cache_creation_tokens ?? 0,
     payload.cache_read_tokens ?? 0,
+    payload.model ?? null,
     payload.payload ?? null,
     preToolId
   );
@@ -270,7 +487,10 @@ function saveRequest(db: Database, payload: CollectPayload): { saved: boolean; w
 // =============================================================================
 
 /**
- * /collect 엔드포인트 핸들러
+ * /collect 엔드포인트 핸들러 (정제된 CollectPayload 기반 저장)
+ *
+ * rawCollectHandler()에서 정제 후 호출됨.
+ * 기존 로직(turn_id 부여, pre/post merge, SSE 브로드캐스트) 유지.
  */
 export function handleCollect(
   db: Database,
@@ -347,11 +567,206 @@ export function handleCollect(
 }
 
 // =============================================================================
-// HTTP 핸들러
+// Raw Hook 핸들러 (신규)
 // =============================================================================
 
 /**
- * Bun HTTP 서버용 collect 핸들러
+ * raw Claude Code hook payload를 수신하여 정제 후 handleCollect()에 위임
+ *
+ * 처리 흐름:
+ *  1. raw payload 파싱
+ *  2. [RECV] 로그 출력
+ *  3. hook_event_name 분기
+ *     - PreToolUse: toolTimingMap에 타임스탬프 저장 → pre_tool INSERT
+ *     - PostToolUse: duration_ms 계산 → transcript 파싱 → tool INSERT
+ *     - UserPromptSubmit: transcript 파싱 → prompt INSERT
+ *  4. handleCollect() 호출
+ */
+export async function rawCollectHandler(req: Request, db: SpyglassDatabase): Promise<Response> {
+  // POST만 허용
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  let raw: ClaudeHookPayload;
+  try {
+    raw = (await req.json()) as ClaudeHookPayload;
+  } catch {
+    return new Response(
+      JSON.stringify({ success: false, error: 'Invalid JSON payload' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const {
+    hook_event_name,
+    session_id,
+    transcript_path,
+    cwd,
+    tool_name,
+    tool_input,
+    tool_use_id,
+  } = raw;
+
+  // 수신 즉시 로그
+  console.log(`[RECV] ${hook_event_name} session=${session_id}`);
+
+  // 기본값 설정
+  const now = Date.now();
+  const project_name = cwd ? cwd.split('/').pop() ?? 'unknown' : 'unknown';
+
+  // PreToolUse: 타이밍 기록 후 pre_tool INSERT
+  if (hook_event_name === 'PreToolUse') {
+    if (tool_use_id) {
+      toolTimingMap.set(tool_use_id, now);
+    }
+
+    const toolDetail = tool_name && tool_input
+      ? extractToolDetail(tool_name, tool_input)
+      : null;
+
+    const requestId = `pre-${now}-${randomUUID().slice(0, 8)}`;
+    const collectPayload: CollectPayload = {
+      id: requestId,
+      session_id,
+      project_name,
+      timestamp: now,
+      event_type: 'pre_tool',
+      request_type: 'tool_call',
+      tool_name: tool_name ?? undefined,
+      tool_detail: toolDetail ?? undefined,
+      model: undefined,
+      tokens_input: 0,
+      tokens_output: 0,
+      tokens_total: 0,
+      duration_ms: 0,
+      payload: JSON.stringify(raw),
+      source: 'claude-code-hook',
+      cache_creation_tokens: 0,
+      cache_read_tokens: 0,
+    };
+
+    const result = handleCollect(db.instance, collectPayload);
+    return new Response(JSON.stringify(result), {
+      status: result.success ? 200 : 400,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+
+  // PostToolUse: duration_ms 계산 + transcript 파싱 후 tool INSERT
+  if (hook_event_name === 'PostToolUse') {
+    let duration_ms = 0;
+    if (tool_use_id) {
+      const startTs = toolTimingMap.get(tool_use_id);
+      if (startTs !== undefined) {
+        duration_ms = now - startTs;
+        toolTimingMap.delete(tool_use_id);
+      }
+    }
+
+    const transcriptData = transcript_path ? parseTranscript(transcript_path) : null;
+    const toolDetail = tool_name && tool_input
+      ? extractToolDetail(tool_name, tool_input)
+      : null;
+
+    const requestId = `tool-${now}-${randomUUID().slice(0, 8)}`;
+    const tokensInput = transcriptData?.inputTokens ?? 0;
+    const tokensOutput = transcriptData?.outputTokens ?? 0;
+
+    const collectPayload: CollectPayload = {
+      id: requestId,
+      session_id,
+      project_name,
+      timestamp: now,
+      event_type: 'tool',
+      request_type: 'tool_call',
+      tool_name: tool_name ?? undefined,
+      tool_detail: toolDetail ?? undefined,
+      model: transcriptData?.model || undefined,
+      tokens_input: tokensInput,
+      tokens_output: tokensOutput,
+      tokens_total: tokensInput + tokensOutput,
+      duration_ms,
+      payload: JSON.stringify(raw),
+      source: 'claude-code-hook',
+      cache_creation_tokens: transcriptData?.cacheCreationTokens ?? 0,
+      cache_read_tokens: transcriptData?.cacheReadTokens ?? 0,
+    };
+
+    const result = handleCollect(db.instance, collectPayload);
+    return new Response(JSON.stringify(result), {
+      status: result.success ? 200 : 400,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+
+  // UserPromptSubmit: transcript 파싱 후 prompt INSERT
+  if (hook_event_name === 'UserPromptSubmit') {
+    const transcriptData = transcript_path ? parseTranscript(transcript_path) : null;
+
+    const requestId = `prompt-${now}-${randomUUID().slice(0, 8)}`;
+    const tokensInput = transcriptData?.inputTokens ?? 0;
+    const tokensOutput = transcriptData?.outputTokens ?? 0;
+
+    const collectPayload: CollectPayload = {
+      id: requestId,
+      session_id,
+      project_name,
+      timestamp: now,
+      event_type: 'prompt',
+      request_type: 'prompt',
+      tool_name: undefined,
+      tool_detail: undefined,
+      model: transcriptData?.model || undefined,
+      tokens_input: tokensInput,
+      tokens_output: tokensOutput,
+      tokens_total: tokensInput + tokensOutput,
+      payload: JSON.stringify(raw),
+      source: 'claude-code-hook',
+      cache_creation_tokens: transcriptData?.cacheCreationTokens ?? 0,
+      cache_read_tokens: transcriptData?.cacheReadTokens ?? 0,
+    };
+
+    const result = handleCollect(db.instance, collectPayload);
+    return new Response(JSON.stringify(result), {
+      status: result.success ? 200 : 400,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+
+  // 그 외 이벤트 (system 타입으로 저장)
+  const requestId = `sys-${now}-${randomUUID().slice(0, 8)}`;
+  const collectPayload: CollectPayload = {
+    id: requestId,
+    session_id,
+    project_name,
+    timestamp: now,
+    event_type: hook_event_name.toLowerCase(),
+    request_type: 'system',
+    tokens_input: 0,
+    tokens_output: 0,
+    tokens_total: 0,
+    payload: JSON.stringify(raw),
+    source: 'claude-code-hook',
+  };
+
+  const result = handleCollect(db.instance, collectPayload);
+  return new Response(JSON.stringify(result), {
+    status: result.success ? 200 : 400,
+    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+  });
+}
+
+// =============================================================================
+// HTTP 핸들러 (레거시 — 하위 호환용)
+// =============================================================================
+
+/**
+ * Bun HTTP 서버용 collect 핸들러 (레거시)
+ * api.ts에서는 rawCollectHandler를 사용
  */
 export async function collectHandler(req: Request, db: SpyglassDatabase): Promise<Response> {
   // POST만 허용
@@ -424,9 +839,9 @@ if (import.meta.main) {
   console.log('Result:', JSON.stringify(result, null, 2));
 
   if (result.success) {
-    console.log('✓ Collect test passed');
+    console.log('Collect test passed');
   } else {
-    console.error('✗ Collect test failed:', result.error);
+    console.error('Collect test failed:', result.error);
     process.exit(1);
   }
 }
