@@ -380,6 +380,8 @@ export function getAvgPromptDurationMs(db: Database): number {
 
 /**
  * 전체 요청 통계
+ * 토큰 합계는 tokens_confidence='high'인 레코드만 집계
+ * 요청 수는 모든 레코드 포함 (성공/실패 분리 필요 시 별도 쿼리 사용)
  */
 export function getRequestStats(db: Database, fromTs?: number, toTs?: number): RequestStats {
   const conditions: string[] = ["(event_type IS NULL OR event_type = 'tool')"];
@@ -392,10 +394,10 @@ export function getRequestStats(db: Database, fromTs?: number, toTs?: number): R
   return db.query(`
     SELECT
       COUNT(*) as total_requests,
-      COALESCE(SUM(tokens_input), 0) as total_tokens_input,
-      COALESCE(SUM(tokens_output), 0) as total_tokens_output,
-      COALESCE(SUM(tokens_total), 0) as total_tokens,
-      COALESCE(AVG(tokens_total), 0) as avg_tokens_per_request,
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_input ELSE 0 END), 0) as total_tokens_input,
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_output ELSE 0 END), 0) as total_tokens_output,
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE 0 END), 0) as total_tokens,
+      COALESCE(AVG(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE NULL END), 0) as avg_tokens_per_request,
       COALESCE(AVG(duration_ms), 0) as avg_duration_ms
     FROM requests
     ${whereClause}
@@ -404,6 +406,7 @@ export function getRequestStats(db: Database, fromTs?: number, toTs?: number): R
 
 /**
  * 세션별 요청 통계
+ * 토큰 합계는 tokens_confidence='high'인 레코드만 집계
  */
 export function getRequestStatsBySession(
   db: Database,
@@ -412,10 +415,10 @@ export function getRequestStatsBySession(
   return db.query(`
     SELECT
       COUNT(*) as total_requests,
-      COALESCE(SUM(tokens_input), 0) as total_tokens_input,
-      COALESCE(SUM(tokens_output), 0) as total_tokens_output,
-      COALESCE(SUM(tokens_total), 0) as total_tokens,
-      COALESCE(AVG(tokens_total), 0) as avg_tokens_per_request,
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_input ELSE 0 END), 0) as total_tokens_input,
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_output ELSE 0 END), 0) as total_tokens_output,
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE 0 END), 0) as total_tokens,
+      COALESCE(AVG(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE NULL END), 0) as avg_tokens_per_request,
       COALESCE(AVG(duration_ms), 0) as avg_duration_ms
     FROM requests
     WHERE session_id = ?
@@ -486,8 +489,8 @@ export function getToolStats(
     SELECT
       tool_name,
       COUNT(*) as call_count,
-      COALESCE(SUM(tokens_total), 0) as total_tokens,
-      COALESCE(AVG(tokens_total), 0) as avg_tokens,
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE 0 END), 0) as total_tokens,
+      COALESCE(AVG(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE NULL END), 0) as avg_tokens,
       COALESCE(AVG(duration_ms), 0)  AS avg_duration_ms,
       COALESCE(MAX(duration_ms), 0)  AS max_duration_ms,
       SUM(CASE WHEN tool_detail LIKE '%Error%' OR tool_detail LIKE '%error%' THEN 1 ELSE 0 END) AS error_count
@@ -512,7 +515,7 @@ export function getSessionToolStats(
 ): SessionToolStats[] {
   return db.query(`
     WITH session_total AS (
-      SELECT COALESCE(SUM(tokens_total), 1) AS total
+      SELECT COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE 0 END), 1) AS total
       FROM requests
       WHERE session_id = ?
         AND (event_type IS NULL OR event_type = 'tool')
@@ -520,12 +523,12 @@ export function getSessionToolStats(
     SELECT
       tool_name,
       COUNT(*) AS call_count,
-      COALESCE(SUM(tokens_total), 0) AS total_tokens,
-      COALESCE(AVG(tokens_total), 0) AS avg_tokens,
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE 0 END), 0) AS total_tokens,
+      COALESCE(AVG(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE NULL END), 0) AS avg_tokens,
       COALESCE(AVG(duration_ms), 0)  AS avg_duration_ms,
       COALESCE(MAX(duration_ms), 0)  AS max_duration_ms,
       SUM(CASE WHEN tool_detail LIKE '%Error%' OR tool_detail LIKE '%error%' THEN 1 ELSE 0 END) AS error_count,
-      ROUND(COALESCE(SUM(tokens_total), 0) * 100.0 / (SELECT total FROM session_total), 1) AS pct_of_total_tokens
+      ROUND(COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE 0 END), 0) * 100.0 / (SELECT total FROM session_total), 1) AS pct_of_total_tokens
     FROM requests
     WHERE session_id = ?
       AND type = 'tool_call'
@@ -625,13 +628,13 @@ function getTodayMidnightMs(): number {
 export function getTodayStripStats(db: Database): StripStats {
   const todayMs = getTodayMidnightMs();
 
-  // 1. 오늘 prompt 레코드에서 모델별 토큰 집계
+  // 1. 오늘 prompt 레코드에서 모델별 토큰 집계 (tokens_confidence='high'만)
   const tokenRows = db.query(`
     SELECT model,
-           COALESCE(SUM(tokens_input), 0)            AS tokens_input,
-           COALESCE(SUM(tokens_output), 0)           AS tokens_output,
-           COALESCE(SUM(cache_creation_tokens), 0)   AS cache_creation_tokens,
-           COALESCE(SUM(cache_read_tokens), 0)       AS cache_read_tokens
+           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_input ELSE 0 END), 0)            AS tokens_input,
+           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_output ELSE 0 END), 0)           AS tokens_output,
+           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_creation_tokens ELSE 0 END), 0)   AS cache_creation_tokens,
+           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_read_tokens ELSE 0 END), 0)       AS cache_read_tokens
     FROM requests
     WHERE type = 'prompt'
       AND timestamp >= ?
@@ -719,6 +722,7 @@ export interface CacheStats {
 /**
  * 캐시 히트율 및 절약 비용 집계
  * - fromTs / toTs 미지정 시 전체 기간
+ * - tokens_confidence='high'인 레코드만 집계
  */
 export function getCacheStats(
   db: Database,
@@ -733,10 +737,10 @@ export function getCacheStats(
 
   const tokenRows = db.query(`
     SELECT model,
-           COALESCE(SUM(tokens_input), 0)            AS tokens_input,
-           COALESCE(SUM(tokens_output), 0)           AS tokens_output,
-           COALESCE(SUM(cache_creation_tokens), 0)   AS cache_creation_tokens,
-           COALESCE(SUM(cache_read_tokens), 0)       AS cache_read_tokens
+           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_input ELSE 0 END), 0)            AS tokens_input,
+           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_output ELSE 0 END), 0)           AS tokens_output,
+           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_creation_tokens ELSE 0 END), 0)   AS cache_creation_tokens,
+           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_read_tokens ELSE 0 END), 0)       AS cache_read_tokens
     FROM requests
     WHERE ${conditions.join(' AND ')}
     GROUP BY model
