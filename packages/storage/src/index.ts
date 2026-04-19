@@ -110,6 +110,9 @@ export {
   getToolStats,
   getHourlyRequestStats,
   getAvgPromptDurationMs,
+  getTodayStripStats,
+  getP95DurationMs,
+  getCacheStats,
   // 턴 집계
   getTurnsBySession,
   // 타입
@@ -121,6 +124,8 @@ export {
   type TypeStats,
   type ToolStats,
   type HourlyStats,
+  type StripStats,
+  type CacheStats,
   type TurnItem,
   type TurnToolCall,
 } from './queries/request';

@@ -354,13 +354,19 @@ export interface RequestStats {
 }
 
 /**
- * prompt 타입의 평균 응답시간 (ms), duration_ms > 0 레코드만 집계
+ * tool_call PostToolUse 레코드 기준 평균 실행시간 (ms)
+ *
+ * prompt 레코드에는 duration_ms가 기록되지 않으므로 (PreToolUse→PostToolUse 쌍으로
+ * tool_call에만 측정값이 있음) tool_call + event_type='tool' 레코드를 대상으로 집계.
+ * duration_ms가 0보다 크고 600_000ms(10분) 미만인 레코드만 집계하여 타임스탬프
+ * 오기입으로 인한 이상값을 제외한다.
  */
 export function getAvgPromptDurationMs(db: Database): number {
   const row = db.query(`
     SELECT AVG(duration_ms) as avg
     FROM requests
-    WHERE type = 'prompt' AND duration_ms > 0
+    WHERE type = 'tool_call' AND event_type = 'tool'
+      AND duration_ms > 0 AND duration_ms < 600000
   `).get() as { avg: number | null };
   return row?.avg ?? 0;
 }
@@ -369,7 +375,7 @@ export function getAvgPromptDurationMs(db: Database): number {
  * 전체 요청 통계
  */
 export function getRequestStats(db: Database, fromTs?: number, toTs?: number): RequestStats {
-  const conditions: string[] = ["(event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')"];
+  const conditions: string[] = ["(event_type IS NULL OR event_type = 'tool')"];
   const params: number[] = [];
 
   if (fromTs) { conditions.push('timestamp >= ?'); params.push(fromTs); }
@@ -458,7 +464,7 @@ export function getToolStats(
   fromTs?: number,
   toTs?: number
 ): ToolStats[] {
-  const conditions: string[] = ["type = 'tool_call'", 'tool_name IS NOT NULL', "(event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')"];
+  const conditions: string[] = ["type = 'tool_call'", 'tool_name IS NOT NULL', "(event_type IS NULL OR event_type = 'tool')"];
   const params: (number | string)[] = [];
 
   if (fromTs) { conditions.push('timestamp >= ?'); params.push(fromTs); }
@@ -510,6 +516,266 @@ export function getHourlyRequestStats(
   sql += ' GROUP BY hour ORDER BY hour';
 
   return db.query(sql).all(...params) as HourlyStats[];
+}
+
+// =============================================================================
+// Command Center Strip 집계
+// =============================================================================
+
+/** 모델별 단가 (USD per 1M tokens) */
+interface ModelPricing {
+  input: number;
+  output: number;
+  cache_create: number;
+  cache_read: number;
+}
+
+const MODEL_PRICING: Array<{ prefix: string; pricing: ModelPricing }> = [
+  {
+    prefix: 'claude-opus-4-',
+    pricing: { input: 15, output: 75, cache_create: 18.75, cache_read: 1.50 },
+  },
+  {
+    prefix: 'claude-haiku-4-',
+    pricing: { input: 0.80, output: 4, cache_create: 1.00, cache_read: 0.08 },
+  },
+  {
+    prefix: 'claude-sonnet-4-',
+    pricing: { input: 3, output: 15, cache_create: 3.75, cache_read: 0.30 },
+  },
+];
+
+const DEFAULT_PRICING: ModelPricing = { input: 3, output: 15, cache_create: 3.75, cache_read: 0.30 };
+
+/**
+ * 모델명 → 단가 반환
+ */
+function getPricingForModel(model: string | null): ModelPricing {
+  if (!model) return DEFAULT_PRICING;
+  for (const { prefix, pricing } of MODEL_PRICING) {
+    if (model.startsWith(prefix)) return pricing;
+  }
+  return DEFAULT_PRICING;
+}
+
+/** Command Center Strip 통계 */
+export interface StripStats {
+  cost_usd: number;
+  cache_savings_usd: number;
+  p95_duration_ms: number;
+  error_rate: number;
+}
+
+/** 오늘 날짜 자정 타임스탬프 */
+function getTodayMidnightMs(): number {
+  return new Date().setHours(0, 0, 0, 0);
+}
+
+/** 오늘 날짜 기준 Command Center Strip 지표 집계 */
+export function getTodayStripStats(db: Database): StripStats {
+  const todayMs = getTodayMidnightMs();
+
+  // 1. 오늘 prompt 레코드에서 모델별 토큰 집계
+  const tokenRows = db.query(`
+    SELECT model,
+           COALESCE(SUM(tokens_input), 0)            AS tokens_input,
+           COALESCE(SUM(tokens_output), 0)           AS tokens_output,
+           COALESCE(SUM(cache_creation_tokens), 0)   AS cache_creation_tokens,
+           COALESCE(SUM(cache_read_tokens), 0)       AS cache_read_tokens
+    FROM requests
+    WHERE type = 'prompt'
+      AND timestamp >= ?
+    GROUP BY model
+  `).all(todayMs) as Array<{
+    model: string | null;
+    tokens_input: number;
+    tokens_output: number;
+    cache_creation_tokens: number;
+    cache_read_tokens: number;
+  }>;
+
+  let cost_usd = 0;
+  let cache_savings_usd = 0;
+
+  for (const row of tokenRows) {
+    const p = getPricingForModel(row.model);
+    cost_usd +=
+      (row.tokens_input * p.input +
+        row.tokens_output * p.output +
+        row.cache_creation_tokens * p.cache_create +
+        row.cache_read_tokens * p.cache_read) /
+      1_000_000;
+    cache_savings_usd +=
+      (row.cache_read_tokens * (p.input - p.cache_read)) / 1_000_000;
+  }
+
+  // 2. P95 duration_ms — 오늘 tool_call PostToolUse 레코드
+  const durationRows = db.query(`
+    SELECT duration_ms
+    FROM requests
+    WHERE type = 'tool_call'
+      AND event_type = 'tool'
+      AND duration_ms > 0
+      AND timestamp >= ?
+    ORDER BY duration_ms ASC
+  `).all(todayMs) as Array<{ duration_ms: number }>;
+
+  let p95_duration_ms = 0;
+  if (durationRows.length > 0) {
+    const idx = Math.ceil(durationRows.length * 0.95) - 1;
+    p95_duration_ms = durationRows[Math.min(idx, durationRows.length - 1)].duration_ms;
+  }
+
+  // 3. 오류율 — 오늘 tool_call PostToolUse 레코드 중 오류 패턴 포함 비율
+  const errorStats = db.query(`
+    SELECT
+      COUNT(*) AS total,
+      SUM(CASE
+        WHEN tool_detail LIKE '%[오류]%' OR tool_detail LIKE '%error%'
+        THEN 1 ELSE 0
+      END) AS errors
+    FROM requests
+    WHERE type = 'tool_call'
+      AND event_type = 'tool'
+      AND timestamp >= ?
+  `).get(todayMs) as { total: number; errors: number };
+
+  const error_rate =
+    errorStats.total > 0 ? errorStats.errors / errorStats.total : 0;
+
+  return {
+    cost_usd: Math.round(cost_usd * 1_000_000) / 1_000_000,
+    cache_savings_usd: Math.round(cache_savings_usd * 1_000_000) / 1_000_000,
+    p95_duration_ms,
+    error_rate: Math.round(error_rate * 10_000) / 10_000,
+  };
+}
+
+// =============================================================================
+// Cache Intelligence 집계
+// =============================================================================
+
+/** 캐시 히트율·절약 금액 통계 */
+export interface CacheStats {
+  hitRate: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  costWithCache: number;
+  costWithoutCache: number;
+  savingsUsd: number;
+  savingsRate: number;
+}
+
+/**
+ * 캐시 히트율 및 절약 비용 집계
+ * - fromTs / toTs 미지정 시 전체 기간
+ */
+export function getCacheStats(
+  db: Database,
+  fromTs?: number,
+  toTs?: number
+): CacheStats {
+  const conditions: string[] = ["type = 'prompt'"];
+  const params: number[] = [];
+
+  if (fromTs !== undefined) { conditions.push('timestamp >= ?'); params.push(fromTs); }
+  if (toTs   !== undefined) { conditions.push('timestamp <= ?'); params.push(toTs); }
+
+  const tokenRows = db.query(`
+    SELECT model,
+           COALESCE(SUM(tokens_input), 0)            AS tokens_input,
+           COALESCE(SUM(tokens_output), 0)           AS tokens_output,
+           COALESCE(SUM(cache_creation_tokens), 0)   AS cache_creation_tokens,
+           COALESCE(SUM(cache_read_tokens), 0)       AS cache_read_tokens
+    FROM requests
+    WHERE ${conditions.join(' AND ')}
+    GROUP BY model
+  `).all(...params) as Array<{
+    model: string | null;
+    tokens_input: number;
+    tokens_output: number;
+    cache_creation_tokens: number;
+    cache_read_tokens: number;
+  }>;
+
+  let totalCacheRead = 0;
+  let totalCacheCreation = 0;
+  let totalTokensInput = 0;
+  let costWithCache = 0;
+  let costWithoutCache = 0;
+
+  for (const row of tokenRows) {
+    const p = getPricingForModel(row.model);
+
+    totalCacheRead += row.cache_read_tokens;
+    totalCacheCreation += row.cache_creation_tokens;
+    totalTokensInput += row.tokens_input;
+
+    // 실제 비용 (캐시 적용)
+    costWithCache +=
+      (row.tokens_input * p.input +
+        row.tokens_output * p.output +
+        row.cache_creation_tokens * p.cache_create +
+        row.cache_read_tokens * p.cache_read) /
+      1_000_000;
+
+    // 캐시 없었다면: cache_read를 일반 input 단가로 계산
+    costWithoutCache +=
+      ((row.tokens_input + row.cache_read_tokens) * p.input +
+        row.tokens_output * p.output +
+        row.cache_creation_tokens * p.cache_create) /
+      1_000_000;
+  }
+
+  const totalEffectiveInput = totalTokensInput + totalCacheRead;
+  const hitRate = totalEffectiveInput > 0 ? totalCacheRead / totalEffectiveInput : 0;
+  const savingsUsd = costWithoutCache - costWithCache;
+  const savingsRate = costWithoutCache > 0 ? savingsUsd / costWithoutCache : 0;
+
+  return {
+    hitRate: Math.round(hitRate * 10_000) / 10_000,
+    cacheReadTokens: totalCacheRead,
+    cacheCreationTokens: totalCacheCreation,
+    costWithCache: Math.round(costWithCache * 1_000_000) / 1_000_000,
+    costWithoutCache: Math.round(costWithoutCache * 1_000_000) / 1_000_000,
+    savingsUsd: Math.round(savingsUsd * 1_000_000) / 1_000_000,
+    savingsRate: Math.round(savingsRate * 10_000) / 10_000,
+  };
+}
+
+// =============================================================================
+// P95 Duration 계산
+// =============================================================================
+
+/**
+ * 현재 필터 기간 기준 tool_call P95 duration_ms 계산
+ * - fromTs / toTs 미지정 시 전체 기간
+ */
+export function getP95DurationMs(
+  db: Database,
+  fromTs?: number,
+  toTs?: number
+): number {
+  const conditions: string[] = [
+    "type = 'tool_call'",
+    "event_type = 'tool'",
+    'duration_ms > 0',
+  ];
+  const params: number[] = [];
+
+  if (fromTs !== undefined) { conditions.push('timestamp >= ?'); params.push(fromTs); }
+  if (toTs   !== undefined) { conditions.push('timestamp <= ?'); params.push(toTs); }
+
+  const rows = db.query(`
+    SELECT duration_ms
+    FROM requests
+    WHERE ${conditions.join(' AND ')}
+    ORDER BY duration_ms ASC
+  `).all(...params) as Array<{ duration_ms: number }>;
+
+  if (rows.length === 0) return 0;
+  const idx = Math.ceil(rows.length * 0.95) - 1;
+  return rows[Math.min(idx, rows.length - 1)].duration_ms;
 }
 
 // =============================================================================

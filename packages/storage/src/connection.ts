@@ -6,7 +6,7 @@
  */
 
 import { Database } from 'bun:sqlite';
-import { INIT_SCHEMA, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5, MIGRATION_V6, MIGRATION_V7, MIGRATION_V8, WAL_MODE_PRAGMAS } from './schema';
+import { INIT_SCHEMA, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5, MIGRATION_V6, MIGRATION_V7, MIGRATION_V8, MIGRATION_V9, WAL_MODE_PRAGMAS } from './schema';
 
 // =============================================================================
 // 설정 상수
@@ -175,6 +175,13 @@ export class SpyglassDatabase {
     const hasToolUseId = cols.some(c => c.name === 'tool_use_id');
     if (!hasToolUseId) {
       this.execMulti(MIGRATION_V8);
+    }
+
+    // V9: user_version 기반 실행 (데이터 마이그레이션)
+    const currentVersion = this.db.query('PRAGMA user_version').get() as { user_version: number };
+    if (currentVersion.user_version < 9) {
+      this.execMulti(MIGRATION_V9);
+      this.db.prepare('PRAGMA user_version = 9').run();
     }
   }
 
