@@ -5,7 +5,7 @@
 
 ---
 
-## 최종 현행화: 2026-04-19 (tooltip-supplement)
+## 최종 현행화: 2026-04-19 (context-chart-toggle)
 
 ## 파일 구조
 
@@ -25,7 +25,8 @@ packages/web/
     │   ├── badges.css          ← .cache-tooltip / .stat-tooltip 포함
     │   ├── skeleton.css
     │   ├── cache-panel.css
-    │   └── turn-view.css
+    │   ├── turn-view.css
+    │   └── turn-gantt.css
     └── js/                     ← native ESM 모듈 (15개 파일)
         ├── main.js             ← 진입점
         ├── formatters.js
@@ -150,14 +151,76 @@ packages/web/
 
 ### 2-0. 상세 헤더
 
-| 요소 | 내용 |
+| 요소 | 클래스 | 내용 |
+|------|--------|------|
+| 세션 ID | `.detail-session-id` | accent 색상, 앞 8자, `flex-shrink:0` (항상 완전 표시) |
+| 프로젝트명 | `.detail-project` | text-muted, `flex-shrink:1` (공간 부족 시 ellipsis 축소) |
+| 총 토큰 | `.detail-tokens` | accent, `flex-shrink:0` |
+| 종료 시각 | `.detail-ended-at` | text-muted, `flex-shrink:0` (인라인 스타일 없음) |
+| 집계 배지 | `.detail-agg-badges` | inline-flex, `flex-shrink:0`, 숨김 시 `.detail-agg-badges--hidden` 클래스 사용 |
+| 버튼 그룹 | `.detail-actions` | 우상단, flex 컨테이너, `flex-shrink:0`, 토글 버튼 + 구분선 + 닫기 버튼 |
+| 접기/펼치기 토글 버튼 | `#btnToggleDetail` `.btn-toggle` | SVG chevron-down, 28×28px, hover: `var(--accent)` + `var(--accent-dim)` bg, 접힌 상태에서 180도 회전 |
+| 구분선 | `.detail-actions-sep` | 1px × 14px, `var(--border)`, 두 버튼 사이 시각적 분리 |
+| 닫기 버튼 | `#btnCloseDetail` `.btn-close` | SVG ✕, 28×28px, hover: `var(--red)` + `var(--red-dim)` bg, `closeDetail()` 호출 |
+
+> **레이아웃 정책 (ADR-001~006)**: `detail-header`와 `detail-meta` 모두 `flex-wrap` 없음 — 1줄 고정. 인라인 스타일 없음 — 모든 상태 CSS 클래스로 제어.
+
+#### 접기/펼치기 상태 (`context-chart-toggle`)
+
+| 상태 | 클래스 | 동작 |
+|------|--------|------|
+| 펼침 (기본) | — | 모든 콘텐츠 표시 |
+| 접힘 | `.detail-collapsed` on `#detailView` + `.context-chart-section--collapsed` on `.context-chart-section` | **차트 영역만** 부드럽게 접힘 (grid-template-rows: 1fr → 0fr 전환, 0.3s ease-in-out) |
+| 탭바·컨트롤바·콘텐츠 | 항상 표시 (ADR-002) | 차트를 접어도 탭 전환·검색·목록 조회 가능 |
+| 접힌 헤더 | `.detail-collapsed .detail-header` | `cursor:pointer` — 전체 헤더 클릭으로 펼치기 |
+| 토글 아이콘 | `.detail-collapsed .btn-toggle svg` | `transform:rotate(180deg)` — 펼치기 방향 표시 |
+
+- 토글 버튼 클릭 → `toggleDetailCollapse()` 호출
+- 접힌 상태에서 헤더 클릭 (`.detail-actions` 제외) → `toggleDetailCollapse()` 호출
+- `closeDetail()` 호출 시 `.detail-collapsed` 자동 제거 (다음 세션 선택 시 펼친 상태로 진입)
+- 차트 접기 구현: `grid-template-rows` + `.context-chart-inner { overflow: hidden }` 래퍼 패턴 (ADR-001)
+
+### 2-0-1. Context Growth 차트
+
+**DOM**: `.context-chart-section > .context-chart-inner > ...` — `.context-chart-inner` 래퍼로 overflow 클립
+**CSS**: `context-chart.css`
+**JS**: `context-chart.js`
+
+#### 접기/펼치기 애니메이션 구조
+
+```
+.context-chart-section          ← display:grid, grid-template-rows 전환 (0.3s ease-in-out)
+  └─ .context-chart-inner       ← overflow:hidden (클립 담당)
+       ├─ .context-chart-header
+       ├─ #contextGrowthChart   ← canvas
+       ├─ #contextChartEmpty
+       └─ .context-chart-footer
+```
+
+- 접힘: `.context-chart-section--collapsed` (grid-template-rows: 0fr, border-bottom: none)
+- 펼침: grid-template-rows: 1fr
+
+| 상태 | 동작 |
 |------|------|
-| 세션 ID | accent 색상, 앞 8자 |
-| 프로젝트명 | text-muted |
-| 총 토큰 | accent |
-| 종료 시각 | text-muted |
-| 집계 배지 | 타입별 건수, 최다 툴, 캐시 히트 등 |
-| 닫기 버튼 | 우상단 |
+| 유효 데이터 있음 | `#contextGrowthChart` (canvas) 표시, `#contextChartEmpty` 숨김 |
+| 유효 데이터 없음 | canvas에 `.context-chart-hidden` 추가, `#contextChartEmpty`에 `.context-chart-empty--visible` 추가 |
+| 세션 변경 / 초기화 | `clearContextChart()` 호출 → 빈 상태 표시 |
+
+빈 상태 텍스트: "컨텍스트 데이터 없음"
+
+### 2-0-2. 탭 바 + 컨트롤 바 구조
+
+```
+view-tab-bar           (플랫 | 턴 뷰 | 간트) — 탭 내비게이션 전용
+detail-controls-bar    (⌕ 검색창) (All/prompt/tool_call/system) — 필터링 전용
+```
+
+- `view-tab-bar`: 탭 버튼만, 컨트롤 요소 없음
+- `detail-controls-bar`: `background: var(--surface-alt)`, `border-bottom: 1px solid var(--border)`, `justify-content: flex-end`
+- 내부 `.feed-controls`: 검색창 + `.detail-type-filter-btns` 묶음 (gap 8px)
+- `.detail-type-filter-btns`: `border-left: 1px solid var(--border)`, `padding-left: 12px`
+- defaultView `view-section-header + .feed-controls` 패턴과 동일 시각 언어
+- 인라인 스타일 없음 — 모든 규칙 `default-view.css` 로 이관
 
 ### 2-1. 로그 리스트 — 플랫 뷰 (detailFlatView)
 
@@ -173,6 +236,38 @@ packages/web/
 | 하단 소계 행 | ❌ | ✅ 타입별 건수 배지 |
 
 > **📌 출력 토큰(out)**: 대시보드와 동일하게 컬럼 존재, 미수집 시 `—` 표시.
+
+### 2-3. Gantt 차트 뷰 (detailGanttView)
+
+**DOM ID**: `#detailGanttView`
+**탭 버튼**: `#tabGantt` (`data-tab="gantt"`)
+**상태**: 구조 완료 (JS 렌더러 미구현)
+
+#### 구조
+
+```
+.detail-content (flex:1, overflow-y:auto)
+  └─ .gantt-toolbar (flex, justify-content:space-between)
+       ├─ #ganttHint (.gantt-hint)   — "세션 전체 · N개 툴 호출"
+       └─ #ganttLegend (.gantt-legend)  — JS가 동적 삽입
+  └─ #ganttScroll (.gantt-scroll)  — flex:1, overflow-y:auto
+       └─ #turnGanttChart (canvas)  — height는 JS 동적 설정
+```
+
+#### 범례 아이템 구조 (JS 동적 삽입)
+
+```html
+<span class="gantt-legend-item">
+  <span class="gantt-legend-dot" style="background:#60a5fa"></span>
+  Read
+</span>
+```
+
+#### CSS 파일
+
+`packages/web/assets/css/turn-gantt.css`
+
+---
 
 ### 2-2. 로그 리스트 — 턴 뷰 (detailTurnView)
 
@@ -388,6 +483,13 @@ grid-template-columns: 28px minmax(140px,1fr) 56px 56px 72px 80px
 | 2026-04-19 | 전체 | badges.css border-radius 불일치 해소 → --radius-sm/--radius-md 일관 적용 | log-page-ux-fix |
 | 2026-04-19 | 1-2, 2-1 | Model 컬럼 'synthetic' 값을 '—'로 표시 (낶부 마커 숨김) | synthetic-model-display |
 | 2026-04-19 | 전체 | 툴팁 보완: Cache Panel 3섹션(hover), turn-meta/detail-agg-badge(title), liveBadge/날짜필터/타입필터(title) | tooltip-supplement |
+| 2026-04-19 | 2 | 세션 상세 뷰에 간트 탭 추가 (탭 버튼 + Gantt 컨테이너 HTML + turn-gantt.css) | turn-trace-gantt |
+| 2026-04-19 | 2 | detailView feed-controls 분리: view-tab-bar에서 검색+필터 제거, detail-controls-bar 신설 (defaultView와 레이아웃 패턴 통일) | feed-controls-layout |
+| 2026-04-19 | 2-0 | detail-header 1줄 고정: flex-wrap 제거, 프로젝트명 ellipsis 축소, 인라인 스타일 → CSS 클래스 이관 (detail-ended-at, detail-agg-badges--hidden) | detail-header-layout |
+| 2026-04-19 | 2-0 | "닫기" → "접기" 버튼 (‹ 아이콘 추가, hover 색상 red → text-muted 변경) | detail-ux-improvements |
+| 2026-04-19 | 2-0-1 | Context Growth 차트 항상 표시: inline display:none 제거, 빈 상태(.context-chart-empty) 추가, JS 클래스 토글 방식으로 전환 | detail-ux-improvements |
+| 2026-04-19 | 2-0 | 접기/펼치기 + 닫기 버튼 분리: .detail-actions 그룹, SVG chevron 토글(rotate), SVG ✕ 닫기, .detail-collapsed CSS 클래스 상태, 접힌 헤더 클릭 펼치기 | detail-collapse-toggle |
+| 2026-04-19 | 2-0-1 | 접기 범위 축소: 차트 영역만 접기/펼치기 (탭바·컨트롤바·콘텐츠는 항상 표시). grid-template-rows 전환 애니메이션(0.3s ease-in-out), .context-chart-inner 래퍼 추가 | context-chart-toggle |
 
 ---
 
