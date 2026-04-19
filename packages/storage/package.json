@@ -10,6 +10,10 @@
     "./connection": "./src/connection.ts",
     "./queries": "./src/queries.ts"
   },
+  "files": [
+    "src",
+    "migrations"
+  ],
   "dependencies": {},
   "scripts": {
     "test": "bun test src/__tests__"
