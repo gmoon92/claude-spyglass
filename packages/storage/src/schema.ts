@@ -148,7 +148,7 @@ export interface Request {
 /**
  * 테이블 스키마 정보 (마이그레이션/검증용)
  */
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 /**
  * v2 마이그레이션: tool_detail 컬럼 추가
@@ -254,6 +254,42 @@ ALTER TABLE requests ADD COLUMN event_type TEXT DEFAULT NULL;
 UPDATE requests SET event_type = 'pre_tool' WHERE id LIKE 'p-%' AND type = 'tool_call';
 UPDATE requests SET event_type = 'tool' WHERE id LIKE 't-%' AND type = 'tool_call';
 CREATE INDEX IF NOT EXISTS idx_requests_tool_use_id ON requests(tool_use_id) WHERE tool_use_id IS NOT NULL;
+`;
+
+/**
+ * v9 마이그레이션: Skill/Agent tool_detail 개선
+ *
+ * 훅 스크립트 변경으로 인해 Skill/Agent 호출 시 tool_detail 저장 방식이 변경됨:
+ * - 기존: args/description 저장 → 화면에 "Skill(인자내용)" 표시
+ * - 개선: skill 이름 저장 → 화면에 "Skill(backend-workflow)" 표시
+ *
+ * 이 마이그레이션은 기존 데이터를 새 형식으로 업데이트합니다.
+ * 메시지 컬럼은 payload에서 별도로 노출되므로 정보 손실 없음.
+ */
+export const MIGRATION_V9 = `
+-- Skill: tool_detail을 skill 이름으로 업데이트
+-- != 조건으로 멱등성 보장 (동일 마이그레이션 반복 실행 가능)
+-- 콜론 포함 스킬 이름(document-skills:theme-factory 등)도 정상 처리
+UPDATE requests
+SET tool_detail = json_extract(payload, '$.tool_input.skill')
+WHERE tool_name = 'Skill'
+  AND json_valid(payload)
+  AND json_extract(payload, '$.tool_input.skill') IS NOT NULL
+  AND (
+    tool_detail IS NULL
+    OR tool_detail != json_extract(payload, '$.tool_input.skill')
+  );
+
+-- Agent: tool_detail을 description으로 업데이트 (이미 된 경우 제외)
+UPDATE requests
+SET tool_detail = json_extract(payload, '$.tool_input.description')
+WHERE tool_name = 'Agent'
+  AND json_valid(payload)
+  AND json_extract(payload, '$.tool_input.description') IS NOT NULL
+  AND (
+    tool_detail IS NULL
+    OR tool_detail != json_extract(payload, '$.tool_input.description')
+  );
 `;
 
 export const SCHEMA_META = {
