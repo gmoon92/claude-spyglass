@@ -1,9 +1,17 @@
 // Command Center Strip 지표 hover 툴팁 — cache-tooltip.js 패턴 동일
 const CTX_TOOLTIP_CONTENT = {
   'context-growth': {
-    title: 'Context Window Usage',
-    desc:  '각 턴(Turn)에서 Claude에 전송된 총 컨텍스트 크기입니다.\n• 파란선: 누적 컨텍스트 토큰 (사용자 입력 + 캐시 읽기 + 캐시 생성)\n• 주황 점선: 80% 경고 임계값 (200K 토큰 기준)\n• 색상이 주황으로 변하면 컨텍스트가 한도에 가까워진 것입니다',
+    title: 'Accumulated Tokens',
+    desc:  '세션 동안 누적된 input_tokens 흐름을 보여줍니다.\n• 200K는 참고 스케일로, Claude 모델별 실제 Context Window 한도와는 다를 수 있습니다.\n• 이 차트는 Claude 런타임의 실제 Context Window 사용률이 아닙니다.\n• 실제 한도 관리는 Claude가 자동으로 수행합니다.',
   },
+};
+
+const MINI_BADGE_TOOLTIP = {
+  spike: '토큰이 세션 평균의 2배 초과',
+  loop:  '동일 도구 연속 3회 이상 호출',
+  slow:  '실행 시간 상위 5% 초과',
+  error: '도구 실행 실패',
+  cache: '프롬프트 캐시 히트',
 };
 
 const STAT_TOOLTIP_CONTENT = {
@@ -90,9 +98,19 @@ export function initStatTooltip() {
     position(e);
   }
 
+  function showBadge(e, key) {
+    const desc = MINI_BADGE_TOOLTIP[key];
+    if (!desc) return;
+    tooltip.innerHTML = `<div class="stat-tooltip-desc">${desc}</div>`;
+    tooltip.style.display = 'block';
+    position(e);
+  }
+
   document.addEventListener('mouseover', e => {
     const ctxEl = e.target.closest('[data-ctx-tooltip]');
     if (ctxEl) { showCtx(e, ctxEl.dataset.ctxTooltip); return; }
+    const badge = e.target.closest('[data-mini-badge-tooltip]');
+    if (badge) { showBadge(e, badge.dataset.miniBadgeTooltip); return; }
     const card = e.target.closest('[data-stat-tooltip]');
     if (!card) return;
     show(e, card.dataset.statTooltip);
@@ -100,12 +118,12 @@ export function initStatTooltip() {
 
   document.addEventListener('mousemove', e => {
     if (tooltip.style.display === 'none') return;
-    if (!e.target.closest('[data-stat-tooltip]') && !e.target.closest('[data-ctx-tooltip]')) { hide(); return; }
+    if (!e.target.closest('[data-stat-tooltip]') && !e.target.closest('[data-ctx-tooltip]') && !e.target.closest('[data-mini-badge-tooltip]')) { hide(); return; }
     position(e);
   });
 
   document.addEventListener('mouseout', e => {
-    if (!e.target.closest('[data-stat-tooltip]') && !e.target.closest('[data-ctx-tooltip]')) return;
+    if (!e.target.closest('[data-stat-tooltip]') && !e.target.closest('[data-ctx-tooltip]') && !e.target.closest('[data-mini-badge-tooltip]')) return;
     hide();
   });
 }

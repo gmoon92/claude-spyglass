@@ -86,15 +86,3 @@
   min-height: 18px; /* 내용 없을 때도 높이 확보 */
 }
 
-/* ── 차트 헤더 도움말 (details 요소) ────────────────────────────────────── */
-.context-chart-help {
-  display: inline;
-}
-
-.context-chart-help summary {
-  outline: none;
-}
-
-.context-chart-help[open] p {
-  display: block;
-}
