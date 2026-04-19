@@ -1,0 +1,19 @@
+services:
+  spyglass:
+    image: spyglass:latest
+    container_name: spyglass
+    restart: unless-stopped
+    ports:
+      # 호스트:컨테이너 — 훅 스크립트가 localhost:9999로 호출하기 위함
+      - "9999:9999"
+    volumes:
+      # ~/.spyglass를 컨테이너에 바인드 마운트 — DB·로그·타이밍 파일이 호스트에 영구 보관됨
+      - "${HOME}/.spyglass:/data/.spyglass"
+    environment:
+      SPYGLASS_PORT: 9999
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:9999/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
