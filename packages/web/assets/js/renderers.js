@@ -230,7 +230,7 @@ export function makeRequestRow(r, opts = {}) {
   const msgHtml    = msgPreview
     ? msgPreview
     : `<span class="cell-msg-empty" aria-label="메시지 없음">—</span>`;
-  return `<tr data-type="${escHtml(r.type||'')}">
+  return `<tr data-type="${escHtml(r.type||'')}" data-request-id="${escHtml(r.id||'')}">
     <td class="cell-time num">${fmtTs(r.timestamp)}</td>
     <td class="cell-action">${makeActionCell(r)}</td>
     ${makeTargetCell(r)}

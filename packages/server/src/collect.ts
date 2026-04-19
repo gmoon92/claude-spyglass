@@ -213,9 +213,8 @@ export function extractToolDetail(
 
     case 'Agent': {
       const subagentType = toolInput.subagent_type as string | undefined;
-      const desc = toolInput.description as string | undefined;
-      if (subagentType && desc) return `${subagentType}: ${desc}`.slice(0, 80);
       if (subagentType) return subagentType;
+      const desc = toolInput.description as string | undefined;
       if (desc) return desc.slice(0, 80);
       const prompt = toolInput.prompt as string | undefined;
       return prompt ? prompt.slice(0, 80) : null;

@@ -130,6 +130,11 @@ function prependRequest(r) {
   const prevScrollTop    = feedBody ? feedBody.scrollTop    : 0;
   const prevScrollHeight = feedBody ? feedBody.scrollHeight : 0;
 
+  // 같은 request ID의 기존 행(pre_tool "실행 중") 제거 후 대체
+  if (r.id) {
+    const existing = body.querySelector(`tr[data-request-id="${CSS.escape(r.id)}"]`);
+    if (existing) existing.remove();
+  }
   while (body.rows.length >= 200) body.deleteRow(body.rows.length - 1);
   const tmp = document.createElement('tbody');
   tmp.innerHTML = makeRequestRow(r, { showSession: true });
