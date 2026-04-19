@@ -5,7 +5,7 @@
 
 ---
 
-## 최종 현행화: 2026-04-20 (summary-strip-ux + turn-card-agent-name)
+## 최종 현행화: 2026-04-20 (left-panel-collapse)
 
 ## 파일 구조
 
@@ -308,6 +308,32 @@ grid-template-columns: 28px minmax(140px,1fr) 56px 56px 72px 80px
 
 ## 화면 3 — 좌측 패널
 
+### 섹션 접기/펼치기 토글
+
+**기능**: 각 섹션 헤더에 `<` 화살표 토글 버튼 추가
+**클래스**: `.btn-panel-toggle` (28x28px, flex center)
+**상태 저장**: `localStorage('left-panel-state')` — JSON 포맷 `{projects: bool, sessions: bool, tools: bool}`
+
+| 동작 | 결과 |
+|------|------|
+| 토글 버튼 클릭 | `.panel-section--collapsed` 토글, `.panel-body` 숨김, SVG 180도 회전 |
+| 페이지 로드 | localStorage에서 상태 복원, 각 섹션 접힘 상태 초기화 |
+| 버튼 호버 | background: `var(--accent-dim)`, color: `var(--accent)` |
+
+**마크업**: 각 섹션 헤더에 `<div class="panel-header-right">` 추가
+```html
+<div class="panel-header-right">
+  <span class="panel-hint">...</span> <!-- 있을 때만 -->
+  <button class="btn-panel-toggle" data-panel="projects">
+    <svg>...</svg>
+  </button>
+</div>
+```
+
+**관련 파일**:
+- `assets/js/main.js` — `togglePanelSection(panelId)`, `restorePanelState()`, `getPanelState()`, `savePanelState()`
+- `assets/css/left-panel.css` — `.btn-panel-toggle`, `.panel-header-right`, `.panel-section--collapsed`
+
 ### 패널 너비 리사이즈
 
 **핸들**: `.panel-resize-handle` (position:absolute, 우측 끝 4px, z-index:10)
@@ -327,14 +353,14 @@ grid-template-columns: 28px minmax(140px,1fr) 56px 56px 72px 80px
 
 ### 3-1. 프로젝트 탐색기
 
-**DOM ID**: 없음 (`.panel-section.flex-section`, tbody: `browserProjectsBody`)
-**높이**: `var(--project-panel-height)` = 215px
+**DOM ID**: `#panelProjects` (`.panel-section.flex-section`, tbody: `browserProjectsBody`)
+**높이**: `var(--project-panel-height)` = 215px (접힘 시 29px)
 **상태**: ✅ 현행
 
 | 요소 | 내용 |
 |------|------|
 | 섹션 라벨 | "프로젝트" (`.panel-label` CSS `text-transform:uppercase` 적용) |
-| 섹션 힌트 | "클릭하여 세션 조회" |
+| 토글 버튼 | `<` 화살표 (`.btn-panel-toggle[data-panel="projects"]`) |
 | 날짜 필터 | **없음** — 날짜 필터는 헤더에만 존재 (`#dateFilter`) |
 | 테이블 컬럼 | **이름** (max-width 120px, ellipsis) \| **세션** (right-align) \| **토큰** (바+텍스트) |
 | 선택 상태 | `.row-selected` 클래스 (accent 좌측 border + accent-dim bg) |
@@ -347,8 +373,8 @@ grid-template-columns: 28px minmax(140px,1fr) 56px 56px 72px 80px
 
 ### 3-2. 세션 목록
 
-**DOM ID**: 없음 (tbody: `browserSessionsBody`, 힌트: `sessionPaneHint`)
-**높이**: 1fr (가변)
+**DOM ID**: `#panelSessions` (tbody: `browserSessionsBody`, 힌트: `sessionPaneHint`)
+**높이**: 1fr (가변, 접힘 시 29px)
 **상태**: ✅ 현행
 
 각 세션 행 구성 (`makeSessionRow`):
@@ -359,6 +385,9 @@ grid-template-columns: 28px minmax(140px,1fr) 56px 56px 72px 80px
 
 | 요소 | 스타일 | 비고 |
 |------|--------|------|
+| 섹션 라벨 | "세션" | 헤더 좌측 |
+| 힌트 텍스트 | 10px, text-dim | 헤더 우측, 동적 변경 |
+| 토글 버튼 | `<` 화살표 (`.btn-panel-toggle[data-panel="sessions"]`) | 헤더 우측 끝 |
 | sess-id | 11px, text-muted, max-width 90px, ellipsis | `s.id.slice(0, 8)` 앞 8자 |
 | 상대시간 | 10px, text-dim, flex-shrink:0 | `fmtRelative(started_at)` |
 | 총토큰 | 10px, text-dim, margin-left:auto (우측 끝 정렬) | `fmtToken(total_tokens)` |
@@ -378,14 +407,15 @@ grid-template-columns: 28px minmax(140px,1fr) 56px 56px 72px 80px
 
 ### 3-3. 툴 통계
 
-**DOM ID**: `#toolStatsSection` (힌트: `#toolCount`, tbody: `#toolsBody`)
-**높이**: `var(--tool-stats-height)` = 160px
+**DOM ID**: `#panelTools` (섹션), `#toolStatsSection` (레거시), 힌트: `#toolCount`, tbody: `#toolsBody`)
+**높이**: `var(--tool-stats-height)` = 160px (접힘 시 29px)
 **상태**: ✅ 현행
 
 | 요소 | 내용 |
 |------|------|
 | 섹션 라벨 | "툴 통계 **(전체)**" — "(전체)"는 별도 span, font-weight:400, opacity:0.6 |
-| 섹션 힌트 | `{n}개` (툴 종류 수) |
+| 힌트 텍스트 | `{n}개` (툴 종류 수) — 동적 업데이트 |
+| 토글 버튼 | `<` 화살표 (`.btn-panel-toggle[data-panel="tools"]`) — 헤더 우측 끝 |
 
 #### 테이블 컬럼
 
@@ -506,6 +536,7 @@ grid-template-columns: 28px minmax(140px,1fr) 56px 56px 72px 80px
 | 2026-04-19 | 전체 | design-tokens.css 신규 토큰 6종: --accent-bg-light/medium, --blue/red-bg-light, --radius-sm/md | log-page-ux-fix |
 | 2026-04-19 | 전체 | badges.css border-radius 불일치 해소 → --radius-sm/--radius-md 일관 적용 | log-page-ux-fix |
 | 2026-04-19 | 1-2, 2-1 | Model 컬럼 'synthetic' 값을 '—'로 표시 (낶부 마커 숨김) | synthetic-model-display |
+| 2026-04-20 | 3 | 좌측 패널 섹션 접기/펼치기 토글 버튼 추가 (프로젝트/세션/툴 통계) | left-panel-collapse |
 | 2026-04-19 | 전체 | 툴팁 보완: Cache Panel 3섹션(hover), turn-meta/detail-agg-badge(title), liveBadge/날짜필터/타입필터(title) | tooltip-supplement |
 | 2026-04-19 | 2 | 세션 상세 뷰에 간트 탭 추가 (탭 버튼 + Gantt 컨테이너 HTML + turn-gantt.css) | turn-trace-gantt |
 | 2026-04-19 | 2 | detailView feed-controls 분리: view-tab-bar에서 검색+필터 제거, detail-controls-bar 신설 (defaultView와 레이아웃 패턴 통일) | feed-controls-layout |
