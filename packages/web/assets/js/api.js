@@ -60,7 +60,11 @@ export async function fetchDashboard() {
     const activeCount = d.summary?.activeSessions ?? 0;
     const activeEl    = document.getElementById('statActive');
     activeEl.textContent = fmt(activeCount);
-    activeEl.closest('.stat-card').classList.toggle('active', activeCount > 0);
+    const activeCard = activeEl.closest('.stat-card');
+    if (activeCard) {
+      activeCard.classList.toggle('active', activeCount > 0);
+      activeCard.classList.toggle('is-active-indicator', activeCount > 0);
+    }
     document.getElementById('statAvgDuration').textContent =
       formatDuration(d.summary?.avgDurationMs ?? d.requests?.avg_duration_ms ?? null);
 
@@ -84,8 +88,12 @@ export async function fetchDashboard() {
     const errorRate = d.summary?.errorRate;
     if (errorRate != null) {
       const errEl = document.getElementById('stat-error-rate');
-      errEl.textContent = `${Number(errorRate).toFixed(1)}%`;
-      errEl.classList.toggle('is-alert', errorRate > 5);
+      errEl.textContent = `${(Number(errorRate) * 100).toFixed(1)}%`;
+      const errCard = errEl.closest('.stat-card');
+      if (errCard) {
+        errCard.classList.toggle('is-error', errorRate > 0);
+        errCard.classList.toggle('is-critical', errorRate > 0.01);
+      }
     }
 
     renderProjects(d.projects || []);

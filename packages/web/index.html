@@ -50,42 +50,50 @@
 
   <!-- SUMMARY STRIP -->
   <div class="summary-strip">
-    <div class="stat-card" data-stat-tooltip="sessions">
-      <span class="stat-label">총 세션</span>
-      <span class="stat-value" id="statSessions"><span class="skeleton"></span></span>
-    </div>
-    <div class="stat-card" data-stat-tooltip="requests">
-      <span class="stat-label">총 요청</span>
-      <span class="stat-value" id="statRequests"><span class="skeleton"></span></span>
-    </div>
-    <div class="stat-card" data-stat-tooltip="tokens">
-      <span class="stat-label">총 토큰</span>
-      <span class="stat-value" id="statTokens"><span class="skeleton"></span></span>
-    </div>
+    <!-- Real-time section -->
     <div class="stat-card" id="activeCard" data-stat-tooltip="active">
       <span class="stat-label">활성</span>
       <span class="stat-value" id="statActive"><span class="skeleton"></span></span>
     </div>
+
+    <!-- Performance section -->
     <div class="stat-card" data-stat-tooltip="avg-duration">
-      <span class="stat-label">평균 응답시간</span>
+      <span class="stat-label">평균 응답</span>
       <span class="stat-value" id="statAvgDuration"><span class="skeleton"></span></span>
     </div>
-    <div class="stat-divider"></div>
-    <div class="stat-card" data-stat-tooltip="cost">
-      <span class="stat-label">cost</span>
-      <span class="stat-value" id="stat-cost">--</span>
-    </div>
-    <div class="stat-card" data-stat-tooltip="saved">
-      <span class="stat-label">saved</span>
-      <span class="stat-value" id="stat-cache-savings">--</span>
-    </div>
     <div class="stat-card" data-stat-tooltip="p95">
-      <span class="stat-label">p95</span>
+      <span class="stat-label">P95</span>
       <span class="stat-value" id="stat-p95">--</span>
     </div>
     <div class="stat-card" data-stat-tooltip="err">
-      <span class="stat-label">err</span>
+      <span class="stat-label">오류</span>
       <span class="stat-value" id="stat-error-rate">--</span>
+    </div>
+
+    <div class="stat-divider"></div>
+
+    <!-- Volume section -->
+    <div class="stat-card" data-stat-tooltip="sessions">
+      <span class="stat-label">세션</span>
+      <span class="stat-value" id="statSessions"><span class="skeleton"></span></span>
+    </div>
+    <div class="stat-card" data-stat-tooltip="requests">
+      <span class="stat-label">요청</span>
+      <span class="stat-value" id="statRequests"><span class="skeleton"></span></span>
+    </div>
+
+    <!-- Cost section -->
+    <div class="stat-card" data-stat-tooltip="tokens">
+      <span class="stat-label">토큰</span>
+      <span class="stat-value" id="statTokens"><span class="skeleton"></span></span>
+    </div>
+    <div class="stat-card" data-stat-tooltip="cost">
+      <span class="stat-label">비용</span>
+      <span class="stat-value" id="stat-cost">--</span>
+    </div>
+    <div class="stat-card" data-stat-tooltip="saved">
+      <span class="stat-label">절감</span>
+      <span class="stat-value" id="stat-cache-savings">--</span>
     </div>
   </div>
 
