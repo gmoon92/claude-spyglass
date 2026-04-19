@@ -34,6 +34,70 @@ let server: ReturnType<typeof Bun.serve> | null = null;
 let db: SpyglassDatabase | null = null;
 
 // =============================================================================
+// 포트 유틸리티
+// =============================================================================
+
+/**
+ * 포트 사용 가능 여부 확인 (테스트 서버로 검증)
+ */
+async function isPortAvailable(port: number): Promise<boolean> {
+  try {
+    const testServer = Bun.serve({
+      port,
+      hostname: HOST,
+      fetch: () => new Response("test"),
+    });
+    testServer.stop();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 포트를 점유한 프로세스 ID 찾기
+ */
+function findProcessByPort(port: number): number | null {
+  try {
+    const { execSync } = require('child_process');
+    const out = execSync(`lsof -ti :${port}`, { encoding: 'utf-8' }).trim();
+    return out ? parseInt(out.split('\n')[0], 10) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 프로세스가 완전히 종료될 때까지 대기
+ */
+async function waitForProcessExit(pid: number, timeoutMs: number = 5000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0);
+      await new Promise(resolve => setTimeout(resolve, 100));
+    } catch {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 포트 해제 대기 (OS 레벨 TIME_WAIT 등)
+ */
+async function waitForPortRelease(port: number, timeoutMs: number = 3000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await isPortAvailable(port)) {
+      return true;
+    }
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+  return false;
+}
+
+// =============================================================================
 // 유지보수
 // =============================================================================
 
@@ -270,23 +334,32 @@ if (import.meta.main) {
 
   switch (command) {
     case 'start': {
-      // 이미 실행 중인지 확인
-      try {
-        const fs = require('fs');
-        if (fs.existsSync(pidFile)) {
-          const pid = parseInt(fs.readFileSync(pidFile, 'utf-8'), 10);
-          try {
-            process.kill(pid, 0); // 프로세스 존재 확인
-            console.log(`[Server] Already running (PID: ${pid})`);
-            process.exit(0);
-          } catch {
-            // 프로세스가 존재하지 않음, PID 파일 삭제
-            fs.unlinkSync(pidFile);
-          }
-        }
-      } catch {}
+      const fs = require('fs');
 
-      // 서버 시작
+      // 1. PID 파일로 실행 중인지 확인
+      if (fs.existsSync(pidFile)) {
+        const pid = parseInt(fs.readFileSync(pidFile, 'utf-8'), 10);
+        try {
+          process.kill(pid, 0);
+          console.log(`[Server] Already running (PID: ${pid})`);
+          process.exit(0);
+        } catch {
+          fs.unlinkSync(pidFile);
+        }
+      }
+
+      // 2. 포트 사용 가능 여부 확인
+      if (!(await isPortAvailable(PORT))) {
+        console.error(`[Server] Port ${PORT} is already in use`);
+        const blockingPid = findProcessByPort(PORT);
+        if (blockingPid) {
+          console.error(`[Server] Blocking process: PID ${blockingPid}`);
+          console.error(`[Server] Run 'bun run dev' to restart with auto-cleanup`);
+        }
+        process.exit(1);
+      }
+
+      // 3. 서버 시작
       startServer();
 
       // PID 파일 저장
@@ -338,37 +411,48 @@ if (import.meta.main) {
 
     case 'restart': {
       const fs = require('fs');
-      const { execSync } = require('child_process');
 
-      // PID 파일 또는 포트 점유 프로세스 종료
-      let pidToKill: number | null = null;
-      if (fs.existsSync(pidFile)) {
-        pidToKill = parseInt(fs.readFileSync(pidFile, 'utf-8'), 10);
-        fs.unlinkSync(pidFile);
+      // 1. 먼저 포트 사용 가능 여부 확인
+      if (await isPortAvailable(PORT)) {
+        console.log(`[Server] Port ${PORT} is available`);
       } else {
-        try {
-          const out = execSync(`lsof -ti :${PORT}`, { encoding: 'utf-8' }).trim();
-          if (out) pidToKill = parseInt(out, 10);
-        } catch {}
-      }
+        console.log(`[Server] Port ${PORT} is in use, attempting to free it...`);
 
-      if (pidToKill) {
-        try {
-          process.kill(pidToKill, 'SIGTERM');
-          console.log(`[Server] Stopped (PID: ${pidToKill})`);
-          // 프로세스가 완전히 종료될 때까지 대기
-          const deadline = Date.now() + 5000;
-          while (Date.now() < deadline) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            try { process.kill(pidToKill!, 0); } catch {
-              // 프로세스 종료 후 포트 해제 대기 (OS 레벨 정리 시간)
-              await new Promise(resolve => setTimeout(resolve, 500));
-              break;
+        // 2. PID 파일 또는 포트 점유 프로세스 찾기
+        let pidToKill: number | null = null;
+        if (fs.existsSync(pidFile)) {
+          pidToKill = parseInt(fs.readFileSync(pidFile, 'utf-8'), 10);
+          fs.unlinkSync(pidFile);
+        } else {
+          pidToKill = findProcessByPort(PORT);
+        }
+
+        // 3. 프로세스 종료
+        if (pidToKill) {
+          try {
+            process.kill(pidToKill, 'SIGTERM');
+            console.log(`[Server] Stopping process (PID: ${pidToKill})...`);
+
+            // 4. 프로세스 종료 대기
+            const exited = await waitForProcessExit(pidToKill, 5000);
+            if (!exited) {
+              console.log(`[Server] Force killing process (PID: ${pidToKill})...`);
+              try { process.kill(pidToKill, 'SIGKILL'); } catch {}
             }
-          }
-        } catch {}
+          } catch {}
+        }
+
+        // 5. 포트 해제 대기
+        console.log(`[Server] Waiting for port ${PORT} to be released...`);
+        const released = await waitForPortRelease(PORT, 5000);
+        if (!released) {
+          console.error(`[Server] Failed to release port ${PORT}. Please check manually.`);
+          process.exit(1);
+        }
+        console.log(`[Server] Port ${PORT} is now available`);
       }
 
+      // 6. 서버 시작
       startServer();
       fs.mkdirSync(`${process.env.HOME}/.spyglass`, { recursive: true });
       fs.writeFileSync(pidFile, process.pid.toString());
