@@ -883,25 +883,45 @@ export interface TurnItem {
  * 세션별 턴 목록 조회
  * - turn_id 기준으로 prompt + tool_calls 그룹화
  * - turn_index: 세션 내 순번 (1부터)
+ * 개선: SQL에서 turn/prompt/tool_call 분리 조회로 메모리 효율 개선
  */
 export function getTurnsBySession(
   db: Database,
   sessionId: string
 ): TurnItem[] {
-  const rows = db.query(`
-    SELECT id, type, tool_name, tool_detail, turn_id,
-           timestamp, tokens_input, tokens_output, tokens_total, duration_ms, model, payload,
-           event_type, cache_read_tokens, cache_creation_tokens
+  // 1. 턴 단위 집계: 턴당 첫 타임스탐프, 토큰합, tool_call 수
+  const turnSummaries = db.query(`
+    SELECT turn_id,
+           MIN(timestamp) as started_at,
+           SUM(CASE WHEN type = 'prompt' THEN tokens_input ELSE 0 END) as prompt_tokens_input,
+           SUM(CASE WHEN type = 'prompt' THEN tokens_output ELSE 0 END) as prompt_tokens_output,
+           SUM(tokens_total) as total_tokens,
+           COUNT(CASE WHEN type = 'tool_call' THEN 1 END) as tool_call_count
     FROM requests
     WHERE session_id = ? AND turn_id IS NOT NULL
       AND (event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')
+    GROUP BY turn_id
+    ORDER BY started_at ASC
+  `).all(sessionId) as Array<{
+    turn_id: string;
+    started_at: number;
+    prompt_tokens_input: number;
+    prompt_tokens_output: number;
+    total_tokens: number;
+    tool_call_count: number;
+  }>;
+
+  // 2. 각 턴의 prompt 행 조회
+  const promptRows = db.query(`
+    SELECT turn_id, id, timestamp, tokens_input, tokens_output, tokens_total, duration_ms,
+           model, payload, cache_read_tokens, cache_creation_tokens
+    FROM requests
+    WHERE session_id = ? AND turn_id IS NOT NULL AND type = 'prompt'
+      AND (event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')
     ORDER BY timestamp ASC
   `).all(sessionId) as Array<{
-    id: string;
-    type: string;
-    tool_name: string | null;
-    tool_detail: string | null;
     turn_id: string;
+    id: string;
     timestamp: number;
     tokens_input: number;
     tokens_output: number;
@@ -909,89 +929,110 @@ export function getTurnsBySession(
     duration_ms: number;
     model: string | null;
     payload: string | null;
-    event_type: string | null;
     cache_read_tokens: number;
     cache_creation_tokens: number;
   }>;
 
-  // turn_id 기준 그룹화
-  const turnMap = new Map<string, TurnItem>();
-  const turnOrder: string[] = [];
+  // 3. 각 턴의 tool_call 행 조회
+  const toolRows = db.query(`
+    SELECT turn_id, id, timestamp, tool_name, tool_detail,
+           tokens_input, tokens_output, tokens_total, duration_ms,
+           payload, event_type
+    FROM requests
+    WHERE session_id = ? AND turn_id IS NOT NULL AND type = 'tool_call'
+      AND (event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')
+    ORDER BY turn_id, timestamp ASC
+  `).all(sessionId) as Array<{
+    turn_id: string;
+    id: string;
+    timestamp: number;
+    tool_name: string | null;
+    tool_detail: string | null;
+    tokens_input: number;
+    tokens_output: number;
+    tokens_total: number;
+    duration_ms: number;
+    payload: string | null;
+    event_type: string | null;
+  }>;
 
-  for (const row of rows) {
-    if (!turnMap.has(row.turn_id)) {
-      turnMap.set(row.turn_id, {
-        turn_id: row.turn_id,
-        turn_index: turnOrder.length + 1,
-        started_at: row.timestamp,
-        prompt: null,
-        tool_calls: [],
-        summary: { tool_call_count: 0, tokens_input: 0, tokens_output: 0, total_tokens: 0, duration_ms: 0 },
-      });
-      turnOrder.push(row.turn_id);
+  // 4. 데이터 구성
+  const promptMap = new Map(promptRows.map(p => [p.turn_id, p]));
+  const toolCallsByTurn = new Map<string, typeof toolRows>();
+  for (const tool of toolRows) {
+    if (!toolCallsByTurn.has(tool.turn_id)) {
+      toolCallsByTurn.set(tool.turn_id, []);
     }
-
-    const turn = turnMap.get(row.turn_id)!;
-
-    if (row.type === 'prompt') {
-      const cacheRead = row.cache_read_tokens || 0;
-      const cacheCreate = row.cache_creation_tokens || 0;
-      turn.prompt = {
-        id: row.id,
-        timestamp: row.timestamp,
-        tokens_input: row.tokens_input,
-        tokens_output: row.tokens_output,
-        tokens_total: row.tokens_total,
-        duration_ms: row.duration_ms,
-        model: row.model,
-        payload: row.payload,
-        cache_read_tokens: cacheRead,
-        cache_creation_tokens: cacheCreate,
-        context_tokens: row.tokens_input + cacheRead + cacheCreate,
-      };
-      turn.started_at = Math.min(turn.started_at, row.timestamp);
-      turn.summary.tokens_input += row.tokens_input;
-      turn.summary.tokens_output += row.tokens_output;
-    } else {
-      turn.tool_calls.push({
-        id: row.id,
-        type: 'tool_call',
-        timestamp: row.timestamp,
-        tool_name: row.tool_name,
-        tool_detail: row.tool_detail,
-        tokens_input: row.tokens_input,
-        tokens_output: row.tokens_output,
-        tokens_total: row.tokens_total,
-        duration_ms: row.duration_ms,
-        payload: row.payload,
-        event_type: row.event_type,
-      });
-    }
-
-    turn.summary.total_tokens += row.tokens_total;
+    toolCallsByTurn.get(tool.turn_id)!.push(tool);
   }
 
-  // summary 최종 집계
-  for (const turn of turnMap.values()) {
-    turn.summary.tool_call_count = turn.tool_calls.length;
-    if (turn.tool_calls.length > 0) {
-      const last = turn.tool_calls[turn.tool_calls.length - 1];
-      const first = turn.started_at;
-      turn.summary.duration_ms = last.timestamp + last.duration_ms - first;
+  const turns: TurnItem[] = turnSummaries.map((summary, idx) => {
+    const prompt = promptMap.get(summary.turn_id);
+    const toolCalls = toolCallsByTurn.get(summary.turn_id) || [];
+
+    // prompt 캐시 정보 계산
+    let promptCacheRead = 0;
+    let promptCacheCreate = 0;
+    if (prompt) {
+      promptCacheRead = prompt.cache_read_tokens || 0;
+      promptCacheCreate = prompt.cache_creation_tokens || 0;
     }
 
-    // prompt 행에 context_tokens가 없으면 tool_call의 최대 cache_read_tokens로 보완
-    // (UserPromptSubmit 훅처럼 LLM 응답 전 수집된 경우 token 정보가 0임)
-    if (turn.prompt && turn.prompt.context_tokens === 0 && turn.tool_calls.length > 0) {
-      const maxCacheRead = Math.max(...(rows
-        .filter(r => r.turn_id === turn.turn_id && r.type !== 'prompt')
-        .map(r => (r.cache_read_tokens || 0) + (r.cache_creation_tokens || 0))
-      ));
-      if (maxCacheRead > 0) {
-        turn.prompt.context_tokens = maxCacheRead;
-      }
+    // 턴 duration 계산
+    let duration_ms = 0;
+    if (toolCalls.length > 0) {
+      const first = summary.started_at;
+      const last = toolCalls[toolCalls.length - 1];
+      duration_ms = last.timestamp + last.duration_ms - first;
     }
-  }
 
-  return turnOrder.map(id => turnMap.get(id)!).reverse();
+    // context_tokens 보완: prompt가 없거나 0이면 tool_call 최대값 사용
+    let contextTokens = (prompt?.tokens_input || 0) + promptCacheRead + promptCacheCreate;
+    if (contextTokens === 0 && toolCalls.length > 0) {
+      contextTokens = Math.max(
+        ...toolCalls.map(t => (t.tokens_input || 0) + (t.tokens_output || 0))
+      );
+    }
+
+    return {
+      turn_id: summary.turn_id,
+      turn_index: idx + 1,
+      started_at: summary.started_at,
+      prompt: prompt ? {
+        id: prompt.id,
+        timestamp: prompt.timestamp,
+        tokens_input: prompt.tokens_input,
+        tokens_output: prompt.tokens_output,
+        tokens_total: prompt.tokens_total,
+        duration_ms: prompt.duration_ms,
+        model: prompt.model,
+        payload: prompt.payload,
+        cache_read_tokens: promptCacheRead,
+        cache_creation_tokens: promptCacheCreate,
+        context_tokens: contextTokens,
+      } : null,
+      tool_calls: toolCalls.map(t => ({
+        id: t.id,
+        type: 'tool_call' as const,
+        timestamp: t.timestamp,
+        tool_name: t.tool_name,
+        tool_detail: t.tool_detail,
+        tokens_input: t.tokens_input,
+        tokens_output: t.tokens_output,
+        tokens_total: t.tokens_total,
+        duration_ms: t.duration_ms,
+        payload: t.payload,
+        event_type: t.event_type,
+      })),
+      summary: {
+        tool_call_count: summary.tool_call_count,
+        tokens_input: summary.prompt_tokens_input,
+        tokens_output: summary.prompt_tokens_output,
+        total_tokens: summary.total_tokens,
+        duration_ms,
+      },
+    };
+  });
+
+  return turns.reverse();
 }
