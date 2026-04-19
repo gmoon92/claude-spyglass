@@ -6,7 +6,8 @@
  */
 
 import { Database } from 'bun:sqlite';
-import { INIT_SCHEMA, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5, MIGRATION_V6, MIGRATION_V7, MIGRATION_V8, MIGRATION_V9, MIGRATION_V10, MIGRATION_V12, WAL_MODE_PRAGMAS } from './schema';
+import { WAL_MODE_PRAGMAS } from './schema';
+import { runMigrations } from './migrator';
 import fs from 'fs';
 
 // =============================================================================
@@ -176,88 +177,19 @@ export class SpyglassDatabase {
 
   /** 스키마 초기화 */
   private initializeSchema(): void {
-    this.execMulti(INIT_SCHEMA);
-    this.runMigrations();
-  }
-
-  /** 마이그레이션 실행 */
-  private runMigrations(): void {
-    const cols = this.db.query('PRAGMA table_info(requests)').all() as Array<{ name: string }>;
-
-    const hasToolDetail = cols.some(c => c.name === 'tool_detail');
-    if (!hasToolDetail) {
-      this.db.prepare(MIGRATION_V2.trim()).run();
-    }
-
-    const hasTurnId = cols.some(c => c.name === 'turn_id');
-    if (!hasTurnId) {
-      this.execMulti(MIGRATION_V3);
-    }
-
-    const hasSource = cols.some(c => c.name === 'source');
-    if (!hasSource) {
-      this.db.prepare(MIGRATION_V4.trim()).run();
-    }
-
-    const hasCacheTokens = cols.some(c => c.name === 'cache_creation_tokens');
-    if (!hasCacheTokens) {
-      this.execMulti(MIGRATION_V5);
-    }
-
-    const tables = this.db.query("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>;
-    const hasEventsTable = tables.some(t => t.name === 'claude_events');
-    if (!hasEventsTable) {
-      this.execMulti(MIGRATION_V6);
-    }
-
-    const hasPreview = cols.some(c => c.name === 'preview');
-    if (!hasPreview) {
-      this.db.prepare(MIGRATION_V7.trim()).run();
-    }
-
-    const hasToolUseId = cols.some(c => c.name === 'tool_use_id');
-    if (!hasToolUseId) {
-      this.execMulti(MIGRATION_V8);
-    }
-
-    // V9: user_version 기반 실행 (데이터 마이그레이션)
-    const currentVersion = this.db.query('PRAGMA user_version').get() as { user_version: number };
-    if (currentVersion.user_version < 9) {
-      this.execMulti(MIGRATION_V9);
-      this.db.prepare('PRAGMA user_version = 9').run();
-    }
-
-    // V10: preview 컬럼 재추출 (100자 → 2000자)
-    // payload JSON의 prompt 필드를 2000자까지 재저장하여 기존 truncation 복원
-    if (currentVersion.user_version < 10) {
-      this.execMulti(MIGRATION_V10);
-      this.db.prepare('PRAGMA user_version = 10').run();
-    }
-
-    // V12: timestamp 인덱스 + visible_requests VIEW
-    if (currentVersion.user_version < 12) {
-      try {
-        // 인덱스 생성
-        this.db.prepare('CREATE INDEX IF NOT EXISTS idx_requests_timestamp ON requests(timestamp DESC)').run();
-        // VIEW 생성 (별도 실행)
-        this.db.prepare('DROP VIEW IF EXISTS visible_requests').run();
-        this.db.prepare(
-          `CREATE VIEW visible_requests AS
-           SELECT * FROM requests
-           WHERE event_type IS NULL
-              OR event_type != 'pre_tool'
-              OR tool_name = 'Agent'`
-        ).run();
-        this.db.prepare('PRAGMA user_version = 12').run();
-      } catch (error) {
-        console.error('[SpyglassDB] Error applying V12 migration:', error);
-        throw error;
-      }
-    }
+    // 파일 기반 마이그레이션 로더로 위임
+    // 빈 DB면 001-init.sql부터 시작하여 모든 마이그레이션 실행
+    // 기존 DB면 현재 버전보다 높은 마이그레이션만 실행 (자동 스킵)
+    runMigrations(this.db, this.options.debug);
   }
 
   /** 원본 Database 인스턴스 반환 */
   get instance(): Database {
+    return this.db;
+  }
+
+  /** 원본 Database 인스턴스 반환 (메서드 형식) */
+  getDb(): Database {
     return this.db;
   }
 
