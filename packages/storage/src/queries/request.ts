@@ -32,6 +32,8 @@ export interface CreateRequestParams {
   preview?: string | null;
   tool_use_id?: string | null;
   event_type?: string | null;
+  tokens_confidence?: string;
+  tokens_source?: string;
 }
 
 /** 요청 생성 SQL */
@@ -39,8 +41,9 @@ const SQL_CREATE_REQUEST = `
   INSERT INTO requests (
     id, session_id, timestamp, type, tool_name, tool_detail, turn_id, model,
     tokens_input, tokens_output, tokens_total, duration_ms, payload, source,
-    cache_creation_tokens, cache_read_tokens, preview, tool_use_id, event_type
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    cache_creation_tokens, cache_read_tokens, preview, tool_use_id, event_type,
+    tokens_confidence, tokens_source
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 /**
@@ -69,7 +72,9 @@ export function createRequest(
     params.cache_read_tokens ?? 0,
     params.preview ?? null,
     params.tool_use_id ?? null,
-    params.event_type ?? null
+    params.event_type ?? null,
+    params.tokens_confidence ?? 'high',
+    params.tokens_source ?? 'transcript'
   );
   return params.id;
 }
@@ -103,7 +108,9 @@ export function createRequests(
         item.cache_read_tokens ?? 0,
         item.preview ?? null,
         item.tool_use_id ?? null,
-        item.event_type ?? null
+        item.event_type ?? null,
+        item.tokens_confidence ?? 'high',
+        item.tokens_source ?? 'transcript'
       );
     }
   });
