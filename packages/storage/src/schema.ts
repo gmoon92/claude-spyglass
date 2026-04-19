@@ -139,6 +139,8 @@ export interface Request {
   preview?: string | null;
   tool_use_id?: string | null;
   event_type?: string | null;
+  tokens_confidence?: string;
+  tokens_source?: string;
   created_at?: number;
 }
 
@@ -149,7 +151,7 @@ export interface Request {
 /**
  * 테이블 스키마 정보 (마이그레이션/검증용)
  */
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 /**
  * v2 마이그레이션: tool_detail 컬럼 추가
@@ -310,6 +312,20 @@ WHERE type = 'prompt'
   AND payload IS NOT NULL
   AND json_valid(payload)
   AND json_extract(payload, '$.prompt') IS NOT NULL;
+`;
+
+/**
+ * v11 마이그레이션: 토큰 신뢰도 추적 컬럼 추가
+ *
+ * TokenResult 인터페이스 도입으로 parseTranscript 실패 시 신뢰도 정보를 함께 저장.
+ * - tokens_confidence: 'high' (정상) | 'error' (파싱 실패)
+ * - tokens_source: 'transcript' (정상 추출) | 'unavailable' (파일 없음/파싱 실패)
+ *
+ * 기존 데이터는 모두 'high' / 'transcript'로 기본값 설정 (실패 케이스 없었음)
+ */
+export const MIGRATION_V11 = `
+ALTER TABLE requests ADD COLUMN tokens_confidence TEXT DEFAULT 'high';
+ALTER TABLE requests ADD COLUMN tokens_source TEXT DEFAULT 'transcript';
 `;
 
 export const SCHEMA_META = {
