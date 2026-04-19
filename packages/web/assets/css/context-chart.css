@@ -2,10 +2,8 @@
 
 /* ── CSS 변수 (canvas overlay 참조용) ───────────────────────────────────── */
 :root {
-  --ctx-chart-line-warn:   rgba(245,158,11,0.55);   /* 80% 경고 기준선 색 */
   --ctx-chart-line-grid:   rgba(255,255,255,0.04);  /* 격자선 */
-  --ctx-chart-fill-normal: rgba(217,119,87,0.12);   /* 정상 영역 fill */
-  --ctx-chart-fill-warn:   rgba(245,158,11,0.12);   /* 경고 영역 fill */
+  --ctx-chart-fill-normal: rgba(217,119,87,0.12);   /* 영역 fill */
   --ctx-chart-stroke:      var(--accent);           /* 꺾은선 stroke */
 }
 
@@ -52,12 +50,7 @@
   color: var(--text-muted);
   font-family: monospace;
   letter-spacing: 0.2px;
-  transition: color .2s;
 }
-
-/* 사용률이 경고 임계값(80%) 이상일 때 JS 가 .warn 클래스를 토글 */
-#ctxUsageIndicator.warn  { color: var(--orange); }
-#ctxUsageIndicator.crit  { color: var(--red); }
 
 /* ── 캔버스 ─────────────────────────────────────────────────────────────── */
 #contextGrowthChart {
@@ -91,4 +84,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   min-height: 18px; /* 내용 없을 때도 높이 확보 */
+}
+
+/* ── 차트 헤더 도움말 (details 요소) ────────────────────────────────────── */
+.context-chart-help {
+  display: inline;
+}
+
+.context-chart-help summary {
+  outline: none;
+}
+
+.context-chart-help[open] p {
+  display: block;
 }
