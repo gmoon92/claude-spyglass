@@ -36,10 +36,10 @@ td.cell-token.cell-empty { text-align: right; }
 td.cache-cell  { cursor: default; }
 
 /* ── ROW TYPE BORDER (ADR-006) ──────────────────────────────────────────── */
-tr[data-type="prompt"]    td:first-child { border-left: 2px solid var(--type-prompt-color);    padding-left: 6px; }
-tr[data-type="tool_call"] td:first-child { border-left: 2px solid var(--type-tool_call-color); padding-left: 6px; }
-tr[data-type="system"]    td:first-child { border-left: 2px solid var(--type-system-color);    padding-left: 6px; }
-tr.row-selected td:first-child { border-left: 2px solid var(--accent) !important; padding-left: 6px !important; }
+tr[data-type="prompt"]    td:first-child { padding-left: 6px; }
+tr[data-type="tool_call"] td:first-child { padding-left: 6px; }
+tr[data-type="system"]    td:first-child { padding-left: 6px; }
+tr.row-selected td:first-child { border-left: 2px solid !important; padding-left: 6px !important; }
 
 /* ── PROMPT EXPAND ──────────────────────────────────────────────────────── */
 .prompt-expand-row td { padding: 0 !important; border-bottom: 1px solid var(--border); }

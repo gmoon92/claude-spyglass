@@ -1,7 +1,8 @@
 /* ── LEFT PANEL ─────────────────────────────────────────────────────────── */
 .left-panel {
   position: relative;
-  display: flex; flex-direction: column;
+  display: grid;
+  grid-template-rows: var(--project-panel-height) 1fr var(--tool-stats-height);
   overflow: hidden; border-right: 1px solid var(--border);
   background: var(--surface);
 }
@@ -30,12 +31,8 @@
   display: flex; flex-direction: column;
   overflow: hidden; border-bottom: 1px solid var(--border); min-height: 0;
 }
-/* 각 섹션의 flex basis 설정 (프로젝트: 215px, 세션: 남은 공간, 툴 통계: 160px) */
-#panelProjects { flex: 0 0 var(--project-panel-height); }
-#panelSessions { flex: 1 1 0; }
-#panelTools { flex: 0 0 var(--tool-stats-height); }
+.panel-section.flex-section { min-height: 0; }
 .panel-section:last-child { border-bottom: none; }
-
 
 .panel-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -45,10 +42,20 @@
 .panel-label { font-size: 10px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; }
 .panel-hint  { font-size: 10px; color: var(--text-dim); }
 
-
 .panel-body { flex: 1; overflow-y: auto; min-height: 0; }
 .panel-body::-webkit-scrollbar { width: 3px; }
 .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── PANEL COLLAPSE BUTTON (< 토글) ──────────────────────────────────── */
+.btn-panel-collapse {
+  display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px;
+  background: none; border: none; border-radius: var(--radius-sm);
+  color: var(--text-dim); cursor: pointer; flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-panel-collapse:hover { background: var(--accent-dim); color: var(--accent); }
+.btn-panel-collapse svg   { transition: transform 0.2s ease; display: block; }
 
 /* ── PROJECT NAME CELL ──────────────────────────────────────────────────── */
 .cell-proj-name {
@@ -57,7 +64,8 @@
   white-space: nowrap;
 }
 
-/* tool-stats-section은 flex 레이아웃에서 자동으로 높이 제어됨 */
+.tool-stats-section { max-height: var(--tool-stats-height); }
+.tool-stats-section .panel-body { max-height: calc(var(--tool-stats-height) - 29px); }
 
 /* ── BAR CELLS ──────────────────────────────────────────────────────────── */
 .bar-cell  { display: flex; align-items: center; gap: 8px; }

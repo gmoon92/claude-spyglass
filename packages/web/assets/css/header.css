@@ -55,26 +55,3 @@
 }
 .filter-btn:hover { border-color: var(--accent); color: var(--accent); }
 .filter-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
-
-/* ── PANEL COLLAPSE BUTTON ──────────────────────────────────────────────– */
-.btn-panel-collapse {
-  display: flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px;
-  background: none; border: none; border-radius: var(--radius-sm);
-  color: var(--text-dim); cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  flex-shrink: 0;
-}
-
-.btn-panel-collapse:hover {
-  background: var(--surface-alt);
-  color: var(--accent);
-}
-
-.btn-panel-collapse svg {
-  transition: transform 0.2s ease;
-}
-
-.main-layout.left-panel-hidden .btn-panel-collapse svg {
-  transform: rotate(180deg);
-}

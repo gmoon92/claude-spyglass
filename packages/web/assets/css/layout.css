@@ -21,16 +21,32 @@ body {
 }
 
 /* ── LEFT PANEL HIDDEN ──────────────────────────────────────────────────── */
+/* 숨김 상태: 좁은 스트립만 남기고 토글 버튼만 노출 (재펼침 접근성 확보) */
 .main-layout.left-panel-hidden {
-  grid-template-columns: 1fr;
+  grid-template-columns: 36px 1fr;
 }
 
 .main-layout.left-panel-hidden .left-panel {
+  grid-template-rows: 36px 0 0;
+}
+
+/* 첫 번째 .panel-section(프로젝트)만 유지, 나머지는 general-sibling(~)로 숨김
+   — .left-panel의 첫 자식은 .panel-resize-handle이므로 :first-child 선택자는 안 됨 */
+.main-layout.left-panel-hidden .left-panel .panel-section ~ .panel-section,
+.main-layout.left-panel-hidden .left-panel .panel-body,
+.main-layout.left-panel-hidden .left-panel .panel-label,
+.main-layout.left-panel-hidden .panel-resize-handle {
   display: none;
 }
 
-.main-layout.left-panel-hidden .panel-resize-handle {
-  display: none;
+.main-layout.left-panel-hidden .left-panel .panel-header {
+  padding: 6px 0;
+  justify-content: center;
+  border-bottom: none;
+}
+
+.main-layout.left-panel-hidden .btn-panel-collapse svg {
+  transform: rotate(180deg);
 }
 
 /* ── FOOTER ─────────────────────────────────────────────────────────────── */
