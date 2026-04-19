@@ -1,69 +1,44 @@
----
-feature: turn-trace-gantt
-title: Feature C — Turn Trace Gantt (도구 실행 시퀀스 Gantt 차트)
-status: pending
-priority: 5
----
+# turn-trace-gantt 개발 계획
 
-## 작업 목표
+> Feature: turn-trace-gantt
+> 작성일: 2026-04-19
+> 작성자: Claude Code
 
-세션 상세 뷰의 턴(Turn) 탭에 각 턴별 도구 실행 시퀀스를 Gantt 차트로 시각화한다.
-"이 턴에서 어떤 도구가 얼마나 걸렸는가"와 "어떤 도구가 병목인가"를 보여준다.
+## 목표
 
-## Gantt 차트 구조
+세션 상세 뷰에 "간트" 탭을 추가하여 세션 전체의 tool_call 실행 타임라인을 Canvas Gantt 차트로 시각화한다.
+서버/DB/TypeScript 파일은 수정하지 않고, 순수 CSS/HTML 레이어만 작성한다.
 
-```
-Turn T3  ████████████████████████████  총 12.3s
+## 범위
 
-  Read   [====]                           0.8s
-  Grep        [==]                        0.4s
-  Read            [===]                   0.9s
-  Bash                [===========]       8.1s  ← 병목!
-  Edit                           [==]     2.1s
-```
+- 포함:
+  - `packages/web/assets/css/turn-gantt.css` 신규 작성 (CSS 변수 전용, 하드코딩 색상 없음)
+  - `packages/web/index.html` 수정 — 간트 탭 버튼, Gantt 컨테이너 HTML, CSS 링크 추가
+- 제외:
+  - 서버/DB/TypeScript 코드 변경
+  - Gantt Canvas 렌더링 JS 로직 (별도 feature에서 처리)
+  - turn-view.css, detail-view.css 변경
 
-- X축: 상대 시간 (턴 시작 기준, ms)
-- Y축: 각 도구 호출 (행)
-- 색상: 도구 타입별
-  - Read/Glob: 파란계열
-  - Bash: 초록계열
-  - Edit/Write: 주황계열
-  - Grep: 보라계열
-  - Agent/MCP: 빨간계열
-- 호버 시 툴팁: 도구명, 파라미터, 소요 시간
+## 단계별 계획
 
-## 단계별 실행 계획
+### 1단계: CSS 파일 작성
+- `packages/web/assets/css/turn-gantt.css` 신규 생성
+- 툴바, 힌트, 범례, 스크롤 컨테이너, Canvas 요소 스타일 작성
+- CSS 변수(`var(--border)`, `var(--text-dim)` 등)만 사용
 
-### Step 1 — 서버: 턴별 도구 상세 데이터 (packages/storage, packages/server)
-- 기존 `/api/sessions/:id` 응답에 각 request의 `timestamp`, `duration_ms` 포함 확인
-- turn_id 그룹 내 tool_call 타입만 필터링, 시간 순 정렬
-- 첫 tool_call timestamp를 턴 시작 기준으로 상대 시간 계산
+### 2단계: index.html 수정
+- `<head>` 에 `turn-gantt.css` 링크 추가
+- `detailTabBar` 에 간트 탭 버튼 추가 (`tabTurn` 뒤)
+- `detailTurnView` 뒤에 `detailGanttView` 컨테이너 삽입
 
-### Step 2 — SVG Gantt 렌더러 (packages/web/assets/js/)
-- `gantt.js` 신규 파일: SVG 기반 Gantt 차트 렌더러
-  - `renderGantt(container, toolCalls)` 함수
-  - 각 도구 → SVG rect 요소 (x: 시작 시간, width: duration)
-  - 도구 타입별 색상 매핑
-  - 툴팁: mouseover 이벤트
-  - 스크롤 가능한 가로 레이아웃
+### 3단계: typecheck 검증
+- `npm run typecheck` 실행하여 오류 없는지 확인
 
-### Step 3 — 턴 뷰 통합 (packages/web/assets/js/session-detail.js)
-- 기존 Turn 탭에 턴 카드 클릭 → 해당 턴의 Gantt 펼침 (accordion 패턴)
-- 또는 턴 목록 우측에 미니 Gantt 인라인 표시
+## 완료 기준
 
-### Step 4 — 스타일 (packages/web/assets/css/turn-view.css)
-- Gantt 컨테이너 스타일
-- 도구 타입별 색상 CSS 변수
-
-## 영향 파일
-
-```
-packages/web/assets/js/gantt.js           — 신규: SVG Gantt 렌더러
-packages/web/assets/js/session-detail.js  — 턴 클릭 시 Gantt 렌더 호출
-packages/web/assets/css/turn-view.css     — Gantt 스타일
-packages/web/index.html                   — 필요 시 컨테이너 추가
-```
-
-## 예상 소요 시간
-
-약 2.5시간 (SVG 렌더러 1.5시간 + 통합 1시간)
+- [ ] `turn-gantt.css` 파일 생성 완료
+- [ ] CSS 변수만 사용 (하드코딩 색상 없음)
+- [ ] index.html 탭 버튼 추가 완료
+- [ ] index.html Gantt 컨테이너 추가 완료
+- [ ] index.html CSS 링크 추가 완료
+- [ ] `npm run typecheck` 통과

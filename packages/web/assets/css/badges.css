@@ -94,7 +94,8 @@
 }
 .stat-tooltip-desc { color: var(--text-dim); }
 [data-stat-tooltip],
-[data-cache-panel-tooltip] { cursor: help; }
+[data-cache-panel-tooltip],
+[data-ctx-tooltip] { cursor: help; }
 
 /* ── TOOL ICON COLOR ────────────────────────────────────────────────────── */
 .tool-icon-tool  { color: var(--type-tool_call-color); }
@@ -136,3 +137,24 @@ tr[data-type="tool_call"] td.cell-msg .prompt-preview { font-family: monospace; 
   max-width: 200px; cursor: pointer; display: block; margin-top: 2px;
 }
 .prompt-preview:hover { color: var(--text-muted); text-decoration: underline dotted; }
+
+/* ── GANTT TOOLTIP ──────────────────────────────────────────────────────── */
+.gantt-tooltip {
+  min-width: 180px;
+  max-width: 240px;
+  font-size: 11px;
+}
+.gantt-tooltip .stat-tooltip-desc > div {
+  margin-bottom: 2px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+/* ── TYPE FILTER BUTTON COLOR (defaultView + detailView 공유) ───────────────── */
+.type-filter-prompt.active     { color: var(--type-prompt-color);    border-color: var(--type-prompt-color);    background: var(--type-prompt-bg); }
+.type-filter-tool_call.active  { color: var(--type-tool_call-color); border-color: var(--type-tool_call-color); background: var(--type-tool_call-bg); }
+.type-filter-system.active     { color: var(--type-system-color);    border-color: var(--type-system-color);    background: var(--type-system-bg); }
+.type-filter-prompt:hover      { color: var(--type-prompt-color);    border-color: var(--type-prompt-color); }
+.type-filter-tool_call:hover   { color: var(--type-tool_call-color); border-color: var(--type-tool_call-color); }
+.type-filter-system:hover      { color: var(--type-system-color);    border-color: var(--type-system-color); }
+

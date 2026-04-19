@@ -1,72 +1,84 @@
----
-feature: tool-performance-summary
-title: Feature F — Tool Performance Summary (도구 성능 분석 패널)
-status: pending
-priority: 6
----
+# tool-performance-summary 개발 계획
 
-## 작업 목표
+> Feature: tool-performance-summary
+> 작성일: 2026-04-19
+> 작성자: Claude Code
 
-도구별 평균 응답시간·성공률·비용 기여율을 분석하는 전용 패널을 추가한다.
-"어떤 도구가 느리고, 실패가 많고, 비용이 가장 비싼가"를 한눈에 파악한다.
+## 목표
 
-## 패널 구성 (3개 서브 차트)
+세션 상세 뷰에 "도구" 탭을 추가하고, 도구별 성능 지표(응답시간·호출횟수·에러율·토큰 기여도)를
+한눈에 파악할 수 있는 Tool Performance Summary 패널을 구현한다.
+"어떤 도구가 느리고, 실패가 많고, 비용이 가장 비싼가"를 세션 단위로 분석 가능하게 한다.
 
-### 1. 도구별 평균 응답시간 수평 바 차트
-```
-Bash    ████████████████████  8.2s  (P95: 23s)
-Agent   ████████████          4.1s
-Edit    ████                  1.3s
-Read    ██                    0.7s
-Grep    █                     0.3s
-```
+## 전제 조건
 
-### 2. 도구별 성공/실패율 스택 바
-- 초록: 성공, 빨강: 실패(오류 응답)
-- tool_detail에서 오류 패턴 감지
+- 백엔드 `GET /api/sessions/:sessionId/tool-stats` 이미 완료
+- 응답: `{ success: true, data: SessionToolStats[] }`
+- `SessionToolStats` 필드: `tool_name, call_count, avg_duration_ms, max_duration_ms, total_tokens, avg_tokens, error_count, pct_of_total_tokens`
 
-### 3. 도구별 토큰 비용 기여 파이 차트 (또는 스택 바)
-- tool_call 타입 요청의 tokens_total 합계를 도구별로 집계
-- "Read가 전체 토큰의 38%"
+## 범위
 
-## 단계별 실행 계획
+- 포함:
+  - `packages/web/assets/js/tool-stats.js` 신규 생성
+  - `packages/web/assets/css/tool-stats.css` 신규 생성
+  - `packages/web/index.html` — 탭 버튼 + 컨테이너 추가
+  - `packages/web/assets/js/session-detail.js` — 탭 연동 수정
+- 제외:
+  - 백엔드 API, DB 스키마, 마이그레이션 (이미 완료)
+  - 전역 필터(프로젝트/날짜) 연동 (세션 단위 탭이므로 불필요)
 
-### Step 1 — 서버: 도구 집계 쿼리 (packages/storage, packages/server)
-- `getToolStats(projectName?, dateRange?)` 쿼리 추가:
-  ```sql
-  SELECT tool_name,
-    COUNT(*) as call_count,
-    AVG(duration_ms) as avg_duration,
-    PERCENTILE(duration_ms, 0.95) as p95_duration,
-    SUM(tokens_total) as total_tokens,
-    SUM(CASE WHEN is_error THEN 1 ELSE 0 END) as error_count
-  FROM requests
-  WHERE type = 'tool_call'
-  GROUP BY tool_name
-  ORDER BY avg_duration DESC
-  ```
-- `/api/tools/stats` 신규 엔드포인트
+## 단계별 계획
 
-### Step 2 — UI 패널 추가 (packages/web)
-- view-section에 새 탭 또는 좌측 패널 하단에 토글 섹션 추가
-- `tool-stats.js`: 도구 통계 패널 렌더러
-  - 수평 바 차트 (CSS width 기반)
-  - 스택 바 성공/실패율
-  - 미니 파이 차트 (SVG)
+### 1단계: CSS 스타일 작성 (`tool-stats.css`)
+- `.tool-stats-section`, `.tool-stats-title`, `.tool-stats-row` 레이아웃
+- `.tool-stats-bar-wrap`, `.tool-stats-bar`, `.tool-stats-bar.is-token` 바 차트
+- `.call-count-badge`, `.error-badge` 뱃지 스타일
+- 기존 CSS 변수만 사용 (하드코딩 색상 금지)
 
-### Step 3 — 필터 연동
-- 프로젝트/날짜 필터 변경 시 도구 통계 자동 갱신
+### 2단계: JS 모듈 작성 (`tool-stats.js`)
+- `loadToolStats(sessionId)` — API 호출 → `renderToolStats()` 위임
+- `clearToolStats()` — 패널 초기화
+- `renderToolStats(stats)` — 3개 섹션 HTML 렌더링
+  - 섹션 1: 평균 응답시간 바 차트 (avg_duration_ms DESC 정렬)
+  - 섹션 2: 호출 횟수 / 에러 뱃지 (call_count DESC 정렬)
+  - 섹션 3: 토큰 기여도 바 차트 (pct_of_total_tokens DESC 정렬)
+- `fmtDur`, `fmtToken` formatters.js에서 import
+
+### 3단계: HTML 수정 (`index.html`)
+- `<head>`에 `tool-stats.css` 링크 추가
+- 탭바에 `<button id="tabTools">도구</button>` 추가
+- `#detailGanttView` 다음에 `#detailToolsView` 컨테이너 추가
+
+### 4단계: JS 연동 (`session-detail.js`)
+- `import { loadToolStats, clearToolStats }` 추가
+- `_currentSessionId` 상태 변수 추가
+- `setDetailView(tab)` — `tools` 탭 분기 추가
+- `loadSessionDetail(sessionId)` — `clearToolStats()` 호출 추가
+
+### 5단계: 검증 (Playwright)
+- http://localhost:9999 접속
+- tool_call이 있는 세션 선택 후 "도구" 탭 클릭
+- 3개 섹션 렌더링 확인
+- 스크린샷 저장
+
+## 완료 기준
+
+- [ ] `tool-stats.css` — CSS 변수만 사용, 하드코딩 색상 없음
+- [ ] `tool-stats.js` — 3개 섹션 정상 렌더링
+- [ ] `index.html` — "도구" 탭 버튼 및 컨테이너 추가
+- [ ] `session-detail.js` — tools 탭 전환 및 데이터 로드 연동
+- [ ] `npm run typecheck` 에러 없음
+- [ ] Playwright 스크린샷으로 UI 확인
 
 ## 영향 파일
 
 ```
-packages/storage/src/queries/request.ts   — 도구 집계 쿼리 추가
-packages/server/src/index.ts              — /api/tools/stats 엔드포인트
-packages/web/index.html                   — 도구 통계 패널 HTML
-packages/web/assets/js/tool-stats.js      — 신규: 도구 통계 렌더러
-packages/web/assets/css/tool-stats.css    — 신규: 도구 통계 스타일
+packages/web/assets/js/tool-stats.js      — 신규
+packages/web/assets/css/tool-stats.css    — 신규
+packages/web/index.html                   — 탭 버튼 + 컨테이너 추가
+packages/web/assets/js/session-detail.js  — 탭 연동 수정
 ```
 
 ## 예상 소요 시간
 
-약 2.5시간 (서버 1시간 + UI 1.5시간)
+약 1시간 (CSS 20분 + JS 25분 + HTML/연동 15분)

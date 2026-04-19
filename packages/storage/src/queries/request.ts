@@ -456,6 +456,9 @@ export interface ToolStats {
   call_count: number;
   total_tokens: number;
   avg_tokens: number;
+  avg_duration_ms: number;
+  max_duration_ms: number;
+  error_count: number;
 }
 
 export function getToolStats(
@@ -477,13 +480,53 @@ export function getToolStats(
       tool_name,
       COUNT(*) as call_count,
       COALESCE(SUM(tokens_total), 0) as total_tokens,
-      COALESCE(AVG(tokens_total), 0) as avg_tokens
+      COALESCE(AVG(tokens_total), 0) as avg_tokens,
+      COALESCE(AVG(duration_ms), 0)  AS avg_duration_ms,
+      COALESCE(MAX(duration_ms), 0)  AS max_duration_ms,
+      SUM(CASE WHEN tool_detail LIKE '%Error%' OR tool_detail LIKE '%error%' THEN 1 ELSE 0 END) AS error_count
     FROM requests
     WHERE ${conditions.join(' AND ')}
     GROUP BY tool_name
     ORDER BY call_count DESC
     LIMIT ?
   `).all(...params) as ToolStats[];
+}
+
+/**
+ * 세션 범위 도구별 성능 통계 (Feature F: Tool Performance Summary)
+ */
+export interface SessionToolStats extends ToolStats {
+  pct_of_total_tokens: number;
+}
+
+export function getSessionToolStats(
+  db: Database,
+  sessionId: string
+): SessionToolStats[] {
+  return db.query(`
+    WITH session_total AS (
+      SELECT COALESCE(SUM(tokens_total), 1) AS total
+      FROM requests
+      WHERE session_id = ?
+        AND (event_type IS NULL OR event_type = 'tool')
+    )
+    SELECT
+      tool_name,
+      COUNT(*) AS call_count,
+      COALESCE(SUM(tokens_total), 0) AS total_tokens,
+      COALESCE(AVG(tokens_total), 0) AS avg_tokens,
+      COALESCE(AVG(duration_ms), 0)  AS avg_duration_ms,
+      COALESCE(MAX(duration_ms), 0)  AS max_duration_ms,
+      SUM(CASE WHEN tool_detail LIKE '%Error%' OR tool_detail LIKE '%error%' THEN 1 ELSE 0 END) AS error_count,
+      ROUND(COALESCE(SUM(tokens_total), 0) * 100.0 / (SELECT total FROM session_total), 1) AS pct_of_total_tokens
+    FROM requests
+    WHERE session_id = ?
+      AND type = 'tool_call'
+      AND tool_name IS NOT NULL
+      AND (event_type IS NULL OR event_type = 'tool')
+    GROUP BY tool_name
+    ORDER BY avg_duration_ms DESC
+  `).all(sessionId, sessionId) as SessionToolStats[];
 }
 
 /**
@@ -808,6 +851,9 @@ export interface TurnItem {
     duration_ms: number;
     model: string | null;
     payload: string | null;
+    cache_read_tokens: number;
+    cache_creation_tokens: number;
+    context_tokens: number;
   } | null;
   tool_calls: TurnToolCall[];
   summary: {
@@ -831,7 +877,7 @@ export function getTurnsBySession(
   const rows = db.query(`
     SELECT id, type, tool_name, tool_detail, turn_id,
            timestamp, tokens_input, tokens_output, tokens_total, duration_ms, model, payload,
-           event_type
+           event_type, cache_read_tokens, cache_creation_tokens
     FROM requests
     WHERE session_id = ? AND turn_id IS NOT NULL
       AND (event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')
@@ -850,6 +896,8 @@ export function getTurnsBySession(
     model: string | null;
     payload: string | null;
     event_type: string | null;
+    cache_read_tokens: number;
+    cache_creation_tokens: number;
   }>;
 
   // turn_id 기준 그룹화
@@ -872,6 +920,8 @@ export function getTurnsBySession(
     const turn = turnMap.get(row.turn_id)!;
 
     if (row.type === 'prompt') {
+      const cacheRead = row.cache_read_tokens || 0;
+      const cacheCreate = row.cache_creation_tokens || 0;
       turn.prompt = {
         id: row.id,
         timestamp: row.timestamp,
@@ -881,6 +931,9 @@ export function getTurnsBySession(
         duration_ms: row.duration_ms,
         model: row.model,
         payload: row.payload,
+        cache_read_tokens: cacheRead,
+        cache_creation_tokens: cacheCreate,
+        context_tokens: row.tokens_input + cacheRead + cacheCreate,
       };
       turn.started_at = Math.min(turn.started_at, row.timestamp);
       turn.summary.tokens_input += row.tokens_input;

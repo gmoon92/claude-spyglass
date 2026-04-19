@@ -1,12 +1,19 @@
 // 세션 상세 뷰 모듈
 import { escHtml, fmtToken, fmtDate, fmtTime, formatDuration } from './formatters.js';
 import { makeRequestRow, typeBadge, makeActionCell, contextPreview, toolStatusBadge, toolResponseHint, FLAT_VIEW_COLS, togglePromptExpand, _promptCache } from './renderers.js';
+import { renderContextChart, clearContextChart } from './context-chart.js';
+import { renderGantt, clearGantt } from './turn-gantt.js';
+import { loadToolStats, clearToolStats } from './tool-stats.js';
+import { detectAnomalies } from './anomaly.js';
 
 export const API = '';
 
-let _detailFilter      = 'all';
-let _detailAllRequests = [];
-let _detailAllTurns    = [];
+let _detailFilter         = 'all';
+let _currentSessionId     = null;
+let _detailAllRequests    = [];
+let _detailAllTurns       = [];
+let _detailSearchQuery    = '';
+let _detailTurnAnomalyMap = new Map();
 
 export function getDetailFilter()     { return _detailFilter; }
 export function setDetailFilter(f)    { _detailFilter = f; }
@@ -69,13 +76,47 @@ export function applyDetailFilter() {
     : _detailFilter === 'prompt'                  ? _detailAllTurns.filter(t => !!t.prompt)
     : [];
   renderTurnView(turnFiltered, _detailAllTurns);
+  renderContextChart(_detailAllTurns);
+
+  // 이상 감지 맵 빌드 (turn_id 기준으로 집계)
+  const rawAnomalyMap = detectAnomalies(_detailAllRequests);
+  const reqById = new Map(_detailAllRequests.map(r => [r.id, r]));
+  _detailTurnAnomalyMap = new Map();
+  for (const [reqId, flags] of rawAnomalyMap) {
+    const req = reqById.get(reqId);
+    if (req?.turn_id) {
+      const existing = _detailTurnAnomalyMap.get(req.turn_id) || new Set();
+      for (const f of flags) existing.add(f);
+      _detailTurnAnomalyMap.set(req.turn_id, existing);
+    }
+  }
+
+  renderGantt(_detailAllTurns, _detailTurnAnomalyMap);
+
+  // 플랫 뷰 검색어 필터
+  const detailRows = document.querySelectorAll('#detailRequestsBody tr[data-type]');
+  detailRows.forEach(tr => {
+    if (!_detailSearchQuery) { tr.style.display = ''; return; }
+    const text = [
+      tr.querySelector('.action-name')?.textContent,
+      tr.querySelector('.prompt-preview')?.textContent,
+      tr.querySelector('.target-role-badge')?.textContent,
+    ].filter(Boolean).join(' ').toLowerCase();
+    tr.style.display = text.includes(_detailSearchQuery) ? '' : 'none';
+  });
 }
 
 export function setDetailView(tab) {
-  document.getElementById('detailFlatView').style.display  = tab === 'flat' ? '' : 'none';
-  document.getElementById('detailTurnView').style.display  = tab === 'turn' ? '' : 'none';
-  document.getElementById('tabFlat').classList.toggle('active', tab === 'flat');
-  document.getElementById('tabTurn').classList.toggle('active', tab === 'turn');
+  document.getElementById('detailFlatView').style.display   = tab === 'flat'  ? '' : 'none';
+  document.getElementById('detailTurnView').style.display   = tab === 'turn'  ? '' : 'none';
+  document.getElementById('detailGanttView').style.display  = tab === 'gantt' ? '' : 'none';
+  document.getElementById('detailToolsView').style.display  = tab === 'tools' ? '' : 'none';
+  document.getElementById('tabFlat').classList.toggle('active',   tab === 'flat');
+  document.getElementById('tabTurn').classList.toggle('active',   tab === 'turn');
+  document.getElementById('tabGantt').classList.toggle('active',  tab === 'gantt');
+  document.getElementById('tabTools').classList.toggle('active',  tab === 'tools');
+  if (tab === 'gantt') renderGantt(_detailAllTurns, _detailTurnAnomalyMap);
+  if (tab === 'tools' && _currentSessionId) loadToolStats(_currentSessionId);
 }
 
 export function toggleTurn(turnId) {
@@ -107,10 +148,10 @@ export function renderTurnView(turns, badgeTurns) {
     const topTool = Object.entries(toolCountMap).sort((a, b) => b[1] - a[1])[0];
     let badgesHtml = `<span class="detail-agg-badge" title="이 세션에서 토큰을 가장 많이 소비한 턴">최고 비용 Turn: <strong>T${maxCostTurn.turn_index}</strong> (${fmtToken(maxCostTurn.summary.total_tokens)})</span>`;
     if (topTool) badgesHtml += `<span class="detail-agg-badge" title="이 세션에서 가장 많이 호출된 도구">최다 호출 Tool: <strong>${escHtml(topTool[0])}</strong> (${topTool[1]}회)</span>`;
-    badgesEl.innerHTML     = badgesHtml;
-    badgesEl.style.display = 'flex';
+    badgesEl.innerHTML = badgesHtml;
+    badgesEl.classList.remove('detail-agg-badges--hidden');
   } else if (badgesEl) {
-    badgesEl.style.display = 'none';
+    badgesEl.classList.add('detail-agg-badges--hidden');
   }
 
   if (!turns.length) {
@@ -212,6 +253,15 @@ export async function refreshDetailSession(sessionId) {
 }
 
 export async function loadSessionDetail(sessionId, opts = {}) {
+  clearContextChart();
+  clearGantt();
+  clearToolStats();
+  _currentSessionId  = sessionId;
+  _detailSearchQuery = '';
+  const detailSearchInput = document.getElementById('detailSearchInput');
+  if (detailSearchInput) { detailSearchInput.value = ''; }
+  const detailSearchClear = document.getElementById('detailSearchClear');
+  if (detailSearchClear) detailSearchClear.classList.remove('visible');
   const { signal } = opts;
   const fetchOpts = signal ? { signal } : {};
   const [reqRes, turnRes] = await Promise.all([
@@ -222,4 +272,22 @@ export async function loadSessionDetail(sessionId, opts = {}) {
   _detailAllRequests = reqJson.data  || [];
   _detailAllTurns    = turnJson.data || [];
   applyDetailFilter();
+}
+
+export function initDetailSearch() {
+  const input = document.getElementById('detailSearchInput');
+  const clear = document.getElementById('detailSearchClear');
+  if (!input || !clear) return;
+  input.addEventListener('input', () => {
+    _detailSearchQuery = input.value.trim().toLowerCase();
+    clear.classList.toggle('visible', _detailSearchQuery.length > 0);
+    applyDetailFilter();
+  });
+  clear.addEventListener('click', () => {
+    input.value = '';
+    _detailSearchQuery = '';
+    clear.classList.remove('visible');
+    applyDetailFilter();
+    input.focus();
+  });
 }

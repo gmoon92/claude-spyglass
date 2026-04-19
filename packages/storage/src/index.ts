@@ -115,6 +115,8 @@ export {
   getCacheStats,
   // 턴 집계
   getTurnsBySession,
+  // 세션 범위 도구 성능 통계
+  getSessionToolStats,
   // 타입
   type CreateRequestParams,
   type UpdateRequestParams,
@@ -123,6 +125,7 @@ export {
   type RequestStats,
   type TypeStats,
   type ToolStats,
+  type SessionToolStats,
   type HourlyStats,
   type StripStats,
   type CacheStats,

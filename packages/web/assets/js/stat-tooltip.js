@@ -1,4 +1,11 @@
 // Command Center Strip 지표 hover 툴팁 — cache-tooltip.js 패턴 동일
+const CTX_TOOLTIP_CONTENT = {
+  'context-growth': {
+    title: 'Context Window Usage',
+    desc:  '각 턴(Turn)에서 Claude에 전송된 총 컨텍스트 크기입니다.\n• 파란선: 누적 컨텍스트 토큰 (사용자 입력 + 캐시 읽기 + 캐시 생성)\n• 주황 점선: 80% 경고 임계값 (200K 토큰 기준)\n• 색상이 주황으로 변하면 컨텍스트가 한도에 가까워진 것입니다',
+  },
+};
+
 const STAT_TOOLTIP_CONTENT = {
   sessions: {
     title: 'Total Sessions',
@@ -72,7 +79,20 @@ export function initStatTooltip() {
     tooltip.style.display = 'none';
   }
 
+  function showCtx(e, key) {
+    const content = CTX_TOOLTIP_CONTENT[key];
+    if (!content) return;
+    tooltip.innerHTML = `
+      <div class="stat-tooltip-title">${content.title}</div>
+      <div class="stat-tooltip-desc">${content.desc.replace(/\n/g, '<br>')}</div>
+    `;
+    tooltip.style.display = 'block';
+    position(e);
+  }
+
   document.addEventListener('mouseover', e => {
+    const ctxEl = e.target.closest('[data-ctx-tooltip]');
+    if (ctxEl) { showCtx(e, ctxEl.dataset.ctxTooltip); return; }
     const card = e.target.closest('[data-stat-tooltip]');
     if (!card) return;
     show(e, card.dataset.statTooltip);
@@ -80,12 +100,12 @@ export function initStatTooltip() {
 
   document.addEventListener('mousemove', e => {
     if (tooltip.style.display === 'none') return;
-    if (!e.target.closest('[data-stat-tooltip]')) { hide(); return; }
+    if (!e.target.closest('[data-stat-tooltip]') && !e.target.closest('[data-ctx-tooltip]')) { hide(); return; }
     position(e);
   });
 
   document.addEventListener('mouseout', e => {
-    if (!e.target.closest('[data-stat-tooltip]')) return;
+    if (!e.target.closest('[data-stat-tooltip]') && !e.target.closest('[data-ctx-tooltip]')) return;
     hide();
   });
 }

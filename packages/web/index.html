@@ -19,6 +19,9 @@
   <link rel="stylesheet" href="/assets/css/skeleton.css">
   <link rel="stylesheet" href="/assets/css/cache-panel.css">
   <link rel="stylesheet" href="/assets/css/turn-view.css">
+  <link rel="stylesheet" href="/assets/css/context-chart.css">
+  <link rel="stylesheet" href="/assets/css/turn-gantt.css">
+  <link rel="stylesheet" href="/assets/css/tool-stats.css">
 </head>
 <body>
 
@@ -235,7 +238,6 @@
                   <button class="type-filter-btn type-filter-tool_call" data-filter="tool_call" title="도구 실행 요청(Read/Write/Bash 등)만 표시">tool_call</button>
                   <button class="type-filter-btn type-filter-system" data-filter="system" title="시스템 메시지(컨텍스트 주입 등)만 표시">system</button>
                 </div>
-                <span class="panel-hint" id="requestCount">—</span>
               </div>
             </div>
             <div class="feed-body" id="feedBody">
@@ -273,20 +275,43 @@
               <span class="detail-session-id" id="detailSessionId">—</span>
               <span class="detail-project" id="detailProject">—</span>
               <span class="detail-tokens" id="detailTokens"></span>
-              <span class="detail-tokens" id="detailEndedAt" style="color:var(--text-muted)"></span>
-              <div class="detail-agg-badges" id="detailBadges" style="display:none"></div>
+              <span class="detail-ended-at" id="detailEndedAt"></span>
+              <div class="detail-agg-badges detail-agg-badges--hidden" id="detailBadges"></div>
             </div>
             <button class="btn-close" id="btnCloseDetail">닫기</button>
+          </div>
+
+          <!-- Context Growth Chart -->
+          <div class="context-chart-section" style="display:none" data-ctx-tooltip="context-growth">
+            <div class="context-chart-header">
+              <span class="context-chart-label">Context Growth</span>
+              <span id="ctxUsageIndicator"></span>
+            </div>
+            <canvas id="contextGrowthChart"></canvas>
+            <div class="context-chart-footer"></div>
           </div>
 
           <div class="view-tab-bar" id="detailTabBar">
             <button class="view-tab active" id="tabFlat" data-tab="flat">플랫</button>
             <button class="view-tab" id="tabTurn" data-tab="turn">턴 뷰</button>
-            <div id="detailTypeFilterBtns" style="margin-left:auto;display:flex;gap:4px;padding:4px 0;border-left:1px solid var(--border);padding-left:12px;margin-left:12px">
-              <button class="type-filter-btn active" data-detail-filter="all" title="모든 요청 타입 표시">All</button>
-              <button class="type-filter-btn" data-detail-filter="prompt" title="사용자 입력(LLM 추론 요청)만 표시">prompt</button>
-              <button class="type-filter-btn" data-detail-filter="tool_call" title="도구 실행 요청(Read/Write/Bash 등)만 표시">tool_call</button>
-              <button class="type-filter-btn" data-detail-filter="system" title="시스템 메시지(컨텍스트 주입 등)만 표시">system</button>
+            <button class="view-tab" id="tabGantt" data-tab="gantt">간트</button>
+            <button class="view-tab" id="tabTools" data-tab="tools">도구</button>
+          </div>
+
+          <div class="detail-controls-bar">
+            <div class="feed-controls">
+              <div class="feed-search">
+                <span class="feed-search-icon">⌕</span>
+                <input id="detailSearchInput" class="feed-search-input" type="text"
+                       placeholder="tool / message" autocomplete="off" />
+                <button class="feed-search-clear" id="detailSearchClear" aria-label="검색어 지우기">×</button>
+              </div>
+              <div id="detailTypeFilterBtns" class="detail-type-filter-btns">
+                <button class="type-filter-btn active" data-detail-filter="all" title="모든 요청 타입 표시">All</button>
+                <button class="type-filter-btn type-filter-prompt" data-detail-filter="prompt" title="사용자 입력(LLM 추론 요청)만 표시">prompt</button>
+                <button class="type-filter-btn type-filter-tool_call" data-detail-filter="tool_call" title="도구 실행 요청(Read/Write/Bash 등)만 표시">tool_call</button>
+                <button class="type-filter-btn type-filter-system" data-detail-filter="system" title="시스템 메시지(컨텍스트 주입 등)만 표시">system</button>
+              </div>
             </div>
           </div>
 
@@ -312,6 +337,23 @@
           <div id="detailTurnView" class="detail-content" style="display:none">
             <div id="turnListBody">
               <div class="turn-row-empty">로딩 중…</div>
+            </div>
+          </div>
+
+          <div id="detailToolsView" class="detail-content" style="display:none"></div>
+
+          <div id="detailGanttView" class="detail-content" style="display:none">
+            <div class="gantt-toolbar">
+              <div class="gantt-nav">
+                <button class="gantt-nav-btn" id="ganttPrev">&#x2039;</button>
+                <span class="gantt-nav-label" id="ganttNavLabel">T1–T10</span>
+                <button class="gantt-nav-btn" id="ganttNext">&#x203a;</button>
+              </div>
+              <span class="gantt-hint" id="ganttHint">로딩 중…</span>
+              <div class="gantt-legend" id="ganttLegend"></div>
+            </div>
+            <div class="gantt-scroll" id="ganttScroll">
+              <canvas id="turnGanttChart"></canvas>
             </div>
           </div>
 

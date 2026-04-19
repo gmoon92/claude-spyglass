@@ -9,7 +9,7 @@ import {
 } from './left-panel.js';
 import {
   setDetailFilter, applyDetailFilter, setDetailView, toggleTurn,
-  refreshDetailSession, loadSessionDetail,
+  refreshDetailSession, loadSessionDetail, initDetailSearch,
 } from './session-detail.js';
 import {
   fetchDashboard, fetchRequests, fetchAllSessions, fetchSessionsByProject,
@@ -18,6 +18,9 @@ import {
 import { fmtToken, fmtDate, formatDuration } from './formatters.js';
 import { initColResize } from './col-resize.js';
 import { initPanelResize } from './panel-resize.js';
+import { initContextChart } from './context-chart.js';
+import { initGantt } from './turn-gantt.js';
+import { initToolStats } from './tool-stats.js';
 import { initCacheTooltip } from './cache-tooltip.js';
 import { initStatTooltip } from './stat-tooltip.js';
 import { initCachePanelTooltip } from './cache-panel-tooltip.js';
@@ -72,12 +75,14 @@ function selectProject(name) {
 
 // ── 세션 선택 ────────────────────────────────────────────────────────────────
 async function selectSession(id) {
-  // 이전 작업이 진행 중이면 즉시 취소 (사용자 입력이 애니메이션보다 우선)
-  if (sessionAbortController) {
-    sessionAbortController.abort();
-  }
-  sessionAbortController = new AbortController();
-  const { signal } = sessionAbortController;
+  // 동일 세션 클릭 무시
+  if (id === getSelectedSession()) return;
+
+  // 이전 요청 즉시 취소, 로컬 변수로 스코프 격리
+  sessionAbortController?.abort();
+  const controller = new AbortController();
+  sessionAbortController = controller;
+  const { signal } = controller;
 
   setSelectedSession(id);
   renderBrowserSessions();
@@ -118,7 +123,10 @@ async function selectSession(id) {
       document.getElementById('detailLoading').style.display = 'none';
       setDetailView(uiState.detailTab);
     }
-    sessionAbortController = null;
+    // 이 호출의 컨트롤러가 여전히 현재 컨트롤러인 경우에만 null 처리
+    if (sessionAbortController === controller) {
+      sessionAbortController = null;
+    }
   }
 }
 
@@ -129,7 +137,7 @@ function closeDetail() {
   renderRightPanel();
   renderBrowserSessions();
   const badgesEl = document.getElementById('detailBadges');
-  if (badgesEl) badgesEl.style.display = 'none';
+  if (badgesEl) badgesEl.classList.add('detail-agg-badges--hidden');
 }
 
 // ── prependRequest ───────────────────────────────────────────────────────────
@@ -321,6 +329,17 @@ function initEventDelegation() {
   });
 
   document.getElementById('defaultView').addEventListener('click', e => {
+    const sessEl = e.target.closest('[data-goto-session]');
+    if (sessEl && sessEl.dataset.gotoSession) {
+      const proj = sessEl.dataset.gotoProject;
+      if (proj && proj !== getSelectedProject()) {
+        localStorage.setItem(STORAGE_KEY, proj);
+        setSelectedProject(proj);
+        renderBrowserProjects();
+      }
+      selectSession(sessEl.dataset.gotoSession);
+      return;
+    }
     const promptEl = e.target.closest('[data-expand-id]');
     if (promptEl) {
       const tr = promptEl.closest('tr');
@@ -362,6 +381,10 @@ function init() {
   initCacheTooltip();
   initStatTooltip();
   initCachePanelTooltip();
+  initContextChart();
+  initGantt();
+  initToolStats();
+  initDetailSearch();
   setInterval(() => { advanceBuckets(); drawTimeline(); }, 60000);
   setInterval(() => fetchAllSessions(), 30000);
 }

@@ -21,6 +21,7 @@ import {
   getRequestStatsByType,
   getToolStats,
   getTurnsBySession,
+  getSessionToolStats,
   getAvgPromptDurationMs,
   getTodayStripStats,
   getP95DurationMs,
@@ -106,6 +107,14 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     const sessionId = path.split('/')[3];
     const turns = getTurnsBySession(db, sessionId);
     return jsonResponse({ success: true, data: turns, meta: { total: turns.length } });
+  }
+
+  // GET /api/sessions/:id/tool-stats
+  const toolStatsMatch = path.match(/^\/api\/sessions\/([^/]+)\/tool-stats$/);
+  if (toolStatsMatch && method === 'GET') {
+    const sessionId = decodeURIComponent(toolStatsMatch[1]);
+    const data = getSessionToolStats(db, sessionId);
+    return jsonResponse({ success: true, data });
   }
 
   // GET /api/sessions/:id  (반드시 하위 경로 라우트 뒤에 위치)

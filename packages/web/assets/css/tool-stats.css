@@ -1,0 +1,84 @@
+.tool-stats-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 12px 16px;
+  overflow-y: auto;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.tool-stats-empty {
+  padding: 24px 16px;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-align: center;
+}
+
+.ts-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ts-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.ts-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 52px 60px;
+  align-items: center;
+  gap: 6px;
+  min-height: 18px;
+}
+
+.ts-name {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ts-bar-wrap {
+  background: var(--bg-row, rgba(255,255,255,0.04));
+  border-radius: 2px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.ts-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.ts-bar-dur  { background: #fb923c; opacity: 0.75; }
+.ts-bar-call { background: #60a5fa; opacity: 0.75; }
+.ts-bar-tok  { background: #a78bfa; opacity: 0.75; }
+
+.ts-val {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary, #ccc);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ts-sub {
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.ts-err-badge {
+  font-size: 10px;
+  color: rgba(239, 68, 68, 0.85);
+  white-space: nowrap;
+}
