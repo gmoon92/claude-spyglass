@@ -68,6 +68,8 @@ export interface CollectPayload {
   cache_creation_tokens?: number;
   cache_read_tokens?: number;
   preview?: string;
+  tokens_confidence?: string;
+  tokens_source?: string;
 }
 
 /**
@@ -157,7 +159,7 @@ export function parseTranscript(transcriptPath: string): TranscriptUsage {
 
   try {
     const content = readFileSync(transcriptPath, 'utf-8');
-    const lines = content.split('\n').filter(line => line.trim());
+    const lines = content.split('\n').filter((line: string) => line.trim());
 
     // 마지막 assistant 메시지 탐색 (뒤에서 앞으로)
     for (let i = lines.length - 1; i >= 0; i--) {
@@ -534,6 +536,8 @@ function saveRequest(db: Database, payload: CollectPayload): { saved: boolean; w
       preview: extractPreview(payload) ?? undefined,
       tool_use_id: toolUseId,
       event_type: payload.event_type || null,
+      tokens_confidence: payload.tokens_confidence,
+      tokens_source: payload.tokens_source,
     });
     return { saved: true, wasUpsert: false };
   } catch (error) {
@@ -736,6 +740,15 @@ export async function rawCollectHandler(req: Request, db: SpyglassDatabase): Pro
     const tokensInput = transcriptData?.inputTokens.value ?? 0;
     const tokensOutput = transcriptData?.outputTokens.value ?? 0;
 
+    // Step A: confidence/source 전파 로직
+    // inputTokens/outputTokens의 confidence를 기준으로 전체 요청 신뢰도 결정
+    const inputConfidence = transcriptData?.inputTokens.confidence ?? 'high';
+    const outputConfidence = transcriptData?.outputTokens.confidence ?? 'high';
+    const tokensConfidence = (inputConfidence === 'error' || outputConfidence === 'error')
+      ? 'error'
+      : 'high';
+    const tokensSource = tokensConfidence === 'error' ? 'unavailable' : 'transcript';
+
     const collectPayload: CollectPayload = {
       id: requestId,
       session_id,
@@ -754,6 +767,8 @@ export async function rawCollectHandler(req: Request, db: SpyglassDatabase): Pro
       source: 'claude-code-hook',
       cache_creation_tokens: transcriptData?.cacheCreationTokens.value ?? 0,
       cache_read_tokens: transcriptData?.cacheReadTokens.value ?? 0,
+      tokens_confidence: tokensConfidence,
+      tokens_source: tokensSource,
     };
 
     const result = handleCollect(db.instance, collectPayload);
@@ -770,6 +785,14 @@ export async function rawCollectHandler(req: Request, db: SpyglassDatabase): Pro
     const requestId = `prompt-${now}-${randomUUID().slice(0, 8)}`;
     const tokensInput = transcriptData?.inputTokens.value ?? 0;
     const tokensOutput = transcriptData?.outputTokens.value ?? 0;
+
+    // Step A: confidence/source 전파 로직 (PostToolUse와 동일)
+    const inputConfidence = transcriptData?.inputTokens.confidence ?? 'high';
+    const outputConfidence = transcriptData?.outputTokens.confidence ?? 'high';
+    const tokensConfidence = (inputConfidence === 'error' || outputConfidence === 'error')
+      ? 'error'
+      : 'high';
+    const tokensSource = tokensConfidence === 'error' ? 'unavailable' : 'transcript';
 
     const collectPayload: CollectPayload = {
       id: requestId,
@@ -788,6 +811,8 @@ export async function rawCollectHandler(req: Request, db: SpyglassDatabase): Pro
       source: 'claude-code-hook',
       cache_creation_tokens: transcriptData?.cacheCreationTokens.value ?? 0,
       cache_read_tokens: transcriptData?.cacheReadTokens.value ?? 0,
+      tokens_confidence: tokensConfidence,
+      tokens_source: tokensSource,
     };
 
     const result = handleCollect(db.instance, collectPayload);
