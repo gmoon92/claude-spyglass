@@ -101,13 +101,17 @@ export function makeTargetCell(r) {
     return `<td class="cell-target cell-empty">—</td>`;
   }
   const icon = toolIconHtml(r.tool_name);
+  const inProgress = r.event_type === 'pre_tool';
   let nameHtml;
   if ((r.tool_name === 'Skill' || r.tool_name === 'Agent') && r.tool_detail) {
     nameHtml = `<span class="action-name">${icon}${escHtml(r.tool_name)}(<span class="action-sub-name">${escHtml(r.tool_detail)}</span>)</span>`;
   } else {
     nameHtml = `<span class="action-name">${icon}${escHtml(r.tool_name)}</span>`;
   }
-  return `<td class="cell-target"><span class="target-cell-inner">${nameHtml}${toolStatusBadge(r)}</span></td>`;
+  const statusBadge = inProgress
+    ? `<span class="mini-badge badge-running">실행 중</span>`
+    : toolStatusBadge(r);
+  return `<td class="cell-target"><span class="target-cell-inner">${nameHtml}${statusBadge}</span></td>`;
 }
 
 export function makeModelCell(r) {

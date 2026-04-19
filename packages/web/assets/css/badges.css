@@ -20,8 +20,9 @@
   font-size: 9px; font-weight: 600; letter-spacing: 0.3px;
   vertical-align: middle; margin-left: 2px; white-space: nowrap;
 }
-.badge-cache  { background: rgba(96,165,250,0.18); color: #93c5fd; }
-.badge-error  { background: rgba(239,68,68,0.18);  color: #f87171; }
+.badge-cache   { background: rgba(96,165,250,0.18); color: #93c5fd; }
+.badge-error   { background: rgba(239,68,68,0.18);  color: #f87171; }
+.badge-running { background: rgba(251,191,36,0.15); color: #fbbf24; }
 
 /* ── TOOL RESPONSE HINT ─────────────────────────────────────────────────── */
 .tool-response-hint {

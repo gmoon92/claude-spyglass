@@ -149,7 +149,7 @@ export function getAllRequests(
   fromTs?: number,
   toTs?: number
 ): RequestQueryResult[] {
-  const conditions: string[] = ["(event_type IS NULL OR event_type != 'pre_tool')"];
+  const conditions: string[] = ["(event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')"];
   const params: (string | number)[] = [];
   if (fromTs) { conditions.push('timestamp >= ?'); params.push(fromTs); }
   if (toTs)   { conditions.push('timestamp <= ?'); params.push(toTs); }
@@ -167,7 +167,7 @@ export function getRequestsBySession(
   limit: number = 100
 ): RequestQueryResult[] {
   return db.query(
-    "SELECT * FROM requests WHERE session_id = ? AND (event_type IS NULL OR event_type != 'pre_tool') ORDER BY timestamp DESC LIMIT ?"
+    "SELECT * FROM requests WHERE session_id = ? AND (event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent') ORDER BY timestamp DESC LIMIT ?"
   ).all(sessionId, limit) as RequestQueryResult[];
 }
 
@@ -182,7 +182,7 @@ export function getRequestsByType(
   fromTs?: number,
   toTs?: number
 ): RequestQueryResult[] {
-  const conditions = ["type = ?", "(event_type IS NULL OR event_type != 'pre_tool')"];
+  const conditions = ["type = ?", "(event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')"];
   const params: (string | number)[] = [type];
   if (fromTs !== undefined) { conditions.push('timestamp >= ?'); params.push(fromTs); }
   if (toTs   !== undefined) { conditions.push('timestamp <= ?'); params.push(toTs); }
@@ -369,7 +369,7 @@ export function getAvgPromptDurationMs(db: Database): number {
  * 전체 요청 통계
  */
 export function getRequestStats(db: Database, fromTs?: number, toTs?: number): RequestStats {
-  const conditions: string[] = ["(event_type IS NULL OR event_type != 'pre_tool')"];
+  const conditions: string[] = ["(event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')"];
   const params: number[] = [];
 
   if (fromTs) { conditions.push('timestamp >= ?'); params.push(fromTs); }
@@ -458,7 +458,7 @@ export function getToolStats(
   fromTs?: number,
   toTs?: number
 ): ToolStats[] {
-  const conditions: string[] = ["type = 'tool_call'", 'tool_name IS NOT NULL', "(event_type IS NULL OR event_type != 'pre_tool')"];
+  const conditions: string[] = ["type = 'tool_call'", 'tool_name IS NOT NULL', "(event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')"];
   const params: (number | string)[] = [];
 
   if (fromTs) { conditions.push('timestamp >= ?'); params.push(fromTs); }
@@ -568,7 +568,7 @@ export function getTurnsBySession(
            event_type
     FROM requests
     WHERE session_id = ? AND turn_id IS NOT NULL
-      AND (event_type IS NULL OR event_type != 'pre_tool')
+      AND (event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')
     ORDER BY timestamp ASC
   `).all(sessionId) as Array<{
     id: string;
