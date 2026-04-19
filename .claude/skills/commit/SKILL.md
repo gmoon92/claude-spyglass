@@ -1,5 +1,5 @@
 ---
-name: git:commit
+name: commit
 description: |
   Git 변경사항을 분석하여 기능/모듈 단위로 분리하고 Conventional Commits 규약에 따라 커밋합니다.
 
