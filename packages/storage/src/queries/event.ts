@@ -12,13 +12,24 @@ export interface ClaudeEvent {
   timestamp: number;
   payload: string;
   schema_version?: number;
+  permission_mode?: string | null;
+  source?: string | null;
+  end_reason?: string | null;
+  model?: string | null;
+  stop_hook_active?: number | null;
+  task_id?: string | null;
+  task_subject?: string | null;
+  notification_type?: string | null;
 }
 
 export function createEvent(db: Database, event: ClaudeEvent): void {
   db.prepare(`
     INSERT OR IGNORE INTO claude_events
-      (event_id, event_type, session_id, transcript_path, cwd, agent_id, agent_type, timestamp, payload, schema_version)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (event_id, event_type, session_id, transcript_path, cwd, agent_id, agent_type,
+       timestamp, payload, schema_version,
+       permission_mode, source, end_reason, model, stop_hook_active,
+       task_id, task_subject, notification_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     event.event_id,
     event.event_type,
@@ -30,6 +41,14 @@ export function createEvent(db: Database, event: ClaudeEvent): void {
     event.timestamp,
     event.payload,
     event.schema_version ?? 1,
+    event.permission_mode ?? null,
+    event.source ?? null,
+    event.end_reason ?? null,
+    event.model ?? null,
+    event.stop_hook_active ?? null,
+    event.task_id ?? null,
+    event.task_subject ?? null,
+    event.notification_type ?? null,
   );
 }
 
