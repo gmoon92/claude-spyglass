@@ -235,6 +235,19 @@ export function extractToolDetail(
       return query ? query.slice(0, 80) : null;
     }
 
+    case 'SendMessage': {
+      const summary = toolInput.summary as string | undefined;
+      const to      = toolInput.to      as string | undefined;
+      if (summary) return to ? `→${to}: ${summary}`.slice(0, 80) : summary.slice(0, 80);
+      return to ? `→${to}` : null;
+    }
+
+    case 'AskUserQuestion': {
+      const questions = toolInput.questions as Array<{ question: string }> | undefined;
+      const first = questions?.[0]?.question;
+      return first ? first.slice(0, 80) : null;
+    }
+
     default: {
       // mcp__* 공통: 첫 번째 의미 있는 문자열 필드 반환
       if (toolName.startsWith('mcp__')) {
