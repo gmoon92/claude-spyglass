@@ -139,6 +139,8 @@ export interface Request {
   preview?: string | null;
   tool_use_id?: string | null;
   event_type?: string | null;
+  tokens_confidence?: string;
+  tokens_source?: string;
   created_at?: number;
 }
 
@@ -149,7 +151,7 @@ export interface Request {
 /**
  * 테이블 스키마 정보 (마이그레이션/검증용)
  */
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 /**
  * v2 마이그레이션: tool_detail 컬럼 추가
@@ -310,6 +312,31 @@ WHERE type = 'prompt'
   AND payload IS NOT NULL
   AND json_valid(payload)
   AND json_extract(payload, '$.prompt') IS NOT NULL;
+`;
+
+/**
+ * v11 마이그레이션: 두 개 기능 병합
+ *
+ * (1) 토큰 신뢰도 추적 (requests)
+ *   - tokens_confidence: 'high' (정상) | 'error' (파싱 실패)
+ *   - tokens_source: 'transcript' (정상 추출) | 'unavailable' (파일 없음/파싱 실패)
+ *
+ * (2) 훅 확장 정규화 (claude_events)
+ *   27개 HOOK_EVENTS 등록 이후 SessionStart/End/Stop/Task/Notification/Permission
+ *   이벤트의 payload 공통 필드를 컬럼으로 승격하여 json_extract 없이 조회 가능.
+ *   reason은 SQL 예약어 충돌 회피 위해 end_reason으로 매핑.
+ */
+export const MIGRATION_V11 = `
+ALTER TABLE requests ADD COLUMN tokens_confidence TEXT DEFAULT 'high';
+ALTER TABLE requests ADD COLUMN tokens_source TEXT DEFAULT 'transcript';
+ALTER TABLE claude_events ADD COLUMN permission_mode TEXT;
+ALTER TABLE claude_events ADD COLUMN source TEXT;
+ALTER TABLE claude_events ADD COLUMN end_reason TEXT;
+ALTER TABLE claude_events ADD COLUMN model TEXT;
+ALTER TABLE claude_events ADD COLUMN stop_hook_active INTEGER;
+ALTER TABLE claude_events ADD COLUMN task_id TEXT;
+ALTER TABLE claude_events ADD COLUMN task_subject TEXT;
+ALTER TABLE claude_events ADD COLUMN notification_type TEXT;
 `;
 
 export const SCHEMA_META = {

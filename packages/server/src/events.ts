@@ -33,6 +33,11 @@ export async function eventsCollectHandler(req: Request, db: Database): Promise<
     return json({ error: 'Missing required fields: hook_event_name, session_id' }, 400);
   }
 
+  const p = payload as Record<string, unknown>;
+  const stopHookActive = typeof p.stop_hook_active === 'boolean'
+    ? (p.stop_hook_active ? 1 : 0)
+    : null;
+
   const event: ClaudeEvent = {
     event_id: crypto.randomUUID(),
     event_type: payload.hook_event_name,
@@ -44,6 +49,14 @@ export async function eventsCollectHandler(req: Request, db: Database): Promise<
     timestamp: Date.now(),
     payload: JSON.stringify(payload),
     schema_version: 1,
+    permission_mode: (p.permission_mode as string) ?? null,
+    source: (p.source as string) ?? null,
+    end_reason: (p.reason as string) ?? null,
+    model: (p.model as string) ?? null,
+    stop_hook_active: stopHookActive,
+    task_id: (p.tool_use_id as string) ?? (p.task_id as string) ?? null,
+    task_subject: (p.description as string) ?? (p.subject as string) ?? null,
+    notification_type: (p.notification_type as string) ?? (p.type as string) ?? null,
   };
 
   try {
