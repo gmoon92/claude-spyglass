@@ -88,6 +88,7 @@ export function getSessionById(
 
 /**
  * 모든 세션 조회 (최근순, first_prompt_payload 포함, 날짜 필터 지원)
+ * 개선: LEFT JOIN + GROUP BY로 N+1 쿼리 제거
  */
 export function getAllSessions(
   db: Database,
@@ -100,15 +101,19 @@ export function getAllSessions(
   if (fromTs) { conditions.push('s.started_at >= ?'); params.push(fromTs); }
   if (toTs)   { conditions.push('s.started_at <= ?'); params.push(toTs); }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
   return db.query(`
     SELECT s.*,
       (SELECT r.payload FROM requests r
        WHERE r.session_id = s.id AND r.type = 'prompt'
        ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload,
-      (SELECT MAX(r.timestamp) FROM requests r WHERE r.session_id = s.id) as last_activity_at
+      MAX(r.timestamp) as last_activity_at
     FROM sessions s
+    LEFT JOIN requests r ON r.session_id = s.id
+      AND (r.event_type IS NULL OR r.event_type != 'pre_tool' OR r.tool_name = 'Agent')
     ${where}
-    ORDER BY (s.ended_at IS NULL) DESC, last_activity_at DESC, s.started_at DESC
+    GROUP BY s.id
+    ORDER BY (s.ended_at IS NULL) DESC, COALESCE(MAX(r.timestamp), s.started_at) DESC
     LIMIT ?
   `).all(...params, limit) as SessionQueryResult[];
 }
@@ -147,6 +152,7 @@ export function getSessionsWithFilter(
 
 /**
  * 프로젝트별 세션 조회
+ * 개선: LEFT JOIN + GROUP BY로 N+1 쿼리 제거
  */
 export function getSessionsByProject(
   db: Database,
@@ -168,10 +174,13 @@ export function getSessionsByProject(
       (SELECT r.payload FROM requests r
        WHERE r.session_id = s.id AND r.type = 'prompt'
        ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload,
-      (SELECT MAX(r.timestamp) FROM requests r WHERE r.session_id = s.id) as last_activity_at
+      MAX(r.timestamp) as last_activity_at
     FROM sessions s
+    LEFT JOIN requests r ON r.session_id = s.id
+      AND (r.event_type IS NULL OR r.event_type != 'pre_tool' OR r.tool_name = 'Agent')
     WHERE ${conditions.join(' AND ')}
-    ORDER BY (s.ended_at IS NULL) DESC, last_activity_at DESC, s.started_at DESC
+    GROUP BY s.id
+    ORDER BY (s.ended_at IS NULL) DESC, COALESCE(MAX(r.timestamp), s.started_at) DESC
     LIMIT ?
   `).all(...params) as SessionQueryResult[];
 }
