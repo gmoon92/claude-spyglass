@@ -51,9 +51,9 @@ export function applyDetailFilter() {
   _detailAllRequests.forEach(r => { if (r.type in countMap) countMap[r.type]++; });
   const labelMap = {
     all:      `All (${countMap.all})`,
-    prompt:   `Prompt (${countMap.prompt})`,
-    tool_call:`Tool (${countMap.tool_call})`,
-    system:   `System (${countMap.system})`,
+    prompt:   `prompt (${countMap.prompt})`,
+    tool_call:`tool_call (${countMap.tool_call})`,
+    system:   `system (${countMap.system})`,
   };
   document.querySelectorAll('#detailTypeFilterBtns .type-filter-btn').forEach(b => {
     if (labelMap[b.dataset.detailFilter]) b.textContent = labelMap[b.dataset.detailFilter];
@@ -192,6 +192,8 @@ export function renderTurnView(turns, badgeTurns) {
     const rowContainer = previewEl?.closest('.turn-row') ?? null;
     if (rowContainer) togglePromptExpand(expandedFor, rowContainer);
   }
+  // 스크롤 위치 복원 (open 상태 복원으로 콘텐츠 높이 변동 후 적용)
+  if (scrollEl && savedScroll) scrollEl.scrollTop = savedScroll;
 }
 
 export async function refreshDetailSession(sessionId) {

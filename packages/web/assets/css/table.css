@@ -22,9 +22,16 @@ tr.row-selected td:first-child { border-left: 2px solid var(--accent); padding-l
 .table-empty { padding: 20px 12px; text-align: center; color: var(--text-dim); font-size: 11px; }
 
 /* ── SEMANTIC CELL CLASSES ──────────────────────────────────────────────── */
-td.cell-time  { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-td.cell-token { text-align: right; font-variant-numeric: tabular-nums; }
-td.cell-sess  { max-width: 120px; }
+td.cell-time   { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+td.cell-token  { text-align: right; font-variant-numeric: tabular-nums; }
+td.cell-sess   { max-width: 120px; }
+td.cell-target { overflow: hidden; }
+td.cell-model  { overflow: hidden; font-size: 11px; color: var(--text-dim); white-space: nowrap; text-overflow: ellipsis; }
+.target-cell-inner { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; overflow: hidden; }
+.model-name    { font-size: 11px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.cell-empty  { color: var(--text-dim); text-align: center; }
+td.cell-token.cell-empty { text-align: right; }
+td.cache-cell  { cursor: default; }
 
 /* ── ROW TYPE BORDER (ADR-006) ──────────────────────────────────────────── */
 tr[data-type="prompt"]    td:first-child { border-left: 2px solid var(--type-prompt-color);    padding-left: 6px; }
@@ -46,3 +53,15 @@ tr.row-selected td:first-child { border-left: 2px solid var(--accent) !important
   cursor: pointer; font-size: 10px; font-family: inherit; margin-bottom: 4px;
 }
 .expand-copy-btn:hover { color: var(--text); border-color: var(--text-dim); }
+
+/* ── COL RESIZE ─────────────────────────────────────────────────────────── */
+.col-resize-handle {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  user-select: none;
+  z-index: 3;
+}
+.col-resize-handle:hover,
+.col-resize-handle.dragging { background: var(--accent); opacity: 0.45; }

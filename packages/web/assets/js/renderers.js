@@ -1,13 +1,11 @@
 // HTML 빌더 모듈 — DOM 조작 없이 HTML 문자열 반환
 import { escHtml, fmtToken, fmtRelative, formatDuration, fmtTimestamp } from './formatters.js';
 
-export const FLAT_VIEW_COLS  = 6;
-export const RECENT_REQ_COLS = 7;
+export const FLAT_VIEW_COLS  = 9;  // Time Action Target Model Message in out Cache Duration
+export const RECENT_REQ_COLS = 10; // + Session
 
 const PROMPT_CACHE_MAX = 500;
 export const _promptCache = new Map(); // export: togglePromptExpand 공유
-
-const TYPE_ABBR = { prompt: 'P', tool_call: 'T', system: 'S' };
 
 export function makeSkeletonRows(cols, count = 2) {
   const row = `<tr><td colspan="${cols}" class="table-empty"><span class="skeleton"></span></td></tr>`;
@@ -17,10 +15,8 @@ export function makeSkeletonRows(cols, count = 2) {
 export function typeBadge(type) {
   const known = ['prompt', 'tool_call', 'system'];
   const cls   = known.includes(type) ? type : 'unknown';
-  const abbr  = TYPE_ABBR[type] ?? (type ? type.slice(0, 1).toUpperCase() : '?');
-  let html = `<span class="type-badge type-${cls}" title="${escHtml(type)}" aria-label="${escHtml(type)}">${abbr}</span>`;
-  if (type === 'prompt') html += `<span class="mini-badge role-badge role-user">user</span>`;
-  return html;
+  const label = known.includes(type) ? type : (type || '?');
+  return `<span class="type-badge type-${cls}" title="${escHtml(type)}" aria-label="${escHtml(type)}">${escHtml(label)}</span>`;
 }
 
 export function toolIconHtml(toolName) {
@@ -28,11 +24,6 @@ export function toolIconHtml(toolName) {
   return isAgent
     ? '<span class="tool-icon tool-icon-agent">◎</span>'
     : '<span class="tool-icon tool-icon-default">◉</span>';
-}
-
-export function cacheHitBadge(r) {
-  if (!r.cache_read_tokens || r.cache_read_tokens <= 0) return '';
-  return `<span class="mini-badge badge-cache" title="캐시 히트">⚡${fmtToken(r.cache_read_tokens)}</span>`;
 }
 
 // payload에서 tool_response 추출
@@ -96,23 +87,37 @@ export function toolResponseHint(r) {
 }
 
 export function makeActionCell(r) {
-  const badge = typeBadge(r.type);
-  let extras = '', identifier = '';
-  if (r.type === 'tool_call' && r.tool_name) {
-    const icon = toolIconHtml(r.tool_name);
-    if ((r.tool_name === 'Skill' || r.tool_name === 'Agent') && r.tool_detail) {
-      identifier = `<span class="action-name">${icon}${escHtml(r.tool_name)}(<span class="action-sub-name">${escHtml(r.tool_detail)}</span>)</span>`;
-    } else {
-      identifier = `<span class="action-name">${icon}${escHtml(r.tool_name)}</span>`;
-    }
-    extras = toolStatusBadge(r);
-  } else if (r.type === 'prompt') {
-    if (r.model) identifier = `<span class="action-name action-model">${escHtml(r.model)}</span>`;
-    extras = cacheHitBadge(r);
-  } else if (r.type === 'system') {
-    identifier = `<span class="action-name action-model">System</span>`;
+  return typeBadge(r.type);
+}
+
+export function makeTargetCell(r) {
+  if (r.type !== 'tool_call' || !r.tool_name) {
+    return `<td class="cell-target cell-empty">—</td>`;
   }
-  return `<span class="action-cell-inner">${badge}${identifier}${extras}</span>`;
+  const icon = toolIconHtml(r.tool_name);
+  let nameHtml;
+  if ((r.tool_name === 'Skill' || r.tool_name === 'Agent') && r.tool_detail) {
+    nameHtml = `<span class="action-name">${icon}${escHtml(r.tool_name)}(<span class="action-sub-name">${escHtml(r.tool_detail)}</span>)</span>`;
+  } else {
+    nameHtml = `<span class="action-name">${icon}${escHtml(r.tool_name)}</span>`;
+  }
+  return `<td class="cell-target"><span class="target-cell-inner">${nameHtml}${toolStatusBadge(r)}</span></td>`;
+}
+
+export function makeModelCell(r) {
+  if (r.type !== 'prompt' || !r.model) {
+    return `<td class="cell-model cell-empty">—</td>`;
+  }
+  return `<td class="cell-model"><span class="model-name">${escHtml(r.model)}</span></td>`;
+}
+
+export function makeCacheCell(r) {
+  if (r.type !== 'prompt' || !r.cache_read_tokens || r.cache_read_tokens <= 0) {
+    return `<td class="cell-token num cell-empty">—</td>`;
+  }
+  const readVal  = r.cache_read_tokens;
+  const writeVal = r.cache_creation_tokens || 0;
+  return `<td class="cell-token num cache-cell" data-cache-read="${readVal}" data-cache-write="${writeVal}">${fmtToken(readVal)}</td>`;
 }
 
 export function getContextText(r) {
@@ -218,9 +223,12 @@ export function makeRequestRow(r, opts = {}) {
   return `<tr data-type="${escHtml(r.type||'')}">
     <td class="cell-time num">${fmtTs(r.timestamp)}</td>
     <td class="cell-action">${makeActionCell(r)}</td>
+    ${makeTargetCell(r)}
+    ${makeModelCell(r)}
     <td class="cell-msg">${msgHtml}</td>
     <td class="cell-token num">${r.tokens_input  > 0 ? fmtToken(r.tokens_input)  : '—'}</td>
     <td class="cell-token num">${r.tokens_output > 0 ? fmtToken(r.tokens_output) : '—'}</td>
+    ${makeCacheCell(r)}
     <td class="cell-token num">${formatDuration(r.duration_ms)}</td>
     ${sessTd}
   </tr>`;

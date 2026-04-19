@@ -1,8 +1,8 @@
 /* ── TYPE BADGES ────────────────────────────────────────────────────────── */
 .type-badge {
-  display: inline-block; padding: 1px 6px; border-radius: 4px;
-  font-size: 10px; font-weight: 600; letter-spacing: 0.2px;
-  min-width: 20px; text-align: center; cursor: default;
+  display: inline-block; padding: 2px 7px; border-radius: 4px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.05em;
+  min-width: 72px; text-align: center; cursor: default; white-space: nowrap;
 }
 .type-prompt    { background: var(--type-prompt-bg);    color: var(--type-prompt-color); }
 .type-tool_call { background: var(--type-tool_call-bg); color: var(--type-tool_call-color); }
@@ -32,6 +32,32 @@
 /* ── NUMERIC ────────────────────────────────────────────────────────────── */
 .num    { font-variant-numeric: tabular-nums; color: var(--text-dim); }
 .num-hi { color: var(--accent); font-variant-numeric: tabular-nums; }
+
+/* ── CACHE TOOLTIP ──────────────────────────────────────────────────────── */
+.cache-tooltip {
+  position: fixed;
+  z-index: 9999;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  min-width: 220px;
+  pointer-events: none;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--text);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+.cache-tooltip-title {
+  font-size: 10px; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+}
+.cache-tooltip-row { display: flex; justify-content: space-between; gap: 16px; }
+.cache-tooltip-label { color: var(--text-muted); }
+.cache-tooltip-value { font-variant-numeric: tabular-nums; }
+.cache-tooltip-value.read  { color: var(--blue); }
+.cache-tooltip-value.write { color: var(--orange); }
+.cache-tooltip-cost { color: var(--text-dim); font-size: 10px; margin-left: 4px; }
 
 /* ── TOOL CELL ──────────────────────────────────────────────────────────── */
 .tool-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

@@ -16,6 +16,9 @@ import {
   setActiveRange, setReqFilter, setIsSSEConnected,
 } from './api.js';
 import { fmtToken, fmtDate } from './formatters.js';
+import { initColResize } from './col-resize.js';
+import { initPanelResize } from './panel-resize.js';
+import { initCacheTooltip } from './cache-tooltip.js';
 
 // ── UI 상태 ──────────────────────────────────────────────────────────────────
 const uiState = { rightView: 'default', detailTab: 'flat', isTransitioning: false };
@@ -105,7 +108,7 @@ function prependRequest(r) {
   const prevScrollTop    = feedBody ? feedBody.scrollTop    : 0;
   const prevScrollHeight = feedBody ? feedBody.scrollHeight : 0;
 
-  while (body.rows.length >= 10) body.deleteRow(body.rows.length - 1);
+  while (body.rows.length >= 200) body.deleteRow(body.rows.length - 1);
   const tmp = document.createElement('tbody');
   tmp.innerHTML = makeRequestRow(r, { showSession: true });
   body.insertBefore(tmp.firstElementChild, body.firstChild);
@@ -280,6 +283,10 @@ function init() {
   connectSSE();
   initEventDelegation();
   initCharts();
+  initColResize(document.querySelector('#feedBody table'));
+  initColResize(document.querySelector('#detailFlatView table'));
+  initPanelResize(document.querySelector('.left-panel'), document.querySelector('.panel-resize-handle'));
+  initCacheTooltip();
   setInterval(() => { advanceBuckets(); drawTimeline(); }, 60000);
   setInterval(() => fetchAllSessions(), 30000);
 }
