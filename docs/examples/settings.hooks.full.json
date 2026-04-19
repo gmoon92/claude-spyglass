@@ -1,0 +1,34 @@
+{
+  "env": {
+    "SPYGLASS_DIR": "/Users/<your-name>/spyglass-hooks"
+  },
+  "hooks": {
+    "PreToolUse":         [{ "matcher": "*", "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "PostToolUse":        [{ "matcher": "*", "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "PostToolUseFailure": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "Notification":       [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "UserPromptSubmit":   [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "SessionStart":       [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "SessionEnd":         [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "Stop":               [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "StopFailure":        [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "SubagentStart":      [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "SubagentStop":       [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "PreCompact":         [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "PostCompact":        [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "PermissionRequest":  [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "PermissionDenied":   [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "Setup":              [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "TeammateIdle":       [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "TaskCreated":        [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "TaskCompleted":      [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "Elicitation":        [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "ElicitationResult":  [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "ConfigChange":       [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "WorktreeCreate":     [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "WorktreeRemove":     [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "InstructionsLoaded": [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "CwdChanged":         [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],
+    "FileChanged":        [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }]
+  }
+}
