@@ -151,7 +151,7 @@ export interface Request {
 /**
  * 테이블 스키마 정보 (마이그레이션/검증용)
  */
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 
 /**
  * v2 마이그레이션: tool_detail 컬럼 추가
@@ -337,6 +337,24 @@ ALTER TABLE claude_events ADD COLUMN stop_hook_active INTEGER;
 ALTER TABLE claude_events ADD COLUMN task_id TEXT;
 ALTER TABLE claude_events ADD COLUMN task_subject TEXT;
 ALTER TABLE claude_events ADD COLUMN notification_type TEXT;
+`;
+
+/**
+ * v12 마이그레이션: 타임스탐프 인덱스 + visible_requests VIEW
+ *
+ * - timestamp 단독 인덱스 추가: 시간 범위 조회 최적화
+ * - visible_requests VIEW 생성: pre_tool 필터링 로직 캡슐화
+ *   쿼리에서 중복되는 필터 조건을 제거하고 VIEW로 통일
+ */
+export const MIGRATION_V12 = `
+CREATE INDEX IF NOT EXISTS idx_requests_timestamp ON requests(timestamp DESC);
+
+DROP VIEW IF EXISTS visible_requests;
+CREATE VIEW visible_requests AS
+SELECT * FROM requests
+WHERE event_type IS NULL
+   OR event_type != 'pre_tool'
+   OR tool_name = 'Agent';
 `;
 
 export const SCHEMA_META = {
