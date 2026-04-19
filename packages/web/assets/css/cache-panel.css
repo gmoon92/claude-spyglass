@@ -1,0 +1,111 @@
+/* ── CACHE INTELLIGENCE PANEL ───────────────────────────────────────────────
+   charts-inner 3번째 행 — grid-column: 1/-1 전체 너비 */
+
+.cache-panel {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-height: 52px;
+  font-size: 11px;
+}
+
+.cache-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.cache-section + .cache-section {
+  border-left: 1px solid var(--border);
+}
+
+/* Hit Rate 프로그레스 바 */
+.cache-bar-wrap {
+  flex: 1;
+  height: 6px;
+  background: var(--surface);
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 60px;
+}
+
+.cache-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s ease, background-color 0.3s;
+  background: var(--text-dim);
+}
+
+.cache-bar-fill.is-high { background: var(--green); }
+.cache-bar-fill.is-mid  { background: var(--orange); }
+.cache-bar-fill.is-low  { background: var(--red); }
+
+.cache-bar-pct {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  min-width: 34px;
+  text-align: right;
+}
+
+/* 비용 비교 */
+.cache-cost-rows { display: flex; gap: 16px; align-items: center; }
+
+.cache-cost-item { display: flex; flex-direction: column; gap: 1px; }
+.cache-cost-label {
+  font-size: 9px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.cache-cost-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.cache-cost-item.is-saved .cache-cost-value { color: var(--green); }
+.cache-cost-item.is-actual .cache-cost-value { color: var(--text); }
+
+/* Creation vs Read 미니 바 */
+.cache-ratio-wrap {
+  flex: 1;
+  height: 6px;
+  display: flex;
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 60px;
+  background: var(--surface);
+}
+
+.cache-ratio-creation {
+  height: 100%;
+  background: var(--orange);
+  transition: width 0.6s ease;
+}
+
+.cache-ratio-read {
+  height: 100%;
+  background: var(--blue);
+  transition: width 0.6s ease;
+}
+
+.cache-ratio-label {
+  color: var(--text-muted);
+  min-width: 60px;
+  text-align: right;
+}
+
+/* 섹션 레이블 */
+.cache-panel-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
