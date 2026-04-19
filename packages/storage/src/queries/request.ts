@@ -6,6 +6,7 @@
 
 import type { Database } from 'bun:sqlite';
 import type { Request, RequestType } from '../schema';
+import { getPricingForModel } from '../pricing';
 
 // =============================================================================
 // 생성 (Create)
@@ -575,41 +576,6 @@ export function getHourlyRequestStats(
 // Command Center Strip 집계
 // =============================================================================
 
-/** 모델별 단가 (USD per 1M tokens) */
-interface ModelPricing {
-  input: number;
-  output: number;
-  cache_create: number;
-  cache_read: number;
-}
-
-const MODEL_PRICING: Array<{ prefix: string; pricing: ModelPricing }> = [
-  {
-    prefix: 'claude-opus-4-',
-    pricing: { input: 15, output: 75, cache_create: 18.75, cache_read: 1.50 },
-  },
-  {
-    prefix: 'claude-haiku-4-',
-    pricing: { input: 0.80, output: 4, cache_create: 1.00, cache_read: 0.08 },
-  },
-  {
-    prefix: 'claude-sonnet-4-',
-    pricing: { input: 3, output: 15, cache_create: 3.75, cache_read: 0.30 },
-  },
-];
-
-const DEFAULT_PRICING: ModelPricing = { input: 3, output: 15, cache_create: 3.75, cache_read: 0.30 };
-
-/**
- * 모델명 → 단가 반환
- */
-function getPricingForModel(model: string | null): ModelPricing {
-  if (!model) return DEFAULT_PRICING;
-  for (const { prefix, pricing } of MODEL_PRICING) {
-    if (model.startsWith(prefix)) return pricing;
-  }
-  return DEFAULT_PRICING;
-}
 
 /** Command Center Strip 통계 */
 export interface StripStats {
