@@ -1,6 +1,6 @@
 // 진입점 — 초기화, 이벤트 위임, SSE, selectProject/Session
 import { initTypeColors, recordRequest, drawTimeline, drawDonut, advanceBuckets, initBuckets } from './chart.js';
-import { togglePromptExpand, makeRequestRow } from './renderers.js';
+import { togglePromptExpand, makeRequestRow, makeTargetCell } from './renderers.js';
 import { clearError, updateScrollLockBanner, jumpToLatest, addScrollLockCount, resetScrollLockCount } from './infra.js';
 import {
   getSelectedProject, getSelectedSession,
@@ -15,10 +15,11 @@ import {
   fetchDashboard, fetchRequests, fetchAllSessions, fetchSessionsByProject,
   setActiveRange, setReqFilter, setIsSSEConnected,
 } from './api.js';
-import { fmtToken, fmtDate } from './formatters.js';
+import { fmtToken, fmtDate, formatDuration } from './formatters.js';
 import { initColResize } from './col-resize.js';
 import { initPanelResize } from './panel-resize.js';
 import { initCacheTooltip } from './cache-tooltip.js';
+import { initStatTooltip } from './stat-tooltip.js';
 
 // ── localStorage ─────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'spyglass:lastProject';
@@ -130,10 +131,17 @@ function prependRequest(r) {
   const prevScrollTop    = feedBody ? feedBody.scrollTop    : 0;
   const prevScrollHeight = feedBody ? feedBody.scrollHeight : 0;
 
-  // 같은 request ID의 기존 행(pre_tool "실행 중") 제거 후 대체
+  // 같은 request ID의 기존 행이 있으면 인플레이스 업데이트 (행 위치·순서 보존)
   if (r.id) {
     const existing = body.querySelector(`tr[data-request-id="${CSS.escape(r.id)}"]`);
-    if (existing) existing.remove();
+    if (existing) {
+      const targetCell = existing.querySelector('.cell-target');
+      if (targetCell) targetCell.outerHTML = makeTargetCell(r);
+      const tokenCells = existing.querySelectorAll('.cell-token.num');
+      const durationCell = tokenCells[tokenCells.length - 1];
+      if (durationCell) durationCell.textContent = formatDuration(r.duration_ms);
+      return;
+    }
   }
   while (body.rows.length >= 200) body.deleteRow(body.rows.length - 1);
   const tmp = document.createElement('tbody');
@@ -335,6 +343,7 @@ function init() {
   initColResize(document.querySelector('#detailFlatView table'));
   initPanelResize(document.querySelector('.left-panel'), document.querySelector('.panel-resize-handle'));
   initCacheTooltip();
+  initStatTooltip();
   setInterval(() => { advanceBuckets(); drawTimeline(); }, 60000);
   setInterval(() => fetchAllSessions(), 30000);
 }

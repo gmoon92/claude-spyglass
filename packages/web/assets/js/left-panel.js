@@ -26,7 +26,7 @@ export function renderBrowserProjects() {
     const isSelected = _selectedProject === p.project_name;
     const pct        = Math.max(1, Math.round((p.total_tokens || 0) / maxT * 100));
     return `<tr class="clickable${isSelected ? ' row-selected' : ''}" data-project="${escHtml(p.project_name)}">
-      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(p.project_name || '')}">${escHtml(p.project_name || '—')}</td>
+      <td class="cell-proj-name" title="${escHtml(p.project_name || '')}">${escHtml(p.project_name || '—')}</td>
       <td class="num" style="text-align:right">${fmt(p.session_count)}</td>
       <td>
         <div class="bar-cell" style="justify-content:flex-end;gap:4px">

@@ -4,6 +4,8 @@ import { setTypeData, drawDonut, renderTypeLegend } from './chart.js';
 import { clearError, setLastUpdated } from './infra.js';
 import { renderProjects, renderTools, getAllSessions, setAllSessions, renderBrowserSessions } from './left-panel.js';
 import { renderRequests, appendRequests, RECENT_REQ_COLS } from './renderers.js';
+import { detectAnomalies } from './anomaly.js';
+import { renderCachePanel } from './cache-panel.js';
 
 export const API = '';
 
@@ -59,7 +61,31 @@ export async function fetchDashboard() {
     activeEl.textContent = fmt(activeCount);
     activeEl.closest('.stat-card').classList.toggle('active', activeCount > 0);
     document.getElementById('statAvgDuration').textContent =
-      formatDuration(d.summary?.avgDurationMs || d.requests?.avg_duration_ms || 0);
+      formatDuration(d.summary?.avgDurationMs ?? d.requests?.avg_duration_ms ?? null);
+
+    // ── Command Center: 비용·성능 지표 ────────────────────────────────────
+    const costUsd = d.summary?.costUsd;
+    if (costUsd != null) {
+      document.getElementById('stat-cost').textContent = `$${Number(costUsd).toFixed(2)}`;
+    }
+
+    const cacheSavingsUsd = d.summary?.cacheSavingsUsd;
+    if (cacheSavingsUsd != null) {
+      document.getElementById('stat-cache-savings').textContent = `$${Number(cacheSavingsUsd).toFixed(2)}`;
+    }
+
+    const p95Ms = d.summary?.p95DurationMs;
+    if (p95Ms != null) {
+      document.getElementById('stat-p95').textContent =
+        p95Ms < 1000 ? `${Math.round(p95Ms)}ms` : `${(p95Ms / 1000).toFixed(1)}s`;
+    }
+
+    const errorRate = d.summary?.errorRate;
+    if (errorRate != null) {
+      const errEl = document.getElementById('stat-error-rate');
+      errEl.textContent = `${Number(errorRate).toFixed(1)}%`;
+      errEl.classList.toggle('is-alert', errorRate > 5);
+    }
 
     renderProjects(d.projects || []);
     renderTools(d.tools || []);
@@ -96,10 +122,12 @@ export async function fetchRequests(append = false) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     const list = json.data || [];
+    const p95  = json.meta?.p95DurationMs ?? null;
+    const anomalyMap = detectAnomalies(list, p95);
     if (append) {
-      appendRequests(list);
+      appendRequests(list, anomalyMap);
     } else {
-      renderRequests(list);
+      renderRequests(list, anomalyMap);
     }
     document.dispatchEvent(new CustomEvent('feed:updated'));
     reqOffset += list.length;

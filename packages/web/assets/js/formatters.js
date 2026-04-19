@@ -3,7 +3,7 @@
 export function fmt(n) { return (n ?? 0).toLocaleString('ko-KR'); }
 
 export function formatDuration(ms) {
-  if (ms === null || ms === undefined || isNaN(ms) || ms <= 0) return '—';
+  if (ms === null || ms === undefined || isNaN(ms) || ms < 0) return '—';
   if (ms >= 3_600_000) return '—';
   if (ms < 1000) return `${Math.round(ms)}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
