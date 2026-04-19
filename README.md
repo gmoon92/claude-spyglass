@@ -65,15 +65,41 @@ Claude Code 훅은 반드시 **글로벌 설정 파일 `~/.claude/settings.json`
 
 ### 이미지 빌드 (배포자)
 
-저장소 보유자가 배포 패키지를 만들 때:
+저장소 보유자가 배포용 이미지를 생성할 때 사용합니다.
 
 ```bash
+# 자동 버전 (package.json의 version + 현재 git 해시)
 bash scripts/build-image.sh
-# dist/spyglass-v<version>-<hash>.tar.gz
-# dist/spyglass-v<version>-<hash>.tar.gz.sha256
+
+# 버전 명시
+bash scripts/build-image.sh 0.2.0
 ```
 
-상세한 빌드·배포 절차는 [docs/install-guide.md §7](./docs/install-guide.md#7-이미지-빌드-배포자) 참고.
+**생성 파일 (`dist/` 하위):**
+
+| 파일 | 설명 |
+|------|------|
+| `spyglass-v<version>-<hash>.tar.gz` | `docker save \| gzip -9` 결과 — 수신자가 `docker load`로 올립니다 |
+| `spyglass-v<version>-<hash>.tar.gz.sha256` | 무결성 검증 해시 (macOS `shasum` / Linux `sha256sum`) |
+
+**파일명 규칙**
+
+- `<version>`: 스크립트 인자 > `package.json`의 `version` 필드 > `0.0.0` 순으로 결정
+- `<hash>`: `git rev-parse --short HEAD` (non-git 환경에서는 `dev`)
+
+예: `package.json`의 `version=0.1.0`, 현재 커밋 `fb205c2` → `spyglass-v0.1.0-fb205c2.tar.gz`
+
+**배포자 → 수신자 전달 묶음**
+
+1. `spyglass-v<version>-<hash>.tar.gz`
+2. `spyglass-v<version>-<hash>.tar.gz.sha256`
+3. `hooks/spyglass-collect.sh` (호스트에서 실행되는 훅 스크립트)
+4. `docker-compose.yml` (선택, 기동 편의)
+5. `docs/examples/settings.hooks.full.json` (훅 설정 예제)
+
+수신자는 [docs/install-guide.md §3](./docs/install-guide.md#3-docker-이미지-사용법-수신자)의 절차대로 `docker load` → `docker compose up -d`를 수행합니다.
+
+> 빌드 내부 동작·환경변수·문제 해결은 [docs/install-guide.md §7](./docs/install-guide.md#7-이미지-빌드-배포자) 참고.
 
 ---
 
