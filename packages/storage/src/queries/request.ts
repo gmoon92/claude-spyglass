@@ -839,6 +839,7 @@ export function getP95DurationMs(
 /** 턴 내 tool_call 항목 */
 export interface TurnToolCall {
   id: string;
+  type: 'tool_call';
   timestamp: number;
   tool_name: string | null;
   tool_detail: string | null;
@@ -846,6 +847,8 @@ export interface TurnToolCall {
   tokens_output: number;
   tokens_total: number;
   duration_ms: number;
+  payload: string | null;
+  event_type: string | null;
 }
 
 /** 턴 항목 */
@@ -952,6 +955,7 @@ export function getTurnsBySession(
     } else {
       turn.tool_calls.push({
         id: row.id,
+        type: 'tool_call',
         timestamp: row.timestamp,
         tool_name: row.tool_name,
         tool_detail: row.tool_detail,
@@ -959,6 +963,8 @@ export function getTurnsBySession(
         tokens_output: row.tokens_output,
         tokens_total: row.tokens_total,
         duration_ms: row.duration_ms,
+        payload: row.payload,
+        event_type: row.event_type,
       });
     }
 
