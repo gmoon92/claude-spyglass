@@ -358,7 +358,8 @@ function getLastTurnId(db: Database, sessionId: string): string | null {
 }
 
 /**
- * prompt 타입 요청의 사용자 입력 텍스트를 100자로 축약하여 반환
+ * prompt 타입 요청의 사용자 입력 텍스트를 최대 2000자로 저장
+ * - 원본 보존을 위해 저장 시점 제한을 2000자로 확대 (렌더링 시 별도 truncate)
  */
 function extractPreview(payload: CollectPayload): string | null {
   if (payload.request_type !== 'prompt') return null;
@@ -367,7 +368,7 @@ function extractPreview(payload: CollectPayload): string | null {
     try {
       const raw = JSON.parse(payload.payload) as Record<string, unknown>;
       const text = typeof raw.prompt === 'string' ? raw.prompt : null;
-      if (text) return text.slice(0, 100);
+      if (text) return text.slice(0, 2000);
     } catch {
       // JSON 파싱 실패 시 무시
     }

@@ -261,7 +261,7 @@ export function renderGantt(turns, turnAnomalyMap = new Map()) {
 
   // 힌트 업데이트
   const totalTools = rows.reduce((s, t) => s + t.tool_calls.length, 0);
-  if (_hint) _hint.textContent = `T${startIdx + 1}–T${endIdx} · ${totalRows}개 턴 중 ${rows.length}개 선택 · ${totalTools}개 툴 호출 · 최대 ${fmtDur(maxTurnDur)}`;
+  if (_hint) _hint.textContent = `T${startIdx + 1}–T${endIdx} · ${totalRows}개 턴 중 ${rows.length}개 선택 · ${totalTools}개 툴 호출 · 최대 ${fmtDur(maxTurnDur)} · 턴 기준 상대 시간`;
 
   // 범례: 등장한 툴 종류 수집
   const usedTools = new Map();
@@ -494,7 +494,7 @@ function _onGanttClick(e) {
 }
 
 // G8: 동적 눈금 단위 계산 헬퍼
-function _calcTicks(totalMs, chartW) {
+function _calcTicks(totalMs) {
   // 원하는 눈금 개수: 5~8
   const targets = [1, 2, 5, 10, 20, 50, 100, 200, 500,
                    1000, 2000, 5000, 10000, 30000, 60000, 120000, 300000];

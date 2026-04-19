@@ -148,7 +148,7 @@ export interface Request {
 /**
  * 테이블 스키마 정보 (마이그레이션/검증용)
  */
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 /**
  * v2 마이그레이션: tool_detail 컬럼 추가
@@ -290,6 +290,25 @@ WHERE tool_name = 'Agent'
     tool_detail IS NULL
     OR tool_detail != json_extract(payload, '$.tool_input.description')
   );
+`;
+
+/**
+ * v10 마이그레이션: 기존 100자로 잘린 preview를 payload에서 재추출 (최대 2000자)
+ *
+ * v7에서 preview 컬럼이 추가되었으나, 서버 측 extractPreview()가 100자로 제한하여
+ * 저장하였음. 이 마이그레이션은 payload JSON에서 prompt 필드를 2000자까지 재추출하여
+ * preview를 복원한다. SQLite TEXT 타입은 길이 제한이 없으므로 DDL 변경 불필요.
+ *
+ * 조건: type='prompt' AND payload NOT NULL AND json_valid(payload)
+ * 멱등성: json_extract(...) IS NOT NULL 조건으로 payload 없는 행은 건드리지 않음
+ */
+export const MIGRATION_V10 = `
+UPDATE requests
+SET preview = substr(json_extract(payload, '$.prompt'), 1, 2000)
+WHERE type = 'prompt'
+  AND payload IS NOT NULL
+  AND json_valid(payload)
+  AND json_extract(payload, '$.prompt') IS NOT NULL;
 `;
 
 export const SCHEMA_META = {

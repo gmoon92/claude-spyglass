@@ -146,7 +146,7 @@ export function getContextText(r) {
     }
     return r.tool_detail || null;
   }
-  if (r.type === 'prompt')   return r.preview || extractPromptText(r) || null;
+  if (r.type === 'prompt')   return extractPromptText(r) || null;
   if (r.type === 'system')   return extractPromptText(r) || null;
   return null;
 }
@@ -169,12 +169,17 @@ export function parseToolDetail(raw) {
 }
 
 export function extractPromptText(r) {
+  // payload 우선: 원본 전체 텍스트 추출 (DB preview는 최대 2000자로 저장되나 payload는 무제한)
+  if (r.payload) {
+    try {
+      const p = typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
+      const fromPayload = p?.prompt ?? p?.content ?? p?.tool_input ?? (typeof p === 'string' ? p : '');
+      if (fromPayload && typeof fromPayload === 'string' && fromPayload.trim()) return fromPayload;
+    } catch { /* 파싱 실패 시 fallback */ }
+  }
+  // fallback: DB에 저장된 preview (payload 파싱 실패 또는 prompt 필드 없을 때)
   if (r.preview && typeof r.preview === 'string' && r.preview.trim()) return r.preview;
-  if (!r.payload) return '';
-  try {
-    const p = typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
-    return p?.prompt ?? p?.content ?? p?.tool_input ?? (typeof p === 'string' ? p : '') ?? '';
-  } catch { return ''; }
+  return '';
 }
 
 export function contextPreview(r, maxLen = 60) {
@@ -229,7 +234,7 @@ export function makeRequestRow(r, opts = {}) {
   const fmtTs  = opts.fmtTime || fmtTimestamp;
   const flags  = opts.anomalyFlags || null;
   const sessTd = opts.showSession
-    ? `<td class="cell-sess"><span class="sess-id" title="${escHtml(r.session_id||'')}">${r.session_id ? r.session_id.slice(0,12)+'…' : '—'}</span></td>`
+    ? `<td class="cell-sess"><span class="sess-id sess-id-link" data-goto-session="${escHtml(r.session_id||'')}" data-goto-project="${escHtml(r.project_name||'')}" title="${escHtml(r.session_id||'')}">${r.session_id ? r.session_id.slice(0,12)+'…' : '—'}</span></td>`
     : '';
   const msgPreview = contextPreview(r);
   const msgHtml    = msgPreview
@@ -295,7 +300,6 @@ export function makeSessionRow(s, isSelected) {
 }
 
 export function renderRequests(list, anomalyMap = new Map()) {
-  document.getElementById('requestCount').textContent = `${list.length}건`;
   const body = document.getElementById('requestsBody');
   if (!list.length) {
     body.innerHTML = `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty">데이터 없음</td></tr>`;

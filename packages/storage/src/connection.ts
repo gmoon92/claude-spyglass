@@ -6,7 +6,7 @@
  */
 
 import { Database } from 'bun:sqlite';
-import { INIT_SCHEMA, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5, MIGRATION_V6, MIGRATION_V7, MIGRATION_V8, MIGRATION_V9, WAL_MODE_PRAGMAS } from './schema';
+import { INIT_SCHEMA, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5, MIGRATION_V6, MIGRATION_V7, MIGRATION_V8, MIGRATION_V9, MIGRATION_V10, WAL_MODE_PRAGMAS } from './schema';
 
 // =============================================================================
 // 설정 상수
@@ -182,6 +182,13 @@ export class SpyglassDatabase {
     if (currentVersion.user_version < 9) {
       this.execMulti(MIGRATION_V9);
       this.db.prepare('PRAGMA user_version = 9').run();
+    }
+
+    // V10: preview 컬럼 재추출 (100자 → 2000자)
+    // payload JSON의 prompt 필드를 2000자까지 재저장하여 기존 truncation 복원
+    if (currentVersion.user_version < 10) {
+      this.execMulti(MIGRATION_V10);
+      this.db.prepare('PRAGMA user_version = 10').run();
     }
   }
 

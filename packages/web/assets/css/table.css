@@ -25,6 +25,8 @@ tr.row-selected td:first-child { border-left: 2px solid var(--accent); padding-l
 td.cell-time   { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 td.cell-token  { text-align: right; font-variant-numeric: tabular-nums; }
 td.cell-sess   { max-width: 120px; }
+.sess-id-link  { cursor: pointer; color: var(--accent); }
+.sess-id-link:hover { text-decoration: underline dotted; }
 td.cell-target { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 td.cell-model  { overflow: hidden; font-size: 11px; color: var(--text-dim); white-space: nowrap; text-overflow: ellipsis; }
 .target-cell-inner { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; overflow: hidden; }
