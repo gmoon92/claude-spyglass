@@ -21,6 +21,7 @@ export const REQ_PAGE = 200;
 export let isSSEConnected = false;
 
 export function setReqFilter(f)     { reqFilter = f; }
+export function getReqFilter()      { return reqFilter; }
 export function setReqOffset(n)     { reqOffset = n; }
 export function setIsSSEConnected(v){ isSSEConnected = v; }
 
@@ -150,6 +151,15 @@ export async function fetchAllSessions() {
     const json = await res.json();
     setAllSessions(json.data || []);
     renderBrowserSessions();
+  } catch { /* silent */ }
+}
+
+export async function fetchCacheStats() {
+  try {
+    const res  = await fetch(buildQuery(`${API}/api/stats/cache`), { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return;
+    const json = await res.json();
+    renderCachePanel(json.data);
   } catch { /* silent */ }
 }
 

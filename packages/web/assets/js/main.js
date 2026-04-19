@@ -13,7 +13,7 @@ import {
 } from './session-detail.js';
 import {
   fetchDashboard, fetchRequests, fetchAllSessions, fetchSessionsByProject,
-  setActiveRange, setReqFilter, setIsSSEConnected,
+  fetchCacheStats, setActiveRange, setReqFilter, getReqFilter, setIsSSEConnected,
 } from './api.js';
 import { fmtToken, fmtDate, formatDuration } from './formatters.js';
 import { initColResize } from './col-resize.js';
@@ -25,7 +25,10 @@ import { initStatTooltip } from './stat-tooltip.js';
 const STORAGE_KEY = 'spyglass:lastProject';
 
 // ── UI 상태 ──────────────────────────────────────────────────────────────────
-const uiState = { rightView: 'default', detailTab: 'flat', isTransitioning: false };
+const uiState = { rightView: 'default', detailTab: 'flat' };
+
+// 세션 선택 작업 취소용 AbortController
+let sessionAbortController = null;
 
 function renderRightPanel() {
   const isDetail = uiState.rightView === 'detail';
@@ -68,32 +71,31 @@ function selectProject(name) {
 
 // ── 세션 선택 ────────────────────────────────────────────────────────────────
 async function selectSession(id) {
-  if (uiState.isTransitioning) return;
+  // 이전 작업이 진행 중이면 즉시 취소 (사용자 입력이 애니메이션보다 우선)
+  if (sessionAbortController) {
+    sessionAbortController.abort();
+  }
+  sessionAbortController = new AbortController();
+  const { signal } = sessionAbortController;
+
   setSelectedSession(id);
   renderBrowserSessions();
 
-  uiState.rightView   = 'detail';
-  uiState.detailTab   = 'flat';
-  uiState.isTransitioning = true;
+  uiState.rightView = 'detail';
+  uiState.detailTab = 'flat';
   renderRightPanel();
 
-  document.getElementById('detailLoading').style.display  = 'block';
+  document.getElementById('detailLoading').style.display = 'block';
   document.getElementById('detailFlatView').style.display = 'none';
   document.getElementById('detailTurnView').style.display = 'none';
 
-  document.getElementById('detailView').addEventListener(
-    'transitionend',
-    () => { uiState.isTransitioning = false; },
-    { once: true }
-  );
-
-  const session    = getAllSessions().find(s => s.id === id);
+  const session = getAllSessions().find(s => s.id === id);
   const detailIdEl = document.getElementById('detailSessionId');
   detailIdEl.textContent = id.slice(0, 8) + '…';
-  detailIdEl.title       = id;
-  document.getElementById('detailProject').textContent  = session ? session.project_name : '';
-  document.getElementById('detailTokens').textContent   = session ? `총 ${fmtToken(session.total_tokens)} 토큰` : '';
-  document.getElementById('detailEndedAt').textContent  = session?.ended_at
+  detailIdEl.title = id;
+  document.getElementById('detailProject').textContent = session ? session.project_name : '';
+  document.getElementById('detailTokens').textContent = session ? `총 ${fmtToken(session.total_tokens)} 토큰` : '';
+  document.getElementById('detailEndedAt').textContent = session?.ended_at
     ? `종료: ${fmtDate(session.ended_at)}`
     : '';
 
@@ -103,13 +105,20 @@ async function selectSession(id) {
   });
 
   try {
-    await loadSessionDetail(id);
-  } catch {
+    // 데이터 로드 즉시 시작 (transitionend 기다리지 않음)
+    await loadSessionDetail(id, { signal });
+  } catch (e) {
+    // AbortError는 사용자가 새 선택을 한 경우이므로 조용히 종료
+    if (e.name === 'AbortError') return;
     applyDetailFilter();
+  } finally {
+    // 취소된 경우가 아닐 때만 UI 정리
+    if (!signal.aborted) {
+      document.getElementById('detailLoading').style.display = 'none';
+      setDetailView(uiState.detailTab);
+    }
+    sessionAbortController = null;
   }
-
-  document.getElementById('detailLoading').style.display = 'none';
-  setDetailView(uiState.detailTab);
 }
 
 // ── 세션 상세 닫기 ───────────────────────────────────────────────────────────
@@ -140,6 +149,8 @@ function prependRequest(r) {
       const tokenCells = existing.querySelectorAll('.cell-token.num');
       const durationCell = tokenCells[tokenCells.length - 1];
       if (durationCell) durationCell.textContent = formatDuration(r.duration_ms);
+      // 검색 필터 재적용 — tool_detail 텍스트 변경 반영 (ADR-005: 가시성 재평가는 하지 않음)
+      document.dispatchEvent(new CustomEvent('feed:updated'));
       return;
     }
   }
@@ -157,6 +168,8 @@ function prependRequest(r) {
     resetScrollLockCount();
     updateScrollLockBanner();
   }
+  // 스크롤 조정 완료 후 검색·유형 필터 재적용
+  document.dispatchEvent(new CustomEvent('feed:updated'));
 }
 
 // ── 수동 갱신 ────────────────────────────────────────────────────────────────
@@ -250,7 +263,7 @@ function initEventDelegation() {
     if (chartSubtitle && subtitles[btn.dataset.range]) {
       chartSubtitle.textContent = subtitles[btn.dataset.range];
     }
-    fetchDashboard(); fetchRequests(); fetchAllSessions();
+    fetchDashboard(); fetchRequests(); fetchCacheStats(); fetchAllSessions();
   });
 
   document.getElementById('typeFilterBtns').addEventListener('click', e => {
@@ -270,15 +283,17 @@ function initEventDelegation() {
     const q = feedSearchInput.value.trim().toLowerCase();
     feedSearchClear.classList.toggle('visible', q.length > 0);
     const rows = document.querySelectorAll('#requestsBody tr[data-type]');
+    const typeFilter = getReqFilter();
     rows.forEach(tr => {
-      if (!q) { tr.style.display = ''; return; }
+      const typeFiltered = typeFilter !== 'all' && tr.dataset.type !== typeFilter;
+      if (!q) { tr.style.display = typeFiltered ? 'none' : ''; return; }
       const text = [
         tr.querySelector('.model-name')?.textContent,
         tr.querySelector('.action-name')?.textContent,
         tr.querySelector('.prompt-preview')?.textContent,
         tr.querySelector('.target-role-badge')?.textContent,
       ].filter(Boolean).join(' ').toLowerCase();
-      tr.style.display = text.includes(q) ? '' : 'none';
+      tr.style.display = (!text.includes(q) || typeFiltered) ? 'none' : '';
     });
   }
   feedSearchInput.addEventListener('input', applyFeedSearch);
@@ -335,6 +350,7 @@ function init() {
   drawDonut();
   fetchDashboard();
   fetchRequests();
+  fetchCacheStats();
   fetchAllSessions().then(() => autoActivateProject());
   connectSSE();
   initEventDelegation();
