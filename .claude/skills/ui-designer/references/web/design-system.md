@@ -19,11 +19,25 @@
   --surface:      #161616;   /* 패널 */
   --surface-alt:  #1c1c1c;   /* 헤더/푸터 */
   --border:       #272727;
-  --border-light: #333;
 
   /* 역할 배지 배경 */
   --blue-bg-light: rgba(96,165,250,0.18);   /* role/cache 배지 */
-  --red-bg-light:  rgba(239,68,68,0.18);    /* error 배지 */
+  --red-bg-light:  rgba(239,68,68,0.18);    /* error/slow 배지 */
+  --yellow-bg-light: rgba(251,191,36,0.15); /* spike 배지 */
+  --sky-bg-light: rgba(147,197,253,0.12);   /* loop 배지 */
+
+  /* 뱃지 텍스트 색상 */
+  --blue-text: #93c5fd;   /* role-user, cache 배지 */
+  --red-text:  #f87171;   /* error, slow 배지 */
+  --sky-text:  #7dd3fc;   /* loop 배지 */
+
+  /* 강조색 계열 (alpha 변형) */
+  --accent-border: rgba(217,119,87,0.3);  /* border 강조 */
+  --red-dim:       rgba(239,68,68,0.1);   /* error subtle 배경 */
+  --red-border:    rgba(239,68,68,0.35);  /* error border */
+
+  /* 흰색 계열 (subtle 배경) */
+  --white-bg-subtle: rgba(255,255,255,0.03);  /* 약한 강조 배경 */
 
   /* Border Radius */
   --radius-sm: 4px;
@@ -36,13 +50,9 @@
 
   /* 상태 색상 */
   --green:        #4ade80;
-  --green-dim:    rgba(74, 222, 128, 0.12);
   --orange:       #f59e0b;
-  --orange-dim:   rgba(245, 158, 11, 0.12);
   --red:          #ef4444;
-  --red-dim:      rgba(239, 68, 68, 0.12);
   --blue:         #60a5fa;
-  --blue-dim:     rgba(96, 165, 250, 0.12);
 
   /* 타입 색상 (ADR-003 SSoT) */
   --type-prompt-color:    #e8a07a;

@@ -14,7 +14,7 @@
 | `prompt` | `--type-prompt-color` | `--type-prompt-bg` | #e8a07a (주황) |
 | `tool_call` | `--type-tool_call-color` | `--type-tool_call-bg` | #6ee7a0 (초록) |
 | `system` | `--type-system-color` | `--type-system-bg` | #fbbf24 (노랑) |
-| unknown | `--text-muted` | `rgba(80,80,80,0.2)` | — |
+| unknown | `--text-muted` | `--unknown-bg` | — |
 
 ### 타입 배지 CSS 클래스
 
@@ -105,10 +105,13 @@ const cls   = isAgent ? 'tool-icon-agent' : 'tool-icon-tool';
 
 `badges.css`의 `.mini-badge` 계열.
 
-| 배지 | 클래스 | 배경 토큰 | 텍스트 색상 | 용도 |
-|------|--------|----------|------------|------|
-| 캐시 히트 | `.badge-cache` | `--blue-bg-light` | `#93c5fd` (blue-300) | cache_read_tokens > 0 |
-| 에러 | `.badge-error` | `--red-bg-light` | `#f87171` (red-400) | 요청 에러 표시 |
+| 배지 | 클래스 | 배경 토큰 | 텍스트 토큰 | 실제 색상 | 용도 |
+|------|--------|----------|-------------|-----------|------|
+| 캐시 히트 | `.badge-cache` | `--blue-bg-light` | `--blue-text` | #93c5fd | cache_read_tokens > 0 |
+| 에러 | `.badge-error` | `--red-bg-light` | `--red-text` | #f87171 | 요청 에러 표시 |
+| 토큰 스파이크 | `.badge-spike` | `--yellow-bg-light` | `--orange` | #f59e0b | 세션 평균 대비 2배 초과 |
+| 루프 감지 | `.badge-loop` | `--sky-bg-light` | `--sky-text` | #7dd3fc | 동일 툴 연속 3회+ 호출 |
+| 느린 실행 | `.badge-slow` | `--red-bg-light` | `--red-text` | #f87171 | duration_ms > P95 |
 
 `.role-user` 배지 배경도 `--blue-bg-light` 동일 토큰 사용.
 
