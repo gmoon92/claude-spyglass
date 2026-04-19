@@ -88,11 +88,11 @@ export async function fetchDashboard() {
     const errorRate = d.summary?.errorRate;
     if (errorRate != null) {
       const errEl = document.getElementById('stat-error-rate');
-      errEl.textContent = `${Number(errorRate).toFixed(1)}%`;
+      errEl.textContent = `${(Number(errorRate) * 100).toFixed(1)}%`;
       const errCard = errEl.closest('.stat-card');
       if (errCard) {
         errCard.classList.toggle('is-error', errorRate > 0);
-        errCard.classList.toggle('is-critical', errorRate > 1);
+        errCard.classList.toggle('is-critical', errorRate > 0.01);
       }
     }
 
