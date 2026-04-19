@@ -170,12 +170,17 @@
           <div class="view-section fill">
             <div class="view-section-header">
               <span class="panel-label">최근 요청</span>
-              <div style="display:flex;align-items:center;gap:6px">
+              <div class="feed-controls">
+                <div class="feed-search">
+                  <span class="feed-search-icon">⌕</span>
+                  <input id="feedSearchInput" class="feed-search-input" type="text" placeholder="model / tool / message" autocomplete="off" />
+                  <button class="feed-search-clear" id="feedSearchClear" aria-label="검색어 지우기">×</button>
+                </div>
                 <div id="typeFilterBtns" style="display:flex;gap:4px">
                   <button class="type-filter-btn active" data-filter="all">All</button>
-                  <button class="type-filter-btn" data-filter="prompt">prompt</button>
-                  <button class="type-filter-btn" data-filter="tool_call">tool_call</button>
-                  <button class="type-filter-btn" data-filter="system">system</button>
+                  <button class="type-filter-btn type-filter-prompt" data-filter="prompt">prompt</button>
+                  <button class="type-filter-btn type-filter-tool_call" data-filter="tool_call">tool_call</button>
+                  <button class="type-filter-btn type-filter-system" data-filter="system">system</button>
                 </div>
                 <span class="panel-hint" id="requestCount">—</span>
               </div>

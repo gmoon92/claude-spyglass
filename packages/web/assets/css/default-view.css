@@ -29,6 +29,9 @@ canvas { display: block; }
 
 /* ── CHARTS ─────────────────────────────────────────────────────────────── */
 .charts-inner { display: grid; grid-template-columns: 2fr 1fr; gap: 0; }
+/* Grid 아이템은 기본 min-width:auto → canvas 고정폭에 묶여 오버플로우 발생.
+   min-width:0 으로 Grid 수축을 허용하고 Chart.js responsive resize가 따라오게 함 */
+.charts-inner > * { min-width: 0; }
 .donut-section { border-left: 1px solid var(--border); }
 .donut-wrap { padding: 12px 16px; display: flex; align-items: center; gap: 16px; }
 .donut-canvas { flex-shrink: 0; }
@@ -39,14 +42,47 @@ canvas { display: block; }
 .legend-val   { color: var(--text); font-weight: 600; }
 .legend-pct   { color: var(--text-dim); min-width: 28px; text-align: right; }
 
+/* ── FEED CONTROLS ──────────────────────────────────────────────────────── */
+.feed-controls { display: flex; align-items: center; gap: 8px; }
+
+/* ── FEED SEARCH ────────────────────────────────────────────────────────── */
+.feed-search { position: relative; display: flex; align-items: center; }
+.feed-search-icon {
+  position: absolute; left: 6px; color: var(--text-dim);
+  font-size: 12px; pointer-events: none; user-select: none;
+}
+.feed-search-input {
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); font-family: inherit; font-size: 10px;
+  padding: 2px 20px 2px 20px; border-radius: 4px;
+  width: 160px; transition: border-color .15s, width .2s; outline: none;
+}
+.feed-search-input:focus { border-color: var(--text-dim); width: 200px; }
+.feed-search-input::placeholder { color: var(--text-dim); }
+.feed-search-clear {
+  position: absolute; right: 4px; background: none; border: none;
+  color: var(--text-dim); font-size: 13px; cursor: pointer;
+  padding: 0 2px; line-height: 1; display: none;
+}
+.feed-search-clear.visible { display: block; }
+.feed-search-clear:hover { color: var(--text-muted); }
+
 /* ── TYPE FILTER ────────────────────────────────────────────────────────── */
 .type-filter-btn {
   background: none; border: 1px solid var(--border); color: var(--text-dim);
   padding: 2px 8px; border-radius: 4px; cursor: pointer;
-  font-family: inherit; font-size: 10px; transition: color .12s, border-color .12s;
+  font-family: inherit; font-size: 10px; transition: color .12s, border-color .12s, background .12s;
 }
 .type-filter-btn:hover { color: var(--text); border-color: var(--text-dim); }
 .type-filter-btn.active { color: var(--accent); border-color: var(--accent); }
+
+/* 타입별 색상 구분 (활성 + hover) */
+.type-filter-prompt.active     { color: var(--type-prompt-color);    border-color: var(--type-prompt-color);    background: var(--type-prompt-bg); }
+.type-filter-tool_call.active  { color: var(--type-tool_call-color); border-color: var(--type-tool_call-color); background: var(--type-tool_call-bg); }
+.type-filter-system.active     { color: var(--type-system-color);    border-color: var(--type-system-color);    background: var(--type-system-bg); }
+.type-filter-prompt:hover      { color: var(--type-prompt-color);    border-color: var(--type-prompt-color); }
+.type-filter-tool_call:hover   { color: var(--type-tool_call-color); border-color: var(--type-tool_call-color); }
+.type-filter-system:hover      { color: var(--type-system-color);    border-color: var(--type-system-color); }
 
 /* ── SCROLL LOCK BANNER ─────────────────────────────────────────────────── */
 .scroll-lock-banner {

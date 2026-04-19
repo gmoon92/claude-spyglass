@@ -15,7 +15,7 @@ export function getActiveRange()  { return _activeRange; }
 // ── 요청 목록 상태 ──────────────────────────────────────────────────────────
 export let reqFilter = 'all';
 export let reqOffset = 0;
-export const REQ_PAGE = 10;
+export const REQ_PAGE = 200;
 export let isSSEConnected = false;
 
 export function setReqFilter(f)     { reqFilter = f; }
@@ -101,6 +101,7 @@ export async function fetchRequests(append = false) {
     } else {
       renderRequests(list);
     }
+    document.dispatchEvent(new CustomEvent('feed:updated'));
     reqOffset += list.length;
     const loadMoreBtn = document.getElementById('loadMoreBtn');
     if (loadMoreBtn) {

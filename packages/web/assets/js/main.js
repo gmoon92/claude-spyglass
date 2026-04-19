@@ -229,6 +229,27 @@ function initEventDelegation() {
 
   document.getElementById('loadMoreBtn').addEventListener('click', () => fetchRequests(true));
 
+  const feedSearchInput = document.getElementById('feedSearchInput');
+  const feedSearchClear = document.getElementById('feedSearchClear');
+  function applyFeedSearch() {
+    const q = feedSearchInput.value.trim().toLowerCase();
+    feedSearchClear.classList.toggle('visible', q.length > 0);
+    const rows = document.querySelectorAll('#requestsBody tr[data-type]');
+    rows.forEach(tr => {
+      if (!q) { tr.style.display = ''; return; }
+      const text = [
+        tr.querySelector('.model-name')?.textContent,
+        tr.querySelector('.action-name')?.textContent,
+        tr.querySelector('.prompt-preview')?.textContent,
+        tr.querySelector('.target-role-badge')?.textContent,
+      ].filter(Boolean).join(' ').toLowerCase();
+      tr.style.display = text.includes(q) ? '' : 'none';
+    });
+  }
+  feedSearchInput.addEventListener('input', applyFeedSearch);
+  feedSearchClear.addEventListener('click', () => { feedSearchInput.value = ''; applyFeedSearch(); feedSearchInput.focus(); });
+  document.addEventListener('feed:updated', applyFeedSearch);
+
   document.getElementById('detailTypeFilterBtns').addEventListener('click', e => {
     const btn = e.target.closest('[data-detail-filter]');
     if (!btn) return;
