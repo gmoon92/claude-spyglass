@@ -206,6 +206,61 @@ export function parseTranscript(transcriptPath: string): TranscriptUsage {
   return defaultResult;
 }
 
+/**
+ * 서브에이전트 전용 transcript 경로 계산
+ * Claude Code 규약: <dirname(transcript_path)>/<session_id>/subagents/agent-<agent_id>.jsonl
+ */
+export function resolveSubagentTranscriptPath(
+  transcriptPath: string,
+  sessionId: string,
+  agentId: string,
+): string {
+  const lastSlash = transcriptPath.lastIndexOf('/');
+  const dir = lastSlash >= 0 ? transcriptPath.slice(0, lastSlash) : '';
+  return `${dir}/${sessionId}/subagents/agent-${agentId}.jsonl`;
+}
+
+/**
+ * 훅 payload 기준으로 실제 usage/model을 읽어올 transcript 데이터를 반환.
+ *
+ * - 서브에이전트 내부 훅 (raw.agent_id 존재): 서브 transcript 사용 (tokens·model 모두)
+ * - Agent tool PostToolUse (tool_response.agentId 존재): 메인 transcript의 tokens 유지 +
+ *   서브 transcript의 full model로 보정
+ * - 그 외: 메인 transcript 그대로
+ *
+ * 반환값 중 `modelOverride`가 있으면 transcriptData.model보다 우선 적용해야 한다.
+ */
+export function resolveTranscriptContext(
+  raw: ClaudeHookPayload,
+): { transcriptData: TranscriptUsage | null; modelOverride?: string } {
+  const mainPath = raw.transcript_path;
+  const mainData = mainPath ? parseTranscript(mainPath) : null;
+
+  if (!mainPath || !raw.session_id) {
+    return { transcriptData: mainData };
+  }
+
+  // 1) 서브에이전트 내부 훅: 서브 transcript 전체 사용
+  if (raw.agent_id) {
+    const subPath = resolveSubagentTranscriptPath(mainPath, raw.session_id, raw.agent_id);
+    return { transcriptData: parseTranscript(subPath) };
+  }
+
+  // 2) Agent tool PostToolUse: 서브 transcript에서 model만 보정
+  if (raw.tool_name === 'Agent' && raw.hook_event_name === 'PostToolUse') {
+    const subAgentId = (raw.tool_response as { agentId?: string } | undefined)?.agentId;
+    if (subAgentId) {
+      const subPath = resolveSubagentTranscriptPath(mainPath, raw.session_id, subAgentId);
+      const subData = parseTranscript(subPath);
+      if (subData.model) {
+        return { transcriptData: mainData, modelOverride: subData.model };
+      }
+    }
+  }
+
+  return { transcriptData: mainData };
+}
+
 // =============================================================================
 // tool_detail 추출
 // =============================================================================
@@ -668,7 +723,6 @@ export async function rawCollectHandler(req: Request, db: SpyglassDatabase): Pro
   const {
     hook_event_name,
     session_id,
-    transcript_path,
     cwd,
     tool_name,
     tool_input,
@@ -692,6 +746,13 @@ export async function rawCollectHandler(req: Request, db: SpyglassDatabase): Pro
       ? extractToolDetail(tool_name, tool_input)
       : null;
 
+    // 서브에이전트 내부 훅이면 서브 transcript에서 model 추출 (메인 세션의 훅은 모델 미지정 유지)
+    const { transcriptData: preTranscriptData, modelOverride: preModelOverride } =
+      resolveTranscriptContext(raw);
+    const preModel = raw.agent_id
+      ? (preModelOverride || preTranscriptData?.model || undefined)
+      : undefined;
+
     const requestId = `pre-${now}-${randomUUID().slice(0, 8)}`;
     const collectPayload: CollectPayload = {
       id: requestId,
@@ -702,7 +763,7 @@ export async function rawCollectHandler(req: Request, db: SpyglassDatabase): Pro
       request_type: 'tool_call',
       tool_name: tool_name ?? undefined,
       tool_detail: toolDetail ?? undefined,
-      model: undefined,
+      model: preModel,
       tokens_input: 0,
       tokens_output: 0,
       tokens_total: 0,
@@ -731,7 +792,7 @@ export async function rawCollectHandler(req: Request, db: SpyglassDatabase): Pro
       }
     }
 
-    const transcriptData = transcript_path ? parseTranscript(transcript_path) : null;
+    const { transcriptData, modelOverride } = resolveTranscriptContext(raw);
     const toolDetail = tool_name && tool_input
       ? extractToolDetail(tool_name, tool_input)
       : null;
@@ -758,7 +819,7 @@ export async function rawCollectHandler(req: Request, db: SpyglassDatabase): Pro
       request_type: 'tool_call',
       tool_name: tool_name ?? undefined,
       tool_detail: toolDetail ?? undefined,
-      model: transcriptData?.model || undefined,
+      model: modelOverride || transcriptData?.model || undefined,
       tokens_input: tokensInput,
       tokens_output: tokensOutput,
       tokens_total: tokensInput + tokensOutput,
@@ -780,7 +841,7 @@ export async function rawCollectHandler(req: Request, db: SpyglassDatabase): Pro
 
   // UserPromptSubmit: transcript 파싱 후 prompt INSERT
   if (hook_event_name === 'UserPromptSubmit') {
-    const transcriptData = transcript_path ? parseTranscript(transcript_path) : null;
+    const { transcriptData, modelOverride } = resolveTranscriptContext(raw);
 
     const requestId = `prompt-${now}-${randomUUID().slice(0, 8)}`;
     const tokensInput = transcriptData?.inputTokens.value ?? 0;
@@ -803,7 +864,7 @@ export async function rawCollectHandler(req: Request, db: SpyglassDatabase): Pro
       request_type: 'prompt',
       tool_name: undefined,
       tool_detail: undefined,
-      model: transcriptData?.model || undefined,
+      model: modelOverride || transcriptData?.model || undefined,
       tokens_input: tokensInput,
       tokens_output: tokensOutput,
       tokens_total: tokensInput + tokensOutput,
