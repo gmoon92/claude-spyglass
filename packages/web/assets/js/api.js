@@ -1,7 +1,7 @@
 // API / Fetch 모듈
 import { fmt, fmtToken, formatDuration } from './formatters.js';
 import { setTypeData, drawDonut, renderTypeLegend } from './chart.js';
-import { clearError, setLastUpdated } from './infra.js';
+import { clearError, setLastUpdated, setLiveStatus } from './infra.js';
 import { renderProjects, renderTools, getAllSessions, setAllSessions, renderBrowserSessions } from './left-panel.js';
 import { renderRequests, appendRequests, RECENT_REQ_COLS } from './renderers.js';
 import { detectAnomalies } from './anomaly.js';
@@ -60,7 +60,7 @@ export async function fetchDashboard() {
     const activeCount = d.summary?.activeSessions ?? 0;
     const activeEl    = document.getElementById('statActive');
     activeEl.textContent = fmt(activeCount);
-    const activeCard = activeEl.closest('.stat-card');
+    const activeCard = activeEl.closest('.header-stat');
     if (activeCard) {
       activeCard.classList.toggle('active', activeCount > 0);
       activeCard.classList.toggle('is-active-indicator', activeCount > 0);
@@ -68,17 +68,7 @@ export async function fetchDashboard() {
     document.getElementById('statAvgDuration').textContent =
       formatDuration(d.summary?.avgDurationMs ?? d.requests?.avg_duration_ms ?? null);
 
-    // ── Command Center: 비용·성능 지표 ────────────────────────────────────
-    const costUsd = d.summary?.costUsd;
-    if (costUsd != null) {
-      document.getElementById('stat-cost').textContent = `$${Number(costUsd).toFixed(2)}`;
-    }
-
-    const cacheSavingsUsd = d.summary?.cacheSavingsUsd;
-    if (cacheSavingsUsd != null) {
-      document.getElementById('stat-cache-savings').textContent = `$${Number(cacheSavingsUsd).toFixed(2)}`;
-    }
-
+    // ── Command Center: 성능 지표 (ADR-015 — costUsd / cacheSavingsUsd 제거) ──
     const p95Ms = d.summary?.p95DurationMs;
     if (p95Ms != null) {
       document.getElementById('stat-p95').textContent =
@@ -89,7 +79,7 @@ export async function fetchDashboard() {
     if (errorRate != null) {
       const errEl = document.getElementById('stat-error-rate');
       errEl.textContent = `${(Number(errorRate) * 100).toFixed(1)}%`;
-      const errCard = errEl.closest('.stat-card');
+      const errCard = errEl.closest('.header-stat');
       if (errCard) {
         errCard.classList.toggle('is-error', errorRate > 0);
         errCard.classList.toggle('is-critical', errorRate > 0.01);
@@ -109,12 +99,10 @@ export async function fetchDashboard() {
 }
 
 function showError(msg) {
-  // infra.showError와 동일 — 순환 import 방지를 위해 직접 호출
+  // infra.showError와 동일 — header-summary-merge ADR-007: setLiveStatus helper 위임으로 chip 보존
   document.getElementById('errorMsg').textContent = msg || '서버에 연결할 수 없습니다.';
   document.getElementById('errorBanner').classList.add('visible');
-  const b = document.getElementById('liveBadge');
-  b.className = 'badge-live disconnected';
-  b.innerHTML = '<span class="dot"></span>OFFLINE';
+  setLiveStatus(false);
 }
 
 // ── Requests ────────────────────────────────────────────────────────────────

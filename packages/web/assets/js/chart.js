@@ -23,9 +23,46 @@ const TIMELINE_BUCKETS = 30;
 let timelineBuckets  = Array(TIMELINE_BUCKETS).fill(0);
 let lastBucketMinute = -1;
 
-let typeData = [];
+// ADR-008: 도넛 모드 ('type' | 'model') — donut-mode-toggle은 폐기되었지만 모드 SSoT는 유지.
+// default 모드 진입 시 setChartMode가 setDonutMode('model')을 호출 (model 분포 노출).
+// detail 모드 진입 시 setChartMode가 setDonutMode('type')을 호출 (세션 type 분포 — session-detail.js 호환).
+// 초기값 'model' — default 모드가 첫 화면이므로.
+let donutMode = 'model';
+const dataByKind = { type: [], model: [] };
+let typeData = dataByKind.type;   // drawDonut/renderTypeLegend가 참조하는 활성 데이터셋
 
-export function setTypeData(data) { typeData = data; }
+/**
+ * 데이터 종류별로 캐시한다. 현재 donutMode와 일치하는 종류만 화면에 즉시 반영.
+ * @param {'type'|'model'} kind
+ * @param {Array} data
+ */
+export function setSourceData(kind, data) {
+  if (kind !== 'type' && kind !== 'model') return;
+  dataByKind[kind] = Array.isArray(data) ? data : [];
+  if (kind === donutMode) typeData = dataByKind[kind];
+}
+/** 후방 호환: 기존 setTypeData(data) 호출은 type 종류로 위임 */
+export function setTypeData(data) { setSourceData('type', data); }
+export function setDonutMode(mode) {
+  donutMode = mode === 'model' ? 'model' : 'type';
+  typeData = dataByKind[donutMode] || [];
+}
+export function getDonutMode() { return donutMode; }
+export function hasSourceData(kind) { return Array.isArray(dataByKind[kind]) && dataByKind[kind].length > 0; }
+// 모델 라벨 → 색상 매핑 (간단한 hash 기반 분배 — TYPE_COLORS와 비슷한 톤)
+const MODEL_PALETTE = ['#d97757', '#6ee7a0', '#fbbf24', '#60a5fa', '#a78bfa', '#f472b6', '#22d3ee', '#94a3b8'];
+function modelColor(model, idx) {
+  return MODEL_PALETTE[idx % MODEL_PALETTE.length];
+}
+function donutItemKey(d, idx) {
+  return donutMode === 'model' ? (d.model || '?') : (d.type || '?');
+}
+function donutItemColor(d, idx) {
+  return donutMode === 'model' ? modelColor(d.model, idx) : (TYPE_COLORS[d.type] || COLORS.textDim);
+}
+function donutItemCount(d) {
+  return donutMode === 'model' ? (d.request_count || 0) : (d.count || 0);
+}
 
 export function initTypeColors() {
   const s = getComputedStyle(document.documentElement);
@@ -157,7 +194,7 @@ export function drawDonut() {
   ctx.clearRect(0, 0, size, size);
 
   const cx = size / 2, cy = size / 2, r = 36, inner = 22;
-  const total = typeData.reduce((s, d) => s + d.count, 0) || 1;
+  const total = typeData.reduce((s, d) => s + donutItemCount(d), 0) || 1;
 
   if (!typeData.length) {
     ctx.beginPath();
@@ -169,9 +206,9 @@ export function drawDonut() {
   }
 
   let startAngle = -Math.PI / 2;
-  typeData.forEach(d => {
-    const slice = (d.count / total) * Math.PI * 2;
-    const color = TYPE_COLORS[d.type] || COLORS.textDim;
+  typeData.forEach((d, idx) => {
+    const slice = (donutItemCount(d) / total) * Math.PI * 2;
+    const color = donutItemColor(d, idx);
     ctx.beginPath();
     ctx.arc(cx, cy, r, startAngle, startAngle + slice);
     ctx.arc(cx, cy, inner, startAngle + slice, startAngle, true);
@@ -192,20 +229,25 @@ export function drawDonut() {
 }
 
 export function renderTypeLegend() {
-  const total = typeData.reduce((s, d) => s + d.count, 0) || 1;
+  const total = typeData.reduce((s, d) => s + donutItemCount(d), 0) || 1;
   const el    = document.getElementById('typeLegend');
-  document.getElementById('typeTotal').textContent = `${total.toLocaleString('ko-KR')}건`;
+  const totalEl = document.getElementById('typeTotal');
+  if (totalEl) totalEl.textContent = `${total.toLocaleString('ko-KR')}건`;
+  if (!el) return;
   if (!typeData.length) {
-    el.innerHTML = '<div style="color:var(--text-dim);font-size:11px">데이터 없음</div>';
+    el.innerHTML = '<div class="state-empty" style="padding:0;font-size:var(--font-meta)">데이터가 없습니다</div>';
     return;
   }
-  el.innerHTML = typeData.map(d => {
-    const color = TYPE_COLORS[d.type] || COLORS.textDim;
-    const pct   = Math.round(d.count / total * 100);
+  el.innerHTML = typeData.map((d, idx) => {
+    const color = donutItemColor(d, idx);
+    const count = donutItemCount(d);
+    const key   = donutItemKey(d, idx);
+    const pct   = Math.round(count / total * 100);
+    // 모델 이름은 길 수 있어 ellipsis로 자름
     return `<div class="legend-item">
       <div class="legend-dot" style="background:${color}"></div>
-      <span class="legend-name">${d.type}</span>
-      <span class="legend-val">${d.count.toLocaleString('ko-KR')}</span>
+      <span class="legend-name" title="${key.replace(/"/g, '&quot;')}">${key}</span>
+      <span class="legend-val">${count.toLocaleString('ko-KR')}</span>
       <span class="legend-pct">${pct}%</span>
     </div>`;
   }).join('');

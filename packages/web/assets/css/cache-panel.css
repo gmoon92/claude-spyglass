@@ -1,6 +1,19 @@
 /* ── CACHE INTELLIGENCE PANEL ───────────────────────────────────────────────
    charts-inner 3번째 행 — grid-column: 1/-1 전체 너비 */
 
+/* ADR-008: cache-mode-toggle / cache-panel-matrix 제거.
+   ADR-007의 cps-volume / cps-cache 'Today Summary' 격상도 폐기 (cps-volume → timeline-meta로 이동).
+   cache-panel-overall은 horizontal flex로 cache 효율 단일 책임 (Hit Rate / Cost / Creation·Read). */
+.cache-panel-overall[hidden] { display: none !important; }
+
+.cache-panel-overall {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-width: 0;
+}
+
 .cache-panel {
   grid-column: 1 / -1;
   border-top: 1px solid var(--border);

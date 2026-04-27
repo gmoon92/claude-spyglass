@@ -1,14 +1,23 @@
 /* ── BODY ───────────────────────────────────────────────────────────────── */
+/* header-summary-merge ADR-001: summary-strip 행 제거 → 4행 그리드
+   (header / error-banner / main / footer) */
 body {
   font-family: 'SF Mono','JetBrains Mono','Fira Code',ui-monospace,monospace;
   background: var(--bg);
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--font-body);
   line-height: 1.5;
   display: grid;
-  grid-template-rows: auto auto auto 1fr auto;
+  grid-template-rows: auto auto 1fr auto;
   height: 100vh;
   overflow: hidden;
+}
+
+/* ── RIGHT PANEL CARD INSET (ADR-003) ───────────────────────────────────── */
+/* 카드를 감싼 right-panel에 padding을 주어 카드 외곽 호흡 확보 */
+.right-panel {
+  padding: var(--space-3);
+  gap: var(--space-3);
 }
 
 /* ── MAIN LAYOUT ────────────────────────────────────────────────────────── */
@@ -26,33 +35,53 @@ body {
   grid-template-columns: 36px 1fr;
 }
 
+/* 숨김 상태: panel-section 전체 숨김, overflow 해제(버튼이 border 밖으로 나오므로)
+   — .left-panel의 첫 자식은 .panel-resize-handle이므로 :first-child 선택자는 안 됨 */
 .main-layout.left-panel-hidden .left-panel {
-  grid-template-rows: 36px 0 0;
+  overflow: visible;
+  grid-template-rows: 1fr;
 }
 
-/* 첫 번째 .panel-section(프로젝트)만 유지, 나머지는 general-sibling(~)로 숨김
-   — .left-panel의 첫 자식은 .panel-resize-handle이므로 :first-child 선택자는 안 됨 */
-.main-layout.left-panel-hidden .left-panel .panel-section ~ .panel-section,
-.main-layout.left-panel-hidden .left-panel .panel-body,
-.main-layout.left-panel-hidden .left-panel .panel-label,
+.main-layout.left-panel-hidden .left-panel .panel-section,
 .main-layout.left-panel-hidden .panel-resize-handle {
   display: none;
 }
 
-.main-layout.left-panel-hidden .left-panel .panel-header {
-  padding: 6px 0;
-  justify-content: center;
-  border-bottom: none;
-}
-
+/* 숨김 상태: 화살표 방향 반전 (오른쪽 → 펼치기) */
 .main-layout.left-panel-hidden .btn-panel-collapse svg {
   transform: rotate(180deg);
 }
 
 /* ── FOOTER ─────────────────────────────────────────────────────────────── */
 .footer {
+  position: relative;
   text-align: center; color: var(--text-dim); font-size: 10px;
   padding: 6px; border-top: 1px solid var(--border); flex-shrink: 0;
+}
+
+/* 우측 도움말 버튼 (ADR-012 — ? 단축키와 동일 동작) */
+.footer-help-btn {
+  position: absolute;
+  right: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: var(--weight-strong);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  line-height: 1;
+  padding: 0;
+}
+.footer-help-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 /* ── RESPONSIVE ─────────────────────────────────────────────────────────── */
@@ -63,7 +92,5 @@ body {
   .charts-inner { grid-template-columns: 1fr; }
   .donut-section { border-left: none; border-top: 1px solid var(--border); }
 }
-@media (max-width: 480px) {
-  .summary-strip { flex-direction: column; gap: 1px; }
-  .stat-card { padding: 6px 12px; }
-}
+/* header-summary-merge ADR-001: .summary-strip / .stat-card 제거됨.
+   480px 이하 헤더 stat 반응형은 header.css @media (max-width: 480px) 참조. */

@@ -1,23 +1,65 @@
-/* ── HEADER ─────────────────────────────────────────────────────────────── */
+/* ── HEADER ─────────────────────────────────────────────────────────────────
+   header-summary-merge ADR-004: 헤더는 글로벌 네비/필터 전용.
+   구조: [.header-left | .header-right] (justify-content: space-between)
+   stats chip(`.header-stats / .header-stat*`)은 default-view.css에서
+   `#chartSection .view-section-header` 내부 SSoT로 정의됨.
+   ────────────────────────────────────────────────────────────────────────── */
 .header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 20px; height: 52px;
-  border-bottom: 1px solid var(--border); flex-shrink: 0;
+  padding: 0 var(--space-4);
+  height: 52px;
+  gap: var(--space-4);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  min-width: 0;
 }
-.header-left { display: flex; align-items: center; gap: 12px; }
-.logo { font-size: 16px; font-weight: 800; color: var(--accent); letter-spacing: -0.5px; }
+.header-left {
+  display: flex; align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+  min-width: 0;
+}
+.header-right {
+  display: flex; align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+/* ── LOGO ──────────────────────────────────────────────────────────────── */
+.logo {
+  font-size: var(--font-major);
+  font-weight: var(--weight-hero);
+  color: var(--accent);
+  letter-spacing: -0.5px;
+  cursor: pointer;
+  user-select: none;
+}
 .logo span { color: var(--text); }
 
-/* ── LIVE BADGE ─────────────────────────────────────────────────────────── */
+/* ── LIVE BADGE — header-summary-merge ADR-007: 활성 세션 chip 통합 ────────
+   구조: dot(SSE 연결 상태) + badge-live-label(LIVE) + .header-stat(active sessions chip).
+   chip은 .header-stat SSoT로 stat-tooltip / api.js와 호환.
+   .live-dot이 SSE pulse를 담당하므로 chip의 ::before는 무력화.
+   ────────────────────────────────────────────────────────────────────── */
 .badge-live {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; gap: var(--space-2);
   background: var(--accent-dim); border: 1px solid var(--accent-border);
-  color: var(--accent); padding: 3px 10px; border-radius: 20px;
-  font-size: 10px; font-weight: 700; letter-spacing: 0.6px;
+  color: var(--accent);
+  padding: 3px 10px; border-radius: 20px;
+  font-size: var(--font-micro);
+  font-weight: var(--weight-hero);
+  letter-spacing: 0.6px;
+  flex-shrink: 0;
 }
 .badge-live .dot {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--accent); animation: pulse 1.8s ease-in-out infinite;
+  flex-shrink: 0;
+}
+.badge-live-label {
+  color: var(--accent);
+  font-weight: var(--weight-hero);
+  letter-spacing: 0.6px;
 }
 @keyframes pulse {
   0%,100% { opacity: 1; transform: scale(1); }
@@ -27,31 +69,80 @@
   background: var(--red-dim); border-color: var(--red-border); color: var(--red);
 }
 .badge-live.disconnected .dot { background: var(--red); animation: none; }
+.badge-live.disconnected .badge-live-label { color: var(--red); }
 
-.last-updated { color: var(--text-dim); font-size: 11px; }
+/* 활성 세션 chip (LIVE 배지 안 통합) — ADR-007 */
+.badge-live .header-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+  padding: 0 0 0 var(--space-2);
+  margin-left: 2px;
+  border-left: 1px solid var(--accent-border);
+  background: transparent;
+}
+.badge-live .header-stat-value {
+  font-size: var(--font-micro);
+  color: var(--accent);
+  font-weight: var(--weight-hero);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  line-height: 1;
+}
+.badge-live.disconnected .header-stat {
+  border-left-color: var(--red-border);
+}
+.badge-live.disconnected .header-stat-value {
+  color: var(--red);
+}
+/* live-dot이 이미 시각 dot을 담당하므로 chip의 .is-active-indicator::before 무력화 */
+.badge-live .header-stat::before { display: none !important; }
+/* 활성 세션 > 0 — chip 값 green (LIVE 배지 컨텍스트에서도 동일 의미) */
+.badge-live .header-stat.is-active-indicator .header-stat-value { color: var(--green); }
+
+.last-updated {
+  color: var(--text-dim);
+  font-size: var(--font-meta);
+  flex-shrink: 0;
+}
 
 /* ── ERROR BANNER ───────────────────────────────────────────────────────── */
 .error-banner {
   display: flex; align-items: center; gap: 10px;
   background: var(--red-bg-subtle);
-  color: var(--red); font-size: 12px; flex-shrink: 0;
+  color: var(--red); font-size: var(--font-body); flex-shrink: 0;
   max-height: 0; overflow: hidden; padding: 0 20px;
 }
 .error-banner.visible { max-height: 60px; padding: 10px 20px; border-bottom: 1px solid var(--red-border); }
 .retry-btn {
   margin-left: auto; background: none; border: 1px solid var(--red);
-  color: var(--red); padding: 3px 10px; border-radius: 6px;
-  cursor: pointer; font-family: inherit; font-size: 11px;
+  color: var(--red); padding: 3px 10px; border-radius: var(--radius-md);
+  cursor: pointer; font-family: inherit; font-size: var(--font-meta);
 }
 .retry-btn:hover { background: var(--red-dim); }
 
 /* ── DATE FILTER ────────────────────────────────────────────────────────── */
-.date-filter { display: flex; gap: 4px; align-items: center; }
+.date-filter { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
 .filter-btn {
   background: none; border: 1px solid var(--border);
-  color: var(--text-dim); padding: 3px 10px; border-radius: 5px;
-  cursor: pointer; font-family: inherit; font-size: 10px;
-  font-weight: 600; letter-spacing: 0.3px; transition: all .15s;
+  color: var(--text-dim); padding: 3px 10px; border-radius: var(--radius-sm);
+  cursor: pointer; font-family: inherit;
+  font-size: var(--font-micro);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0.3px;
+  transition: all .15s;
 }
 .filter-btn:hover { border-color: var(--accent); color: var(--accent); }
 .filter-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+
+/* ── 반응형 ───────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .header { gap: var(--space-3); padding: 0 var(--space-3); }
+  .last-updated { display: none; }
+}
+@media (max-width: 480px) {
+  /* ADR-007: badge-live는 활성 세션 chip을 포함하므로 480에서도 노출 (핵심 정보).
+     공간 절약은 padding 축소 + label 짧게. */
+  .badge-live { padding: 3px var(--space-2); }
+  .badge-live-label { display: none; }
+}

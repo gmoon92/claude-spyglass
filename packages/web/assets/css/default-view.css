@@ -1,11 +1,21 @@
 /* ── RIGHT PANEL / CONTENT SWITCHER ─────────────────────────────────────── */
-.right-panel { display: flex; flex-direction: column; overflow: hidden; }
+/* ADR-019: chartSection이 viewport 초과 시 right-panel 자체 스크롤로 로그 피드 접근 보장
+   (header-summary-merge ADR-002: Insights 카드 제거됨) */
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  /* gap/padding은 layout.css에서 설정 (card 호흡) */
+}
 
-.content-switcher { position: relative; flex: 1; overflow: hidden; min-height: 0; }
+/* ADR-019: content-switcher는 viewport가 충분할 땐 flex:1로 잔여공간 차지,
+   부족할 땐 min-height로 로그 피드 최소 가시성 보장 (right-panel 스크롤로 접근) */
+.content-switcher { position: relative; flex: 1 0 auto; overflow: hidden; min-height: 360px; }
 
 .right-view {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; overflow: hidden;
+  gap: var(--space-3);
   opacity: 0; transform: translateX(6px);
   transition: opacity .18s ease, transform .18s ease;
   pointer-events: none;
@@ -13,15 +23,252 @@
 .right-view.active { opacity: 1; transform: translateX(0); pointer-events: auto; }
 
 /* ── VIEW SECTIONS ──────────────────────────────────────────────────────── */
-.view-section { border-bottom: 1px solid var(--border); flex-shrink: 0; }
+/* ADR-003: 일부 view-section이 .card로 전환됨. 기존 border-bottom은 카드 border로 대체 */
+.view-section { flex-shrink: 0; }
+.view-section:not(.card) { border-bottom: 1px solid var(--border); }
 .view-section.fill { flex: 1; display: flex; flex-direction: column; min-height: 0; border-bottom: none; }
+
 .view-section-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 16px; background: var(--surface-alt);
-  border-bottom: 1px solid var(--border); flex-shrink: 0;
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
-.chart-wrap { padding: 12px 16px 8px; }
+/* card로 전환된 view-section의 헤더 — surface-alt 배경 제거 (카드 자체가 surface) */
+.view-section.card > .view-section-header {
+  background: transparent;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--card-border);
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+}
+/* ADR-019: 수직 영역 압축 — chartSection이 로그 피드 viewport를 잠식하지 않도록 padding 축소 */
+.chart-wrap { padding: var(--space-2) var(--space-3); }
 canvas { display: block; }
+
+/* ── ADR-017 + header-summary-merge ADR-007: chartSection 헤더 ──
+   view-section-header는 단일 flex row(가벼움 회복):
+     [.chart-default-meta(라벨+부제)] + [.chart-detail-meta(세션 메타, hidden)] + [.chart-actions]
+   stats는 자기 의미와 가까운 거처로 분산:
+     · 활성 세션  → header.css의 .badge-live
+     · 오류율/평균/P95 → 본 파일 .timeline-meta (chart-wrap 내 canvas 위)
+     · 세션/요청/토큰 → 본 파일 .timeline-meta-group (오늘) — ADR-008로 cps-volume에서 이동
+   ADR-006의 .vsh-row*, .view-section-header--vsh, .header-stat--hero 모두 폐기.
+   ────────────────────────────────────────────────────────────────────── */
+#chartSection .view-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  justify-content: space-between;
+}
+
+#chartSection .chart-default-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  min-width: 0;
+}
+#chartSection .chart-detail-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+#chartSection .chart-detail-meta[hidden] { display: none; }
+#chartSection.chart-mode-detail .chart-default-meta { display: none; }
+#chartSection.chart-mode-detail .chart-detail-only { display: inline-flex !important; }
+/* detail 모드 — timeline 부속 meta 자동 숨김 (chart 영역이 contextGrowthChart로 swap) */
+#chartSection.chart-mode-detail .timeline-meta { display: none; }
+
+#chartSection .chart-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* ── HEADER STAT chip — 단일 위계 inline-flex baseline (ADR-007) ────────────
+   `.header-stat*` 시각 클래스 SSoT 유지 (api.js / stat-tooltip.js / 상태 클래스 호환).
+   라벨/값 순서: 값 → 라벨 (큰 숫자 먼저). chip은 어디 있든 동일 외관.
+   거처별 컨텍스트 정의는 각자 CSS 파일에서:
+     · timeline-meta : 본 파일
+     · timeline-meta : 본 파일 (6 stat 통합 — ADR-008)
+     · badge-live    : header.css
+   ────────────────────────────────────────────────────────────────────── */
+.header-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  padding: 0;
+  position: relative;
+  white-space: nowrap;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  transition: background 0.12s ease;
+}
+
+.header-stat-value {
+  font-size: var(--font-meta);
+  color: var(--text);
+  font-weight: var(--weight-strong);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+.header-stat-label {
+  font-size: var(--font-micro);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: var(--weight-strong);
+  line-height: 1;
+}
+
+/* skeleton 자식 배치 보정 (loading) */
+.header-stat-value > .skeleton {
+  display: inline-block;
+  width: 28px; height: 10px;
+  vertical-align: middle;
+}
+
+/* ── 상태 클래스 SSoT (기존 의미 그대로 적용) ──────────────────────────── */
+
+/* 활성 세션 > 0 — 값 green (dot은 .badge-live 컨텍스트에서 live-dot이 담당하므로 ::before 무력화 필요 — header.css 참조) */
+.header-stat.is-active-indicator .header-stat-value { color: var(--green); }
+
+/* 오류율 > 0% — 값 빨간색 */
+.header-stat.is-error .header-stat-value { color: var(--red); }
+
+/* 오류율 > 1% — chip 배경 강조 (layout shift 없는 outline + bg) */
+.header-stat.is-critical {
+  background: linear-gradient(to right, var(--red-bg-subtle), transparent);
+  outline: 1px solid var(--red-border);
+  outline-offset: 1px;
+  border-radius: var(--radius-sm);
+}
+
+/* hover (tooltip 트리거 시각 hint) — layout shift 방지 위해 padding 변경 없음, 미세 outline */
+.header-stat[data-stat-tooltip] {
+  cursor: help;
+}
+.header-stat[data-stat-tooltip]:hover {
+  background: var(--accent-bg-light);
+}
+
+/* ── TIMELINE META — chart-wrap 내 canvas 위 통합 meta (ADR-008) ──
+   2 그룹 배치 (좌 품질 / 우 볼륨), 시간 컨텍스트 라벨.
+     · timeline-meta-group (지난 30분) : 평균 · P95 · 오류율
+     · timeline-meta-group (오늘)      : 세션 · 요청 · 토큰
+   두 그룹 사이 큰 gap(space-between). 좁은 폭에서 자동 wrap. divider DOM 0. */
+#chartSection .chart-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  position: relative;
+}
+
+#chartSection .timeline-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 0 var(--space-1);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+#chartSection .timeline-meta-group {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+#chartSection .timeline-meta-group-label {
+  font-size: var(--font-micro);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: var(--weight-strong);
+  flex-shrink: 0;
+}
+
+/* ── 반응형 (ADR-008) ─────────────────────────────────────────────────────
+   1024px 이하: chart-default-meta 부제 숨김 + timeline-meta-group gap 축소
+    768px 이하: timeline-meta gap 축소 — 두 그룹이 자연스럽게 wrap
+    480px 이하: timeline-meta padding 0 — 좁은 폭에서도 wrap graceful
+   ────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  #chartSection .chart-default-meta .panel-hint { display: none; }
+  #chartSection .timeline-meta { gap: var(--space-3); }
+  #chartSection .timeline-meta-group { gap: var(--space-2); }
+}
+@media (max-width: 768px) {
+  #chartSection .timeline-meta { gap: var(--space-2); padding: 0; }
+}
+
+/* contextGrowthChart canvas는 detail 모드에서만 보임 (chart-wrap의 column flex / position:relative는 위쪽 정의 참조) */
+#chartSection #contextGrowthChart { width: 100%; height: 64px; display: block; }
+#chartSection.chart-mode-detail #timelineChart { display: none; }
+#chartSection:not(.chart-mode-detail) #contextGrowthChart { display: none; }
+
+/* context-chart 빈 상태 / meta는 detail 모드에서만 의미 */
+#chartSection .context-chart-empty[hidden] { display: none; }
+#chartSection .context-chart-empty {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-dim); font-size: var(--font-meta);
+  pointer-events: none;
+}
+#chartSection .context-chart-meta {
+  display: flex; gap: var(--space-3); align-items: baseline;
+  padding: 0 var(--space-3) var(--space-2);
+  font-size: var(--font-meta);
+  color: var(--text-dim);
+}
+#chartSection:not(.chart-mode-detail) .context-chart-meta { display: none; }
+
+/* Donut 모드 토글 + total 메타 */
+#chartSection .donut-meta {
+  display: flex; flex-direction: column; gap: var(--space-1);
+  padding: 0 var(--space-3) var(--space-2);
+  align-items: center;
+}
+/* ADR-008: donut-mode-toggle / cache-mode-toggle / cache-panel-matrix / cache-matrix-* 정의 모두 제거.
+   도넛은 default→model / detail→type을 setChartMode가 자동 결정. cache-panel은 Hit Rate / Cost / Creation·Read 단일 책임. */
+#chartSection .donut-total {
+  font-size: var(--font-micro);
+  color: var(--text-dim);
+  text-align: center;
+}
+
+/* ── CHART SECTION COLLAPSE ─────────────────────────────────────────────── */
+/* grid-template-rows 전환으로 .charts-inner 을 부드럽게 접음 (ADR-001)
+   .card flex display 보다 우선 — !important 없이 specificity 해결 */
+.view-section#chartSection {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  transition: grid-template-rows 0.25s ease;
+}
+#chartSection .charts-inner {
+  overflow: hidden;
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
+}
+#chartSection.chart-collapsed {
+  grid-template-rows: auto 0fr;
+}
+/* 접힘 상태: chevron 위 방향, border 제거 */
+#chartSection.chart-collapsed .view-section-header { border-bottom: none; }
+#chartSection.chart-collapsed #btnToggleChart svg { transform: rotate(180deg); }
 
 .feed-body { flex: 1; overflow-y: auto; min-height: 0; }
 .feed-body::-webkit-scrollbar { width: 3px; }
@@ -53,8 +300,26 @@ canvas { display: block; }
 /* ── DETAIL TYPE FILTER BTNS ─────────────────────────────────────────────── */
 /* 인라인 스타일 대체: 검색창과 필터 사이 구분선 + 간격 */
 .detail-type-filter-btns {
-  display: flex; gap: 4px;
-  border-left: 1px solid var(--border); padding-left: 12px; margin-left: 4px;
+  border-left: 1px solid var(--border);
+  padding-left: var(--space-3);
+  margin-left: var(--space-1);
+}
+
+/* ── TYPE FILTER GROUP (ADR-006 — 의미론적 분류) ──────────────────────── */
+.type-filter-btns {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+/* 그룹 사이 시각 구분선 — 첫 그룹이 아닌 경우에 좌측 border */
+.filter-group + .filter-group {
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--border);
 }
 
 /* ── FEED CONTROLS ──────────────────────────────────────────────────────── */

@@ -8,9 +8,12 @@
 
   <!-- ── 디자인 토큰 (반드시 첫 번째) ── -->
   <link rel="stylesheet" href="/assets/css/design-tokens.css">
+  <!-- ── 글로벌 컴포넌트 SSoT (ADR-003 / ADR-009 / ADR-012) ── -->
+  <link rel="stylesheet" href="/assets/css/card.css">
+  <link rel="stylesheet" href="/assets/css/state.css">
+  <link rel="stylesheet" href="/assets/css/keyboard-help.css">
   <link rel="stylesheet" href="/assets/css/layout.css">
   <link rel="stylesheet" href="/assets/css/header.css">
-  <link rel="stylesheet" href="/assets/css/summary-strip.css">
   <link rel="stylesheet" href="/assets/css/left-panel.css">
   <link rel="stylesheet" href="/assets/css/default-view.css">
   <link rel="stylesheet" href="/assets/css/detail-view.css">
@@ -25,18 +28,29 @@
 </head>
 <body>
 
-  <!-- HEADER -->
+  <!-- HEADER (header-summary-merge ADR-004 — 글로벌 네비/필터 전용. stats는 view-section-header로 이전) -->
   <header class="header">
     <div class="header-left">
       <div class="logo">Claude<span>Spyglass</span></div>
-      <span class="badge-live" id="liveBadge" title="SSE 실시간 연결 상태. 초록: 연결됨 · 빨강: 연결 끊김 (5초마다 재시도)"><span class="dot"></span>LIVE</span>
+      <!-- LIVE 배지 — header-summary-merge ADR-007: 활성 세션 chip 통합
+           dot(SSE 연결 상태) + LABEL(LIVE) + chip(active sessions).
+           chip은 .header-stat SSoT로 stat-tooltip / api.js와 호환. -->
+      <span class="badge-live" id="liveBadge" title="SSE 실시간 연결 상태 + 활성 세션 수">
+        <span class="dot"></span>
+        <span class="badge-live-label">LIVE</span>
+        <span class="header-stat" id="activeCard" data-stat-tooltip="active">
+          <span class="header-stat-value" id="statActive">--</span>
+        </span>
+      </span>
     </div>
-    <div class="date-filter" id="dateFilter">
-      <button class="filter-btn active" data-range="all" title="수집된 전체 기간 데이터 표시">전체</button>
-      <button class="filter-btn" data-range="today" title="오늘 00:00(로컬 시간) 이후 데이터만 표시">오늘</button>
-      <button class="filter-btn" data-range="week" title="이번 주 월요일 00:00(로컬 시간) 이후 데이터만 표시">이번주</button>
+    <div class="header-right">
+      <div class="date-filter" id="dateFilter">
+        <button class="filter-btn active" data-range="all" title="수집된 전체 기간 데이터 표시">전체</button>
+        <button class="filter-btn" data-range="today" title="오늘 00:00(로컬 시간) 이후 데이터만 표시">오늘</button>
+        <button class="filter-btn" data-range="week" title="이번 주 월요일 00:00(로컬 시간) 이후 데이터만 표시">이번주</button>
+      </div>
+      <span class="last-updated" id="lastUpdated">—</span>
     </div>
-    <span class="last-updated" id="lastUpdated">—</span>
   </header>
 
   <!-- ERROR BANNER -->
@@ -48,71 +62,23 @@
     <button class="retry-btn" id="retryBtn">다시 시도</button>
   </div>
 
-  <!-- SUMMARY STRIP -->
-  <div class="summary-strip">
-    <!-- Real-time section -->
-    <div class="stat-card" id="activeCard" data-stat-tooltip="active">
-      <span class="stat-label">활성</span>
-      <span class="stat-value" id="statActive"><span class="skeleton"></span></span>
-    </div>
-
-    <!-- Performance section -->
-    <div class="stat-card" data-stat-tooltip="avg-duration">
-      <span class="stat-label">평균 응답</span>
-      <span class="stat-value" id="statAvgDuration"><span class="skeleton"></span></span>
-    </div>
-    <div class="stat-card" data-stat-tooltip="p95">
-      <span class="stat-label">P95</span>
-      <span class="stat-value" id="stat-p95">--</span>
-    </div>
-    <div class="stat-card" data-stat-tooltip="err">
-      <span class="stat-label">오류</span>
-      <span class="stat-value" id="stat-error-rate">--</span>
-    </div>
-
-    <div class="stat-divider"></div>
-
-    <!-- Volume section -->
-    <div class="stat-card" data-stat-tooltip="sessions">
-      <span class="stat-label">세션</span>
-      <span class="stat-value" id="statSessions"><span class="skeleton"></span></span>
-    </div>
-    <div class="stat-card" data-stat-tooltip="requests">
-      <span class="stat-label">요청</span>
-      <span class="stat-value" id="statRequests"><span class="skeleton"></span></span>
-    </div>
-
-    <!-- Cost section -->
-    <div class="stat-card" data-stat-tooltip="tokens">
-      <span class="stat-label">토큰</span>
-      <span class="stat-value" id="statTokens"><span class="skeleton"></span></span>
-    </div>
-    <div class="stat-card" data-stat-tooltip="cost">
-      <span class="stat-label">비용</span>
-      <span class="stat-value" id="stat-cost">--</span>
-    </div>
-    <div class="stat-card" data-stat-tooltip="saved">
-      <span class="stat-label">절감</span>
-      <span class="stat-value" id="stat-cache-savings">--</span>
-    </div>
-  </div>
-
   <!-- MAIN LAYOUT -->
   <div class="main-layout">
 
     <!-- LEFT PANEL -->
     <aside class="left-panel">
       <div class="panel-resize-handle" title="드래그: 너비 조절 · 더블클릭: 콘텐츠 너비에 맞춤"></div>
+      <!-- 패널 접기/펼치기 토글 — border 위 floating, 패널 세로 가운데 고정 -->
+      <button class="btn-panel-collapse" id="btnPanelCollapse" title="왼쪽 패널 숨기기 / 펼치기" aria-label="왼쪽 패널 숨기기">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M7.5 2.5L3.5 6L7.5 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
 
       <!-- 프로젝트 -->
       <div class="panel-section flex-section">
         <div class="panel-header">
           <span class="panel-label">프로젝트</span>
-          <button class="btn-panel-collapse" id="btnPanelCollapse" title="왼쪽 패널 숨기기 / 펼치기" aria-label="왼쪽 패널 숨기기">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M7.5 2.5L3.5 6L7.5 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
         </div>
         <div class="panel-body">
           <table>
@@ -145,26 +111,33 @@
         <div class="panel-body">
           <table>
             <tbody id="browserSessionsBody">
-              <tr><td colspan="4" class="table-empty">프로젝트를 선택하세요</td></tr>
+              <tr><td colspan="4" class="table-empty">프로젝트를 선택해주세요</td></tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- 툴 통계 -->
-      <div class="panel-section tool-stats-section">
+      <!-- 툴 통계 — ADR-016 도구별/카테고리별 토글 -->
+      <div class="panel-section tool-stats-section" id="panelTools">
         <div class="panel-header">
-          <span class="panel-label">툴 통계 <span style="font-weight:400;opacity:0.6">(전체)</span></span>
+          <span class="panel-label">툴 통계</span>
+          <div class="tool-mode-toggle" id="toolModeToggle" role="group" aria-label="도구 모드">
+            <button class="tool-mode-btn active" data-tool-mode="tool" title="도구별 통계">도구</button>
+            <button class="tool-mode-btn" data-tool-mode="category" title="카테고리별 분포">카테고리</button>
+          </div>
           <span class="panel-hint" id="toolCount">—</span>
         </div>
         <div class="panel-body">
-          <table>
+          <table id="toolsByName">
             <thead><tr><th>툴</th><th style="text-align:right">호출</th><th style="text-align:right">평균토큰</th><th style="min-width:80px">호출 비율</th></tr></thead>
             <tbody id="toolsBody">
               <tr><td colspan="4" class="table-empty"><span class="skeleton"></span></td></tr>
               <tr><td colspan="4" class="table-empty"><span class="skeleton"></span></td></tr>
             </tbody>
           </table>
+          <div class="tool-categories" id="toolCategories" hidden>
+            <div class="state-loading" style="padding:0"><div class="state-loading-spinner"></div><span>불러오는 중…</span></div>
+          </div>
         </div>
       </div>
 
@@ -173,58 +146,133 @@
     <!-- RIGHT PANEL -->
     <main class="right-panel">
 
-      <!-- 차트: 항상 표시 -->
-      <div class="view-section" id="chartSection">
+      <!-- 차트: 모드 전환 (default/detail) — ADR-003 .card + ADR-017 모드 통합 -->
+      <div class="view-section card card--compact" id="chartSection">
+        <!-- header-summary-merge ADR-007 + ADR-008 — Stats Distribution.
+             view-section-header는 "이 섹션이 무엇인가"만 알린다(요청 추이 / chart-actions).
+             stats는 자기 의미와 가까운 영역으로 분산:
+              · 활성 세션 → header LIVE 배지
+              · 오류율 / 평균 / P95 / 세션 / 요청 / 토큰 → chart-wrap 내 .timeline-meta (ADR-008: 6 stat 통합) -->
         <div class="view-section-header">
-          <span class="panel-label">요청 추이 (실시간)</span>
-          <span class="panel-hint" id="chartSubtitle">최근 30분</span>
+          <div class="chart-default-meta">
+            <span class="panel-label">요청 추이 (실시간)</span>
+            <span class="panel-hint" id="chartSubtitle">최근 30분</span>
+          </div>
+          <!-- detail 모드 메타 (세션 메타 — ADR-017 — detail-header 통합) -->
+          <div class="chart-detail-meta" hidden>
+            <span class="detail-session-id" id="detailSessionId">—</span>
+            <span class="detail-project" id="detailProject">—</span>
+            <span class="detail-tokens" id="detailTokens"></span>
+            <span class="detail-ended-at" id="detailEndedAt"></span>
+            <div class="detail-agg-badges detail-agg-badges--hidden" id="detailBadges"></div>
+          </div>
+          <!-- ADR-008: chart-actions에서 btn-close / detail-actions-sep 제거.
+               closeDetail은 Esc 키 / 로고 클릭으로 트리거. -->
+          <div class="chart-actions">
+            <button class="btn-toggle" id="btnToggleChart" title="접기 / 펼치기" aria-label="접기">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
         </div>
         <div class="charts-inner">
-          <div class="chart-wrap">
-            <canvas id="timelineChart" height="100"></canvas>
+          <div class="chart-wrap" data-ctx-tooltip="context-growth">
+            <!-- ADR-008 — timeline-meta 통합 : 두 그룹 (지난 30분 / 오늘).
+                 그룹 1: 품질 (평균 · P95 · 오류율) — timeline 윈도우 컨텍스트
+                 그룹 2: 볼륨 (세션 · 요청 · 토큰)   — 오늘 누적 컨텍스트
+                 detail 모드에서 자동 숨김(.chart-mode-detail .timeline-meta { display:none }). -->
+            <div class="timeline-meta" id="timelineMeta" role="group" aria-label="요약 지표">
+              <div class="timeline-meta-group" role="group" aria-label="요청 품질 (지난 30분)">
+                <span class="timeline-meta-group-label">지난 30분</span>
+                <div class="header-stat" data-stat-tooltip="avg-duration">
+                  <span class="header-stat-value" id="statAvgDuration"><span class="skeleton"></span></span>
+                  <span class="header-stat-label">평균</span>
+                </div>
+                <div class="header-stat" data-stat-tooltip="p95">
+                  <span class="header-stat-value" id="stat-p95">--</span>
+                  <span class="header-stat-label">P95</span>
+                </div>
+                <div class="header-stat" data-stat-tooltip="err">
+                  <span class="header-stat-value" id="stat-error-rate">--</span>
+                  <span class="header-stat-label">오류율</span>
+                </div>
+              </div>
+              <div class="timeline-meta-group" role="group" aria-label="누적 볼륨 (오늘)">
+                <span class="timeline-meta-group-label">오늘</span>
+                <div class="header-stat" data-stat-tooltip="sessions">
+                  <span class="header-stat-value" id="statSessions"><span class="skeleton"></span></span>
+                  <span class="header-stat-label">세션</span>
+                </div>
+                <div class="header-stat" data-stat-tooltip="requests">
+                  <span class="header-stat-value" id="statRequests"><span class="skeleton"></span></span>
+                  <span class="header-stat-label">요청</span>
+                </div>
+                <div class="header-stat" data-stat-tooltip="tokens">
+                  <span class="header-stat-value" id="statTokens"><span class="skeleton"></span></span>
+                  <span class="header-stat-label">토큰</span>
+                </div>
+              </div>
+            </div>
+            <!-- default 모드: timelineChart / detail 모드: contextGrowthChart — display 토글 -->
+            <canvas id="timelineChart" height="64"></canvas>
+            <canvas id="contextGrowthChart" hidden></canvas>
+            <div class="context-chart-empty" id="contextChartEmpty" hidden>
+              <span class="context-chart-empty-text">데이터가 없습니다</span>
+            </div>
+            <div class="context-chart-meta">
+              <span id="ctxUsageIndicator"></span>
+              <span class="context-chart-footer"></span>
+            </div>
           </div>
           <div class="donut-section">
             <div class="donut-wrap">
               <canvas class="donut-canvas" id="typeChart" width="90" height="90"></canvas>
               <div class="type-legend" id="typeLegend">
-                <div style="color:var(--text-dim);font-size:11px">로딩 중…</div>
+                <div class="state-loading" style="padding:0">불러오는 중…</div>
               </div>
             </div>
-            <div style="padding:0 12px 8px;font-size:10px;color:var(--text-dim);text-align:center" id="typeTotal">—</div>
+            <!-- ADR-008: donut-mode-toggle 제거. 도넛은 default→model / detail→type 자동 전환 (setChartMode가 결정). -->
+            <div class="donut-meta">
+              <div class="donut-total" id="typeTotal">—</div>
+            </div>
           </div>
 
-          <!-- Cache Intelligence Panel -->
+          <!-- Cache Intelligence Panel — ADR-008: cache-mode-toggle / cache-panel-matrix 제거.
+               cache-panel-overall은 cache 효율 단일 책임 (Hit Rate / Cost / Creation·Read). -->
           <div class="cache-panel" id="cachePanel">
-            <div class="cache-section" data-cache-panel-tooltip="hit-rate">
-              <span class="cache-panel-label">Hit Rate</span>
-              <div class="cache-bar-wrap">
-                <div class="cache-bar-fill" id="cacheHitFill" style="width:0%"></div>
-              </div>
-              <span class="cache-bar-pct" id="cacheHitPct">--</span>
-            </div>
-            <div class="cache-section" data-cache-panel-tooltip="cost">
-              <div class="cache-cost-rows">
-                <div class="cache-cost-item">
-                  <span class="cache-cost-label">without cache</span>
-                  <span class="cache-cost-value" id="cacheCostWithout">--</span>
+            <div class="cache-panel-overall" id="cachePanelOverall">
+              <div class="cache-section" data-cache-panel-tooltip="hit-rate">
+                <span class="cache-panel-label">Hit Rate</span>
+                <div class="cache-bar-wrap">
+                  <div class="cache-bar-fill" id="cacheHitFill" style="width:0%"></div>
                 </div>
-                <div class="cache-cost-item is-actual">
-                  <span class="cache-cost-label">actual cost</span>
-                  <span class="cache-cost-value" id="cacheCostActual">--</span>
-                </div>
-                <div class="cache-cost-item is-saved">
-                  <span class="cache-cost-label">saved</span>
-                  <span class="cache-cost-value" id="cacheCostSaved">--</span>
+                <span class="cache-bar-pct" id="cacheHitPct">--</span>
+              </div>
+              <div class="cache-section" data-cache-panel-tooltip="cost">
+                <div class="cache-cost-rows">
+                  <div class="cache-cost-item">
+                    <span class="cache-cost-label">no cache</span>
+                    <span class="cache-cost-value" id="cacheCostWithout">--</span>
+                  </div>
+                  <div class="cache-cost-item is-actual">
+                    <span class="cache-cost-label">actual</span>
+                    <span class="cache-cost-value" id="cacheCostActual">--</span>
+                  </div>
+                  <div class="cache-cost-item is-saved">
+                    <span class="cache-cost-label">saved</span>
+                    <span class="cache-cost-value" id="cacheCostSaved">--</span>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div class="cache-section" data-cache-panel-tooltip="ratio">
-              <span class="cache-panel-label">Creation / Read</span>
-              <div class="cache-ratio-wrap">
-                <div class="cache-ratio-creation" id="cacheRatioCreate" style="width:0%"></div>
-                <div class="cache-ratio-read" id="cacheRatioRead" style="width:0%"></div>
+              <div class="cache-section" data-cache-panel-tooltip="ratio">
+                <span class="cache-panel-label">Creation / Read</span>
+                <div class="cache-ratio-wrap">
+                  <div class="cache-ratio-creation" id="cacheRatioCreate" style="width:0%"></div>
+                  <div class="cache-ratio-read" id="cacheRatioRead" style="width:0%"></div>
+                </div>
+                <span class="cache-ratio-label" id="cacheRatioLabel">--</span>
               </div>
-              <span class="cache-ratio-label" id="cacheRatioLabel">--</span>
             </div>
           </div>
         </div>
@@ -233,9 +281,9 @@
       <!-- 전환 영역 -->
       <div class="content-switcher">
 
-        <!-- 기본 뷰: 최근 요청 피드 -->
+        <!-- 기본 뷰: 최근 요청 피드 — ADR-003 .card 적용 -->
         <div id="defaultView" class="right-view active">
-          <div class="view-section fill">
+          <div class="view-section fill card">
             <div class="view-section-header">
               <span class="panel-label">최근 요청</span>
               <div class="feed-controls">
@@ -244,11 +292,20 @@
                   <input id="feedSearchInput" class="feed-search-input" type="text" placeholder="model / tool / message" autocomplete="off" />
                   <button class="feed-search-clear" id="feedSearchClear" aria-label="검색어 지우기">×</button>
                 </div>
-                <div id="typeFilterBtns" style="display:flex;gap:4px">
-                  <button class="type-filter-btn active" data-filter="all" title="모든 요청 타입 표시">All</button>
-                  <button class="type-filter-btn type-filter-prompt" data-filter="prompt" title="사용자 입력(LLM 추론 요청)만 표시">prompt</button>
-                  <button class="type-filter-btn type-filter-tool_call" data-filter="tool_call" title="도구 실행 요청(Read/Write/Bash 등)만 표시">tool_call</button>
-                  <button class="type-filter-btn type-filter-system" data-filter="system" title="시스템 메시지(컨텍스트 주입 등)만 표시">system</button>
+                <div id="typeFilterBtns" class="type-filter-btns">
+                  <div class="filter-group filter-group--all">
+                    <button class="type-filter-btn active" data-filter="all" title="모든 요청 타입 표시">All</button>
+                  </div>
+                  <div class="filter-group filter-group--request" aria-label="요청 종류">
+                    <button class="type-filter-btn type-filter-prompt" data-filter="prompt" title="사용자 입력(LLM 추론 요청)만 표시">prompt</button>
+                    <button class="type-filter-btn type-filter-system" data-filter="system" title="시스템 메시지(컨텍스트 주입 등)만 표시">system</button>
+                  </div>
+                  <div class="filter-group filter-group--tool" aria-label="도구 분류">
+                    <button class="type-filter-btn type-filter-tool_call" data-filter="tool_call" title="도구 실행 요청(Read/Write/Bash 등)만 표시">tool_call</button>
+                    <button class="type-filter-btn type-filter-agent" data-filter="agent" title="Agent 도구 실행만 표시">Agent</button>
+                    <button class="type-filter-btn type-filter-skill" data-filter="skill" title="Skill 도구 실행만 표시">Skill</button>
+                    <button class="type-filter-btn type-filter-mcp" data-filter="mcp" title="MCP 도구 실행만 표시">MCP</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -279,38 +336,8 @@
           </div>
         </div>
 
-        <!-- 세션 상세 뷰 -->
-        <div id="detailView" class="right-view">
-
-          <div class="detail-header">
-            <div class="detail-meta">
-              <span class="detail-session-id" id="detailSessionId">—</span>
-              <span class="detail-project" id="detailProject">—</span>
-              <span class="detail-tokens" id="detailTokens"></span>
-              <span class="detail-ended-at" id="detailEndedAt"></span>
-              <div class="detail-agg-badges detail-agg-badges--hidden" id="detailBadges"></div>
-            </div>
-            <button class="btn-toggle" id="btnToggleDetail" title="접기 / 펼치기" aria-label="접기">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-          </div>
-
-          <!-- Accumulated Tokens Chart -->
-          <div class="context-chart-section" data-ctx-tooltip="context-growth">
-            <div class="context-chart-inner">
-              <div class="context-chart-header">
-                <span class="context-chart-label">Accumulated Tokens</span>
-                <span id="ctxUsageIndicator"></span>
-              </div>
-              <canvas id="contextGrowthChart"></canvas>
-              <div class="context-chart-empty" id="contextChartEmpty">
-                <span class="context-chart-empty-text">누적 토큰 데이터 없음</span>
-              </div>
-              <div class="context-chart-footer"></div>
-            </div>
-          </div>
+        <!-- 세션 상세 뷰 — ADR-003 .card 적용 / ADR-017 — detail-header / context-chart는 chartSection으로 통합되어 제거됨 -->
+        <div id="detailView" class="right-view card">
 
           <div class="view-tab-bar" id="detailTabBar">
             <button class="view-tab active" id="tabFlat" data-tab="flat">플랫</button>
@@ -327,16 +354,27 @@
                        placeholder="tool / message" autocomplete="off" />
                 <button class="feed-search-clear" id="detailSearchClear" aria-label="검색어 지우기">×</button>
               </div>
-              <div id="detailTypeFilterBtns" class="detail-type-filter-btns">
-                <button class="type-filter-btn active" data-detail-filter="all" title="모든 요청 타입 표시">All</button>
-                <button class="type-filter-btn type-filter-prompt" data-detail-filter="prompt" title="사용자 입력(LLM 추론 요청)만 표시">prompt</button>
-                <button class="type-filter-btn type-filter-tool_call" data-detail-filter="tool_call" title="도구 실행 요청(Read/Write/Bash 등)만 표시">tool_call</button>
-                <button class="type-filter-btn type-filter-system" data-detail-filter="system" title="시스템 메시지(컨텍스트 주입 등)만 표시">system</button>
+              <div id="detailTypeFilterBtns" class="detail-type-filter-btns type-filter-btns">
+                <div class="filter-group filter-group--all">
+                  <button class="type-filter-btn active" data-detail-filter="all" title="모든 요청 타입 표시">All</button>
+                </div>
+                <div class="filter-group filter-group--request" aria-label="요청 종류">
+                  <button class="type-filter-btn type-filter-prompt" data-detail-filter="prompt" title="사용자 입력(LLM 추론 요청)만 표시">prompt</button>
+                  <button class="type-filter-btn type-filter-system" data-detail-filter="system" title="시스템 메시지(컨텍스트 주입 등)만 표시">system</button>
+                </div>
+                <div class="filter-group filter-group--tool" aria-label="도구 분류">
+                  <button class="type-filter-btn type-filter-tool_call" data-detail-filter="tool_call" title="도구 실행 요청(Read/Write/Bash 등)만 표시">tool_call</button>
+                  <button class="type-filter-btn type-filter-agent" data-detail-filter="agent" title="Agent 도구 실행만 표시">Agent</button>
+                  <button class="type-filter-btn type-filter-skill" data-detail-filter="skill" title="Skill 도구 실행만 표시">Skill</button>
+                  <button class="type-filter-btn type-filter-mcp" data-detail-filter="mcp" title="MCP 도구 실행만 표시">MCP</button>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="detail-loading" id="detailLoading" style="display:none">로딩 중…</div>
+          <div class="detail-loading" id="detailLoading" style="display:none">
+            <div class="state-loading"><div class="state-loading-spinner"></div><span>불러오는 중…</span></div>
+          </div>
 
           <div id="detailFlatView" class="detail-content">
             <table>
@@ -350,20 +388,15 @@
               </colgroup>
               <thead><tr><th>Time</th><th>Action</th><th>Target</th><th>Model</th><th>Message</th><th style="text-align:right">in</th><th style="text-align:right">out</th><th style="text-align:right"><span style="text-transform:none">⚡</span>Cache</th><th style="text-align:right">Duration</th></tr></thead>
               <tbody id="detailRequestsBody">
-                <tr><td colspan="9" class="table-empty">데이터 없음</td></tr>
+                <tr><td colspan="9" class="table-empty">데이터가 없습니다</td></tr>
               </tbody>
             </table>
           </div>
 
           <div id="detailTurnView" class="detail-content" style="display:none">
-            <div class="turn-view-toolbar">
-              <button class="turn-view-toggle active" id="btnTurnList" data-view="list">목록</button>
-              <button class="turn-view-toggle" id="btnTurnCard" data-view="card">카드</button>
+            <div id="turnUnifiedBody" role="region" aria-label="턴 목록">
+              <div class="state-loading"><div class="state-loading-spinner"></div><span>불러오는 중…</span></div>
             </div>
-            <div id="turnListBody">
-              <div class="turn-row-empty">로딩 중…</div>
-            </div>
-            <div id="turnCardBody" style="display:none"></div>
           </div>
 
           <div id="detailToolsView" class="detail-content" style="display:none"></div>
@@ -375,7 +408,7 @@
                 <span class="gantt-nav-label" id="ganttNavLabel">T1–T10</span>
                 <button class="gantt-nav-btn" id="ganttNext">&#x203a;</button>
               </div>
-              <span class="gantt-hint" id="ganttHint">로딩 중…</span>
+              <span class="gantt-hint" id="ganttHint">불러오는 중…</span>
               <div class="gantt-legend" id="ganttLegend"></div>
             </div>
             <div class="gantt-scroll" id="ganttScroll">
@@ -390,7 +423,75 @@
     </main>
   </div>
 
-  <footer class="footer">Claude Spyglass — real-time Claude Code monitor</footer>
+  <footer class="footer">
+    Claude Spyglass — real-time Claude Code monitor
+    <button class="footer-help-btn" id="btnHelpOpen" title="단축키 (?)" aria-label="키보드 단축키">?</button>
+  </footer>
+
+  <!-- Keyboard Help Modal (ADR-012) -->
+  <div class="kbd-help-backdrop" id="kbdHelpBackdrop" role="dialog" aria-modal="true" aria-labelledby="kbdHelpTitle">
+    <div class="kbd-help-modal" role="document">
+      <div class="kbd-help-header">
+        <span class="kbd-help-title" id="kbdHelpTitle">키보드 단축키</span>
+        <button class="kbd-help-close" id="kbdHelpClose" aria-label="닫기">×</button>
+      </div>
+      <div class="kbd-help-body">
+        <div class="kbd-help-section">
+          <div class="kbd-help-section-title">탐색</div>
+          <div class="kbd-help-row">
+            <span class="kbd-key">/</span>
+            <span class="kbd-help-desc">검색창에 포커스</span>
+          </div>
+          <div class="kbd-help-row">
+            <span class="kbd-key">Esc</span>
+            <span class="kbd-help-desc">모달 / 확장 패널 / 검색 / 상세 뷰 닫기</span>
+          </div>
+          <div class="kbd-help-row">
+            <span class="kbd-key">⌘F</span>
+            <span class="kbd-help-desc">검색창 포커스 (Ctrl+F)</span>
+          </div>
+        </div>
+        <div class="kbd-help-section">
+          <div class="kbd-help-section-title">필터</div>
+          <div class="kbd-help-row">
+            <span class="kbd-key">1</span>
+            <span class="kbd-help-desc">All</span>
+          </div>
+          <div class="kbd-help-row">
+            <span class="kbd-key">2</span>
+            <span class="kbd-help-desc">prompt</span>
+          </div>
+          <div class="kbd-help-row">
+            <span class="kbd-key">3</span>
+            <span class="kbd-help-desc">system</span>
+          </div>
+          <div class="kbd-help-row">
+            <span class="kbd-key">4</span>
+            <span class="kbd-help-desc">tool_call</span>
+          </div>
+          <div class="kbd-help-row">
+            <span class="kbd-key">5</span>
+            <span class="kbd-help-desc">Agent</span>
+          </div>
+          <div class="kbd-help-row">
+            <span class="kbd-key">6</span>
+            <span class="kbd-help-desc">Skill</span>
+          </div>
+          <div class="kbd-help-row">
+            <span class="kbd-key">7</span>
+            <span class="kbd-help-desc">MCP</span>
+          </div>
+        </div>
+        <div class="kbd-help-section">
+          <div class="kbd-help-section-title">도움말</div>
+          <div class="kbd-help-row">
+            <span class="kbd-key">?</span>
+            <span class="kbd-help-desc">이 도움말 토글</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="/assets/js/main.js"></script>
 </body>

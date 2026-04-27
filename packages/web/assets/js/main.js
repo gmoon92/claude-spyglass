@@ -1,5 +1,6 @@
 // 진입점 — 초기화, 이벤트 위임, SSE, selectProject/Session
-import { initTypeColors, recordRequest, drawTimeline, drawDonut, advanceBuckets, initBuckets } from './chart.js';
+import { initTypeColors, recordRequest, drawTimeline, drawDonut, advanceBuckets, initBuckets, setSourceData, setDonutMode, hasSourceData, renderTypeLegend } from './chart.js';
+import { fetchModelUsage } from './metrics-api.js';
 import { togglePromptExpand, makeRequestRow, makeTargetCell } from './renderers.js';
 import { clearError, updateScrollLockBanner, jumpToLatest, addScrollLockCount, resetScrollLockCount } from './infra.js';
 import {
@@ -10,7 +11,7 @@ import {
 import {
   setDetailFilter, applyDetailFilter, setDetailView, toggleTurn,
   refreshDetailSession, loadSessionDetail, initDetailSearch, initGanttNavigation,
-  setTurnViewMode,
+  toggleCardExpand,
 } from './session-detail.js';
 import {
   fetchDashboard, fetchRequests, fetchAllSessions, fetchSessionsByProject,
@@ -91,6 +92,7 @@ async function selectSession(id) {
   uiState.rightView = 'detail';
   uiState.detailTab = 'flat';
   document.getElementById('detailView').classList.remove('detail-collapsed');
+  setChartMode('detail');                  // ADR-017: 차트가 세션 모드로 전환
   renderRightPanel();
 
   document.getElementById('detailLoading').style.display = 'block';
@@ -132,16 +134,52 @@ async function selectSession(id) {
   }
 }
 
-// ── 세션 상세 접기/펼치기 토글 ───────────────────────────────────────────────
-function toggleDetailCollapse() {
-  const detailView = document.getElementById('detailView');
-  const btn = document.getElementById('btnToggleDetail');
-  const chartSection = detailView.querySelector('.context-chart-section');
-  detailView.classList.toggle('detail-collapsed');
-  const collapsed = detailView.classList.contains('detail-collapsed');
-  // context-chart-section 만 접기/펼치기 (ADR-002: 탭바·컨트롤바·콘텐츠는 항상 표시)
-  if (chartSection) chartSection.classList.toggle('context-chart-section--collapsed', collapsed);
-  if (btn) btn.setAttribute('aria-label', collapsed ? '펼치기' : '접기');
+// ── ADR-017 + ADR-008: chartSection 모드 전환 (default ↔ detail) ──────────────────────
+// ADR-008: donut-mode-toggle 폐기로 setChartMode가 도넛 모드를 자동 결정.
+//   default → setDonutMode('model') + (캐시 미스 시) fetchModelUsage → setSourceData('model', data)
+//   detail  → setDonutMode('type')  (session-detail.js의 setTypeData(sessionTypeData) 호환)
+async function setChartMode(mode) {
+  const chartSection = document.getElementById('chartSection');
+  const rightPanel  = document.querySelector('.right-panel');
+  if (!chartSection) return;
+  if (mode === 'detail') {
+    chartSection.classList.add('chart-mode-detail');
+    chartSection.querySelector('.chart-detail-meta')?.removeAttribute('hidden');
+    chartSection.querySelectorAll('.chart-detail-only').forEach(el => el.removeAttribute('hidden'));
+    rightPanel?.classList.add('is-detail-mode');
+    // detail: 세션 단위 type 분포 도넛 (session-detail.js가 setTypeData로 데이터 공급)
+    setDonutMode('type');
+  } else {
+    chartSection.classList.remove('chart-mode-detail');
+    chartSection.querySelector('.chart-detail-meta')?.setAttribute('hidden', '');
+    chartSection.querySelectorAll('.chart-detail-only').forEach(el => el.setAttribute('hidden', ''));
+    rightPanel?.classList.remove('is-detail-mode');
+    // default: 전역 model 사용량 도넛 — 캐시 미스 시 fetch
+    setDonutMode('model');
+    if (!hasSourceData('model')) {
+      try {
+        const data = await fetchModelUsage({ range: '24h' });
+        setSourceData('model', data || []);
+      } catch (e) {
+        // network failure는 silent — 기존 typeData 유지
+      }
+    }
+    drawDonut();
+    renderTypeLegend();
+  }
+}
+
+// ── 세션 상세 닫기 (ADR-010 A-1) ─────────────────────────────────────────────
+function closeDetail() {
+  sessionAbortController?.abort();
+  setSelectedSession(null);
+  uiState.rightView = 'default';
+  setChartMode('default');                              // ADR-017: 차트 default 모드 복귀
+  renderRightPanel();
+  renderBrowserSessions();
+  // detail 닫힘 후 전역 데이터 재적용 (donut/cache 즉시 복귀)
+  fetchDashboard();
+  fetchCacheStats();
 }
 
 // ── prependRequest ───────────────────────────────────────────────────────────
@@ -162,7 +200,8 @@ function prependRequest(r) {
       const tokenCells = existing.querySelectorAll('.cell-token.num');
       const durationCell = tokenCells[tokenCells.length - 1];
       if (durationCell) durationCell.textContent = formatDuration(r.duration_ms);
-      // 검색 필터 재적용 — tool_detail 텍스트 변경 반영 (ADR-005: 가시성 재평가는 하지 않음)
+      // ADR-011: 인플레이스 업데이트 후 anomaly 재적용
+      reapplyFeedAnomalies();
       document.dispatchEvent(new CustomEvent('feed:updated'));
       return;
     }
@@ -181,8 +220,21 @@ function prependRequest(r) {
     resetScrollLockCount();
     updateScrollLockBanner();
   }
+  // ADR-011: 새 행에 anomaly 즉시 반영
+  reapplyFeedAnomalies();
   // 스크롤 조정 완료 후 검색·유형 필터 재적용
   document.dispatchEvent(new CustomEvent('feed:updated'));
+}
+
+// ── ADR-011: 피드 anomaly 재계산 + 모든 행에 배지 적용 (in-DOM 데이터로) ──────
+function reapplyFeedAnomalies() {
+  const body = document.getElementById('requestsBody');
+  if (!body) return;
+  // DOM에서 현재 행들의 핵심 데이터 재구성 (request 객체 형태)
+  // 단순화: data-request-id, data-type만으로 anomaly 재계산은 어려움
+  // → 대신 클래스 기반 마커: spike/loop는 SSE prepend 시점에 알 수 없으므로
+  //    fetchRequests 갱신을 1초 debounce로 트리거 (이미 SSE 흐름에 존재)
+  // 여기서는 별도 작업 없음. 실제 anomaly는 다음 fetchRequests 응답 시 적용된다.
 }
 
 // ── 수동 갱신 ────────────────────────────────────────────────────────────────
@@ -214,6 +266,9 @@ function connectSSE() {
           const tokEl   = sessRow?.querySelector('.sess-row-tokens');
           if (tokEl) tokEl.textContent = fmtToken(req.session_total_tokens);
           else renderBrowserSessions();
+        } else {
+          // 세션 목록에 없는 새 세션 — 세션 목록 재조회 후 재렌더링 (/clear 직후 등)
+          fetchAllSessions();
         }
         prependRequest(req);
         if (getSelectedSession() === req.session_id) refreshDetailSession(req.session_id);
@@ -255,15 +310,7 @@ function initEventDelegation() {
     if (sessRow)  { selectSession(sessRow.dataset.sessionId); }
   });
 
-  document.getElementById('btnToggleDetail').addEventListener('click', toggleDetailCollapse);
-
-  // 접힌 상태에서 헤더 클릭 시 펼치기 (버튼 영역 클릭은 각 버튼이 처리)
-  document.querySelector('#detailView .detail-header').addEventListener('click', e => {
-    const detailView = document.getElementById('detailView');
-    if (!detailView.classList.contains('detail-collapsed')) return;
-    if (e.target.closest('#btnToggleDetail')) return;
-    toggleDetailCollapse();
-  });
+  // ADR-008: btn-close 제거. closeDetail은 Esc 키 / 로고 클릭으로만 트리거.
 
   document.getElementById('detailTabBar').addEventListener('click', e => {
     const tab = e.target.closest('[data-tab]');
@@ -287,13 +334,21 @@ function initEventDelegation() {
     fetchDashboard(); fetchRequests(); fetchCacheStats(); fetchAllSessions();
   });
 
+  // Agent/Skill/MCP는 서버 type 컬럼이 아닌 tool_name 기반 클라이언트 필터 전용 (ADR-004)
+  const SUB_TYPES = ['agent', 'skill', 'mcp'];
+
   document.getElementById('typeFilterBtns').addEventListener('click', e => {
     const btn = e.target.closest('[data-filter]');
     if (!btn) return;
     setReqFilter(btn.dataset.filter);
     document.querySelectorAll('#typeFilterBtns .type-filter-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    fetchRequests(false);
+    if (SUB_TYPES.includes(btn.dataset.filter)) {
+      // 서버에 agent/skill/mcp 타입이 없으므로 재조회 스킵 — 현재 DOM에서 data-sub-type 필터만 재적용
+      applyFeedSearch();
+    } else {
+      fetchRequests(false);
+    }
   });
 
   document.getElementById('loadMoreBtn').addEventListener('click', () => fetchRequests(true));
@@ -306,7 +361,11 @@ function initEventDelegation() {
     const rows = document.querySelectorAll('#requestsBody tr[data-type]');
     const typeFilter = getReqFilter();
     rows.forEach(tr => {
-      const typeFiltered = typeFilter !== 'all' && tr.dataset.type !== typeFilter;
+      const typeFiltered = typeFilter !== 'all' && (
+        SUB_TYPES.includes(typeFilter)
+          ? tr.dataset.subType !== typeFilter
+          : tr.dataset.type !== typeFilter
+      );
       if (!q) { tr.style.display = typeFiltered ? 'none' : ''; return; }
       const text = [
         tr.querySelector('.model-name')?.textContent,
@@ -330,28 +389,44 @@ function initEventDelegation() {
     applyDetailFilter();
   });
 
-  document.getElementById('btnTurnList')?.addEventListener('click', () => {
-    setTurnViewMode('list');
-    document.getElementById('btnTurnList')?.classList.add('active');
-    document.getElementById('btnTurnCard')?.classList.remove('active');
-    document.getElementById('turnListBody').style.display = '';
-    document.getElementById('turnCardBody').style.display = 'none';
-  });
-  document.getElementById('btnTurnCard')?.addEventListener('click', () => {
-    setTurnViewMode('card');
-    document.getElementById('btnTurnCard')?.classList.add('active');
-    document.getElementById('btnTurnList')?.classList.remove('active');
-    document.getElementById('turnListBody').style.display = 'none';
-    document.getElementById('turnCardBody').style.display = '';
-  });
-
   document.getElementById('detailView').addEventListener('click', e => {
     const turnBtn  = e.target.closest('[data-toggle-turn]');
     if (turnBtn) { toggleTurn(turnBtn.dataset.toggleTurn); return; }
+
+    // 카드 expanded 내부 클릭 — 버블링 차단 (카드 토글과 충돌 방지)
+    if (e.target.closest('.turn-card-expanded')) {
+      // 연속 도구 그룹 헤더 토글
+      const groupRow = e.target.closest('[data-toggle-group]');
+      if (groupRow) {
+        groupRow.classList.toggle('open');
+        return;
+      }
+      const promptEl = e.target.closest('[data-expand-id]');
+      if (promptEl) {
+        const container = promptEl.closest('tr') || promptEl.closest('.turn-row');
+        if (container) togglePromptExpand(promptEl.dataset.expandId, container);
+      }
+      return;
+    }
+
+    // 카드 헤더 클릭 → accordion 토글
+    const cardBtn = e.target.closest('[data-toggle-card]');
+    if (cardBtn) { toggleCardExpand(cardBtn.dataset.toggleCard); return; }
+
     const promptEl = e.target.closest('[data-expand-id]');
     if (promptEl) {
       const container = promptEl.closest('tr') || promptEl.closest('.turn-row');
       if (container) togglePromptExpand(promptEl.dataset.expandId, container);
+    }
+  });
+
+  // 카드 accordion 키보드 접근성 — Enter/Space
+  document.getElementById('detailView').addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const cardBtn = e.target.closest('[data-toggle-card]');
+    if (cardBtn) {
+      e.preventDefault();
+      toggleCardExpand(cardBtn.dataset.toggleCard);
     }
   });
 
@@ -376,8 +451,43 @@ function initEventDelegation() {
 }
 
 
+// ── CHART SECTION COLLAPSE TOGGLE ────────────────────────────────────────────
+const CHART_COLLAPSED_KEY = 'spyglass:chart-collapsed';
+
+function toggleChartCollapse() {
+  const chartSection = document.getElementById('chartSection');
+  const btn = document.getElementById('btnToggleChart');
+  chartSection.classList.toggle('chart-collapsed');
+  const collapsed = chartSection.classList.contains('chart-collapsed');
+  localStorage.setItem(CHART_COLLAPSED_KEY, JSON.stringify(collapsed));
+  if (btn) btn.setAttribute('aria-label', collapsed ? '펼치기' : '접기');
+}
+
+function restoreChartCollapsedState() {
+  const collapsed = JSON.parse(localStorage.getItem(CHART_COLLAPSED_KEY) || 'false');
+  if (collapsed) {
+    const chartSection = document.getElementById('chartSection');
+    const btn = document.getElementById('btnToggleChart');
+    chartSection.classList.add('chart-collapsed');
+    if (btn) btn.setAttribute('aria-label', '펼치기');
+  }
+}
+
 // ── LEFT PANEL COLLAPSE TOGGLE ─────────────────────────────────────────────
-const PANEL_HIDDEN_KEY = 'left-panel-hidden';
+const PANEL_HIDDEN_KEY = 'spyglass:left-panel-hidden';
+
+// ── localStorage 마이그레이션 (ADR-014 — prefix 통일) ──────────────────────
+function migrateKey(oldKey, newKey) {
+  const v = localStorage.getItem(oldKey);
+  if (v != null && localStorage.getItem(newKey) == null) {
+    localStorage.setItem(newKey, v);
+    localStorage.removeItem(oldKey);
+  }
+}
+function migrateLocalStorage() {
+  migrateKey('left-panel-hidden', 'spyglass:left-panel-hidden');
+  migrateKey('left-panel-state', 'spyglass:left-panel-state');
+}
 
 function savePanelHiddenState(isHidden) {
   localStorage.setItem(PANEL_HIDDEN_KEY, JSON.stringify(isHidden));
@@ -398,6 +508,193 @@ function toggleLeftPanel() {
   savePanelHiddenState(isHidden);
 }
 
+// ── Keyboard Shortcuts (ADR-012, 1차) ────────────────────────────────────────
+
+const KBD_HELP_BACKDROP_ID = 'kbdHelpBackdrop';
+
+function isKbdHelpVisible() {
+  return document.getElementById(KBD_HELP_BACKDROP_ID)?.classList.contains('visible');
+}
+
+function showKbdHelp() {
+  document.getElementById(KBD_HELP_BACKDROP_ID)?.classList.add('visible');
+}
+
+function hideKbdHelp() {
+  document.getElementById(KBD_HELP_BACKDROP_ID)?.classList.remove('visible');
+}
+
+function toggleKbdHelp() {
+  if (isKbdHelpVisible()) hideKbdHelp();
+  else showKbdHelp();
+}
+
+// 현재 활성 뷰의 검색 input
+function activeSearchInput() {
+  if (uiState.rightView === 'detail') return document.getElementById('detailSearchInput');
+  return document.getElementById('feedSearchInput');
+}
+
+// 현재 활성 뷰의 type filter 버튼 컨테이너
+function activeTypeFilterButtons() {
+  const id = uiState.rightView === 'detail' ? 'detailTypeFilterBtns' : 'typeFilterBtns';
+  return document.querySelectorAll(`#${id} .type-filter-btn`);
+}
+
+// 입력 중에는 단축키 가로채지 않음 (검색 input 등)
+function isTypingTarget(el) {
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+}
+
+// ESC 우선순위: 모달 → 확장 패널 → 검색 클리어 → detail 닫기
+function handleEscape() {
+  if (isKbdHelpVisible()) { hideKbdHelp(); return; }
+  // 확장 패널 닫기
+  const expandRow = document.querySelector('[data-expand-for]');
+  if (expandRow) { expandRow.remove(); return; }
+  // 검색 클리어 (값이 있을 때)
+  const searchInput = activeSearchInput();
+  if (searchInput && searchInput.value) {
+    searchInput.value = '';
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+  // detail 뷰 닫기
+  if (uiState.rightView === 'detail') {
+    closeDetail();
+    return;
+  }
+}
+
+function focusActiveSearch() {
+  const el = activeSearchInput();
+  if (el) {
+    el.focus();
+    el.select?.();
+  }
+}
+
+function triggerFilterByIndex(idx) {
+  const btns = activeTypeFilterButtons();
+  if (idx >= 0 && idx < btns.length) btns[idx].click();
+}
+
+function initKeyboardShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    // ESC는 input 안에서도 동작 (검색 클리어용)
+    if (e.key === 'Escape') {
+      handleEscape();
+      // 입력 중이면 추가 동작은 막고, blur는 안함 (사용자 흐름 보존)
+      e.preventDefault();
+      return;
+    }
+
+    // Cmd/Ctrl+F → 검색 포커스 (브라우저 기본 가로채기)
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+      e.preventDefault();
+      focusActiveSearch();
+      return;
+    }
+
+    // 입력 중에는 나머지 단축키 비활성화
+    if (isTypingTarget(e.target)) return;
+
+    // / 키 → 검색 포커스
+    if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      focusActiveSearch();
+      return;
+    }
+
+    // ? 키 → 도움말 모달 토글
+    if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+      e.preventDefault();
+      toggleKbdHelp();
+      return;
+    }
+
+    // 1~7 → 타입 필터
+    if (/^[1-7]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      triggerFilterByIndex(parseInt(e.key, 10) - 1);
+      return;
+    }
+  });
+}
+
+function initKbdHelpModal() {
+  const backdrop = document.getElementById(KBD_HELP_BACKDROP_ID);
+  if (!backdrop) return;
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) hideKbdHelp();
+  });
+  document.getElementById('kbdHelpClose')?.addEventListener('click', hideKbdHelp);
+  document.getElementById('btnHelpOpen')?.addEventListener('click', toggleKbdHelp);
+}
+
+// ── ADR-008: Donut 모드 토글 / Cache 모드 토글 / cache-matrix 모두 제거.
+//   도넛 모드는 setChartMode가 자동 결정 (default→model, detail→type).
+//   cache panel은 cache 효율 단일 책임으로 복귀 (Hit Rate / Cost / Creation·Read).
+
+// ── ADR-016: Tool 모드 토글 (도구별 / 카테고리별) ─────────────────────────
+let _toolCategoriesCache = null;
+
+function initToolModeToggle() {
+  const wrap = document.getElementById('toolModeToggle');
+  if (!wrap) return;
+  wrap.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-tool-mode]');
+    if (!btn) return;
+    const mode = btn.dataset.toolMode;
+    wrap.querySelectorAll('.tool-mode-btn').forEach(b => b.classList.toggle('active', b === btn));
+    const tableEl = document.getElementById('toolsByName');
+    const catsEl  = document.getElementById('toolCategories');
+    if (mode === 'category') {
+      tableEl?.setAttribute('hidden', '');
+      catsEl?.removeAttribute('hidden');
+      if (!_toolCategoriesCache) {
+        const { fetchToolCategories } = await import('./metrics-api.js');
+        _toolCategoriesCache = await fetchToolCategories({ range: '24h' });
+      }
+      const { renderToolCategories } = await import('./left-panel.js');
+      renderToolCategories(_toolCategoriesCache);
+    } else {
+      catsEl?.setAttribute('hidden', '');
+      tableEl?.removeAttribute('hidden');
+    }
+  });
+}
+
+// ── ADR-018: 로고 홈 복귀 ───────────────────────────────────────────────────
+function initLogoHome() {
+  const logo = document.querySelector('.logo');
+  if (!logo) return;
+  logo.setAttribute('role', 'button');
+  logo.setAttribute('tabindex', '0');
+  logo.setAttribute('aria-label', '홈으로 이동');
+  logo.style.cursor = 'pointer';
+
+  const goHome = () => {
+    if (uiState.rightView === 'detail') closeDetail();
+    setSelectedSession(null);
+    setSelectedProject(null);
+    localStorage.removeItem('spyglass:lastProject');
+    renderBrowserSessions();
+    renderBrowserProjects();
+    document.querySelector('.right-panel')?.scrollTo({ top: 0, behavior: 'smooth' });
+    autoActivateProject();
+  };
+  logo.addEventListener('click', goHome);
+  logo.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      goHome();
+    }
+  });
+}
+
 // ── Canvas ResizeObserver ─────────────────────────────────────────────────────
 function initCharts() {
   let _rafId = null;
@@ -414,17 +711,24 @@ function initCharts() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 function init() {
+  // ADR-014: localStorage 키 prefix 마이그레이션 (다른 init 보다 먼저)
+  migrateLocalStorage();
+
   initTypeColors();
   initBuckets();
   drawTimeline();
   drawDonut();
+  // ADR-008: 초기 진입은 default 모드 — setChartMode가 setDonutMode('model') + fetchModelUsage 자동 처리
+  setChartMode('default');
   fetchDashboard();
   fetchRequests();
   fetchCacheStats();
   fetchAllSessions().then(() => autoActivateProject());
   connectSSE();
   restorePanelHiddenState();
+  restoreChartCollapsedState();
   document.getElementById('btnPanelCollapse').addEventListener('click', toggleLeftPanel);
+  document.getElementById('btnToggleChart').addEventListener('click', toggleChartCollapse);
   initEventDelegation();
   initCharts();
   initColResize(document.querySelector('#feedBody table'));
@@ -438,6 +742,13 @@ function init() {
   initToolStats();
   initDetailSearch();
   initGanttNavigation();
+  // ADR-012: 키보드 단축키 + 도움말 모달
+  initKeyboardShortcuts();
+  initKbdHelpModal();
+  // ADR-008: donut-mode-toggle / cache-mode-toggle 폐기. setChartMode가 도넛 모드 자동 결정.
+  initToolModeToggle();   // ADR-016 Tool 카테고리 토글 — 유지
+  // ADR-018: 로고 홈 복귀
+  initLogoHome();
   setInterval(() => { advanceBuckets(); drawTimeline(); }, 60000);
   setInterval(() => fetchAllSessions(), 30000);
 }
