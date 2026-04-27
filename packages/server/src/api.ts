@@ -31,6 +31,7 @@ import {
   getEventsByType,
   getEventStats,
 } from '@spyglass/storage';
+import { metricsRouter } from './metrics';
 
 // =============================================================================
 // API 응답 타입
@@ -71,6 +72,11 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
   const method = req.method;
+
+  // /api/metrics/* — UI Redesign Phase 2 시각 지표 8종
+  // (가격 환산 없음, 토큰/카운트/비율 단위만 노출)
+  const metricsResponse = await metricsRouter(req, db);
+  if (metricsResponse) return metricsResponse;
 
   // GET /api/sessions
   if (path === '/api/sessions' && method === 'GET') {
@@ -198,18 +204,33 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     return jsonResponse({ success: true, data: stats });
   }
 
-  // GET /api/stats/strip — 오늘 Command Center Strip 지표 (cost, cache savings, P95, error rate)
+  // GET /api/stats/strip — 오늘 Command Center Strip 지표 (P95, error rate, 토큰 캐시)
+  // [DEPRECATED] cost_usd, cache_savings_usd 필드는 UI Redesign Phase 2에서 제거 예정.
   if (path === '/api/stats/strip' && method === 'GET') {
     const stats = getTodayStripStats(db);
-    return jsonResponse({ success: true, data: stats });
+    return jsonResponse({
+      success: true,
+      data: {
+        ...stats,
+        _deprecated_cost_fields: ['cost_usd', 'cache_savings_usd'],
+      },
+    });
   }
 
-  // GET /api/stats/cache — 캐시 히트율·절약 금액 집계
+  // GET /api/stats/cache — 캐시 히트율·토큰 절감 집계
+  // [DEPRECATED] costWithCache, costWithoutCache, savingsUsd 필드는 UI Redesign Phase 2에서 제거 예정.
+  // 토큰 단위 절감(cacheReadTokens, cacheCreationTokens)과 hitRate/savingsRate는 유지.
   if (path === '/api/stats/cache' && method === 'GET') {
     const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
     const toTs   = url.searchParams.get('to')   ? parseInt(url.searchParams.get('to')!,   10) : undefined;
     const stats = getCacheStats(db, fromTs, toTs);
-    return jsonResponse({ success: true, data: stats });
+    return jsonResponse({
+      success: true,
+      data: {
+        ...stats,
+        _deprecated_cost_fields: ['costWithCache', 'costWithoutCache', 'savingsUsd'],
+      },
+    });
   }
 
   // GET /api/dashboard
@@ -241,10 +262,13 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
         totalTokens: requestStats.total_tokens,
         activeSessions: activeSessions.length,
         avgDurationMs,
+        // [DEPRECATED] costUsd, cacheSavingsUsd 필드는 UI Redesign Phase 2에서 제거 예정.
+        // 신규 시각 지표는 /api/metrics/* 사용 권장.
         costUsd: stripStats.cost_usd,
         cacheSavingsUsd: stripStats.cache_savings_usd,
         p95DurationMs: stripStats.p95_duration_ms,
         errorRate: stripStats.error_rate,
+        _deprecated_cost_fields: ['costUsd', 'cacheSavingsUsd'],
       },
       sessions: sessionStats,
       requests: requestStats,

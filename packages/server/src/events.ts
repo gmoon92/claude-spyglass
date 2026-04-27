@@ -5,7 +5,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { createEvent, endSession, type ClaudeEvent } from '@spyglass/storage';
+import { createEvent, endSession, reactivateSession, type ClaudeEvent } from '@spyglass/storage';
 
 export interface RawHookPayload {
   hook_event_name: string;
@@ -64,6 +64,9 @@ export async function eventsCollectHandler(req: Request, db: Database): Promise<
 
     if (event.event_type === 'SessionEnd') {
       endSession(db, event.session_id, event.timestamp);
+    } else if (event.event_type === 'SessionStart') {
+      // compact/resume: 동일 session_id로 SessionStart 재발생 시 ended_at 클리어
+      reactivateSession(db, event.session_id);
     }
 
     return json({ success: true, event_id: event.event_id });

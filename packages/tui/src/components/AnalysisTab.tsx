@@ -18,14 +18,17 @@ import { RequestTypeFormatter, TokenFormatter } from '../formatters';
 export interface AnalysisTabProps {
   isActive?: boolean;
   apiUrl?: string;
+  /** ADR-013: Top Requests에서 Enter 시 세션 점프 */
+  onSessionSelect?: (sessionId: string) => void;
 }
 
 
 /**
  * Analysis Tab 컴포넌트
  */
-export function AnalysisTab({ isActive = false, apiUrl }: AnalysisTabProps): JSX.Element {
+export function AnalysisTab({ isActive = false, apiUrl, onSessionSelect }: AnalysisTabProps): JSX.Element {
   const [activeSection, setActiveSection] = useState(0);
+  const [selectedRow, setSelectedRow] = useState(0);
   const { data, loading } = useAnalysis({ apiUrl });
 
   const sections = ['Overview', 'Top Requests', 'By Type', 'By Tool'];
@@ -35,8 +38,20 @@ export function AnalysisTab({ isActive = false, apiUrl }: AnalysisTabProps): JSX
     if (!isActive) return;
     if (key.leftArrow) {
       setActiveSection(prev => Math.max(0, prev - 1));
+      setSelectedRow(0);
     } else if (key.rightArrow) {
       setActiveSection(prev => Math.min(sections.length - 1, prev + 1));
+      setSelectedRow(0);
+    } else if (activeSection === 1 && key.upArrow) {
+      setSelectedRow(prev => Math.max(0, prev - 1));
+    } else if (activeSection === 1 && key.downArrow) {
+      const max = Math.min((data?.topRequests?.length ?? 0) - 1, 9);
+      setSelectedRow(prev => Math.min(max, prev + 1));
+    } else if (activeSection === 1 && key.return && onSessionSelect) {
+      // ADR-013: Top Requests Enter → 세션 점프
+      const req = data?.topRequests?.[selectedRow] as any;
+      const sid = req?.session_id;
+      if (sid) onSessionSelect(sid);
     }
   });
 
@@ -51,7 +66,7 @@ export function AnalysisTab({ isActive = false, apiUrl }: AnalysisTabProps): JSX
   if (!data || (!data.topRequests.length && !data.typeStats.length && !data.toolStats.length)) {
     return (
       <Box flexDirection="column" padding={2}>
-        <Text color="gray">No analysis data available.</Text>
+        <Text color="gray">데이터가 없습니다</Text>
       </Box>
     );
   }
@@ -72,7 +87,7 @@ export function AnalysisTab({ isActive = false, apiUrl }: AnalysisTabProps): JSX
       {/* 섹션 컨텐츠 */}
       <Box flexDirection="column">
         {activeSection === 0 && <OverviewSection data={data} />}
-        {activeSection === 1 && <TopRequestsSection requests={data.topRequests} />}
+        {activeSection === 1 && <TopRequestsSection requests={data.topRequests} selectedRow={selectedRow} canJump={!!onSessionSelect} />}
         {activeSection === 2 && <ByTypeSection stats={data.typeStats} />}
         {activeSection === 3 && <ByToolSection stats={data.toolStats} />}
       </Box>
@@ -122,36 +137,52 @@ function OverviewSection({ data }: { data: AnalysisResult }): JSX.Element {
 }
 
 /**
- * TOP Requests 섹션
+ * TOP Requests 섹션 (ADR-013 — selectedRow + Enter 점프)
  */
 function TopRequestsSection({
   requests,
+  selectedRow = 0,
+  canJump = false,
 }: {
   requests: AnalysisResult['topRequests'];
+  selectedRow?: number;
+  canJump?: boolean;
 }): JSX.Element {
   return (
     <Box flexDirection="column">
       <Text bold underline color="cyan">Top Token Consumers</Text>
       <Box marginTop={1}>
+        <Box width="6%"><Text bold> </Text></Box>
         <Box width="10%"><Text bold>#</Text></Box>
-        <Box width="30%"><Text bold>Type</Text></Box>
+        <Box width="24%"><Text bold>Type</Text></Box>
         <Box width="40%"><Text bold>Tool/Model</Text></Box>
         <Box width="20%" justifyContent="flex-end"><Text bold>Tokens</Text></Box>
       </Box>
-      {requests.slice(0, 10).map((req, index) => (
-        <Box key={req.id} height={1}>
-          <Box width="10%"><Text color="gray">{index + 1}</Text></Box>
-          <Box width="30%">
-            <Text color={RequestTypeFormatter.getColor(req.type)}>{req.type}</Text>
+      {requests.slice(0, 10).map((req, index) => {
+        const isSelected = index === selectedRow;
+        const prefix = isSelected ? '> ' : '  ';
+        const baseColor = isSelected ? 'cyan' : 'gray';
+        return (
+          <Box key={req.id} height={1}>
+            <Box width="6%"><Text color={baseColor} bold={isSelected}>{prefix}</Text></Box>
+            <Box width="10%"><Text color={baseColor}>{index + 1}</Text></Box>
+            <Box width="24%">
+              <Text color={RequestTypeFormatter.getColor(req.type)}>{req.type}</Text>
+            </Box>
+            <Box width="40%">
+              <Text wrap="truncate" color={isSelected ? 'cyan' : 'white'} bold={isSelected}>{req.tool_name || '-'}</Text>
+            </Box>
+            <Box width="20%" justifyContent="flex-end">
+              <Text color="yellow">{TokenFormatter.format(req.tokens_total)}</Text>
+            </Box>
           </Box>
-          <Box width="40%">
-            <Text wrap="truncate">{req.tool_name || '-'}</Text>
-          </Box>
-          <Box width="20%" justifyContent="flex-end">
-            <Text color="yellow">{TokenFormatter.format(req.tokens_total)}</Text>
-          </Box>
+        );
+      })}
+      {canJump && requests.length > 0 && (
+        <Box marginTop={1}>
+          <Text color="gray">↑↓ Navigate | Enter → 세션 점프</Text>
         </Box>
-      ))}
+      )}
     </Box>
   );
 }

@@ -34,6 +34,8 @@ export interface LiveTabProps {
  */
 const API_URL = 'http://localhost:9999';
 const MAX_RECENT = 20;
+// ADR-010 C-1: Claude 모델 표준 컨텍스트 한도 (Sonnet/Opus 200K)
+const MAX_TOKENS = 200_000;
 
 export function LiveTab({ data, isLoading, error }: LiveTabProps): JSX.Element {
   const { stdout } = useStdout();
@@ -100,7 +102,7 @@ export function LiveTab({ data, isLoading, error }: LiveTabProps): JSX.Element {
 
   const summary = data?.summary;
   const tokens = summary?.totalTokens || 0;
-  const maxTokens = 100000; // 예상 최대 토큰
+  const maxTokens = MAX_TOKENS;
   const progress = Math.min((tokens / maxTokens) * 100, 100);
 
   return (
@@ -164,7 +166,7 @@ export function LiveTab({ data, isLoading, error }: LiveTabProps): JSX.Element {
       <Box flexDirection="column" marginTop={1}>
         <Text color="gray" underline>Recent Requests ({recentRequests.length})</Text>
         {recentRequests.length === 0 ? (
-          <Text color="gray">No requests yet...</Text>
+          <Text color="gray">데이터가 없습니다</Text>
         ) : (
           recentRequests.slice(0, 8).map(req => (
             <Box key={req.id} flexDirection="column">

@@ -815,6 +815,7 @@ export interface TurnToolCall {
   duration_ms: number;
   payload: string | null;
   event_type: string | null;
+  model: string | null;
 }
 
 /** 턴 항목 */
@@ -903,7 +904,7 @@ export function getTurnsBySession(
   const toolRows = db.query(`
     SELECT turn_id, id, timestamp, tool_name, tool_detail,
            tokens_input, tokens_output, tokens_total, duration_ms,
-           payload, event_type
+           payload, event_type, model
     FROM requests
     WHERE session_id = ? AND turn_id IS NOT NULL AND type = 'tool_call'
       AND (event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')
@@ -920,6 +921,7 @@ export function getTurnsBySession(
     duration_ms: number;
     payload: string | null;
     event_type: string | null;
+    model: string | null;
   }>;
 
   // 4. 데이터 구성
@@ -989,6 +991,7 @@ export function getTurnsBySession(
         duration_ms: t.duration_ms,
         payload: t.payload,
         event_type: t.event_type,
+        model: t.model,
       })),
       summary: {
         tool_call_count: summary.tool_call_count,

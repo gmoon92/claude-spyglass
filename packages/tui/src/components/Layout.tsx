@@ -86,7 +86,7 @@ export function Sidebar({
       <Box flexDirection="column">
         {sessions.length === 0 ? (
           <Box paddingX={1}>
-            <Text color="gray">No sessions</Text>
+            <Text color="gray">데이터가 없습니다</Text>
           </Box>
         ) : (
           sessions.slice(0, 10).map((session) => (

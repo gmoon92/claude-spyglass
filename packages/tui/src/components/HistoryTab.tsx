@@ -147,7 +147,7 @@ export function HistoryTab({
 
       {filteredSessions.length === 0 ? (
         <Box paddingY={2}>
-          <Text color="gray">No sessions found.</Text>
+          <Text color="gray">데이터가 없습니다</Text>
         </Box>
       ) : (
         filteredSessions.map((session, index) => {

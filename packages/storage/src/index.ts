@@ -64,6 +64,7 @@ export {
   // 수정
   updateSession,
   endSession,
+  reactivateSession,
   updateSessionTokens,
   // 삭제
   deleteSession,
@@ -144,6 +145,34 @@ export {
   getEventStats,
   type ClaudeEvent,
 } from './queries/event';
+
+// =============================================================================
+// Observability Metrics (UI Redesign Phase 2 — Tier 1+2+3 시각 지표)
+// =============================================================================
+
+export {
+  // Tier 1
+  getModelUsageStats,
+  getModelCacheMatrix,
+  getSessionContextUsage,
+  // Tier 2
+  getActivityHeatmap,
+  getTurnsPerSession,
+  getCompactionSessionCount,
+  getActiveSessionCount,
+  getAgentCallsPerSession,
+  // Tier 3
+  getToolCategoryRawCounts,
+  getAnomalyTimeSeriesInputs,
+  // 타입
+  type ModelUsageRow,
+  type ModelCacheMatrixRow,
+  type SessionContextUsageRow,
+  type ActivityHeatmapRow,
+  type TurnsPerSessionRow,
+  type ToolCategoryRawRow,
+  type AnomalyInputRow,
+} from './queries/metrics';
 
 // =============================================================================
 // 가격 관리

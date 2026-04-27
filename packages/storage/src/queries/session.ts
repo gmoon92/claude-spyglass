@@ -252,6 +252,19 @@ export function endSession(
 }
 
 /**
+ * 세션 재활성화 — ended_at을 NULL로 되돌림.
+ * SessionEnd 후 동일 session_id로 SessionStart가 재발생할 때(compact/resume) 사용.
+ */
+export function reactivateSession(db: Database, id: string): boolean {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = (db as any).run(
+    'UPDATE sessions SET ended_at = NULL WHERE id = ? AND ended_at IS NOT NULL',
+    id
+  );
+  return result.changes > 0;
+}
+
+/**
  * 세션 토큰 수 업데이트
  */
 export function updateSessionTokens(
