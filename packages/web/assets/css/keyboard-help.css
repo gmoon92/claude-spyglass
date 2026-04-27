@@ -1,0 +1,100 @@
+/* ── Keyboard Help Modal (ADR-012) ──────────────────────────────────────── */
+
+.kbd-help-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 100;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+.kbd-help-backdrop.visible { display: flex; }
+
+.kbd-help-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  width: min(480px, 90vw);
+  max-height: 80vh;
+  overflow: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.kbd-help-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.kbd-help-title {
+  font-size: var(--font-major);
+  font-weight: var(--weight-strong);
+  color: var(--text);
+}
+
+.kbd-help-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 18px;
+  cursor: pointer;
+  padding: var(--space-1);
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.kbd-help-close:hover {
+  color: var(--red-text);
+  background: var(--red-dim);
+}
+
+.kbd-help-body {
+  padding: var(--space-3) var(--space-4);
+}
+
+.kbd-help-section {
+  margin-bottom: var(--space-4);
+}
+.kbd-help-section:last-child { margin-bottom: 0; }
+
+.kbd-help-section-title {
+  font-size: var(--font-meta);
+  font-weight: var(--weight-strong);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--space-2);
+}
+
+.kbd-help-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  font-size: var(--font-body);
+}
+
+.kbd-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  padding: 2px 6px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--font-meta);
+  font-weight: var(--weight-strong);
+  color: var(--text);
+}
+
+.kbd-help-desc {
+  flex: 1;
+  color: var(--text-muted);
+}

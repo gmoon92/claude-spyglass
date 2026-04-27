@@ -1,0 +1,97 @@
+/* ── State SSoT (ADR-009) ──────────────────────────────────────────────
+   빈/로딩/에러 상태 통일 디자인.
+   사용처: 모든 빈 영역 (테이블/카드/차트)
+   ──────────────────────────────────────────────────────────────────── */
+
+/* 공통 베이스 */
+.state-empty,
+.state-loading,
+.state-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4);
+  font-size: var(--font-body);
+  font-weight: var(--weight-normal);
+  text-align: center;
+}
+
+/* 빈 상태 — 회색 톤, 디스크립션 1줄 */
+.state-empty {
+  color: var(--text-dim);
+  font-size: var(--font-meta);
+}
+
+.state-empty-title {
+  font-size: var(--font-body);
+  color: var(--text-muted);
+  font-weight: var(--weight-strong);
+}
+
+.state-empty-hint {
+  font-size: var(--font-meta);
+  color: var(--text-dim);
+}
+
+/* 로딩 상태 — minimal spinner + skeleton */
+.state-loading {
+  color: var(--text-dim);
+  font-size: var(--font-meta);
+}
+
+.state-loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: state-spin 0.8s linear infinite;
+}
+
+@keyframes state-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 에러 상태 — 빨간 톤 + 재시도 버튼 */
+.state-error {
+  color: var(--red-text);
+}
+
+.state-error-icon {
+  font-size: var(--font-major);
+  color: var(--red);
+}
+
+.state-error-message {
+  color: var(--red-text);
+  font-size: var(--font-body);
+}
+
+.state-error-retry {
+  margin-top: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
+  border: 1px solid var(--red-border);
+  border-radius: var(--radius-sm);
+  color: var(--red-text);
+  font-family: inherit;
+  font-size: var(--font-meta);
+  font-weight: var(--weight-strong);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.state-error-retry:hover {
+  background: var(--red-dim);
+}
+
+/* 테이블 안 빈 셀용 (table-empty 대체) */
+td.state-empty-cell,
+.state-empty-cell {
+  color: var(--text-dim);
+  text-align: center;
+  padding: var(--space-4);
+  font-size: var(--font-meta);
+}

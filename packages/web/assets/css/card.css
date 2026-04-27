@@ -1,0 +1,89 @@
+/* ── Card Container System (ADR-003) ──────────────────────────────────
+   "그룹핑된 덩어리감"을 만들기 위한 SSoT.
+   surface 배경 + border + radius로 영역 경계를 명확히 한다.
+   사용처: Chart Strip, Default View 피드, Detail Header/Context/Tab Bar, Tools Matrix
+   ──────────────────────────────────────────────────────────────────── */
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;             /* flex 자식의 overflow 허용 */
+}
+
+/* 카드 헤더 — 라벨/제목/액션 배치 */
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--card-border);
+  flex-shrink: 0;
+}
+
+/* 카드 본문 — flex 자식들 자유 배치 */
+.card-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 카드 본문 (스크롤 영역) */
+.card-body--scroll {
+  overflow-y: auto;
+}
+
+/* 카드 본문 (인셋 padding) */
+.card-body--padded {
+  padding: var(--space-3) var(--space-4);
+}
+
+/* 카드 제목 — Major 위계 */
+.card-title {
+  font-size: var(--font-major);
+  font-weight: var(--weight-strong);
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+/* 카드 부제 — Meta */
+.card-subtitle {
+  font-size: var(--font-meta);
+  font-weight: var(--weight-normal);
+  color: var(--text-muted);
+}
+
+/* 카드 액션 영역 (우측 정렬) */
+.card-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* 카드 풋터 (선택) */
+.card-footer {
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--card-border);
+  font-size: var(--font-meta);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Hero 변형 — 강조 카드 (Summary Strip Hero 그룹) */
+.card--hero {
+  border-color: var(--accent-border);
+  background: linear-gradient(
+    180deg,
+    rgba(217, 119, 87, 0.04) 0%,
+    var(--card-bg) 60%
+  );
+}
+
+/* Compact 변형 — 패딩 축소 */
+.card--compact > .card-header { padding: var(--space-2) var(--space-3); }
+.card--compact > .card-body--padded { padding: var(--space-2) var(--space-3); }
