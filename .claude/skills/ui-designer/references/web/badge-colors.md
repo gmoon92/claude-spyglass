@@ -37,14 +37,21 @@
 
 헤더 영역의 `<button class="type-filter-btn" data-filter="{type}">` 활성 상태에서 타입 색상을 반영할 때 참조.
 
-| 버튼 | 비활성 색상 | 활성 색상 |
-|------|------------|----------|
-| All | `--text-dim` / `--border` | `--accent` / `--accent-dim` |
-| prompt | `--text-dim` / `--border` | `--type-prompt-color` / `--type-prompt-bg` |
-| tool_call | `--text-dim` / `--border` | `--type-tool_call-color` / `--type-tool_call-bg` |
-| system | `--text-dim` / `--border` | `--type-system-color` / `--type-system-bg` |
+버튼 순서: `All | prompt | Agent | Skill | MCP | tool_call | system`
 
-> 현재 `.type-filter-btn.active`는 `--accent` 단일색만 적용됨. 타입별 색상 분기 구현 시 위 색상 참조.
+| 버튼 | 비활성 색상 | 활성 색상 | 실제 색상 |
+|------|------------|----------|-----------|
+| All | `--text-dim` / `--border` | `--accent` / `--accent-dim` | #d97757 |
+| prompt | `--text-dim` / `--border` | `--type-prompt-color` / `--type-prompt-bg` | #e8a07a (주황) |
+| Agent | `--text-dim` / `--border` | `--type-agent-color` / `--type-agent-bg` | `var(--orange)` = #f59e0b |
+| Skill | `--text-dim` / `--border` | `--type-skill-color` / `--type-skill-bg` | `var(--orange)` = #f59e0b |
+| MCP | `--text-dim` / `--border` | `--type-mcp-color` / `--type-mcp-bg` | #22d3ee (cyan) |
+| tool_call | `--text-dim` / `--border` | `--type-tool_call-color` / `--type-tool_call-bg` | #6ee7a0 (초록) |
+| system | `--text-dim` / `--border` | `--type-system-color` / `--type-system-bg` | #fbbf24 (노랑) |
+
+> **Agent/Skill = `--orange`**: badge-colors.md ADR-002 (2026-04-20) — `.tool-icon-agent` 아이콘과 동일 색으로 "AI 위임" 의미론 일관.
+> **MCP = cyan `#22d3ee`**: type-filter-expansion ADR-002-R1 (2026-04-21) 신규 결정. orange(Agent/Skill/Bash), green(tool_call), yellow(system), pink(WebFetch) 와 모두 구분.
+> **클라이언트 필터 전용**: Agent/Skill/MCP는 `tool_name` 기반 서브분류로 서버 재조회 없이 `data-sub-type` 속성으로 필터링.
 
 ---
 
