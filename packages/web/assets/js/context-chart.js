@@ -20,8 +20,15 @@ function getColors() {
 }
 
 function setEmptyState(isEmpty) {
-  if (_canvas)    _canvas.classList.toggle('context-chart-hidden', isEmpty);
-  if (_empty)     _empty.classList.toggle('context-chart-empty--visible', isEmpty);
+  // ADR-017: hidden 속성과 클래스 둘 다 토글 (chartSection 안 신규 마크업 호환)
+  if (_canvas) {
+    _canvas.classList.toggle('context-chart-hidden', isEmpty);
+  }
+  if (_empty) {
+    _empty.classList.toggle('context-chart-empty--visible', isEmpty);
+    if (isEmpty) _empty.removeAttribute('hidden');
+    else _empty.setAttribute('hidden', '');
+  }
 }
 
 export function initContextChart() {

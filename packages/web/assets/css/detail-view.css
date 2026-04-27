@@ -1,16 +1,16 @@
-/* ── DETAIL HEADER ──────────────────────────────────────────────────────── */
-.detail-header {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 16px; background: var(--surface-alt);
-  border-bottom: 1px solid var(--border); flex-shrink: 0;
-  overflow: hidden;
-}
-.detail-meta { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; }
-.detail-session-id { font-size: 11px; color: var(--accent); font-family: monospace; flex-shrink: 0; }
-.detail-project    { font-size: 11px; color: var(--text-muted); flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.detail-tokens     { font-size: 11px; color: var(--text); margin-left: auto; flex-shrink: 0; white-space: nowrap; }
-.detail-ended-at   { font-size: 11px; color: var(--text-muted); flex-shrink: 0; white-space: nowrap; }
+/* ── DETAIL META (ADR-017 — chartSection 헤더 안에 배치) ───────────────── */
+/* 기존 .detail-header DOM은 제거됨. .chart-detail-meta 자손으로 동작 */
+.detail-session-id { font-size: var(--font-meta); color: var(--accent); font-family: monospace; flex-shrink: 0; font-weight: var(--weight-strong); }
+.detail-project    { font-size: var(--font-meta); color: var(--text-muted); flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detail-tokens     { font-size: var(--font-meta); color: var(--text); flex-shrink: 0; white-space: nowrap; margin-left: auto; font-weight: var(--weight-strong); }
+.detail-ended-at   { font-size: var(--font-meta); color: var(--text-muted); flex-shrink: 0; white-space: nowrap; }
 /* ── DETAIL ACTIONS (버튼 그룹) ─────────────────────────────────────────── */
+/* ADR-008: btn-close / detail-actions-sep 제거. 접기 토글(btn-toggle)만 유지. */
+.detail-actions {
+  display: flex; align-items: center; gap: var(--space-1);
+  flex-shrink: 0;
+}
+
 /* ── 토글 버튼 (접기/펼치기) ──────────────────────────────────────────── */
 .btn-toggle {
   display: flex; align-items: center; justify-content: center;
@@ -22,7 +22,7 @@
 .btn-toggle:hover { background: var(--accent-dim); color: var(--accent); }
 .btn-toggle svg   { transition: transform 0.2s ease; display: block; }
 
-/* ── COLLAPSED 상태 ───────────────────────────────────────────────────── */
+/* ── COLLAPSED 상태 (ADR-017 — chartSection 통합으로 별도 detail 토글 동작은 chart-collapsed로 통합) ─────── */
 /* context-chart-section 접기는 .context-chart-section--collapsed 클래스로 처리 (ADR-001) */
 /* 탭바·컨트롤바·콘텐츠는 항상 표시 (ADR-002) */
 .detail-collapsed .detail-header {

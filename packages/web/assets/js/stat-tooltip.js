@@ -35,13 +35,15 @@ const STAT_TOOLTIP_CONTENT = {
     title: 'Avg Response Time',
     desc:  'prompt 타입 요청의 평균 응답시간.\nLLM 추론 + 네트워크 지연 포함.',
   },
+  // ADR-015: 가격 정책 옵션 2 — cost / saved 카드 제거됨. 토큰 기반 지표만 남김.
+  // 아래 정의는 하위 호환을 위해 유지하되, 텍스트는 토큰 기반으로 변경.
   cost: {
-    title: 'Today\'s API Cost',
-    desc:  'model별 단가 × (input + output + cache_create + cache_read tokens) 합산.\n실제 Anthropic API 청구 기준.',
+    title: 'API Tokens',
+    desc:  'input + output + cache_create + cache_read 토큰 합산.\n가격 환산은 모델 단가에 따라 다르므로 화면에 표시하지 않습니다.',
   },
   saved: {
-    title: 'Cache Savings',
-    desc:  '프롬프트 캐시 덕분에 절약된 비용.\ncache_read 단가는 일반 input의 약 10% 수준.',
+    title: 'Cache Saved Tokens',
+    desc:  '프롬프트 캐시로 재사용되어 절약된 입력 토큰.\ncache_read 토큰만큼 LLM 재처리를 회피합니다.',
   },
   p95: {
     title: 'P95 Response Time',

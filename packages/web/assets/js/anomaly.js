@@ -71,3 +71,34 @@ export function detectAnomalies(requests, p95DurationMs = null) {
 
   return anomalyMap;
 }
+
+/**
+ * 행 요소(<tr> 또는 grid container)에 anomaly mini-badge를 적용한다 (ADR-011).
+ * 이미 적용된 행은 중복 추가하지 않는다 (badge-* 존재 여부로 판별).
+ *
+ * @param {Element} rowEl
+ * @param {Set<'spike'|'loop'|'slow'>} flags
+ */
+export function applyAnomalyBadgesToRow(rowEl, flags) {
+  if (!rowEl || !flags || flags.size === 0) return;
+  const targetCell = rowEl.querySelector('.cell-target');
+  const tokenCells = rowEl.querySelectorAll('.cell-token.num');
+  const durationCell = tokenCells[tokenCells.length - 1];
+  const has = (name) => !!rowEl.querySelector(`.badge-${name}`);
+
+  for (const f of flags) {
+    if (f === 'slow') {
+      if (durationCell && !has('slow')) {
+        durationCell.insertAdjacentHTML(
+          'beforeend',
+          ` <span class="mini-badge badge-slow" data-mini-badge-tooltip="slow">slow</span>`
+        );
+      }
+    } else if ((f === 'spike' || f === 'loop') && targetCell && !has(f)) {
+      targetCell.insertAdjacentHTML(
+        'beforeend',
+        `<span class="mini-badge badge-${f}" data-mini-badge-tooltip="${f}">${f}</span>`
+      );
+    }
+  }
+}

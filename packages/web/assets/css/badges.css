@@ -155,7 +155,13 @@ tr[data-type="tool_call"] td.cell-msg .prompt-preview { font-family: monospace; 
 .type-filter-prompt.active     { color: var(--type-prompt-color);    border-color: var(--type-prompt-color);    background: var(--type-prompt-bg); }
 .type-filter-tool_call.active  { color: var(--type-tool_call-color); border-color: var(--type-tool_call-color); background: var(--type-tool_call-bg); }
 .type-filter-system.active     { color: var(--type-system-color);    border-color: var(--type-system-color);    background: var(--type-system-bg); }
+.type-filter-agent.active      { color: var(--type-agent-color);     border-color: var(--type-agent-color);     background: var(--type-agent-bg); }
+.type-filter-skill.active      { color: var(--type-skill-color);     border-color: var(--type-skill-color);     background: var(--type-skill-bg); }
+.type-filter-mcp.active        { color: var(--type-mcp-color);       border-color: var(--type-mcp-color);       background: var(--type-mcp-bg); }
 .type-filter-prompt:hover      { color: var(--type-prompt-color);    border-color: var(--type-prompt-color); }
 .type-filter-tool_call:hover   { color: var(--type-tool_call-color); border-color: var(--type-tool_call-color); }
 .type-filter-system:hover      { color: var(--type-system-color);    border-color: var(--type-system-color); }
+.type-filter-agent:hover       { color: var(--type-agent-color);     border-color: var(--type-agent-color); }
+.type-filter-skill:hover       { color: var(--type-skill-color);     border-color: var(--type-skill-color); }
+.type-filter-mcp:hover         { color: var(--type-mcp-color);       border-color: var(--type-mcp-color); }
 

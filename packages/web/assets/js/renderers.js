@@ -1,5 +1,5 @@
 // HTML 빌더 모듈 — DOM 조작 없이 HTML 문자열 반환
-import { escHtml, fmtToken, fmtRelative, formatDuration, fmtTimestamp } from './formatters.js';
+import { escHtml, fmtToken, fmtRelative, formatDuration, fmtTimestamp, shortModelName } from './formatters.js';
 
 export const FLAT_VIEW_COLS  = 9;  // Time Action Target Model Message in out Cache Duration
 export const RECENT_REQ_COLS = 10; // + Session
@@ -108,7 +108,9 @@ export function targetInnerHtml(r) {
   const icon = toolIconHtml(r.tool_name, r.event_type); // event_type 직접 전달
   let nameHtml;
   if ((r.tool_name === 'Skill' || r.tool_name === 'Agent') && r.tool_detail) {
-    nameHtml = `<span class="action-name">${icon}${escHtml(r.tool_name)}(<span class="action-sub-name">${escHtml(r.tool_detail)}</span>)</span>`;
+    const ms = shortModelName(r.model);
+    const modelBadge = ms ? ` <span class="action-model">${escHtml(ms)}</span>` : '';
+    nameHtml = `<span class="action-name">${icon}${escHtml(r.tool_name)}(<span class="action-sub-name">${escHtml(r.tool_detail)}</span>)${modelBadge}</span>`;
   } else {
     nameHtml = `<span class="action-name">${icon}${escHtml(r.tool_name)}</span>`;
   }
@@ -148,7 +150,7 @@ export function getContextText(r) {
         const ti = p?.tool_input || {};
         const text = r.tool_name === 'Agent'
           ? (ti.description || ti.prompt || r.tool_detail)
-          : ti.args;  // Skill: args만 표시, 스킬 이름은 Target 컬럼에 이미 있음
+          : ti.args;
         return text || null;
       } catch {}
       return r.tool_name === 'Agent' ? (r.tool_detail || null) : null;
@@ -157,6 +159,44 @@ export function getContextText(r) {
   }
   if (r.type === 'prompt')   return extractPromptText(r) || null;
   if (r.type === 'system')   return extractPromptText(r) || null;
+  return null;
+}
+
+// 클릭 확장 시 보여줄 상세 텍스트 — preview와 별도로 관리
+function getDetailText(r) {
+  if (!r) return null;
+  if (r.type === 'tool_call') {
+    try {
+      const p  = typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
+      const ti = p?.tool_input || {};
+      if (r.tool_name === 'Agent') {
+        return ti.prompt || ti.description || r.tool_detail || null;
+      }
+      if (r.tool_name === 'Skill') {
+        return ti.args || r.tool_detail || null;
+      }
+      if (r.tool_name === 'Bash') {
+        return ti.command || r.tool_detail || null;
+      }
+      if (['Read', 'Edit', 'Write', 'MultiEdit'].includes(r.tool_name)) {
+        return ti.file_path || r.tool_detail || null;
+      }
+      if (r.tool_name === 'Grep') {
+        const parts = [ti.pattern, ti.path ? `in ${ti.path}` : null].filter(Boolean);
+        return parts.join(' ') || r.tool_detail || null;
+      }
+      if (r.tool_name === 'Glob') {
+        const parts = [ti.pattern, ti.path ? `in ${ti.path}` : null].filter(Boolean);
+        return parts.join(' ') || r.tool_detail || null;
+      }
+      if (r.tool_name?.startsWith('mcp__')) {
+        const keys = Object.keys(ti);
+        if (keys.length > 0) return JSON.stringify(ti, null, 2);
+      }
+    } catch {}
+    return r.tool_detail || null;
+  }
+  if (r.type === 'prompt' || r.type === 'system') return extractPromptText(r) || null;
   return null;
 }
 
@@ -197,7 +237,8 @@ export function contextPreview(r, maxLen = 60) {
   if (_promptCache.size >= PROMPT_CACHE_MAX) {
     _promptCache.delete(_promptCache.keys().next().value);
   }
-  _promptCache.set(r.id, rawText);
+  const detailText = getDetailText(r) || rawText;
+  _promptCache.set(r.id, detailText);
   const displayText = r.type === 'tool_call'
     ? (parseToolDetail(rawText) ?? rawText)
     : rawText;
@@ -239,6 +280,13 @@ function anomalyBadgesHtml(flags) {
   return [...flags].map(f => `<span class="mini-badge badge-${f}" data-mini-badge-tooltip="${f}">${f}</span>`).join('');
 }
 
+function subTypeOf(r) {
+  if (r.tool_name === 'Agent') return 'agent';
+  if (r.tool_name === 'Skill') return 'skill';
+  if (r.tool_name?.startsWith('mcp__')) return 'mcp';
+  return '';
+}
+
 export function makeRequestRow(r, opts = {}) {
   const fmtTs  = opts.fmtTime || fmtTimestamp;
   const flags  = opts.anomalyFlags || null;
@@ -253,7 +301,7 @@ export function makeRequestRow(r, opts = {}) {
   const spikeLoopBadges = flags ? anomalyBadgesHtml(new Set([...flags].filter(f => f !== 'slow'))) : '';
   const slowBadge       = flags && flags.has('slow') ? `<span class="mini-badge badge-slow" data-mini-badge-tooltip="slow">slow</span>` : '';
 
-  return `<tr data-type="${escHtml(r.type||'')}" data-request-id="${escHtml(r.id||'')}">
+  return `<tr data-type="${escHtml(r.type||'')}" data-sub-type="${subTypeOf(r)}" data-request-id="${escHtml(r.id||'')}">
     <td class="cell-time num">${fmtTs(r.timestamp)}</td>
     <td class="cell-action">${makeActionCell(r)}</td>
     ${makeTargetCellWithBadges(r, spikeLoopBadges)}
@@ -311,7 +359,7 @@ export function makeSessionRow(s, isSelected) {
 export function renderRequests(list, anomalyMap = new Map()) {
   const body = document.getElementById('requestsBody');
   if (!list.length) {
-    body.innerHTML = `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty">데이터 없음</td></tr>`;
+    body.innerHTML = `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty">데이터가 없습니다</td></tr>`;
     return;
   }
   body.innerHTML = list.map(r => makeRequestRow(r, { showSession: true, anomalyFlags: anomalyMap.get(r.id) || null })).join('');

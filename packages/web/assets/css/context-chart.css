@@ -1,4 +1,4 @@
-/* ── CONTEXT GROWTH CHART ────────────────────────────────────────────────── */
+/* ── CONTEXT GROWTH CHART (ADR-017 — chartSection 안으로 통합) ────────── */
 
 /* ── CSS 변수 (canvas overlay 참조용) ───────────────────────────────────── */
 :root {
@@ -7,82 +7,29 @@
   --ctx-chart-stroke:      var(--accent);           /* 꺾은선 stroke */
 }
 
-/* ── 섹션 컨테이너 ──────────────────────────────────────────────────────── */
-/* grid-template-rows 방식으로 부드러운 접기/펼치기 구현 (ADR-001) */
-.context-chart-section {
-  display: grid;
-  grid-template-rows: 1fr;
-  transition: grid-template-rows 0.3s ease-in-out;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-alt);
-  flex-shrink: 0;
+/* contextGrowthChart canvas는 #chartSection .chart-wrap 안에 timelineChart와 sibling.
+   default-view.css에서 모드별 display 토글. 여기서는 빈 상태 / 메타 텍스트만 정리. */
+
+#contextGrowthChart {
+  width: 100%;
+  height: 100px;
 }
 
-.context-chart-section--collapsed {
-  grid-template-rows: 0fr;
-  border-bottom: none;
-}
-
-/* ── 내부 래퍼 (overflow 클립 담당) ────────────────────────────────────── */
-.context-chart-inner {
-  overflow: hidden;
-  min-height: 0;
-}
-
-/* ── 헤더 (레이블 + 인디케이터) ─────────────────────────────────────────── */
-.context-chart-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px 6px;
-}
-
-.context-chart-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-}
+/* 빈 상태 토글 (legacy 호환 — 현재 main.js에서는 hidden 속성 토글 사용) */
+#contextGrowthChart.context-chart-hidden { display: none; }
+.context-chart-empty--visible { display: flex !important; }
 
 #ctxUsageIndicator {
-  font-size: 10px;
+  font-size: var(--font-meta);
   color: var(--text-muted);
   font-family: monospace;
   letter-spacing: 0.2px;
 }
 
-/* ── 캔버스 ─────────────────────────────────────────────────────────────── */
-#contextGrowthChart {
-  display: block;
-  width: 100%;
-  height: 80px;
-  /* Chart.js responsive 모드가 부모 width에 맞추므로 고정 height만 지정 */
-}
-
-/* ── 캔버스 숨김 (빈 상태 표시 시) ─────────────────────────────────────── */
-#contextGrowthChart.context-chart-hidden { display: none; }
-
-/* ── 빈 상태 (데이터 없음) ──────────────────────────────────────────────── */
-.context-chart-empty {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  height: 80px;
-  color: var(--text-dim);
-  font-size: 10px;
-  letter-spacing: 0.3px;
-}
-.context-chart-empty--visible { display: flex; }
-
-/* ── 푸터 (턴 레이블 / 상태 메시지) ────────────────────────────────────── */
 .context-chart-footer {
-  padding: 0 16px 8px;
-  font-size: 10px;
+  font-size: var(--font-micro);
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-height: 18px; /* 내용 없을 때도 높이 확보 */
 }
-

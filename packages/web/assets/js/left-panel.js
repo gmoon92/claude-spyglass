@@ -2,6 +2,40 @@
 import { fmt, fmtToken, escHtml } from './formatters.js';
 import { makeSkeletonRows, makeSessionRow } from './renderers.js';
 
+// ADR-016: tool-categories 6 카테고리 색상 매핑
+const CATEGORY_COLORS = {
+  FileOps: '#34d399',
+  Search:  '#fbbf24',
+  Bash:    '#fb923c',
+  MCP:     '#22d3ee',
+  Agent:   '#f59e0b',
+  Other:   '#94a3b8',
+};
+
+/**
+ * ADR-016 — Tool 카테고리 분포 렌더 (api-spec §7).
+ * 6 카테고리, 가로 막대 + percentage.
+ */
+export function renderToolCategories(categories) {
+  const el = document.getElementById('toolCategories');
+  if (!el) return;
+  if (!Array.isArray(categories) || !categories.length || categories.every(c => !c.request_count)) {
+    el.innerHTML = '<div class="state-empty" style="padding:0;font-size:var(--font-meta)">데이터가 없습니다</div>';
+    return;
+  }
+  const max = Math.max(1, ...categories.map(c => c.request_count || 0));
+  el.innerHTML = categories.map(c => {
+    const pct = Math.round((c.request_count || 0) / max * 100);
+    const color = CATEGORY_COLORS[c.category] || CATEGORY_COLORS.Other;
+    return `<div class="cat-row">
+      <span class="cat-name">${escHtml(c.category)}</span>
+      <div class="cat-bar"><div class="cat-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+      <span class="cat-count num">${c.request_count}</span>
+      <span class="cat-pct">${(c.percentage ?? 0).toFixed(1)}%</span>
+    </div>`;
+  }).join('');
+}
+
 let _selectedProject = null;
 let _selectedSession = null;
 let _allProjects     = [];
@@ -18,7 +52,7 @@ export function getAllProjects()  { return _allProjects; }
 export function renderBrowserProjects() {
   const body = document.getElementById('browserProjectsBody');
   if (!_allProjects.length) {
-    body.innerHTML = '<tr><td colspan="3" class="table-empty">프로젝트 없음</td></tr>';
+    body.innerHTML = '<tr><td colspan="3" class="table-empty">데이터가 없습니다</td></tr>';
     return;
   }
   const maxT = Math.max(..._allProjects.map(p => p.total_tokens || 0), 1);
@@ -59,7 +93,7 @@ export function renderBrowserSessions() {
     });
   hint.textContent = `${_selectedProject} · ${list.length}개`;
   if (!list.length) {
-    body.innerHTML = '<tr><td colspan="4" class="table-empty">세션 없음</td></tr>';
+    body.innerHTML = '<tr><td colspan="4" class="table-empty">데이터가 없습니다</td></tr>';
     return;
   }
   body.innerHTML = list.map(s => makeSessionRow(s, _selectedSession === s.id)).join('');

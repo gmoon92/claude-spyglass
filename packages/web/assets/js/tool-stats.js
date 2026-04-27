@@ -1,8 +1,15 @@
-import { fmtToken } from './formatters.js';
+// Detail Tools View — 단일 매트릭스 뷰 (ADR-007)
+// 1행 1도구, 6컬럼 (Tool/Avg/Calls/Tokens/%/Err) + 정렬 토글
+
+import { fmtToken, escHtml } from './formatters.js';
+import { toolIconHtml } from './renderers.js';
 
 export const API = '';
 
 let _container = null;
+let _stats     = [];
+let _sortKey   = 'tokens';   // 'avg' | 'calls' | 'tokens' (기본: 토큰 기여도)
+let _currentSessionId = null;
 
 export function initToolStats() {
   _container = document.getElementById('detailToolsView');
@@ -10,91 +17,118 @@ export function initToolStats() {
 
 export async function loadToolStats(sessionId) {
   if (!_container) return;
-  _container.innerHTML = '<div class="tool-stats-empty">로딩 중…</div>';
+  _currentSessionId = sessionId;
+  _container.innerHTML = `
+    <div class="state-loading">
+      <div class="state-loading-spinner"></div>
+      <span>불러오는 중…</span>
+    </div>`;
   try {
     const res  = await fetch(`${API}/api/sessions/${encodeURIComponent(sessionId)}/tool-stats`);
     const json = await res.json();
-    renderToolStats(json.data || []);
+    _stats = json.data || [];
+    renderMatrix();
   } catch {
-    _container.innerHTML = '<div class="tool-stats-empty">데이터를 불러올 수 없습니다</div>';
+    _container.innerHTML = `
+      <div class="state-error">
+        <div class="state-error-message">데이터를 불러올 수 없습니다</div>
+        <button class="state-error-retry" data-retry-tools>다시 시도</button>
+      </div>`;
+    _container.querySelector('[data-retry-tools]')?.addEventListener('click', () => loadToolStats(_currentSessionId));
   }
 }
 
 export function clearToolStats() {
   if (_container) _container.innerHTML = '';
+  _stats = [];
 }
 
 function fmtDur(ms) {
   if (!ms || ms === 0) return '—';
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  if (ms < 1000)   return `${Math.round(ms)}ms`;
+  if (ms < 60000)  return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60000)}m${Math.round((ms % 60000) / 1000)}s`;
 }
 
-function renderToolStats(stats) {
+function setSort(key) {
+  _sortKey = key;
+  renderMatrix();
+}
+
+function renderMatrix() {
   if (!_container) return;
-  if (!stats.length) {
-    _container.innerHTML = '<div class="tool-stats-empty">tool_call 데이터 없음</div>';
+  if (!_stats.length) {
+    _container.innerHTML = '<div class="state-empty"><span class="state-empty-title">데이터가 없습니다</span></div>';
     return;
   }
 
-  const maxDur   = Math.max(...stats.map(s => s.avg_duration_ms || 0), 1);
-  const maxCalls = Math.max(...stats.map(s => s.call_count || 0), 1);
+  const sortFns = {
+    avg:    (a, b) => (b.avg_duration_ms || 0) - (a.avg_duration_ms || 0),
+    calls:  (a, b) => (b.call_count || 0) - (a.call_count || 0),
+    tokens: (a, b) => (b.pct_of_total_tokens || 0) - (a.pct_of_total_tokens || 0),
+  };
+  const sorted = [..._stats].sort(sortFns[_sortKey] || sortFns.tokens);
 
-  const byDur    = [...stats].sort((a, b) => (b.avg_duration_ms || 0) - (a.avg_duration_ms || 0));
-  const byCalls  = [...stats].sort((a, b) => b.call_count - a.call_count);
-  const byTokens = [...stats].sort((a, b) => (b.pct_of_total_tokens || 0) - (a.pct_of_total_tokens || 0));
+  const maxCalls = Math.max(..._stats.map(s => s.call_count || 0), 1);
+  const maxDur   = Math.max(..._stats.map(s => s.avg_duration_ms || 0), 1);
 
-  function escHtml(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
-  const durRows = byDur.map(s => {
-    const pct = maxDur > 0 ? Math.round((s.avg_duration_ms || 0) / maxDur * 100) : 0;
-    return `<div class="ts-row">
-      <span class="ts-name" title="${escHtml(s.tool_name)}">${escHtml(s.tool_name)}</span>
-      <div class="ts-bar-wrap"><div class="ts-bar ts-bar-dur" style="width:${pct}%"></div></div>
-      <span class="ts-val">${fmtDur(s.avg_duration_ms)}</span>
-      <span class="ts-sub">max ${fmtDur(s.max_duration_ms)}</span>
-    </div>`;
-  }).join('');
-
-  const callRows = byCalls.map(s => {
-    const pct = maxCalls > 0 ? Math.round(s.call_count / maxCalls * 100) : 0;
+  const rows = sorted.map(s => {
+    // SSoT: renderers.toolIconHtml 재사용 (Agent/Skill/Task → ◎ orange, 그 외 → ◉ green)
+    const icon = toolIconHtml(s.tool_name);
+    const callPct = Math.round((s.call_count || 0) / maxCalls * 100);
+    const durPct  = Math.round((s.avg_duration_ms || 0) / maxDur * 100);
+    const tokPct  = s.pct_of_total_tokens || 0;
     const errBadge = s.error_count > 0
-      ? `<span class="ts-err-badge">오류 ${s.error_count}</span>` : '';
-    return `<div class="ts-row">
-      <span class="ts-name" title="${escHtml(s.tool_name)}">${escHtml(s.tool_name)}</span>
-      <div class="ts-bar-wrap"><div class="ts-bar ts-bar-call" style="width:${pct}%"></div></div>
-      <span class="ts-val">${s.call_count}회</span>
-      ${errBadge}
-    </div>`;
-  }).join('');
+      ? `<span class="ts-err-cell"><span class="mini-badge badge-error">${s.error_count}</span></span>`
+      : `<span class="ts-err-cell ts-err-cell--none">—</span>`;
 
-  const tokenRows = byTokens.map(s => {
-    const pct = s.pct_of_total_tokens || 0;
-    return `<div class="ts-row">
-      <span class="ts-name" title="${escHtml(s.tool_name)}">${escHtml(s.tool_name)}</span>
-      <div class="ts-bar-wrap"><div class="ts-bar ts-bar-tok" style="width:${Math.min(pct, 100)}%"></div></div>
-      <span class="ts-val">${pct.toFixed(1)}%</span>
-      <span class="ts-sub">${fmtToken(s.total_tokens)}</span>
+    return `<div class="ts-mx-row">
+      <div class="ts-mx-cell ts-mx-tool">
+        ${icon}<span class="ts-mx-tool-name" title="${escHtml(s.tool_name)}">${escHtml(s.tool_name)}</span>
+      </div>
+      <div class="ts-mx-cell ts-mx-num">
+        <span class="ts-mx-val">${fmtDur(s.avg_duration_ms)}</span>
+        <span class="ts-mx-bar"><span class="ts-mx-bar-fill ts-mx-bar-fill--avg" style="width:${durPct}%"></span></span>
+      </div>
+      <div class="ts-mx-cell ts-mx-num">
+        <span class="ts-mx-val">${s.call_count || 0}</span>
+        <span class="ts-mx-bar"><span class="ts-mx-bar-fill ts-mx-bar-fill--calls" style="width:${callPct}%"></span></span>
+      </div>
+      <div class="ts-mx-cell ts-mx-num">
+        <span class="ts-mx-val">${fmtToken(s.total_tokens)}</span>
+        <span class="ts-mx-sub">${tokPct.toFixed(1)}%</span>
+      </div>
+      <div class="ts-mx-cell ts-mx-num">
+        <span class="ts-mx-bar"><span class="ts-mx-bar-fill ts-mx-bar-fill--tokens" style="width:${Math.min(tokPct, 100)}%"></span></span>
+      </div>
+      <div class="ts-mx-cell ts-mx-err">${errBadge}</div>
     </div>`;
   }).join('');
 
   _container.innerHTML = `
-    <div class="tool-stats-panel">
-      <div class="ts-section">
-        <div class="ts-section-title">평균 응답시간</div>
-        ${durRows}
+    <div class="ts-mx">
+      <div class="ts-mx-toolbar">
+        <span class="ts-mx-title">도구별 통계</span>
+        <div class="ts-mx-sort">
+          <span class="ts-mx-sort-label">정렬</span>
+          <button class="ts-mx-sort-btn ${_sortKey === 'avg'    ? 'active' : ''}" data-sort="avg">응답시간</button>
+          <button class="ts-mx-sort-btn ${_sortKey === 'calls'  ? 'active' : ''}" data-sort="calls">호출 횟수</button>
+          <button class="ts-mx-sort-btn ${_sortKey === 'tokens' ? 'active' : ''}" data-sort="tokens">토큰 기여도</button>
+        </div>
       </div>
-      <div class="ts-section">
-        <div class="ts-section-title">호출 횟수</div>
-        ${callRows}
+      <div class="ts-mx-head">
+        <div class="ts-mx-cell ts-mx-tool">Tool</div>
+        <div class="ts-mx-cell ts-mx-num">평균 응답</div>
+        <div class="ts-mx-cell ts-mx-num">호출</div>
+        <div class="ts-mx-cell ts-mx-num">토큰</div>
+        <div class="ts-mx-cell ts-mx-num">기여도</div>
+        <div class="ts-mx-cell ts-mx-err">오류</div>
       </div>
-      <div class="ts-section">
-        <div class="ts-section-title">토큰 기여도</div>
-        ${tokenRows}
-      </div>
-    </div>
-  `;
+      <div class="ts-mx-body">${rows}</div>
+    </div>`;
+
+  // 정렬 버튼 이벤트
+  _container.querySelectorAll('[data-sort]').forEach(btn => {
+    btn.addEventListener('click', () => setSort(btn.dataset.sort));
+  });
 }

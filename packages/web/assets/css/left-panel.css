@@ -46,16 +46,27 @@
 .panel-body::-webkit-scrollbar { width: 3px; }
 .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-/* ── PANEL COLLAPSE BUTTON (< 토글) ──────────────────────────────────── */
+/* ── PANEL COLLAPSE BUTTON (< 토글) — border 위 floating, 세로 가운데 ── */
 .btn-panel-collapse {
+  position: absolute;
+  top: 50%;
+  right: -12px;
+  transform: translateY(-50%);
+  z-index: 20;
   display: flex; align-items: center; justify-content: center;
   width: 24px; height: 24px;
-  background: none; border: none; border-radius: var(--radius-sm);
-  color: var(--text-dim); cursor: pointer; flex-shrink: 0;
-  transition: background 0.15s, color 0.15s;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-dim); cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.btn-panel-collapse:hover { background: var(--accent-dim); color: var(--accent); }
-.btn-panel-collapse svg   { transition: transform 0.2s ease; display: block; }
+.btn-panel-collapse:hover {
+  background: var(--surface-alt);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn-panel-collapse svg { transition: transform 0.2s ease; display: block; }
 
 /* ── PROJECT NAME CELL ──────────────────────────────────────────────────── */
 .cell-proj-name {
@@ -89,4 +100,71 @@
 .sess-row-preview {
   font-size: 10px; color: var(--text-dim);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;
+}
+
+/* ── ADR-016: Tool mode toggle (tool / category) ───────────────────────── */
+.tool-mode-toggle {
+  display: flex; gap: 2px;
+  background: var(--surface-alt);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  margin-left: var(--space-2);
+}
+.tool-mode-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: var(--font-micro);
+  font-weight: var(--weight-strong);
+  padding: 2px var(--space-1);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+}
+.tool-mode-btn:hover { color: var(--text); }
+.tool-mode-btn.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* Tool 카테고리 분포 행 */
+.tool-categories {
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.cat-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 36px 36px;
+  gap: var(--space-1);
+  align-items: center;
+  font-size: var(--font-meta);
+  padding: 2px 0;
+}
+.cat-name {
+  color: var(--text);
+  font-weight: var(--weight-strong);
+}
+.cat-bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.cat-bar-fill {
+  display: block;
+  height: 100%;
+  transition: width 0.3s ease;
+}
+.cat-count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.cat-pct {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
 }

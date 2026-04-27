@@ -1,84 +1,155 @@
-.tool-stats-panel {
+/* ── Tool Stats Matrix (ADR-007) ──────────────────────────────────────────
+   1행 1도구, 6컬럼 매트릭스 + 정렬 토글
+   ─────────────────────────────────────────────────────────────────────── */
+
+.ts-mx {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 12px 16px;
-  overflow-y: auto;
-  height: 100%;
-  box-sizing: border-box;
+  padding: var(--space-3) var(--space-4) var(--space-4);
 }
 
-.tool-stats-empty {
-  padding: 24px 16px;
+.ts-mx-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.ts-mx-title {
+  font-size: var(--font-major);
+  font-weight: var(--weight-strong);
+  color: var(--text);
+}
+
+.ts-mx-sort {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.ts-mx-sort-label {
+  font-size: var(--font-meta);
   color: var(--text-dim);
-  font-size: 12px;
-  text-align: center;
+  margin-right: var(--space-1);
 }
 
-.ts-section {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+.ts-mx-sort-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-meta);
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.ts-mx-sort-btn:hover { color: var(--text); border-color: var(--text-dim); }
+.ts-mx-sort-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
 }
 
-.ts-section-title {
-  font-size: 10px;
-  font-weight: 600;
+/* 헤더와 본문 공통 grid */
+.ts-mx-head,
+.ts-mx-row {
+  display: grid;
+  grid-template-columns:
+    minmax(140px, 1.4fr)   /* Tool name */
+    minmax(110px, 1fr)     /* Avg */
+    minmax(80px, 0.8fr)    /* Calls */
+    minmax(90px, 0.9fr)    /* Tokens */
+    minmax(100px, 1fr)     /* % bar */
+    minmax(56px, 0.6fr);   /* Err */
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ts-mx-head {
+  font-size: var(--font-micro);
+  color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-muted);
-  margin-bottom: 4px;
+  font-weight: var(--weight-strong);
 }
 
-.ts-row {
-  display: grid;
-  grid-template-columns: 80px 1fr 52px 60px;
+.ts-mx-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ts-mx-row {
+  transition: background 0.15s ease;
+}
+.ts-mx-row:hover {
+  background: var(--accent-bg-light);
+}
+
+/* Tool 컬럼 — 아이콘 + 이름 한 줄 */
+.ts-mx-tool {
+  flex-direction: row;
   align-items: center;
-  gap: 6px;
-  min-height: 18px;
+  gap: var(--space-2);
 }
-
-.ts-name {
-  font-size: 11px;
-  color: var(--text-dim);
-  white-space: nowrap;
+.ts-mx-tool-name {
+  font-size: var(--font-body);
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--weight-strong);
+}
+.ts-mx-tool .tool-icon {
+  flex-shrink: 0;
+  font-size: 12px;
 }
 
-.ts-bar-wrap {
-  background: var(--bg-row, rgba(255,255,255,0.04));
+/* 숫자 셀 — value + bar */
+.ts-mx-val {
+  font-size: var(--font-body);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-strong);
+}
+.ts-mx-sub {
+  font-size: var(--font-meta);
+  color: var(--text-dim);
+}
+
+/* 막대 그래프 — 가는 바, 아래쪽 */
+.ts-mx-bar {
+  display: block;
+  height: 3px;
+  background: var(--border);
   border-radius: 2px;
-  height: 8px;
   overflow: hidden;
 }
-
-.ts-bar {
+.ts-mx-bar-fill {
+  display: block;
   height: 100%;
-  border-radius: 2px;
+  background: var(--accent);
   transition: width 0.3s ease;
 }
+.ts-mx-bar-fill--avg    { background: var(--orange); }
+.ts-mx-bar-fill--calls  { background: var(--green); }
+.ts-mx-bar-fill--tokens { background: var(--accent); }
 
-.ts-bar-dur  { background: var(--orange);  opacity: 0.75; }
-.ts-bar-call { background: var(--blue);    opacity: 0.75; }
-.ts-bar-tok  { background: var(--purple);  opacity: 0.75; }
-
-.ts-val {
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
-  text-align: right;
-  white-space: nowrap;
+/* 에러 셀 */
+.ts-err-cell {
+  display: flex;
+  align-items: center;
 }
-
-.ts-sub {
-  font-size: 10px;
+.ts-err-cell--none {
   color: var(--text-dim);
-  white-space: nowrap;
+  font-size: var(--font-meta);
 }
 
-.ts-err-badge {
-  font-size: 10px;
-  color: rgba(239, 68, 68, 0.85);
-  white-space: nowrap;
+/* 헤더 셀의 dir/flex은 row와 다르게 단순 정렬 */
+.ts-mx-head .ts-mx-cell {
+  flex-direction: row;
 }

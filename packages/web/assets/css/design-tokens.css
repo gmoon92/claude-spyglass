@@ -32,6 +32,12 @@
   --type-tool_call-bg:     rgba(74,222,128,0.15);
   --type-system-color:     #fbbf24;
   --type-system-bg:        rgba(245,158,11,0.15);
+  --type-agent-color:      var(--orange);           /* badge-colors.md ADR-002: Agent/Skill = --orange */
+  --type-agent-bg:         rgba(245,158,11,0.15);
+  --type-skill-color:      var(--orange);           /* badge-colors.md ADR-002: Agent/Skill = --orange */
+  --type-skill-bg:         rgba(245,158,11,0.15);
+  --type-mcp-color:        #22d3ee;                 /* type-filter-expansion ADR-002-R1: cyan — orange/green/yellow/pink 계열과 구분 */
+  --type-mcp-bg:           rgba(34,211,238,0.15);
 
   /* ── Accent 배경 계층 (log-page-ux-fix ADR-003) ── */
   --accent-bg-light:  rgba(217,119,87,0.04);  /* 일반 행 hover */
@@ -73,4 +79,29 @@
   /* ── Border Radius 토큰 ── */
   --radius-sm: 4px;
   --radius-md: 6px;
+  --radius-lg: 8px;          /* card container (ADR-003) */
+
+  /* ── Spacing Scale (ADR-002 — 8px Grid) ── */
+  --space-1:   4px;          /* 인라인 미세 (배지 padding) */
+  --space-2:   8px;          /* 기본 단위 */
+  --space-3:  12px;          /* 행 간격 */
+  --space-4:  16px;          /* 섹션 내부 padding */
+  --space-5:  24px;          /* 섹션 간 간격 */
+  --space-6:  32px;          /* 카드 간 간격 */
+
+  /* ── Typography Scale (ADR-001/004 — 3-Tier Hierarchy) ── */
+  --font-hero:   24px;       /* Primary 메트릭 (Hero 카드 활성 세션 등) */
+  --font-major:  18px;       /* 카드 헤드라인 / 섹션 라벨 강조 */
+  --font-body:   13px;       /* 본문 (테이블 셀, 카드 내용) */
+  --font-meta:   11px;       /* 미리보기, 힌트, 사이드 정보 */
+  --font-micro:   9px;       /* 컬럼 헤더, 초소형 라벨 */
+
+  --weight-hero:   700;      /* Primary 강조 */
+  --weight-strong: 600;      /* Secondary 강조 */
+  --weight-normal: 400;      /* 본문 */
+
+  /* ── Card surface 변형 (ADR-003) ── */
+  --card-bg:        var(--surface);
+  --card-border:    var(--border);
+  --card-shadow:    0 1px 3px rgba(0,0,0,0.2);
 }
