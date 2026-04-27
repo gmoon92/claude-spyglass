@@ -15,7 +15,7 @@ import {
 } from './session-detail.js';
 import {
   fetchDashboard, fetchRequests, fetchAllSessions, fetchSessionsByProject,
-  fetchCacheStats, setActiveRange, setReqFilter, getReqFilter, setIsSSEConnected,
+  fetchCacheStats, setActiveRange, getActiveRange, setReqFilter, getReqFilter, setIsSSEConnected,
 } from './api.js';
 import { fmtToken, fmtDate, formatDuration } from './formatters.js';
 import { initColResize } from './col-resize.js';
@@ -301,6 +301,32 @@ function connectSSE() {
   }
 }
 
+// ── chart-section-filter-sync ADR-001/003 ──────────────────────────────────
+// timeline-meta 두 그룹 라벨의 SSoT.
+// date-filter ↔ timeline-meta 라벨 매핑은 RANGE_LABELS 한 곳에서만 관리하고,
+// 호출처(클릭 핸들러 / 초기화)는 applyRangeLabels(range) 한 함수만 호출한다.
+const RANGE_LABELS = {
+  all:   '전체 기간',
+  today: '오늘',
+  week:  '이번 주',
+};
+
+// 그룹 본질(고정 정체성) — DOM 순서 기반 매핑.
+// idx 0: 품질 그룹 (평균 · P95 · 오류율)
+// idx 1: 누적 볼륨 그룹 (세션 · 요청 · 토큰)
+const TIMELINE_META_PREFIXES = ['품질', '누적'];
+const TIMELINE_META_ARIA_PREFIXES = ['요청 품질', '누적 볼륨'];
+
+function applyRangeLabels(range) {
+  const rangeText = RANGE_LABELS[range] || RANGE_LABELS.all;
+  const groups = document.querySelectorAll('#timelineMeta .timeline-meta-group');
+  groups.forEach((group, i) => {
+    const label = group.querySelector('.timeline-meta-group-label');
+    if (label) label.textContent = `${TIMELINE_META_PREFIXES[i]} · ${rangeText}`;
+    group.setAttribute('aria-label', `${TIMELINE_META_ARIA_PREFIXES[i]} (${rangeText})`);
+  });
+}
+
 // ── 이벤트 위임 ──────────────────────────────────────────────────────────────
 function initEventDelegation() {
   document.querySelector('.left-panel').addEventListener('click', e => {
@@ -326,11 +352,9 @@ function initEventDelegation() {
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     setActiveRange(btn.dataset.range);
-    const subtitles = { all: '전체 기간', today: '오늘', week: '이번 주' };
-    const chartSubtitle = document.getElementById('chartSubtitle');
-    if (chartSubtitle && subtitles[btn.dataset.range]) {
-      chartSubtitle.textContent = subtitles[btn.dataset.range];
-    }
+    // chart-section-filter-sync ADR-001 — timeline-meta 라벨은 SSoT 함수로 갱신.
+    // chartSubtitle은 ADR-002에 따라 timelineChart 본질 고정 — 여기서 갱신하지 않는다.
+    applyRangeLabels(btn.dataset.range);
     fetchDashboard(); fetchRequests(); fetchCacheStats(); fetchAllSessions();
   });
 
@@ -730,6 +754,9 @@ function init() {
   document.getElementById('btnPanelCollapse').addEventListener('click', toggleLeftPanel);
   document.getElementById('btnToggleChart').addEventListener('click', toggleChartCollapse);
   initEventDelegation();
+  // chart-section-filter-sync ADR-001 — 초기 활성 범위에 맞춰 timeline-meta 라벨 동기화.
+  // HTML 초기값과 getActiveRange() 기본값이 어긋나도 SSoT가 단일 진실로 작동.
+  applyRangeLabels(getActiveRange());
   initCharts();
   initColResize(document.querySelector('#feedBody table'));
   initColResize(document.querySelector('#detailFlatView table'));

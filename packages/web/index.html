@@ -156,7 +156,9 @@
         <div class="view-section-header">
           <div class="chart-default-meta">
             <span class="panel-label">요청 추이 (실시간)</span>
-            <span class="panel-hint" id="chartSubtitle">최근 30분</span>
+            <!-- chart-section-filter-sync ADR-002 — chartSubtitle은 timelineChart 본질(30분 sliding · 실시간)에 고정.
+                 date-filter와 분리되어 의미 충돌 제거. -->
+            <span class="panel-hint" id="chartSubtitle">최근 30분 · 실시간</span>
           </div>
           <!-- detail 모드 메타 (세션 메타 — ADR-017 — detail-header 통합) -->
           <div class="chart-detail-meta" hidden>
@@ -178,13 +180,15 @@
         </div>
         <div class="charts-inner">
           <div class="chart-wrap" data-ctx-tooltip="context-growth">
-            <!-- ADR-008 — timeline-meta 통합 : 두 그룹 (지난 30분 / 오늘).
-                 그룹 1: 품질 (평균 · P95 · 오류율) — timeline 윈도우 컨텍스트
-                 그룹 2: 볼륨 (세션 · 요청 · 토큰)   — 오늘 누적 컨텍스트
+            <!-- ADR-008 — timeline-meta 통합 : 두 그룹 (품질 / 누적).
+                 chart-section-filter-sync ADR-003 — 라벨 형식 "본질 · 활성 범위".
+                 그룹 1: 품질 (평균 · P95 · 오류율)  ─ /api/dashboard 필터 윈도우의 품질 지표
+                 그룹 2: 누적 (세션 · 요청 · 토큰)    ─ /api/dashboard 필터 윈도우의 누적 볼륨
+                 라벨/aria-label은 main.js applyRangeLabels(range)가 RANGE_LABELS SSoT에서 갱신.
                  detail 모드에서 자동 숨김(.chart-mode-detail .timeline-meta { display:none }). -->
             <div class="timeline-meta" id="timelineMeta" role="group" aria-label="요약 지표">
-              <div class="timeline-meta-group" role="group" aria-label="요청 품질 (지난 30분)">
-                <span class="timeline-meta-group-label">지난 30분</span>
+              <div class="timeline-meta-group" role="group" aria-label="요청 품질 (전체 기간)">
+                <span class="timeline-meta-group-label">품질 · 전체 기간</span>
                 <div class="header-stat" data-stat-tooltip="avg-duration">
                   <span class="header-stat-value" id="statAvgDuration"><span class="skeleton"></span></span>
                   <span class="header-stat-label">평균</span>
@@ -198,8 +202,8 @@
                   <span class="header-stat-label">오류율</span>
                 </div>
               </div>
-              <div class="timeline-meta-group" role="group" aria-label="누적 볼륨 (오늘)">
-                <span class="timeline-meta-group-label">오늘</span>
+              <div class="timeline-meta-group" role="group" aria-label="누적 볼륨 (전체 기간)">
+                <span class="timeline-meta-group-label">누적 · 전체 기간</span>
                 <div class="header-stat" data-stat-tooltip="sessions">
                   <span class="header-stat-value" id="statSessions"><span class="skeleton"></span></span>
                   <span class="header-stat-label">세션</span>
