@@ -368,14 +368,31 @@ export interface RequestStats {
  * tool_call에만 측정값이 있음) tool_call + event_type='tool' 레코드를 대상으로 집계.
  * duration_ms가 0보다 크고 600_000ms(10분) 미만인 레코드만 집계하여 타임스탬프
  * 오기입으로 인한 이상값을 제외한다.
+ *
+ * @param fromTs 집계 시작 타임스탬프 (옵셔널, 미지정 시 전체 기간)
+ * @param toTs   집계 종료 타임스탬프 (옵셔널, 미지정 시 전체 기간)
  */
-export function getAvgPromptDurationMs(db: Database): number {
+export function getAvgPromptDurationMs(
+  db: Database,
+  fromTs?: number,
+  toTs?: number
+): number {
+  const conditions: string[] = [
+    "type = 'tool_call'",
+    "event_type = 'tool'",
+    'duration_ms > 0',
+    'duration_ms < 600000',
+  ];
+  const params: number[] = [];
+
+  if (fromTs !== undefined) { conditions.push('timestamp >= ?'); params.push(fromTs); }
+  if (toTs   !== undefined) { conditions.push('timestamp <= ?'); params.push(toTs); }
+
   const row = db.query(`
     SELECT AVG(duration_ms) as avg
     FROM requests
-    WHERE type = 'tool_call' AND event_type = 'tool'
-      AND duration_ms > 0 AND duration_ms < 600000
-  `).get() as { avg: number | null };
+    WHERE ${conditions.join(' AND ')}
+  `).get(...params) as { avg: number | null };
   return row?.avg ?? 0;
 }
 
@@ -585,16 +602,34 @@ export interface StripStats {
   error_rate: number;
 }
 
-/** 오늘 날짜 자정 타임스탬프 */
-function getTodayMidnightMs(): number {
-  return new Date().setHours(0, 0, 0, 0);
-}
+/**
+ * Command Center Strip 지표 집계 (비용 / P95 / 오류율)
+ *
+ * 3개 쿼리(token cost, p95 duration, error rate) 모두 동일한 timestamp 범위 조건을 적용한다.
+ * - fromTs / toTs 미지정 시 전체 기간
+ * - fromTs만 → timestamp >= fromTs
+ * - toTs만   → timestamp <= toTs
+ * - 둘 다    → 사이 범위
+ *
+ * @param fromTs 집계 시작 타임스탬프 (옵셔널)
+ * @param toTs   집계 종료 타임스탬프 (옵셔널)
+ */
+export function getStripStats(
+  db: Database,
+  fromTs?: number,
+  toTs?: number
+): StripStats {
+  /** 시간 범위 WHERE 절 빌드 (공통 로직) */
+  const buildRangeClause = (baseConditions: string[]): { sql: string; params: number[] } => {
+    const conditions = [...baseConditions];
+    const params: number[] = [];
+    if (fromTs !== undefined) { conditions.push('timestamp >= ?'); params.push(fromTs); }
+    if (toTs   !== undefined) { conditions.push('timestamp <= ?'); params.push(toTs); }
+    return { sql: conditions.join(' AND '), params };
+  };
 
-/** 오늘 날짜 기준 Command Center Strip 지표 집계 */
-export function getTodayStripStats(db: Database): StripStats {
-  const todayMs = getTodayMidnightMs();
-
-  // 1. 오늘 prompt 레코드에서 모델별 토큰 집계 (tokens_confidence='high'만)
+  // 1. 지정 기간 prompt 레코드에서 모델별 토큰 집계 (tokens_confidence='high'만)
+  const tokenRange = buildRangeClause(["type = 'prompt'"]);
   const tokenRows = db.query(`
     SELECT model,
            COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_input ELSE 0 END), 0)            AS tokens_input,
@@ -602,10 +637,9 @@ export function getTodayStripStats(db: Database): StripStats {
            COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_creation_tokens ELSE 0 END), 0)   AS cache_creation_tokens,
            COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_read_tokens ELSE 0 END), 0)       AS cache_read_tokens
     FROM requests
-    WHERE type = 'prompt'
-      AND timestamp >= ?
+    WHERE ${tokenRange.sql}
     GROUP BY model
-  `).all(todayMs) as Array<{
+  `).all(...tokenRange.params) as Array<{
     model: string | null;
     tokens_input: number;
     tokens_output: number;
@@ -628,16 +662,18 @@ export function getTodayStripStats(db: Database): StripStats {
       (row.cache_read_tokens * (p.input - p.cache_read)) / 1_000_000;
   }
 
-  // 2. P95 duration_ms — 오늘 tool_call PostToolUse 레코드
+  // 2. P95 duration_ms — 지정 기간 tool_call PostToolUse 레코드
+  const durationRange = buildRangeClause([
+    "type = 'tool_call'",
+    "event_type = 'tool'",
+    'duration_ms > 0',
+  ]);
   const durationRows = db.query(`
     SELECT duration_ms
     FROM requests
-    WHERE type = 'tool_call'
-      AND event_type = 'tool'
-      AND duration_ms > 0
-      AND timestamp >= ?
+    WHERE ${durationRange.sql}
     ORDER BY duration_ms ASC
-  `).all(todayMs) as Array<{ duration_ms: number }>;
+  `).all(...durationRange.params) as Array<{ duration_ms: number }>;
 
   let p95_duration_ms = 0;
   if (durationRows.length > 0) {
@@ -645,7 +681,11 @@ export function getTodayStripStats(db: Database): StripStats {
     p95_duration_ms = durationRows[Math.min(idx, durationRows.length - 1)].duration_ms;
   }
 
-  // 3. 오류율 — 오늘 tool_call PostToolUse 레코드 중 오류 패턴 포함 비율
+  // 3. 오류율 — 지정 기간 tool_call PostToolUse 레코드 중 오류 패턴 포함 비율
+  const errorRange = buildRangeClause([
+    "type = 'tool_call'",
+    "event_type = 'tool'",
+  ]);
   const errorStats = db.query(`
     SELECT
       COUNT(*) AS total,
@@ -654,10 +694,8 @@ export function getTodayStripStats(db: Database): StripStats {
         THEN 1 ELSE 0
       END) AS errors
     FROM requests
-    WHERE type = 'tool_call'
-      AND event_type = 'tool'
-      AND timestamp >= ?
-  `).get(todayMs) as { total: number; errors: number };
+    WHERE ${errorRange.sql}
+  `).get(...errorRange.params) as { total: number; errors: number };
 
   const error_rate =
     errorStats.total > 0 ? errorStats.errors / errorStats.total : 0;

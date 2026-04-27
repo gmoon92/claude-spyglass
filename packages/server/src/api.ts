@@ -23,7 +23,7 @@ import {
   getTurnsBySession,
   getSessionToolStats,
   getAvgPromptDurationMs,
-  getTodayStripStats,
+  getStripStats,
   getP95DurationMs,
   getCacheStats,
   getRecentEvents,
@@ -206,8 +206,10 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
 
   // GET /api/stats/strip — 오늘 Command Center Strip 지표 (P95, error rate, 토큰 캐시)
   // [DEPRECATED] cost_usd, cache_savings_usd 필드는 UI Redesign Phase 2에서 제거 예정.
+  // 기존 의미("오늘") 보존을 위해 자정 ms를 명시적으로 전달한다.
   if (path === '/api/stats/strip' && method === 'GET') {
-    const stats = getTodayStripStats(db);
+    const todayMidnightMs = new Date().setHours(0, 0, 0, 0);
+    const stats = getStripStats(db, todayMidnightMs);
     return jsonResponse({
       success: true,
       data: {
@@ -251,9 +253,9 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     const toolStats = getToolStats(db, 5, fromTs, toTs);
     const typeStats = getRequestStatsByType(db, fromTs, toTs);
     const activeSessions = getActiveSessions(db);
-    const _avgRaw = getAvgPromptDurationMs(db);
+    const _avgRaw = getAvgPromptDurationMs(db, fromTs, toTs);
     const avgDurationMs = _avgRaw > 0 ? Math.round(_avgRaw) : null;
-    const stripStats = getTodayStripStats(db);
+    const stripStats = getStripStats(db, fromTs, toTs);
 
     const data = {
       summary: {

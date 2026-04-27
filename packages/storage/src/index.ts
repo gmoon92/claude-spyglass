@@ -110,7 +110,7 @@ export {
   getToolStats,
   getHourlyRequestStats,
   getAvgPromptDurationMs,
-  getTodayStripStats,
+  getStripStats,
   getP95DurationMs,
   getCacheStats,
   // 턴 집계
