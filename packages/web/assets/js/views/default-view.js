@@ -1,7 +1,7 @@
 // views/default-view.js — DefaultView 피드·차트·UI 초기화
 
 import { formatDuration } from '../formatters.js';
-import { makeRequestRow, makeTargetCell, togglePromptExpand } from '../renderers.js';
+import { makeRequestRow, makeTargetCell, togglePromptExpand, renderRequests, appendRequests } from '../renderers.js';
 import { addScrollLockCount, updateScrollLockBanner, resetScrollLockCount } from '../infra.js';
 import { fetchModelUsage } from '../metrics-api.js';
 import { fetchRequests, setReqFilter, getReqFilter } from '../api.js';
@@ -231,7 +231,18 @@ export function initDefaultView({ onSelectSession, onCloseDetail, onGoHome }) {
     placeholder: 'model / tool / message',
     onSearch: applyFeedSearch,
   });
-  document.addEventListener(FEED_UPDATED, applyFeedSearch);
+  document.addEventListener(FEED_UPDATED, (e) => {
+    const detail = e.detail;
+    if (detail && detail.list !== undefined) {
+      const container = document.getElementById('requestsBody');
+      if (detail.append) {
+        appendRequests(container, detail.list, detail.anomalyMap);
+      } else {
+        renderRequests(container, detail.list, detail.anomalyMap);
+      }
+    }
+    applyFeedSearch();
+  });
 
   // DefaultView click delegation
   document.getElementById('defaultView').addEventListener('click', e => {

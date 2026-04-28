@@ -351,17 +351,15 @@ export function makeSessionRow(s, isSelected) {
   </tr>`;
 }
 
-export function renderRequests(list, anomalyMap = new Map()) {
-  const body = document.getElementById('requestsBody');
+export function renderRequests(container, list, anomalyMap = new Map()) {
   if (!list.length) {
-    body.innerHTML = `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty">데이터가 없습니다</td></tr>`;
+    container.innerHTML = `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty">데이터가 없습니다</td></tr>`;
     return;
   }
-  body.innerHTML = list.map(r => makeRequestRow(r, { showSession: true, anomalyFlags: anomalyMap.get(r.id) || null })).join('');
+  container.innerHTML = list.map(r => makeRequestRow(r, { showSession: true, anomalyFlags: anomalyMap.get(r.id) || null })).join('');
 }
 
-export function appendRequests(list, anomalyMap = new Map()) {
-  const body = document.getElementById('requestsBody');
+export function appendRequests(container, list, anomalyMap = new Map()) {
   if (!list.length) return;
-  body.insertAdjacentHTML('beforeend', list.map(r => makeRequestRow(r, { showSession: true, anomalyFlags: anomalyMap.get(r.id) || null })).join(''));
+  container.insertAdjacentHTML('beforeend', list.map(r => makeRequestRow(r, { showSession: true, anomalyFlags: anomalyMap.get(r.id) || null })).join(''));
 }

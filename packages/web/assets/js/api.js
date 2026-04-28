@@ -3,7 +3,7 @@ import { fmt, fmtToken, formatDuration } from './formatters.js';
 import { setTypeData, drawDonut, renderTypeLegend } from './chart.js';
 import { clearError, setLastUpdated, showError } from './infra.js';
 import { renderProjects, renderTools, getAllSessions, setAllSessions, renderBrowserSessions } from './left-panel.js';
-import { renderRequests, appendRequests, RECENT_REQ_COLS } from './renderers.js';
+import { RECENT_REQ_COLS } from './renderers.js';
 import { detectAnomalies } from './anomaly.js';
 import { renderCachePanel } from './cache-panel.js';
 import { FEED_UPDATED } from './events.js';
@@ -115,12 +115,9 @@ export async function fetchRequests(append = false) {
     const list = json.data || [];
     const p95  = json.meta?.p95DurationMs ?? null;
     const anomalyMap = detectAnomalies(list, p95);
-    if (append) {
-      appendRequests(list, anomalyMap);
-    } else {
-      renderRequests(list, anomalyMap);
-    }
-    document.dispatchEvent(new CustomEvent(FEED_UPDATED));
+    document.dispatchEvent(new CustomEvent(FEED_UPDATED, {
+      detail: { list, anomalyMap, append },
+    }));
     reqOffset += list.length;
     const loadMoreBtn = document.getElementById('loadMoreBtn');
     if (loadMoreBtn) {
