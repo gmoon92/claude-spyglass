@@ -1,7 +1,7 @@
 // API / Fetch 모듈
 import { fmt, fmtToken, formatDuration } from './formatters.js';
 import { setTypeData, drawDonut, renderTypeLegend } from './chart.js';
-import { clearError, setLastUpdated, setLiveStatus } from './infra.js';
+import { clearError, setLastUpdated, showError } from './infra.js';
 import { renderProjects, renderTools, getAllSessions, setAllSessions, renderBrowserSessions } from './left-panel.js';
 import { renderRequests, appendRequests, RECENT_REQ_COLS } from './renderers.js';
 import { detectAnomalies } from './anomaly.js';
@@ -96,13 +96,6 @@ export async function fetchDashboard() {
   } catch (err) {
     showError(`대시보드 로드 실패: ${err.message}`);
   }
-}
-
-function showError(msg) {
-  // infra.showError와 동일 — header-summary-merge ADR-007: setLiveStatus helper 위임으로 chip 보존
-  document.getElementById('errorMsg').textContent = msg || '서버에 연결할 수 없습니다.';
-  document.getElementById('errorBanner').classList.add('visible');
-  setLiveStatus(false);
 }
 
 // ── Requests ────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 // 좌측 패널 모듈 — 프로젝트/세션/툴 렌더링
 import { fmt, fmtToken, escHtml } from './formatters.js';
-import { makeSkeletonRows, makeSessionRow } from './renderers.js';
+import { makeSkeletonRows, makeSessionRow, toolIconHtml } from './renderers.js';
 
 // ADR-016: tool-categories 6 카테고리 색상 매핑
 const CATEGORY_COLORS = {
@@ -113,13 +113,6 @@ export function renderTools(list) {
   document.getElementById('toolCount').textContent = `${list.length}개`;
   const body = document.getElementById('toolsBody');
   const maxC = Math.max(...list.map(t => t.call_count || 0), 1);
-
-  function toolIconHtml(toolName) {
-    const isAgent = toolName && /^(Agent|Skill|Task)/.test(toolName);
-    return isAgent
-      ? '<span class="tool-icon tool-icon-agent">◎</span>'
-      : '<span class="tool-icon tool-icon-default">◉</span>';
-  }
 
   body.innerHTML = list.map(t => {
     const detailText = t.tool_detail
