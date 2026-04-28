@@ -1,4 +1,6 @@
 // Turn Trace Gantt — Canvas 기반 세션 타임라인 차트
+import { GANTT_TURN_CLICK } from './events.js';
+
 const ROW_H     = 22;   // 턴 행 높이
 const BAR_H     = 12;   // 바 높이
 const LABEL_W   = 36;   // 왼쪽 턴 레이블 영역 너비
@@ -515,7 +517,7 @@ function _onGanttClick(e) {
       hit = mx >= item.x && mx <= item.x + item.w && my >= item.y && my <= item.y + item.h;
     }
     if (hit) {
-      document.dispatchEvent(new CustomEvent('gantt:turnClick', {
+      document.dispatchEvent(new CustomEvent(GANTT_TURN_CLICK, {
         detail: { turnId: item.turn.turn_id }
       }));
       break;

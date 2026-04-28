@@ -6,6 +6,7 @@ import { renderProjects, renderTools, getAllSessions, setAllSessions, renderBrow
 import { renderRequests, appendRequests, RECENT_REQ_COLS } from './renderers.js';
 import { detectAnomalies } from './anomaly.js';
 import { renderCachePanel } from './cache-panel.js';
+import { FEED_UPDATED } from './events.js';
 
 export const API = '';
 
@@ -119,7 +120,7 @@ export async function fetchRequests(append = false) {
     } else {
       renderRequests(list, anomalyMap);
     }
-    document.dispatchEvent(new CustomEvent('feed:updated'));
+    document.dispatchEvent(new CustomEvent(FEED_UPDATED));
     reqOffset += list.length;
     const loadMoreBtn = document.getElementById('loadMoreBtn');
     if (loadMoreBtn) {

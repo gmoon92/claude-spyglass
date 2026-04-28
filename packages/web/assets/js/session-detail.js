@@ -10,6 +10,7 @@ import { detectAnomalies } from './anomaly.js';
 // ADR-017: 세션 모드일 때 chartSection의 donut/cache panel을 세션 데이터로 갱신
 import { setTypeData, drawDonut, renderTypeLegend } from './chart.js';
 import { renderCachePanel, computeSessionCacheStats } from './cache-panel.js';
+import { GANTT_TURN_CLICK } from './events.js';
 
 export const API = '';
 
@@ -550,7 +551,7 @@ export function toggleCardExpand(turnId) {
 
 // G7: Gantt 클릭 → 턴뷰 연동 이벤트 리스너 등록
 export function initGanttNavigation() {
-  document.addEventListener('gantt:turnClick', (e) => {
+  document.addEventListener(GANTT_TURN_CLICK, (e) => {
     const { turnId } = e.detail;
     setDetailView('turn');
     // 약간의 딜레이로 DOM 렌더링 후 펼침

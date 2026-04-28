@@ -17,6 +17,7 @@ import {
 } from '../state.js';
 import { renderBrowserProjects } from '../left-panel.js';
 import { detailSearchBox } from '../session-detail.js';
+import { FEED_UPDATED } from '../events.js';
 
 const STORAGE_KEY        = 'spyglass:lastProject';
 const CHART_COLLAPSED_KEY = 'spyglass:chart-collapsed';
@@ -78,7 +79,7 @@ export function prependRequest(r) {
       if (durationCell) durationCell.textContent = formatDuration(r.duration_ms);
       // ADR-011: 인플레이스 업데이트 후 anomaly 재적용
       reapplyFeedAnomalies();
-      document.dispatchEvent(new CustomEvent('feed:updated'));
+      document.dispatchEvent(new CustomEvent(FEED_UPDATED));
       return;
     }
   }
@@ -99,7 +100,7 @@ export function prependRequest(r) {
   // ADR-011: 새 행에 anomaly 즉시 반영
   reapplyFeedAnomalies();
   // 스크롤 조정 완료 후 검색·유형 필터 재적용
-  document.dispatchEvent(new CustomEvent('feed:updated'));
+  document.dispatchEvent(new CustomEvent(FEED_UPDATED));
 }
 
 export function reapplyFeedAnomalies() {
@@ -230,7 +231,7 @@ export function initDefaultView({ onSelectSession, onCloseDetail, onGoHome }) {
     placeholder: 'model / tool / message',
     onSearch: applyFeedSearch,
   });
-  document.addEventListener('feed:updated', applyFeedSearch);
+  document.addEventListener(FEED_UPDATED, applyFeedSearch);
 
   // DefaultView click delegation
   document.getElementById('defaultView').addEventListener('click', e => {
