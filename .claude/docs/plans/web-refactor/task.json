@@ -9,9 +9,9 @@
   "updated": "2026-04-28",
   "summary": {
     "total": 22,
-    "pending": 19,
+    "pending": 18,
     "in_progress": 0,
-    "done": 2,
+    "done": 3,
     "skipped": 0
   },
   "parallel_groups": [
@@ -53,7 +53,7 @@
       "id": "T-03",
       "title": "순수 함수 단위 테스트 (api 파라미터, formatters)",
       "file": "tasks/task-03.json",
-      "status": "pending",
+      "status": "done",
       "type": "test",
       "phase": 0,
       "risk": "low",

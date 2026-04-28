@@ -1,7 +1,7 @@
 {
   "id": "T-03",
   "title": "순수 함수 단위 테스트 (api 파라미터, formatters)",
-  "status": "pending",
+  "status": "done",
   "type": "test",
   "phase": 0,
   "risk": "low",
