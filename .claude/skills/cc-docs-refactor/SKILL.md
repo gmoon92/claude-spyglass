@@ -282,7 +282,7 @@ ${CLAUDE_TMP_DIR}/benchmark/<target>/<YYYYMMDD>/draft.md
 
 1. **사용자 승인을 기다립니다.** 승인 전에 파일을 수정하지 마세요.
 2. 승인 후, 수정 전 원본을 스냅샷으로 백업합니다:
-    - 스냅샷 경로: `${CLAUDE_PROJECT_DIR}/.claude/archive/<target>/benchmark/<YYYYMMDD>/snapshot.md`
+    - 스냅샷 경로: `${CLAUDE_TMP_DIR}/benchmark/<target>/<YYYYMMDD>/snapshot.md`
     - `<YYYYMMDD>`는 Step 3에서 사용한 날짜와 동일한 값을 사용합니다.
     - `Bash` 도구로 `mkdir -p <날짜디렉토리경로> && cp <원본파일경로> <스냅샷경로>` 실행
 3. `Edit` 도구로 Step 3 수정 초안을 적용합니다.
@@ -348,16 +348,16 @@ find "${CLAUDE_TMP_DIR}/benchmark/<target>" \
 
 > 기존 스킬 개선 작업입니다.
 > - 스킬 경로: `<수정된 파일이 속한 스킬 디렉토리>`
-> - 이전 버전 스냅샷(baseline): `${CLAUDE_PROJECT_DIR}/.claude/archive/<target>/benchmark/<YYYYMMDD>/snapshot.md`
+> - 이전 버전 스냅샷(baseline): `${CLAUDE_TMP_DIR}/benchmark/<target>/<YYYYMMDD>/snapshot.md`
 > - eval 파일: `${CLAUDE_TMP_DIR}/benchmark/<target>/<YYYYMMDD>/evals.json`
 > - workspace 경로: `${CLAUDE_TMP_DIR}/benchmark/<target>/<YYYYMMDD>/workspace/`
-> - old vs new 비교 평가를 실행하고, 평가 결과를 `${CLAUDE_PROJECT_DIR}/.claude/archive/<target>/benchmark/<YYYYMMDD>/eval-viewer.html`에 HTML 파일로
+> - old vs new 비교 평가를 실행하고, 평가 결과를 `${CLAUDE_TMP_DIR}/benchmark/<target>/<YYYYMMDD>/eval-viewer.html`에 HTML 파일로
     저장합니다.
 > - 목표: 수정 전후 품질 및 토큰 비용 비교
 
 **상세 비교 평가 모드 완료 후:**
 
-1. `Read` 도구로 `${CLAUDE_PROJECT_DIR}/.claude/archive/<target>/benchmark/<YYYYMMDD>/eval-viewer.html`을 읽어 평가 결과(점수 변화·개선 항목·권고사항)를 요약하여
+1. `Read` 도구로 `${CLAUDE_TMP_DIR}/benchmark/<target>/<YYYYMMDD>/eval-viewer.html`을 읽어 평가 결과(점수 변화·개선 항목·권고사항)를 요약하여
    사용자에게 출력합니다.
 2. eval-viewer.html의 전체 경로를 사용자에게 제공합니다.
 3. 요약 결과를 바탕으로 추가 수정이 필요한지 사용자에게 확인합니다.
@@ -387,6 +387,6 @@ find "${CLAUDE_TMP_DIR}/benchmark/<target>" \
 - [ ] 수정 초안이 `${CLAUDE_TMP_DIR}/benchmark/<target>/<YYYYMMDD>/draft.md`에 저장되었다
 - [ ] 기준 G/H 위반 항목은 초안에 직접 추가하지 않고 보고서에 안내로만 기재했다
 - [ ] 사용자 승인 후에만 실제 파일을 수정했다 (승인 전 파일 수정 금지)
-- [ ] 스냅샷이 `${CLAUDE_PROJECT_DIR}/.claude/archive/<target>/benchmark/<YYYYMMDD>/snapshot.md`에 저장되었다
+- [ ] 스냅샷이 `${CLAUDE_TMP_DIR}/benchmark/<target>/<YYYYMMDD>/snapshot.md`에 저장되었다
 - [ ] 소스 코드를 수정하지 않았다 — 이 스킬은 Claude Code 메타 문서 전용이다
 - [ ] Step 6 skill-creator 품질 검토가 실행되었다 (또는 위임 실패 메시지를 출력했다)
