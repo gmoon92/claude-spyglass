@@ -1,4 +1,5 @@
 // 세션 상세 뷰 모듈
+import { createSearchBox } from './components/search-box.js';
 import { subTypeOf, SUB_TYPES } from './request-types.js';
 import { escHtml, fmtToken, fmtDate, fmtTime, formatDuration } from './formatters.js';
 import { makeRequestRow, typeBadge, contextPreview, toolStatusBadge, toolResponseHint, toolIconHtml, targetInnerHtml, FLAT_VIEW_COLS, togglePromptExpand, _promptCache } from './renderers.js';
@@ -19,6 +20,7 @@ let _detailAllTurns       = [];
 let _detailSearchQuery    = '';
 let _detailTurnAnomalyMap = new Map();
 let _expandedTurnIds      = new Set(); // accordion 펼침 상태 유지
+export let detailSearchBox = null;
 
 export function getDetailFilter()     { return _detailFilter; }
 export function setDetailFilter(f)    { _detailFilter = f; }
@@ -495,10 +497,7 @@ export async function loadSessionDetail(sessionId, opts = {}) {
   _currentSessionId  = sessionId;
   _detailSearchQuery = '';
   _expandedTurnIds.clear(); // 세션 전환 시 accordion 펼침 상태 초기화
-  const detailSearchInput = document.getElementById('detailSearchInput');
-  if (detailSearchInput) { detailSearchInput.value = ''; }
-  const detailSearchClear = document.getElementById('detailSearchClear');
-  if (detailSearchClear) detailSearchClear.classList.remove('visible');
+  detailSearchBox?.clear();
   const { signal } = opts;
   const fetchOpts = signal ? { signal } : {};
   const [reqRes, turnRes] = await Promise.all([
@@ -512,20 +511,12 @@ export async function loadSessionDetail(sessionId, opts = {}) {
 }
 
 export function initDetailSearch() {
-  const input = document.getElementById('detailSearchInput');
-  const clear = document.getElementById('detailSearchClear');
-  if (!input || !clear) return;
-  input.addEventListener('input', () => {
-    _detailSearchQuery = input.value.trim().toLowerCase();
-    clear.classList.toggle('visible', _detailSearchQuery.length > 0);
-    applyDetailFilter();
-  });
-  clear.addEventListener('click', () => {
-    input.value = '';
-    _detailSearchQuery = '';
-    clear.classList.remove('visible');
-    applyDetailFilter();
-    input.focus();
+  detailSearchBox = createSearchBox('detailSearchContainer', {
+    placeholder: 'tool / message',
+    onSearch(q) {
+      _detailSearchQuery = q;
+      applyDetailFilter();
+    },
   });
 }
 

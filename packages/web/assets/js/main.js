@@ -23,6 +23,8 @@ import { initPanelResize } from './panel-resize.js';
 import { initContextChart } from './context-chart.js';
 import { SUB_TYPES } from './request-types.js';
 import { createFilterBar } from './components/filter-bar.js';
+import { createSearchBox } from './components/search-box.js';
+import { detailSearchBox } from './session-detail.js';
 import { initGantt } from './turn-gantt.js';
 import { initToolStats } from './tool-stats.js';
 import { initCacheTooltip } from './cache-tooltip.js';
@@ -246,8 +248,9 @@ function manualRefresh() {
 let sseSource       = null;
 let retryTimer      = null;
 let refreshDebounce = null;
-let feedFilterBar   = null;
-let detailFilterBar = null;
+let feedFilterBar    = null;
+let detailFilterBar  = null;
+let feedSearchBox    = null;
 
 function connectSSE() {
   if (sseSource) { sseSource.close(); sseSource = null; }
@@ -350,11 +353,8 @@ function initEventDelegation() {
 
   document.getElementById('loadMoreBtn').addEventListener('click', () => fetchRequests(true));
 
-  const feedSearchInput = document.getElementById('feedSearchInput');
-  const feedSearchClear = document.getElementById('feedSearchClear');
   function applyFeedSearch() {
-    const q = feedSearchInput.value.trim().toLowerCase();
-    feedSearchClear.classList.toggle('visible', q.length > 0);
+    const q = feedSearchBox?.getValue() ?? '';
     const rows = document.querySelectorAll('#requestsBody tr[data-type]');
     const typeFilter = getReqFilter();
     rows.forEach(tr => {
@@ -373,8 +373,10 @@ function initEventDelegation() {
       tr.style.display = (!text.includes(q) || typeFiltered) ? 'none' : '';
     });
   }
-  feedSearchInput.addEventListener('input', applyFeedSearch);
-  feedSearchClear.addEventListener('click', () => { feedSearchInput.value = ''; applyFeedSearch(); feedSearchInput.focus(); });
+  feedSearchBox = createSearchBox('feedSearchContainer', {
+    placeholder: 'model / tool / message',
+    onSearch: applyFeedSearch,
+  });
   document.addEventListener('feed:updated', applyFeedSearch);
 
   detailFilterBar = createFilterBar('detailTypeFilterBtns', {
@@ -527,8 +529,8 @@ function toggleKbdHelp() {
 
 // 현재 활성 뷰의 검색 input
 function activeSearchInput() {
-  if (uiState.rightView === 'detail') return document.getElementById('detailSearchInput');
-  return document.getElementById('feedSearchInput');
+  const box = uiState.rightView === 'detail' ? detailSearchBox : feedSearchBox;
+  return box?.element() ?? null;
 }
 
 // 현재 활성 뷰의 type filter 버튼 NodeList

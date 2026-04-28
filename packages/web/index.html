@@ -287,11 +287,7 @@
             <div class="view-section-header">
               <span class="panel-label">최근 요청</span>
               <div class="feed-controls">
-                <div class="feed-search">
-                  <span class="feed-search-icon">⌕</span>
-                  <input id="feedSearchInput" class="feed-search-input" type="text" placeholder="model / tool / message" autocomplete="off" />
-                  <button class="feed-search-clear" id="feedSearchClear" aria-label="검색어 지우기">×</button>
-                </div>
+                <div id="feedSearchContainer" class="feed-search"></div>
                 <div id="typeFilterBtns" class="type-filter-btns"></div>
               </div>
             </div>
@@ -334,12 +330,7 @@
 
           <div class="detail-controls-bar">
             <div class="feed-controls">
-              <div class="feed-search">
-                <span class="feed-search-icon">⌕</span>
-                <input id="detailSearchInput" class="feed-search-input" type="text"
-                       placeholder="tool / message" autocomplete="off" />
-                <button class="feed-search-clear" id="detailSearchClear" aria-label="검색어 지우기">×</button>
-              </div>
+              <div id="detailSearchContainer" class="feed-search"></div>
               <div id="detailTypeFilterBtns" class="detail-type-filter-btns type-filter-btns"></div>
             </div>
           </div>
