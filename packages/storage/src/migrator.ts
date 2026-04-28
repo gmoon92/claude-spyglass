@@ -105,21 +105,31 @@ export function runMigrations(db: Database, debug: boolean = false): void {
         const nonPragmaStmts = stmts.filter(s => !s.toUpperCase().startsWith('PRAGMA'));
         const pragmaStmts = stmts.filter(s => s.toUpperCase().startsWith('PRAGMA'));
 
-        if (nonPragmaStmts.length > 0) {
-          db.transaction(() => {
-            for (const stmt of nonPragmaStmts) {
+        // user_version을 트랜잭션 안에서 설정하여 DDL과 버전 갱신을 원자적으로 처리
+        // (트랜잭션 커밋 후 프로세스 종료 시 버전 불일치 방지)
+        db.transaction(() => {
+          for (const stmt of nonPragmaStmts) {
+            try {
               db.prepare(stmt).run();
+            } catch (e: unknown) {
+              const msg: string = (e as Error)?.message ?? '';
+              // 이미 적용된 DDL(컬럼/테이블 중복)은 건너뜀 — 비정상 종료로 인한 버전 불일치 복구
+              if (msg.includes('duplicate column name') || msg.includes('already exists')) {
+                if (debug) {
+                  console.log(`[migrator] Skipping already-applied statement in ${file}: ${stmt.slice(0, 60)}`);
+                }
+                continue;
+              }
+              throw e;
             }
-          })();
-        }
+          }
+          db.prepare(`PRAGMA user_version = ${version}`).run();
+        })();
 
-        // PRAGMA는 트랜잭션 밖에서 실행
+        // 파일에 명시된 다른 PRAGMA는 트랜잭션 밖에서 실행
         for (const stmt of pragmaStmts) {
           db.prepare(stmt).run();
         }
-
-        // 마이그레이션 완료 후 user_version 자동 설정 (트랜잭션 밖)
-        db.prepare(`PRAGMA user_version = ${version}`).run();
 
         if (debug) {
           console.log(`[migrator] Applied ${file} (version ${version})`);
