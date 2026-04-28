@@ -1,4 +1,5 @@
 // 세션 상세 뷰 모듈
+import { subTypeOf, SUB_TYPES } from './request-types.js';
 import { escHtml, fmtToken, fmtDate, fmtTime, formatDuration } from './formatters.js';
 import { makeRequestRow, typeBadge, contextPreview, toolStatusBadge, toolResponseHint, toolIconHtml, targetInnerHtml, FLAT_VIEW_COLS, togglePromptExpand, _promptCache } from './renderers.js';
 import { renderContextChart, clearContextChart } from './context-chart.js';
@@ -66,9 +67,8 @@ export function applyDetailFilter() {
   const countMap = { all: _detailAllRequests.length, prompt: 0, tool_call: 0, system: 0, agent: 0, skill: 0, mcp: 0 };
   _detailAllRequests.forEach(r => {
     if (r.type in countMap) countMap[r.type]++;
-    if (r.tool_name === 'Agent') countMap.agent++;
-    else if (r.tool_name === 'Skill') countMap.skill++;
-    else if (r.tool_name?.startsWith('mcp__')) countMap.mcp++;
+    const sub = subTypeOf(r);
+    if (sub) countMap[sub]++;
   });
   const labelMap = {
     all:      `All (${countMap.all})`,
@@ -84,9 +84,7 @@ export function applyDetailFilter() {
   });
 
   const flatFiltered = _detailFilter === 'all'    ? _detailAllRequests
-    : _detailFilter === 'agent'                   ? _detailAllRequests.filter(r => r.tool_name === 'Agent')
-    : _detailFilter === 'skill'                   ? _detailAllRequests.filter(r => r.tool_name === 'Skill')
-    : _detailFilter === 'mcp'                     ? _detailAllRequests.filter(r => r.tool_name?.startsWith('mcp__'))
+    : SUB_TYPES.includes(_detailFilter)           ? _detailAllRequests.filter(r => subTypeOf(r) === _detailFilter)
     : _detailAllRequests.filter(r => r.type === _detailFilter);
   // ADR-011: anomaly map을 미리 빌드하여 detail flat에도 배지 적용
   const flatAnomalyMap = detectAnomalies(_detailAllRequests);
@@ -95,7 +93,7 @@ export function applyDetailFilter() {
   const turnFiltered = _detailFilter === 'all'                          ? _detailAllTurns
     : _detailFilter === 'tool_call'                                     ? _detailAllTurns.filter(t => t.tool_calls.length > 0)
     : _detailFilter === 'prompt'                                        ? _detailAllTurns.filter(t => !!t.prompt)
-    : ['agent', 'skill', 'mcp'].includes(_detailFilter)                ? _detailAllTurns.filter(t => t.tool_calls.length > 0)
+    : SUB_TYPES.includes(_detailFilter)                                ? _detailAllTurns.filter(t => t.tool_calls.length > 0)
     : [];
   renderTurnCards(turnFiltered, _detailAllTurns);
   renderContextChart(_detailAllTurns);

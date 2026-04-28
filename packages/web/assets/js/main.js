@@ -21,6 +21,7 @@ import { fmtToken, fmtDate, formatDuration } from './formatters.js';
 import { initColResize } from './col-resize.js';
 import { initPanelResize } from './panel-resize.js';
 import { initContextChart } from './context-chart.js';
+import { SUB_TYPES } from './request-types.js';
 import { initGantt } from './turn-gantt.js';
 import { initToolStats } from './tool-stats.js';
 import { initCacheTooltip } from './cache-tooltip.js';
@@ -333,9 +334,6 @@ function initEventDelegation() {
     }
     fetchDashboard(); fetchRequests(); fetchCacheStats(); fetchAllSessions();
   });
-
-  // Agent/Skill/MCP는 서버 type 컬럼이 아닌 tool_name 기반 클라이언트 필터 전용 (ADR-004)
-  const SUB_TYPES = ['agent', 'skill', 'mcp'];
 
   document.getElementById('typeFilterBtns').addEventListener('click', e => {
     const btn = e.target.closest('[data-filter]');

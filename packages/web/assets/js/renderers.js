@@ -1,5 +1,6 @@
 // HTML 빌더 모듈 — DOM 조작 없이 HTML 문자열 반환
 import { escHtml, fmtToken, fmtRelative, formatDuration, fmtTimestamp, shortModelName } from './formatters.js';
+import { subTypeOf } from './request-types.js';
 
 export const FLAT_VIEW_COLS  = 9;  // Time Action Target Model Message in out Cache Duration
 export const RECENT_REQ_COLS = 10; // + Session
@@ -280,12 +281,6 @@ function anomalyBadgesHtml(flags) {
   return [...flags].map(f => `<span class="mini-badge badge-${f}" data-mini-badge-tooltip="${f}">${f}</span>`).join('');
 }
 
-function subTypeOf(r) {
-  if (r.tool_name === 'Agent') return 'agent';
-  if (r.tool_name === 'Skill') return 'skill';
-  if (r.tool_name?.startsWith('mcp__')) return 'mcp';
-  return '';
-}
 
 export function makeRequestRow(r, opts = {}) {
   const fmtTs  = opts.fmtTime || fmtTimestamp;
