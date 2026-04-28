@@ -166,12 +166,25 @@ git merge {feature}/branch-b
 
 # 4. 통합 검증 (T-N: 회귀 테스트 태스크)
 bun test
+```
 
-# 5. worktree 정리
+**⚠️ 필수: worktree 정리 (merge 완료 직후 반드시 실행)**
+
+```bash
+# worktree 디렉토리 제거
 git worktree remove ../{feature}-branch-a
 git worktree remove ../{feature}-branch-b
+
+# 피처 브랜치 삭제
 git branch -d {feature}/branch-a {feature}/branch-b
+
+# 정리 완료 확인 — main worktree만 남아 있어야 함
+git worktree list
+git branch
 ```
+
+정리를 빠뜨리면 `git worktree list`에 고아 경로가 남고, 디렉토리가 디스크에 잔류합니다.
+통합 검증(`bun test`) 직후, 사용자에게 결과를 보고하기 **전에** 반드시 실행하세요.
 
 **서브에이전트 프롬프트에 반드시 포함할 내용:**
 - 작업 경로: `worktree 절대 경로` (예: `/path/to/{feature}-branch-a`)
