@@ -292,21 +292,7 @@
                   <input id="feedSearchInput" class="feed-search-input" type="text" placeholder="model / tool / message" autocomplete="off" />
                   <button class="feed-search-clear" id="feedSearchClear" aria-label="검색어 지우기">×</button>
                 </div>
-                <div id="typeFilterBtns" class="type-filter-btns">
-                  <div class="filter-group filter-group--all">
-                    <button class="type-filter-btn active" data-filter="all" title="모든 요청 타입 표시">All</button>
-                  </div>
-                  <div class="filter-group filter-group--request" aria-label="요청 종류">
-                    <button class="type-filter-btn type-filter-prompt" data-filter="prompt" title="사용자 입력(LLM 추론 요청)만 표시">prompt</button>
-                    <button class="type-filter-btn type-filter-system" data-filter="system" title="시스템 메시지(컨텍스트 주입 등)만 표시">system</button>
-                  </div>
-                  <div class="filter-group filter-group--tool" aria-label="도구 분류">
-                    <button class="type-filter-btn type-filter-tool_call" data-filter="tool_call" title="도구 실행 요청(Read/Write/Bash 등)만 표시">tool_call</button>
-                    <button class="type-filter-btn type-filter-agent" data-filter="agent" title="Agent 도구 실행만 표시">Agent</button>
-                    <button class="type-filter-btn type-filter-skill" data-filter="skill" title="Skill 도구 실행만 표시">Skill</button>
-                    <button class="type-filter-btn type-filter-mcp" data-filter="mcp" title="MCP 도구 실행만 표시">MCP</button>
-                  </div>
-                </div>
+                <div id="typeFilterBtns" class="type-filter-btns"></div>
               </div>
             </div>
             <div class="feed-body" id="feedBody">
@@ -354,21 +340,7 @@
                        placeholder="tool / message" autocomplete="off" />
                 <button class="feed-search-clear" id="detailSearchClear" aria-label="검색어 지우기">×</button>
               </div>
-              <div id="detailTypeFilterBtns" class="detail-type-filter-btns type-filter-btns">
-                <div class="filter-group filter-group--all">
-                  <button class="type-filter-btn active" data-detail-filter="all" title="모든 요청 타입 표시">All</button>
-                </div>
-                <div class="filter-group filter-group--request" aria-label="요청 종류">
-                  <button class="type-filter-btn type-filter-prompt" data-detail-filter="prompt" title="사용자 입력(LLM 추론 요청)만 표시">prompt</button>
-                  <button class="type-filter-btn type-filter-system" data-detail-filter="system" title="시스템 메시지(컨텍스트 주입 등)만 표시">system</button>
-                </div>
-                <div class="filter-group filter-group--tool" aria-label="도구 분류">
-                  <button class="type-filter-btn type-filter-tool_call" data-detail-filter="tool_call" title="도구 실행 요청(Read/Write/Bash 등)만 표시">tool_call</button>
-                  <button class="type-filter-btn type-filter-agent" data-detail-filter="agent" title="Agent 도구 실행만 표시">Agent</button>
-                  <button class="type-filter-btn type-filter-skill" data-detail-filter="skill" title="Skill 도구 실행만 표시">Skill</button>
-                  <button class="type-filter-btn type-filter-mcp" data-detail-filter="mcp" title="MCP 도구 실행만 표시">MCP</button>
-                </div>
-              </div>
+              <div id="detailTypeFilterBtns" class="detail-type-filter-btns type-filter-btns"></div>
             </div>
           </div>
 

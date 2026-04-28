@@ -22,6 +22,7 @@ import { initColResize } from './col-resize.js';
 import { initPanelResize } from './panel-resize.js';
 import { initContextChart } from './context-chart.js';
 import { SUB_TYPES } from './request-types.js';
+import { createFilterBar } from './components/filter-bar.js';
 import { initGantt } from './turn-gantt.js';
 import { initToolStats } from './tool-stats.js';
 import { initCacheTooltip } from './cache-tooltip.js';
@@ -111,9 +112,7 @@ async function selectSession(id) {
     : '';
 
   setDetailFilter('all');
-  document.querySelectorAll('#detailTypeFilterBtns .type-filter-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.detailFilter === 'all');
-  });
+  detailFilterBar?.setActive('all');
 
   try {
     // 데이터 로드 즉시 시작 (transitionend 기다리지 않음)
@@ -247,6 +246,8 @@ function manualRefresh() {
 let sseSource       = null;
 let retryTimer      = null;
 let refreshDebounce = null;
+let feedFilterBar   = null;
+let detailFilterBar = null;
 
 function connectSSE() {
   if (sseSource) { sseSource.close(); sseSource = null; }
@@ -335,18 +336,16 @@ function initEventDelegation() {
     fetchDashboard(); fetchRequests(); fetchCacheStats(); fetchAllSessions();
   });
 
-  document.getElementById('typeFilterBtns').addEventListener('click', e => {
-    const btn = e.target.closest('[data-filter]');
-    if (!btn) return;
-    setReqFilter(btn.dataset.filter);
-    document.querySelectorAll('#typeFilterBtns .type-filter-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    if (SUB_TYPES.includes(btn.dataset.filter)) {
-      // 서버에 agent/skill/mcp 타입이 없으므로 재조회 스킵 — 현재 DOM에서 data-sub-type 필터만 재적용
-      applyFeedSearch();
-    } else {
-      fetchRequests(false);
-    }
+  feedFilterBar = createFilterBar('typeFilterBtns', {
+    dataAttr: 'filter',
+    onChange(filter) {
+      setReqFilter(filter);
+      if (SUB_TYPES.includes(filter)) {
+        applyFeedSearch();
+      } else {
+        fetchRequests(false);
+      }
+    },
   });
 
   document.getElementById('loadMoreBtn').addEventListener('click', () => fetchRequests(true));
@@ -378,13 +377,12 @@ function initEventDelegation() {
   feedSearchClear.addEventListener('click', () => { feedSearchInput.value = ''; applyFeedSearch(); feedSearchInput.focus(); });
   document.addEventListener('feed:updated', applyFeedSearch);
 
-  document.getElementById('detailTypeFilterBtns').addEventListener('click', e => {
-    const btn = e.target.closest('[data-detail-filter]');
-    if (!btn) return;
-    setDetailFilter(btn.dataset.detailFilter);
-    document.querySelectorAll('#detailTypeFilterBtns .type-filter-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    applyDetailFilter();
+  detailFilterBar = createFilterBar('detailTypeFilterBtns', {
+    dataAttr: 'detail-filter',
+    onChange(filter) {
+      setDetailFilter(filter);
+      applyDetailFilter();
+    },
   });
 
   document.getElementById('detailView').addEventListener('click', e => {
@@ -533,10 +531,10 @@ function activeSearchInput() {
   return document.getElementById('feedSearchInput');
 }
 
-// 현재 활성 뷰의 type filter 버튼 컨테이너
+// 현재 활성 뷰의 type filter 버튼 NodeList
 function activeTypeFilterButtons() {
-  const id = uiState.rightView === 'detail' ? 'detailTypeFilterBtns' : 'typeFilterBtns';
-  return document.querySelectorAll(`#${id} .type-filter-btn`);
+  return (uiState.rightView === 'detail' ? detailFilterBar : feedFilterBar)?.buttons()
+    ?? document.querySelectorAll('.type-filter-btn-none');
 }
 
 // 입력 중에는 단축키 가로채지 않음 (검색 input 등)
