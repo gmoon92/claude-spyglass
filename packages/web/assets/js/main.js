@@ -32,6 +32,7 @@ import { initToolStats } from './tool-stats.js';
 import { initCacheTooltip } from './cache-tooltip.js';
 import { initStatTooltip } from './stat-tooltip.js';
 import { initCachePanelTooltip } from './cache-panel-tooltip.js';
+import { connectSSE } from './sse.js';
 
 // ── localStorage ─────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'spyglass:lastProject';
@@ -244,19 +245,14 @@ function manualRefresh() {
 }
 
 // ── SSE ──────────────────────────────────────────────────────────────────────
-let sseSource       = null;
-let retryTimer      = null;
 let refreshDebounce = null;
 let feedFilterBar    = null;
 let detailFilterBar  = null;
 let feedSearchBox    = null;
 
-function connectSSE() {
-  if (sseSource) { sseSource.close(); sseSource = null; }
-  try {
-    sseSource = new EventSource('/events');
-
-    sseSource.addEventListener('new_request', (e) => {
+function startSSE() {
+  connectSSE({
+    onNewRequest(e) {
       recordRequest();
       drawTimeline();
       try {
@@ -280,29 +276,22 @@ function connectSSE() {
 
       clearTimeout(refreshDebounce);
       refreshDebounce = setTimeout(() => fetchDashboard(), 1000);
-    });
-
-    sseSource.onopen = () => {
+    },
+    onOpen() {
       clearError();
-      clearTimeout(retryTimer);
       setIsSSEConnected(true);
       const loadMoreBtn = document.getElementById('loadMoreBtn');
       if (loadMoreBtn) loadMoreBtn.style.display = 'none';
       fetchDashboard();
       fetchRequests();
       fetchAllSessions();
-    };
-
-    sseSource.onerror = () => {
+    },
+    onError() {
       setIsSSEConnected(false);
-      sseSource.close(); sseSource = null;
       resetScrollLockCount();
       updateScrollLockBanner();
-      retryTimer = setTimeout(connectSSE, 5000);
-    };
-  } catch {
-    retryTimer = setTimeout(connectSSE, 5000);
-  }
+    },
+  });
 }
 
 // ── 이벤트 위임 ──────────────────────────────────────────────────────────────
@@ -721,7 +710,7 @@ function init() {
   fetchRequests();
   fetchCacheStats();
   fetchAllSessions().then(() => autoActivateProject());
-  connectSSE();
+  startSSE();
   restorePanelHiddenState();
   restoreChartCollapsedState();
   document.getElementById('btnPanelCollapse').addEventListener('click', toggleLeftPanel);
