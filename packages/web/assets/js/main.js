@@ -251,4 +251,38 @@ function init() {
   setInterval(() => fetchAllSessions(), 30000);
 }
 
+// 키보드 단축키 모달 — index.html 다이어트로 JS 주입
+document.body.insertAdjacentHTML('beforeend', `
+  <div class="kbd-help-backdrop" id="kbdHelpBackdrop" role="dialog" aria-modal="true" aria-labelledby="kbdHelpTitle">
+    <div class="kbd-help-modal" role="document">
+      <div class="kbd-help-header">
+        <span class="kbd-help-title" id="kbdHelpTitle">키보드 단축키</span>
+        <button class="kbd-help-close" id="kbdHelpClose" aria-label="닫기">×</button>
+      </div>
+      <div class="kbd-help-body">
+        <div class="kbd-help-section">
+          <div class="kbd-help-section-title">탐색</div>
+          <div class="kbd-help-row"><span class="kbd-key">/</span><span class="kbd-help-desc">검색창에 포커스</span></div>
+          <div class="kbd-help-row"><span class="kbd-key">Esc</span><span class="kbd-help-desc">모달 / 확장 패널 / 검색 / 상세 뷰 닫기</span></div>
+          <div class="kbd-help-row"><span class="kbd-key">⌘F</span><span class="kbd-help-desc">검색창 포커스 (Ctrl+F)</span></div>
+        </div>
+        <div class="kbd-help-section">
+          <div class="kbd-help-section-title">필터</div>
+          <div class="kbd-help-row"><span class="kbd-key">1</span><span class="kbd-help-desc">All</span></div>
+          <div class="kbd-help-row"><span class="kbd-key">2</span><span class="kbd-help-desc">prompt</span></div>
+          <div class="kbd-help-row"><span class="kbd-key">3</span><span class="kbd-help-desc">system</span></div>
+          <div class="kbd-help-row"><span class="kbd-key">4</span><span class="kbd-help-desc">tool_call</span></div>
+          <div class="kbd-help-row"><span class="kbd-key">5</span><span class="kbd-help-desc">Agent</span></div>
+          <div class="kbd-help-row"><span class="kbd-key">6</span><span class="kbd-help-desc">Skill</span></div>
+          <div class="kbd-help-row"><span class="kbd-key">7</span><span class="kbd-help-desc">MCP</span></div>
+        </div>
+        <div class="kbd-help-section">
+          <div class="kbd-help-section-title">도움말</div>
+          <div class="kbd-help-row"><span class="kbd-key">?</span><span class="kbd-help-desc">이 도움말 토글</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
 document.addEventListener('DOMContentLoaded', init);
