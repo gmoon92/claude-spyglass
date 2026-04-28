@@ -1,6 +1,7 @@
 // 좌측 패널 모듈 — 프로젝트/세션/툴 렌더링
 import { fmt, fmtToken, escHtml } from './formatters.js';
 import { makeSkeletonRows, makeSessionRow, toolIconHtml } from './renderers.js';
+import { getSelectedProject, getSelectedSession } from './state.js';
 
 // ADR-016: tool-categories 6 카테고리 색상 매핑
 const CATEGORY_COLORS = {
@@ -36,15 +37,9 @@ export function renderToolCategories(categories) {
   }).join('');
 }
 
-let _selectedProject = null;
-let _selectedSession = null;
 let _allProjects     = [];
 let _allSessions     = [];
 
-export function getSelectedProject() { return _selectedProject; }
-export function getSelectedSession() { return _selectedSession; }
-export function setSelectedProject(p) { _selectedProject = p; }
-export function setSelectedSession(s) { _selectedSession = s; }
 export function getAllSessions()  { return _allSessions; }
 export function setAllSessions(list) { _allSessions = list; }
 export function getAllProjects()  { return _allProjects; }
@@ -57,7 +52,7 @@ export function renderBrowserProjects() {
   }
   const maxT = Math.max(..._allProjects.map(p => p.total_tokens || 0), 1);
   body.innerHTML = _allProjects.map(p => {
-    const isSelected = _selectedProject === p.project_name;
+    const isSelected = getSelectedProject() === p.project_name;
     const pct        = Math.max(1, Math.round((p.total_tokens || 0) / maxT * 100));
     return `<tr class="clickable${isSelected ? ' row-selected' : ''}" data-project="${escHtml(p.project_name)}">
       <td class="cell-proj-name" title="${escHtml(p.project_name || '')}">${escHtml(p.project_name || '—')}</td>
@@ -75,13 +70,13 @@ export function renderBrowserProjects() {
 export function renderBrowserSessions() {
   const body = document.getElementById('browserSessionsBody');
   const hint = document.getElementById('sessionPaneHint');
-  if (!_selectedProject) {
+  if (!getSelectedProject()) {
     body.innerHTML = '<tr><td colspan="4" class="table-empty">—</td></tr>';
     hint.textContent = '프로젝트를 선택하세요';
     return;
   }
   const list = _allSessions
-    .filter(s => s.project_name === _selectedProject)
+    .filter(s => s.project_name === getSelectedProject())
     .sort((a, b) => {
       const aActive = a.ended_at == null ? 1 : 0;
       const bActive = b.ended_at == null ? 1 : 0;
@@ -91,12 +86,12 @@ export function renderBrowserSessions() {
       if (bLast !== aLast) return bLast - aLast;
       return (b.started_at || 0) - (a.started_at || 0);
     });
-  hint.textContent = `${_selectedProject} · ${list.length}개`;
+  hint.textContent = `${getSelectedProject()} · ${list.length}개`;
   if (!list.length) {
     body.innerHTML = '<tr><td colspan="4" class="table-empty">데이터가 없습니다</td></tr>';
     return;
   }
-  body.innerHTML = list.map(s => makeSessionRow(s, _selectedSession === s.id)).join('');
+  body.innerHTML = list.map(s => makeSessionRow(s, getSelectedSession() === s.id)).join('');
 }
 
 export function renderProjects(list) {

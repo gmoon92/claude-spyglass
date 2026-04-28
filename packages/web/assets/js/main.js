@@ -4,10 +4,12 @@ import { fetchModelUsage } from './metrics-api.js';
 import { togglePromptExpand, makeRequestRow, makeTargetCell } from './renderers.js';
 import { clearError, updateScrollLockBanner, jumpToLatest, addScrollLockCount, resetScrollLockCount } from './infra.js';
 import {
-  getSelectedProject, getSelectedSession,
-  setSelectedProject, setSelectedSession,
   getAllSessions, getAllProjects, renderBrowserProjects, renderBrowserSessions, showSkeletonSessions,
 } from './left-panel.js';
+import {
+  getRightView, setRightView, getDetailTab, setDetailTab,
+  getSelectedProject, getSelectedSession, setSelectedProject, setSelectedSession,
+} from './state.js';
 import {
   setDetailFilter, applyDetailFilter, setDetailView, toggleTurn,
   refreshDetailSession, loadSessionDetail, initDetailSearch, initGanttNavigation,
@@ -34,14 +36,11 @@ import { initCachePanelTooltip } from './cache-panel-tooltip.js';
 // ── localStorage ─────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'spyglass:lastProject';
 
-// ── UI 상태 ──────────────────────────────────────────────────────────────────
-const uiState = { rightView: 'default', detailTab: 'flat' };
-
 // 세션 선택 작업 취소용 AbortController
 let sessionAbortController = null;
 
 function renderRightPanel() {
-  const isDetail = uiState.rightView === 'detail';
+  const isDetail = getRightView() === 'detail';
   document.getElementById('defaultView').classList.toggle('active', !isDetail);
   document.getElementById('detailView').classList.toggle('active', isDetail);
 }
@@ -69,8 +68,8 @@ function selectProject(name) {
   localStorage.setItem(STORAGE_KEY, name);
   setSelectedProject(name);
   setSelectedSession(null);
-  if (uiState.rightView === 'detail') {
-    uiState.rightView = 'default';
+  if (getRightView() === 'detail') {
+    setRightView('default');
     renderRightPanel();
   }
   renderBrowserProjects();
@@ -93,8 +92,8 @@ async function selectSession(id) {
   setSelectedSession(id);
   renderBrowserSessions();
 
-  uiState.rightView = 'detail';
-  uiState.detailTab = 'flat';
+  setRightView('detail');
+  setDetailTab('flat');
   document.getElementById('detailView').classList.remove('detail-collapsed');
   setChartMode('detail');                  // ADR-017: 차트가 세션 모드로 전환
   renderRightPanel();
@@ -127,7 +126,7 @@ async function selectSession(id) {
     // 취소된 경우가 아닐 때만 UI 정리
     if (!signal.aborted) {
       document.getElementById('detailLoading').style.display = 'none';
-      setDetailView(uiState.detailTab);
+      setDetailView(getDetailTab());
     }
     // 이 호출의 컨트롤러가 여전히 현재 컨트롤러인 경우에만 null 처리
     if (sessionAbortController === controller) {
@@ -175,7 +174,7 @@ async function setChartMode(mode) {
 function closeDetail() {
   sessionAbortController?.abort();
   setSelectedSession(null);
-  uiState.rightView = 'default';
+  setRightView('default');
   setChartMode('default');                              // ADR-017: 차트 default 모드 복귀
   renderRightPanel();
   renderBrowserSessions();
@@ -319,7 +318,7 @@ function initEventDelegation() {
 
   document.getElementById('detailTabBar').addEventListener('click', e => {
     const tab = e.target.closest('[data-tab]');
-    if (tab) { uiState.detailTab = tab.dataset.tab; setDetailView(tab.dataset.tab); }
+    if (tab) { setDetailTab(tab.dataset.tab); setDetailView(tab.dataset.tab); }
   });
 
   document.getElementById('retryBtn').addEventListener('click', manualRefresh);
@@ -529,13 +528,13 @@ function toggleKbdHelp() {
 
 // 현재 활성 뷰의 검색 input
 function activeSearchInput() {
-  const box = uiState.rightView === 'detail' ? detailSearchBox : feedSearchBox;
+  const box = getRightView() === 'detail' ? detailSearchBox : feedSearchBox;
   return box?.element() ?? null;
 }
 
 // 현재 활성 뷰의 type filter 버튼 NodeList
 function activeTypeFilterButtons() {
-  return (uiState.rightView === 'detail' ? detailFilterBar : feedFilterBar)?.buttons()
+  return (getRightView() === 'detail' ? detailFilterBar : feedFilterBar)?.buttons()
     ?? document.querySelectorAll('.type-filter-btn-none');
 }
 
@@ -560,7 +559,7 @@ function handleEscape() {
     return;
   }
   // detail 뷰 닫기
-  if (uiState.rightView === 'detail') {
+  if (getRightView() === 'detail') {
     closeDetail();
     return;
   }
@@ -675,7 +674,7 @@ function initLogoHome() {
   logo.style.cursor = 'pointer';
 
   const goHome = () => {
-    if (uiState.rightView === 'detail') closeDetail();
+    if (getRightView() === 'detail') closeDetail();
     setSelectedSession(null);
     setSelectedProject(null);
     localStorage.removeItem('spyglass:lastProject');
