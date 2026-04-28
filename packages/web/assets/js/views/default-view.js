@@ -23,6 +23,13 @@ const CHART_COLLAPSED_KEY = 'spyglass:chart-collapsed';
 const PANEL_HIDDEN_KEY   = 'spyglass:left-panel-hidden';
 const KBD_HELP_BACKDROP_ID = 'kbdHelpBackdrop';
 
+// ── 공통 뷰 전환 ─────────────────────────────────────────────────────────────
+export function renderRightPanel() {
+  const isDetail = getRightView() === 'detail';
+  document.getElementById('defaultView').classList.toggle('active', !isDetail);
+  document.getElementById('detailView').classList.toggle('active', isDetail);
+}
+
 // ── 차트 모드 ─────────────────────────────────────────────────────────────────
 export async function setChartMode(mode) {
   const chartSection = document.getElementById('chartSection');

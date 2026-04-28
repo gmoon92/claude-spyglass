@@ -1,24 +1,24 @@
-// 진입점 — 초기화, 이벤트 위임, SSE, selectProject/Session
+// 진입점 — 초기화, 이벤트 위임, SSE, selectProject
 import { initTypeColors, recordRequest, drawTimeline, advanceBuckets, initBuckets } from './chart.js';
 import { clearError, updateScrollLockBanner, jumpToLatest, resetScrollLockCount } from './infra.js';
 import {
   getAllSessions, getAllProjects, renderBrowserProjects, renderBrowserSessions, showSkeletonSessions,
 } from './left-panel.js';
 import {
-  getRightView, setRightView, getDetailTab, setDetailTab,
+  getRightView, setRightView, setDetailTab,
   getSelectedProject, getSelectedSession, setSelectedProject, setSelectedSession,
-  setDetailFilterBar, getDetailFilterBar,
+  setDetailFilterBar,
 } from './state.js';
 import {
   setDetailFilter, applyDetailFilter, setDetailView, toggleTurn,
-  refreshDetailSession, loadSessionDetail, initDetailSearch, initGanttNavigation,
+  refreshDetailSession, initDetailSearch, initGanttNavigation,
   toggleCardExpand,
 } from './session-detail.js';
 import {
   fetchDashboard, fetchRequests, fetchAllSessions, fetchSessionsByProject,
   fetchCacheStats, setActiveRange, setIsSSEConnected,
 } from './api.js';
-import { fmtToken, fmtDate } from './formatters.js';
+import { fmtToken } from './formatters.js';
 import { togglePromptExpand } from './renderers.js';
 import { initColResize } from './col-resize.js';
 import { initPanelResize } from './panel-resize.js';
@@ -31,19 +31,14 @@ import { initStatTooltip } from './stat-tooltip.js';
 import { initCachePanelTooltip } from './cache-panel-tooltip.js';
 import { connectSSE } from './sse.js';
 import {
-  setChartMode, prependRequest,
+  setChartMode, prependRequest, renderRightPanel,
   initDefaultView, toggleChartCollapse, restoreChartCollapsedState,
   migrateLocalStorage, restorePanelHiddenState, toggleLeftPanel,
 } from './views/default-view.js';
+import { loadSession, abortCurrentSession } from './views/detail-view.js';
 
 const STORAGE_KEY = 'spyglass:lastProject';
-let sessionAbortController = null;
 
-function renderRightPanel() {
-  const isDetail = getRightView() === 'detail';
-  document.getElementById('defaultView').classList.toggle('active', !isDetail);
-  document.getElementById('detailView').classList.toggle('active', isDetail);
-}
 function autoActivateProject() {
   if (getSelectedProject()) return;
   const projects = getAllProjects();
@@ -72,47 +67,8 @@ function selectProject(name) {
   fetchSessionsByProject(name);
 }
 
-async function selectSession(id) {
-  if (id === getSelectedSession()) return;
-  sessionAbortController?.abort();
-  const controller = new AbortController();
-  sessionAbortController = controller;
-  const { signal } = controller;
-  setSelectedSession(id);
-  renderBrowserSessions();
-  setRightView('detail');
-  setDetailTab('flat');
-  document.getElementById('detailView').classList.remove('detail-collapsed');
-  setChartMode('detail');
-  renderRightPanel();
-  document.getElementById('detailLoading').style.display = 'block';
-  document.getElementById('detailFlatView').style.display = 'none';
-  document.getElementById('detailTurnView').style.display = 'none';
-  const session = getAllSessions().find(s => s.id === id);
-  const detailIdEl = document.getElementById('detailSessionId');
-  detailIdEl.textContent = id.slice(0, 8) + '…';
-  detailIdEl.title = id;
-  document.getElementById('detailProject').textContent = session ? session.project_name : '';
-  document.getElementById('detailTokens').textContent = session ? `총 ${fmtToken(session.total_tokens)} 토큰` : '';
-  document.getElementById('detailEndedAt').textContent = session?.ended_at ? `종료: ${fmtDate(session.ended_at)}` : '';
-  setDetailFilter('all');
-  getDetailFilterBar()?.setActive('all');
-  try {
-    await loadSessionDetail(id, { signal });
-  } catch (e) {
-    if (e.name === 'AbortError') return;
-    applyDetailFilter();
-  } finally {
-    if (!signal.aborted) {
-      document.getElementById('detailLoading').style.display = 'none';
-      setDetailView(getDetailTab());
-    }
-    if (sessionAbortController === controller) sessionAbortController = null;
-  }
-}
-
 function closeDetail() {
-  sessionAbortController?.abort();
+  abortCurrentSession();
   setSelectedSession(null);
   setRightView('default');
   setChartMode('default');
@@ -177,7 +133,7 @@ function initEventDelegation() {
     const projRow = e.target.closest('[data-project]');
     if (projRow) { selectProject(projRow.dataset.project); return; }
     const sessRow = e.target.closest('[data-session-id]');
-    if (sessRow)  { selectSession(sessRow.dataset.sessionId); }
+    if (sessRow)  { loadSession(sessRow.dataset.sessionId); }
   });
 
   document.getElementById('detailTabBar').addEventListener('click', e => {
@@ -267,7 +223,7 @@ function init() {
   document.getElementById('btnToggleChart').addEventListener('click', toggleChartCollapse);
   initEventDelegation();
   initDefaultView({
-    onSelectSession: selectSession,
+    onSelectSession: loadSession,
     onCloseDetail: closeDetail,
     onGoHome: () => {
       if (getRightView() === 'detail') closeDetail();
