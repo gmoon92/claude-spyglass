@@ -5,10 +5,7 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Claude Spyglass</title>
-
-  <!-- ── 디자인 토큰 (반드시 첫 번째) ── -->
   <link rel="stylesheet" href="/assets/css/design-tokens.css">
-  <!-- ── 글로벌 컴포넌트 SSoT (ADR-003 / ADR-009 / ADR-012) ── -->
   <link rel="stylesheet" href="/assets/css/card.css">
   <link rel="stylesheet" href="/assets/css/state.css">
   <link rel="stylesheet" href="/assets/css/keyboard-help.css">
@@ -28,13 +25,9 @@
 </head>
 <body>
 
-  <!-- HEADER (header-summary-merge ADR-004 — 글로벌 네비/필터 전용. stats는 view-section-header로 이전) -->
   <header class="header">
     <div class="header-left">
       <div class="logo">Claude<span>Spyglass</span></div>
-      <!-- LIVE 배지 — header-summary-merge ADR-007: 활성 세션 chip 통합
-           dot(SSE 연결 상태) + LABEL(LIVE) + chip(active sessions).
-           chip은 .header-stat SSoT로 stat-tooltip / api.js와 호환. -->
       <span class="badge-live" id="liveBadge" title="SSE 실시간 연결 상태 + 활성 세션 수">
         <span class="dot"></span>
         <span class="badge-live-label">LIVE</span>
@@ -53,7 +46,6 @@
     </div>
   </header>
 
-  <!-- ERROR BANNER -->
   <div class="error-banner" id="errorBanner">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
       <circle cx="8" cy="8" r="6.5"/><line x1="8" y1="5" x2="8" y2="9"/><circle cx="8" cy="11.5" r="0.6" fill="currentColor"/>
@@ -62,20 +54,16 @@
     <button class="retry-btn" id="retryBtn">다시 시도</button>
   </div>
 
-  <!-- MAIN LAYOUT -->
   <div class="main-layout">
 
-    <!-- LEFT PANEL -->
     <aside class="left-panel">
       <div class="panel-resize-handle" title="드래그: 너비 조절 · 더블클릭: 콘텐츠 너비에 맞춤"></div>
-      <!-- 패널 접기/펼치기 토글 — border 위 floating, 패널 세로 가운데 고정 -->
       <button class="btn-panel-collapse" id="btnPanelCollapse" title="왼쪽 패널 숨기기 / 펼치기" aria-label="왼쪽 패널 숨기기">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <path d="M7.5 2.5L3.5 6L7.5 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
 
-      <!-- 프로젝트 -->
       <div class="panel-section flex-section">
         <div class="panel-header">
           <span class="panel-label">프로젝트</span>
@@ -102,7 +90,6 @@
         </div>
       </div>
 
-      <!-- 세션 -->
       <div class="panel-section flex-section">
         <div class="panel-header">
           <span class="panel-label">세션</span>
@@ -117,7 +104,6 @@
         </div>
       </div>
 
-      <!-- 툴 통계 — ADR-016 도구별/카테고리별 토글 -->
       <div class="panel-section tool-stats-section" id="panelTools">
         <div class="panel-header">
           <span class="panel-label">툴 통계</span>
@@ -143,22 +129,14 @@
 
     </aside>
 
-    <!-- RIGHT PANEL -->
     <main class="right-panel">
 
-      <!-- 차트: 모드 전환 (default/detail) — ADR-003 .card + ADR-017 모드 통합 -->
       <div class="view-section card card--compact" id="chartSection">
-        <!-- header-summary-merge ADR-007 + ADR-008 — Stats Distribution.
-             view-section-header는 "이 섹션이 무엇인가"만 알린다(요청 추이 / chart-actions).
-             stats는 자기 의미와 가까운 영역으로 분산:
-              · 활성 세션 → header LIVE 배지
-              · 오류율 / 평균 / P95 / 세션 / 요청 / 토큰 → chart-wrap 내 .timeline-meta (ADR-008: 6 stat 통합) -->
         <div class="view-section-header">
           <div class="chart-default-meta">
             <span class="panel-label">요청 추이 (실시간)</span>
             <span class="panel-hint" id="chartSubtitle">최근 30분</span>
           </div>
-          <!-- detail 모드 메타 (세션 메타 — ADR-017 — detail-header 통합) -->
           <div class="chart-detail-meta" hidden>
             <span class="detail-session-id" id="detailSessionId">—</span>
             <span class="detail-project" id="detailProject">—</span>
@@ -166,8 +144,6 @@
             <span class="detail-ended-at" id="detailEndedAt"></span>
             <div class="detail-agg-badges detail-agg-badges--hidden" id="detailBadges"></div>
           </div>
-          <!-- ADR-008: chart-actions에서 btn-close / detail-actions-sep 제거.
-               closeDetail은 Esc 키 / 로고 클릭으로 트리거. -->
           <div class="chart-actions">
             <button class="btn-toggle" id="btnToggleChart" title="접기 / 펼치기" aria-label="접기">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -178,10 +154,6 @@
         </div>
         <div class="charts-inner">
           <div class="chart-wrap" data-ctx-tooltip="context-growth">
-            <!-- ADR-008 — timeline-meta 통합 : 두 그룹 (지난 30분 / 오늘).
-                 그룹 1: 품질 (평균 · P95 · 오류율) — timeline 윈도우 컨텍스트
-                 그룹 2: 볼륨 (세션 · 요청 · 토큰)   — 오늘 누적 컨텍스트
-                 detail 모드에서 자동 숨김(.chart-mode-detail .timeline-meta { display:none }). -->
             <div class="timeline-meta" id="timelineMeta" role="group" aria-label="요약 지표">
               <div class="timeline-meta-group" role="group" aria-label="요청 품질 (지난 30분)">
                 <span class="timeline-meta-group-label">지난 30분</span>
@@ -214,7 +186,6 @@
                 </div>
               </div>
             </div>
-            <!-- default 모드: timelineChart / detail 모드: contextGrowthChart — display 토글 -->
             <canvas id="timelineChart" height="64"></canvas>
             <canvas id="contextGrowthChart" hidden></canvas>
             <div class="context-chart-empty" id="contextChartEmpty" hidden>
@@ -232,14 +203,11 @@
                 <div class="state-loading" style="padding:0">불러오는 중…</div>
               </div>
             </div>
-            <!-- ADR-008: donut-mode-toggle 제거. 도넛은 default→model / detail→type 자동 전환 (setChartMode가 결정). -->
             <div class="donut-meta">
               <div class="donut-total" id="typeTotal">—</div>
             </div>
           </div>
 
-          <!-- Cache Intelligence Panel — ADR-008: cache-mode-toggle / cache-panel-matrix 제거.
-               cache-panel-overall은 cache 효율 단일 책임 (Hit Rate / Cost / Creation·Read). -->
           <div class="cache-panel" id="cachePanel">
             <div class="cache-panel-overall" id="cachePanelOverall">
               <div class="cache-section" data-cache-panel-tooltip="hit-rate">
@@ -278,10 +246,8 @@
         </div>
       </div>
 
-      <!-- 전환 영역 -->
       <div class="content-switcher">
 
-        <!-- 기본 뷰: 최근 요청 피드 — ADR-003 .card 적용 -->
         <div id="defaultView" class="right-view active">
           <div class="view-section fill card">
             <div class="view-section-header">
@@ -318,7 +284,6 @@
           </div>
         </div>
 
-        <!-- 세션 상세 뷰 — ADR-003 .card 적용 / ADR-017 — detail-header / context-chart는 chartSection으로 통합되어 제거됨 -->
         <div id="detailView" class="right-view card">
 
           <div class="view-tab-bar" id="detailTabBar">
@@ -390,71 +355,6 @@
     Claude Spyglass — real-time Claude Code monitor
     <button class="footer-help-btn" id="btnHelpOpen" title="단축키 (?)" aria-label="키보드 단축키">?</button>
   </footer>
-
-  <!-- Keyboard Help Modal (ADR-012) -->
-  <div class="kbd-help-backdrop" id="kbdHelpBackdrop" role="dialog" aria-modal="true" aria-labelledby="kbdHelpTitle">
-    <div class="kbd-help-modal" role="document">
-      <div class="kbd-help-header">
-        <span class="kbd-help-title" id="kbdHelpTitle">키보드 단축키</span>
-        <button class="kbd-help-close" id="kbdHelpClose" aria-label="닫기">×</button>
-      </div>
-      <div class="kbd-help-body">
-        <div class="kbd-help-section">
-          <div class="kbd-help-section-title">탐색</div>
-          <div class="kbd-help-row">
-            <span class="kbd-key">/</span>
-            <span class="kbd-help-desc">검색창에 포커스</span>
-          </div>
-          <div class="kbd-help-row">
-            <span class="kbd-key">Esc</span>
-            <span class="kbd-help-desc">모달 / 확장 패널 / 검색 / 상세 뷰 닫기</span>
-          </div>
-          <div class="kbd-help-row">
-            <span class="kbd-key">⌘F</span>
-            <span class="kbd-help-desc">검색창 포커스 (Ctrl+F)</span>
-          </div>
-        </div>
-        <div class="kbd-help-section">
-          <div class="kbd-help-section-title">필터</div>
-          <div class="kbd-help-row">
-            <span class="kbd-key">1</span>
-            <span class="kbd-help-desc">All</span>
-          </div>
-          <div class="kbd-help-row">
-            <span class="kbd-key">2</span>
-            <span class="kbd-help-desc">prompt</span>
-          </div>
-          <div class="kbd-help-row">
-            <span class="kbd-key">3</span>
-            <span class="kbd-help-desc">system</span>
-          </div>
-          <div class="kbd-help-row">
-            <span class="kbd-key">4</span>
-            <span class="kbd-help-desc">tool_call</span>
-          </div>
-          <div class="kbd-help-row">
-            <span class="kbd-key">5</span>
-            <span class="kbd-help-desc">Agent</span>
-          </div>
-          <div class="kbd-help-row">
-            <span class="kbd-key">6</span>
-            <span class="kbd-help-desc">Skill</span>
-          </div>
-          <div class="kbd-help-row">
-            <span class="kbd-key">7</span>
-            <span class="kbd-help-desc">MCP</span>
-          </div>
-        </div>
-        <div class="kbd-help-section">
-          <div class="kbd-help-section-title">도움말</div>
-          <div class="kbd-help-row">
-            <span class="kbd-key">?</span>
-            <span class="kbd-help-desc">이 도움말 토글</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <script type="module" src="/assets/js/main.js"></script>
 </body>
