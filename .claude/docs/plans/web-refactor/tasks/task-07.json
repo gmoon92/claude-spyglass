@@ -1,7 +1,7 @@
 {
   "id": "T-07",
   "title": "api.js showError 중복 제거 + toolIconHtml 참조 통일",
-  "status": "pending",
+  "status": "done",
   "type": "refactor",
   "phase": 1,
   "risk": "low",

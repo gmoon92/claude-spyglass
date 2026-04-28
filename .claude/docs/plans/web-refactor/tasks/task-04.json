@@ -1,7 +1,7 @@
 {
   "id": "T-04",
   "title": "request-types.js SSoT 생성 + 3개 파일 참조 교체",
-  "status": "pending",
+  "status": "done",
   "type": "refactor",
   "phase": 1,
   "risk": "low",

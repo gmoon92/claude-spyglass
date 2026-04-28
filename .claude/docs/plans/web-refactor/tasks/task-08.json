@@ -1,7 +1,7 @@
 {
   "id": "T-08",
   "title": "Phase 1 회귀 검증 (6개 시나리오)",
-  "status": "pending",
+  "status": "done",
   "type": "test",
   "phase": 1,
   "risk": "low",

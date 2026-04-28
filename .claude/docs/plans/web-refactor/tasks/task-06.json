@@ -1,7 +1,7 @@
 {
   "id": "T-06",
   "title": "search-box.js 컴포넌트 추출",
-  "status": "pending",
+  "status": "done",
   "type": "refactor",
   "phase": 1,
   "risk": "low",
