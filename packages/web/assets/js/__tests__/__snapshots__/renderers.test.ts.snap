@@ -2,7 +2,7 @@
 
 exports[`makeRequestRow prompt 타입 with showSession: false 1`] = `
 "<tr data-type="prompt" data-sub-type="" data-request-id="r1">
-    <td class="cell-time num">오전 10:00 · 4시간 전</td>
+    <td class="cell-time num">오전 10:00 · 5시간 전</td>
     <td class="cell-action"><span class="type-badge type-prompt" title="prompt" aria-label="prompt">prompt</span></td>
     <td class="cell-target"><span class="target-role-badge role-badge-user"><span class="role-icon">◉</span>user</span></td>
     <td class="cell-model"><span class="model-name">claude-3-5-sonnet</span></td>
@@ -17,7 +17,7 @@ exports[`makeRequestRow prompt 타입 with showSession: false 1`] = `
 
 exports[`makeRequestRow prompt 타입 with showSession: true 1`] = `
 "<tr data-type="prompt" data-sub-type="" data-request-id="r1">
-    <td class="cell-time num">오전 10:00 · 4시간 전</td>
+    <td class="cell-time num">오전 10:00 · 5시간 전</td>
     <td class="cell-action"><span class="type-badge type-prompt" title="prompt" aria-label="prompt">prompt</span></td>
     <td class="cell-target"><span class="target-role-badge role-badge-user"><span class="role-icon">◉</span>user</span></td>
     <td class="cell-model"><span class="model-name">claude-3-5-sonnet</span></td>
@@ -32,7 +32,7 @@ exports[`makeRequestRow prompt 타입 with showSession: true 1`] = `
 
 exports[`makeRequestRow tool_call 타입 with 정상 응답 1`] = `
 "<tr data-type="tool_call" data-sub-type="" data-request-id="r2">
-    <td class="cell-time num">오전 10:01 · 4시간 전</td>
+    <td class="cell-time num">오전 10:01 · 5시간 전</td>
     <td class="cell-action"><span class="type-badge type-tool_call" title="tool_call" aria-label="tool_call">tool_call</span></td>
     <td class="cell-target"><span class="target-cell-inner"><span class="action-name"><span class="tool-icon tool-icon-tool">◉</span>Read</span></span></td>
     <td class="cell-model cell-empty">—</td>
@@ -47,7 +47,7 @@ exports[`makeRequestRow tool_call 타입 with 정상 응답 1`] = `
 
 exports[`makeRequestRow tool_call 타입 with anomaly flags (spike + loop) 1`] = `
 "<tr data-type="tool_call" data-sub-type="" data-request-id="r3">
-    <td class="cell-time num">오전 10:01 · 4시간 전</td>
+    <td class="cell-time num">오전 10:01 · 5시간 전</td>
     <td class="cell-action"><span class="type-badge type-tool_call" title="tool_call" aria-label="tool_call">tool_call</span></td>
     <td class="cell-target"><span class="target-cell-inner"><span class="action-name"><span class="tool-icon tool-icon-tool">◉</span>Bash</span></span><span class="mini-badge badge-spike" data-mini-badge-tooltip="spike">spike</span><span class="mini-badge badge-loop" data-mini-badge-tooltip="loop">loop</span></td>
     <td class="cell-model cell-empty">—</td>
@@ -62,7 +62,7 @@ exports[`makeRequestRow tool_call 타입 with anomaly flags (spike + loop) 1`] =
 
 exports[`makeRequestRow system 타입 (드물지만 포함) 1`] = `
 "<tr data-type="system" data-sub-type="" data-request-id="r4">
-    <td class="cell-time num">오전 10:02 · 4시간 전</td>
+    <td class="cell-time num">오전 10:02 · 5시간 전</td>
     <td class="cell-action"><span class="type-badge type-system" title="system" aria-label="system">system</span></td>
     <td class="cell-target"><span class="target-role-badge role-badge-system"><span class="role-icon">◉</span>system</span></td>
     <td class="cell-model cell-empty">—</td>
@@ -77,7 +77,7 @@ exports[`makeRequestRow system 타입 (드물지만 포함) 1`] = `
 
 exports[`makeRequestRow 토큰 0 인 경우 (빈 셀) 1`] = `
 "<tr data-type="prompt" data-sub-type="" data-request-id="r5">
-    <td class="cell-time num">오전 10:00 · 4시간 전</td>
+    <td class="cell-time num">오전 10:00 · 5시간 전</td>
     <td class="cell-action"><span class="type-badge type-prompt" title="prompt" aria-label="prompt">prompt</span></td>
     <td class="cell-target"><span class="target-role-badge role-badge-user"><span class="role-icon">◉</span>user</span></td>
     <td class="cell-model"><span class="model-name">claude-3-5-sonnet</span></td>
@@ -92,7 +92,7 @@ exports[`makeRequestRow 토큰 0 인 경우 (빈 셀) 1`] = `
 
 exports[`makeRequestRow 모델명 없는 prompt (synthetic) 1`] = `
 "<tr data-type="prompt" data-sub-type="" data-request-id="r6">
-    <td class="cell-time num">오전 10:00 · 4시간 전</td>
+    <td class="cell-time num">오전 10:00 · 5시간 전</td>
     <td class="cell-action"><span class="type-badge type-prompt" title="prompt" aria-label="prompt">prompt</span></td>
     <td class="cell-target"><span class="target-role-badge role-badge-user"><span class="role-icon">◉</span>user</span></td>
     <td class="cell-model cell-empty">—</td>
@@ -107,7 +107,7 @@ exports[`makeRequestRow 모델명 없는 prompt (synthetic) 1`] = `
 
 exports[`makeRequestRow 캐시 토큰 포함 1`] = `
 "<tr data-type="prompt" data-sub-type="" data-request-id="r7">
-    <td class="cell-time num">오전 10:00 · 4시간 전</td>
+    <td class="cell-time num">오전 10:00 · 5시간 전</td>
     <td class="cell-action"><span class="type-badge type-prompt" title="prompt" aria-label="prompt">prompt</span></td>
     <td class="cell-target"><span class="target-role-badge role-badge-user"><span class="role-icon">◉</span>user</span></td>
     <td class="cell-model"><span class="model-name">claude-3-5-sonnet</span></td>
@@ -122,7 +122,7 @@ exports[`makeRequestRow 캐시 토큰 포함 1`] = `
 
 exports[`makeRequestRow anomaly flag: slow만 포함 1`] = `
 "<tr data-type="tool_call" data-sub-type="" data-request-id="r8">
-    <td class="cell-time num">오전 10:01 · 4시간 전</td>
+    <td class="cell-time num">오전 10:01 · 5시간 전</td>
     <td class="cell-action"><span class="type-badge type-tool_call" title="tool_call" aria-label="tool_call">tool_call</span></td>
     <td class="cell-target"><span class="target-cell-inner"><span class="action-name"><span class="tool-icon tool-icon-tool">◉</span>Write</span></span></td>
     <td class="cell-model cell-empty">—</td>
@@ -150,7 +150,7 @@ exports[`makeSessionRow 활성 세션 (ended_at: null) with preview 1`] = `
     <td colspan="4" class="sess-row-cell" style="padding:5px 10px">
       <div class="sess-row-header">
         <span class="sess-id" title="s1">s1</span>
-        <span class="sess-row-time">4시간 전</span>
+        <span class="sess-row-time">5시간 전</span>
         <span class="sess-row-tokens">10.0k</span>
         <span class="sess-row-status active">●</span>
       </div>
@@ -164,7 +164,7 @@ exports[`makeSessionRow 활성 세션 (ended_at: null) isSelected: true 1`] = `
     <td colspan="4" class="sess-row-cell" style="padding:5px 10px">
       <div class="sess-row-header">
         <span class="sess-id" title="s2">s2</span>
-        <span class="sess-row-time">5시간 전</span>
+        <span class="sess-row-time">6시간 전</span>
         <span class="sess-row-tokens">5.0k</span>
         <span class="sess-row-status active">●</span>
       </div>
@@ -178,7 +178,7 @@ exports[`makeSessionRow 종료된 세션 (ended_at 설정) 1`] = `
     <td colspan="4" class="sess-row-cell" style="padding:5px 10px">
       <div class="sess-row-header">
         <span class="sess-id" title="s3">s3</span>
-        <span class="sess-row-time">6시간 전</span>
+        <span class="sess-row-time">7시간 전</span>
         <span class="sess-row-tokens">3.0k</span>
         <span class="sess-row-status">○</span>
       </div>
@@ -192,7 +192,7 @@ exports[`makeSessionRow 미리보기 없는 세션 1`] = `
     <td colspan="4" class="sess-row-cell" style="padding:5px 10px">
       <div class="sess-row-header">
         <span class="sess-id" title="s4">s4</span>
-        <span class="sess-row-time">4시간 전</span>
+        <span class="sess-row-time">5시간 전</span>
         <span class="sess-row-tokens">5.0k</span>
         <span class="sess-row-status active">●</span>
       </div>
@@ -206,7 +206,7 @@ exports[`makeSessionRow 토큰이 많은 세션 1`] = `
     <td colspan="4" class="sess-row-cell" style="padding:5px 10px">
       <div class="sess-row-header">
         <span class="sess-id" title="s5">s5</span>
-        <span class="sess-row-time">7시간 전</span>
+        <span class="sess-row-time">8시간 전</span>
         <span class="sess-row-tokens">1.0M</span>
         <span class="sess-row-status active">●</span>
       </div>
@@ -220,7 +220,7 @@ exports[`makeSessionRow 긴 미리보기 텍스트 1`] = `
     <td colspan="4" class="sess-row-cell" style="padding:5px 10px">
       <div class="sess-row-header">
         <span class="sess-id" title="s6">s6</span>
-        <span class="sess-row-time">4시간 전</span>
+        <span class="sess-row-time">5시간 전</span>
         <span class="sess-row-tokens">5.0k</span>
         <span class="sess-row-status active">●</span>
       </div>
