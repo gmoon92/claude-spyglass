@@ -3,14 +3,14 @@ import { createSearchBox } from './components/search-box.js';
 import { subTypeOf, SUB_TYPES } from './request-types.js';
 import { escHtml, fmtToken, fmtDate, fmtTime, formatDuration } from './formatters.js';
 import { makeRequestRow, typeBadge, contextPreview, toolStatusBadge, toolResponseHint, toolIconHtml, targetInnerHtml, FLAT_VIEW_COLS, togglePromptExpand, _promptCache } from './renderers.js';
-import { renderContextChart, clearContextChart } from './context-chart.js';
+import { clearContextChart } from './context-chart.js';
 import { renderGantt, clearGantt, TOOL_COLORS } from './turn-gantt.js';
 import { loadToolStats, clearToolStats } from './tool-stats.js';
 import { detectAnomalies } from './anomaly.js';
 // ADR-017: 세션 모드일 때 chartSection의 donut/cache panel을 세션 데이터로 갱신
 import { setTypeData, drawDonut, renderTypeLegend } from './chart.js';
 import { renderCachePanel, computeSessionCacheStats } from './cache-panel.js';
-import { GANTT_TURN_CLICK } from './events.js';
+import { GANTT_TURN_CLICK, DETAIL_FILTER_CHANGED } from './events.js';
 
 export const API = '';
 
@@ -66,6 +66,11 @@ export function renderDetailRequests(list, anomalyMap = new Map()) {
   }
 }
 
+// 모듈 수준 변수 — DETAIL_FILTER_CHANGED 리스너가 접근하는 처리된 데이터
+let _flatFiltered    = [];
+let _flatAnomalyMap  = new Map();
+let _turnFiltered    = [];
+
 export function applyDetailFilter() {
   const countMap = { all: _detailAllRequests.length, prompt: 0, tool_call: 0, system: 0, agent: 0, skill: 0, mcp: 0 };
   _detailAllRequests.forEach(r => {
@@ -86,20 +91,18 @@ export function applyDetailFilter() {
     if (labelMap[b.dataset.detailFilter]) b.textContent = labelMap[b.dataset.detailFilter];
   });
 
-  const flatFiltered = _detailFilter === 'all'    ? _detailAllRequests
-    : SUB_TYPES.includes(_detailFilter)           ? _detailAllRequests.filter(r => subTypeOf(r) === _detailFilter)
+  // 데이터 처리 — 결과를 모듈 변수에 저장하여 리스너가 접근 가능하게 함
+  _flatFiltered = _detailFilter === 'all'    ? _detailAllRequests
+    : SUB_TYPES.includes(_detailFilter)      ? _detailAllRequests.filter(r => subTypeOf(r) === _detailFilter)
     : _detailAllRequests.filter(r => r.type === _detailFilter);
   // ADR-011: anomaly map을 미리 빌드하여 detail flat에도 배지 적용
-  const flatAnomalyMap = detectAnomalies(_detailAllRequests);
-  renderDetailRequests(flatFiltered, flatAnomalyMap);
+  _flatAnomalyMap = detectAnomalies(_detailAllRequests);
 
-  const turnFiltered = _detailFilter === 'all'                          ? _detailAllTurns
-    : _detailFilter === 'tool_call'                                     ? _detailAllTurns.filter(t => t.tool_calls.length > 0)
-    : _detailFilter === 'prompt'                                        ? _detailAllTurns.filter(t => !!t.prompt)
-    : SUB_TYPES.includes(_detailFilter)                                ? _detailAllTurns.filter(t => t.tool_calls.length > 0)
+  _turnFiltered = _detailFilter === 'all'                          ? _detailAllTurns
+    : _detailFilter === 'tool_call'                                ? _detailAllTurns.filter(t => t.tool_calls.length > 0)
+    : _detailFilter === 'prompt'                                   ? _detailAllTurns.filter(t => !!t.prompt)
+    : SUB_TYPES.includes(_detailFilter)                           ? _detailAllTurns.filter(t => t.tool_calls.length > 0)
     : [];
-  renderTurnCards(turnFiltered, _detailAllTurns);
-  renderContextChart(_detailAllTurns);
 
   // 이상 감지 맵 빌드 (turn_id 기준으로 집계)
   const rawAnomalyMap = detectAnomalies(_detailAllRequests);
@@ -114,14 +117,31 @@ export function applyDetailFilter() {
     }
   }
 
-  renderGantt(_detailAllTurns, _detailTurnAnomalyMap);
+  // 처리된 데이터를 event.detail에 실어 발행 — 리스너가 session-detail.js를 import 없이 데이터에 접근
+  document.dispatchEvent(new CustomEvent(DETAIL_FILTER_CHANGED, {
+    detail: {
+      flatFiltered:    _flatFiltered,
+      flatAnomalyMap:  _flatAnomalyMap,
+      turnFiltered:    _turnFiltered,
+      allTurns:        _detailAllTurns,
+      turnAnomalyMap:  _detailTurnAnomalyMap,
+      allRequests:     _detailAllRequests,
+    },
+  }));
+}
+
+// DETAIL_FILTER_CHANGED 자체 구독 — flat view, turn view, 차트 패널 갱신
+document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
+  const { flatFiltered, flatAnomalyMap, turnFiltered, allTurns, allRequests } = e.detail;
+
+  renderDetailRequests(flatFiltered, flatAnomalyMap);
+  renderTurnCards(turnFiltered, allTurns);
 
   // ADR-017: chartSection이 detail 모드일 때 donut/cache panel을 세션 데이터로 갱신
   const chartSection = document.getElementById('chartSection');
   if (chartSection?.classList.contains('chart-mode-detail')) {
-    // 세션 type 분포 (donut)
     const typeCounts = {};
-    _detailAllRequests.forEach(r => {
+    allRequests.forEach(r => {
       typeCounts[r.type] = (typeCounts[r.type] || 0) + 1;
     });
     const sessionTypeData = Object.entries(typeCounts)
@@ -131,8 +151,7 @@ export function applyDetailFilter() {
     drawDonut();
     renderTypeLegend();
 
-    // 세션 cache stats (panel)
-    const sessionCache = computeSessionCacheStats(_detailAllRequests);
+    const sessionCache = computeSessionCacheStats(allRequests);
     renderCachePanel(sessionCache);
   }
 
@@ -147,7 +166,7 @@ export function applyDetailFilter() {
     ].filter(Boolean).join(' ').toLowerCase();
     tr.style.display = text.includes(_detailSearchQuery) ? '' : 'none';
   });
-}
+});
 
 export function setDetailView(tab) {
   document.getElementById('detailFlatView').style.display   = tab === 'flat'  ? '' : 'none';

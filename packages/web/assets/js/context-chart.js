@@ -1,4 +1,6 @@
 // Accumulated Tokens Chart — Canvas 기반 턴별 누적 토큰 라인 차트
+import { DETAIL_FILTER_CHANGED } from './events.js';
+
 const REFERENCE_SCALE_TOKENS = 200_000; // Claude 모델 참고 스케일 (실제 한도는 모델별 상이)
 
 let _canvas = null;
@@ -36,6 +38,12 @@ export function initContextChart() {
   _footer    = document.querySelector('.context-chart-footer');
   _indicator = document.getElementById('ctxUsageIndicator');
   _empty     = document.getElementById('contextChartEmpty');
+
+  // DETAIL_FILTER_CHANGED 구독 — 컨텍스트 차트 갱신
+  document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
+    const { allTurns } = e.detail;
+    renderContextChart(allTurns);
+  });
 }
 
 export function renderContextChart(turns) {

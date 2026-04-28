@@ -1,5 +1,5 @@
 // Turn Trace Gantt — Canvas 기반 세션 타임라인 차트
-import { GANTT_TURN_CLICK } from './events.js';
+import { GANTT_TURN_CLICK, DETAIL_FILTER_CHANGED } from './events.js';
 
 const ROW_H     = 22;   // 턴 행 높이
 const BAR_H     = 12;   // 바 높이
@@ -138,6 +138,14 @@ export function initGantt() {
     });
     _ro.observe(_scroll);
   }
+
+  // DETAIL_FILTER_CHANGED 구독 — gantt 탭이 표시 중일 때만 렌더 (이중 렌더 방지)
+  document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
+    if (document.getElementById('detailGanttView')?.style.display !== 'none') {
+      const { allTurns, turnAnomalyMap } = e.detail;
+      renderGantt(allTurns, turnAnomalyMap);
+    }
+  });
 }
 
 // G1: mousemove 핸들러
