@@ -1,7 +1,7 @@
 {
   "id": "T-01",
   "title": "detectAnomalies 단위 테스트",
-  "status": "in_progress",
+  "status": "done",
   "type": "test",
   "phase": 0,
   "risk": "low",

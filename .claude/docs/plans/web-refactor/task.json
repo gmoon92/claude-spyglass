@@ -9,9 +9,9 @@
   "updated": "2026-04-28",
   "summary": {
     "total": 22,
-    "pending": 21,
-    "in_progress": 1,
-    "done": 0,
+    "pending": 20,
+    "in_progress": 0,
+    "done": 1,
     "skipped": 0
   },
   "parallel_groups": [
@@ -31,7 +31,7 @@
       "id": "T-01",
       "title": "detectAnomalies 단위 테스트",
       "file": "tasks/task-01.json",
-      "status": "pending",
+      "status": "done",
       "type": "test",
       "phase": 0,
       "risk": "low",
