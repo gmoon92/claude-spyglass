@@ -1,0 +1,29 @@
+{
+  "id": "T-09",
+  "title": "sse.js 분리 (콜백 주입 방식)",
+  "status": "pending",
+  "type": "refactor",
+  "phase": 2,
+  "risk": "high",
+  "estimate": "1.5h",
+  "depends_on": ["T-08"],
+  "parallel_with": ["T-10"],
+  "rollback_checkpoint": "T-08 커밋",
+  "files": {
+    "new": ["packages/web/assets/js/sse.js"],
+    "modify": ["packages/web/assets/js/main.js"],
+    "delete": []
+  },
+  "commit_message": "refactor(web): SSE 연결 로직을 sse.js로 분리 (콜백 주입 방식)",
+  "verification": {
+    "commands": ["bun test"],
+    "checklist": [
+      "main.js에 EventSource 직접 참조 없음",
+      "공개 API: connectSSE({ onNewRequest, onSessionUpdate, onOpen, onError })",
+      "SSE 재연결 동작 유지",
+      "onOpen 콜백에서 fetchDashboard, fetchRequests, fetchAllSessions 호출 확인",
+      "SSE 핸들러 9개 이상 함수 참조 콜백으로 모두 이전 확인"
+    ]
+  },
+  "rollback_command": "git revert HEAD"
+}

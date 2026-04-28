@@ -1,0 +1,26 @@
+{
+  "id": "T-13",
+  "title": "Phase 3 회귀 검증",
+  "status": "pending",
+  "type": "test",
+  "phase": 3,
+  "risk": "low",
+  "estimate": "0.5h",
+  "depends_on": ["T-12"],
+  "parallel_with": [],
+  "rollback_checkpoint": null,
+  "files": {
+    "new": [],
+    "modify": [],
+    "delete": []
+  },
+  "commit_message": "test(web): Phase 3 회귀 검증 통과",
+  "verification": {
+    "commands": ["bun test"],
+    "checklist": [
+      "T-08 6개 핵심 시나리오 재확인",
+      "bun test 전체 통과"
+    ]
+  },
+  "rollback_command": null
+}

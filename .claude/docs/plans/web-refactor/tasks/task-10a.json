@@ -1,0 +1,32 @@
+{
+  "id": "T-10a",
+  "title": "state.js 단위 테스트",
+  "status": "pending",
+  "type": "test",
+  "phase": 2,
+  "risk": "low",
+  "estimate": "0.5h",
+  "depends_on": ["T-10"],
+  "parallel_with": ["T-09a"],
+  "rollback_checkpoint": null,
+  "files": {
+    "new": ["packages/web/assets/js/__tests__/state.test.ts"],
+    "modify": [],
+    "delete": []
+  },
+  "commit_message": "test(web): state.js getter/setter 단위 테스트 추가",
+  "verification": {
+    "commands": [
+      "bun test packages/web/assets/js/__tests__/state.test.ts"
+    ],
+    "checklist": [
+      "rightView getter 초기값 확인",
+      "detailTab getter 초기값 확인",
+      "selectedProject getter 초기값 확인",
+      "selectedSession getter 초기값 확인",
+      "각 setter 호출 후 getter 반환값 변경 확인",
+      "키 미정의 시 기본값 반환 확인"
+    ]
+  },
+  "rollback_command": null
+}

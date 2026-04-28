@@ -1,0 +1,31 @@
+{
+  "id": "T-02",
+  "title": "makeRequestRow 골든 스냅샷 테스트",
+  "status": "pending",
+  "type": "test",
+  "phase": 0,
+  "risk": "low",
+  "estimate": "1h",
+  "depends_on": ["T-01"],
+  "parallel_with": [],
+  "rollback_checkpoint": null,
+  "files": {
+    "new": ["packages/web/assets/js/__tests__/renderers.test.ts"],
+    "modify": [],
+    "delete": []
+  },
+  "commit_message": "test(web): makeRequestRow 골든 스냅샷 테스트 추가",
+  "verification": {
+    "commands": [
+      "bun test packages/web/assets/js/__tests__/renderers.test.ts"
+    ],
+    "checklist": [
+      "makeRequestRow(r, { showSession: true/false }) × prompt/tool_call/system 스냅샷 생성",
+      "makeTargetCell(r) — tool_name 있는/없는 스냅샷 생성",
+      "makeSessionRow(s, true/false) 스냅샷 생성",
+      "스냅샷 파일 커밋 포함",
+      "갱신 조건: 의도적 UI 변경 시 bun test --update-snapshots + 커밋 메시지에 'snapshot update' 표기 필수"
+    ]
+  },
+  "rollback_command": null
+}

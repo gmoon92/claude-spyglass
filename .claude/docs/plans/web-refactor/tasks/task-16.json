@@ -1,0 +1,36 @@
+{
+  "id": "T-16",
+  "title": "renderers.js 정리 (DOM 삽입 제거)",
+  "status": "pending",
+  "type": "refactor",
+  "phase": 5,
+  "risk": "high",
+  "estimate": "1h",
+  "depends_on": ["T-15b"],
+  "parallel_with": [],
+  "rollback_checkpoint": "T-15b 커밋",
+  "files": {
+    "new": [],
+    "modify": [
+      "packages/web/assets/js/renderers.js",
+      "packages/web/assets/js/api.js"
+    ],
+    "delete": []
+  },
+  "commit_message": "refactor(web): renderers.js DOM 삽입 제거 — HTML 생성 전용 모듈로 정리",
+  "verification": {
+    "commands": [
+      "grep -n \"document.getElementById\" packages/web/assets/js/renderers.js",
+      "grep -n \"renderRequests\" packages/web/assets/js/api.js",
+      "bun test"
+    ],
+    "checklist": [
+      "renderers.js에 document.getElementById 호출 없음 (grep 결과 0줄)",
+      "api.js에 renderRequests import 없음 (grep 결과 0줄)",
+      "골든 스냅샷 테스트(T-02) 전체 통과",
+      "피드 요청 목록 정상 렌더링 확인",
+      "api.js ↔ renderers.js 커플링 완전 해소"
+    ]
+  },
+  "rollback_command": "git revert HEAD"
+}
