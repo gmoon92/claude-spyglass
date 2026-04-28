@@ -9,9 +9,9 @@
   "updated": "2026-04-28",
   "summary": {
     "total": 22,
-    "pending": 20,
+    "pending": 19,
     "in_progress": 0,
-    "done": 1,
+    "done": 2,
     "skipped": 0
   },
   "parallel_groups": [
@@ -42,7 +42,7 @@
       "id": "T-02",
       "title": "makeRequestRow 골든 스냅샷 테스트",
       "file": "tasks/task-02.json",
-      "status": "pending",
+      "status": "done",
       "type": "test",
       "phase": 0,
       "risk": "low",

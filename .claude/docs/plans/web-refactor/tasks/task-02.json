@@ -1,7 +1,7 @@
 {
   "id": "T-02",
   "title": "makeRequestRow 골든 스냅샷 테스트",
-  "status": "pending",
+  "status": "done",
   "type": "test",
   "phase": 0,
   "risk": "low",
