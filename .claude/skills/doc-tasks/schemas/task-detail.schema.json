@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "task-detail.schema.json",
+  "title": "Task Detail",
+  "description": "개별 원자성 태스크 세부 파일 (tasks/task-N.json). 구현 범위, 커밋 메시지, 검증 명령어, 완료 기준을 포함합니다.",
+  "type": "object",
+  "required": ["id", "title", "status", "type", "phase", "risk", "estimate", "depends_on", "parallel_with", "rollback_checkpoint", "files", "commit_message", "verification", "rollback_command"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^T-[0-9]+[a-z]?$",
+      "description": "태스크 ID — task.json 인덱스와 반드시 일치"
+    },
+    "title": {
+      "type": "string",
+      "description": "태스크 제목 — task.json 인덱스와 반드시 일치"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "in_progress", "done", "skipped"],
+      "description": "실행 상태. 변경 시 task.json summary도 함께 갱신 필수"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["test", "refactor", "feat", "fix", "docs"]
+    },
+    "phase": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "실행 단계 번호 (0=선행, 1=Phase1, ...)"
+    },
+    "risk": {
+      "type": "string",
+      "enum": ["low", "medium", "high"],
+      "description": "high: rollback_checkpoint 필수, rollback_command 필수"
+    },
+    "estimate": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?h$",
+      "description": "예상 소요 시간 (예: '1h', '2.5h')"
+    },
+    "depends_on": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^T-[0-9]+[a-z]?$" },
+      "description": "선행 완료되어야 할 태스크 ID 목록"
+    },
+    "parallel_with": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^T-[0-9]+[a-z]?$" },
+      "description": "동시에 진행 가능한 태스크 ID 목록"
+    },
+    "rollback_checkpoint": {
+      "type": ["string", "null"],
+      "description": "실패 시 되돌릴 커밋 기준점 (예: 'T-08 커밋'). risk=high이면 필수"
+    },
+    "files": {
+      "type": "object",
+      "required": ["new", "modify", "delete"],
+      "additionalProperties": false,
+      "properties": {
+        "new":    { "type": "array", "items": { "type": "string" }, "description": "신규 생성 파일 경로 목록" },
+        "modify": { "type": "array", "items": { "type": "string" }, "description": "수정 대상 파일 경로 목록" },
+        "delete": { "type": "array", "items": { "type": "string" }, "description": "삭제 대상 파일 경로 목록" }
+      }
+    },
+    "commit_message": {
+      "type": "string",
+      "pattern": "^(test|refactor|feat|fix|docs|chore)(\\([a-z0-9-]+\\))?: .+",
+      "description": "Conventional Commits 형식 커밋 메시지"
+    },
+    "verification": {
+      "type": "object",
+      "required": ["commands", "checklist"],
+      "additionalProperties": false,
+      "properties": {
+        "commands": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "완료 확인용 실행 명령어 목록"
+        },
+        "checklist": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "완료 기준 체크리스트 항목 (정량 기준 포함 권장)"
+        }
+      }
+    },
+    "rollback_command": {
+      "type": ["string", "null"],
+      "description": "롤백 명령어 (예: 'git revert HEAD'). risk=high이면 필수"
+    }
+  },
+  "if": {
+    "properties": { "risk": { "const": "high" } }
+  },
+  "then": {
+    "properties": {
+      "rollback_checkpoint": { "type": "string", "minLength": 1 },
+      "rollback_command":    { "type": "string", "minLength": 1 }
+    }
+  }
+}
