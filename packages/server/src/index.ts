@@ -11,6 +11,8 @@ import {
   closeDatabase,
   getDefaultDbPath,
   deleteOldSessions,
+  getMetadata,
+  setMetadata,
 } from '@spyglass/storage';
 import { rawCollectHandler } from './collect';
 import { eventsCollectHandler } from './events';
@@ -55,15 +57,15 @@ async function isPortAvailable(port: number): Promise<boolean> {
 }
 
 /**
- * 포트를 점유한 프로세스 ID 찾기
+ * 포트를 점유한 프로세스 ID 목록 찾기
  */
-function findProcessByPort(port: number): number | null {
+function findProcessesByPort(port: number): number[] {
   try {
     const { execSync } = require('child_process');
     const out = execSync(`lsof -ti :${port}`, { encoding: 'utf-8' }).trim();
-    return out ? parseInt(out.split('\n')[0], 10) : null;
+    return out ? out.split('\n').map(Number).filter((n: number) => !isNaN(n) && n > 0) : [];
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -101,22 +103,52 @@ async function waitForPortRelease(port: number, timeoutMs: number = 3000): Promi
 // 유지보수
 // =============================================================================
 
+const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000; // 1시간마다 조건 체크
+const METADATA_KEY_LAST_CLEANUP = 'last_cleanup_date'; // 저장 형식: YYYY-MM-DD
+
+function todayDateString(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 /**
- * 서버 시작 시 오래된 데이터 정리 및 DB 압축
+ * 오늘 아직 cleanup을 실행하지 않았으면 실행한다.
+ * - 서버 시작 시 즉시 호출
+ * - 이후 1시간 간격 인터벌에서도 호출 (날짜가 바뀐 시점을 놓치지 않기 위해)
+ *
  * SPYGLASS_RETENTION_DAYS 환경변수로 보존 기간 설정 (기본: 90일)
  */
-function runStartupMaintenance(database: SpyglassDatabase): void {
-  const retentionDays = parseInt(process.env.SPYGLASS_RETENTION_DAYS ?? '90', 10);
-  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
-
+function runDailyMaintenanceIfNeeded(database: SpyglassDatabase): void {
   try {
+    const today = todayDateString();
+    const lastRun = getMetadata(database.instance, METADATA_KEY_LAST_CLEANUP);
+    if (lastRun === today) return;
+
+    const retentionDays = parseInt(process.env.SPYGLASS_RETENTION_DAYS ?? '90', 10);
+    const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
     const deleted = deleteOldSessions(database.instance, cutoff);
     database.instance.run('PRAGMA VACUUM');
-    if (deleted > 0) {
-      console.log(`[Maintenance] Deleted ${deleted} sessions older than ${retentionDays} days`);
-    }
+
+    setMetadata(database.instance, METADATA_KEY_LAST_CLEANUP, today);
+    console.log(`[Maintenance] Cleanup done (${today}): removed ${deleted} sessions older than ${retentionDays}d`);
   } catch (err) {
     console.warn('[Maintenance] Cleanup failed:', err);
+  }
+}
+
+let maintenanceTimer: ReturnType<typeof setInterval> | null = null;
+
+function startMaintenanceSchedule(database: SpyglassDatabase): void {
+  runDailyMaintenanceIfNeeded(database);
+  maintenanceTimer = setInterval(
+    () => runDailyMaintenanceIfNeeded(database),
+    MAINTENANCE_INTERVAL_MS
+  );
+}
+
+function stopMaintenanceSchedule(): void {
+  if (maintenanceTimer) {
+    clearInterval(maintenanceTimer);
+    maintenanceTimer = null;
   }
 }
 
@@ -280,8 +312,8 @@ export function startServer(options: {
   db = getDatabase({ dbPath });
   console.log(`[Server] Database connected: ${dbPath}`);
 
-  // 시작 시 유지보수 (오래된 데이터 정리)
-  runStartupMaintenance(db);
+  // 일별 유지보수 스케줄 시작 (시작 시 즉시 + 1시간 인터벌로 날짜 변경 감지)
+  startMaintenanceSchedule(db);
 
   // 서버 시작
   server = Bun.serve({
@@ -301,6 +333,8 @@ export function startServer(options: {
  * 서버 종료
  */
 export async function stopServer(): Promise<void> {
+  stopMaintenanceSchedule();
+
   if (server) {
     server.stop();
     server = null;
@@ -351,9 +385,9 @@ if (import.meta.main) {
       // 2. 포트 사용 가능 여부 확인
       if (!(await isPortAvailable(PORT))) {
         console.error(`[Server] Port ${PORT} is already in use`);
-        const blockingPid = findProcessByPort(PORT);
-        if (blockingPid) {
-          console.error(`[Server] Blocking process: PID ${blockingPid}`);
+        const blockingPids = findProcessesByPort(PORT);
+        if (blockingPids.length > 0) {
+          console.error(`[Server] Blocking process(es): PID ${blockingPids.join(', ')}`);
           console.error(`[Server] Run 'bun run dev' to restart with auto-cleanup`);
         }
         process.exit(1);
@@ -419,25 +453,26 @@ if (import.meta.main) {
         console.log(`[Server] Port ${PORT} is in use, attempting to free it...`);
 
         // 2. PID 파일 또는 포트 점유 프로세스 찾기
-        let pidToKill: number | null = null;
+        let pidsToKill: number[] = [];
         if (fs.existsSync(pidFile)) {
-          pidToKill = parseInt(fs.readFileSync(pidFile, 'utf-8'), 10);
+          const savedPid = parseInt(fs.readFileSync(pidFile, 'utf-8'), 10);
           fs.unlinkSync(pidFile);
+          pidsToKill = [savedPid, ...findProcessesByPort(PORT).filter(p => p !== savedPid)];
         } else {
-          pidToKill = findProcessByPort(PORT);
+          pidsToKill = findProcessesByPort(PORT);
         }
 
-        // 3. 프로세스 종료
-        if (pidToKill) {
+        // 3. 프로세스 종료 (포트 점유 프로세스 전체)
+        for (const pid of pidsToKill) {
           try {
-            process.kill(pidToKill, 'SIGTERM');
-            console.log(`[Server] Stopping process (PID: ${pidToKill})...`);
+            process.kill(pid, 'SIGTERM');
+            console.log(`[Server] Stopping process (PID: ${pid})...`);
 
             // 4. 프로세스 종료 대기
-            const exited = await waitForProcessExit(pidToKill, 5000);
+            const exited = await waitForProcessExit(pid, 5000);
             if (!exited) {
-              console.log(`[Server] Force killing process (PID: ${pidToKill})...`);
-              try { process.kill(pidToKill, 'SIGKILL'); } catch {}
+              console.log(`[Server] Force killing process (PID: ${pid})...`);
+              try { process.kill(pid, 'SIGKILL'); } catch {}
             }
           } catch {}
         }
