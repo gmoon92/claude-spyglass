@@ -1,109 +1,78 @@
 # 🔭 spyglass
 
-**Claude Code 실행 과정 가시화 도구 - 토큰 누수 탐지**
+**See exactly what Claude Code is doing — and what it's costing you.**
 
 [![Version](https://img.shields.io/badge/version-0.1.0--mvp-blue)](./CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 
-Claude Code의 블랙박스를 열어 토큰 누수 지점을 정확히 찾아내는 개발자 도구입니다.
+Claude Code is a black box. Spyglass opens it.
 
-> **AI는 더 이상 블랙박스가 아닙니다.**
-
----
-
-## ✨ 핵심 가치
-
-| 가치       | 설명                            |
-|----------|-------------------------------|
-| **투명성**  | Claude Code의 실행 과정을 실시간으로 가시화 |
-| **효율성**  | 토큰 낭비 지점을 빠르게 식별하여 개발 비용 절감   |
-| **인사이트** | 요청별/스킬별 토큰 사용 패턴 분석           |
-| **편의성**  | 터미널에서 즉시 확인, 별도 브라우저 불필요      |
+Every token spent, every tool call made, every session started — captured in real time and surfaced in a terminal dashboard or web UI. If you've ever wondered *why* a Claude session ballooned in cost, spyglass shows you.
 
 ---
 
-## 🚀 Quick Start (Docker)
+## What you get
 
-spyglass는 **Docker 이미지(tar.gz)** 로 배포됩니다. 비공개 프로젝트이므로 레지스트리 없이 이미지 파일을 직접 전달받아 기동합니다.
+- **Live token counter** — watch usage tick up as Claude works
+- **Tool call timeline** — see which tools ran, in what order, how long each took
+- **Cost tracking** — actual USD cost per session, with prompt-cache savings broken out
+- **P95 latency & error rate** — spot slow or flaky tool calls before they compound
+- **Web dashboard + TUI** — pick your interface; both update in real time via SSE
 
-### 사전 요구사항
+---
 
-- Docker Engine 20.10 이상 (`docker version`)
-- Claude Code (호스트 설치, 훅 실행용)
+## Quick Start
 
-### 1분 기동 (수신자)
+**Prerequisites:** [Bun](https://bun.sh) 1.2+, Claude Code
 
 ```bash
-# 1) 배포받은 이미지 로드
-docker load < spyglass-v0.1.0-abcdef0.tar.gz
+# 1. Clone
+git clone <repository-url> ~/.spyglass-src
+cd ~/.spyglass-src
 
-# 2) 컨테이너 기동 (9999 포트 + ~/.spyglass 볼륨)
-docker compose up -d
+# 2. Install & start
+bun install
+bun run dev
 
-# 3) 헬스체크
-curl -sf http://localhost:9999/health && echo OK
+# 3. Verify
+curl -sf http://127.0.0.1:9999/health && echo OK
 
-# 4) 대시보드
+# 4. Open dashboard
 open http://localhost:9999
 ```
 
-> `docker-compose.yml`이 없으면:
-`docker run -d --name spyglass -p 9999:9999 -v "${HOME}/.spyglass:/data/.spyglass" spyglass:latest`
-
-### 훅 설정은 글로벌 사용자 설정에
-
-Claude Code 훅은 반드시 **글로벌 설정 파일 `~/.claude/settings.json`** 에 등록해야 합니다. 프로젝트 로컬 설정(`.claude/settings.local.json`)에 두면 다른 레포에서는 수집되지 않습니다.
-
-훅 JSON은 예제 파일로 분리되어 있습니다. 아래 파일을 참고해 **`env`·`hooks` 두 키만** 기존 `~/.claude/settings.json`에 병합하고 `SPYGLASS_DIR` 경로를 본인 환경에 맞게 수정하세요(전체 교체 시 기존 설정이 사라집니다).
-
-| 프로파일 | 수집 범위 | 파일 |
-|---------|-----------|------|
-| 최소 (6개 훅) | 토큰·세션·도구 사용량 | [docs/examples/settings.hooks.minimal.json](./docs/examples/settings.hooks.minimal.json) |
-| 권장 (27개 전체 HOOK_EVENTS) ★ | Subagent·Task·Permission·Compact·Worktree 포함 전체 | [docs/examples/settings.hooks.full.json](./docs/examples/settings.hooks.full.json) |
-
-환경변수·검증·문제해결 등 **상세 가이드는 [docs/install-guide.md](./docs/install-guide.md)** 를 참고하세요.
-
-### 이미지 빌드 (배포자)
-
-저장소 보유자가 배포용 이미지를 생성할 때 사용합니다.
-
-```bash
-# 자동 버전 (package.json의 version + 현재 git 해시)
-bash scripts/build-image.sh
-
-# 버전 명시
-bash scripts/build-image.sh 0.2.0
-```
-
-**생성 파일 (`dist/` 하위):**
-
-| 파일 | 설명 |
-|------|------|
-| `spyglass-v<version>-<hash>.tar.gz` | `docker save \| gzip -9` 결과 — 수신자가 `docker load`로 올립니다 |
-| `spyglass-v<version>-<hash>.tar.gz.sha256` | 무결성 검증 해시 (macOS `shasum` / Linux `sha256sum`) |
-
-**파일명 규칙**
-
-- `<version>`: 스크립트 인자 > `package.json`의 `version` 필드 > `0.0.0` 순으로 결정
-- `<hash>`: `git rev-parse --short HEAD` (non-git 환경에서는 `dev`)
-
-예: `package.json`의 `version=0.1.0`, 현재 커밋 `fb205c2` → `spyglass-v0.1.0-fb205c2.tar.gz`
-
-**배포자 → 수신자 전달 묶음**
-
-1. `spyglass-v<version>-<hash>.tar.gz`
-2. `spyglass-v<version>-<hash>.tar.gz.sha256`
-3. `hooks/spyglass-collect.sh` (호스트에서 실행되는 훅 스크립트)
-4. `docker-compose.yml` (선택, 기동 편의)
-5. `docs/examples/settings.hooks.full.json` (훅 설정 예제)
-
-수신자는 [docs/install-guide.md §3](./docs/install-guide.md#3-docker-이미지-사용법-수신자)의 절차대로 `docker load` → `docker compose up -d`를 수행합니다.
-
-> 빌드 내부 동작·환경변수·문제 해결은 [docs/install-guide.md §7](./docs/install-guide.md#7-이미지-빌드-배포자) 참고.
+The server runs as a background daemon on `127.0.0.1:9999`. PID is stored at `~/.spyglass/server.pid`.
 
 ---
 
-## 🖥️ TUI 화면
+## Hook setup
+
+Spyglass collects data through Claude Code hooks. Register them **globally** (`~/.claude/settings.json`) so every project is captured automatically.
+
+Copy the `env` and `hooks` keys from one of the example files below into your existing settings — don't replace the whole file.
+
+| Profile | Coverage | File |
+|---------|----------|------|
+| Minimal (6 hooks) | Tokens · sessions · tool usage | [docs/examples/settings.hooks.minimal.json](./docs/examples/settings.hooks.minimal.json) |
+| Full (27 hooks) ★ | + Subagent · Task · Permission · Compact · Worktree | [docs/examples/settings.hooks.full.json](./docs/examples/settings.hooks.full.json) |
+
+Full setup guide → [docs/install-guide.md](./docs/install-guide.md)
+
+---
+
+## Commands
+
+```bash
+bun run dev      # Start (or restart) the server
+bun run stop     # Stop the server
+bun run status   # Show server status
+bun run doctor   # Diagnose configuration issues
+bun run tui      # Launch the terminal UI
+```
+
+---
+
+## TUI
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -111,217 +80,70 @@ bash scripts/build-image.sh 0.2.0
 ├─────────────────────────────────────────────────────────────────┤
 │ [F1:Live] [F2:History] [F3:Analysis] [F4:Settings]              │
 ├──────────────┬──────────────────────────────────────────────────┤
-│  Sessions    │   🔴 CRITICAL: Token Limit Exceeded              │
-│  ├── proj-a  │   Request used 12,456 tokens (>10,000)          │
-│  ├── proj-b  │                                                  │
-│  └── proj-c  │   Total Tokens: 45.2K                           │
-│              │   [████████████████████░░░░░░░░░░] 45%          │
+│  Sessions    │  COST $0.42  SAVED $0.18  P95 312ms  ERR 0%     │
+│  ├── proj-a  │                                                  │
+│  ├── proj-b  │  Total Tokens: 45.2K                            │
+│  └── proj-c  │  [████████████████████░░░░░░░░░░] 45%           │
 │              │                                                  │
-│              │   Active Sessions: 3                             │
-│              │   Session Time: 00:15:32                         │
+│              │  Active Sessions: 3  |  Session Time: 00:15:32  │
 ├──────────────┴──────────────────────────────────────────────────┤
 │ ↑↓ Navigate | Enter Select | / Search | A Ack | q Quit         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Command Center Strip
-
-화면 상단 summary strip에서 아래 4개 지표를 실시간으로 확인할 수 있습니다:
-
-| 지표        | 설명                                          |
-|-----------|---------------------------------------------|
-| **COST**  | 오늘 API 실사용 비용 (USD) — model별 단가 × tokens 계산 |
-| **SAVED** | 프롬프트 캐시로 절약한 금액 (USD)                       |
-| **P95**   | tool_call 응답시간 P95 (95번째 백분위)               |
-| **ERR**   | tool_call 오류율 (%)                           |
-
----
-
-## ⌨️ 키보드 단축키
-
-| 키     | 동작                 |
-|-------|--------------------|
-| F1    | Live 탭 (실시간 모니터링)  |
-| F2    | History 탭 (과거 세션)  |
-| F3    | Analysis 탭 (통계 분석) |
-| F4    | Settings 탭 (설정)    |
-| ↑/↓   | 목록 이동              |
-| ←/→   | 섹션 전환              |
-| Enter | 선택/상세보기            |
-| /     | 검색                 |
-| A     | 알림 확인              |
-| q     | 종료                 |
+| Key | Action |
+|-----|--------|
+| F1 | Live tab — real-time monitoring |
+| F2 | History tab — past sessions |
+| F3 | Analysis tab — usage stats |
+| F4 | Settings tab — thresholds |
+| ↑↓ | Navigate list |
+| Enter | Select / detail view |
+| / | Search |
+| A | Acknowledge alert |
+| q | Quit |
 
 ---
 
-## 🏗️ 아키텍처
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Claude Code Session                       │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌──────────┐  │
-│  │UserPrompt   │ │ PreToolUse  │ │ PostToolUse │ │Session   │  │
-│  │Submit 훅    │ │     훅      │ │     훅      │ │Start/End │  │
-│  └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ └────┬─────┘  │
-│         └───────────────┼───────────────┼─────────────┘         │
-│                         ▼               ▼                        │
-│                  ┌─────────────────────────────┐                │
-│                  │    spyglass-collect.sh (Bash)│                │
-│                  │    async, timeout=1s         │                │
-│                  │  PreToolUse → 타이밍 파일 저장│                │
-│                  │  PostToolUse → duration_ms 계산│              │
-│                  └────────┬────────────┬────────┘                │
-└───────────────────────────┼────────────┼────────────────────────┘
-                            │            │ HTTP POST
-                  타이밍 파일│            ▼
-           ~/.spyglass/     │  ┌─────────────────────────────────┐
-             timing/        │  │       spyglass Server (Bun)      │
-                            │  │  ┌──────────┐  ┌─────────────┐  │
-                            └──┤  │ /collect │  │   /events   │  │
-                               │  │(토큰/세션)│  │(raw 이벤트) │  │
-                               │  └─────┬────┘  └──────┬──────┘  │
-                               │        └───────────────┘         │
-                               │                ▼                 │
-                               │        ┌──────────────┐         │
-                               │        │    SQLite     │WAL Mode │
-                               │        │  sessions     │         │
-                               │        │  requests     │         │
-                               │        │  claude_events│         │
-                               │        └──────────────┘         │
-                               │        ┌─────┐  ┌──────────┐   │
-                               │        │REST │  │SSE /GET  │   │
-                               │        │API  │  │ events   │   │
-                               │        └──────┘  └──────────┘   │
-                               └─────────────────────────────────┘
-                                              │
-                          ┌───────────────────┼───────────────────┐
-                          ▼                   ▼                   ▼
-                 ┌────────────────┐  ┌────────────────┐  ┌───────────────┐
-                 │  TUI (Ink)     │  │ Web Dashboard  │  │  REST Client  │
-                 │  Live/History/ │  │ (Vanilla JS)   │  │  (/api/*)     │
-                 │  Analysis 탭   │  │  실시간 갱신    │  └───────────────┘
-                 └────────────────┘  └────────────────┘
+Claude Code hooks  →  spyglass-collect.sh  →  POST /collect or /events
+                                                        │
+                                               Bun HTTP server
+                                               SQLite (WAL mode)
+                                                        │
+                                      ┌─────────────────┼──────────────┐
+                                   TUI (Ink)     Web Dashboard     REST API
 ```
 
 ---
 
-## 📡 API 엔드포인트
+## Build (distributors only)
 
-| 메서드  | 엔드포인트                      | 설명                                      |
-|------|----------------------------|-----------------------------------------|
-| POST | `/collect`                 | UserPromptSubmit/PostToolUse 수집 (토큰 집계) |
-| POST | `/events`                  | raw hook payload 수집 (claude_events 저장)  |
-| GET  | `/events`                  | SSE 실시간 스트리밍                            |
-| GET  | `/api/sessions`            | 세션 목록                                   |
-| GET  | `/api/sessions/:id`        | 세션 상세                                   |
-| GET  | `/api/sessions/active`     | 활성 세션                                   |
-| GET  | `/api/sessions/:id/events` | 세션별 이벤트                                 |
-| GET  | `/api/requests`            | 요청 목록                                   |
-| GET  | `/api/requests/top`        | TOP 토큰 요청                               |
-| GET  | `/api/stats/sessions`      | 세션 통계                                   |
-| GET  | `/api/stats/requests`      | 요청 통계                                   |
-| GET  | `/api/stats/projects`      | 프로젝트별 통계                                |
-| GET  | `/api/events`              | 최근 이벤트 목록                               |
-| GET  | `/api/events/stats`        | 이벤트 타입별 통계                              |
-| GET  | `/api/dashboard`           | 통합 대시보드                                 |
-| GET  | `/health`                  | 헬스체크                                    |
+```bash
+bash scripts/build-image.sh          # auto version from package.json + git hash
+bash scripts/build-image.sh 0.2.0   # explicit version
+```
+
+Output in `dist/`: a `.tar.gz` image and a `.sha256` checksum.
 
 ---
 
-## 🔔 알림
+## Stack
 
-토큰 사용량이 임계값을 초과하면 시각적 알림이 표시됩니다:
-
-| 레벨    | 조건          | 색상  |
-|-------|-------------|-----|
-| 🟢 정상 | < 5K 토큰     | 녹색  |
-| 🟡 주의 | 5K ~ 10K 토큰 | 노란색 |
-| 🔴 경고 | > 10K 토큰    | 빨간색 |
-
----
-
-## 🛠️ 기술 스택
-
-| 구성요소 | 기술           | 버전     |
-|------|--------------|--------|
-| 런타임  | Bun          | 1.2.8+ |
-| 언어   | TypeScript   | 5.0+   |
-| TUI  | Ink (React)  | 5.2.0  |
-| 저장소  | SQLite (WAL) | 3.40+  |
-| 통신   | HTTP + SSE   | -      |
+| Component | Technology |
+|-----------|-----------|
+| Runtime | Bun 1.2+ |
+| Language | TypeScript 5 |
+| TUI | Ink (React) |
+| Storage | SQLite WAL |
+| Transport | HTTP + SSE |
 
 ---
 
-## 📝 최근 변경사항
-
-### Skill/Agent 이름 표시 개선 (2024-04-19)
-
-**문제**: 대시보드에서 Skill 호출 시 `Skill(인자내용)` 형태로 표시되어 어떤 스킬인지 파악하기 어려움
-
-**해결**:
-
-- **훅 스크립트 수정** (`hooks/spyglass-collect.sh`): Skill 호출 시 `skill` 필드 우선 추출
-    - 기존: `tool_detail`에 `args` 저장 → `Skill(#266234)`
-    - 개선: `tool_detail`에 스킬 이름 저장 → `Skill(backend-workflow)`
-- **기존 데이터 마이그레이션**: 31개 Skill 레코드 업데이트 완료
-
-**결과**:
-
-- **행위 컬럼**: 스킬 이름 표시 (예: `Skill(backend-workflow)`)
-- **메시지 컬럼**: args 내용 그대로 표시 (예: `#266234`)
-- Agent도 동일한 패턴으로 description 우선 표시
-
 ---
 
-## 📝 문서
+## License
 
-- [개발 계획](./docs/planning/01-overview-plan.md)
-- [제품 요구사항 (PRD)](./docs/planning/02-prd.md)
-- [기술 결정 기록 (ADR)](./docs/planning/03-adr.md)
-- [개발 작업](./docs/planning/04-tasks-ai.md)
-- [최종 스펙](./docs/planning/05-spec.md) 📋
-
----
-
-## 🗺️ 로드맵
-
-### Phase 1 (MVP) ✅ 완료
-
-- [x] SQLite 저장소 (WAL 모드)
-- [x] 훅 기반 데이터 수집 (UserPromptSubmit, PostToolUse)
-- [x] HTTP 서버 + REST API
-- [x] SSE 실시간 스트리밍
-- [x] TUI 기본 구조 (Ink)
-- [x] 실시간 토큰 카운터
-- [x] 히스토리/분석 탭
-- [x] 10K 토큰 알림
-
-### Phase 2 ✅ 완료
-
-- [x] 웹 대시보드 (Vanilla JS SPA)
-- [x] 동적 알림 임계값 (Settings 탭)
-- [x] 데이터 날짜 필터
-- [x] `claude_events` 테이블 (raw 이벤트 전체 수집)
-- [x] `PreToolUse` 훅 — 도구 실행 시간(`duration_ms`) 측정
-- [x] 글로벌 훅 설정 — 모든 프로젝트 자동 수집 + 프로젝트별 구분
-
-### Phase 3 (예정)
-
-- [ ] `tool_use_id` 컬럼 추출 — 도구 호출 체인 추적
-- [ ] Agent 서브세션 링크 — 부모/자식 세션 관계 추적
-- [ ] 히트맵/타임라인 시각화
-- [ ] CSV/JSON 내보내기
-
----
-
-## 🤝 기여
-
-기여는 언제나 환영합니다! Issue와 PR을 통해 참여해주세요.
-
-## 📄 라이선스
-
-MIT
-
----
-
-<p align="center">Made with ❤️ for Claude Code developers</p>
+MIT — made for Claude Code developers who want to see inside the box.
