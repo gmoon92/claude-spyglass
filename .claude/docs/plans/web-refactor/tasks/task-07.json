@@ -1,0 +1,34 @@
+{
+  "id": "T-07",
+  "title": "api.js showError 중복 제거 + toolIconHtml 참조 통일",
+  "status": "done",
+  "type": "refactor",
+  "phase": 1,
+  "risk": "low",
+  "estimate": "0.5h",
+  "depends_on": ["T-03"],
+  "parallel_with": ["T-04", "T-05", "T-06"],
+  "rollback_checkpoint": null,
+  "files": {
+    "new": [],
+    "modify": [
+      "packages/web/assets/js/api.js",
+      "packages/web/assets/js/left-panel.js"
+    ],
+    "delete": []
+  },
+  "commit_message": "refactor(web): api.js showError 중복 제거, left-panel toolIconHtml 참조 통일",
+  "verification": {
+    "commands": [
+      "grep -n \"function showError\\|function toolIconHtml\" packages/web/assets/js/api.js packages/web/assets/js/left-panel.js"
+    ],
+    "checklist": [
+      "api.js에 로컬 showError 없음 (grep 결과 0줄)",
+      "left-panel.js에 로컬 toolIconHtml 없음 (grep 결과 0줄)",
+      "api.js → infra.js import로 showError 교체",
+      "left-panel.js → renderers.js import로 toolIconHtml 교체",
+      "eventType 파라미터 갭 해소 (undefined 명시 또는 기본값 처리)"
+    ]
+  },
+  "rollback_command": null
+}

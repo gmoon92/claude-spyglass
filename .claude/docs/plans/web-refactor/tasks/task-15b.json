@@ -1,0 +1,30 @@
+{
+  "id": "T-15b",
+  "title": "CustomEvent 발행-구독 단위 테스트",
+  "status": "pending",
+  "type": "test",
+  "phase": 4,
+  "risk": "low",
+  "estimate": "1h",
+  "depends_on": ["T-15"],
+  "parallel_with": [],
+  "rollback_checkpoint": null,
+  "files": {
+    "new": ["packages/web/assets/js/__tests__/events.test.ts"],
+    "modify": [],
+    "delete": []
+  },
+  "commit_message": "test(web): CustomEvent 발행-구독 단위 테스트 추가",
+  "verification": {
+    "commands": [
+      "bun test packages/web/assets/js/__tests__/events.test.ts"
+    ],
+    "checklist": [
+      "detail:filterChanged 발행 → 각 구독자 콜백 호출 확인",
+      "이중 발행 시 중복 렌더 없음 확인",
+      "리스너 removeEventListener 누락 경고 검증",
+      "발행-구독 경로 테스트 통과"
+    ]
+  },
+  "rollback_command": null
+}

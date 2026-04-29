@@ -1,0 +1,36 @@
+{
+  "id": "T-04",
+  "title": "request-types.js SSoT 생성 + 3개 파일 참조 교체",
+  "status": "done",
+  "type": "refactor",
+  "phase": 1,
+  "risk": "low",
+  "estimate": "1h",
+  "depends_on": ["T-03"],
+  "parallel_with": [],
+  "rollback_checkpoint": null,
+  "files": {
+    "new": ["packages/web/assets/js/request-types.js"],
+    "modify": [
+      "packages/web/assets/js/main.js",
+      "packages/web/assets/js/session-detail.js",
+      "packages/web/assets/js/renderers.js"
+    ],
+    "delete": []
+  },
+  "commit_message": "refactor(web): SUB_TYPES 상수를 request-types.js SSoT로 통합",
+  "verification": {
+    "commands": [
+      "bun test",
+      "grep -rn \"\\['agent'\\|'skill'\\|'mcp'\\]\" packages/web/assets/js/*.js | grep -v request-types"
+    ],
+    "checklist": [
+      "request-types.js 이외 파일에 ['agent', 'skill', 'mcp'] 인라인 배열 없음 (grep 결과 0줄)",
+      "main.js: SUB_TYPES 인라인 배열 → import 교체",
+      "session-detail.js: applyDetailFilter 내 countMap 하드코딩 키 → import 교체",
+      "renderers.js: subTypeOf 함수 내부 인라인 배열 → import 교체",
+      "기존 테스트 전체 통과"
+    ]
+  },
+  "rollback_command": null
+}

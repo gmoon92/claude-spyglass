@@ -1,0 +1,230 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`makeRequestRow prompt 타입 with showSession: false 1`] = `
+"<tr data-type="prompt" data-sub-type="" data-request-id="r1">
+    <td class="cell-time num">오전 10:00 · 5시간 전</td>
+    <td class="cell-action"><span class="type-badge type-prompt" title="prompt" aria-label="prompt">prompt</span></td>
+    <td class="cell-target"><span class="target-role-badge role-badge-user"><span class="role-icon">◉</span>user</span></td>
+    <td class="cell-model"><span class="model-name">claude-3-5-sonnet</span></td>
+    <td class="cell-msg"><span class="cell-msg-empty" aria-label="메시지 없음">—</span></td>
+    <td class="cell-token num">500</td>
+    <td class="cell-token num">—</td>
+    <td class="cell-token num cell-empty">—</td>
+    <td class="cell-token num">50ms</td>
+    
+  </tr>"
+`;
+
+exports[`makeRequestRow prompt 타입 with showSession: true 1`] = `
+"<tr data-type="prompt" data-sub-type="" data-request-id="r1">
+    <td class="cell-time num">오전 10:00 · 5시간 전</td>
+    <td class="cell-action"><span class="type-badge type-prompt" title="prompt" aria-label="prompt">prompt</span></td>
+    <td class="cell-target"><span class="target-role-badge role-badge-user"><span class="role-icon">◉</span>user</span></td>
+    <td class="cell-model"><span class="model-name">claude-3-5-sonnet</span></td>
+    <td class="cell-msg"><span class="cell-msg-empty" aria-label="메시지 없음">—</span></td>
+    <td class="cell-token num">500</td>
+    <td class="cell-token num">—</td>
+    <td class="cell-token num cell-empty">—</td>
+    <td class="cell-token num">50ms</td>
+    <td class="cell-sess"><span class="sess-id sess-id-link" data-goto-session="s1" data-goto-project="" title="s1">s1…</span></td>
+  </tr>"
+`;
+
+exports[`makeRequestRow tool_call 타입 with 정상 응답 1`] = `
+"<tr data-type="tool_call" data-sub-type="" data-request-id="r2">
+    <td class="cell-time num">오전 10:01 · 5시간 전</td>
+    <td class="cell-action"><span class="type-badge type-tool_call" title="tool_call" aria-label="tool_call">tool_call</span></td>
+    <td class="cell-target"><span class="target-cell-inner"><span class="action-name"><span class="tool-icon tool-icon-tool">◉</span>Read</span></span></td>
+    <td class="cell-model cell-empty">—</td>
+    <td class="cell-msg"><span class="cell-msg-empty" aria-label="메시지 없음">—</span></td>
+    <td class="cell-token num">—</td>
+    <td class="cell-token num">100</td>
+    <td class="cell-token num cell-empty">—</td>
+    <td class="cell-token num">200ms</td>
+    
+  </tr>"
+`;
+
+exports[`makeRequestRow tool_call 타입 with anomaly flags (spike + loop) 1`] = `
+"<tr data-type="tool_call" data-sub-type="" data-request-id="r3">
+    <td class="cell-time num">오전 10:01 · 5시간 전</td>
+    <td class="cell-action"><span class="type-badge type-tool_call" title="tool_call" aria-label="tool_call">tool_call</span></td>
+    <td class="cell-target"><span class="target-cell-inner"><span class="action-name"><span class="tool-icon tool-icon-tool">◉</span>Bash</span></span><span class="mini-badge badge-spike" data-mini-badge-tooltip="spike">spike</span><span class="mini-badge badge-loop" data-mini-badge-tooltip="loop">loop</span></td>
+    <td class="cell-model cell-empty">—</td>
+    <td class="cell-msg"><span class="cell-msg-empty" aria-label="메시지 없음">—</span></td>
+    <td class="cell-token num">—</td>
+    <td class="cell-token num">100</td>
+    <td class="cell-token num cell-empty">—</td>
+    <td class="cell-token num">2.0s</td>
+    
+  </tr>"
+`;
+
+exports[`makeRequestRow system 타입 (드물지만 포함) 1`] = `
+"<tr data-type="system" data-sub-type="" data-request-id="r4">
+    <td class="cell-time num">오전 10:02 · 5시간 전</td>
+    <td class="cell-action"><span class="type-badge type-system" title="system" aria-label="system">system</span></td>
+    <td class="cell-target"><span class="target-role-badge role-badge-system"><span class="role-icon">◉</span>system</span></td>
+    <td class="cell-model cell-empty">—</td>
+    <td class="cell-msg"><span class="cell-msg-empty" aria-label="메시지 없음">—</span></td>
+    <td class="cell-token num">—</td>
+    <td class="cell-token num">—</td>
+    <td class="cell-token num cell-empty">—</td>
+    <td class="cell-token num">10ms</td>
+    <td class="cell-sess"><span class="sess-id sess-id-link" data-goto-session="s1" data-goto-project="" title="s1">s1…</span></td>
+  </tr>"
+`;
+
+exports[`makeRequestRow 토큰 0 인 경우 (빈 셀) 1`] = `
+"<tr data-type="prompt" data-sub-type="" data-request-id="r5">
+    <td class="cell-time num">오전 10:00 · 5시간 전</td>
+    <td class="cell-action"><span class="type-badge type-prompt" title="prompt" aria-label="prompt">prompt</span></td>
+    <td class="cell-target"><span class="target-role-badge role-badge-user"><span class="role-icon">◉</span>user</span></td>
+    <td class="cell-model"><span class="model-name">claude-3-5-sonnet</span></td>
+    <td class="cell-msg"><span class="cell-msg-empty" aria-label="메시지 없음">—</span></td>
+    <td class="cell-token num">—</td>
+    <td class="cell-token num">—</td>
+    <td class="cell-token num cell-empty">—</td>
+    <td class="cell-token num">50ms</td>
+    
+  </tr>"
+`;
+
+exports[`makeRequestRow 모델명 없는 prompt (synthetic) 1`] = `
+"<tr data-type="prompt" data-sub-type="" data-request-id="r6">
+    <td class="cell-time num">오전 10:00 · 5시간 전</td>
+    <td class="cell-action"><span class="type-badge type-prompt" title="prompt" aria-label="prompt">prompt</span></td>
+    <td class="cell-target"><span class="target-role-badge role-badge-user"><span class="role-icon">◉</span>user</span></td>
+    <td class="cell-model cell-empty">—</td>
+    <td class="cell-msg"><span class="cell-msg-empty" aria-label="메시지 없음">—</span></td>
+    <td class="cell-token num">100</td>
+    <td class="cell-token num">—</td>
+    <td class="cell-token num cell-empty">—</td>
+    <td class="cell-token num">50ms</td>
+    
+  </tr>"
+`;
+
+exports[`makeRequestRow 캐시 토큰 포함 1`] = `
+"<tr data-type="prompt" data-sub-type="" data-request-id="r7">
+    <td class="cell-time num">오전 10:00 · 5시간 전</td>
+    <td class="cell-action"><span class="type-badge type-prompt" title="prompt" aria-label="prompt">prompt</span></td>
+    <td class="cell-target"><span class="target-role-badge role-badge-user"><span class="role-icon">◉</span>user</span></td>
+    <td class="cell-model"><span class="model-name">claude-3-5-sonnet</span></td>
+    <td class="cell-msg"><span class="cell-msg-empty" aria-label="메시지 없음">—</span></td>
+    <td class="cell-token num">1.0k</td>
+    <td class="cell-token num">—</td>
+    <td class="cell-token num cache-cell" data-cache-read="500" data-cache-write="250">500</td>
+    <td class="cell-token num">50ms</td>
+    
+  </tr>"
+`;
+
+exports[`makeRequestRow anomaly flag: slow만 포함 1`] = `
+"<tr data-type="tool_call" data-sub-type="" data-request-id="r8">
+    <td class="cell-time num">오전 10:01 · 5시간 전</td>
+    <td class="cell-action"><span class="type-badge type-tool_call" title="tool_call" aria-label="tool_call">tool_call</span></td>
+    <td class="cell-target"><span class="target-cell-inner"><span class="action-name"><span class="tool-icon tool-icon-tool">◉</span>Write</span></span></td>
+    <td class="cell-model cell-empty">—</td>
+    <td class="cell-msg"><span class="cell-msg-empty" aria-label="메시지 없음">—</span></td>
+    <td class="cell-token num">—</td>
+    <td class="cell-token num">100</td>
+    <td class="cell-token num cell-empty">—</td>
+    <td class="cell-token num">3.0s<span class="mini-badge badge-slow" data-mini-badge-tooltip="slow">slow</span></td>
+    
+  </tr>"
+`;
+
+exports[`makeTargetCell prompt 타입 (user role) 1`] = `"<td class="cell-target"><span class="target-role-badge role-badge-user"><span class="role-icon">◉</span>user</span></td>"`;
+
+exports[`makeTargetCell tool_call 타입 with tool_name 1`] = `"<td class="cell-target"><span class="target-cell-inner"><span class="action-name"><span class="tool-icon tool-icon-tool">◉</span>Read</span></span></td>"`;
+
+exports[`makeTargetCell tool_call 타입 tool_name 없음 1`] = `"<td class="cell-target cell-empty">—</td>"`;
+
+exports[`makeTargetCell Agent/Skill 타입 (특수 렌더링) 1`] = `"<td class="cell-target"><span class="target-cell-inner"><span class="action-name"><span class="tool-icon tool-icon-agent">◎</span>Agent</span></span></td>"`;
+
+exports[`makeTargetCell system 타입 1`] = `"<td class="cell-target"><span class="target-role-badge role-badge-system"><span class="role-icon">◉</span>system</span></td>"`;
+
+exports[`makeSessionRow 활성 세션 (ended_at: null) with preview 1`] = `
+"<tr class="clickable" data-session-id="s1">
+    <td colspan="4" class="sess-row-cell" style="padding:5px 10px">
+      <div class="sess-row-header">
+        <span class="sess-id" title="s1">s1</span>
+        <span class="sess-row-time">5시간 전</span>
+        <span class="sess-row-tokens">10.0k</span>
+        <span class="sess-row-status active">●</span>
+      </div>
+      <div class="sess-row-preview" title="첫 프롬프트 미리보기">첫 프롬프트 미리보기</div>
+    </td>
+  </tr>"
+`;
+
+exports[`makeSessionRow 활성 세션 (ended_at: null) isSelected: true 1`] = `
+"<tr class="clickable row-selected" data-session-id="s2">
+    <td colspan="4" class="sess-row-cell" style="padding:5px 10px">
+      <div class="sess-row-header">
+        <span class="sess-id" title="s2">s2</span>
+        <span class="sess-row-time">6시간 전</span>
+        <span class="sess-row-tokens">5.0k</span>
+        <span class="sess-row-status active">●</span>
+      </div>
+      <div class="sess-row-preview" title="첫 프롬프트 미리보기">첫 프롬프트 미리보기</div>
+    </td>
+  </tr>"
+`;
+
+exports[`makeSessionRow 종료된 세션 (ended_at 설정) 1`] = `
+"<tr class="clickable" data-session-id="s3">
+    <td colspan="4" class="sess-row-cell" style="padding:5px 10px">
+      <div class="sess-row-header">
+        <span class="sess-id" title="s3">s3</span>
+        <span class="sess-row-time">7시간 전</span>
+        <span class="sess-row-tokens">3.0k</span>
+        <span class="sess-row-status">○</span>
+      </div>
+      <div class="sess-row-preview" title="첫 프롬프트 미리보기">첫 프롬프트 미리보기</div>
+    </td>
+  </tr>"
+`;
+
+exports[`makeSessionRow 미리보기 없는 세션 1`] = `
+"<tr class="clickable" data-session-id="s4">
+    <td colspan="4" class="sess-row-cell" style="padding:5px 10px">
+      <div class="sess-row-header">
+        <span class="sess-id" title="s4">s4</span>
+        <span class="sess-row-time">5시간 전</span>
+        <span class="sess-row-tokens">5.0k</span>
+        <span class="sess-row-status active">●</span>
+      </div>
+      
+    </td>
+  </tr>"
+`;
+
+exports[`makeSessionRow 토큰이 많은 세션 1`] = `
+"<tr class="clickable" data-session-id="s5">
+    <td colspan="4" class="sess-row-cell" style="padding:5px 10px">
+      <div class="sess-row-header">
+        <span class="sess-id" title="s5">s5</span>
+        <span class="sess-row-time">8시간 전</span>
+        <span class="sess-row-tokens">1.0M</span>
+        <span class="sess-row-status active">●</span>
+      </div>
+      <div class="sess-row-preview" title="첫 프롬프트 미리보기">첫 프롬프트 미리보기</div>
+    </td>
+  </tr>"
+`;
+
+exports[`makeSessionRow 긴 미리보기 텍스트 1`] = `
+"<tr class="clickable" data-session-id="s6">
+    <td colspan="4" class="sess-row-cell" style="padding:5px 10px">
+      <div class="sess-row-header">
+        <span class="sess-id" title="s6">s6</span>
+        <span class="sess-row-time">5시간 전</span>
+        <span class="sess-row-tokens">5.0k</span>
+        <span class="sess-row-status active">●</span>
+      </div>
+      <div class="sess-row-preview" title="이것은 매우 긴 프롬프트 텍스트입니다. 여러 줄에 걸쳐 있을 수 있으며 특수 문자도 포함됩니다: &lt;&gt;&amp;&quot;'">이것은 매우 긴 프롬프트 텍스트입니다. 여러 줄에 걸쳐 있을 수 있으며 특수 문자도 포함됩니다: &lt;&gt;&amp;&quot;'</div>
+    </td>
+  </tr>"
+`;

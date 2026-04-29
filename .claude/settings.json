@@ -1,27 +1,11 @@
 {
-  "language": "korean",
-  "autoUpdatesChannel": "latest",
   "env": {
     "CLAUDE_TMP_DIR": ".claude/.tmp",
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "ENABLE_LSP_TOOL": "1",
-    "MCP_TIMEOUT": "5000",
-    "SPYGLASS_DIR": "/Users/moongyeom/IdeaProjects/claude-spyglass"
-  },
-  "hooks": {},
-  "extraKnownMarketplaces": {
-    "spyglass-local": {
-      "source": {
-        "source": "directory",
-        "path": "."
-      }
-    }
-  },
-  "enabledPlugins": {
-    "typescript-lsp@spyglass-local": true
+    "MCP_TIMEOUT": "5000"
   },
   "permissions": {
-    "defaultMode": "acceptEdits",
     "allow": [
       "mcp__context7__*",
       "mcp__sequential-thinking__*",
@@ -39,6 +23,19 @@
       "Read(**/*credentials*)",
       "Bash(sudo *)",
       "Bash(git remove *)"
-    ]
-  }
+    ],
+    "defaultMode": "acceptEdits"
+  },
+  "hooks": {},
+  "enabledPlugins": {},
+  "extraKnownMarketplaces": {
+    "spyglass-local": {
+      "source": {
+        "source": "directory",
+        "path": "."
+      }
+    }
+  },
+  "language": "korean",
+  "autoUpdatesChannel": "latest"
 }

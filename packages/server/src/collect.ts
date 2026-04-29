@@ -258,6 +258,14 @@ export function resolveTranscriptContext(
     }
   }
 
+  // 3) Skill tool PostToolUse: tool_response.model에서 직접 모델 추출
+  if (raw.tool_name === 'Skill' && raw.hook_event_name === 'PostToolUse') {
+    const skillModel = (raw.tool_response as { model?: string } | undefined)?.model;
+    if (skillModel) {
+      return { transcriptData: mainData, modelOverride: skillModel };
+    }
+  }
+
   return { transcriptData: mainData };
 }
 

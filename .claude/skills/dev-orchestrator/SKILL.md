@@ -24,13 +24,15 @@ description: >
 
 ```
 .claude/docs/plans/{feature-name}/
-├── plan.md      # 입력 계획 문서
-├── adr.md       # 전문가 회의 산출 ADR
-└── tasks.md     # 원자성 커밋 작업 목록
+├── plan.md     # 입력 계획 문서
+├── adr.md      # 전문가 회의 산출 ADR
+├── task.json   # 태스크 인덱스 (doc-tasks 스킬 관리)
+└── tasks/      # 개별 원자성 태스크 파일 (doc-tasks 스킬 관리)
 ```
 
 - `{feature-name}`: kebab-case (예: `user-auth`, `payment-api`, `dashboard`)
 - 기능이 명확하지 않으면 사용자에게 feature 이름을 먼저 확인합니다.
+- 태스크 파일 구조·스키마·샘플은 `doc-tasks` 스킬 참조
 
 ---
 
@@ -89,16 +91,16 @@ ADR 형식은 `references/meeting-protocol.md`를 따릅니다.
 
 ### Phase 3: 원자성 작업 분해
 
-`${CLAUDE_PROJECT_DIR}/.claude/docs/plans/{feature}/plan.md`와 `${CLAUDE_PROJECT_DIR}/.claude/docs/plans/{feature}/adr.md`를 기반으로
-`${CLAUDE_PROJECT_DIR}/.claude/docs/plans/{feature}/tasks.md`를 작성합니다.
+`plan.md`와 `adr.md`를 기반으로 태스크를 분해합니다.
 
 원자성 분해 원칙:
 - **하나의 태스크 = 하나의 커밋** (git bisect 가능)
 - 각 커밋 후 코드베이스가 빌드/테스트 가능한 상태 유지
 - 의존성 순서로 정렬 (선행 태스크 먼저)
-- 각 태스크에 검증 명령어 포함
+- 병렬 가능한 태스크 식별
 
-태스크 작성 가이드는 `references/atomic-task-guide.md`를 참고합니다.
+태스크 파일 생성은 **`doc-tasks` 스킬에 위임**합니다.
+태스크 분해 원칙은 `references/atomic-task-guide.md`를 참고합니다.
 
 ---
 
@@ -117,7 +119,7 @@ ADR 형식은 `references/meeting-protocol.md`를 따릅니다.
 
 **검토 결과 처리:**
 - 두 검토자 모두 승인 → Phase 5 진행
-- 수정 의견 있음 → tasks.md 수정 후 재검토 요청
+- 수정 의견 있음 → **`doc-tasks` 스킬로 태스크 수정** 후 재검토 요청
 
 ---
 
@@ -132,20 +134,25 @@ ADR 형식은 `references/meeting-protocol.md`를 따릅니다.
 - 시작하시겠습니까?
 ```
 
-실행 중:
-- 각 태스크를 순서대로 진행
-- 태스크 완료 시 즉시 커밋 (원자성 커밋)
-- 검증 명령어 실행 후 다음 태스크로 이동
-- 실패 시 즉시 중단하고 원인 보고
+#### 5-A: 순차 실행 (기본)
+
+- 태스크 시작/완료 시 **`doc-tasks` 스킬로 상태 갱신**
+- 검증 명령어(`verification.commands`) 실행 후 다음 태스크로 이동
+- 실패 시 즉시 중단하고 원인 보고. 고위험 태스크(`risk: "high"`)는 `rollback_checkpoint` 커밋으로 복귀
+
+#### 5-B: git worktree 병렬 실행 (파일 겹침 없는 그룹)
+
+태스크 그룹 간 **파일 겹침이 없고** 논리적 의존도 낮을 때, git worktree로 병렬 개발합니다.
+
+세부 절차(조건 확인 · 실행 · 정리 · 서브에이전트 프롬프트)는 `references/worktree-parallel.md` 참조.
 
 ---
 
 ## 참고 파일
-
-세부 지침은 아래 파일을 읽어 사용합니다:
 
 | 파일 | 내용 | 읽어야 할 때 |
 |------|------|-------------|
 | `references/expert-roles.md` | 전문가 유형과 선발 기준 | Phase 0-1 |
 | `references/meeting-protocol.md` | 회의 진행 방식, ADR 형식 | Phase 2 |
 | `references/atomic-task-guide.md` | 원자성 태스크 분해 원칙 | Phase 3 |
+| `references/worktree-parallel.md` | git worktree 병렬 실행 절차 | Phase 5-B |

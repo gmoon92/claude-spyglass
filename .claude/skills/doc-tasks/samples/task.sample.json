@@ -1,0 +1,83 @@
+{
+  "_comment": "이 파일은 task.json의 샘플입니다. 실제 파일 생성 시 _comment 필드는 제거하세요.",
+
+  "feature": "user-auth",
+  "title": "사용자 인증 기능 구현",
+  "docs": {
+    "plan": "plan.md",
+    "adr": "adr.md"
+  },
+  "created": "2026-01-01",
+  "updated": "2026-01-01",
+  "summary": {
+    "total": 5,
+    "pending": 3,
+    "in_progress": 1,
+    "done": 1,
+    "skipped": 0
+  },
+  "parallel_groups": [
+    {
+      "group": "auth-components",
+      "description": "T-02 완료 후 독립적으로 병렬 진행 가능 — login-form과 register-form은 서로 무관",
+      "tasks": ["T-03", "T-04"]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T-01",
+      "title": "auth.test.ts — 순수 함수 단위 테스트 추가",
+      "file": "tasks/task-01.json",
+      "status": "done",
+      "type": "test",
+      "phase": 0,
+      "risk": "low",
+      "depends_on": [],
+      "parallel_with": []
+    },
+    {
+      "id": "T-02",
+      "title": "auth-service.js 추출 (validateToken, hashPassword)",
+      "file": "tasks/task-02.json",
+      "status": "in_progress",
+      "type": "refactor",
+      "phase": 1,
+      "risk": "medium",
+      "depends_on": ["T-01"],
+      "parallel_with": []
+    },
+    {
+      "id": "T-03",
+      "title": "login-form.js 컴포넌트 추출",
+      "file": "tasks/task-03.json",
+      "status": "pending",
+      "type": "feat",
+      "phase": 1,
+      "risk": "low",
+      "depends_on": ["T-02"],
+      "parallel_with": ["T-04"]
+    },
+    {
+      "id": "T-04",
+      "title": "register-form.js 컴포넌트 추출",
+      "file": "tasks/task-04.json",
+      "status": "pending",
+      "type": "feat",
+      "phase": 1,
+      "risk": "low",
+      "depends_on": ["T-02"],
+      "parallel_with": ["T-03"]
+    },
+    {
+      "id": "T-05",
+      "title": "Phase 1 회귀 검증",
+      "file": "tasks/task-05.json",
+      "status": "pending",
+      "type": "test",
+      "phase": 1,
+      "risk": "low",
+      "depends_on": ["T-03", "T-04"],
+      "parallel_with": []
+    }
+  ]
+}

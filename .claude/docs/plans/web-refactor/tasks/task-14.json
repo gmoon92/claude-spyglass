@@ -1,0 +1,33 @@
+{
+  "id": "T-14",
+  "title": "DetailView 기반 추출 (selectSession + AbortController)",
+  "status": "pending",
+  "type": "refactor",
+  "phase": 4,
+  "risk": "high",
+  "estimate": "2h",
+  "depends_on": ["T-13"],
+  "parallel_with": [],
+  "rollback_checkpoint": "T-13 커밋",
+  "files": {
+    "new": ["packages/web/assets/js/views/detail-view.js"],
+    "modify": [
+      "packages/web/assets/js/main.js",
+      "packages/web/assets/js/session-detail.js"
+    ],
+    "delete": []
+  },
+  "commit_message": "refactor(web): DetailView 추출 — selectSession + AbortController 캡슐화",
+  "verification": {
+    "commands": ["bun test"],
+    "checklist": [
+      "빠른 세션 연속 클릭 → 마지막 세션 데이터만 표시",
+      "경쟁 조건 1: SSE 스트림 도중 다른 세션 클릭 → 이전 요청 정확히 abort 됨",
+      "경쟁 조건 2: 네트워크 오류 후 세션 재클릭 → AbortController 정상 재생성",
+      "경쟁 조건 3: _expandedTurnIds.clear()가 loadSession() 내부에서 호출됨",
+      "detail-collapsed 클래스 토글 DetailView 내부화",
+      "main.js: selectSession → detailView.loadSession(id) 호출로 교체"
+    ]
+  },
+  "rollback_command": "git revert HEAD"
+}

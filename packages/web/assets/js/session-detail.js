@@ -1,13 +1,16 @@
 // 세션 상세 뷰 모듈
+import { createSearchBox } from './components/search-box.js';
+import { subTypeOf, SUB_TYPES } from './request-types.js';
 import { escHtml, fmtToken, fmtDate, fmtTime, formatDuration } from './formatters.js';
 import { makeRequestRow, typeBadge, contextPreview, toolStatusBadge, toolResponseHint, toolIconHtml, targetInnerHtml, FLAT_VIEW_COLS, togglePromptExpand, _promptCache } from './renderers.js';
-import { renderContextChart, clearContextChart } from './context-chart.js';
+import { clearContextChart } from './context-chart.js';
 import { renderGantt, clearGantt, TOOL_COLORS } from './turn-gantt.js';
 import { loadToolStats, clearToolStats } from './tool-stats.js';
 import { detectAnomalies } from './anomaly.js';
 // ADR-017: 세션 모드일 때 chartSection의 donut/cache panel을 세션 데이터로 갱신
 import { setTypeData, drawDonut, renderTypeLegend } from './chart.js';
 import { renderCachePanel, computeSessionCacheStats } from './cache-panel.js';
+import { GANTT_TURN_CLICK, DETAIL_FILTER_CHANGED } from './events.js';
 
 export const API = '';
 
@@ -18,6 +21,7 @@ let _detailAllTurns       = [];
 let _detailSearchQuery    = '';
 let _detailTurnAnomalyMap = new Map();
 let _expandedTurnIds      = new Set(); // accordion 펼침 상태 유지
+export let detailSearchBox = null;
 
 export function getDetailFilter()     { return _detailFilter; }
 export function setDetailFilter(f)    { _detailFilter = f; }
@@ -62,13 +66,17 @@ export function renderDetailRequests(list, anomalyMap = new Map()) {
   }
 }
 
+// 모듈 수준 변수 — DETAIL_FILTER_CHANGED 리스너가 접근하는 처리된 데이터
+let _flatFiltered    = [];
+let _flatAnomalyMap  = new Map();
+let _turnFiltered    = [];
+
 export function applyDetailFilter() {
   const countMap = { all: _detailAllRequests.length, prompt: 0, tool_call: 0, system: 0, agent: 0, skill: 0, mcp: 0 };
   _detailAllRequests.forEach(r => {
     if (r.type in countMap) countMap[r.type]++;
-    if (r.tool_name === 'Agent') countMap.agent++;
-    else if (r.tool_name === 'Skill') countMap.skill++;
-    else if (r.tool_name?.startsWith('mcp__')) countMap.mcp++;
+    const sub = subTypeOf(r);
+    if (sub) countMap[sub]++;
   });
   const labelMap = {
     all:      `All (${countMap.all})`,
@@ -83,22 +91,18 @@ export function applyDetailFilter() {
     if (labelMap[b.dataset.detailFilter]) b.textContent = labelMap[b.dataset.detailFilter];
   });
 
-  const flatFiltered = _detailFilter === 'all'    ? _detailAllRequests
-    : _detailFilter === 'agent'                   ? _detailAllRequests.filter(r => r.tool_name === 'Agent')
-    : _detailFilter === 'skill'                   ? _detailAllRequests.filter(r => r.tool_name === 'Skill')
-    : _detailFilter === 'mcp'                     ? _detailAllRequests.filter(r => r.tool_name?.startsWith('mcp__'))
+  // 데이터 처리 — 결과를 모듈 변수에 저장하여 리스너가 접근 가능하게 함
+  _flatFiltered = _detailFilter === 'all'    ? _detailAllRequests
+    : SUB_TYPES.includes(_detailFilter)      ? _detailAllRequests.filter(r => subTypeOf(r) === _detailFilter)
     : _detailAllRequests.filter(r => r.type === _detailFilter);
   // ADR-011: anomaly map을 미리 빌드하여 detail flat에도 배지 적용
-  const flatAnomalyMap = detectAnomalies(_detailAllRequests);
-  renderDetailRequests(flatFiltered, flatAnomalyMap);
+  _flatAnomalyMap = detectAnomalies(_detailAllRequests);
 
-  const turnFiltered = _detailFilter === 'all'                          ? _detailAllTurns
-    : _detailFilter === 'tool_call'                                     ? _detailAllTurns.filter(t => t.tool_calls.length > 0)
-    : _detailFilter === 'prompt'                                        ? _detailAllTurns.filter(t => !!t.prompt)
-    : ['agent', 'skill', 'mcp'].includes(_detailFilter)                ? _detailAllTurns.filter(t => t.tool_calls.length > 0)
+  _turnFiltered = _detailFilter === 'all'                          ? _detailAllTurns
+    : _detailFilter === 'tool_call'                                ? _detailAllTurns.filter(t => t.tool_calls.length > 0)
+    : _detailFilter === 'prompt'                                   ? _detailAllTurns.filter(t => !!t.prompt)
+    : SUB_TYPES.includes(_detailFilter)                           ? _detailAllTurns.filter(t => t.tool_calls.length > 0)
     : [];
-  renderTurnCards(turnFiltered, _detailAllTurns);
-  renderContextChart(_detailAllTurns);
 
   // 이상 감지 맵 빌드 (turn_id 기준으로 집계)
   const rawAnomalyMap = detectAnomalies(_detailAllRequests);
@@ -113,14 +117,31 @@ export function applyDetailFilter() {
     }
   }
 
-  renderGantt(_detailAllTurns, _detailTurnAnomalyMap);
+  // 처리된 데이터를 event.detail에 실어 발행 — 리스너가 session-detail.js를 import 없이 데이터에 접근
+  document.dispatchEvent(new CustomEvent(DETAIL_FILTER_CHANGED, {
+    detail: {
+      flatFiltered:    _flatFiltered,
+      flatAnomalyMap:  _flatAnomalyMap,
+      turnFiltered:    _turnFiltered,
+      allTurns:        _detailAllTurns,
+      turnAnomalyMap:  _detailTurnAnomalyMap,
+      allRequests:     _detailAllRequests,
+    },
+  }));
+}
+
+// DETAIL_FILTER_CHANGED 자체 구독 — flat view, turn view, 차트 패널 갱신
+document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
+  const { flatFiltered, flatAnomalyMap, turnFiltered, allTurns, allRequests } = e.detail;
+
+  renderDetailRequests(flatFiltered, flatAnomalyMap);
+  renderTurnCards(turnFiltered, allTurns);
 
   // ADR-017: chartSection이 detail 모드일 때 donut/cache panel을 세션 데이터로 갱신
   const chartSection = document.getElementById('chartSection');
   if (chartSection?.classList.contains('chart-mode-detail')) {
-    // 세션 type 분포 (donut)
     const typeCounts = {};
-    _detailAllRequests.forEach(r => {
+    allRequests.forEach(r => {
       typeCounts[r.type] = (typeCounts[r.type] || 0) + 1;
     });
     const sessionTypeData = Object.entries(typeCounts)
@@ -130,8 +151,7 @@ export function applyDetailFilter() {
     drawDonut();
     renderTypeLegend();
 
-    // 세션 cache stats (panel)
-    const sessionCache = computeSessionCacheStats(_detailAllRequests);
+    const sessionCache = computeSessionCacheStats(allRequests);
     renderCachePanel(sessionCache);
   }
 
@@ -146,7 +166,7 @@ export function applyDetailFilter() {
     ].filter(Boolean).join(' ').toLowerCase();
     tr.style.display = text.includes(_detailSearchQuery) ? '' : 'none';
   });
-}
+});
 
 export function setDetailView(tab) {
   document.getElementById('detailFlatView').style.display   = tab === 'flat'  ? '' : 'none';
@@ -497,10 +517,7 @@ export async function loadSessionDetail(sessionId, opts = {}) {
   _currentSessionId  = sessionId;
   _detailSearchQuery = '';
   _expandedTurnIds.clear(); // 세션 전환 시 accordion 펼침 상태 초기화
-  const detailSearchInput = document.getElementById('detailSearchInput');
-  if (detailSearchInput) { detailSearchInput.value = ''; }
-  const detailSearchClear = document.getElementById('detailSearchClear');
-  if (detailSearchClear) detailSearchClear.classList.remove('visible');
+  detailSearchBox?.clear();
   const { signal } = opts;
   const fetchOpts = signal ? { signal } : {};
   const [reqRes, turnRes] = await Promise.all([
@@ -514,20 +531,12 @@ export async function loadSessionDetail(sessionId, opts = {}) {
 }
 
 export function initDetailSearch() {
-  const input = document.getElementById('detailSearchInput');
-  const clear = document.getElementById('detailSearchClear');
-  if (!input || !clear) return;
-  input.addEventListener('input', () => {
-    _detailSearchQuery = input.value.trim().toLowerCase();
-    clear.classList.toggle('visible', _detailSearchQuery.length > 0);
-    applyDetailFilter();
-  });
-  clear.addEventListener('click', () => {
-    input.value = '';
-    _detailSearchQuery = '';
-    clear.classList.remove('visible');
-    applyDetailFilter();
-    input.focus();
+  detailSearchBox = createSearchBox('detailSearchContainer', {
+    placeholder: 'tool / message',
+    onSearch(q) {
+      _detailSearchQuery = q;
+      applyDetailFilter();
+    },
   });
 }
 
@@ -561,7 +570,7 @@ export function toggleCardExpand(turnId) {
 
 // G7: Gantt 클릭 → 턴뷰 연동 이벤트 리스너 등록
 export function initGanttNavigation() {
-  document.addEventListener('gantt:turnClick', (e) => {
+  document.addEventListener(GANTT_TURN_CLICK, (e) => {
     const { turnId } = e.detail;
     setDetailView('turn');
     // 약간의 딜레이로 DOM 렌더링 후 펼침

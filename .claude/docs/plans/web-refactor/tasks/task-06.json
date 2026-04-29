@@ -1,0 +1,32 @@
+{
+  "id": "T-06",
+  "title": "search-box.js 컴포넌트 추출",
+  "status": "done",
+  "type": "refactor",
+  "phase": 1,
+  "risk": "low",
+  "estimate": "1.5h",
+  "depends_on": ["T-05"],
+  "parallel_with": [],
+  "rollback_checkpoint": null,
+  "files": {
+    "new": ["packages/web/assets/js/components/search-box.js"],
+    "modify": [
+      "packages/web/index.html",
+      "packages/web/assets/js/main.js",
+      "packages/web/assets/js/session-detail.js"
+    ],
+    "delete": []
+  },
+  "commit_message": "refactor(web): 검색 박스 중복을 search-box.js 컴포넌트로 추출",
+  "verification": {
+    "commands": ["bun test"],
+    "checklist": [
+      "activeSearchInput() 함수 삭제 확인",
+      "feed/detail 검색 서로 독립적으로 동작",
+      "ESC 클리어 동작 유지",
+      "index.html 검색 박스 HTML 중복 제거 (~20줄 감소)"
+    ]
+  },
+  "rollback_command": null
+}

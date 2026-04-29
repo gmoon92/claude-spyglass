@@ -1,0 +1,32 @@
+{
+  "id": "T-05",
+  "title": "filter-bar.js 컴포넌트 추출",
+  "status": "done",
+  "type": "refactor",
+  "phase": 1,
+  "risk": "low",
+  "estimate": "2h",
+  "depends_on": ["T-04"],
+  "parallel_with": [],
+  "rollback_checkpoint": null,
+  "files": {
+    "new": ["packages/web/assets/js/components/filter-bar.js"],
+    "modify": [
+      "packages/web/index.html",
+      "packages/web/assets/js/main.js"
+    ],
+    "delete": []
+  },
+  "commit_message": "refactor(web): 필터 버튼 중복을 filter-bar.js 컴포넌트로 추출",
+  "verification": {
+    "commands": ["bun test"],
+    "checklist": [
+      "activeTypeFilterButtons() 함수 삭제 확인",
+      "feedFilterBar / detailFilterBar 인스턴스 생성 확인",
+      "defaultView/detailView 필터 버튼 각 7개 정상 동작",
+      "숫자키 1-7이 현재 활성 뷰에 올바르게 적용됨",
+      "index.html 필터 버튼 HTML 중복 제거 (~40줄 감소)"
+    ]
+  },
+  "rollback_command": null
+}

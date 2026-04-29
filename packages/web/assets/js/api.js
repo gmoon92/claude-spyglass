@@ -1,11 +1,12 @@
 // API / Fetch 모듈
 import { fmt, fmtToken, formatDuration } from './formatters.js';
 import { setTypeData, drawDonut, renderTypeLegend } from './chart.js';
-import { clearError, setLastUpdated, setLiveStatus } from './infra.js';
+import { clearError, setLastUpdated, showError } from './infra.js';
 import { renderProjects, renderTools, getAllSessions, setAllSessions, renderBrowserSessions } from './left-panel.js';
-import { renderRequests, appendRequests, RECENT_REQ_COLS } from './renderers.js';
+import { RECENT_REQ_COLS } from './renderers.js';
 import { detectAnomalies } from './anomaly.js';
 import { renderCachePanel } from './cache-panel.js';
+import { FEED_UPDATED } from './events.js';
 
 export const API = '';
 
@@ -98,13 +99,6 @@ export async function fetchDashboard() {
   }
 }
 
-function showError(msg) {
-  // infra.showError와 동일 — header-summary-merge ADR-007: setLiveStatus helper 위임으로 chip 보존
-  document.getElementById('errorMsg').textContent = msg || '서버에 연결할 수 없습니다.';
-  document.getElementById('errorBanner').classList.add('visible');
-  setLiveStatus(false);
-}
-
 // ── Requests ────────────────────────────────────────────────────────────────
 export async function fetchRequests(append = false) {
   if (!append) { reqOffset = 0; }
@@ -121,12 +115,9 @@ export async function fetchRequests(append = false) {
     const list = json.data || [];
     const p95  = json.meta?.p95DurationMs ?? null;
     const anomalyMap = detectAnomalies(list, p95);
-    if (append) {
-      appendRequests(list, anomalyMap);
-    } else {
-      renderRequests(list, anomalyMap);
-    }
-    document.dispatchEvent(new CustomEvent('feed:updated'));
+    document.dispatchEvent(new CustomEvent(FEED_UPDATED, {
+      detail: { list, anomalyMap, append },
+    }));
     reqOffset += list.length;
     const loadMoreBtn = document.getElementById('loadMoreBtn');
     if (loadMoreBtn) {

@@ -1,0 +1,39 @@
+{
+  "_comment": "이 파일은 task-N.json의 샘플입니다. 실제 파일 생성 시 _comment 필드는 제거하세요.",
+
+  "id": "T-03",
+  "title": "login-form.js 컴포넌트 추출",
+  "status": "pending",
+  "type": "feat",
+  "phase": 1,
+  "risk": "low",
+  "estimate": "2h",
+  "depends_on": ["T-02"],
+  "parallel_with": ["T-04"],
+  "rollback_checkpoint": null,
+  "files": {
+    "new": [
+      "packages/web/assets/js/components/login-form.js"
+    ],
+    "modify": [
+      "packages/web/index.html",
+      "packages/web/assets/js/main.js"
+    ],
+    "delete": []
+  },
+  "commit_message": "feat(web): 로그인 폼을 login-form.js 컴포넌트로 추출",
+  "verification": {
+    "commands": [
+      "bun test packages/web/assets/js/__tests__/login-form.test.ts",
+      "grep -n \"function renderLoginForm\" packages/web/assets/js/main.js"
+    ],
+    "checklist": [
+      "main.js의 renderLoginForm() 함수 삭제 확인 (grep 결과 0줄)",
+      "createLoginForm(containerEl, { onSubmit }) 인터페이스 노출 확인",
+      "로그인 성공 → onSubmit 콜백 호출 확인",
+      "로그인 실패 → 에러 메시지 표시 확인",
+      "Enter 키 제출 동작 유지"
+    ]
+  },
+  "rollback_command": null
+}
