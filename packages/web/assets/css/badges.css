@@ -1,30 +1,68 @@
-/* ── TYPE BADGES ────────────────────────────────────────────────────────── */
+/* ── TYPE BADGES (ADR-WDO-007: 11px UI, 비-색상 신호 강화) ─────────────── */
 .type-badge {
-  display: inline-block; padding: 2px 7px; border-radius: var(--radius-sm);
-  font-size: 10px; font-weight: 600; letter-spacing: 0.05em;
-  min-width: 72px; text-align: center; cursor: default; white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  min-width: 72px;
+  text-align: center;
+  cursor: default;
+  white-space: nowrap;
+  text-transform: lowercase;
+  border: 1px solid transparent;
 }
 .type-prompt    { background: var(--type-prompt-bg);    color: var(--type-prompt-color); }
 .type-tool_call { background: var(--type-tool_call-bg); color: var(--type-tool_call-color); }
 .type-system    { background: var(--type-system-bg);    color: var(--type-system-color); }
-.type-unknown   { background: var(--unknown-bg);       color: var(--text-muted); }
+.type-unknown   { background: var(--unknown-bg);       color: var(--text-3); }
 
 .role-badge { margin-left: 4px; }
 .role-user  { background: var(--blue-bg-light); color: var(--blue-text); }
 
-.model-badge { margin-left: 4px; background: var(--model-badge-bg); color: var(--accent); }
+.model-badge {
+  margin-left: 4px;
+  font-family: var(--font-data);
+  background: var(--model-badge-bg);
+  color: var(--accent);
+}
 
-/* ── MINI BADGE (ADR-R10-002) ───────────────────────────────────────────── */
+/* ── MINI BADGE (11px Inter — 9px 폐기) ────────────────────────────────── */
 .mini-badge {
-  display: inline-block; padding: 1px 5px; border-radius: var(--radius-sm);
-  font-size: 9px; font-weight: 600; letter-spacing: 0.3px;
-  vertical-align: middle; margin-left: 2px; white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  margin-left: 4px;
+  white-space: nowrap;
 }
 .badge-cache   { background: var(--blue-bg-light); color: var(--blue-text); }
-.badge-error   { background: var(--red-bg-light);  color: var(--red-text); }
-.badge-spike   { background: var(--yellow-bg-light);  color: var(--type-system-color); }
+/* 에러는 비-색상 신호 추가: ✗ 아이콘 + 좌측 inset shadow (--error 보더) */
+.badge-error::before { content: '✗'; font-weight: 700; margin-right: 1px; }
+.badge-error   {
+  background: var(--red-bg-light);
+  color: var(--red-text);
+  box-shadow: inset 2px 0 0 var(--error);
+  padding-left: 8px;
+}
+.badge-spike::before { content: '↑'; font-weight: 700; margin-right: 1px; }
+.badge-spike   { background: var(--yellow-bg-light);  color: var(--warn); }
+.badge-loop::before  { content: '↻'; margin-right: 1px; }
 .badge-loop    { background: var(--sky-bg-light);   color: var(--sky-text); }
-.badge-slow    { background: var(--red-bg-light);   color: var(--red-text); }
+/* 'slow' = orange tint, 'error'와 분리 (Failure Mode 15) */
+.badge-slow::before  { content: '◷'; margin-right: 1px; }
+.badge-slow    { background: rgba(240,183,47,0.15); color: var(--warn); }
 
 /* ── RUNNING ICON ANIMATION ─────────────────────────────────────────────── */
 @keyframes tool-running-pulse {
@@ -38,13 +76,26 @@
 
 /* ── TOOL RESPONSE HINT ─────────────────────────────────────────────────── */
 .tool-response-hint {
-  font-size: 10px; color: var(--text-dim); font-style: normal;
-  margin-left: 2px; white-space: nowrap;
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  color: var(--text-4);
+  font-style: normal;
+  margin-left: 4px;
+  white-space: nowrap;
 }
 
 /* ── NUMERIC ────────────────────────────────────────────────────────────── */
-.num    { font-variant-numeric: tabular-nums; color: var(--text-dim); }
-.num-hi { color: var(--accent); font-variant-numeric: tabular-nums; }
+.num    {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+}
+.num-hi {
+  font-family: var(--font-data);
+  color: var(--text-1);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
 
 /* ── CACHE TOOLTIP ──────────────────────────────────────────────────────── */
 .cache-tooltip {
@@ -99,45 +150,81 @@
 [data-mini-badge-tooltip] { cursor: help; }
 
 /* ── TOOL ICON COLOR ────────────────────────────────────────────────────── */
-.tool-icon-tool  { color: var(--type-tool_call-color); }
-.tool-icon-agent { color: var(--orange); }
+.tool-icon-tool  { color: var(--success); }
+.tool-icon-agent { color: var(--warn); }
 
 /* ── TARGET ROLE BADGE (prompt/system row) ──────────────────────────────── */
 .target-role-badge {
-  display: inline-flex; align-items: center; gap: 3px;
-  font-size: 12px; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  font-weight: 500;
 }
 .role-badge-user   { color: var(--type-prompt-color); }
 .role-badge-system { color: var(--type-system-color); }
-.role-icon { font-size: 10px; }
+.role-icon { font-size: var(--text-meta); }
 
 /* ── TOOL CELL ──────────────────────────────────────────────────────────── */
 .tool-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.tool-main { font-size: 12px; color: var(--text); min-width: 0; overflow: hidden; }
-.tool-sub  { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-/* tool-sub 안의 prompt-preview: block→inline으로 변환해 hint와 동일 줄에 표시 */
+.tool-main {
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  color: var(--text-2);
+  min-width: 0;
+  overflow: hidden;
+}
+.tool-sub  {
+  font-family: var(--font-data);
+  font-size: var(--text-small);
+  color: var(--text-4);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
 .tool-sub .prompt-preview { display: inline; max-width: none; margin-top: 0; white-space: inherit; }
 
 /* ── ACTION CELL ────────────────────────────────────────────────────────── */
 .cell-action { overflow: hidden; }
-.action-cell-inner { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; overflow: hidden; }
-.action-name { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.action-model    { color: var(--text-dim); font-size: 11px; }
-.action-sub-name { color: var(--text-dim); font-size: 10px; }
+.action-cell-inner { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; overflow: hidden; }
+.action-name {
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  color: var(--text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.action-model    {
+  font-family: var(--font-data);
+  color: var(--text-4);
+  font-size: var(--text-small);
+}
+.action-sub-name {
+  font-family: var(--font-ui);
+  color: var(--text-4);
+  font-size: var(--text-small);
+}
 
 /* ── MESSAGE CELL ───────────────────────────────────────────────────────── */
-td.cell-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.cell-msg {
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  color: var(--text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 td.cell-msg .prompt-preview { max-width: none; display: inline; cursor: pointer; }
-.cell-msg-empty { color: var(--text-dim); cursor: default; }
-tr[data-type="tool_call"] td.cell-msg .prompt-preview { font-family: monospace; font-size: 11px; }
+.cell-msg-empty { color: var(--text-4); cursor: default; }
+tr[data-type="tool_call"] td.cell-msg .prompt-preview {
+  font-family: var(--font-data);
+  font-size: var(--text-small);
+  color: var(--text-3);
+}
 
 /* ── PROMPT PREVIEW (inline) ────────────────────────────────────────────── */
 .prompt-preview {
-  font-size: 10px; color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  color: var(--text-3);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   max-width: 200px; cursor: pointer; display: block; margin-top: 2px;
 }
-.prompt-preview:hover { color: var(--text-muted); text-decoration: underline dotted; }
+.prompt-preview:hover { color: var(--text-2); text-decoration: underline dotted; }
 
 /* ── GANTT TOOLTIP ──────────────────────────────────────────────────────── */
 .gantt-tooltip {
