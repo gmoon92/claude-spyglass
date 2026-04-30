@@ -1,123 +1,166 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { EventSource } from 'eventsource';
+/**
+ * useSSE — connect to /events, push records into feedStore, expose connection state.
+ *
+ * @see ${CLAUDE_PROJECT_DIR}/.claude/skills/ui-designer/references/tui/signature-pulse.md §6
+ */
 
-export interface SSEMessage {
-  type: 'new_request' | 'session_update' | 'token_update' | 'stats_update' | 'ping';
-  timestamp: number;
-  data?: Record<string, unknown>;
-}
+import { useEffect, useRef, useState } from 'react';
+import { feedStore } from '../stores/feed-store';
+import type { Request } from '../types';
 
-export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
+export type SSEStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
 
-export interface UseSSEOptions {
-  url?: string;
-  autoReconnect?: boolean;
-  reconnectInterval?: number;
-  timeout?: number;
-  /** 메시지 버퍼 최대 크기 (FIFO, 기본: 50) */
-  maxBuffer?: number;
-}
+export type UseSSEResult = {
+  status: SSEStatus;
+  eventsPerSec: number;
+  lastEventAt: number | null;
+  /** 10s-bucketed token counts for the past 30 minutes. */
+  pulseBuckets: readonly number[];
+};
 
-export interface UseSSEReturn {
-  lastMessage: SSEMessage | null;
-  /** 누적 메시지 버퍼 (최근 maxBuffer건, FIFO) */
-  messages: SSEMessage[];
-  status: ConnectionStatus;
-  connect: () => void;
-  disconnect: () => void;
-  error: string | null;
-}
+const BUCKET_COUNT = 180;
+const BUCKET_MS = 10_000;
 
-export function useSSE(options: UseSSEOptions = {}): UseSSEReturn {
-  const {
-    url = 'http://localhost:9999/events',
-    autoReconnect = true,
-    reconnectInterval = 5000,
-    timeout = 10000,
-    maxBuffer = 50,
-  } = options;
+export function useSSE(apiUrl: string): UseSSEResult {
+  const [status, setStatus] = useState<SSEStatus>('connecting');
+  const [eventsPerSec, setEventsPerSec] = useState(0);
+  const [lastEventAt, setLastEventAt] = useState<number | null>(null);
+  const [pulseBuckets, setPulseBuckets] = useState<number[]>(() => Array(BUCKET_COUNT).fill(0));
 
-  const [lastMessage, setLastMessage] = useState<SSEMessage | null>(null);
-  const [messages, setMessages] = useState<SSEMessage[]>([]);
-  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
-  const [error, setError] = useState<string | null>(null);
-
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const addMessage = useCallback((msg: SSEMessage) => {
-    setMessages(prev => {
-      const key = `${msg.timestamp}:${msg.type}`;
-      const isDuplicate = prev.some(m => `${m.timestamp}:${m.type}` === key);
-      if (isDuplicate) return prev;
-      const next = [...prev, msg];
-      return next.length > maxBuffer ? next.slice(next.length - maxBuffer) : next;
-    });
-  }, [maxBuffer]);
-
-  const disconnect = useCallback(() => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-    setStatus('disconnected');
-  }, []);
-
-  const connect = useCallback(() => {
-    if (eventSourceRef.current?.readyState === EventSource.OPEN) return;
-
-    disconnect();
-    setStatus('connecting');
-    setError(null);
-
-    try {
-      const es = new EventSource(url);
-      eventSourceRef.current = es;
-
-      es.onopen = () => {
-        setStatus('connected');
-        setError(null);
-      };
-
-      es.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data) as SSEMessage;
-          setLastMessage(data);
-          addMessage(data);
-        } catch {
-          // ignore parse errors
-        }
-      };
-
-      es.onerror = () => {
-        setStatus('error');
-        setError('Connection error');
-        es.close();
-        if (autoReconnect) {
-          reconnectTimeoutRef.current = setTimeout(() => connect(), reconnectInterval);
-        }
-      };
-
-      setTimeout(() => {
-        if (es.readyState !== EventSource.OPEN) {
-          setError('Connection timeout');
-          es.close();
-        }
-      }, timeout);
-    } catch (err) {
-      setStatus('error');
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    }
-  }, [url, autoReconnect, reconnectInterval, timeout, disconnect, addMessage]);
+  const buckets = useRef<number[]>(Array(BUCKET_COUNT).fill(0));
+  const bucketStartRef = useRef<number>(Math.floor(Date.now() / BUCKET_MS) * BUCKET_MS);
+  const eventCounter = useRef(0);
 
   useEffect(() => {
-    connect();
-    return disconnect;
-  }, [connect, disconnect]);
+    let cancelled = false;
+    let es: EventSource | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let retryDelay = 1000;
 
-  return { lastMessage, messages, status, connect, disconnect, error };
+    const tick = () => {
+      // Roll bucket if needed.
+      const now = Date.now();
+      const startedAt = bucketStartRef.current;
+      const elapsed = now - startedAt;
+      const slots = Math.floor(elapsed / BUCKET_MS);
+      if (slots > 0) {
+        for (let i = 0; i < slots; i++) {
+          buckets.current.shift();
+          buckets.current.push(0);
+        }
+        bucketStartRef.current = startedAt + slots * BUCKET_MS;
+        setPulseBuckets(buckets.current.slice());
+      }
+      setEventsPerSec(eventCounter.current);
+      eventCounter.current = 0;
+    };
+
+    const interval = setInterval(tick, 1000);
+
+    const connect = () => {
+      if (cancelled) return;
+      try {
+        // EventSource is provided by the `eventsource` workspace dep at runtime.
+        // Fallback: skip connection if not available.
+        const ESCtor: typeof EventSource | undefined =
+          ((globalThis as { EventSource?: typeof EventSource }).EventSource) ??
+          tryRequireEventSource();
+        if (!ESCtor) {
+          setStatus('closed');
+          return;
+        }
+        es = new ESCtor(`${apiUrl}/events`);
+        setStatus('connecting');
+
+        es.addEventListener('open', () => {
+          if (cancelled) return;
+          setStatus('open');
+          retryDelay = 1000;
+        });
+
+        es.addEventListener('error', () => {
+          if (cancelled) return;
+          setStatus('reconnecting');
+          es?.close();
+          es = null;
+          retryTimer = setTimeout(connect, retryDelay);
+          retryDelay = Math.min(retryDelay * 2, 15_000);
+        });
+
+        es.addEventListener('new_request', (ev: MessageEvent) => {
+          handleEvent(ev);
+        });
+        es.addEventListener('session_update', (ev: MessageEvent) => {
+          // No-op for v1 — session-store would consume.
+          void ev;
+        });
+        es.addEventListener('ping', () => {
+          // Heartbeat keeps connection alive.
+        });
+      } catch (err) {
+        setStatus('reconnecting');
+        retryTimer = setTimeout(connect, retryDelay);
+        retryDelay = Math.min(retryDelay * 2, 15_000);
+      }
+    };
+
+    const handleEvent = (ev: MessageEvent) => {
+      try {
+        const parsed = JSON.parse(ev.data);
+        const data = parsed.data ?? parsed;
+        const r: Request = {
+          id: data.id,
+          session_id: data.session_id,
+          type: data.type,
+          request_type: data.request_type,
+          tool_name: data.tool_name,
+          tool_detail: data.tool_detail,
+          tool_use_id: data.tool_use_id,
+          event_type: data.event_type,
+          tokens_input: data.tokens_input,
+          tokens_output: data.tokens_output,
+          tokens_total: data.tokens_total,
+          duration_ms: data.duration_ms,
+          model: data.model,
+          timestamp: data.timestamp ?? Date.now(),
+          payload: data.payload,
+          status: data.status,
+          arrivedAt: Date.now(),
+        };
+        feedStore.push(r);
+        eventCounter.current += 1;
+        setLastEventAt(Date.now());
+
+        // Update pulse bucket.
+        const now = Date.now();
+        const idx = BUCKET_COUNT - 1;
+        const tokens = r.tokens_total ?? 0;
+        buckets.current[idx] = (buckets.current[idx] ?? 0) + tokens;
+      } catch {
+        // ignore
+      }
+    };
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      if (retryTimer) clearTimeout(retryTimer);
+      if (es) es.close();
+    };
+  }, [apiUrl]);
+
+  return { status, eventsPerSec, lastEventAt, pulseBuckets };
+}
+
+function tryRequireEventSource(): typeof EventSource | undefined {
+  try {
+    // Bun ships EventSource on globalThis in recent versions; if not, fall through.
+    // We avoid require() at runtime to keep CommonJS interop simple.
+    const g = globalThis as { EventSource?: typeof EventSource };
+    return g.EventSource;
+  } catch {
+    return undefined;
+  }
 }

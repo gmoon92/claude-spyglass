@@ -1,19 +1,15 @@
 /**
- * spyglass TUI Entry Point
+ * spyglass TUI entry point.
  *
- * @description Ink 기반 터미널 UI
- * @see docs/planning/02-prd.md - UI/UX 설계
+ * Renders the App with Capabilities provider; exits cleanly on user quit.
  */
 
-/** @jsxImportSource react */
-import React from 'react';
 import { render } from 'ink';
-import { App } from './app';
+import { App } from './App';
 
-// 앱 렌더링
 const { waitUntilExit } = render(<App />);
 
-// 정상 종료 처리
-waitUntilExit().then(() => {
-  process.exit(0);
-});
+waitUntilExit().then(
+  () => process.exit(0),
+  () => process.exit(1),
+);
