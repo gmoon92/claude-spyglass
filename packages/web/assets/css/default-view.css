@@ -114,20 +114,22 @@ canvas { display: block; }
 }
 
 .header-stat-value {
-  font-size: var(--font-meta);
-  color: var(--text);
-  font-weight: var(--weight-strong);
+  font-family: var(--font-data);
+  font-size: var(--text-data);
+  color: var(--text-1);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
   line-height: 1;
 }
 
 .header-stat-label {
-  font-size: var(--font-micro);
-  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  color: var(--text-3);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  font-weight: var(--weight-strong);
+  font-weight: 500;
   line-height: 1;
 }
 
@@ -177,28 +179,49 @@ canvas { display: block; }
 #chartSection .timeline-meta {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: 0 var(--space-1);
+  justify-content: flex-start;
+  gap: var(--space-5);
+  padding: var(--space-2) var(--space-1) var(--space-3);
   flex-shrink: 0;
   flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-3);
 }
 
 #chartSection .timeline-meta-group {
   display: flex;
   align-items: baseline;
-  gap: var(--space-3);
+  gap: var(--space-4);
   flex-wrap: wrap;
   min-width: 0;
 }
 
+/* 두 번째 그룹(누적) — Hero 위계: 큰 숫자 (Major level) */
+#chartSection .timeline-meta-group:nth-child(2) .header-stat-value {
+  font-size: var(--text-h2);
+  color: var(--text-1);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+#chartSection .timeline-meta-group:nth-child(2) .header-stat {
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 4px;
+}
+#chartSection .timeline-meta-group:nth-child(2) .header-stat-label {
+  font-size: var(--text-small);
+}
+
 #chartSection .timeline-meta-group-label {
-  font-size: var(--font-micro);
-  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  color: var(--text-3);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: var(--weight-strong);
+  letter-spacing: 0.06em;
+  font-weight: 600;
   flex-shrink: 0;
+  padding-right: var(--space-2);
+  border-right: 1px solid var(--border);
 }
 
 /* ── 반응형 (ADR-008) ─────────────────────────────────────────────────────
@@ -283,11 +306,26 @@ canvas { display: block; }
 .donut-wrap { padding: 12px 16px; display: flex; align-items: center; gap: 16px; }
 .donut-canvas { flex-shrink: 0; }
 .type-legend  { flex: 1; display: flex; flex-direction: column; gap: 6px; }
-.legend-item  { display: flex; align-items: center; gap: 6px; font-size: 11px; }
-.legend-dot   { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.legend-name  { color: var(--text-dim); flex: 1; }
-.legend-val   { color: var(--text); font-weight: 600; }
-.legend-pct   { color: var(--text-dim); min-width: 28px; text-align: right; }
+.legend-item  {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+}
+.legend-dot   { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.legend-name  { color: var(--text-3); flex: 1; }
+.legend-val   {
+  font-family: var(--font-data);
+  color: var(--text-1);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.legend-pct   {
+  font-family: var(--font-data);
+  color: var(--text-3);
+  min-width: 32px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 
 /* ── DETAIL CONTROLS BAR ────────────────────────────────────────────────── */
 /* detailView 전용 컨트롤 행 — view-section-header 와 동일 시각 패턴 */
@@ -332,13 +370,19 @@ canvas { display: block; }
   font-size: 12px; pointer-events: none; user-select: none;
 }
 .feed-search-input {
-  background: var(--surface); border: 1px solid var(--border);
-  color: var(--text); font-family: inherit; font-size: 10px;
-  padding: 2px 20px 2px 20px; border-radius: 4px;
-  width: 160px; transition: border-color .15s, width .2s; outline: none;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  padding: 5px 24px 5px 24px;
+  border-radius: var(--radius-md);
+  width: 200px;
+  transition: border-color var(--dur-fast) var(--ease), width var(--dur-base) var(--ease);
+  outline: none;
 }
-.feed-search-input:focus { border-color: var(--text-dim); width: 200px; }
-.feed-search-input::placeholder { color: var(--text-dim); }
+.feed-search-input:focus { border-color: var(--accent); width: 240px; }
+.feed-search-input::placeholder { color: var(--text-4); }
 .feed-search-clear {
   position: absolute; right: 4px; background: none; border: none;
   color: var(--text-dim); font-size: 13px; cursor: pointer;
@@ -349,12 +393,19 @@ canvas { display: block; }
 
 /* ── TYPE FILTER ────────────────────────────────────────────────────────── */
 .type-filter-btn {
-  background: none; border: 1px solid var(--border); color: var(--text-dim);
-  padding: 2px 8px; border-radius: 4px; cursor: pointer;
-  font-family: inherit; font-size: 10px; transition: color .12s, border-color .12s, background .12s;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  font-weight: 500;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
-.type-filter-btn:hover { color: var(--text); border-color: var(--text-dim); }
-.type-filter-btn.active { color: var(--accent); border-color: var(--accent); }
+.type-filter-btn:hover { color: var(--text-1); background: var(--raised); }
+.type-filter-btn.active { color: var(--text-1); border-color: var(--accent-border); background: rgba(255,122,69,0.10); }
 
 
 /* ── SCROLL LOCK BANNER ─────────────────────────────────────────────────── */

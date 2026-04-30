@@ -1,30 +1,34 @@
 /* ── BODY ───────────────────────────────────────────────────────────────── */
-/* header-summary-merge ADR-001: summary-strip 행 제거 → 4행 그리드
-   (header / error-banner / main / footer) */
+/* web-design-overhaul ADR-WDO-006: UI Font 디폴트 (Inter), Data Font는 셀별 분기 */
 body {
-  font-family: 'SF Mono','JetBrains Mono','Fira Code',ui-monospace,monospace;
+  font-family: var(--font-ui);
   background: var(--bg);
-  color: var(--text);
-  font-size: var(--font-body);
+  color: var(--text-2);
+  font-size: var(--text-body);
   line-height: 1.5;
   display: grid;
   grid-template-rows: auto auto 1fr auto;
   height: 100vh;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* ── RIGHT PANEL CARD INSET (ADR-003) ───────────────────────────────────── */
-/* 카드를 감싼 right-panel에 padding을 주어 카드 외곽 호흡 확보 */
+/* ── RIGHT PANEL (WDO Phase 2 — 좌/우 패널 통일 호흡) ───────────────────── */
+/* main-layout 통합 padding+gap으로 외곽 호흡 확보. 자체 padding 0. */
 .right-panel {
-  padding: var(--space-3);
-  gap: var(--space-3);
+  padding: 0;
+  gap: var(--space-4);
 }
 
 /* ── MAIN LAYOUT ────────────────────────────────────────────────────────── */
+/* WDO Phase 2 — 헤더와 좌·우 패널 간 동일한 16px 외곽 호흡 (Linear/Notion 패턴).
+   페이지 배경(--bg)이 16px 노출되어 헤더(--surface)와 명도차로 분리됨. */
 .main-layout {
   display: grid;
   grid-template-columns: var(--left-panel-width) 1fr;
   grid-template-rows: 1fr;
+  gap: var(--space-4);
+  padding: var(--space-4);
   overflow: hidden;
   min-height: 0;
 }
@@ -55,8 +59,11 @@ body {
 /* ── FOOTER ─────────────────────────────────────────────────────────────── */
 .footer {
   position: relative;
-  text-align: center; color: var(--text-dim); font-size: 10px;
-  padding: 6px; border-top: 1px solid var(--border); flex-shrink: 0;
+  text-align: center; color: var(--text-4);
+  font-size: var(--text-small);
+  font-family: var(--font-ui);
+  padding: 8px; border-top: 1px solid var(--border); flex-shrink: 0;
+  background: var(--surface);
 }
 
 /* 우측 도움말 버튼 (ADR-012 — ? 단축키와 동일 동작) */

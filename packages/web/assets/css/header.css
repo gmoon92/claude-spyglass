@@ -6,12 +6,14 @@
    ────────────────────────────────────────────────────────────────────────── */
 .header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 var(--space-4);
-  height: 52px;
+  padding: 0 var(--space-5);
+  height: 56px;
   gap: var(--space-4);
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   min-width: 0;
+  font-family: var(--font-ui);
 }
 .header-left {
   display: flex; align-items: center;
@@ -27,14 +29,15 @@
 
 /* ── LOGO ──────────────────────────────────────────────────────────────── */
 .logo {
-  font-size: var(--font-major);
-  font-weight: var(--weight-hero);
-  color: var(--accent);
-  letter-spacing: -0.5px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-1);
+  letter-spacing: -0.01em;
   cursor: pointer;
   user-select: none;
 }
-.logo span { color: var(--text); }
+.logo span { color: var(--accent); }
 
 /* ── LIVE BADGE — header-summary-merge ADR-007: 활성 세션 chip 통합 ────────
    구조: dot(SSE 연결 상태) + badge-live-label(LIVE) + .header-stat(active sessions chip).
@@ -43,23 +46,29 @@
    ────────────────────────────────────────────────────────────────────── */
 .badge-live {
   display: inline-flex; align-items: center; gap: var(--space-2);
-  background: var(--accent-dim); border: 1px solid var(--accent-border);
-  color: var(--accent);
-  padding: 3px 10px; border-radius: 20px;
-  font-size: var(--font-micro);
-  font-weight: var(--weight-hero);
-  letter-spacing: 0.6px;
+  background: rgba(63,185,80,0.10);
+  border: 1px solid rgba(63,185,80,0.30);
+  color: var(--success);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   flex-shrink: 0;
 }
 .badge-live .dot {
   width: 6px; height: 6px; border-radius: 50%;
-  background: var(--accent); animation: pulse 1.8s ease-in-out infinite;
+  background: var(--success);
+  box-shadow: 0 0 6px rgba(63,185,80,0.6);
+  animation: pulse 1.8s ease-in-out infinite;
   flex-shrink: 0;
 }
 .badge-live-label {
-  color: var(--accent);
-  font-weight: var(--weight-hero);
-  letter-spacing: 0.6px;
+  color: var(--success);
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 @keyframes pulse {
   0%,100% { opacity: 1; transform: scale(1); }
@@ -78,13 +87,14 @@
   gap: 0;
   padding: 0 0 0 var(--space-2);
   margin-left: 2px;
-  border-left: 1px solid var(--accent-border);
+  border-left: 1px solid rgba(63,185,80,0.30);
   background: transparent;
 }
 .badge-live .header-stat-value {
-  font-size: var(--font-micro);
-  color: var(--accent);
-  font-weight: var(--weight-hero);
+  font-family: var(--font-data);
+  font-size: var(--text-small);
+  color: var(--success);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
   line-height: 1;
@@ -101,8 +111,10 @@
 .badge-live .header-stat.is-active-indicator .header-stat-value { color: var(--green); }
 
 .last-updated {
-  color: var(--text-dim);
-  font-size: var(--font-meta);
+  font-family: var(--font-data);
+  color: var(--text-3);
+  font-size: var(--text-meta);
+  font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
 
@@ -122,18 +134,31 @@
 .retry-btn:hover { background: var(--red-dim); }
 
 /* ── DATE FILTER ────────────────────────────────────────────────────────── */
-.date-filter { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
-.filter-btn {
-  background: none; border: 1px solid var(--border);
-  color: var(--text-dim); padding: 3px 10px; border-radius: var(--radius-sm);
-  cursor: pointer; font-family: inherit;
-  font-size: var(--font-micro);
-  font-weight: var(--weight-strong);
-  letter-spacing: 0.3px;
-  transition: all .15s;
+.date-filter {
+  display: flex; gap: 2px; align-items: center; flex-shrink: 0;
+  background: var(--surface-alt);
+  padding: 3px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
 }
-.filter-btn:hover { border-color: var(--accent); color: var(--accent); }
-.filter-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+.filter-btn {
+  background: transparent; border: none;
+  color: var(--text-3);
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  letter-spacing: 0;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.filter-btn:hover { color: var(--text-2); background: var(--raised); }
+.filter-btn.active {
+  background: var(--raised);
+  color: var(--text-1);
+  font-weight: 600;
+}
 
 /* ── 반응형 ───────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
