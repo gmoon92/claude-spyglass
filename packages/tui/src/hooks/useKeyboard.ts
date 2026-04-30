@@ -11,9 +11,20 @@ export type UseKeyboardArgs = {
   onQuit: () => void;
   onZoom?: () => void;
   onAmbient?: () => void;
+  onMove?: (delta: number) => void;
+  onEnter?: () => void;
+  onBack?: () => void;
 };
 
-export function useKeyboard({ onView, onQuit, onZoom, onAmbient }: UseKeyboardArgs): void {
+export function useKeyboard({
+  onView,
+  onQuit,
+  onZoom,
+  onAmbient,
+  onMove,
+  onEnter,
+  onBack,
+}: UseKeyboardArgs): void {
   useInput((input, key) => {
     if (input === 'q' || input === 'Q' || (key.ctrl && input === 'c')) {
       onQuit();
@@ -30,5 +41,11 @@ export function useKeyboard({ onView, onQuit, onZoom, onAmbient }: UseKeyboardAr
       void dropped;
       return;
     }
+
+    // List navigation
+    if (key.upArrow || input === 'k') return onMove?.(-1);
+    if (key.downArrow || input === 'j') return onMove?.(1);
+    if (key.return) return onEnter?.();
+    if (key.escape || input === 'h') return onBack?.();
   });
 }

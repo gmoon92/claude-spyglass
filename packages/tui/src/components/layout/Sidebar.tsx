@@ -1,5 +1,5 @@
 /**
- * Sidebar — session tree + tools mini list.
+ * Sidebar — single-project session list + tools mini chart.
  *
  * @see ${CLAUDE_PROJECT_DIR}/.claude/skills/ui-designer/references/tui/layouts.md §3
  */
@@ -7,47 +7,64 @@
 import { Box, Text } from 'ink';
 import { tokens } from '../../design-tokens';
 import { Card } from '../display/Card';
-import { Divider } from '../display/Divider';
 import { BarChart } from '../charts/BarChart';
 import { formatTokens } from '../../lib/format';
 import type { Session } from '../../types';
 
 export type SidebarProps = {
-  activeSessions: Session[];
+  sessions: Session[];
+  projectName: string | null;
+  selectedIndex?: number;
   toolStats?: Array<{ tool_name: string; calls: number }>;
   width?: number;
   focused?: boolean;
+  showAll?: boolean;
 };
 
-export function Sidebar({ activeSessions, toolStats = [], width = tokens.layout.sidebarWidth.default, focused = false }: SidebarProps): JSX.Element {
-  // Group sessions by project
-  const groups = new Map<string, Session[]>();
-  for (const s of activeSessions) {
-    const key = s.project_name ?? 'unknown';
-    const arr = groups.get(key) ?? [];
-    arr.push(s);
-    groups.set(key, arr);
-  }
+export function Sidebar({
+  sessions,
+  projectName,
+  selectedIndex = -1,
+  toolStats = [],
+  width = tokens.layout.sidebarWidth.default,
+  focused = false,
+  showAll = false,
+}: SidebarProps): JSX.Element {
+  const headerLabel = showAll ? 'Sessions' : projectName ?? 'Sessions';
+  const innerWidth = Math.max(8, width - 4);
 
   return (
     <Box width={width} flexDirection="column">
-      <Card title="Sessions" focused={focused}>
-        {groups.size === 0 ? (
+      <Card title={headerLabel} focused={focused}>
+        {sessions.length === 0 ? (
           <Text dimColor>No active sessions</Text>
         ) : (
-          [...groups.entries()].map(([proj, sessions]) => (
-            <Box key={proj} flexDirection="column">
-              <Text color={tokens.color.primary.fg}>▾ {truncate(proj, width - 6)}</Text>
-              <Text dimColor>  {sessions.length} active</Text>
-              {sessions.slice(0, 4).map((s) => (
+          <Box flexDirection="column">
+            {!showAll && projectName ? (
+              <Text dimColor>{sessions.length} active</Text>
+            ) : null}
+            {sessions.slice(0, 8).map((s, i) => {
+              const selected = i === selectedIndex;
+              const marker = selected ? '▶' : ' ';
+              const dotColor = selected ? tokens.color.accent.fg : tokens.color.primary.fg;
+              return (
                 <Box key={s.id} flexDirection="row">
-                  <Text color={tokens.color.primary.fg}>  ● </Text>
-                  <Text color={tokens.color.fg.fg}>{shortId(s.id)} </Text>
-                  <Text dimColor>{formatTokens(s.total_tokens ?? 0)}</Text>
+                  <Text color={tokens.color.accent.fg}>{marker} </Text>
+                  <Text color={dotColor}>● </Text>
+                  <Text
+                    color={selected ? tokens.color.accent.fg : tokens.color.fg.fg}
+                    bold={selected}
+                  >
+                    {truncate(`S-${s.id.slice(0, 6)}`, innerWidth - 6)}
+                  </Text>
+                  <Text dimColor> {formatTokens(s.total_tokens ?? 0)}</Text>
                 </Box>
-              ))}
-            </Box>
-          ))
+              );
+            })}
+            {sessions.length > 8 ? (
+              <Text dimColor>{`+${sessions.length - 8} more`}</Text>
+            ) : null}
+          </Box>
         )}
       </Card>
       <Box marginTop={1} />
@@ -66,11 +83,7 @@ export function Sidebar({ activeSessions, toolStats = [], width = tokens.layout.
   );
 }
 
-function shortId(id: string): string {
-  return `S-${id.slice(0, 6)}`;
-}
-
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
-  return s.slice(0, max - 1) + '…';
+  return s.slice(0, Math.max(1, max - 1)) + '…';
 }
