@@ -40,7 +40,7 @@ export function App(): JSX.Element {
   const project = useMemo(() => getCurrentProject(), []);
 
   const { status, eventsPerSec, lastEventAt, pulseBuckets } = useSSE(API_URL);
-  const { strip, activeSessions } = useStripStats(API_URL);
+  const { strip, activeSessions, toolStats } = useStripStats(API_URL);
 
   // Filter sessions to current project (unless SPYGLASS_ALL_PROJECTS=1).
   const sessions: Session[] = useMemo(() => {
@@ -146,6 +146,7 @@ export function App(): JSX.Element {
               projectName={project.showAll ? null : project.name}
               selectedIndex={view === 'sessions' || view === 'session-detail' ? safeSelected : -1}
               showAll={project.showAll}
+              toolStats={toolStats.map((t) => ({ tool_name: t.tool_name, calls: t.calls }))}
             />
           }
           main={renderMain({

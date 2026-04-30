@@ -2,8 +2,6 @@
  * PulseWave — real line chart of token throughput (asciichart).
  *
  * Always renders a chart. Idle = flat line at 0, never blinking dots.
- * X-axis: 30 minutes of 10s buckets (right-aligned to "now").
- * Y-axis: tokens per bucket, auto-scaled.
  */
 
 import { useMemo } from 'react';
@@ -16,11 +14,12 @@ export type PulseWaveProps = {
   buckets: readonly number[];
   state: PulseState;
   width?: number;
-  /** Multi-row expanded mode = total box rows including border. Default 8. */
+  /** Total rows including header and time axis. Default 10. */
   height?: number;
-  /** legacy — ignored. kept for backward compat. */
   miniMode?: boolean;
 };
+
+const Y_AXIS_COLS = 8;
 
 function inkLineColor(state: PulseState): string {
   if (state === 'spike') return tokens.color.danger.fg;
@@ -28,11 +27,16 @@ function inkLineColor(state: PulseState): string {
   return tokens.color.muted.fg;
 }
 
-export function PulseWave({ buckets, state, width = 80, height = 8 }: PulseWaveProps): JSX.Element {
-  // Reserve cols for asciichart's Y-axis prefix (~7 cols), box border (2),
-  // box padding (2), and a small safety margin (2) to avoid wrap.
-  const dataWidth = Math.max(16, width - 13);
-  const chartHeight = Math.max(3, height - 4);
+function headerLabel(state: PulseState): string {
+  if (state === 'spike') return '● PULSE · spike';
+  if (state === 'active') return '● PULSE · active';
+  return '○ PULSE · idle';
+}
+
+export function PulseWave({ buckets, state, width = 80, height = 10 }: PulseWaveProps): JSX.Element {
+  const dataWidth = Math.max(16, width - Y_AXIS_COLS - 2);
+  // Reserve 2 rows for header + axis, the rest for chart.
+  const chartHeight = Math.max(3, Math.min(8, height - 3));
 
   const series = useMemo(() => {
     const slice = buckets.slice(-dataWidth);
@@ -44,7 +48,7 @@ export function PulseWave({ buckets, state, width = 80, height = 8 }: PulseWaveP
   }, [buckets, dataWidth]);
 
   const peak = Math.max(...series, 1);
-  const max = peak < 10 ? 10 : peak;
+  const max = peak < 10 ? 10 : niceCeil(peak);
 
   const chart = useMemo(
     () =>
@@ -52,54 +56,62 @@ export function PulseWave({ buckets, state, width = 80, height = 8 }: PulseWaveP
         height: chartHeight,
         max,
         min: 0,
-        format: (x: number) => x.toFixed(0).padStart(5, ' '),
-        // Don't pass colors here — Ink would render the raw ANSI escapes as text.
-        // We color the whole chart string via the Ink <Text> wrapper below.
+        format: (x: number) => x.toFixed(0).padStart(Y_AXIS_COLS - 2, ' '),
       }),
     [series, chartHeight, max],
   );
 
-  const headerLabel =
-    state === 'spike' ? 'PULSE · spike' : state === 'active' ? 'PULSE · active' : 'PULSE · idle';
-  const headerColor =
-    state === 'spike'
-      ? tokens.color.danger.fg
-      : state === 'active'
-      ? tokens.color.info.fg
-      : tokens.color.muted.fg;
+  const right = `max ${formatNum(max)} · last 30m`;
+
+  // Pad header to full width manually (Ink's flexbox can be flaky on row alignment).
+  const left = headerLabel(state);
+  const gap = Math.max(1, width - left.length - right.length);
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={tokens.color.muted.fg}>
-      <Box flexDirection="row" justifyContent="space-between" paddingX={1}>
-        <Text color={headerColor} bold>
-          {headerLabel}
-        </Text>
-        <Text dimColor>tokens/10s · last 30m</Text>
-      </Box>
+    <Box flexDirection="column">
+      <Text>
+        <Text color={inkLineColor(state)} bold>{left}</Text>
+        <Text>{' '.repeat(gap)}</Text>
+        <Text dimColor>{right}</Text>
+      </Text>
       <Text color={inkLineColor(state)}>{chart}</Text>
-      <Box paddingX={1}>
-        <Text dimColor>{buildTimeAxis(dataWidth)}</Text>
-      </Box>
+      <Text dimColor>{buildTimeAxis(dataWidth)}</Text>
     </Box>
   );
 }
 
-/** Y-axis prefix takes ~7 cols ("  N.0 ┤"); add it to our left padding. */
-function buildTimeAxis(dataWidth: number): string {
-  const labels = ['-30m', '-20m', '-10m', 'now'];
-  const slotW = Math.max(4, Math.floor(dataWidth / labels.length));
-  let line = '';
-  for (let i = 0; i < labels.length; i++) {
-    if (i === labels.length - 1) {
-      line += labels[i].padStart(dataWidth - line.length);
-    } else {
-      line += labels[i].padEnd(slotW);
-    }
-  }
-  return ' '.repeat(7) + line.slice(0, dataWidth);
+function niceCeil(n: number): number {
+  if (n <= 0) return 10;
+  const exp = Math.floor(Math.log10(n));
+  const base = Math.pow(10, exp);
+  const m = n / base;
+  const stepped = m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10;
+  return stepped * base;
 }
 
-/** Compute pulse state from recent activity. */
+function formatNum(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return n.toFixed(0);
+}
+
+function buildTimeAxis(dataWidth: number): string {
+  const labels = ['-30m', '-20m', '-10m', 'now'];
+  const slotW = Math.max(8, Math.floor(dataWidth / (labels.length - 1)));
+  let line = '';
+  for (let i = 0; i < labels.length; i++) {
+    if (i === 0) {
+      line += labels[i];
+    } else if (i === labels.length - 1) {
+      line += labels[i].padStart(dataWidth - line.length);
+    } else {
+      const target = i * slotW;
+      line += ' '.repeat(Math.max(0, target - line.length)) + labels[i];
+    }
+  }
+  return ' '.repeat(Y_AXIS_COLS) + line.slice(0, dataWidth);
+}
+
 export function derivePulseState(buckets: readonly number[], lastEventAt: number | null): PulseState {
   const now = Date.now();
   const idleMs = lastEventAt == null ? Number.POSITIVE_INFINITY : now - lastEventAt;

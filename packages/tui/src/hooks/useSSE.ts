@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { EventSource as NodeEventSource } from 'eventsource';
 import { feedStore } from '../stores/feed-store';
 import type { Request } from '../types';
 
@@ -67,16 +68,8 @@ export function useSSE(apiUrl: string): UseSSEResult {
     const connect = () => {
       if (cancelled) return;
       try {
-        // EventSource is provided by the `eventsource` workspace dep at runtime.
-        // Fallback: skip connection if not available.
-        const ESCtor: typeof EventSource | undefined =
-          ((globalThis as { EventSource?: typeof EventSource }).EventSource) ??
-          tryRequireEventSource();
-        if (!ESCtor) {
-          setStatus('closed');
-          return;
-        }
-        es = new ESCtor(`${apiUrl}/events`);
+        // Bun does not expose globalThis.EventSource — use the node `eventsource` package.
+        es = new NodeEventSource(`${apiUrl}/events`) as unknown as EventSource;
         setStatus('connecting');
 
         es.addEventListener('open', () => {
@@ -165,13 +158,3 @@ export function useSSE(apiUrl: string): UseSSEResult {
   return { status, eventsPerSec, lastEventAt, flashOk, pulseBuckets };
 }
 
-function tryRequireEventSource(): typeof EventSource | undefined {
-  try {
-    // Bun ships EventSource on globalThis in recent versions; if not, fall through.
-    // We avoid require() at runtime to keep CommonJS interop simple.
-    const g = globalThis as { EventSource?: typeof EventSource };
-    return g.EventSource;
-  } catch {
-    return undefined;
-  }
-}
