@@ -43,5 +43,9 @@ tmp/
 .tmp/
 
 # Claude Code
+.claude/
+.claude-plugin/
+.githooks/
+CLAUDE.md
 **/.claude/.tmp/
 **/settings.local.json
