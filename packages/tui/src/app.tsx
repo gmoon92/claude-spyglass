@@ -82,7 +82,11 @@ export function App(): JSX.Element {
         setView('sessions');
       }
     },
-    onTimeRangeCycle: () => setTimeRange((r) => nextTimeRange(r)),
+    onTimeRangeCycle: () => {
+      // Only meaningful on screens that actually use timeRange.
+      if (view !== 'tools' && view !== 'anomalies') return;
+      setTimeRange((r) => nextTimeRange(r));
+    },
   });
 
   const showSidebar = !zoom && view !== 'ambient' && cols >= tokens.layout.breakpoint.md;
@@ -169,7 +173,7 @@ export function App(): JSX.Element {
         />
 
         <StatusBar
-          hints={hintsFor(view)}
+          hints={hintsFor(view, timeRange)}
           sseStatus={status}
           eventsPerSec={eventsPerSec}
           frozen={frozen}
@@ -226,7 +230,7 @@ function renderMain(args: RenderMainArgs) {
   }
 }
 
-function hintsFor(view: ScreenId) {
+function hintsFor(view: ScreenId, timeRange?: string) {
   const common = [
     { key: '1', label: 'live' },
     { key: '2', label: 'sessions' },
@@ -262,7 +266,7 @@ function hintsFor(view: ScreenId) {
   if (view === 'tools' || view === 'anomalies') {
     return [
       ...common,
-      { key: 't', label: 'range' },
+      { key: 't', label: timeRange ? `range:${timeRange}` : 'range' },
       { key: 'm', label: 'ambient' },
       { key: 'q', label: 'quit' },
     ];

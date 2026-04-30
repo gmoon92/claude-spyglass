@@ -52,6 +52,22 @@ function ColoredTreeRow({
 }
 
 export function TokenTree({ input, output, cacheRead, cacheCreate, total }: TokenTreeProps): JSX.Element {
+  // All-zero fold: collapse to single line when nothing meaningful to show.
+  const hasAny =
+    (input ?? 0) > 0 ||
+    (output ?? 0) > 0 ||
+    (cacheRead ?? 0) > 0 ||
+    (cacheCreate ?? 0) > 0 ||
+    (total ?? 0) > 0;
+  if (!hasAny) {
+    return (
+      <Box flexDirection="row">
+        <Text color={tokens.color.muted.fg} dimColor>TOKENS </Text>
+        <Text color={tokens.color.muted.fg} dimColor>—</Text>
+      </Box>
+    );
+  }
+
   return (
     <Box flexDirection="column">
       <Text color={tokens.color.muted.fg} dimColor>TOKENS</Text>

@@ -61,7 +61,7 @@ export function SessionDetail({ sessionId }: SessionDetailProps): JSX.Element {
       ) : (
         <Box flexDirection="column">
           {turns.map((t) => (
-            <TurnCard key={t.id} turn={t} />
+            <TurnCard key={t.id} turn={t} showTokenTree />
           ))}
         </Box>
       )}

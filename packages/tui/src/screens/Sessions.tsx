@@ -61,7 +61,7 @@ export function Sessions({ sessions, projectName, selectedIndex, showAll = false
             );
           })}
           <Box marginTop={1}>
-            <Text dimColor>{'  [↑↓/j k] move   [Enter] open detail   [Esc/h] back'}</Text>
+            <Text dimColor>{'  [↑↓/j k] move   [Enter] open detail'}</Text>
           </Box>
         </Box>
       )}
