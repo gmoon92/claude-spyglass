@@ -17,6 +17,8 @@ import type { StripStats, Session } from '../../types';
 
 export type StripProps = {
   pulseBuckets: readonly number[];
+  /** 10s-bucketed request counts — used for REQ/MIN KPI. */
+  requestBuckets: readonly number[];
   lastEventAt: number | null;
   stats: StripStats | null;
   activeSessions: Session[];
@@ -33,20 +35,20 @@ function deltaPct(current: number, baseline: number): { str: string; dir: 'up' |
   return { str: `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%`, dir };
 }
 
-export function Strip({ pulseBuckets, lastEventAt, stats, activeSessions, width }: StripProps): JSX.Element {
+export function Strip({ pulseBuckets, requestBuckets, lastEventAt, stats, activeSessions, width }: StripProps): JSX.Element {
   const pulseState = derivePulseState(pulseBuckets, lastEventAt);
 
   const p95 = stats?.p95_duration_ms ?? 0;
   const errRate = stats?.error_rate ?? 0;
   const totalReq = stats?.total_requests ?? 0;
 
-  // Approximate req/min from last 6 buckets (each bucket = 10s).
-  const last6 = pulseBuckets.slice(-6);
-  const reqMin = last6.reduce((a, b) => a + b, 0) / 1; // rough req in last minute
+  // True req/min from last 6 request-count buckets (each bucket = 10s → 6 buckets = 60s).
+  const last6Req = requestBuckets.slice(-6);
+  const reqMin = last6Req.reduce((a, b) => a + b, 0);
 
-  // Delta approximation: compare last 6 vs prev 6 buckets.
-  const prev6 = pulseBuckets.slice(-12, -6);
-  const prev6Sum = prev6.reduce((a, b) => a + b, 0);
+  // Delta approximation: compare last 6 vs prev 6 request-count buckets.
+  const prev6Req = requestBuckets.slice(-12, -6);
+  const prev6Sum = prev6Req.reduce((a, b) => a + b, 0);
   const reqDelta = deltaPct(reqMin, prev6Sum);
 
   const kpiW = Math.max(14, Math.floor((width - 2) / 5));

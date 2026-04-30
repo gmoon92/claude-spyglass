@@ -39,7 +39,7 @@ export function App(): JSX.Element {
 
   const project = useMemo(() => getCurrentProject(), []);
 
-  const { status, eventsPerSec, lastEventAt, pulseBuckets } = useSSE(API_URL);
+  const { status, eventsPerSec, lastEventAt, pulseBuckets, requestBuckets } = useSSE(API_URL);
   const { strip, activeSessions, toolStats } = useStripStats(API_URL);
 
   // Filter sessions to current project (unless SPYGLASS_ALL_PROJECTS=1).
@@ -131,6 +131,7 @@ export function App(): JSX.Element {
         {/* KPI Strip: 3 BigKpi + Sessions sidebar. */}
         <Strip
           pulseBuckets={pulseBuckets}
+          requestBuckets={requestBuckets}
           lastEventAt={lastEventAt}
           stats={strip}
           activeSessions={sessions}

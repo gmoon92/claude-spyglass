@@ -24,9 +24,9 @@ import { tokens } from '../design-tokens';
 import { Card } from '../components/display/Card';
 import {
   formatDuration,
-  formatTokens,
   shortSession,
 } from '../lib/format';
+import { TokenTree } from '../components/display/TokenTree';
 import type { Request } from '../types';
 
 export type LiveFeedProps = {
@@ -148,7 +148,7 @@ export function LiveFeed({ width, rows, sseStatus, frozen }: LiveFeedProps): JSX
   );
 }
 
-/** 4-line inline detail box rendered below selected row. */
+/** Inline detail box rendered below selected row. */
 function DetailBox({
   record,
   width,
@@ -161,11 +161,7 @@ function DetailBox({
   void onClose; // available for future Esc handling at this level
   const boxW = Math.max(40, width - 4);
   const sid = shortSession(record.session_id);
-  const tokTotal = formatTokens(record.tokens_total);
   const dur = formatDuration(record.duration_ms);
-  const cacheHit = record.tokens_input
-    ? `cache —`
-    : `—`;
 
   return (
     <Box
@@ -176,31 +172,24 @@ function DetailBox({
       marginLeft={1}
       width={boxW}
     >
-      {/* Line 1: in — tool_detail or payload */}
-      <Box flexDirection="row">
-        <Text color={tokens.color.muted.fg} dimColor>├─ in   </Text>
-        <Text color={tokens.color.muted.fg} dimColor>
-          {record.tool_detail ?? record.payload ?? '—'}
-        </Text>
-      </Box>
+      {/* Token usage tree */}
+      <TokenTree
+        input={record.tokens_input}
+        output={record.tokens_output}
+        cacheRead={record.tokens_cache_read}
+        cacheCreate={record.tokens_cache_creation}
+        total={record.tokens_total}
+      />
 
-      {/* Line 2: out — tokens + duration */}
-      <Box flexDirection="row">
-        <Text color={tokens.color.info.fg}>├─ out  </Text>
-        <Text color={tokens.color.info.fg}>
-          {tokTotal} tok · {cacheHit} · ttft {dur}
-        </Text>
-      </Box>
-
-      {/* Line 3: ses — session + model */}
-      <Box flexDirection="row">
+      {/* Session / model / duration */}
+      <Box flexDirection="row" marginTop={1}>
         <Text color={tokens.color.muted.fg} dimColor>├─ ses  </Text>
         <Text color={tokens.color.muted.fg} dimColor>
-          {sid} · {record.model ?? '—'}
+          {sid} · {record.model ?? '—'} · {dur}
         </Text>
       </Box>
 
-      {/* Line 4: action hints */}
+      {/* Action hints */}
       <Box flexDirection="row">
         <Text color={tokens.color.warning.fg} dimColor>└─ </Text>
         <Text color={tokens.color.primary.fg}>[o]</Text>

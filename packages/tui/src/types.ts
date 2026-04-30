@@ -19,6 +19,8 @@ export type Request = {
   tokens_input?: number;
   tokens_output?: number;
   tokens_total?: number;
+  tokens_cache_read?: number;
+  tokens_cache_creation?: number;
   duration_ms?: number;
   model?: string | null;
   timestamp: number;

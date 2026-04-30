@@ -22,6 +22,8 @@ export type UseSSEResult = {
   flashOk: boolean;
   /** 10s-bucketed token counts for the past 30 minutes. */
   pulseBuckets: readonly number[];
+  /** 10s-bucketed request counts for the past 30 minutes (actual request count, not tokens). */
+  requestBuckets: readonly number[];
 };
 
 const BUCKET_COUNT = 180;
@@ -33,9 +35,11 @@ export function useSSE(apiUrl: string): UseSSEResult {
   const [lastEventAt, setLastEventAt] = useState<number | null>(null);
   const [flashOk, setFlashOk] = useState(false);
   const [pulseBuckets, setPulseBuckets] = useState<number[]>(() => Array(BUCKET_COUNT).fill(0));
+  const [requestBuckets, setRequestBuckets] = useState<number[]>(() => Array(BUCKET_COUNT).fill(0));
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const buckets = useRef<number[]>(Array(BUCKET_COUNT).fill(0));
+  const reqBuckets = useRef<number[]>(Array(BUCKET_COUNT).fill(0));
   const bucketStartRef = useRef<number>(Math.floor(Date.now() / BUCKET_MS) * BUCKET_MS);
   const eventCounter = useRef(0);
 
@@ -55,9 +59,12 @@ export function useSSE(apiUrl: string): UseSSEResult {
         for (let i = 0; i < slots; i++) {
           buckets.current.shift();
           buckets.current.push(0);
+          reqBuckets.current.shift();
+          reqBuckets.current.push(0);
         }
         bucketStartRef.current = startedAt + slots * BUCKET_MS;
         setPulseBuckets(buckets.current.slice());
+        setRequestBuckets(reqBuckets.current.slice());
       }
       setEventsPerSec(eventCounter.current);
       eventCounter.current = 0;
@@ -124,6 +131,8 @@ export function useSSE(apiUrl: string): UseSSEResult {
           tokens_input: data.tokens_input,
           tokens_output: data.tokens_output,
           tokens_total: data.tokens_total,
+          tokens_cache_read: data.tokens_cache_read ?? data.cache_read_tokens,
+          tokens_cache_creation: data.tokens_cache_creation ?? data.cache_creation_tokens,
           duration_ms: data.duration_ms,
           model: data.model,
           timestamp: data.timestamp ?? Date.now(),
@@ -135,10 +144,12 @@ export function useSSE(apiUrl: string): UseSSEResult {
         eventCounter.current += 1;
         setLastEventAt(Date.now());
 
-        // Update pulse bucket.
+        // Update pulse bucket (token amounts).
         const idx = BUCKET_COUNT - 1;
-        const tokens = r.tokens_total ?? 0;
-        buckets.current[idx] = (buckets.current[idx] ?? 0) + tokens;
+        const tokenCount = r.tokens_total ?? 0;
+        buckets.current[idx] = (buckets.current[idx] ?? 0) + tokenCount;
+        // Update request count bucket.
+        reqBuckets.current[idx] = (reqBuckets.current[idx] ?? 0) + 1;
       } catch {
         // ignore
       }
@@ -155,6 +166,6 @@ export function useSSE(apiUrl: string): UseSSEResult {
     };
   }, [apiUrl]);
 
-  return { status, eventsPerSec, lastEventAt, flashOk, pulseBuckets };
+  return { status, eventsPerSec, lastEventAt, flashOk, pulseBuckets, requestBuckets };
 }
 
