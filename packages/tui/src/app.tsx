@@ -25,6 +25,8 @@ import { Anomalies } from './screens/Anomalies';
 import { Ambient } from './screens/Ambient';
 import { tokens } from './design-tokens';
 import { getCurrentProject } from './lib/current-project';
+import { nextTimeRange } from './lib/time-range';
+import type { TimeRange } from './lib/time-range';
 import type { ScreenId, Session } from './types';
 
 const API_URL = process.env.SPYGLASS_API_URL ?? 'http://127.0.0.1:9999';
@@ -34,6 +36,7 @@ export function App(): JSX.Element {
   const [zoom, setZoom] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [timeRange, setTimeRange] = useState<TimeRange>('1h');
   const cols = useTermCols();
   const rows = useTermRows();
 
@@ -79,6 +82,7 @@ export function App(): JSX.Element {
         setView('sessions');
       }
     },
+    onTimeRangeCycle: () => setTimeRange((r) => nextTimeRange(r)),
   });
 
   const showSidebar = !zoom && view !== 'ambient' && cols >= tokens.layout.breakpoint.md;
@@ -160,6 +164,7 @@ export function App(): JSX.Element {
             rows: rows - 14,
             sseStatus: status,
             frozen,
+            timeRange,
           })}
         />
 
@@ -185,10 +190,11 @@ type RenderMainArgs = {
   rows: number;
   sseStatus: string;
   frozen: boolean;
+  timeRange: TimeRange;
 };
 
 function renderMain(args: RenderMainArgs) {
-  const { view, sessions, selectedIndex, activeSessionId, project, width, rows, sseStatus, frozen } = args;
+  const { view, sessions, selectedIndex, activeSessionId, project, width, rows, sseStatus, frozen, timeRange } = args;
   switch (view) {
     case 'live':
       return <LiveFeed width={width} rows={rows} sseStatus={sseStatus} frozen={frozen} />;
@@ -212,9 +218,9 @@ function renderMain(args: RenderMainArgs) {
         />
       );
     case 'tools':
-      return <Tools apiUrl={API_URL} />;
+      return <Tools apiUrl={API_URL} timeRange={timeRange} />;
     case 'anomalies':
-      return <Anomalies apiUrl={API_URL} />;
+      return <Anomalies apiUrl={API_URL} timeRange={timeRange} />;
     default:
       return <LiveFeed width={width} rows={rows} sseStatus={sseStatus} frozen={frozen} />;
   }
@@ -250,6 +256,14 @@ function hintsFor(view: ScreenId) {
     return [
       ...common,
       { key: 'esc', label: 'back' },
+      { key: 'q', label: 'quit' },
+    ];
+  }
+  if (view === 'tools' || view === 'anomalies') {
+    return [
+      ...common,
+      { key: 't', label: 'range' },
+      { key: 'm', label: 'ambient' },
       { key: 'q', label: 'quit' },
     ];
   }

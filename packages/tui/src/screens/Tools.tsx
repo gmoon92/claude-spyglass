@@ -8,13 +8,16 @@ import { Card } from '../components/display/Card';
 import { BarChart } from '../components/charts/BarChart';
 import { tokens } from '../design-tokens';
 import { toolIconForRecord } from '../lib/tool-icon';
+import { TIME_RANGES } from '../lib/time-range';
+import type { TimeRange } from '../lib/time-range';
 import type { ToolStat } from '../types';
 
 export type ToolsProps = {
   apiUrl: string;
+  timeRange?: TimeRange;
 };
 
-export function Tools({ apiUrl }: ToolsProps): JSX.Element {
+export function Tools({ apiUrl, timeRange = '1h' }: ToolsProps): JSX.Element {
   const [stats, setStats] = useState<ToolStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +26,7 @@ export function Tools({ apiUrl }: ToolsProps): JSX.Element {
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await fetch(`${apiUrl}/api/stats/tools`);
+        const res = await fetch(`${apiUrl}/api/stats/tools?range=${timeRange}`);
         const json = (await res.json()) as { success: boolean; data: ToolStat[] };
         if (cancelled) return;
         setStats(json.data ?? []);
@@ -40,14 +43,28 @@ export function Tools({ apiUrl }: ToolsProps): JSX.Element {
       cancelled = true;
       clearInterval(id);
     };
-  }, [apiUrl]);
+  }, [apiUrl, timeRange]);
+
+  const rangeSelector = (
+    <Box flexDirection="row" gap={1}>
+      {TIME_RANGES.map((r) => (
+        <Text key={r} color={r === timeRange ? tokens.color.primary.fg : tokens.color.muted.fg} bold={r === timeRange}>
+          {r === timeRange ? `[${r}]` : r}
+        </Text>
+      ))}
+      <Text color={tokens.color.muted.fg}> [t]</Text>
+    </Box>
+  );
 
   return (
     <Card
       title={
-        <Text color={tokens.color.primary.fg} bold>
-          Tools · {stats.length}
-        </Text>
+        <Box flexDirection="row" gap={1}>
+          <Text color={tokens.color.primary.fg} bold>
+            Tools · {stats.length}
+          </Text>
+          {rangeSelector}
+        </Box>
       }
       focused
     >

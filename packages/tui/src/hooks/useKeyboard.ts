@@ -24,6 +24,8 @@ export type UseKeyboardArgs = {
   onGoBottom?: () => void;
   /** 'r' — reconnect SSE. */
   onReconnect?: () => void;
+  /** 't' — cycle through time range presets (Tools / Anomalies). */
+  onTimeRangeCycle?: () => void;
 };
 
 export function useKeyboard({
@@ -39,6 +41,7 @@ export function useKeyboard({
   onGoTop,
   onGoBottom,
   onReconnect,
+  onTimeRangeCycle,
 }: UseKeyboardArgs): void {
   useInput((input, key) => {
     if (input === 'q' || input === 'Q' || (key.ctrl && input === 'c')) {
@@ -56,6 +59,9 @@ export function useKeyboard({
       void dropped;
       return;
     }
+
+    // Time range cycle (Tools / Anomalies)
+    if (input === 't') { onTimeRangeCycle?.(); return; }
 
     // Follow / navigation shortcuts
     if (input === 'f') return onFollow?.();

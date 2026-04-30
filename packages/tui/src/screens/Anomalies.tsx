@@ -8,13 +8,16 @@ import { Card } from '../components/display/Card';
 import { Badge } from '../components/display/Badge';
 import { tokens } from '../design-tokens';
 import { formatClock } from '../lib/format';
+import { TIME_RANGES } from '../lib/time-range';
+import type { TimeRange } from '../lib/time-range';
 import type { Anomaly } from '../types';
 
 export type AnomaliesProps = {
   apiUrl: string;
+  timeRange?: TimeRange;
 };
 
-export function Anomalies({ apiUrl }: AnomaliesProps): JSX.Element {
+export function Anomalies({ apiUrl, timeRange = '1h' }: AnomaliesProps): JSX.Element {
   const [items, setItems] = useState<Anomaly[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +26,7 @@ export function Anomalies({ apiUrl }: AnomaliesProps): JSX.Element {
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await fetch(`${apiUrl}/api/metrics/anomalies-timeseries?range=24h`);
+        const res = await fetch(`${apiUrl}/api/metrics/anomalies-timeseries?range=${timeRange}`);
         const json = (await res.json()) as {
           success: boolean;
           data?: { events?: Anomaly[]; recent?: Anomaly[] };
@@ -44,14 +47,28 @@ export function Anomalies({ apiUrl }: AnomaliesProps): JSX.Element {
       cancelled = true;
       clearInterval(id);
     };
-  }, [apiUrl]);
+  }, [apiUrl, timeRange]);
+
+  const rangeSelector = (
+    <Box flexDirection="row" gap={1}>
+      {TIME_RANGES.map((r) => (
+        <Text key={r} color={r === timeRange ? tokens.color.primary.fg : tokens.color.muted.fg} bold={r === timeRange}>
+          {r === timeRange ? `[${r}]` : r}
+        </Text>
+      ))}
+      <Text color={tokens.color.muted.fg}> [t]</Text>
+    </Box>
+  );
 
   return (
     <Card
       title={
-        <Text color={tokens.color.primary.fg} bold>
-          Anomalies · last 24h · {items.length}
-        </Text>
+        <Box flexDirection="row" gap={1}>
+          <Text color={tokens.color.primary.fg} bold>
+            Anomalies · {items.length}
+          </Text>
+          {rangeSelector}
+        </Box>
       }
       focused
     >
