@@ -13,7 +13,7 @@
  * @see ${CLAUDE_PROJECT_DIR}/.claude/skills/ui-designer/references/tui/screen-inventory.md T1
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { useFeed } from '../hooks/useFeed';
 import { useFollowMode } from '../hooks/useFollowMode';
@@ -48,7 +48,11 @@ export function LiveFeed({ width, rows, sseStatus, frozen }: LiveFeedProps): JSX
     onGoBottom,
   } = useFollowMode();
 
-  const [expandedId, setExpandedId] = React.useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  // 검색 취소 시 복귀할 expandedId 저장
+  const savedExpandedRef = useRef<string | null>(null);
   const prevFeedLenRef = useRef(feed.length);
 
   // Detect new rows prepended — notify follow mode.
@@ -63,7 +67,41 @@ export function LiveFeed({ width, rows, sseStatus, frozen }: LiveFeedProps): JSX
 
   // Keyboard handling within LiveFeed.
   useInput((input, key) => {
-    const listLen = feed.length;
+    // 검색 모드 처리
+    if (searchActive) {
+      if (key.escape) {
+        // 검색 취소 — 쿼리 폐기, 원래 상태 복귀
+        setSearchActive(false);
+        setSearchQuery('');
+        setExpandedId(savedExpandedRef.current);
+        return;
+      }
+      if (key.return) {
+        // 검색 확정 — 쿼리 보존, 노멀 모드 복귀
+        setSearchActive(false);
+        return;
+      }
+      if (key.backspace || key.delete) {
+        setSearchQuery((q) => q.slice(0, -1));
+        return;
+      }
+      // 일반 문자 입력 (알파벳/숫자/공백/하이픈/점/밑줄 등)
+      if (input && input.length === 1 && !key.ctrl && !key.meta) {
+        setSearchQuery((q) => q + input);
+        return;
+      }
+      return; // 검색 모드 중 다른 키 무시
+    }
+
+    // 노멀 모드
+    const listLen = filteredFeed.length;
+    if (input === '/') {
+      // 검색 모드 진입
+      savedExpandedRef.current = expandedId;
+      setSearchActive(true);
+      setSearchQuery('');
+      return;
+    }
     if (key.upArrow || input === 'k') {
       onMove(-1, listLen);
       return;
@@ -86,61 +124,101 @@ export function LiveFeed({ width, rows, sseStatus, frozen }: LiveFeedProps): JSX
     }
     if (key.return) {
       // Toggle inline expand for selected row.
-      const rec = feed[selectedIdx];
+      const rec = filteredFeed[selectedIdx];
       if (!rec) return;
       const rid = rec.tool_use_id ?? rec.id;
       setExpandedId((prev) => (prev === rid ? null : rid));
       return;
     }
     if (key.escape) {
+      if (searchQuery) {
+        // 검색어 있으면 클리어
+        setSearchQuery('');
+        return;
+      }
       setExpandedId(null);
       return;
     }
   });
 
+  // 검색 필터 적용 (case-insensitive substring match)
+  const filteredFeed = React.useMemo(() => {
+    if (!searchQuery) return feed;
+    const q = searchQuery.toLowerCase();
+    return feed.filter((r) => {
+      const toolName = (r.tool_name ?? '').toLowerCase();
+      const detail = (r.tool_detail ?? '').toLowerCase();
+      const sid = (r.session_id ?? '').slice(0, 8).toLowerCase();
+      return toolName.includes(q) || detail.includes(q) || sid.includes(q);
+    });
+  }, [feed, searchQuery]);
+
   // Visible slice calculation: account for expanded detail box (+4 rows).
   const hasExpand = expandedId != null;
   const expandRows = hasExpand ? 5 : 0;
-  const visible = Math.max(4, rows - 2 - expandRows);
-  const slice = feed.slice(0, visible + (hasExpand ? 1 : 0));
+  const searchBarRows = searchActive || searchQuery ? 1 : 0;
+  const visible = Math.max(4, rows - 2 - expandRows - searchBarRows);
+  const slice = filteredFeed.slice(0, visible + (hasExpand ? 1 : 0));
+
+  const title = titleNode(feed.length, frozen, followState, searchActive, searchQuery, filteredFeed.length);
 
   if (feed.length === 0) {
     return (
-      <Card title={titleNode(feed.length, frozen, followState)} focused>
+      <Card title={title} focused>
         <EmptyState sseStatus={sseStatus} />
       </Card>
     );
   }
 
   return (
-    <Card title={titleNode(feed.length, frozen, followState)} focused>
+    <Card title={title} focused>
       <Box flexDirection="column">
+        {/* 검색바 */}
+        {(searchActive || searchQuery) && (
+          <Box flexDirection="row" marginBottom={0}>
+            <Text color={tokens.color.warning.fg}>{'╭─ /'}</Text>
+            <Text color={tokens.color.info.fg} bold>search: </Text>
+            <Text color={tokens.color.fg.fg}>{searchQuery}</Text>
+            {searchActive && <Text color={tokens.color.warning.fg}>█</Text>}
+            <Text color={tokens.color.muted.fg}>
+              {searchActive ? ' (Enter: 확정  Esc: 취소)' : '  [Esc] 클리어'}
+            </Text>
+          </Box>
+        )}
         {slice.map((r, i) => {
           const rid = r.tool_use_id ?? r.id;
           const isSelected = followState === 'paused' && i === selectedIdx;
           const isExpanded = expandedId === rid;
+          const isSearchMatch = !!searchQuery;
 
           return (
             <React.Fragment key={rid}>
               <RowAccent since={r.arrivedAt} selected={isSelected}>
-                <ToolRow
-                  record={r}
-                  highlightSince={undefined}
-                  width={width}
-                />
+                <Box flexDirection="row">
+                  {isSearchMatch && (
+                    <Text color={tokens.color.warning.fg}>▎</Text>
+                  )}
+                  <Box flexGrow={1}>
+                    <ToolRow
+                      record={r}
+                      highlightSince={undefined}
+                      width={isSearchMatch ? width - 1 : width}
+                    />
+                  </Box>
+                </Box>
               </RowAccent>
               {isExpanded && <DetailBox record={r} width={width} onClose={() => setExpandedId(null)} />}
             </React.Fragment>
           );
         })}
-        {feed.length > visible && followState === 'following' && (
+        {filteredFeed.length > visible && followState === 'following' && (
           <Text dimColor>
-            … {feed.length - visible} more · f to pause
+            … {filteredFeed.length - visible} more · f to pause
           </Text>
         )}
-        {followState === 'paused' && feed.length > visible && (
+        {followState === 'paused' && filteredFeed.length > visible && (
           <Text color={tokens.color.warning.fg} dimColor>
-            +{feed.length - visible} more · g to follow
+            +{filteredFeed.length - visible} more · g to follow
           </Text>
         )}
       </Box>
@@ -203,11 +281,28 @@ function DetailBox({
   );
 }
 
-function titleNode(count: number, frozen: boolean, followState: 'following' | 'paused'): React.ReactNode {
+function titleNode(
+  count: number,
+  frozen: boolean,
+  followState: 'following' | 'paused',
+  searchActive: boolean,
+  searchQuery: string,
+  hitCount: number,
+): React.ReactNode {
   return (
     <Box flexDirection="row">
       <Text color={tokens.color.primary.fg} bold>Live Feed </Text>
       <Text color={tokens.color.muted.fg}>· {count} req</Text>
+      {searchQuery && (
+        <>
+          <Text color={tokens.color.muted.fg}> · </Text>
+          <Text color={tokens.color.warning.fg}>/search: {searchQuery}</Text>
+          <Text color={tokens.color.muted.fg}> · {hitCount} hits</Text>
+        </>
+      )}
+      {searchActive && !searchQuery && (
+        <Text color={tokens.color.warning.fg}>  /search…</Text>
+      )}
       {frozen && (
         <Text color={tokens.color.warning.fg} bold>  [FROZEN]</Text>
       )}
