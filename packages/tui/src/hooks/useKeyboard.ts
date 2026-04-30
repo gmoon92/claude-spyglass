@@ -26,6 +26,8 @@ export type UseKeyboardArgs = {
   onReconnect?: () => void;
   /** 't' — cycle through time range presets (Tools / Anomalies). */
   onTimeRangeCycle?: () => void;
+  /** '?' — toggle help overlay. */
+  onHelp?: () => void;
 };
 
 export function useKeyboard({
@@ -42,12 +44,14 @@ export function useKeyboard({
   onGoBottom,
   onReconnect,
   onTimeRangeCycle,
+  onHelp,
 }: UseKeyboardArgs): void {
   useInput((input, key) => {
     if (input === 'q' || input === 'Q' || (key.ctrl && input === 'c')) {
       onQuit();
       return;
     }
+    if (input === '?') { onHelp?.(); return; }
     if (input === '1') return onView('live');
     if (input === '2') return onView('sessions');
     if (input === '3') return onView('tools');

@@ -17,6 +17,8 @@ import { ResponsiveShell, useTermCols, useTermRows } from './components/layout/R
 import { TabBar } from './components/nav/TabBar';
 import { StatusBar } from './components/nav/StatusBar';
 import { PulseWave, derivePulseState } from './components/signature/PulseWave';
+import { HelpOverlay } from './components/overlays/HelpOverlay';
+import { PanelBoundary } from './components/feedback/PanelBoundary';
 import { LiveFeed } from './screens/LiveFeed';
 import { Sessions } from './screens/Sessions';
 import { SessionDetail } from './screens/SessionDetail';
@@ -37,6 +39,7 @@ export function App(): JSX.Element {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>('1h');
+  const [helpOpen, setHelpOpen] = useState(false);
   const cols = useTermCols();
   const rows = useTermRows();
 
@@ -87,6 +90,7 @@ export function App(): JSX.Element {
       if (view !== 'tools' && view !== 'anomalies') return;
       setTimeRange((r) => nextTimeRange(r));
     },
+    onHelp: () => setHelpOpen((o) => !o),
   });
 
   const showSidebar = !zoom && view !== 'ambient' && cols >= tokens.layout.breakpoint.md;
@@ -115,6 +119,7 @@ export function App(): JSX.Element {
             frozen={frozen}
             lastEventAt={lastEventAt}
           />
+          {helpOpen && <HelpOverlay onClose={() => setHelpOpen(false)} />}
         </Box>
       </CapabilitiesProvider>
     );
@@ -129,23 +134,27 @@ export function App(): JSX.Element {
         </Box>
 
         {/* Pulse Wave — promoted to its own full-width box (6 rows). */}
-        <PulseWave
-          buckets={pulseBuckets}
-          state={pulseState}
-          width={cols - 4}
-          height={6}
-        />
+        <PanelBoundary name="PulseWave">
+          <PulseWave
+            buckets={pulseBuckets}
+            state={pulseState}
+            width={cols - 4}
+            height={6}
+          />
+        </PanelBoundary>
 
         {/* KPI Strip: 3 BigKpi + Sessions sidebar. */}
-        <Strip
-          pulseBuckets={pulseBuckets}
-          requestBuckets={requestBuckets}
-          lastEventAt={lastEventAt}
-          stats={strip}
-          activeSessions={sessions}
-          width={cols}
-          status={status as 'open' | 'connecting' | 'reconnecting' | 'closed'}
-        />
+        <PanelBoundary name="Strip">
+          <Strip
+            pulseBuckets={pulseBuckets}
+            requestBuckets={requestBuckets}
+            lastEventAt={lastEventAt}
+            stats={strip}
+            activeSessions={sessions}
+            width={cols}
+            status={status as 'open' | 'connecting' | 'reconnecting' | 'closed'}
+          />
+        </PanelBoundary>
 
         <ResponsiveShell
           showSidebar={showSidebar}
@@ -158,18 +167,22 @@ export function App(): JSX.Element {
               toolStats={toolStats.map((t) => ({ tool_name: t.tool_name, calls: t.calls }))}
             />
           }
-          main={renderMain({
-            view,
-            sessions,
-            selectedIndex: safeSelected,
-            activeSessionId,
-            project,
-            width: cols - (showSidebar ? tokens.layout.sidebarWidth.default + 2 : 0),
-            rows: rows - 14,
-            sseStatus: status,
-            frozen,
-            timeRange,
-          })}
+          main={
+            <PanelBoundary name="Main">
+              {renderMain({
+                view,
+                sessions,
+                selectedIndex: safeSelected,
+                activeSessionId,
+                project,
+                width: cols - (showSidebar ? tokens.layout.sidebarWidth.default + 2 : 0),
+                rows: rows - 14,
+                sseStatus: status,
+                frozen,
+                timeRange,
+              })}
+            </PanelBoundary>
+          }
         />
 
         <StatusBar
@@ -179,6 +192,7 @@ export function App(): JSX.Element {
           frozen={frozen}
           lastEventAt={lastEventAt}
         />
+        {helpOpen && <HelpOverlay onClose={() => setHelpOpen(false)} />}
       </Box>
     </CapabilitiesProvider>
   );
