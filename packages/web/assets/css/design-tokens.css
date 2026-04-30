@@ -1,23 +1,81 @@
 /* ── 전역 리셋 ─────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* ── 디자인 토큰 SSoT ───────────────────────────────────────────────────── */
+/* ── 디자인 토큰 SSoT (web-design-overhaul 합의안 적용) ────────────────── */
+/* 4명 전문가 3라운드 회의 결과 — Round 3 ADR-WDO-004~007 참조           */
+/* contrast 1.06:1 → 1.22~1.30:1 / Accent 6+ → 1맥락 / mono → UI+Data 이중 */
+
 :root {
-  --accent:      #d97757;
-  --accent-dim:  rgba(217,119,87,0.1);
-  --bg:          #0f0f0f;
-  --surface:     #161616;
-  --surface-alt: #1c1c1c;
-  --border:      #272727;
-  --text:        #e8e8e8;
-  --text-muted:  #888;
-  --text-dim:    #505050;
-  --green:       #4ade80;
-  --orange:      #f59e0b;
-  --red:         #ef4444;
-  --blue:        #60a5fa;
-  --purple:      #a78bfa;   /* 현재 미사용 — Gantt/카드뷰 Task 색상은 --tool-task(--blue)로 통일됨 */
+  /* ── L1. Layer 5단계 (ADR-WDO-004) ── */
+  --bg:           #0a0a0b;   /* 페이지 배경 — 최하층 */
+  --surface:      #111113;   /* 사이드바, 헤더 — bg 대비 1.27:1 */
+  --surface-alt:  #17171a;   /* 메인 카드, Hero, 차트 — surface 대비 1.24:1 */
+  --raised:       #1e1e22;   /* selected row, hover, drawer */
+  --floating:     #26262b;   /* 모달, 툴팁, dropdown */
+  --border:       #26262b;
+  --border-strong:#3a3a40;
+
+  /* ── L2. 텍스트 4-Level (ADR-WDO-006) — 모두 bg 대비 AA 4.5:1 이상 ── */
+  --text-1: #F0F6FC;   /* Hero 숫자, 핵심 수치 — 16.1:1 (AAA) */
+  --text-2: #C9D1D9;   /* 본문, 카드 제목 — 12.4:1 (AAA) */
+  --text-3: #8B949E;   /* 보조, 레이블, 메타 — 5.5:1 (AA) */
+  --text-4: #6E7681;   /* disabled, 장식 — 3.8:1 (AA Large only) */
+
+  /* ── 호환성 alias (기존 CSS가 참조 — 점진적 마이그레이션) ── */
+  --text:        var(--text-2);   /* 기존 #e8e8e8 → #C9D1D9 */
+  --text-muted:  var(--text-3);   /* 기존 #888    → #8B949E */
+  --text-dim:    var(--text-4);   /* 기존 #505050 → #6E7681 (대비 향상) */
+
+  /* ── L3. Semantic 6-color (ADR-WDO-005) — 모두 bg 대비 AA 4.5:1 이상 ── */
+  --error:   #F47174;   /* 5.8:1 — 에러, 실패 */
+  --warn:    #F0B72F;   /* 10.2:1 — 경고, stale */
+  --success: #3FB950;   /* 6.1:1 — 성공, Live, 활성 */
+  --info:    #58A6FF;   /* 7.4:1 — 정보, 진행 중 */
+  --neutral: #8B949E;   /* 5.5:1 — 비활성, 일반 */
+  --accent:  #FF7A45;   /* 6.3:1 — 비용 sparkline + 활성 세션 1맥락 전용 */
+
+  /* ── 호환성 alias ── */
+  --green:       var(--success);
+  --orange:      var(--warn);
+  --red:         var(--error);
+  --blue:        var(--info);
+  --purple:      #a78bfa;   /* 미사용 (Gantt Task는 --info로 통일) */
   --pink:        #f472b6;   /* WebSearch/WebFetch 전용 */
+
+  /* ── L4. Typography 이중 계층 (ADR-WDO-006) ── */
+  --font-ui:   'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', sans-serif;
+  --font-data: 'SF Mono', 'SFMono-Regular', ui-monospace, 'Menlo', 'JetBrains Mono', 'Consolas', monospace;
+
+  /* ── 폰트 사이즈 스케일 (4-Level + 추가 단계) ── */
+  --text-hero:  32px;    /* Hero 비용 수치 */
+  --text-h1:    24px;    /* 큰 메트릭 */
+  --text-h2:    20px;    /* 섹션 제목 */
+  --text-h3:    18px;    /* 카드 헤드라인 */
+  --text-body:  14px;    /* 본문 */
+  --text-data:  13px;    /* 테이블 데이터 (mono) */
+  --text-meta:  12px;    /* 레이블, 메타 */
+  --text-small: 11px;    /* 미니 레이블 (uppercase) */
+
+  /* ── 호환성 alias (기존 CSS) ── */
+  --font-hero:   var(--text-h1);    /* 기존 24px 유지 */
+  --font-major:  var(--text-h3);    /* 18px */
+  --font-body:   var(--text-data);  /* 13px (mono 데이터 컬럼) */
+  --font-meta:   var(--text-meta);  /* 12px */
+  --font-micro:  var(--text-small); /* 11px (9px 폐기 — legibility 한계) */
+
+  /* ── 폰트 굵기 ── */
+  --weight-hero:   600;     /* Hero 수치 */
+  --weight-strong: 600;     /* 강조 */
+  --weight-medium: 500;     /* 메타 레이블 */
+  --weight-normal: 400;     /* 본문 */
+
+  /* ── L5. Motion (모든 transition은 layout shift 없이) ── */
+  --ease:         cubic-bezier(.2,.8,.2,1);
+  --dur-fast:     120ms;     /* hover */
+  --dur-base:     200ms;     /* 일반 전환 */
+  --dur-drawer:   280ms;     /* drawer slide-in */
+
+  /* ── 레이아웃 ── */
   --left-panel-width:          280px;
   --tool-stats-height:         160px;
   --project-panel-height:      215px;
@@ -25,83 +83,93 @@
   --panel-resize-max:          480px;
   --panel-resize-handle-width: 4px;
 
-  /* ── 타입별 색상 SSoT (ADR-003) — 임의 수정 금지 ── */
+  /* ── 타입별 색상 SSoT (ADR-003) — 사용 영역 축소: 배지/필터 활성 상태만 ── */
   --type-prompt-color:     #e8a07a;
-  --type-prompt-bg:        rgba(217,119,87,0.18);
-  --type-tool_call-color:  #6ee7a0;
-  --type-tool_call-bg:     rgba(74,222,128,0.15);
-  --type-system-color:     #fbbf24;
-  --type-system-bg:        rgba(245,158,11,0.15);
-  --type-agent-color:      var(--orange);           /* badge-colors.md ADR-002: Agent/Skill = --orange */
-  --type-agent-bg:         rgba(245,158,11,0.15);
-  --type-skill-color:      var(--orange);           /* badge-colors.md ADR-002: Agent/Skill = --orange */
-  --type-skill-bg:         rgba(245,158,11,0.15);
-  --type-mcp-color:        #22d3ee;                 /* type-filter-expansion ADR-002-R1: cyan — orange/green/yellow/pink 계열과 구분 */
+  --type-prompt-bg:        rgba(255,122,69,0.18);
+  --type-tool_call-color:  var(--success);
+  --type-tool_call-bg:     rgba(63,185,80,0.15);
+  --type-system-color:     var(--warn);
+  --type-system-bg:        rgba(240,183,47,0.15);
+  --type-agent-color:      var(--warn);
+  --type-agent-bg:         rgba(240,183,47,0.15);
+  --type-skill-color:      var(--warn);
+  --type-skill-bg:         rgba(240,183,47,0.15);
+  --type-mcp-color:        #22d3ee;
   --type-mcp-bg:           rgba(34,211,238,0.15);
 
-  /* ── Accent 배경 계층 (log-page-ux-fix ADR-003) ── */
-  --accent-bg-light:  rgba(217,119,87,0.04);  /* 일반 행 hover */
-  --accent-bg-medium: rgba(217,119,87,0.07);  /* clickable 행 hover */
+  /* ── Accent 배경 계층 ── */
+  --accent-dim:       rgba(255,122,69,0.10);
+  --accent-bg-light:  rgba(255,122,69,0.04);
+  --accent-bg-medium: rgba(255,122,69,0.07);
+  --accent-border:    rgba(255,122,69,0.35);
 
   /* ── 역할 배지 배경 ── */
-  --blue-bg-light: rgba(96,165,250,0.18);   /* role/cache 배지 */
-  --red-bg-light:  rgba(239,68,68,0.18);    /* error/slow 배지 */
-  --yellow-bg-light: rgba(251,191,36,0.15); /* spike 배지 */
-  --sky-bg-light: rgba(147,197,253,0.12);   /* loop 배지 */
+  --blue-bg-light:   rgba(88,166,255,0.18);
+  --red-bg-light:    rgba(244,113,116,0.18);
+  --yellow-bg-light: rgba(240,183,47,0.15);
+  --sky-bg-light:    rgba(147,197,253,0.12);
 
   /* ── 뱃지 텍스트 색상 ── */
-  --blue-text: #93c5fd;   /* role-user, cache 배지 */
-  --red-text:  #f87171;   /* error, slow 배지 */
-  --sky-text:  #7dd3fc;   /* loop 배지 */
+  --blue-text: #93c5fd;
+  --red-text:  #f87171;
+  --sky-text:  #7dd3fc;
 
-  /* ── 강조색 계열 (alpha 변형) ── */
-  --accent-border: rgba(217,119,87,0.35); /* border 강조 (LIVE 배지) */
-  --red-dim:       rgba(239,68,68,0.1);   /* error subtle 배경 (disconnected) */
-  --red-border:    rgba(239,68,68,0.35);  /* error border */
-  --red-bg-subtle: rgba(239,68,68,0.08);  /* error 배너 배경 */
+  /* ── 강조색 계열 alpha 변형 ── */
+  --red-dim:       rgba(244,113,116,0.10);
+  --red-border:    rgba(244,113,116,0.35);
+  --red-bg-subtle: rgba(244,113,116,0.08);
 
-  /* ── 흰색 계열 (subtle 배경) ── */
-  --white-bg-subtle: rgba(255,255,255,0.02);  /* 약한 강조 배경 */
+  /* ── 흰색 계열 ── */
+  --white-bg-subtle: rgba(255,255,255,0.02);
 
   /* ── 기타 배지 ── */
-  --unknown-bg: rgba(80,80,80,0.2);           /* type-unknown 배지 */
-  --model-badge-bg: rgba(217,119,87,0.15);    /* model-badge 배경 */
+  --unknown-bg:     rgba(110,118,129,0.20);
+  --model-badge-bg: rgba(255,122,69,0.15);
 
-  /* ── 도구 색상 토큰 (tool-color-tokens ADR-001) — Gantt/카드뷰 공용 ── */
-  --tool-agent:   var(--orange);  /* Agent, Skill — AI 능동 위임 */
-  --tool-task:    var(--blue);    /* Task — 작업 단위 */
-  --tool-fs:      #34d399;        /* Read, Write, Edit, MultiEdit — 파일시스템 */
-  --tool-bash:    #fb923c;        /* Bash — 시스템 명령 실행 */
-  --tool-search:  #fbbf24;        /* Grep, Glob — 검색 */
-  --tool-web:     #f472b6;        /* WebSearch, WebFetch — 웹 */
-  --tool-default: #94a3b8;        /* 그 외 기본값 */
+  /* ── 도구 색상 토큰 (Gantt/카드뷰 — 활성 시에만 사용) ── */
+  --tool-agent:   var(--warn);
+  --tool-task:    var(--info);
+  --tool-fs:      #34d399;
+  --tool-bash:    #fb923c;
+  --tool-search:  #fbbf24;
+  --tool-web:     #f472b6;
+  --tool-default: var(--text-3);
 
-  /* ── Border Radius 토큰 ── */
+  /* ── Border Radius ── */
   --radius-sm: 4px;
   --radius-md: 6px;
-  --radius-lg: 8px;          /* card container (ADR-003) */
+  --radius-lg: 8px;
 
-  /* ── Spacing Scale (ADR-002 — 8px Grid) ── */
-  --space-1:   4px;          /* 인라인 미세 (배지 padding) */
-  --space-2:   8px;          /* 기본 단위 */
-  --space-3:  12px;          /* 행 간격 */
-  --space-4:  16px;          /* 섹션 내부 padding */
-  --space-5:  24px;          /* 섹션 간 간격 */
-  --space-6:  32px;          /* 카드 간 간격 */
+  /* ── Spacing Scale (8px Grid) ── */
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  24px;
+  --space-6:  32px;
 
-  /* ── Typography Scale (ADR-001/004 — 3-Tier Hierarchy) ── */
-  --font-hero:   24px;       /* Primary 메트릭 (Hero 카드 활성 세션 등) */
-  --font-major:  18px;       /* 카드 헤드라인 / 섹션 라벨 강조 */
-  --font-body:   13px;       /* 본문 (테이블 셀, 카드 내용) */
-  --font-meta:   11px;       /* 미리보기, 힌트, 사이드 정보 */
-  --font-micro:   9px;       /* 컬럼 헤더, 초소형 라벨 */
-
-  --weight-hero:   700;      /* Primary 강조 */
-  --weight-strong: 600;      /* Secondary 강조 */
-  --weight-normal: 400;      /* 본문 */
-
-  /* ── Card surface 변형 (ADR-003) ── */
-  --card-bg:        var(--surface);
+  /* ── Card surface (다크는 box-shadow 대신 배경 명도) ── */
+  --card-bg:        var(--surface-alt);
   --card-border:    var(--border);
-  --card-shadow:    0 1px 3px rgba(0,0,0,0.2);
+  --card-shadow:    none;
+}
+
+/* ── 페이지 기본 스타일 (UI Font 디폴트) ── */
+html, body {
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  line-height: 1.5;
+  color: var(--text-2);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+/* 데이터 폰트 헬퍼 클래스 */
+.font-data,
+.mono,
+code, pre, kbd, samp {
+  font-family: var(--font-data);
+  font-feature-settings: 'tnum' 1, 'zero' 1;
 }
