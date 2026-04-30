@@ -1,93 +1,102 @@
 /**
- * PulseWave — claude-spyglass signature visual.
+ * PulseWave — real line chart of token throughput (asciichart).
  *
- * @see ${CLAUDE_PROJECT_DIR}/.claude/skills/ui-designer/references/tui/signature-pulse.md
- *
- * 4-row braille pixels with sliding-window log normalization.
- * Three states:
- *   - idle   : muted ⠁/⠂ baseline breathing (SSE ping-synced)
- *   - active : info  ⣶⣿ filled, leading-edge brightness
- *   - spike  : danger bold burst peak retained
+ * Always renders a chart. Idle = flat line at 0, never blinking dots.
+ * X-axis: 30 minutes of 10s buckets (right-aligned to "now").
+ * Y-axis: tokens per bucket, auto-scaled.
  */
 
-import { useEffect, useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Box, Text } from 'ink';
+import asciichart from 'asciichart';
 import { tokens } from '../../design-tokens';
 import type { PulseState } from '../../types';
-
-const IDLE_BREATH = ['⠁', '⠂', '⠃', '⠂'];
-const PIXEL_LADDER = [' ', '⠁', '⡀', '⠐', '⡄', '⢠', '⣀', '⣄', '⣆', '⣶', '⣷', '⣿'];
 
 export type PulseWaveProps = {
   buckets: readonly number[];
   state: PulseState;
   width?: number;
+  /** Multi-row expanded mode = total box rows including border. Default 8. */
+  height?: number;
+  /** legacy — ignored. kept for backward compat. */
   miniMode?: boolean;
 };
 
-export function PulseWave({ buckets, state, width, miniMode = false }: PulseWaveProps): JSX.Element {
-  const [tick, setTick] = useState(0);
+function inkLineColor(state: PulseState): string {
+  if (state === 'spike') return tokens.color.danger.fg;
+  if (state === 'active') return tokens.color.info.fg;
+  return tokens.color.muted.fg;
+}
 
-  // Idle baseline breathing — synced loosely to 1.5s.
-  useEffect(() => {
-    if (state !== 'idle') return;
-    const id = setInterval(() => setTick((t) => (t + 1) % IDLE_BREATH.length), 750);
-    return () => clearInterval(id);
-  }, [state]);
+export function PulseWave({ buckets, state, width = 80, height = 8 }: PulseWaveProps): JSX.Element {
+  // Reserve cols for asciichart's Y-axis prefix (~7 cols), box border (2),
+  // box padding (2), and a small safety margin (2) to avoid wrap.
+  const dataWidth = Math.max(16, width - 13);
+  const chartHeight = Math.max(3, height - 4);
 
-  const w = width ?? (miniMode ? 24 : 80);
-
-  const rendered = useMemo(() => {
-    if (state === 'idle') {
-      // Repeat breathing baseline across the width with shifting phase.
-      let s = '';
-      for (let i = 0; i < w; i++) {
-        s += IDLE_BREATH[(i + tick) % IDLE_BREATH.length];
-      }
-      return s;
+  const series = useMemo(() => {
+    const slice = buckets.slice(-dataWidth);
+    if (slice.length === 0) return new Array(dataWidth).fill(0) as number[];
+    if (slice.length < dataWidth) {
+      return [...new Array(dataWidth - slice.length).fill(0), ...slice];
     }
+    return [...slice];
+  }, [buckets, dataWidth]);
 
-    // Normalize buckets: log + sliding max.
-    const slice = buckets.slice(-w);
-    if (slice.length === 0) return ' '.repeat(w);
-    const logged = slice.map((b) => Math.log10((b ?? 0) + 1));
-    const peak = Math.max(...logged, 0.1);
-    const normalized = logged.map((v) => v / peak);
+  const peak = Math.max(...series, 1);
+  const max = peak < 10 ? 10 : peak;
 
-    let chars = '';
-    for (let i = 0; i < w; i++) {
-      const v = normalized[i] ?? 0;
-      const idx = Math.max(0, Math.min(PIXEL_LADDER.length - 1, Math.floor(v * (PIXEL_LADDER.length - 1))));
-      chars += PIXEL_LADDER[idx];
-    }
-    return chars;
-  }, [buckets, state, tick, w]);
+  const chart = useMemo(
+    () =>
+      asciichart.plot(series, {
+        height: chartHeight,
+        max,
+        min: 0,
+        format: (x: number) => x.toFixed(0).padStart(5, ' '),
+        // Don't pass colors here — Ink would render the raw ANSI escapes as text.
+        // We color the whole chart string via the Ink <Text> wrapper below.
+      }),
+    [series, chartHeight, max],
+  );
 
-  const bodyColor =
+  const headerLabel =
+    state === 'spike' ? 'PULSE · spike' : state === 'active' ? 'PULSE · active' : 'PULSE · idle';
+  const headerColor =
     state === 'spike'
       ? tokens.color.danger.fg
       : state === 'active'
       ? tokens.color.info.fg
       : tokens.color.muted.fg;
 
-  const tailGlyph = state === 'spike' ? '!' : state === 'active' ? '⣿' : '·';
-  const tailColor =
-    state === 'spike'
-      ? tokens.color.danger.fg
-      : state === 'active'
-      ? tokens.color.primary.fg
-      : tokens.color.muted.fg;
-
   return (
-    <Box flexDirection="row">
-      <Text color={bodyColor} bold={state === 'spike'}>
-        {rendered}
-      </Text>
-      <Text color={tailColor} bold={state !== 'idle'}>
-        {' '}{tailGlyph}
-      </Text>
+    <Box flexDirection="column" borderStyle="round" borderColor={tokens.color.muted.fg}>
+      <Box flexDirection="row" justifyContent="space-between" paddingX={1}>
+        <Text color={headerColor} bold>
+          {headerLabel}
+        </Text>
+        <Text dimColor>tokens/10s · last 30m</Text>
+      </Box>
+      <Text color={inkLineColor(state)}>{chart}</Text>
+      <Box paddingX={1}>
+        <Text dimColor>{buildTimeAxis(dataWidth)}</Text>
+      </Box>
     </Box>
   );
+}
+
+/** Y-axis prefix takes ~7 cols ("  N.0 ┤"); add it to our left padding. */
+function buildTimeAxis(dataWidth: number): string {
+  const labels = ['-30m', '-20m', '-10m', 'now'];
+  const slotW = Math.max(4, Math.floor(dataWidth / labels.length));
+  let line = '';
+  for (let i = 0; i < labels.length; i++) {
+    if (i === labels.length - 1) {
+      line += labels[i].padStart(dataWidth - line.length);
+    } else {
+      line += labels[i].padEnd(slotW);
+    }
+  }
+  return ' '.repeat(7) + line.slice(0, dataWidth);
 }
 
 /** Compute pulse state from recent activity. */
