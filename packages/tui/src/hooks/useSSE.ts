@@ -79,15 +79,31 @@ export function useSSE(apiUrl: string): UseSSEResult {
         es = new NodeEventSource(`${apiUrl}/events`) as unknown as EventSource;
         setStatus('connecting');
 
-        es.addEventListener('open', () => {
+        const markOpen = () => {
           if (cancelled) return;
           setStatus('open');
           retryDelay = 1000;
-          // Flash OK for 400ms on reconnect.
           setFlashOk(true);
           if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
           flashTimerRef.current = setTimeout(() => setFlashOk(false), 400);
-        });
+        };
+
+        es.addEventListener('open', markOpen);
+        // Fallback: some Node EventSource implementations only fire onopen, not addEventListener('open').
+        (es as unknown as { onopen?: () => void }).onopen = markOpen;
+        // Final fallback: readyState polling (1 = OPEN).
+        const readyCheck = setInterval(() => {
+          if (cancelled || !es) {
+            clearInterval(readyCheck);
+            return;
+          }
+          if ((es as unknown as { readyState?: number }).readyState === 1) {
+            markOpen();
+            clearInterval(readyCheck);
+          }
+        }, 250);
+        // Stop polling once we know the answer either way.
+        setTimeout(() => clearInterval(readyCheck), 5000);
 
         es.addEventListener('error', () => {
           if (cancelled) return;
@@ -99,15 +115,20 @@ export function useSSE(apiUrl: string): UseSSEResult {
         });
 
         es.addEventListener('new_request', (ev: MessageEvent) => {
+          // Receiving any data implies the connection is open.
+          markOpen();
           handleEvent(ev);
         });
         es.addEventListener('session_update', (ev: MessageEvent) => {
-          // No-op for v1 — session-store would consume.
+          markOpen();
           void ev;
         });
         es.addEventListener('ping', () => {
-          // Heartbeat keeps connection alive.
+          // Server emits a ping immediately on connect — use it as an open signal.
+          markOpen();
         });
+        // Generic 'message' listener as final fallback (some EventSource impls route untyped events here).
+        es.addEventListener('message', () => markOpen());
       } catch (err) {
         setStatus('reconnecting');
         retryTimer = setTimeout(connect, retryDelay);
