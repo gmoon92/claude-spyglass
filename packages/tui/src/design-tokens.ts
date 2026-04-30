@@ -76,6 +76,17 @@ export const tokens = {
     scale: {
       tokenUsage: tokenUsageLut,
       heatmap: heatmapLut,
+      /** percentile gradient: p0→p50 info, p50→p95 warning, p95+ danger */
+      percentile: ['#7dcfff', '#a8d8a8', '#e0af68', '#f7768e'] as const,
+    },
+    /** SSE connection state semantic colors */
+    live: '#9ece6a',
+    paused: '#e0af68',
+    stale: '#f7768e',
+    /** Ticker dot colors */
+    ticker: {
+      active: '#7aa2f7',
+      idle: '#565f89',
     },
   },
   spacing: {

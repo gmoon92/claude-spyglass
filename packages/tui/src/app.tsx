@@ -16,6 +16,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { ResponsiveShell, useTermCols, useTermRows } from './components/layout/ResponsiveShell';
 import { TabBar } from './components/nav/TabBar';
 import { StatusBar } from './components/nav/StatusBar';
+import { PulseWave, derivePulseState } from './components/signature/PulseWave';
 import { LiveFeed } from './screens/LiveFeed';
 import { Sessions } from './screens/Sessions';
 import { SessionDetail } from './screens/SessionDetail';
@@ -83,6 +84,8 @@ export function App(): JSX.Element {
   const showSidebar = !zoom && view !== 'ambient' && cols >= tokens.layout.breakpoint.md;
   const frozen = feedStore.isFrozen();
 
+  const pulseState = derivePulseState(pulseBuckets, lastEventAt);
+
   if (view === 'ambient') {
     return (
       <CapabilitiesProvider>
@@ -102,6 +105,7 @@ export function App(): JSX.Element {
             sseStatus={status}
             eventsPerSec={eventsPerSec}
             frozen={frozen}
+            lastEventAt={lastEventAt}
           />
         </Box>
       </CapabilitiesProvider>
@@ -111,6 +115,20 @@ export function App(): JSX.Element {
   return (
     <CapabilitiesProvider>
       <Box flexDirection="column" height={rows}>
+        {/* Header: TabBar only — title/status moved to separate boxes. */}
+        <Box marginY={0}>
+          <TabBar active={view === 'session-detail' ? 'sessions' : view} />
+        </Box>
+
+        {/* Pulse Wave — promoted to its own full-width box (6 rows). */}
+        <PulseWave
+          buckets={pulseBuckets}
+          state={pulseState}
+          width={cols - 4}
+          height={6}
+        />
+
+        {/* KPI Strip: 3 BigKpi + Sessions sidebar. */}
         <Strip
           pulseBuckets={pulseBuckets}
           lastEventAt={lastEventAt}
@@ -119,10 +137,6 @@ export function App(): JSX.Element {
           width={cols}
           status={status as 'open' | 'connecting' | 'reconnecting' | 'closed'}
         />
-
-        <Box marginY={0}>
-          <TabBar active={view === 'session-detail' ? 'sessions' : view} />
-        </Box>
 
         <ResponsiveShell
           showSidebar={showSidebar}
@@ -141,7 +155,7 @@ export function App(): JSX.Element {
             activeSessionId,
             project,
             width: cols - (showSidebar ? tokens.layout.sidebarWidth.default + 2 : 0),
-            rows: rows - 12,
+            rows: rows - 14,
             sseStatus: status,
             frozen,
           })}
@@ -152,6 +166,7 @@ export function App(): JSX.Element {
           sseStatus={status}
           eventsPerSec={eventsPerSec}
           frozen={frozen}
+          lastEventAt={lastEventAt}
         />
       </Box>
     </CapabilitiesProvider>
@@ -213,7 +228,10 @@ function hintsFor(view: ScreenId) {
   if (view === 'live') {
     return [
       ...common,
-      { key: 'space', label: 'freeze' },
+      { key: '↑↓', label: 'select' },
+      { key: '⏎', label: 'expand' },
+      { key: 'f', label: 'follow' },
+      { key: 'g/G', label: 'top/bot' },
       { key: 'm', label: 'ambient' },
       { key: 'q', label: 'quit' },
     ];

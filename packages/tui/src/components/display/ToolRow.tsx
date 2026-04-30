@@ -9,7 +9,7 @@
 import { memo } from 'react';
 import { Box, Text } from 'ink';
 import { Icon } from './Icon';
-import { Highlight } from '../feedback/Highlight';
+import { RowAccent } from '../feedback/RowAccent';
 import { tokens } from '../../design-tokens';
 import {
   formatClock,
@@ -60,7 +60,7 @@ export const ToolRow = memo(function ToolRow({
     </Box>
   );
 
-  return <Highlight since={highlightSince}>{inner}</Highlight>;
+  return <RowAccent since={highlightSince}>{inner}</RowAccent>;
 }, (a, b) =>
   a.record.id === b.record.id &&
   a.record.event_type === b.record.event_type &&

@@ -10,10 +10,15 @@ import type { Request } from '../types';
 
 export type SSEStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
 
+/** Milliseconds of silence before connection is considered stale. */
+export const STALE_MS = 2000;
+
 export type UseSSEResult = {
   status: SSEStatus;
   eventsPerSec: number;
   lastEventAt: number | null;
+  /** True for 400ms after the first event on a freshly-opened connection. */
+  flashOk: boolean;
   /** 10s-bucketed token counts for the past 30 minutes. */
   pulseBuckets: readonly number[];
 };
@@ -25,7 +30,9 @@ export function useSSE(apiUrl: string): UseSSEResult {
   const [status, setStatus] = useState<SSEStatus>('connecting');
   const [eventsPerSec, setEventsPerSec] = useState(0);
   const [lastEventAt, setLastEventAt] = useState<number | null>(null);
+  const [flashOk, setFlashOk] = useState(false);
   const [pulseBuckets, setPulseBuckets] = useState<number[]>(() => Array(BUCKET_COUNT).fill(0));
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const buckets = useRef<number[]>(Array(BUCKET_COUNT).fill(0));
   const bucketStartRef = useRef<number>(Math.floor(Date.now() / BUCKET_MS) * BUCKET_MS);
@@ -76,6 +83,10 @@ export function useSSE(apiUrl: string): UseSSEResult {
           if (cancelled) return;
           setStatus('open');
           retryDelay = 1000;
+          // Flash OK for 400ms on reconnect.
+          setFlashOk(true);
+          if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+          flashTimerRef.current = setTimeout(() => setFlashOk(false), 400);
         });
 
         es.addEventListener('error', () => {
@@ -132,7 +143,6 @@ export function useSSE(apiUrl: string): UseSSEResult {
         setLastEventAt(Date.now());
 
         // Update pulse bucket.
-        const now = Date.now();
         const idx = BUCKET_COUNT - 1;
         const tokens = r.tokens_total ?? 0;
         buckets.current[idx] = (buckets.current[idx] ?? 0) + tokens;
@@ -147,11 +157,12 @@ export function useSSE(apiUrl: string): UseSSEResult {
       cancelled = true;
       clearInterval(interval);
       if (retryTimer) clearTimeout(retryTimer);
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
       if (es) es.close();
     };
   }, [apiUrl]);
 
-  return { status, eventsPerSec, lastEventAt, pulseBuckets };
+  return { status, eventsPerSec, lastEventAt, flashOk, pulseBuckets };
 }
 
 function tryRequireEventSource(): typeof EventSource | undefined {

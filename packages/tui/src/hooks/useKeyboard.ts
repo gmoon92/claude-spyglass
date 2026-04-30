@@ -14,6 +14,16 @@ export type UseKeyboardArgs = {
   onMove?: (delta: number) => void;
   onEnter?: () => void;
   onBack?: () => void;
+  /** 'o' — jump to session for selected row. */
+  onSession?: () => void;
+  /** 'f' — follow toggle in LiveFeed. */
+  onFollow?: () => void;
+  /** 'g' — go to top (and follow ON). */
+  onGoTop?: () => void;
+  /** 'G' — go to bottom. */
+  onGoBottom?: () => void;
+  /** 'r' — reconnect SSE. */
+  onReconnect?: () => void;
 };
 
 export function useKeyboard({
@@ -24,6 +34,11 @@ export function useKeyboard({
   onMove,
   onEnter,
   onBack,
+  onSession,
+  onFollow,
+  onGoTop,
+  onGoBottom,
+  onReconnect,
 }: UseKeyboardArgs): void {
   useInput((input, key) => {
     if (input === 'q' || input === 'Q' || (key.ctrl && input === 'c')) {
@@ -35,12 +50,19 @@ export function useKeyboard({
     if (input === '3') return onView('tools');
     if (input === '4') return onView('anomalies');
     if (input === 'm') return onAmbient?.();
-    if (input === 'f') return onZoom?.();
+    if (input === 'z') return onZoom?.();
     if (input === ' ') {
       const dropped = feedStore.setFreeze(!feedStore.isFrozen());
       void dropped;
       return;
     }
+
+    // Follow / navigation shortcuts
+    if (input === 'f') return onFollow?.();
+    if (input === 'g') return onGoTop?.();
+    if (input === 'G') return onGoBottom?.();
+    if (input === 'o') return onSession?.();
+    if (input === 'r') return onReconnect?.();
 
     // List navigation
     if (key.upArrow || input === 'k') return onMove?.(-1);
