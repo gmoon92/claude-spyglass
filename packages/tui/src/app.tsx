@@ -212,7 +212,7 @@ function renderMain(args: RenderMainArgs) {
         />
       );
     case 'session-detail':
-      if (activeSessionId) return <SessionDetail sessionId={activeSessionId} />;
+      if (activeSessionId) return <SessionDetail sessionId={activeSessionId} apiUrl={API_URL} />;
       return (
         <Sessions
           sessions={sessions}
