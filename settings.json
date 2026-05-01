@@ -1,5 +1,6 @@
 {
   "env": {
-    "ENABLE_PROMPT_CACHING_1H": "1"
+    "ENABLE_PROMPT_CACHING_1H": "1",
+    "ANTHROPIC_BASE_URL": "http://localhost:9999"
   }
 }
