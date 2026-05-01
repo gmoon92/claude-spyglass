@@ -6,7 +6,6 @@
 
 import type { Database } from 'bun:sqlite';
 import type { Request, RequestType } from '../schema';
-import { getPricingForModel } from '../pricing';
 
 // =============================================================================
 // 생성 (Create)
@@ -643,20 +642,19 @@ export function getHourlyRequestStats(
 
 /** Command Center Strip 통계 */
 export interface StripStats {
-  cost_usd: number;
-  cache_savings_usd: number;
   p95_duration_ms: number;
   error_rate: number;
 }
 
 /**
- * Command Center Strip 지표 집계 (비용 / P95 / 오류율)
+ * Command Center Strip 지표 집계 (P95 / 오류율)
  *
- * 3개 쿼리(token cost, p95 duration, error rate) 모두 동일한 timestamp 범위 조건을 적용한다.
  * - fromTs / toTs 미지정 시 전체 기간
  * - fromTs만 → timestamp >= fromTs
  * - toTs만   → timestamp <= toTs
  * - 둘 다    → 사이 범위
+ *
+ * USD 환산은 페이로드에 없는 계산값이라 옵저빌리티 신뢰도 정책상 노출·집계 모두 제거됨.
  *
  * @param fromTs 집계 시작 타임스탬프 (옵셔널)
  * @param toTs   집계 종료 타임스탬프 (옵셔널)
@@ -666,7 +664,6 @@ export function getStripStats(
   fromTs?: number,
   toTs?: number
 ): StripStats {
-  /** 시간 범위 WHERE 절 빌드 (공통 로직) */
   const buildRangeClause = (baseConditions: string[]): { sql: string; params: number[] } => {
     const conditions = [...baseConditions];
     const params: number[] = [];
@@ -675,41 +672,7 @@ export function getStripStats(
     return { sql: conditions.join(' AND '), params };
   };
 
-  // 1. 지정 기간 prompt 레코드에서 모델별 토큰 집계 (tokens_confidence='high'만)
-  const tokenRange = buildRangeClause(["type = 'prompt'"]);
-  const tokenRows = db.query(`
-    SELECT model,
-           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_input ELSE 0 END), 0)            AS tokens_input,
-           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_output ELSE 0 END), 0)           AS tokens_output,
-           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_creation_tokens ELSE 0 END), 0)   AS cache_creation_tokens,
-           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_read_tokens ELSE 0 END), 0)       AS cache_read_tokens
-    FROM requests
-    WHERE ${tokenRange.sql}
-    GROUP BY model
-  `).all(...tokenRange.params) as Array<{
-    model: string | null;
-    tokens_input: number;
-    tokens_output: number;
-    cache_creation_tokens: number;
-    cache_read_tokens: number;
-  }>;
-
-  let cost_usd = 0;
-  let cache_savings_usd = 0;
-
-  for (const row of tokenRows) {
-    const p = getPricingForModel(row.model);
-    cost_usd +=
-      (row.tokens_input * p.input +
-        row.tokens_output * p.output +
-        row.cache_creation_tokens * p.cache_create +
-        row.cache_read_tokens * p.cache_read) /
-      1_000_000;
-    cache_savings_usd +=
-      (row.cache_read_tokens * (p.input - p.cache_read)) / 1_000_000;
-  }
-
-  // 2. P95 duration_ms — 지정 기간 tool_call PostToolUse 레코드
+  // 1. P95 duration_ms — 지정 기간 tool_call PostToolUse 레코드
   const durationRange = buildRangeClause([
     "type = 'tool_call'",
     "event_type = 'tool'",
@@ -728,7 +691,7 @@ export function getStripStats(
     p95_duration_ms = durationRows[Math.min(idx, durationRows.length - 1)].duration_ms;
   }
 
-  // 3. 오류율 — 지정 기간 tool_call PostToolUse 레코드 중 오류 패턴 포함 비율
+  // 2. 오류율 — 지정 기간 tool_call PostToolUse 레코드 중 오류 패턴 포함 비율
   const errorRange = buildRangeClause([
     "type = 'tool_call'",
     "event_type = 'tool'",
@@ -748,8 +711,6 @@ export function getStripStats(
     errorStats.total > 0 ? errorStats.errors / errorStats.total : 0;
 
   return {
-    cost_usd: Math.round(cost_usd * 1_000_000) / 1_000_000,
-    cache_savings_usd: Math.round(cache_savings_usd * 1_000_000) / 1_000_000,
     p95_duration_ms,
     error_rate: Math.round(error_rate * 10_000) / 10_000,
   };
@@ -759,21 +720,21 @@ export function getStripStats(
 // Cache Intelligence 집계
 // =============================================================================
 
-/** 캐시 히트율·절약 금액 통계 */
+/** 캐시 히트율·절약 토큰 통계 */
 export interface CacheStats {
   hitRate: number;
   cacheReadTokens: number;
   cacheCreationTokens: number;
-  costWithCache: number;
-  costWithoutCache: number;
-  savingsUsd: number;
   savingsRate: number;
 }
 
 /**
- * 캐시 히트율 및 절약 비용 집계
+ * 캐시 히트율 및 절약율 집계 (토큰 기반)
  * - fromTs / toTs 미지정 시 전체 기간
  * - tokens_confidence='high'인 레코드만 집계
+ *
+ * USD 환산은 페이로드에 없는 계산값이라 옵저빌리티 신뢰도 정책상 노출·집계 모두 제거됨.
+ * savingsRate는 cache_read_tokens가 전체 input 대비 차지하는 비율로 토큰 단위 절감률.
  */
 export function getCacheStats(
   db: Database,
@@ -786,64 +747,30 @@ export function getCacheStats(
   if (fromTs !== undefined) { conditions.push('timestamp >= ?'); params.push(fromTs); }
   if (toTs   !== undefined) { conditions.push('timestamp <= ?'); params.push(toTs); }
 
-  const tokenRows = db.query(`
-    SELECT model,
-           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_input ELSE 0 END), 0)            AS tokens_input,
-           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_output ELSE 0 END), 0)           AS tokens_output,
-           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_creation_tokens ELSE 0 END), 0)   AS cache_creation_tokens,
-           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_read_tokens ELSE 0 END), 0)       AS cache_read_tokens
+  const tokenRow = db.query(`
+    SELECT
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_input ELSE 0 END), 0)            AS tokens_input,
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_creation_tokens ELSE 0 END), 0)   AS cache_creation_tokens,
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_read_tokens ELSE 0 END), 0)       AS cache_read_tokens
     FROM requests
     WHERE ${conditions.join(' AND ')}
-    GROUP BY model
-  `).all(...params) as Array<{
-    model: string | null;
+  `).get(...params) as {
     tokens_input: number;
-    tokens_output: number;
     cache_creation_tokens: number;
     cache_read_tokens: number;
-  }>;
+  };
 
-  let totalCacheRead = 0;
-  let totalCacheCreation = 0;
-  let totalTokensInput = 0;
-  let costWithCache = 0;
-  let costWithoutCache = 0;
-
-  for (const row of tokenRows) {
-    const p = getPricingForModel(row.model);
-
-    totalCacheRead += row.cache_read_tokens;
-    totalCacheCreation += row.cache_creation_tokens;
-    totalTokensInput += row.tokens_input;
-
-    // 실제 비용 (캐시 적용)
-    costWithCache +=
-      (row.tokens_input * p.input +
-        row.tokens_output * p.output +
-        row.cache_creation_tokens * p.cache_create +
-        row.cache_read_tokens * p.cache_read) /
-      1_000_000;
-
-    // 캐시 없었다면: cache_read를 일반 input 단가로 계산
-    costWithoutCache +=
-      ((row.tokens_input + row.cache_read_tokens) * p.input +
-        row.tokens_output * p.output +
-        row.cache_creation_tokens * p.cache_create) /
-      1_000_000;
-  }
-
-  const totalEffectiveInput = totalTokensInput + totalCacheRead;
+  const totalCacheRead = tokenRow.cache_read_tokens;
+  const totalCacheCreation = tokenRow.cache_creation_tokens;
+  const totalEffectiveInput = tokenRow.tokens_input + totalCacheRead;
   const hitRate = totalEffectiveInput > 0 ? totalCacheRead / totalEffectiveInput : 0;
-  const savingsUsd = costWithoutCache - costWithCache;
-  const savingsRate = costWithoutCache > 0 ? savingsUsd / costWithoutCache : 0;
+  // savingsRate: 캐시 없이 전량 input으로 처리했을 경우 대비 cache_read가 차지한 비율
+  const savingsRate = totalEffectiveInput > 0 ? totalCacheRead / totalEffectiveInput : 0;
 
   return {
     hitRate: Math.round(hitRate * 10_000) / 10_000,
     cacheReadTokens: totalCacheRead,
     cacheCreationTokens: totalCacheCreation,
-    costWithCache: Math.round(costWithCache * 1_000_000) / 1_000_000,
-    costWithoutCache: Math.round(costWithoutCache * 1_000_000) / 1_000_000,
-    savingsUsd: Math.round(savingsUsd * 1_000_000) / 1_000_000,
     savingsRate: Math.round(savingsRate * 10_000) / 10_000,
   };
 }

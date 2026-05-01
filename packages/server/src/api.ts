@@ -204,20 +204,17 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     return jsonResponse({ success: true, data: stats });
   }
 
-  // GET /api/stats/strip — 오늘 Command Center Strip 지표 (P95, error rate, 토큰 캐시)
-  // 비용(USD) 지표는 페이로드에 없는 계산값이라 옵저빌리티 신뢰도 정책상 제거됨.
+  // GET /api/stats/strip — 오늘 Command Center Strip 지표 (P95, error rate)
   if (path === '/api/stats/strip' && method === 'GET') {
     const todayMidnightMs = new Date().setHours(0, 0, 0, 0);
-    const { cost_usd: _c, cache_savings_usd: _s, ...stats } = getStripStats(db, todayMidnightMs);
-    return jsonResponse({ success: true, data: stats });
+    return jsonResponse({ success: true, data: getStripStats(db, todayMidnightMs) });
   }
 
-  // GET /api/stats/cache — 캐시 히트율·토큰 절감 집계 (USD 환산은 노출하지 않음)
+  // GET /api/stats/cache — 캐시 히트율·토큰 통계 (USD 환산 없음)
   if (path === '/api/stats/cache' && method === 'GET') {
     const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
     const toTs   = url.searchParams.get('to')   ? parseInt(url.searchParams.get('to')!,   10) : undefined;
-    const { costWithCache: _w, costWithoutCache: _wo, savingsUsd: _su, ...stats } = getCacheStats(db, fromTs, toTs);
-    return jsonResponse({ success: true, data: stats });
+    return jsonResponse({ success: true, data: getCacheStats(db, fromTs, toTs) });
   }
 
   // GET /api/dashboard
