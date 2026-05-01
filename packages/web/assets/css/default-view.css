@@ -47,6 +47,11 @@
 .chart-wrap { padding: var(--space-2) var(--space-3); }
 canvas { display: block; }
 
+/* Sparkline canvas drop-shadow glow — brand orange */
+#timelineChart {
+  filter: drop-shadow(0 0 8px rgba(255, 122, 69, 0.4));
+}
+
 /* ── ADR-017 + header-summary-merge ADR-007: chartSection 헤더 ──
    view-section-header는 단일 flex row(가벼움 회복):
      [.chart-default-meta(라벨+부제)] + [.chart-detail-meta(세션 메타, hidden)] + [.chart-actions]
@@ -196,22 +201,6 @@ canvas { display: block; }
   min-width: 0;
 }
 
-/* 두 번째 그룹(누적) — Hero 위계: 큰 숫자 (Major level) */
-#chartSection .timeline-meta-group:nth-child(2) .header-stat-value {
-  font-size: var(--text-h2);
-  color: var(--text-1);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-#chartSection .timeline-meta-group:nth-child(2) .header-stat {
-  flex-direction: column-reverse;
-  align-items: flex-start;
-  gap: 4px;
-}
-#chartSection .timeline-meta-group:nth-child(2) .header-stat-label {
-  font-size: var(--text-small);
-}
-
 #chartSection .timeline-meta-group-label {
   font-family: var(--font-ui);
   font-size: var(--text-small);
@@ -327,16 +316,11 @@ canvas { display: block; }
   font-variant-numeric: tabular-nums;
 }
 
-/* ── DETAIL CONTROLS BAR ────────────────────────────────────────────────── */
-/* detailView 전용 컨트롤 행 — view-section-header 와 동일 시각 패턴 */
-.detail-controls-bar {
-  display: flex; align-items: center; justify-content: flex-end;
-  padding: 6px 16px; background: var(--surface-alt);
-  border-bottom: 1px solid var(--border); flex-shrink: 0;
-}
-
 /* ── DETAIL TYPE FILTER BTNS ─────────────────────────────────────────────── */
-/* 인라인 스타일 대체: 검색창과 필터 사이 구분선 + 간격 */
+/* session-detail-controls-merge ADR-001: .detail-controls-bar 클래스 폐기 — 검색·필터는
+   view-tab-bar 우측 슬롯(.view-tab-bar-controls)으로 흡수됨 (detail-view.css 정의 참조).
+   본 클래스는 JS의 createFilterBar가 추가하므로 검색창과 필터 사이 시각 구분(border-left
+   + padding) 정의만 유지. */
 .detail-type-filter-btns {
   border-left: 1px solid var(--border);
   padding-left: var(--space-3);
@@ -361,13 +345,20 @@ canvas { display: block; }
 }
 
 /* ── FEED CONTROLS ──────────────────────────────────────────────────────── */
-.feed-controls { display: flex; align-items: center; gap: 8px; }
+/* default 뷰의 .view-section-header와 detail 뷰의 .view-tab-bar-controls 양쪽에서
+   공통 사용. session-detail-controls-merge ADR-001: 두 위치가 동일 패턴
+   (좌측 라벨/탭 + 우측 컨트롤)으로 통일됨. 토큰만 사용. */
+.feed-controls { display: flex; align-items: center; gap: var(--space-2); }
 
 /* ── FEED SEARCH ────────────────────────────────────────────────────────── */
 .feed-search { position: relative; display: flex; align-items: center; }
 .feed-search-icon {
-  position: absolute; left: 6px; color: var(--text-dim);
-  font-size: 12px; pointer-events: none; user-select: none;
+  position: absolute;
+  left: var(--space-2);
+  color: var(--text-3);
+  font-size: var(--text-meta);
+  pointer-events: none;
+  user-select: none;
 }
 .feed-search-input {
   background: var(--bg);
@@ -375,7 +366,7 @@ canvas { display: block; }
   color: var(--text-2);
   font-family: var(--font-ui);
   font-size: var(--text-meta);
-  padding: 5px 24px 5px 24px;
+  padding: var(--space-1) var(--space-5) var(--space-1) var(--space-5);
   border-radius: var(--radius-md);
   width: 200px;
   transition: border-color var(--dur-fast) var(--ease), width var(--dur-base) var(--ease);
@@ -384,36 +375,59 @@ canvas { display: block; }
 .feed-search-input:focus { border-color: var(--accent); width: 240px; }
 .feed-search-input::placeholder { color: var(--text-4); }
 .feed-search-clear {
-  position: absolute; right: 4px; background: none; border: none;
-  color: var(--text-dim); font-size: 13px; cursor: pointer;
-  padding: 0 2px; line-height: 1; display: none;
+  position: absolute;
+  right: var(--space-1);
+  background: none;
+  border: none;
+  color: var(--text-3);
+  font-size: var(--text-data);
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  display: none;
 }
 .feed-search-clear.visible { display: block; }
-.feed-search-clear:hover { color: var(--text-muted); }
+.feed-search-clear:hover { color: var(--text-2); }
 
 /* ── TYPE FILTER ────────────────────────────────────────────────────────── */
+/* session-detail-unify ADR-003: padding 4px 10px → 토큰 (var(--space-1) 약간 변형).
+   active 배경은 하드코딩 rgba 대신 --accent-dim 토큰 재사용. */
 .type-filter-btn {
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text-3);
-  padding: 4px 10px;
+  padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-md);
   cursor: pointer;
   font-family: var(--font-ui);
   font-size: var(--text-small);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 .type-filter-btn:hover { color: var(--text-1); background: var(--raised); }
-.type-filter-btn.active { color: var(--text-1); border-color: var(--accent-border); background: rgba(255,122,69,0.10); }
+.type-filter-btn.active {
+  color: var(--text-1);
+  border-color: var(--accent-border);
+  background: var(--accent-dim);
+}
 
 
 /* ── SCROLL LOCK BANNER ─────────────────────────────────────────────────── */
+/* session-detail-unify ADR-003: 하드코딩 px → 토큰 */
 .scroll-lock-banner {
-  position: sticky; top: 0; z-index: 10; display: none;
-  padding: 5px 12px; text-align: center; cursor: pointer;
-  background: var(--accent-dim); border-bottom: 1px solid var(--accent-border);
-  color: var(--accent); font-size: 11px; font-weight: 600; user-select: none;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: none;
+  padding: var(--space-1) var(--space-3);
+  text-align: center;
+  cursor: pointer;
+  background: var(--accent-dim);
+  border-bottom: 1px solid var(--accent-border);
+  color: var(--accent);
+  font-size: var(--text-small);
+  font-weight: var(--weight-strong);
+  user-select: none;
 }
 .scroll-lock-banner.visible { display: block; }
 .scroll-lock-banner:hover { background: var(--accent-border); }

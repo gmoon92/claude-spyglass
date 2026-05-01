@@ -1,7 +1,7 @@
 // state.js — 라우팅/뷰 상태 SSoT (ADR-003 라우팅 로직 단순화)
 
 let _rightView        = 'default';
-let _detailTab        = 'flat';
+let _detailTab        = 'requests';
 let _selectedProject  = null;
 let _selectedSession  = null;
 let _feedFilterBar    = null;

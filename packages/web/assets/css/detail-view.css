@@ -30,21 +30,70 @@
 }
 .detail-collapsed .btn-toggle svg { transform: rotate(180deg); }
 
-/* ── TAB BAR ────────────────────────────────────────────────────────────── */
+/* ── TAB BAR ──────────────────────────────────────────────────────────────
+   session-detail-controls-merge ADR-001/003:
+   - 단일 가로 막대에 좌측 .view-tab-group(탭 4개) + 우측 .view-tab-bar-controls(검색·필터).
+   - default 뷰의 view-section-header와 동일한 "라벨/탭 + 우측 컨트롤" 패턴.
+   - .view-tab은 design-tokens 토큰만 사용 (하드코딩 px/font-size 0).
+   ─────────────────────────────────────────────────────────────────────── */
 .view-tab-bar {
-  display: flex; align-items: center;
-  padding: 0 16px; border-bottom: 1px solid var(--border);
-  background: var(--surface-alt); flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-alt);
+  flex-shrink: 0;
 }
+
+/* 좌측 그룹 — 탭 4개. .view-tab 자체 padding으로 간격 흡수, 자체 gap 불필요 */
+.view-tab-group {
+  display: flex;
+  align-items: center;
+}
+
+/* 우측 슬롯 — 검색 + 필터.
+   .feed-controls 클래스도 함께 부여되어 default-view.css의 gap 토큰 재사용.
+   margin-left: auto로 우측 정렬 (justify-content 대신 — wrap 시 좌측 그룹 위치 유지). */
+.view-tab-bar-controls {
+  margin-left: auto;
+}
+
 .view-tab {
-  background: none; border: none; border-bottom: 2px solid transparent;
-  color: var(--text-dim); padding: 8px 14px; font-family: inherit;
-  font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
-  text-transform: uppercase; cursor: pointer;
-  transition: color .15s, border-color .15s;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-3);
+  padding: var(--space-2) var(--space-3);
+  font-family: inherit;
+  font-size: var(--text-small);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
 }
-.view-tab:hover { color: var(--text); }
+.view-tab:hover { color: var(--text-1); }
 .view-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── RESPONSIVE (session-detail-controls-merge plan §4) ──────────────────
+   768px 이하: view-tab-bar wrap — 컨트롤이 다음 줄로 자연 이동.
+   480px 이하: 검색창 width 축소 (협소 폭 fallback). */
+@media (max-width: 768px) {
+  .view-tab-bar {
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+  }
+  .view-tab-bar-controls {
+    margin-left: 0;
+    flex-basis: 100%;
+    padding: 0 0 var(--space-2);
+  }
+}
+@media (max-width: 480px) {
+  .view-tab-bar-controls .feed-search-input { width: 140px; }
+  .view-tab-bar-controls .feed-search-input:focus { width: 180px; }
+}
 
 /* ── DETAIL CONTENT ─────────────────────────────────────────────────────── */
 .detail-loading {

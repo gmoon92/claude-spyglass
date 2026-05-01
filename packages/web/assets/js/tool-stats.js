@@ -70,25 +70,45 @@ function renderMatrix() {
   const sorted = [..._stats].sort(sortFns[_sortKey] || sortFns.tokens);
 
   const maxCalls = Math.max(..._stats.map(s => s.call_count || 0), 1);
-  const maxDur   = Math.max(..._stats.map(s => s.avg_duration_ms || 0), 1);
+  // data-honesty-ui (ADR-003): duration 0 행은 max 산정에서 제외 (왜곡 방지)
+  const maxDur   = Math.max(..._stats.map(s => s.avg_duration_ms || 0).filter(v => v > 0), 1);
 
   const rows = sorted.map(s => {
     // SSoT: renderers.toolIconHtml 재사용 (Agent/Skill/Task → ◎ orange, 그 외 → ◉ green)
     const icon = toolIconHtml(s.tool_name);
     const callPct = Math.round((s.call_count || 0) / maxCalls * 100);
-    const durPct  = Math.round((s.avg_duration_ms || 0) / maxDur * 100);
+    const durMs   = s.avg_duration_ms || 0;
+    const durPct  = Math.round(durMs / maxDur * 100);
     const tokPct  = s.pct_of_total_tokens || 0;
+
+    // data-honesty-ui (ADR-003): duration 0 → '—' + title 툴팁 (행 단위 data 속성)
+    const durUnavailable = !durMs;
+    const durAttr = durUnavailable ? ' data-duration-unavailable="true" title="duration unavailable for older data"' : '';
+    const durBarPct = durUnavailable ? 0 : durPct;
+
+    // data-honesty-ui (ADR-002): tokens_confidence 비-high → '*' 마크 + title 툴팁
+    const errCount = s.confidence_error_count || 0;
+    const lowCount = s.confidence_low_count || 0;
+    const hasLowConf = !!s.has_low_confidence || (errCount + lowCount) > 0;
+    const confTip = errCount > 0
+      ? '토큰 신뢰도 오류 (수집 실패)'
+      : '토큰 신뢰도 낮음 (transcript 파싱 실패 또는 proxy fallback)';
+    const confMark = hasLowConf
+      ? `<sup class="confidence-low-mark" title="${escHtml(confTip)}">*</sup>`
+      : '';
+
+    // error 컬럼: SQL의 error_count는 이미 confidence_error_count도 합산함 (T-02 보강).
     const errBadge = s.error_count > 0
       ? `<span class="ts-err-cell"><span class="mini-badge badge-error">${s.error_count}</span></span>`
       : `<span class="ts-err-cell ts-err-cell--none">—</span>`;
 
     return `<div class="ts-mx-row">
       <div class="ts-mx-cell ts-mx-tool">
-        ${icon}<span class="ts-mx-tool-name" title="${escHtml(s.tool_name)}">${escHtml(s.tool_name)}</span>
+        ${icon}<span class="ts-mx-tool-name" title="${escHtml(s.tool_name)}">${escHtml(s.tool_name)}${confMark}</span>
       </div>
-      <div class="ts-mx-cell ts-mx-num">
-        <span class="ts-mx-val">${fmtDur(s.avg_duration_ms)}</span>
-        <span class="ts-mx-bar"><span class="ts-mx-bar-fill ts-mx-bar-fill--avg" style="width:${durPct}%"></span></span>
+      <div class="ts-mx-cell ts-mx-num"${durAttr}>
+        <span class="ts-mx-val">${fmtDur(durMs)}</span>
+        <span class="ts-mx-bar"><span class="ts-mx-bar-fill ts-mx-bar-fill--avg" style="width:${durBarPct}%"></span></span>
       </div>
       <div class="ts-mx-cell ts-mx-num">
         <span class="ts-mx-val">${s.call_count || 0}</span>

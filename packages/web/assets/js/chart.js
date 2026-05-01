@@ -23,44 +23,51 @@ const TIMELINE_BUCKETS = 30;
 let timelineBuckets  = Array(TIMELINE_BUCKETS).fill(0);
 let lastBucketMinute = -1;
 
-// ADR-008: 도넛 모드 ('type' | 'model') — donut-mode-toggle은 폐기되었지만 모드 SSoT는 유지.
+// ADR-008: 도넛 모드 ('type' | 'model' | 'cache') — donut-mode-toggle은 폐기되었지만 모드 SSoT는 유지.
 // default 모드 진입 시 setChartMode가 setDonutMode('model')을 호출 (model 분포 노출).
-// detail 모드 진입 시 setChartMode가 setDonutMode('type')을 호출 (세션 type 분포 — session-detail.js 호환).
+// detail 모드 진입 시 setChartMode가 setDonutMode('cache')을 호출 (캐시 퍼포먼스 — ADR-WDO-010).
 // 초기값 'model' — default 모드가 첫 화면이므로.
 let donutMode = 'model';
-const dataByKind = { type: [], model: [] };
+const dataByKind = { type: [], model: [], cache: [] };
 let typeData = dataByKind.type;   // drawDonut/renderTypeLegend가 참조하는 활성 데이터셋
 
 /**
  * 데이터 종류별로 캐시한다. 현재 donutMode와 일치하는 종류만 화면에 즉시 반영.
- * @param {'type'|'model'} kind
+ * @param {'type'|'model'|'cache'} kind
  * @param {Array} data
  */
 export function setSourceData(kind, data) {
-  if (kind !== 'type' && kind !== 'model') return;
+  if (kind !== 'type' && kind !== 'model' && kind !== 'cache') return;
   dataByKind[kind] = Array.isArray(data) ? data : [];
   if (kind === donutMode) typeData = dataByKind[kind];
 }
 /** 후방 호환: 기존 setTypeData(data) 호출은 type 종류로 위임 */
 export function setTypeData(data) { setSourceData('type', data); }
 export function setDonutMode(mode) {
-  donutMode = mode === 'model' ? 'model' : 'type';
+  donutMode = ['model', 'cache', 'type'].includes(mode) ? mode : 'type';
   typeData = dataByKind[donutMode] || [];
 }
 export function getDonutMode() { return donutMode; }
 export function hasSourceData(kind) { return Array.isArray(dataByKind[kind]) && dataByKind[kind].length > 0; }
 // 모델 라벨 → 색상 매핑 (간단한 hash 기반 분배 — TYPE_COLORS와 비슷한 톤)
-const MODEL_PALETTE = ['#d97757', '#6ee7a0', '#fbbf24', '#60a5fa', '#a78bfa', '#f472b6', '#22d3ee', '#94a3b8'];
-function modelColor(model, idx) {
+const MODEL_PALETTE = ['#FF7A45', '#34D399', '#fbbf24', '#60a5fa', '#fb923c', '#f472b6', '#22d3ee', '#94a3b8'];
+function modelColor(_model, idx) {
   return MODEL_PALETTE[idx % MODEL_PALETTE.length];
 }
-function donutItemKey(d, idx) {
+function donutItemKey(d, _idx) {
+  if (donutMode === 'cache') return d.label || '?';
   return donutMode === 'model' ? (d.model || '?') : (d.type || '?');
 }
+function cacheItemColor(d) {
+  const map = { 'Cached': '#34D399', 'Cache Write': '#58A6FF', 'Uncached': '#6E7681' };
+  return map[d.label] || COLORS.textDim;
+}
 function donutItemColor(d, idx) {
+  if (donutMode === 'cache') return cacheItemColor(d);
   return donutMode === 'model' ? modelColor(d.model, idx) : (TYPE_COLORS[d.type] || COLORS.textDim);
 }
 function donutItemCount(d) {
+  if (donutMode === 'cache') return d.tokens || 0;
   return donutMode === 'model' ? (d.request_count || 0) : (d.count || 0);
 }
 
@@ -158,21 +165,30 @@ export function drawTimeline() {
   ctx.closePath();
   ctx.fill();
 
-  ctx.strokeStyle = COLORS.accent;
+  // sparkline stroke — orange → amber horizontal gradient (brand 톤 일관)
+  const lineGrad = ctx.createLinearGradient(padL, 0, w - padR, 0);
+  lineGrad.addColorStop(0, '#FF7A45');   /* --brand-primary */
+  lineGrad.addColorStop(1, '#FFD43B');   /* --data-amber */
+  ctx.strokeStyle = lineGrad;
   ctx.lineWidth   = 1.5;
   ctx.lineJoin    = 'round';
+  // drop-shadow glow — brand orange 색조
+  ctx.shadowColor = 'rgba(255, 122, 69, 0.4)';
+  ctx.shadowBlur  = 8;
   ctx.beginPath();
   pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
   ctx.stroke();
+  ctx.shadowBlur  = 0;
+  ctx.shadowColor = 'transparent';
 
   const last = pts[pts.length - 1];
   ctx.beginPath();
   ctx.arc(last.x, last.y, 3, 0, Math.PI * 2);
-  ctx.fillStyle = COLORS.accent;
+  ctx.fillStyle = '#FFD43B';   /* --data-amber: gradient 끝점 색 */
   ctx.fill();
 
   if (data[data.length - 1] > 0) {
-    ctx.fillStyle  = COLORS.accent;
+    ctx.fillStyle  = '#FFD43B';   /* --data-amber */
     ctx.font       = 'bold 10px monospace';
     ctx.textAlign  = 'left';
     ctx.fillText(data[data.length - 1], last.x + 5, last.y + 3);
@@ -213,19 +229,37 @@ export function drawDonut() {
     ctx.arc(cx, cy, r, startAngle, startAngle + slice);
     ctx.arc(cx, cy, inner, startAngle + slice, startAngle, true);
     ctx.closePath();
-    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur  = 10;
+    ctx.fillStyle   = color;
     ctx.fill();
+    ctx.shadowBlur  = 0;
+    ctx.shadowColor = 'transparent';
     startAngle += slice;
   });
 
-  ctx.fillStyle    = COLORS.text;
-  ctx.font         = `bold ${total >= 1000 ? 12 : 15}px monospace`;
-  ctx.textAlign    = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(total >= 1000 ? (total / 1000).toFixed(1) + 'k' : total, cx, cy - 3);
-  ctx.fillStyle = COLORS.textDim;
-  ctx.font      = '8px monospace';
-  ctx.fillText('total', cx, cy + 9);
+  if (donutMode === 'cache') {
+    const cached   = typeData.find(d => d.label === 'Cached')?.tokens || 0;
+    const cTotal   = typeData.reduce((s, d) => s + (d.tokens || 0), 0) || 1;
+    const hitRate  = Math.round((cached / cTotal) * 100);
+    ctx.fillStyle    = '#34D399';
+    ctx.font         = 'bold 18px ' + (getComputedStyle(document.documentElement).getPropertyValue('--font-data').trim() || 'monospace');
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(hitRate + '%', cx, cy - 4);
+    ctx.fillStyle = COLORS.textDim;
+    ctx.font      = '9px ' + (getComputedStyle(document.documentElement).getPropertyValue('--font-ui').trim() || 'sans-serif');
+    ctx.fillText('hit rate', cx, cy + 10);
+  } else {
+    ctx.fillStyle    = COLORS.text;
+    ctx.font         = `bold ${total >= 1000 ? 12 : 15}px monospace`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(total >= 1000 ? (total / 1000).toFixed(1) + 'k' : total, cx, cy - 3);
+    ctx.fillStyle = COLORS.textDim;
+    ctx.font      = '8px monospace';
+    ctx.fillText('total', cx, cy + 9);
+  }
 }
 
 export function renderTypeLegend() {
@@ -241,7 +275,8 @@ export function renderTypeLegend() {
   el.innerHTML = typeData.map((d, idx) => {
     const color = donutItemColor(d, idx);
     const count = donutItemCount(d);
-    const key   = donutItemKey(d, idx);
+    const label = donutMode === 'cache' ? d.label : (donutMode === 'model' ? d.model : d.type);
+    const key   = label || donutItemKey(d, idx);
     const pct   = Math.round(count / total * 100);
     // 모델 이름은 길 수 있어 ellipsis로 자름
     return `<div class="legend-item">

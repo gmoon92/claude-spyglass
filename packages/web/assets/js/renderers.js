@@ -218,8 +218,9 @@ export function modelChipHtml(r, opts = {}) {
 }
 
 export function makeModelCell(r) {
-  // tool_call 등 모델이 의미 없는 행: 기존처럼 빈 셀
-  if (r.type === 'tool_call' || r.type === 'system') {
+  // 모든 타입에서 model을 표시. model이 없으면 "—".
+  // (이전: tool_call/system은 무조건 "—" 처리 → 사용자가 LLM 모델을 알 수 없음)
+  if (!r?.model) {
     return `<td class="cell-model cell-empty">—</td>`;
   }
   return `<td class="cell-model">${modelChipHtml(r)}</td>`;

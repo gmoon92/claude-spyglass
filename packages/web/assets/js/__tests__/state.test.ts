@@ -9,7 +9,7 @@ import {
 // state.js는 모듈 수준 변수를 공유하므로 각 테스트 전 초기값 복원
 beforeEach(() => {
   setRightView('default');
-  setDetailTab('flat');
+  setDetailTab('requests');
   setSelectedProject(null);
   setSelectedSession(null);
 });
@@ -32,8 +32,8 @@ describe('rightView', () => {
 });
 
 describe('detailTab', () => {
-  it('초기값은 "flat"', () => {
-    expect(getDetailTab()).toBe('flat');
+  it('초기값은 "requests"', () => {
+    expect(getDetailTab()).toBe('requests');
   });
 
   it('setDetailTab → getDetailTab 반환', () => {

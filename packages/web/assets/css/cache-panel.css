@@ -42,21 +42,30 @@
   flex: 1;
   height: 6px;
   background: var(--surface);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   min-width: 60px;
 }
 
 .cache-bar-fill {
   height: 100%;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   transition: width 0.6s ease, background-color 0.3s;
-  background: var(--text-dim);
+  background: var(--grad-neutral);
 }
 
-.cache-bar-fill.is-high { background: var(--green); }
-.cache-bar-fill.is-mid  { background: var(--orange); }
-.cache-bar-fill.is-low  { background: var(--red); }
+.cache-bar-fill.is-high {
+  background: var(--grad-success);
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.5);
+}
+.cache-bar-fill.is-mid  {
+  background: var(--grad-warn);
+  box-shadow: 0 0 8px rgba(240, 183, 47, 0.45);
+}
+.cache-bar-fill.is-low  {
+  background: var(--grad-error);
+  box-shadow: 0 0 8px rgba(244, 113, 116, 0.45);
+}
 
 .cache-bar-pct {
   color: var(--text);
@@ -71,7 +80,7 @@
   flex: 1;
   height: 6px;
   display: flex;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   min-width: 60px;
   background: var(--surface);
@@ -79,13 +88,15 @@
 
 .cache-ratio-creation {
   height: 100%;
-  background: var(--orange);
+  background: var(--grad-info);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.45);
   transition: width 0.6s ease;
 }
 
 .cache-ratio-read {
   height: 100%;
-  background: var(--blue);
+  background: var(--grad-success);
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.45);
   transition: width 0.6s ease;
 }
 

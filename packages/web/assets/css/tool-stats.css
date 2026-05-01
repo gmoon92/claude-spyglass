@@ -19,7 +19,7 @@
 .ts-mx-title {
   font-size: var(--font-major);
   font-weight: var(--weight-strong);
-  color: var(--text);
+  color: var(--text-2);
 }
 
 .ts-mx-sort {
@@ -29,22 +29,22 @@
 }
 .ts-mx-sort-label {
   font-size: var(--font-meta);
-  color: var(--text-dim);
+  color: var(--text-3);
   margin-right: var(--space-1);
 }
 
 .ts-mx-sort-btn {
   background: none;
   border: 1px solid var(--border);
-  color: var(--text-dim);
+  color: var(--text-3);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-family: inherit;
   font-size: var(--font-meta);
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
-.ts-mx-sort-btn:hover { color: var(--text); border-color: var(--text-dim); }
+.ts-mx-sort-btn:hover { color: var(--text-1); border-color: var(--text-3); }
 .ts-mx-sort-btn.active {
   color: var(--accent);
   border-color: var(--accent);
@@ -70,7 +70,7 @@
 
 .ts-mx-head {
   font-size: var(--font-micro);
-  color: var(--text-dim);
+  color: var(--text-3);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: var(--weight-strong);
@@ -84,7 +84,7 @@
 }
 
 .ts-mx-row {
-  transition: background 0.15s ease;
+  transition: background var(--dur-fast) var(--ease);
 }
 .ts-mx-row:hover {
   background: var(--accent-bg-light);
@@ -98,7 +98,7 @@
 }
 .ts-mx-tool-name {
   font-size: var(--font-body);
-  color: var(--text);
+  color: var(--text-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -106,19 +106,19 @@
 }
 .ts-mx-tool .tool-icon {
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: var(--text-meta);
 }
 
 /* 숫자 셀 — value + bar */
 .ts-mx-val {
   font-size: var(--font-body);
-  color: var(--text);
+  color: var(--text-2);
   font-variant-numeric: tabular-nums;
   font-weight: var(--weight-strong);
 }
 .ts-mx-sub {
   font-size: var(--font-meta);
-  color: var(--text-dim);
+  color: var(--text-3);
 }
 
 /* 막대 그래프 — 가는 바, 아래쪽 */
@@ -132,12 +132,13 @@
 .ts-mx-bar-fill {
   display: block;
   height: 100%;
-  background: var(--accent);
-  transition: width 0.3s ease;
+  background: var(--grad-brand);
+  box-shadow: 0 0 8px rgba(255, 122, 69, 0.50);
+  transition: width var(--dur-drawer) var(--ease);
 }
-.ts-mx-bar-fill--avg    { background: var(--orange); }
-.ts-mx-bar-fill--calls  { background: var(--green); }
-.ts-mx-bar-fill--tokens { background: var(--accent); }
+.ts-mx-bar-fill--avg    { background: var(--grad-warn);    box-shadow: 0 0 8px rgba(240, 183, 47, 0.50); }
+.ts-mx-bar-fill--calls  { background: var(--grad-success); box-shadow: 0 0 8px rgba(52, 211, 153, 0.50); }
+.ts-mx-bar-fill--tokens { background: var(--grad-brand);   box-shadow: 0 0 8px rgba(255, 122, 69, 0.50); }
 
 /* 에러 셀 */
 .ts-err-cell {
@@ -145,11 +146,35 @@
   align-items: center;
 }
 .ts-err-cell--none {
-  color: var(--text-dim);
+  color: var(--text-3);
   font-size: var(--font-meta);
 }
 
 /* 헤더 셀의 dir/flex은 row와 다르게 단순 정렬 */
 .ts-mx-head .ts-mx-cell {
   flex-direction: row;
+}
+
+/* ── 데이터 신뢰도 표지 (data-honesty-ui ADR-002, ADR-003) ───────────────── */
+/*
+ * tokens_confidence !== 'high' 행에 작은 위첨자 '*' 표시.
+ * title 속성으로 툴팁 안내. high는 표시 안 함.
+ */
+.confidence-low-mark {
+  display: inline-block;
+  margin-left: 2px;
+  color: var(--text-3);
+  font-size: 0.85em;
+  vertical-align: super;
+  cursor: help;
+  user-select: none;
+}
+
+/* duration 부재(0 또는 null) 셀: 기존 — 글리프 + 툴팁만 활성화 */
+.ts-mx-num[data-duration-unavailable="true"] {
+  cursor: help;
+}
+.ts-mx-num[data-duration-unavailable="true"] .ts-mx-val {
+  color: var(--text-3);
+  font-weight: var(--weight-normal);
 }

@@ -17,19 +17,19 @@
   text-transform: lowercase;
   border: 1px solid transparent;
 }
-.type-prompt    { background: var(--type-prompt-bg);    color: var(--type-prompt-color); }
-.type-tool_call { background: var(--type-tool_call-bg); color: var(--type-tool_call-color); }
-.type-system    { background: var(--type-system-bg);    color: var(--type-system-color); }
-.type-response  { background: var(--type-response-bg);  color: var(--type-response-color); }
-.type-unknown   { background: var(--unknown-bg);       color: var(--text-3); }
+.type-prompt    { background: var(--badge-grad-brand);   color: var(--type-prompt-color); }
+.type-tool_call { background: var(--badge-grad-success); color: var(--type-tool_call-color); }
+.type-system    { background: var(--badge-grad-warn);    color: var(--type-system-color); }
+.type-response  { background: var(--type-response-bg);   color: var(--type-response-color); }
+.type-unknown   { background: var(--badge-grad-neutral); color: var(--text-3); }
 
 .role-badge { margin-left: 4px; }
-.role-user  { background: var(--blue-bg-light); color: var(--blue-text); }
+.role-user  { background: var(--badge-grad-info); color: var(--blue-text); }
 
 .model-badge {
   margin-left: 4px;
   font-family: var(--font-data);
-  background: var(--model-badge-bg);
+  background: var(--badge-grad-brand);
   color: var(--accent);
 }
 
@@ -48,22 +48,22 @@
   margin-left: 4px;
   white-space: nowrap;
 }
-.badge-cache   { background: var(--blue-bg-light); color: var(--blue-text); }
+.badge-cache   { background: var(--badge-grad-info); color: var(--blue-text); }
 /* 에러는 비-색상 신호 추가: ✗ 아이콘 + 좌측 inset shadow (--error 보더) */
 .badge-error::before { content: '✗'; font-weight: 700; margin-right: 1px; }
 .badge-error   {
-  background: var(--red-bg-light);
+  background: var(--badge-grad-error);
   color: var(--red-text);
-  box-shadow: inset 2px 0 0 var(--error);
+  box-shadow: inset 2px 0 0 var(--error), var(--glow-error);
   padding-left: 8px;
 }
 .badge-spike::before { content: '↑'; font-weight: 700; margin-right: 1px; }
-.badge-spike   { background: var(--yellow-bg-light);  color: var(--warn); }
+.badge-spike   { background: var(--badge-grad-warn); color: var(--warn); }
 .badge-loop::before  { content: '↻'; margin-right: 1px; }
-.badge-loop    { background: var(--sky-bg-light);   color: var(--sky-text); }
+.badge-loop    { background: var(--badge-grad-info); color: var(--sky-text); }
 /* 'slow' = orange tint, 'error'와 분리 (Failure Mode 15) */
 .badge-slow::before  { content: '◷'; margin-right: 1px; }
-.badge-slow    { background: rgba(240,183,47,0.15); color: var(--warn); }
+.badge-slow    { background: var(--badge-grad-warn); color: var(--warn); }
 
 /* ── RUNNING ICON ANIMATION ─────────────────────────────────────────────── */
 @keyframes tool-running-pulse {
@@ -150,8 +150,26 @@
 [data-mini-badge-tooltip] { cursor: help; }
 
 /* ── TOOL ICON COLOR ────────────────────────────────────────────────────── */
-.tool-icon-tool  { color: var(--success); }
-.tool-icon-agent { color: var(--warn); }
+.tool-icon {
+  font-weight: 700;
+  display: inline-block;
+}
+.tool-icon-tool {
+  background: var(--grad-success);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  filter: drop-shadow(0 0 4px rgba(52, 211, 153, 0.5));
+}
+.tool-icon-agent {
+  background: var(--grad-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  filter: drop-shadow(0 0 4px rgba(255, 122, 69, 0.5));
+}
 
 /* ── TARGET ROLE BADGE (prompt/system row) ──────────────────────────────── */
 .target-role-badge {

@@ -1,35 +1,52 @@
 /* ── TURN VIEW ──────────────────────────────────────────────────────────── */
-.turn-list { padding: 4px 0; }
+/* session-detail-unify ADR-003: 하드코딩 px/font-size → design-tokens 토큰.
+   레거시 .turn-list/.turn-item/.turn-header는 통합 카드 뷰(.turn-card)로 전환됐으나
+   호환성을 위해 토큰화한 상태로 보존. */
+.turn-list { padding: var(--space-1) 0; }
 .turn-item { border-bottom: 1px solid var(--border); }
 .turn-item:last-child { border-bottom: none; }
 
 .turn-header {
-  display: flex; align-items: center; gap: 10px;
-  padding: 7px 16px; cursor: pointer; user-select: none;
-  transition: background .12s;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--dur-fast) var(--ease);
 }
 .turn-header:hover { background: var(--accent-bg-light); }
 
 .turn-badge {
-  display: inline-block; padding: 1px 7px; border-radius: 4px;
-  background: var(--accent-dim); color: var(--accent);
-  font-size: 10px; font-weight: 700; letter-spacing: 0.5px; flex-shrink: 0;
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: var(--radius-sm);
+  background: var(--badge-grad-brand);
+  color: var(--accent);
+  font-size: var(--text-small);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
 }
-.turn-time   { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
-.turn-meta   { flex: 1; font-size: 11px; color: var(--text-muted); }
-.turn-tokens { font-size: 11px; color: var(--accent); font-weight: 600; white-space: nowrap; }
-.turn-toggle { font-size: 11px; color: var(--text-dim); transition: transform .2s; }
+.turn-time   { font-size: var(--text-small); color: var(--text-3); white-space: nowrap; }
+.turn-meta   { flex: 1; font-size: var(--text-small); color: var(--text-3); }
+.turn-tokens { font-size: var(--text-small); color: var(--accent); font-weight: var(--weight-strong); white-space: nowrap; }
+.turn-toggle { font-size: var(--text-small); color: var(--text-3); transition: transform var(--dur-base) var(--ease); }
 .turn-item.open .turn-toggle  { transform: rotate(90deg); }
 .turn-item.open .turn-header  { background: var(--accent-bg-light); }
 
-.turn-children { display: none; padding: 4px 0 6px; }
+.turn-children { display: none; padding: var(--space-1) 0 var(--space-2); }
 .turn-item.open .turn-children { display: block; }
 
-/* 첫 컬럼 28px는 chevron / status bullet 공용 placeholder.
-   정렬 상수: margin 16 + border 0 + padding 32 = 48px (border 있는 변종은 padding 30으로 흡수). */
+/* turn-row grid:
+   - 첫 컬럼 28px(var(--space-6) 보다 작아 토큰 미사용 — chevron 폭 상수)
+   - 정렬 상수: margin 16 + border 0 + padding 32 = 48px (border 있는 변종은 padding 30으로 흡수). */
 .turn-row {
-  display: grid; grid-template-columns: 28px minmax(140px, 1fr) 56px 56px 72px 80px;
-  align-items: center; padding: 5px 16px 5px 32px; font-size: 12px;
+  display: grid;
+  grid-template-columns: 28px minmax(140px, 1fr) 56px 56px 72px 80px;
+  align-items: center;
+  padding: var(--space-1) var(--space-4) var(--space-1) var(--space-6);
+  font-size: var(--text-meta);
 }
 .turn-row > * { min-width: 0; }
 /* 숫자 컬럼 우정렬 — td.cell-token은 table 전용이라 span에 별도 지정 */
@@ -40,28 +57,61 @@
    두번째 grid 컬럼 시작 x좌표(48px)를 유지하기 위해 border-left를 padding에서 흡수한다.
    (chevron 유무와 무관하게 ◉/✓/× 아이콘 수직선 일치 — ADR turn-view-chevron-alignment) */
 .turn-row-prompt {
-  background: var(--white-bg-subtle); border-left: 2px solid var(--text-dim);
-  margin: 0 16px 4px; border-radius: 4px; padding-left: 30px;
+  background: var(--white-bg-subtle);
+  border-left: 2px solid var(--text-3);
+  margin: 0 var(--space-4) var(--space-1);
+  border-radius: var(--radius-sm);
+  padding-left: 30px;
 }
-.turn-row-tool  { margin: 0 16px; }
-.turn-row-empty { color: var(--text-dim); font-size: 11px; padding: 8px 32px; }
+.turn-row-tool  { margin: 0 var(--space-4); }
+.turn-row-empty {
+  color: var(--text-3);
+  font-size: var(--text-small);
+  padding: var(--space-2) var(--space-6);
+}
+
+/* ── data-honesty-ui (ADR-004): tool-only turn 응답 부재 placeholder ─────── */
+/* response 행이 없는 turn은 프롬프트가 도구만 호출하고 텍스트 응답을 생성하지 않은
+ * 상태. 사용자가 데이터 누락으로 오인하지 않도록 명시적 한 줄 표시. */
+.turn-row-response--empty {
+  margin: 0 var(--space-4);
+  padding-left: 30px;
+  background: transparent;
+}
+.turn-row-response--empty .tool-sub {
+  color: var(--text-3);
+  font-style: italic;
+}
+
+/* ── data-honesty-ui (ADR-002): tokens_confidence 비-high 표지 ───────────── */
+/* turn-view 와 tool-stats 에서 동일한 클래스 재사용 (turn-view.css에서 한 번 더
+ * 정의해도 안전 — 동일 선언이라 cascading 영향 없음). */
+.turn-row .confidence-low-mark {
+  display: inline-block;
+  margin-left: 2px;
+  color: var(--text-3);
+  font-size: 0.85em;
+  vertical-align: super;
+  cursor: help;
+  user-select: none;
+}
 
 /* ── UNIFIED CARD CONTAINER ─────────────────────────────────────────────── */
 #turnUnifiedBody {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
+  gap: var(--space-2);
+  padding: var(--space-3);
   overflow-y: auto;
   height: 100%;
   box-sizing: border-box;
 }
 
 .turn-card-empty {
-  padding: 24px;
+  padding: var(--space-5);
   text-align: center;
-  color: var(--text-dim);
-  font-size: 12px;
+  color: var(--text-3);
+  font-size: var(--text-meta);
 }
 
 /* ── CARD ───────────────────────────────────────────────────────────────── */
@@ -72,7 +122,7 @@
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  transition: border-color 0.15s;
+  transition: border-color var(--dur-fast) var(--ease);
   overflow: hidden;
 }
 
@@ -86,10 +136,10 @@
 
 /* ── CARD SUMMARY (클릭 가능 헤더 영역) ────────────────────────────────── */
 .turn-card-summary {
-  padding: 10px 12px;
+  padding: var(--space-2) var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: var(--space-2);
   cursor: pointer;
   user-select: none;
 }
@@ -100,13 +150,12 @@
 
 /* ── EXPAND BUTTON ──────────────────────────────────────────────────────── */
 .turn-card-expand-btn {
-  color: var(--text-dim);
+  color: var(--text-3);
   line-height: 1;
   display: inline-flex;
   align-items: center;
   transform: rotate(-90deg);
-  transition: transform 0.18s ease;
-  transition: transform 0.2s ease;
+  transition: transform var(--dur-base) var(--ease);
   flex-shrink: 0;
 }
 
@@ -118,7 +167,7 @@
 .turn-card-expanded {
   display: none;
   border-top: 1px solid var(--border);
-  padding: 4px 0 6px;
+  padding: var(--space-1) 0 var(--space-2);
   background: var(--white-bg-subtle);
 }
 
@@ -130,21 +179,21 @@
 .turn-card-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   min-height: 18px;
 }
 
 .turn-card-index {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--text-small);
+  font-weight: var(--weight-strong);
   color: var(--accent);
   white-space: nowrap;
   min-width: 24px;
 }
 
 .turn-card-preview {
-  font-size: 11px;
-  color: var(--text);
+  font-size: var(--text-small);
+  color: var(--text-2);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -164,11 +213,11 @@
 }
 .turn-complexity.mid {
   color: var(--type-system-color);
-  background: var(--yellow-bg-light);
+  background: var(--badge-grad-warn);
 }
 .turn-complexity.high {
   color: var(--red-text);
-  background: var(--red-bg-light);
+  background: var(--badge-grad-error);
 }
 
 /* ── TOOL FLOW ──────────────────────────────────────────────────────────── */
@@ -181,8 +230,8 @@
 }
 
 .tool-chip {
-  font-size: 10px;
-  padding: 1px 6px;
+  font-size: var(--text-small);
+  padding: 1px var(--space-2);
   border: 1px solid;
   border-radius: 10px;
   white-space: nowrap;
@@ -239,13 +288,13 @@
 
 /* ── TOOL ICONS ─────────────────────────────────────────────────────────── */
 /* badges.css의 .tool-icon-tool/.tool-icon-agent와 동일 토큰 사용 (ADR-003) */
-.tool-icon { font-size: 13px; }
+.tool-icon { font-size: var(--text-data); }
 
 /* ── TURN BAR ───────────────────────────────────────────────────────────── */
-.turn-bar { display: flex; align-items: center; gap: 4px; flex-shrink: 0; width: 84px; }
+.turn-bar { display: flex; align-items: center; gap: var(--space-1); flex-shrink: 0; width: 84px; }
 .turn-bar .bar-track { flex: 1; min-width: 36px; }
-.turn-bar .bar-fill  { background: var(--orange); }
-.turn-bar .bar-label { font-size: 10px; color: var(--text-dim); min-width: 24px; text-align: right; }
+.turn-bar .bar-fill  { background: var(--grad-warn); box-shadow: 0 0 6px rgba(240, 183, 47, 0.50); }
+.turn-bar .bar-label { font-size: var(--text-small); color: var(--text-3); min-width: 24px; text-align: right; }
 
 /* ── CARD BAR PCT (위 .turn-card-footer 섹션에 정의됨) ───────────────────── */
 
@@ -258,10 +307,10 @@
   user-select: none;
   background: var(--surface-alt);
   border-left: 2px solid var(--accent-border);    /* ADR-008: 그룹임을 시각적으로 강조 */
-  margin: 2px 16px 0;
+  margin: 2px var(--space-4) 0;
   padding-left: 30px;
   border-radius: var(--radius-sm);
-  transition: background 0.12s, border-color 0.12s;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
 }
 .turn-row-group:hover {
   background: var(--accent-bg-medium);
@@ -274,8 +323,8 @@
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 }
 .turn-group-chevron {
-  color: var(--text-dim);
-  transition: transform 0.18s ease;
+  color: var(--text-3);
+  transition: transform var(--dur-base) var(--ease);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -297,7 +346,7 @@
   display: none;
   background: var(--white-bg-subtle);
   border-left: 2px solid var(--accent-border);
-  margin: 0 16px 2px;
+  margin: 0 var(--space-4) 2px;
   border-radius: 0 0 var(--radius-sm) var(--radius-sm);
 }
 .turn-row-group.open + .turn-row-group-children {
@@ -335,5 +384,5 @@
 }
 
 /* ── UTILITY ────────────────────────────────────────────────────────────── */
-/* inline style="color:var(--text-dim)" 대체용 (HTML 직접 작성 최소화) */
-.text-dim { color: var(--text-dim); }
+/* inline style="color:var(--text-3)" 대체용 (HTML 직접 작성 최소화) */
+.text-dim { color: var(--text-3); }

@@ -67,7 +67,7 @@ export async function setChartMode(mode) {
     chartSection.querySelector('.chart-detail-meta')?.removeAttribute('hidden');
     chartSection.querySelectorAll('.chart-detail-only').forEach(el => el.removeAttribute('hidden'));
     rightPanel?.classList.add('is-detail-mode');
-    setDonutMode('type');
+    setDonutMode('cache');
   } else {
     chartSection.classList.remove('chart-mode-detail');
     chartSection.querySelector('.chart-detail-meta')?.setAttribute('hidden', '');
@@ -369,32 +369,6 @@ export function initDefaultView({ onSelectSession, onCloseDetail, onGoHome }) {
     });
   }
 
-  // Tool mode toggle (ADR-016)
-  let _toolCategoriesCache = null;
-  const toolModeWrap = document.getElementById('toolModeToggle');
-  if (toolModeWrap) {
-    toolModeWrap.addEventListener('click', async (e) => {
-      const btn = e.target.closest('[data-tool-mode]');
-      if (!btn) return;
-      const mode = btn.dataset.toolMode;
-      toolModeWrap.querySelectorAll('.tool-mode-btn').forEach(b => b.classList.toggle('active', b === btn));
-      const tableEl = document.getElementById('toolsByName');
-      const catsEl  = document.getElementById('toolCategories');
-      if (mode === 'category') {
-        tableEl?.setAttribute('hidden', '');
-        catsEl?.removeAttribute('hidden');
-        if (!_toolCategoriesCache) {
-          const { fetchToolCategories } = await import('../metrics-api.js');
-          _toolCategoriesCache = await fetchToolCategories({ range: '24h' });
-        }
-        const { renderToolCategories } = await import('../left-panel.js');
-        renderToolCategories(_toolCategoriesCache);
-      } else {
-        catsEl?.setAttribute('hidden', '');
-        tableEl?.removeAttribute('hidden');
-      }
-    });
-  }
 
   // Canvas ResizeObserver
   const timelineWrap = document.querySelector('#timelineChart')?.parentElement;

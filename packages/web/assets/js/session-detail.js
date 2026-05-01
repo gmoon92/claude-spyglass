@@ -8,7 +8,8 @@ import { TOOL_COLORS } from './tool-colors.js';
 import { loadToolStats, clearToolStats } from './tool-stats.js';
 import { detectAnomalies } from './anomaly.js';
 // ADR-017: 세션 모드일 때 chartSection의 donut/cache panel을 세션 데이터로 갱신
-import { setTypeData, drawDonut, renderTypeLegend } from './chart.js';
+// ADR-WDO-010: cache 모드 추가 — setSourceData('cache', ...) 사용
+import { setSourceData, drawDonut, renderTypeLegend } from './chart.js';
 import { renderCachePanel, computeSessionCacheStats } from './cache-panel.js';
 import { DETAIL_FILTER_CHANGED } from './events.js';
 
@@ -30,7 +31,7 @@ export function getDetailTurns()      { return _detailAllTurns; }
 
 export function renderDetailRequests(list, anomalyMap = new Map()) {
   const body     = document.getElementById('detailRequestsBody');
-  const scrollEl = document.getElementById('detailFlatView');
+  const scrollEl = document.getElementById('detailRequestsView');
   const savedScroll = scrollEl?.scrollTop ?? 0;
 
   // SSE 갱신 시 열린 프롬프트 확장 행 보존
@@ -138,16 +139,19 @@ document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
   renderTurnCards(turnFiltered, allTurns);
 
   // ADR-017: chartSection이 detail 모드일 때 donut/cache panel을 세션 데이터로 갱신
+  // ADR-WDO-010: donut은 type 대신 cache 모드로 변경
   const chartSection = document.getElementById('chartSection');
   if (chartSection?.classList.contains('chart-mode-detail')) {
-    const typeCounts = {};
-    allRequests.forEach(r => {
-      typeCounts[r.type] = (typeCounts[r.type] || 0) + 1;
-    });
-    const sessionTypeData = Object.entries(typeCounts)
-      .map(([type, count]) => ({ type, count }))
-      .sort((a, b) => b.count - a.count);
-    setTypeData(sessionTypeData);
+    // cache 토큰 집계 (모든 요청 대상 — prompt 한정하지 않음)
+    const cachedRead  = allRequests.reduce((s, r) => s + (r.cache_read_tokens     || 0), 0);
+    const cacheWrite  = allRequests.reduce((s, r) => s + (r.cache_creation_tokens || 0), 0);
+    const uncached    = allRequests.reduce((s, r) => s + (r.tokens_input          || 0), 0);
+    const cacheData   = [
+      { label: 'Cached',      tokens: cachedRead },
+      { label: 'Cache Write', tokens: cacheWrite },
+      { label: 'Uncached',    tokens: uncached },
+    ].filter(d => d.tokens > 0);
+    setSourceData('cache', cacheData);
     drawDonut();
     renderTypeLegend();
 
@@ -169,12 +173,12 @@ document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
 });
 
 export function setDetailView(tab) {
-  document.getElementById('detailFlatView').style.display   = tab === 'flat'  ? '' : 'none';
-  document.getElementById('detailTurnView').style.display   = tab === 'turn'  ? '' : 'none';
-  document.getElementById('detailToolsView').style.display  = tab === 'tools' ? '' : 'none';
-  document.getElementById('tabFlat').classList.toggle('active',   tab === 'flat');
-  document.getElementById('tabTurn').classList.toggle('active',   tab === 'turn');
-  document.getElementById('tabTools').classList.toggle('active',  tab === 'tools');
+  document.getElementById('detailRequestsView').style.display = tab === 'requests' ? '' : 'none';
+  document.getElementById('detailTurnView').style.display     = tab === 'turn'     ? '' : 'none';
+  document.getElementById('detailToolsView').style.display    = tab === 'tools'    ? '' : 'none';
+  document.getElementById('tabRequests').classList.toggle('active', tab === 'requests');
+  document.getElementById('tabTurn').classList.toggle('active',     tab === 'turn');
+  document.getElementById('tabTools').classList.toggle('active',    tab === 'tools');
   if (tab === 'tools' && _currentSessionId) loadToolStats(_currentSessionId);
 }
 
@@ -347,11 +351,13 @@ function buildTurnDetailRows(turn) {
   const promptTrustAttr   = (promptTrust === 'estimated' || promptTrust === 'synthetic' || promptTrust === 'unknown')
     ? ` data-trust="${promptTrust}"` : '';
   const promptModelChip   = promptData ? modelChipHtml(promptData, { mini: true }) : '';
+  // data-honesty-ui (ADR-002): prompt의 tokens_confidence 가 비-high면 '*' 마크
+  const promptConfMark    = promptData ? confidenceMarkHtml(promptData.tokens_confidence) : '';
   const promptRow         = promptData ? `
     <div class="turn-row turn-row-prompt" data-type="prompt"${promptTrustAttr}>
       <span></span>
       <div class="tool-cell">
-        <span class="tool-main">${promptTarget}${promptModelChip}</span>
+        <span class="tool-main">${promptTarget}${promptModelChip}${promptConfMark}</span>
         ${promptPreviewHtml ? `<span class="tool-sub">${promptPreviewHtml}</span>` : ''}
       </div>
       <span class="num cell-token">${promptData.tokens_input  > 0 ? fmtToken(promptData.tokens_input)  : '—'}</span>
@@ -386,7 +392,9 @@ function buildTurnDetailRows(turn) {
     <div class="turn-row-group-children">${childRows}</div>`;
   }).join('');
 
-  // assistant 응답 행 — turns API의 turn.response 필드 사용 (없으면 빈 문자열)
+  // assistant 응답 행 — turns API의 turn.response 필드 사용
+  // data-honesty-ui (ADR-004): response 부재 시 placeholder row로 명시
+  // data-honesty-ui (ADR-002): tokens_confidence 비-high 시 '*' 마크
   const responseData = turn.response ? {
     ...turn.response,
     type: 'response',
@@ -397,20 +405,56 @@ function buildTurnDetailRows(turn) {
   const responseTrustAttr   = (responseTrust === 'estimated' || responseTrust === 'synthetic' || responseTrust === 'unknown')
     ? ` data-trust="${responseTrust}"` : '';
   const responseModelChip   = responseData ? modelChipHtml(responseData, { mini: true }) : '';
-  const responseRow         = responseData ? `
+  const responseConfMark    = responseData
+    ? confidenceMarkHtml(responseData.tokens_confidence)
+    : '';
+
+  let responseRow;
+  if (responseData) {
+    responseRow = `
     <div class="turn-row turn-row-response" data-type="response"${responseTrustAttr}>
       <span></span>
       <div class="tool-cell">
-        <span class="tool-main">${responseTarget}${responseModelChip}</span>
+        <span class="tool-main">${responseTarget}${responseModelChip}${responseConfMark}</span>
         ${responsePreviewHtml ? `<span class="tool-sub">${responsePreviewHtml}</span>` : ''}
       </div>
       <span class="num cell-token">${responseData.tokens_input  > 0 ? fmtToken(responseData.tokens_input)  : '—'}</span>
       <span class="num cell-token">${responseData.tokens_output > 0 ? fmtToken(responseData.tokens_output) : '—'}</span>
       <span class="num cell-token text-dim">—</span>
       <span class="num cell-time text-dim">${fmtDate(responseData.timestamp)}</span>
-    </div>` : '';
+    </div>`;
+  } else {
+    // tool-only turn: 텍스트 응답이 없음을 명시적으로 표시
+    responseRow = `
+    <div class="turn-row turn-row-response turn-row-response--empty" data-type="response">
+      <span></span>
+      <div class="tool-cell">
+        <span class="tool-sub">(no text response — tool-only turn)</span>
+      </div>
+      <span class="num cell-token">—</span>
+      <span class="num cell-token">—</span>
+      <span class="num cell-token text-dim">—</span>
+      <span class="num cell-time text-dim">—</span>
+    </div>`;
+  }
 
   return promptRow + (toolRows || '<div class="turn-row-empty">도구 호출 없음</div>') + responseRow;
+}
+
+/**
+ * 토큰 신뢰도 마크 HTML (data-honesty-ui ADR-002).
+ * tokens_confidence 가 'low' 또는 'error' 인 경우 작은 '*' + title 툴팁.
+ * 'high' 또는 null 은 빈 문자열.
+ *
+ * @param {string|null|undefined} confidence
+ * @returns {string} HTML
+ */
+function confidenceMarkHtml(confidence) {
+  if (!confidence || confidence === 'high') return '';
+  const tip = confidence === 'error'
+    ? '응답 메타 신뢰도 오류 (수집 실패)'
+    : '응답 메타 신뢰도 낮음 (proxy fallback)';
+  return `<sup class="confidence-low-mark" title="${escHtml(tip)}">*</sup>`;
 }
 
 // setTurnViewMode는 하위 호환성을 위해 no-op stub으로 유지

@@ -25,13 +25,13 @@ export async function loadSession(id) {
   setSelectedSession(id);
   renderBrowserSessions();
   setRightView('detail');
-  setDetailTab('flat');
+  setDetailTab('requests');
   document.getElementById('detailView').classList.remove('detail-collapsed');
   setChartMode('detail');
   renderRightPanel();
 
   document.getElementById('detailLoading').style.display = 'block';
-  document.getElementById('detailFlatView').style.display = 'none';
+  document.getElementById('detailRequestsView').style.display = 'none';
   document.getElementById('detailTurnView').style.display = 'none';
 
   const session = getAllSessions().find(s => s.id === id);
