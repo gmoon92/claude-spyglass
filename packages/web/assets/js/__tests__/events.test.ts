@@ -1,5 +1,5 @@
 import { describe, it, expect, mock, beforeAll } from 'bun:test';
-import { DETAIL_FILTER_CHANGED, FEED_UPDATED, GANTT_TURN_CLICK } from '../events.js';
+import { DETAIL_FILTER_CHANGED, FEED_UPDATED } from '../events.js';
 
 // Bun 테스트 환경은 DOM이 없으므로 EventTarget 기반 document mock 제공
 const eventTarget = new EventTarget();
@@ -15,9 +15,6 @@ describe('events.js 상수', () => {
   });
   it('FEED_UPDATED 값이 feed:updated', () => {
     expect(FEED_UPDATED).toBe('feed:updated');
-  });
-  it('GANTT_TURN_CLICK 값이 gantt:turnClick', () => {
-    expect(GANTT_TURN_CLICK).toBe('gantt:turnClick');
   });
 });
 

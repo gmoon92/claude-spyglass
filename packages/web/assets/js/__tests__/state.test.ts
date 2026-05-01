@@ -37,8 +37,8 @@ describe('detailTab', () => {
   });
 
   it('setDetailTab → getDetailTab 반환', () => {
-    setDetailTab('gantt');
-    expect(getDetailTab()).toBe('gantt');
+    setDetailTab('turn');
+    expect(getDetailTab()).toBe('turn');
   });
 
   it('임의 문자열도 저장', () => {
@@ -83,9 +83,9 @@ describe('selectedSession', () => {
 
 describe('독립성: 한 상태 변경이 다른 상태에 영향 없음', () => {
   it('rightView 변경 시 detailTab 유지', () => {
-    setDetailTab('gantt');
+    setDetailTab('turn');
     setRightView('detail');
-    expect(getDetailTab()).toBe('gantt');
+    expect(getDetailTab()).toBe('turn');
   });
 
   it('selectedProject 변경 시 selectedSession 유지', () => {

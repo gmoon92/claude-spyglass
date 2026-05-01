@@ -23,7 +23,6 @@
   <link rel="stylesheet" href="/assets/css/cache-panel.css">
   <link rel="stylesheet" href="/assets/css/turn-view.css">
   <link rel="stylesheet" href="/assets/css/context-chart.css">
-  <link rel="stylesheet" href="/assets/css/turn-gantt.css">
   <link rel="stylesheet" href="/assets/css/tool-stats.css">
 </head>
 <body>
@@ -228,22 +227,6 @@
                 </div>
                 <span class="cache-bar-pct" id="cacheHitPct">--</span>
               </div>
-              <div class="cache-section" data-cache-panel-tooltip="cost">
-                <div class="cache-cost-rows">
-                  <div class="cache-cost-item">
-                    <span class="cache-cost-label">no cache</span>
-                    <span class="cache-cost-value" id="cacheCostWithout">--</span>
-                  </div>
-                  <div class="cache-cost-item is-actual">
-                    <span class="cache-cost-label">actual</span>
-                    <span class="cache-cost-value" id="cacheCostActual">--</span>
-                  </div>
-                  <div class="cache-cost-item is-saved">
-                    <span class="cache-cost-label">saved</span>
-                    <span class="cache-cost-value" id="cacheCostSaved">--</span>
-                  </div>
-                </div>
-              </div>
               <div class="cache-section" data-cache-panel-tooltip="ratio">
                 <span class="cache-panel-label">Creation / Read</span>
                 <div class="cache-ratio-wrap">
@@ -300,7 +283,6 @@
           <div class="view-tab-bar" id="detailTabBar">
             <button class="view-tab active" id="tabFlat" data-tab="flat">플랫</button>
             <button class="view-tab" id="tabTurn" data-tab="turn">턴 뷰</button>
-            <button class="view-tab" id="tabGantt" data-tab="gantt">간트</button>
             <button class="view-tab" id="tabTools" data-tab="tools">도구</button>
           </div>
 
@@ -339,21 +321,6 @@
           </div>
 
           <div id="detailToolsView" class="detail-content" style="display:none"></div>
-
-          <div id="detailGanttView" class="detail-content" style="display:none">
-            <div class="gantt-toolbar">
-              <div class="gantt-nav">
-                <button class="gantt-nav-btn" id="ganttPrev">&#x2039;</button>
-                <span class="gantt-nav-label" id="ganttNavLabel">T1–T10</span>
-                <button class="gantt-nav-btn" id="ganttNext">&#x203a;</button>
-              </div>
-              <span class="gantt-hint" id="ganttHint">불러오는 중…</span>
-              <div class="gantt-legend" id="ganttLegend"></div>
-            </div>
-            <div class="gantt-scroll" id="ganttScroll">
-              <canvas id="turnGanttChart"></canvas>
-            </div>
-          </div>
 
         </div>
 

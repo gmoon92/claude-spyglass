@@ -266,7 +266,7 @@ canvas { display: block; }
   align-items: center;
 }
 /* ADR-008: donut-mode-toggle / cache-mode-toggle / cache-panel-matrix / cache-matrix-* 정의 모두 제거.
-   도넛은 default→model / detail→type을 setChartMode가 자동 결정. cache-panel은 Hit Rate / Cost / Creation·Read 단일 책임. */
+   도넛은 default→model / detail→type을 setChartMode가 자동 결정. cache-panel은 Hit Rate / Creation·Read 단일 책임. */
 #chartSection .donut-total {
   font-size: var(--font-micro);
   color: var(--text-dim);

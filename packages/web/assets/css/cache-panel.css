@@ -3,7 +3,7 @@
 
 /* ADR-008: cache-mode-toggle / cache-panel-matrix 제거.
    ADR-007의 cps-volume / cps-cache 'Today Summary' 격상도 폐기 (cps-volume → timeline-meta로 이동).
-   cache-panel-overall은 horizontal flex로 cache 효율 단일 책임 (Hit Rate / Cost / Creation·Read). */
+   cache-panel-overall은 horizontal flex로 cache 효율 단일 책임 (Hit Rate / Creation·Read). */
 .cache-panel-overall[hidden] { display: none !important; }
 
 .cache-panel-overall {
@@ -65,24 +65,6 @@
   min-width: 34px;
   text-align: right;
 }
-
-/* 비용 비교 */
-.cache-cost-rows { display: flex; gap: 16px; align-items: center; }
-
-.cache-cost-item { display: flex; flex-direction: column; gap: 1px; }
-.cache-cost-label {
-  font-size: 9px;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-}
-.cache-cost-value {
-  font-variant-numeric: tabular-nums;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-.cache-cost-item.is-saved .cache-cost-value { color: var(--green); }
-.cache-cost-item.is-actual .cache-cost-value { color: var(--text); }
 
 /* Creation vs Read 미니 바 */
 .cache-ratio-wrap {

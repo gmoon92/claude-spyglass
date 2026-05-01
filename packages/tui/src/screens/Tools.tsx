@@ -129,23 +129,11 @@ function CacheView({ cache }: { cache: CacheStats | null }): JSX.Element {
         total={cache.cacheReadTokens + cache.cacheCreationTokens}
       />
 
-      {/* Savings */}
+      {/* Savings (토큰 기반) */}
       <Box flexDirection="column">
         <Box flexDirection="row" gap={2}>
           <Text color={tokens.color.muted.fg} dimColor>savings rate</Text>
           <Text color={tokens.color.success.fg} bold>{savePct}%</Text>
-        </Box>
-        <Box flexDirection="row" gap={2}>
-          <Text color={tokens.color.muted.fg} dimColor>saved USD</Text>
-          <Text color={tokens.color.success.fg}>${cache.savingsUsd.toFixed(2)}</Text>
-        </Box>
-        <Box flexDirection="row" gap={2}>
-          <Text color={tokens.color.muted.fg} dimColor>cost w/ cache</Text>
-          <Text color={tokens.color.warning.fg}>${cache.costWithCache.toFixed(2)}</Text>
-        </Box>
-        <Box flexDirection="row" gap={2}>
-          <Text color={tokens.color.muted.fg} dimColor>cost w/o cache</Text>
-          <Text color={tokens.color.muted.fg}>${cache.costWithoutCache.toFixed(2)}</Text>
         </Box>
       </Box>
     </Box>

@@ -1,12 +1,8 @@
-// Cache Intelligence Panel 렌더러 (ADR-015 — 토큰 단위, ADR-017 — 세션/전역 모드 지원)
-import { fmtToken } from './formatters.js';
+// Cache Intelligence Panel 렌더러 (Hit Rate + Creation/Read 비율)
+//
+// 비용/USD 표시는 옵저빌리티 신뢰도 정책상 제거됨. 토큰은 페이로드에서 받은 실측이지만
+// USD는 계산값이라 오해 소지가 있어 노출하지 않는다.
 
-/**
- * Cache panel 렌더링.
- *
- * @param {Object} data — 전역(서버) or 세션(클라이언트 계산):
- *   { hitRate, cacheReadTokens, cacheCreationTokens, totalInputTokens? }
- */
 export function renderCachePanel(data) {
   if (!data) return;
 
@@ -14,7 +10,6 @@ export function renderCachePanel(data) {
     hitRate,
     cacheReadTokens     = 0,
     cacheCreationTokens = 0,
-    totalInputTokens    = 0,    // 비-캐시 input 토큰 (없으면 0)
   } = data;
 
   // Hit Rate 바
@@ -26,22 +21,6 @@ export function renderCachePanel(data) {
     fill.className   = 'cache-bar-fill ' + (pct >= 70 ? 'is-high' : pct >= 30 ? 'is-mid' : 'is-low');
   }
   if (pctEl) pctEl.textContent = `${pct}%`;
-
-  // ── ADR-015: 가격($) 대신 토큰 단위 ──
-  // no cache  = totalInputTokens + cacheCreationTokens + cacheReadTokens (캐시 없었으면 전부 input)
-  // actual    = totalInputTokens + cacheCreationTokens (실제로 LLM에 새로 전달된 토큰)
-  // saved     = cacheReadTokens (캐시 read 덕에 LLM 재처리를 회피한 토큰)
-  const noCacheTokens = totalInputTokens + cacheCreationTokens + cacheReadTokens;
-  const actualTokens  = totalInputTokens + cacheCreationTokens;
-  const savedTokens   = cacheReadTokens;
-  const savedRate     = noCacheTokens > 0 ? Math.round((savedTokens / noCacheTokens) * 100) : 0;
-
-  const elWithout = document.getElementById('cacheCostWithout');
-  const elActual  = document.getElementById('cacheCostActual');
-  const elSaved   = document.getElementById('cacheCostSaved');
-  if (elWithout) elWithout.textContent = fmtToken(noCacheTokens);
-  if (elActual)  elActual.textContent  = fmtToken(actualTokens);
-  if (elSaved)   elSaved.textContent   = `${fmtToken(savedTokens)} (${savedRate}%)`;
 
   // Creation vs Read 비율 바
   const total      = cacheCreationTokens + cacheReadTokens;

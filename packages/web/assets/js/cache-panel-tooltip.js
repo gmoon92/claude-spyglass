@@ -4,10 +4,6 @@ const CACHE_PANEL_TOOLTIP_CONTENT = {
     title: 'Cache Hit Rate',
     desc:  '전체 입력 토큰 중 프롬프트 캐시에서 읽힌 비율.\n70% 이상: green · 30~69%: orange · 30% 미만: red.',
   },
-  cost: {
-    title: 'Token Breakdown',
-    desc:  'no cache: 캐시 없이 전량 입력으로 처리했을 경우의 토큰 합.\nactual: 캐시 적용 후 실제 LLM 입력 토큰.\nsaved: cache_read 덕에 LLM 재처리를 회피한 토큰과 절감률.',
-  },
   ratio: {
     title: 'Creation / Read Ratio',
     desc:  '캐시 토큰의 Write(초기 생성) vs Read(재사용) 비율.\nstable: Read ≥ 70% — 캐시가 잘 재사용되고 있음.\nbuilding: Read < 70% — 캐시를 채우는 중.',

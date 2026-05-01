@@ -20,9 +20,6 @@ export type CacheStats = {
   cacheReadTokens: number;
   cacheCreationTokens: number;
   savingsRate: number;
-  costWithCache: number;
-  costWithoutCache: number;
-  savingsUsd: number;
 };
 
 export type ToolsAnalytics = {
@@ -63,9 +60,6 @@ type RawCacheData = {
   cacheReadTokens?: unknown;
   cacheCreationTokens?: unknown;
   savingsRate?: unknown;
-  costWithCache?: unknown;
-  costWithoutCache?: unknown;
-  savingsUsd?: unknown;
 };
 
 function mapToolRow(t: RawToolRow): ToolStat {
@@ -121,9 +115,6 @@ export function useToolsAnalytics(apiUrl: string, timeRange: TimeRange): ToolsAn
               cacheReadTokens: Number(cd.cacheReadTokens ?? 0),
               cacheCreationTokens: Number(cd.cacheCreationTokens ?? 0),
               savingsRate: Number(cd.savingsRate ?? 0),
-              costWithCache: Number(cd.costWithCache ?? 0),
-              costWithoutCache: Number(cd.costWithoutCache ?? 0),
-              savingsUsd: Number(cd.savingsUsd ?? 0),
             }
           : null;
 

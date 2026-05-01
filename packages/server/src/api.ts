@@ -205,34 +205,19 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
   }
 
   // GET /api/stats/strip — 오늘 Command Center Strip 지표 (P95, error rate, 토큰 캐시)
-  // [DEPRECATED] cost_usd, cache_savings_usd 필드는 UI Redesign Phase 2에서 제거 예정.
-  // 기존 의미("오늘") 보존을 위해 자정 ms를 명시적으로 전달한다.
+  // 비용(USD) 지표는 페이로드에 없는 계산값이라 옵저빌리티 신뢰도 정책상 제거됨.
   if (path === '/api/stats/strip' && method === 'GET') {
     const todayMidnightMs = new Date().setHours(0, 0, 0, 0);
-    const stats = getStripStats(db, todayMidnightMs);
-    return jsonResponse({
-      success: true,
-      data: {
-        ...stats,
-        _deprecated_cost_fields: ['cost_usd', 'cache_savings_usd'],
-      },
-    });
+    const { cost_usd: _c, cache_savings_usd: _s, ...stats } = getStripStats(db, todayMidnightMs);
+    return jsonResponse({ success: true, data: stats });
   }
 
-  // GET /api/stats/cache — 캐시 히트율·토큰 절감 집계
-  // [DEPRECATED] costWithCache, costWithoutCache, savingsUsd 필드는 UI Redesign Phase 2에서 제거 예정.
-  // 토큰 단위 절감(cacheReadTokens, cacheCreationTokens)과 hitRate/savingsRate는 유지.
+  // GET /api/stats/cache — 캐시 히트율·토큰 절감 집계 (USD 환산은 노출하지 않음)
   if (path === '/api/stats/cache' && method === 'GET') {
     const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
     const toTs   = url.searchParams.get('to')   ? parseInt(url.searchParams.get('to')!,   10) : undefined;
-    const stats = getCacheStats(db, fromTs, toTs);
-    return jsonResponse({
-      success: true,
-      data: {
-        ...stats,
-        _deprecated_cost_fields: ['costWithCache', 'costWithoutCache', 'savingsUsd'],
-      },
-    });
+    const { costWithCache: _w, costWithoutCache: _wo, savingsUsd: _su, ...stats } = getCacheStats(db, fromTs, toTs);
+    return jsonResponse({ success: true, data: stats });
   }
 
   // GET /api/dashboard
@@ -264,13 +249,8 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
         totalTokens: requestStats.total_tokens,
         activeSessions: activeSessions.length,
         avgDurationMs,
-        // [DEPRECATED] costUsd, cacheSavingsUsd 필드는 UI Redesign Phase 2에서 제거 예정.
-        // 신규 시각 지표는 /api/metrics/* 사용 권장.
-        costUsd: stripStats.cost_usd,
-        cacheSavingsUsd: stripStats.cache_savings_usd,
         p95DurationMs: stripStats.p95_duration_ms,
         errorRate: stripStats.error_rate,
-        _deprecated_cost_fields: ['costUsd', 'cacheSavingsUsd'],
       },
       sessions: sessionStats,
       requests: requestStats,

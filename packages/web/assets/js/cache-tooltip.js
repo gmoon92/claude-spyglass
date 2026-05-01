@@ -16,18 +16,12 @@ export function initCacheTooltip() {
       <div class="cache-tooltip-title">Prompt Cache</div>
       <div class="cache-tooltip-row">
         <span class="cache-tooltip-label">Read</span>
-        <span>
-          <span class="cache-tooltip-value read">${fmtNum(readTokens)} tokens</span>
-          <span class="cache-tooltip-cost">×0.1 cost</span>
-        </span>
+        <span class="cache-tooltip-value read">${fmtNum(readTokens)} tokens</span>
       </div>
       ${writeTokens > 0 ? `
       <div class="cache-tooltip-row">
         <span class="cache-tooltip-label">Write</span>
-        <span>
-          <span class="cache-tooltip-value write">${fmtNum(writeTokens)} tokens</span>
-          <span class="cache-tooltip-cost">×1.25 cost</span>
-        </span>
+        <span class="cache-tooltip-value write">${fmtNum(writeTokens)} tokens</span>
       </div>` : ''}
     `;
     tooltip.style.display = 'block';

@@ -11,7 +11,7 @@ import {
 } from './state.js';
 import {
   setDetailFilter, applyDetailFilter, setDetailView, toggleTurn,
-  refreshDetailSession, initDetailSearch, initGanttNavigation,
+  refreshDetailSession, initDetailSearch,
   toggleCardExpand,
 } from './session-detail.js';
 import {
@@ -24,7 +24,7 @@ import { initColResize } from './col-resize.js';
 import { initPanelResize } from './panel-resize.js';
 import { initContextChart } from './context-chart.js';
 import { createFilterBar } from './components/filter-bar.js';
-import { initGantt } from './turn-gantt.js';
+import { initToolColors } from './tool-colors.js';
 import { initToolStats } from './tool-stats.js';
 import { initCacheTooltip } from './cache-tooltip.js';
 import { initStatTooltip } from './stat-tooltip.js';
@@ -245,10 +245,9 @@ function init() {
   initStatTooltip();
   initCachePanelTooltip();
   initContextChart();
-  initGantt();
+  initToolColors();
   initToolStats();
   initDetailSearch();
-  initGanttNavigation();
   setInterval(() => { advanceBuckets(); drawTimeline(); }, 60000);
   setInterval(() => fetchAllSessions(), 30000);
 }
