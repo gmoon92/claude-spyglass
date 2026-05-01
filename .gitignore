@@ -42,6 +42,12 @@ coverage/
 tmp/
 .tmp/
 
+# Local DB / 임시 캡처
+*.db
+*.db-journal
+/verify-*.png
+/left-panel-*.png
+
 # Claude Code
 .claude/
 .claude-plugin/

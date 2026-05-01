@@ -152,8 +152,10 @@ export interface Request {
  *   - v15: 015-proxy-requests-enrich.sql (proxy_requests 컬럼 + correlated_requests VIEW)
  *   - v16: 016-add-response-type.sql (requests.type CHECK 'response' 추가)
  *   - v17: 017-add-parent-tool-use-id.sql (requests.parent_tool_use_id + 인덱스)
+ *   - v18: 018-cleanup-and-correlation.sql (sentinel 삭제, visible_requests 제거,
+ *           correlated_requests를 prompt+tool_call 매칭으로 재정의)
  */
-export const SCHEMA_VERSION = 17;
+export const SCHEMA_VERSION = 18;
 
 export const SCHEMA_META = {
   version: SCHEMA_VERSION,

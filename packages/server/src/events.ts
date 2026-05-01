@@ -11,6 +11,7 @@ import {
   createEvent,
   createRequest,
   endSession,
+  getLatestProxyResponseBefore,
   getSessionById,
   reactivateSession,
   type ClaudeEvent,
@@ -108,28 +109,59 @@ function saveAssistantResponse(
   timestamp: number,
 ): void {
   try {
-    const message = typeof payload.last_assistant_message === 'string'
-      ? payload.last_assistant_message
-      : null;
-    if (!message || !message.trim()) return;
-
     const sessionId = payload.session_id;
     const transcriptPath = payload.transcript_path ?? '';
 
-    // tokens/model: transcript 파싱 best-effort
-    const usage = transcriptPath ? parseTranscript(transcriptPath) : null;
-    const tokensInput = usage?.inputTokens.value ?? 0;
-    const tokensOutput = usage?.outputTokens.value ?? 0;
-    const cacheCreate = usage?.cacheCreationTokens.value ?? 0;
-    const cacheRead   = usage?.cacheReadTokens.value ?? 0;
-    const model       = usage?.model || null;
+    // 1차: Stop 훅 payload에서 last_assistant_message 추출
+    let message = typeof payload.last_assistant_message === 'string'
+      ? payload.last_assistant_message
+      : null;
+    let proxyFallback: ReturnType<typeof getLatestProxyResponseBefore> = null;
 
-    const inputConfidence  = usage?.inputTokens.confidence ?? 'error';
-    const outputConfidence = usage?.outputTokens.confidence ?? 'error';
-    const tokensConfidence = (inputConfidence === 'error' || outputConfidence === 'error')
-      ? 'error'
-      : 'high';
-    const tokensSource = tokensConfidence === 'error' ? 'unavailable' : 'transcript';
+    // 2차: 비어 있으면 proxy_requests의 최근 response_preview로 fallback
+    if (!message || !message.trim()) {
+      proxyFallback = getLatestProxyResponseBefore(db, timestamp, 30_000);
+      if (proxyFallback?.response_preview && proxyFallback.response_preview.trim()) {
+        message = proxyFallback.response_preview;
+      } else {
+        return;
+      }
+    }
+
+    // tokens/model: transcript 파싱 best-effort, 실패 시 proxy fallback
+    const usage = transcriptPath ? parseTranscript(transcriptPath) : null;
+    const transcriptOk = usage !== null
+      && usage.inputTokens.confidence !== 'error'
+      && usage.outputTokens.confidence !== 'error';
+
+    let tokensInput = 0;
+    let tokensOutput = 0;
+    let cacheCreate = 0;
+    let cacheRead = 0;
+    let model: string | null = null;
+    let tokensConfidence: 'high' | 'low' | 'error';
+    let tokensSource: 'transcript' | 'proxy' | 'unavailable';
+
+    if (transcriptOk && usage) {
+      tokensInput = usage.inputTokens.value ?? 0;
+      tokensOutput = usage.outputTokens.value ?? 0;
+      cacheCreate = usage.cacheCreationTokens.value ?? 0;
+      cacheRead = usage.cacheReadTokens.value ?? 0;
+      model = usage.model || null;
+      tokensConfidence = 'high';
+      tokensSource = 'transcript';
+    } else if (proxyFallback) {
+      tokensInput = proxyFallback.tokens_input;
+      tokensOutput = proxyFallback.tokens_output;
+      cacheCreate = proxyFallback.cache_creation_tokens;
+      cacheRead = proxyFallback.cache_read_tokens;
+      model = proxyFallback.model;
+      tokensConfidence = (tokensInput > 0 || tokensOutput > 0) ? 'low' : 'error';
+      tokensSource = (tokensInput > 0 || tokensOutput > 0) ? 'proxy' : 'unavailable';
+    } else {
+      tokensConfidence = 'error';
+      tokensSource = 'unavailable';
+    }
 
     // turn_id 매핑: 직전 prompt의 turn_id 재사용 (없으면 NULL)
     const turnId = getLastTurnId(db, sessionId) ?? undefined;

@@ -6,7 +6,6 @@
 
 import type { Database } from 'bun:sqlite';
 import type { Request, RequestType } from '../schema';
-import { getPricingForModel } from '../pricing';
 
 // =============================================================================
 // 생성 (Create)
@@ -525,6 +524,11 @@ export function getRequestStatsByType(db: Database, fromTs?: number, toTs?: numb
 
 /**
  * 도구별 통계 (tool_call 타입만, tool_name 단위 집계)
+ *
+ * 데이터 신뢰도 표지 필드 (data-honesty-ui):
+ * - confidence_low_count: tokens_confidence='low' 행 수
+ * - confidence_error_count: tokens_confidence='error' 행 수
+ * - error_count: tool_detail에 'Error' 포함 OR tokens_confidence='error' 행 수 (합산)
  */
 export interface ToolStats {
   tool_name: string;
@@ -534,6 +538,8 @@ export interface ToolStats {
   avg_duration_ms: number;
   max_duration_ms: number;
   error_count: number;
+  confidence_low_count: number;
+  confidence_error_count: number;
 }
 
 export function getToolStats(
@@ -556,9 +562,11 @@ export function getToolStats(
       COUNT(*) as call_count,
       COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE 0 END), 0) as total_tokens,
       COALESCE(AVG(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE NULL END), 0) as avg_tokens,
-      COALESCE(AVG(duration_ms), 0)  AS avg_duration_ms,
+      COALESCE(AVG(CASE WHEN duration_ms > 0 THEN duration_ms ELSE NULL END), 0)  AS avg_duration_ms,
       COALESCE(MAX(duration_ms), 0)  AS max_duration_ms,
-      SUM(CASE WHEN tool_detail LIKE '%Error%' OR tool_detail LIKE '%error%' THEN 1 ELSE 0 END) AS error_count
+      SUM(CASE WHEN tool_detail LIKE '%Error%' OR tool_detail LIKE '%error%' OR tokens_confidence='error' THEN 1 ELSE 0 END) AS error_count,
+      SUM(CASE WHEN tokens_confidence='low'   THEN 1 ELSE 0 END) AS confidence_low_count,
+      SUM(CASE WHEN tokens_confidence='error' THEN 1 ELSE 0 END) AS confidence_error_count
     FROM requests
     WHERE ${conditions.join(' AND ')}
     GROUP BY tool_name
@@ -590,9 +598,11 @@ export function getSessionToolStats(
       COUNT(*) AS call_count,
       COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE 0 END), 0) AS total_tokens,
       COALESCE(AVG(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE NULL END), 0) AS avg_tokens,
-      COALESCE(AVG(duration_ms), 0)  AS avg_duration_ms,
+      COALESCE(AVG(CASE WHEN duration_ms > 0 THEN duration_ms ELSE NULL END), 0)  AS avg_duration_ms,
       COALESCE(MAX(duration_ms), 0)  AS max_duration_ms,
-      SUM(CASE WHEN tool_detail LIKE '%Error%' OR tool_detail LIKE '%error%' THEN 1 ELSE 0 END) AS error_count,
+      SUM(CASE WHEN tool_detail LIKE '%Error%' OR tool_detail LIKE '%error%' OR tokens_confidence='error' THEN 1 ELSE 0 END) AS error_count,
+      SUM(CASE WHEN tokens_confidence='low'   THEN 1 ELSE 0 END) AS confidence_low_count,
+      SUM(CASE WHEN tokens_confidence='error' THEN 1 ELSE 0 END) AS confidence_error_count,
       ROUND(COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE 0 END), 0) * 100.0 / (SELECT total FROM session_total), 1) AS pct_of_total_tokens
     FROM requests
     WHERE session_id = ?
@@ -643,20 +653,15 @@ export function getHourlyRequestStats(
 
 /** Command Center Strip 통계 */
 export interface StripStats {
-  cost_usd: number;
-  cache_savings_usd: number;
   p95_duration_ms: number;
   error_rate: number;
 }
 
 /**
- * Command Center Strip 지표 집계 (비용 / P95 / 오류율)
+ * Command Center Strip 지표 집계 (P95 duration / 오류율)
  *
- * 3개 쿼리(token cost, p95 duration, error rate) 모두 동일한 timestamp 범위 조건을 적용한다.
- * - fromTs / toTs 미지정 시 전체 기간
- * - fromTs만 → timestamp >= fromTs
- * - toTs만   → timestamp <= toTs
- * - 둘 다    → 사이 범위
+ * 비용(cost_usd / cache_savings_usd)은 정확한 가격 플랜을 알 수 없는 추정치라 제거됨.
+ * 두 쿼리(p95 duration, error rate) 모두 동일한 timestamp 범위 조건을 적용한다.
  *
  * @param fromTs 집계 시작 타임스탬프 (옵셔널)
  * @param toTs   집계 종료 타임스탬프 (옵셔널)
@@ -666,7 +671,6 @@ export function getStripStats(
   fromTs?: number,
   toTs?: number
 ): StripStats {
-  /** 시간 범위 WHERE 절 빌드 (공통 로직) */
   const buildRangeClause = (baseConditions: string[]): { sql: string; params: number[] } => {
     const conditions = [...baseConditions];
     const params: number[] = [];
@@ -675,41 +679,7 @@ export function getStripStats(
     return { sql: conditions.join(' AND '), params };
   };
 
-  // 1. 지정 기간 prompt 레코드에서 모델별 토큰 집계 (tokens_confidence='high'만)
-  const tokenRange = buildRangeClause(["type = 'prompt'"]);
-  const tokenRows = db.query(`
-    SELECT model,
-           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_input ELSE 0 END), 0)            AS tokens_input,
-           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_output ELSE 0 END), 0)           AS tokens_output,
-           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_creation_tokens ELSE 0 END), 0)   AS cache_creation_tokens,
-           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_read_tokens ELSE 0 END), 0)       AS cache_read_tokens
-    FROM requests
-    WHERE ${tokenRange.sql}
-    GROUP BY model
-  `).all(...tokenRange.params) as Array<{
-    model: string | null;
-    tokens_input: number;
-    tokens_output: number;
-    cache_creation_tokens: number;
-    cache_read_tokens: number;
-  }>;
-
-  let cost_usd = 0;
-  let cache_savings_usd = 0;
-
-  for (const row of tokenRows) {
-    const p = getPricingForModel(row.model);
-    cost_usd +=
-      (row.tokens_input * p.input +
-        row.tokens_output * p.output +
-        row.cache_creation_tokens * p.cache_create +
-        row.cache_read_tokens * p.cache_read) /
-      1_000_000;
-    cache_savings_usd +=
-      (row.cache_read_tokens * (p.input - p.cache_read)) / 1_000_000;
-  }
-
-  // 2. P95 duration_ms — 지정 기간 tool_call PostToolUse 레코드
+  // 1. P95 duration_ms — 지정 기간 tool_call PostToolUse 레코드
   const durationRange = buildRangeClause([
     "type = 'tool_call'",
     "event_type = 'tool'",
@@ -728,7 +698,7 @@ export function getStripStats(
     p95_duration_ms = durationRows[Math.min(idx, durationRows.length - 1)].duration_ms;
   }
 
-  // 3. 오류율 — 지정 기간 tool_call PostToolUse 레코드 중 오류 패턴 포함 비율
+  // 2. 오류율 — 지정 기간 tool_call PostToolUse 레코드 중 오류 패턴 포함 비율
   const errorRange = buildRangeClause([
     "type = 'tool_call'",
     "event_type = 'tool'",
@@ -748,8 +718,6 @@ export function getStripStats(
     errorStats.total > 0 ? errorStats.errors / errorStats.total : 0;
 
   return {
-    cost_usd: Math.round(cost_usd * 1_000_000) / 1_000_000,
-    cache_savings_usd: Math.round(cache_savings_usd * 1_000_000) / 1_000_000,
     p95_duration_ms,
     error_rate: Math.round(error_rate * 10_000) / 10_000,
   };
@@ -759,21 +727,23 @@ export function getStripStats(
 // Cache Intelligence 집계
 // =============================================================================
 
-/** 캐시 히트율·절약 금액 통계 */
+/** 캐시 히트율·절감 토큰 통계 (USD 환산은 신뢰도 낮아 제거됨) */
 export interface CacheStats {
   hitRate: number;
   cacheReadTokens: number;
   cacheCreationTokens: number;
-  costWithCache: number;
-  costWithoutCache: number;
-  savingsUsd: number;
+  /** 캐시로 절감된 입력 토큰 수 (cache_read_tokens 합산과 동일) */
+  savingsTokens: number;
+  /** 캐시 히트로 절감된 비율 (0~1) */
   savingsRate: number;
 }
 
 /**
- * 캐시 히트율 및 절약 비용 집계
+ * 캐시 히트율 및 절감 토큰 집계
  * - fromTs / toTs 미지정 시 전체 기간
  * - tokens_confidence='high'인 레코드만 집계
+ *
+ * USD 비용 환산은 정확한 가격 플랜을 알 수 없어 추정치만 가능하므로 제거됨.
  */
 export function getCacheStats(
   db: Database,
@@ -786,64 +756,32 @@ export function getCacheStats(
   if (fromTs !== undefined) { conditions.push('timestamp >= ?'); params.push(fromTs); }
   if (toTs   !== undefined) { conditions.push('timestamp <= ?'); params.push(toTs); }
 
-  const tokenRows = db.query(`
-    SELECT model,
-           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_input ELSE 0 END), 0)            AS tokens_input,
-           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_output ELSE 0 END), 0)           AS tokens_output,
-           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_creation_tokens ELSE 0 END), 0)   AS cache_creation_tokens,
-           COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_read_tokens ELSE 0 END), 0)       AS cache_read_tokens
+  const row = db.query(`
+    SELECT
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_input ELSE 0 END), 0)            AS tokens_input,
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_creation_tokens ELSE 0 END), 0)   AS cache_creation_tokens,
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_read_tokens ELSE 0 END), 0)       AS cache_read_tokens
     FROM requests
     WHERE ${conditions.join(' AND ')}
-    GROUP BY model
-  `).all(...params) as Array<{
-    model: string | null;
+  `).get(...params) as {
     tokens_input: number;
-    tokens_output: number;
     cache_creation_tokens: number;
     cache_read_tokens: number;
-  }>;
+  } | null;
 
-  let totalCacheRead = 0;
-  let totalCacheCreation = 0;
-  let totalTokensInput = 0;
-  let costWithCache = 0;
-  let costWithoutCache = 0;
-
-  for (const row of tokenRows) {
-    const p = getPricingForModel(row.model);
-
-    totalCacheRead += row.cache_read_tokens;
-    totalCacheCreation += row.cache_creation_tokens;
-    totalTokensInput += row.tokens_input;
-
-    // 실제 비용 (캐시 적용)
-    costWithCache +=
-      (row.tokens_input * p.input +
-        row.tokens_output * p.output +
-        row.cache_creation_tokens * p.cache_create +
-        row.cache_read_tokens * p.cache_read) /
-      1_000_000;
-
-    // 캐시 없었다면: cache_read를 일반 input 단가로 계산
-    costWithoutCache +=
-      ((row.tokens_input + row.cache_read_tokens) * p.input +
-        row.tokens_output * p.output +
-        row.cache_creation_tokens * p.cache_create) /
-      1_000_000;
-  }
+  const totalCacheRead     = row?.cache_read_tokens ?? 0;
+  const totalCacheCreation = row?.cache_creation_tokens ?? 0;
+  const totalTokensInput   = row?.tokens_input ?? 0;
 
   const totalEffectiveInput = totalTokensInput + totalCacheRead;
   const hitRate = totalEffectiveInput > 0 ? totalCacheRead / totalEffectiveInput : 0;
-  const savingsUsd = costWithoutCache - costWithCache;
-  const savingsRate = costWithoutCache > 0 ? savingsUsd / costWithoutCache : 0;
+  const savingsRate = totalEffectiveInput > 0 ? totalCacheRead / totalEffectiveInput : 0;
 
   return {
     hitRate: Math.round(hitRate * 10_000) / 10_000,
     cacheReadTokens: totalCacheRead,
     cacheCreationTokens: totalCacheCreation,
-    costWithCache: Math.round(costWithCache * 1_000_000) / 1_000_000,
-    costWithoutCache: Math.round(costWithoutCache * 1_000_000) / 1_000_000,
-    savingsUsd: Math.round(savingsUsd * 1_000_000) / 1_000_000,
+    savingsTokens: totalCacheRead,
     savingsRate: Math.round(savingsRate * 10_000) / 10_000,
   };
 }
@@ -901,6 +839,10 @@ export interface TurnToolCall {
   payload: string | null;
   event_type: string | null;
   model: string | null;
+  /** data-honesty-ui: 자식 도구 호출 추적 (sub-agent transcript) */
+  parent_tool_use_id: string | null;
+  /** data-honesty-ui: 'high'|'low'|'error' (UI에서 신뢰도 표지에 사용) */
+  tokens_confidence: string | null;
 }
 
 /** 턴 내 assistant 응답 (Stop 훅의 last_assistant_message) */
@@ -913,6 +855,8 @@ export interface TurnResponse {
   tokens_output: number;
   tokens_total: number;
   model: string | null;
+  /** data-honesty-ui: 응답 메타 신뢰도 ('high'|'low'|'error') */
+  tokens_confidence: string | null;
 }
 
 /** 턴 항목 */
@@ -932,6 +876,8 @@ export interface TurnItem {
     cache_read_tokens: number;
     cache_creation_tokens: number;
     context_tokens: number;
+    /** data-honesty-ui: prompt 메타 신뢰도 ('high'|'low'|'error') */
+    tokens_confidence: string | null;
   } | null;
   tool_calls: TurnToolCall[];
   /** 턴의 마지막 assistant 응답 (없을 수 있음) */
@@ -980,7 +926,7 @@ export function getTurnsBySession(
   // 2. 각 턴의 prompt 행 조회
   const promptRows = db.query(`
     SELECT turn_id, id, timestamp, tokens_input, tokens_output, tokens_total, duration_ms,
-           model, payload, cache_read_tokens, cache_creation_tokens
+           model, payload, cache_read_tokens, cache_creation_tokens, tokens_confidence
     FROM requests
     WHERE session_id = ? AND turn_id IS NOT NULL AND type = 'prompt'
       AND (event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')
@@ -997,13 +943,14 @@ export function getTurnsBySession(
     payload: string | null;
     cache_read_tokens: number;
     cache_creation_tokens: number;
+    tokens_confidence: string | null;
   }>;
 
   // 3. 각 턴의 tool_call 행 조회
   const toolRows = db.query(`
     SELECT turn_id, id, timestamp, tool_name, tool_detail,
            tokens_input, tokens_output, tokens_total, duration_ms,
-           payload, event_type, model
+           payload, event_type, model, parent_tool_use_id, tokens_confidence
     FROM requests
     WHERE session_id = ? AND turn_id IS NOT NULL AND type = 'tool_call'
       AND (event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')
@@ -1021,13 +968,15 @@ export function getTurnsBySession(
     payload: string | null;
     event_type: string | null;
     model: string | null;
+    parent_tool_use_id: string | null;
+    tokens_confidence: string | null;
   }>;
 
   // 3-bis. 각 턴의 assistant response 행 조회 (Stop 훅의 last_assistant_message 저장분)
   // 한 턴에 응답이 여러 건이면 가장 마지막(최신) 행을 선택
   const responseRows = db.query(`
     SELECT turn_id, id, timestamp, preview, payload,
-           tokens_input, tokens_output, tokens_total, model
+           tokens_input, tokens_output, tokens_total, model, tokens_confidence
     FROM requests
     WHERE session_id = ? AND turn_id IS NOT NULL AND type = 'response'
     ORDER BY turn_id, timestamp ASC
@@ -1041,6 +990,7 @@ export function getTurnsBySession(
     tokens_output: number;
     tokens_total: number;
     model: string | null;
+    tokens_confidence: string | null;
   }>;
 
   // 4. 데이터 구성
@@ -1079,13 +1029,8 @@ export function getTurnsBySession(
       duration_ms = last.timestamp + last.duration_ms - first;
     }
 
-    // context_tokens 보완: prompt가 없거나 0이면 tool_call 최대값 사용
-    let contextTokens = (prompt?.tokens_input || 0) + promptCacheRead + promptCacheCreate;
-    if (contextTokens === 0 && toolCalls.length > 0) {
-      contextTokens = Math.max(
-        ...toolCalls.map(t => (t.tokens_input || 0) + (t.tokens_output || 0))
-      );
-    }
+    // context_tokens: prompt 실제 입력+캐시. 0이면 0 그대로 노출 (왜곡 fallback 제거 — data-honesty-ui)
+    const contextTokens = (prompt?.tokens_input || 0) + promptCacheRead + promptCacheCreate;
 
     return {
       turn_id: summary.turn_id,
@@ -1103,6 +1048,7 @@ export function getTurnsBySession(
         cache_read_tokens: promptCacheRead,
         cache_creation_tokens: promptCacheCreate,
         context_tokens: contextTokens,
+        tokens_confidence: prompt.tokens_confidence,
       } : null,
       tool_calls: toolCalls.map(t => ({
         id: t.id,
@@ -1117,6 +1063,8 @@ export function getTurnsBySession(
         payload: t.payload,
         event_type: t.event_type,
         model: t.model,
+        parent_tool_use_id: t.parent_tool_use_id,
+        tokens_confidence: t.tokens_confidence,
       })),
       response: respRow ? {
         id: respRow.id,
@@ -1127,6 +1075,7 @@ export function getTurnsBySession(
         tokens_output: respRow.tokens_output,
         tokens_total: respRow.tokens_total,
         model: respRow.model,
+        tokens_confidence: respRow.tokens_confidence,
       } : null,
       summary: {
         tool_call_count: summary.tool_call_count,

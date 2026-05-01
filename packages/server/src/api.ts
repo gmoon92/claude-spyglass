@@ -30,6 +30,8 @@ import {
   getEventsBySession,
   getEventsByType,
   getEventStats,
+  getRecentProxyRequests,
+  getProxyStats,
 } from '@spyglass/storage';
 import { metricsRouter } from './metrics';
 
@@ -119,7 +121,12 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
   const toolStatsMatch = path.match(/^\/api\/sessions\/([^/]+)\/tool-stats$/);
   if (toolStatsMatch && method === 'GET') {
     const sessionId = decodeURIComponent(toolStatsMatch[1]);
-    const data = getSessionToolStats(db, sessionId);
+    const rows = getSessionToolStats(db, sessionId);
+    // data-honesty-ui: confidence 카운트 → has_low_confidence boolean 파생
+    const data = rows.map((r) => ({
+      ...r,
+      has_low_confidence: (r.confidence_low_count ?? 0) + (r.confidence_error_count ?? 0) > 0,
+    }));
     return jsonResponse({ success: true, data });
   }
 
@@ -195,7 +202,12 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
   if (path === '/api/stats/tools' && method === 'GET') {
     const limit = parseInt(url.searchParams.get('limit') || '10', 10);
     const stats = getToolStats(db, limit);
-    return jsonResponse({ success: true, data: stats });
+    // data-honesty-ui: confidence 카운트 → has_low_confidence boolean 파생
+    const data = stats.map((r) => ({
+      ...r,
+      has_low_confidence: (r.confidence_low_count ?? 0) + (r.confidence_error_count ?? 0) > 0,
+    }));
+    return jsonResponse({ success: true, data });
   }
 
   // GET /api/stats/by-type
@@ -204,11 +216,11 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     return jsonResponse({ success: true, data: stats });
   }
 
-  // GET /api/stats/strip — 오늘 Command Center Strip 지표 (P95, error rate, 토큰 캐시)
-  // 비용(USD) 지표는 페이로드에 없는 계산값이라 옵저빌리티 신뢰도 정책상 제거됨.
+  // GET /api/stats/strip — 오늘 Command Center Strip 지표 (P95 / error rate)
+  // 비용(USD) 지표는 정확한 가격 플랜을 알 수 없는 추정치이므로 제거됨 (storage layer에서 계산 자체 제거).
   if (path === '/api/stats/strip' && method === 'GET') {
     const todayMidnightMs = new Date().setHours(0, 0, 0, 0);
-    const { cost_usd: _c, cache_savings_usd: _s, ...stats } = getStripStats(db, todayMidnightMs);
+    const stats = getStripStats(db, todayMidnightMs);
     return jsonResponse({ success: true, data: stats });
   }
 
@@ -216,7 +228,7 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
   if (path === '/api/stats/cache' && method === 'GET') {
     const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
     const toTs   = url.searchParams.get('to')   ? parseInt(url.searchParams.get('to')!,   10) : undefined;
-    const { costWithCache: _w, costWithoutCache: _wo, savingsUsd: _su, ...stats } = getCacheStats(db, fromTs, toTs);
+    const stats = getCacheStats(db, fromTs, toTs);
     return jsonResponse({ success: true, data: stats });
   }
 
@@ -290,6 +302,22 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     const limit = parseInt(url.searchParams.get('limit') || '100', 10);
     const events = getEventsBySession(db, sessionId, limit);
     return jsonResponse({ success: true, data: events, meta: { total: events.length, limit } });
+  }
+
+  // GET /api/proxy-requests — HTTP 레벨 메트릭 (프록시 수집)
+  if (path === '/api/proxy-requests' && method === 'GET') {
+    const limit = parseInt(url.searchParams.get('limit') || '50', 10);
+    const requests = getRecentProxyRequests(db, limit);
+    return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit } });
+  }
+
+  // GET /api/proxy-requests/stats — 프록시 집계 통계
+  if (path === '/api/proxy-requests/stats' && method === 'GET') {
+    const sinceMs = url.searchParams.get('since')
+      ? parseInt(url.searchParams.get('since')!, 10)
+      : Date.now() - 24 * 60 * 60 * 1000; // 기본 24시간
+    const stats = getProxyStats(db, sinceMs);
+    return jsonResponse({ success: true, data: stats });
   }
 
   // 404

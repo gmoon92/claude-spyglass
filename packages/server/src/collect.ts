@@ -43,6 +43,8 @@ export interface ClaudeHookPayload {
   agent_type?: string;
   // UserPromptSubmit 전용
   prompt?: string;
+  // PostToolUse: Claude Code가 실측 측정한 도구 실행 시간 (ms)
+  duration_ms?: number;
 }
 
 /**
@@ -958,8 +960,12 @@ export async function rawCollectHandler(req: Request, db: SpyglassDatabase): Pro
 
   // PostToolUse: duration_ms 계산 + transcript 파싱 후 tool INSERT
   if (hook_event_name === 'PostToolUse') {
-    let duration_ms = 0;
-    if (tool_use_id) {
+    // Claude Code는 hook payload에 duration_ms를 직접 제공함.
+    // PreToolUse 훅이 등록되지 않으면 timing map은 비어 있으므로 payload를 우선 사용.
+    let duration_ms = typeof raw.duration_ms === 'number' && raw.duration_ms >= 0
+      ? raw.duration_ms
+      : 0;
+    if (duration_ms === 0 && tool_use_id) {
       const startTs = toolTimingMap.get(tool_use_id);
       if (startTs !== undefined) {
         duration_ms = now - startTs;

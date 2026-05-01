@@ -18,6 +18,7 @@ import { rawCollectHandler } from './collect';
 import { eventsCollectHandler } from './events';
 import { apiRouter, invalidateDashboardCache } from './api';
 import { sseRouter } from './sse';
+import { handleProxy } from './proxy';
 
 // =============================================================================
 // 설정
@@ -176,6 +177,11 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   try {
+    // /v1/* — Anthropic API 프록시 (ANTHROPIC_BASE_URL 설정 시 활성화)
+    if (path.startsWith('/v1/')) {
+      return handleProxy(req, url, db!.instance);
+    }
+
     // /collect 엔드포인트 — raw Claude Code hook payload 수신 후 서버에서 정제
     if (path === '/collect') {
       const result = await rawCollectHandler(req, db!);
