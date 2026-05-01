@@ -32,6 +32,8 @@ import {
   getAgentCallsPerSession,
   getToolCategoryRawCounts,
   getAnomalyTimeSeriesInputs,
+  getBurnRateBuckets,
+  getCacheTrendBuckets,
   type AnomalyInputRow,
 } from '@spyglass/storage';
 import { getModelMaxTokens, getAllModelLimits } from './model-limits';
@@ -335,7 +337,128 @@ export async function metricsRouter(req: Request, db: Database): Promise<Respons
     return jsonResponse({ success: true, data, meta });
   }
 
+  // -------------------------------------------------------------------------
+  // 9) Burn Rate (left-panel-observability-revamp ADR-003)
+  //    24h 1h 버킷 24개 + 어제 동시각 윈도우 비교
+  // -------------------------------------------------------------------------
+  if (path === '/api/metrics/burn-rate') {
+    const data = computeBurnRate(db, window);
+    return jsonResponse({ success: true, data, meta });
+  }
+
+  // -------------------------------------------------------------------------
+  // 10) Cache Trend (left-panel-observability-revamp ADR-003)
+  //     24h 1h 버킷 hit_rate 추세 + 절감 토큰 합
+  // -------------------------------------------------------------------------
+  if (path === '/api/metrics/cache-trend') {
+    const data = computeCacheTrend(db, window);
+    return jsonResponse({ success: true, data, meta });
+  }
+
   return null;
+}
+
+// =============================================================================
+// Burn Rate / Cache Trend 계산 (라우트 핸들러에서 분리 — 가독성)
+// =============================================================================
+
+/** 1h 단위로 정렬된 buckets를 N개 슬롯으로 채운다 (빈 버킷=0).
+ *  builder가 만드는 출력 타입을 그대로 보존해 호출 측 cast가 불필요하도록 한다. */
+function fillHourSlots<T extends { hour_ts: number }, U>(
+  rawRows: T[],
+  fromMs: number,
+  toMs: number,
+  builder: (hour_ts: number, row: T | undefined) => U
+): U[] {
+  const HOUR = 3_600_000;
+  const startSlot = Math.floor(fromMs / HOUR) * HOUR;
+  const endSlot   = Math.floor(toMs / HOUR) * HOUR;
+  const map = new Map<number, T>();
+  for (const r of rawRows) map.set(r.hour_ts, r);
+  const out: U[] = [];
+  for (let ts = startSlot; ts <= endSlot; ts += HOUR) {
+    out.push(builder(ts, map.get(ts)));
+  }
+  return out;
+}
+
+interface BurnRatePayload {
+  buckets: Array<{ hour_ts: number; tokens: number; requests: number }>;
+  current_total: number;
+  yesterday_same_window: number;
+  delta_pct: number | null;
+}
+
+function computeBurnRate(
+  db: Database,
+  window: { from?: number; to?: number; label: string }
+): BurnRatePayload {
+  const now = Date.now();
+  const toMs   = window.to   ?? now;
+  const fromMs = window.from ?? (toMs - 24 * 3_600_000);
+  const spanMs = toMs - fromMs;
+
+  // 오늘 윈도우 버킷
+  const todayRaw = getBurnRateBuckets(db, fromMs, toMs);
+  const buckets: BurnRatePayload['buckets'] = fillHourSlots(todayRaw, fromMs, toMs, (hour_ts, r) => ({
+    hour_ts,
+    tokens: r?.tokens ?? 0,
+    requests: r?.requests ?? 0,
+  }));
+
+  const current_total = buckets.reduce((s, b) => s + b.tokens, 0);
+
+  // 어제 동시각 윈도우 (정확히 24h 이전)
+  const yFrom = fromMs - 24 * 3_600_000;
+  const yTo   = toMs   - 24 * 3_600_000;
+  // 동일 spanMs 보장 (윈도우가 24h 미만이어도 같은 길이)
+  if (yFrom + spanMs !== yTo) {
+    // no-op: 안전하게 yFrom..yFrom+spanMs 사용
+  }
+  const yesterdayRaw = getBurnRateBuckets(db, yFrom, yTo);
+  const yesterday_same_window = yesterdayRaw.reduce((s, r) => s + r.tokens, 0);
+
+  let delta_pct: number | null = null;
+  if (yesterday_same_window > 0) {
+    delta_pct = Math.round(
+      ((current_total - yesterday_same_window) / yesterday_same_window) * 1000
+    ) / 10;
+  } else if (current_total > 0) {
+    delta_pct = null; // 어제 0 → 비교 의미 없음
+  }
+
+  return { buckets, current_total, yesterday_same_window, delta_pct };
+}
+
+interface CacheTrendPayload {
+  buckets: Array<{ hour_ts: number; hit_rate: number | null; savings_tokens: number }>;
+  hit_rate_now: number | null;
+  savings_tokens_total: number;
+}
+
+function computeCacheTrend(
+  db: Database,
+  window: { from?: number; to?: number; label: string }
+): CacheTrendPayload {
+  const now = Date.now();
+  const toMs   = window.to   ?? now;
+  const fromMs = window.from ?? (toMs - 24 * 3_600_000);
+
+  const raw = getCacheTrendBuckets(db, fromMs, toMs);
+  const buckets: CacheTrendPayload['buckets'] = fillHourSlots(raw, fromMs, toMs, (hour_ts, r) => ({
+    hour_ts,
+    hit_rate: r?.hit_rate ?? null,
+    savings_tokens: r?.savings_tokens ?? 0,
+  }));
+
+  // 마지막 valid hit_rate (= 최신)
+  let hit_rate_now: number | null = null;
+  for (let i = buckets.length - 1; i >= 0; i--) {
+    if (buckets[i].hit_rate !== null) { hit_rate_now = buckets[i].hit_rate; break; }
+  }
+  const savings_tokens_total = buckets.reduce((s, b) => s + b.savings_tokens, 0);
+
+  return { buckets, hit_rate_now, savings_tokens_total };
 }
 
 // =============================================================================

@@ -7,9 +7,9 @@
 
 :root {
   /* ── L1. Layer 5단계 (ADR-WDO-004) ── */
-  --bg:           #0a0a0b;   /* 페이지 배경 — 최하층 */
-  --surface:      #111113;   /* 사이드바, 헤더 — bg 대비 1.27:1 */
-  --surface-alt:  #17171a;   /* 메인 카드, Hero, 차트 — surface 대비 1.24:1 */
+  --bg:           #0a0a0b;   /* 페이지 배경 — 최하층 (neutral black) */
+  --surface:      #111113;   /* 사이드바, 헤더 — neutral slate */
+  --surface-alt:  #17171a;   /* 메인 카드, Hero, 차트 — neutral */
   --raised:       #1e1e22;   /* selected row, hover, drawer */
   --floating:     #26262b;   /* 모달, 툴팁, dropdown */
   --border:       #26262b;
@@ -39,7 +39,7 @@
   --orange:      var(--warn);
   --red:         var(--error);
   --blue:        var(--info);
-  --purple:      #a78bfa;   /* 미사용 (Task 도구는 --info로 통일) */
+  --purple:      var(--text-3);   /* violet 제거 — neutral fallback */
   --pink:        #f472b6;   /* WebSearch/WebFetch 전용 */
 
   /* ── L4. Typography 이중 계층 (ADR-WDO-006) ── */
@@ -79,25 +79,26 @@
   --left-panel-width:          280px;
   --tool-stats-height:         160px;
   --project-panel-height:      215px;
+  --session-panel-height:      420px;   /* 세션 행 ~56px × 7 + 헤더 ~36px (ADR-001) */
   --panel-resize-min:          180px;
   --panel-resize-max:          480px;
   --panel-resize-handle-width: 4px;
 
   /* ── 타입별 색상 SSoT (ADR-003) — 사용 영역 축소: 배지/필터 활성 상태만 ── */
-  --type-prompt-color:     #e8a07a;
-  --type-prompt-bg:        rgba(255,122,69,0.18);
-  --type-tool_call-color:  var(--success);
-  --type-tool_call-bg:     rgba(63,185,80,0.15);
+  --type-prompt-color:     #FFB088;
+  --type-prompt-bg:        linear-gradient(135deg, rgba(255,176,136,0.28) 0%, rgba(255,212,59,0.14) 100%);
+  --type-tool_call-color:  #34D399;
+  --type-tool_call-bg:     linear-gradient(135deg, rgba(52,211,153,0.28) 0%, rgba(56,189,248,0.14) 100%);
   --type-system-color:     var(--warn);
-  --type-system-bg:        rgba(240,183,47,0.15);
+  --type-system-bg:        linear-gradient(135deg, rgba(240,183,47,0.26) 0%, rgba(255,122,69,0.14) 100%);
   --type-response-color:   #79c0ff; /* assistant blue */
   --type-response-bg:      rgba(121,192,255,0.15);
   --type-agent-color:      var(--warn);
-  --type-agent-bg:         rgba(240,183,47,0.15);
+  --type-agent-bg:         linear-gradient(135deg, rgba(240,183,47,0.26) 0%, rgba(255,122,69,0.14) 100%);
   --type-skill-color:      var(--warn);
-  --type-skill-bg:         rgba(240,183,47,0.15);
+  --type-skill-bg:         linear-gradient(135deg, rgba(240,183,47,0.26) 0%, rgba(255,122,69,0.14) 100%);
   --type-mcp-color:        #22d3ee;
-  --type-mcp-bg:           rgba(34,211,238,0.15);
+  --type-mcp-bg:           linear-gradient(135deg, rgba(34,211,238,0.26) 0%, rgba(88,166,255,0.14) 100%);
 
   /* ── Accent 배경 계층 ── */
   --accent-dim:       rgba(255,122,69,0.10);
@@ -124,9 +125,9 @@
   /* ── 흰색 계열 ── */
   --white-bg-subtle: rgba(255,255,255,0.02);
 
-  /* ── 기타 배지 ── */
-  --unknown-bg:     rgba(110,118,129,0.20);
-  --model-badge-bg: rgba(255,122,69,0.15);
+  /* ── 기타 배지 (→ badge-grad-* 토큰으로 대체됨, 하위 호환 alias 유지) ── */
+  --unknown-bg:     var(--badge-grad-neutral);
+  --model-badge-bg: var(--badge-grad-brand);
 
   /* ── 모델 시각 구분 (ADR-data-trust-visual-001) ───────────────────────── */
   /* Haiku=sky / Sonnet=accent orange / Opus=violet / external=pink / synthetic=neutral / unknown=dim */
@@ -183,6 +184,51 @@
   --card-bg:        var(--surface-alt);
   --card-border:    var(--border);
   --card-shadow:    none;
+
+  /* ── ADR-WDO-012: Orange-Centric Vivid Tokens ── */
+  /* Brand Core */
+  --brand-primary:  #FF7A45;
+  --brand-warm:     #FFA94D;
+  --brand-deep:     #E85A2C;
+  --brand-glow:     rgba(255, 122, 69, 0.4);
+
+  /* Data Visualization (vivid — UI text와 분리, saturation +30%) */
+  --data-positive:       #34D399;
+  --data-positive-glow:  rgba(52, 211, 153, 0.45);
+  --data-info:           #38BDF8;
+  --data-info-glow:      rgba(56, 189, 248, 0.5);
+  --data-amber:          #FFD43B;
+
+  /* Brand Gradients (orange-centric) */
+  --grad-brand:        linear-gradient(135deg, #FF7A45 0%, #FFA94D 100%);
+  --grad-brand-soft:   linear-gradient(135deg, rgba(255,122,69,0.08) 0%, rgba(255,169,77,0.04) 100%);
+  --grad-warm-glow:    radial-gradient(circle at center, rgba(255,122,69,0.15) 0%, transparent 70%);
+
+  /* Glow utilities (sparingly — 4곳 이내 사용) */
+  --glow-brand:        0 0 20px rgba(255, 122, 69, 0.35);
+  --glow-data-info:    0 0 12px rgba(56, 189, 248, 0.4);
+  --glow-positive:     0 0 12px rgba(52, 211, 153, 0.35);
+
+  /* === 통일 hue-shift gradients (timelineChart 패턴 — 단색 X, 두 hue 이상) === */
+  --grad-success: linear-gradient(90deg, #3FB950 0%, #34D399 50%, #38BDF8 100%);   /* green→teal→cyan */
+  --grad-info:    linear-gradient(90deg, #58A6FF 0%, #38BDF8 50%, #34D399 100%);   /* blue→cyan→teal */
+  --grad-warn:    linear-gradient(90deg, #F0B72F 0%, #FFD43B 50%, #FF7A45 100%);   /* yellow→amber→orange */
+  --grad-error:   linear-gradient(90deg, #F47174 0%, #FF5E3A 100%);                /* red→red-orange */
+  --grad-neutral: linear-gradient(90deg, #6E7681 0%, #8B949E 100%);
+
+  /* === 강한 glow (timelineChart blur 8px 수준) === */
+  --glow-success: 0 0 10px rgba(52, 211, 153, 0.45);
+  --glow-info:    0 0 10px rgba(56, 189, 248, 0.45);
+  --glow-warn:    0 0 10px rgba(240, 183, 47, 0.40);
+  --glow-error:   0 0 10px rgba(244, 113, 116, 0.40);
+
+  /* === 뱃지용 그라데이션 (45% start alpha → 15% end alpha, hue-shift) === */
+  --badge-grad-success:  linear-gradient(135deg, rgba(52,211,153,0.30) 0%, rgba(56,189,248,0.15) 100%);
+  --badge-grad-info:     linear-gradient(135deg, rgba(88,166,255,0.30) 0%, rgba(167,139,250,0.15) 100%);
+  --badge-grad-warn:     linear-gradient(135deg, rgba(240,183,47,0.28) 0%, rgba(255,122,69,0.15) 100%);
+  --badge-grad-error:    linear-gradient(135deg, rgba(244,113,116,0.30) 0%, rgba(255,94,58,0.15) 100%);
+  --badge-grad-brand:    linear-gradient(135deg, rgba(255,176,136,0.30) 0%, rgba(255,212,59,0.15) 100%);
+  --badge-grad-neutral:  linear-gradient(135deg, rgba(110,118,129,0.25) 0%, rgba(139,148,158,0.12) 100%);
 }
 
 /* ── 페이지 기본 스타일 (UI Font 디폴트) ── */

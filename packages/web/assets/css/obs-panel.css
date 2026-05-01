@@ -1,0 +1,242 @@
+/* ── Observability Panel (좌측 사이드바 하단) ───────────────────────────────
+   ADR: left-panel-observability-revamp ADR-001/004/006/007 + ADR-008(후속)
+   - 4컬럼 툴 통계 테이블을 글랜서블 옵저빌리티 위젯 4 카드로 대체
+   - ADR-008: 카드 라벨/패널 타이틀 제거. KPI 숫자가 first-impression. 의미는 stat-tooltip 패턴.
+   - 모든 색상은 design-tokens.css 변수 SSoT 참조 (하드코딩 금지)
+   ─────────────────────────────────────────────────────────────────────── */
+
+/* ── 패널 컨테이너 ─────────────────────────────────────────────────────── */
+.obs-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  min-height: 0;
+}
+
+/* ADR-008: panel-header 자체가 사라졌으므로 panel-body가 카드 컨테이너의 전부 */
+.tool-stats-section .panel-body { padding: 0; }
+.tool-stats-section { border-top-left-radius: var(--radius-md); border-top-right-radius: var(--radius-md); }
+
+/* ── 카드 (60-80px, 사이드바 폭 fit) ────────────────────────────────────── */
+.obs-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "value   trend"
+    "sub     spark";
+  column-gap: var(--space-3);
+  row-gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  min-height: 56px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: help;            /* hover 시 툴팁 안내 */
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+.obs-card:hover {
+  background: var(--raised);
+  border-color: var(--border-strong);
+}
+
+/* Phase 2 placeholder — 회색 dim + 우상단 'soon' 마커만 (ADR-008: 'PHASE 2' 글자 제거) */
+.obs-card[data-phase="2"] {
+  opacity: 0.62;
+}
+.obs-card[data-phase="2"]::after {
+  content: "soon";
+  position: absolute;
+  top: 4px;
+  right: var(--space-2);
+  font-family: var(--font-ui);
+  font-size: 9px;
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.06em;
+  color: var(--text-4);
+  text-transform: lowercase;
+  opacity: 0.7;
+}
+
+/* ── 카드 슬롯 — KPI 숫자가 first-impression ─────────────────────────── */
+.obs-card-value {
+  grid-area: value;
+  font-family: var(--font-data);
+  font-size: 19px;
+  font-weight: var(--weight-hero);
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+}
+
+.obs-card-sub {
+  grid-area: sub;
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* trend delta (어제 동시각 ±%, 또는 등급 dot) */
+.obs-card-trend {
+  grid-area: trend;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+}
+.obs-card-trend.is-up   { color: var(--success); }
+.obs-card-trend.is-down { color: var(--info); }
+.obs-card-trend.is-warn { color: var(--warn); }
+.obs-card-trend-icon {
+  font-size: 10px;
+  line-height: 1;
+}
+
+/* spark (sparkline 영역) */
+.obs-card-spark {
+  grid-area: spark;
+  align-self: end;
+  justify-self: end;
+  height: 24px;
+  width: 76px;
+  color: var(--accent);
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+.obs-card-spark svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+/* ── 카드 변형 (각 위젯 메타 색상) ─────────────────────────────────────── */
+.obs-card--burn .obs-card-spark   { color: var(--accent); }
+.obs-card--cache .obs-card-spark  { color: var(--data-info); }
+.obs-card--pulse .obs-card-spark  { color: var(--success); }
+
+/* Tool Categories는 spark 영역 미사용 — 가로 막대 4행 (라벨 영역 제거) */
+.obs-card--tools {
+  grid-template-areas:
+    "tools   tools"
+    "tools   tools";
+  cursor: default;
+  padding: var(--space-2) var(--space-3);
+}
+.obs-card--tools:hover { cursor: default; }
+.obs-card--tools .obs-card-tools {
+  grid-area: tools;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.obs-cat-row {
+  display: grid;
+  grid-template-columns: 56px 1fr 36px;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  cursor: help;          /* 카테고리 의미 툴팁 */
+}
+.obs-cat-name {
+  color: var(--text-2);
+  font-weight: var(--weight-medium);
+}
+.obs-cat-bar {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.obs-cat-bar-fill {
+  display: block;
+  height: 100%;
+  transition: width var(--dur-drawer) var(--ease);
+}
+.obs-cat-bar-fill--agent  { background: var(--badge-grad-warn);    box-shadow: var(--glow-warn); }
+.obs-cat-bar-fill--skill  { background: var(--badge-grad-warn);    box-shadow: var(--glow-warn); }
+.obs-cat-bar-fill--mcp    { background: var(--badge-grad-info);    box-shadow: var(--glow-info); }
+.obs-cat-bar-fill--native { background: var(--badge-grad-neutral); }
+.obs-cat-pct {
+  text-align: right;
+  font-family: var(--font-data);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 빈 상태 ──────────────────────────────────────────────────────────── */
+.obs-card-empty {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  color: var(--text-4);
+}
+
+/* ── Anomaly Badge (floating, 사이드바 우상단) ──────────────────────────── */
+.anomaly-badge {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-3);
+  z-index: 25;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px var(--space-2);
+  background: var(--badge-grad-error);
+  border: 1px solid var(--red-border);
+  border-radius: 999px;
+  box-shadow: var(--glow-error);
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  font-weight: var(--weight-strong);
+  color: var(--error);
+  cursor: help;
+  transition: transform var(--dur-fast) var(--ease);
+}
+.anomaly-badge[hidden] { display: none; }
+.anomaly-badge:hover { transform: scale(1.04); }
+.anomaly-badge-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--error);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--error);
+  animation: anomaly-pulse 1.6s ease-in-out infinite;
+}
+.anomaly-badge-count {
+  font-variant-numeric: tabular-nums;
+}
+@keyframes anomaly-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+
+/* ── 사이드바 좁은 폭 적응 ─────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .obs-card-spark { display: none; }
+  .obs-card {
+    grid-template-areas:
+      "value   trend"
+      "sub     sub";
+  }
+}

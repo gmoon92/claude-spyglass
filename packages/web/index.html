@@ -24,6 +24,7 @@
   <link rel="stylesheet" href="/assets/css/turn-view.css">
   <link rel="stylesheet" href="/assets/css/context-chart.css">
   <link rel="stylesheet" href="/assets/css/tool-stats.css">
+  <link rel="stylesheet" href="/assets/css/obs-panel.css">
 </head>
 <body>
 
@@ -60,6 +61,8 @@
 
     <aside class="left-panel">
       <div class="panel-resize-handle" title="드래그: 너비 조절 · 더블클릭: 콘텐츠 너비에 맞춤"></div>
+      <!-- left-panel-observability-revamp ADR-006: Anomaly 발생 시에만 표시 (floating, 우상단) -->
+      <button class="anomaly-badge" id="anomalyBadge" hidden type="button" aria-label="이상 감지 알림"></button>
       <button class="btn-panel-collapse" id="btnPanelCollapse" title="왼쪽 패널 숨기기 / 펼치기" aria-label="왼쪽 패널 숨기기">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <path d="M7.5 2.5L3.5 6L7.5 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -67,19 +70,16 @@
       </button>
 
       <div class="panel-section flex-section">
-        <div class="panel-header">
-          <span class="panel-label">프로젝트</span>
-        </div>
         <div class="panel-body">
           <table>
             <colgroup>
               <col>
-              <col style="width:38px">
+              <col style="width:52px">
               <col style="width:92px">
             </colgroup>
             <thead>
               <tr>
-                <th>이름</th>
+                <th>프로젝트</th>
                 <th style="text-align:right">세션</th>
                 <th style="text-align:right">토큰</th>
               </tr>
@@ -106,25 +106,18 @@
         </div>
       </div>
 
+      <!-- left-panel-observability-revamp ADR-001/004 + 후속 ADR-008:
+           4컬럼 툴 통계 테이블 → 글랜서블 옵저빌리티 위젯 4 카드 + 1 floating badge.
+           정밀 통계는 detail view ts-mx 단일 진실 소스로 유지.
+           카드 콘텐츠는 obs-panel.js 의 render*() 함수가 raw payload로 채움 (ADR-005).
+           ADR-008 (후속) — 패널 타이틀 + 카드 라벨 제거. 의미는 stat-tooltip 패턴(data-obs-tooltip)이 hover로 노출. -->
       <div class="panel-section tool-stats-section" id="panelTools">
-        <div class="panel-header">
-          <span class="panel-label">툴 통계</span>
-          <div class="tool-mode-toggle" id="toolModeToggle" role="group" aria-label="도구 모드">
-            <button class="tool-mode-btn active" data-tool-mode="tool" title="도구별 통계">도구</button>
-            <button class="tool-mode-btn" data-tool-mode="category" title="카테고리별 분포">카테고리</button>
-          </div>
-          <span class="panel-hint" id="toolCount">—</span>
-        </div>
         <div class="panel-body">
-          <table id="toolsByName">
-            <thead><tr><th>툴</th><th style="text-align:right">호출</th><th style="text-align:right">평균토큰</th><th style="min-width:80px">호출 비율</th></tr></thead>
-            <tbody id="toolsBody">
-              <tr><td colspan="4" class="table-empty"><span class="skeleton"></span></td></tr>
-              <tr><td colspan="4" class="table-empty"><span class="skeleton"></span></td></tr>
-            </tbody>
-          </table>
-          <div class="tool-categories" id="toolCategories" hidden>
-            <div class="state-loading" style="padding:0"><div class="state-loading-spinner"></div><span>불러오는 중…</span></div>
+          <div class="obs-panel" id="obsPanel">
+            <article class="obs-card obs-card--burn"  id="cardBurnRate"     data-obs-tooltip="burn-rate"></article>
+            <article class="obs-card obs-card--cache" id="cardCacheHealth"  data-obs-tooltip="cache-health"></article>
+            <article class="obs-card obs-card--pulse" id="cardLivePulse"    data-obs-tooltip="live-pulse" data-phase="2"></article>
+            <article class="obs-card obs-card--tools" id="cardToolCategories" data-obs-tooltip="tool-categories"></article>
           </div>
         </div>
       </div>
@@ -272,22 +265,22 @@
                 </tbody>
               </table>
               <div style="padding:8px 12px;text-align:center">
-                <button id="loadMoreBtn" style="display:none;background:none;border:1px solid var(--border);color:var(--text-dim);padding:4px 16px;border-radius:5px;cursor:pointer;font-family:inherit;font-size:11px">더 보기</button>
+                <button id="loadMoreBtn" style="display:none;background:none;border:1px solid var(--border);color:var(--text-dim);padding:4px 16px;border-radius:var(--radius-md);cursor:pointer;font-family:inherit;font-size:11px">더 보기</button>
               </div>
             </div>
           </div>
+
         </div>
 
         <div id="detailView" class="right-view card">
 
           <div class="view-tab-bar" id="detailTabBar">
-            <button class="view-tab active" id="tabFlat" data-tab="flat">플랫</button>
-            <button class="view-tab" id="tabTurn" data-tab="turn">턴 뷰</button>
-            <button class="view-tab" id="tabTools" data-tab="tools">도구</button>
-          </div>
-
-          <div class="detail-controls-bar">
-            <div class="feed-controls">
+            <div class="view-tab-group">
+              <button class="view-tab active" id="tabRequests" data-tab="requests">요청</button>
+              <button class="view-tab" id="tabTurn" data-tab="turn">턴 뷰</button>
+              <button class="view-tab" id="tabTools" data-tab="tools">도구</button>
+            </div>
+            <div class="view-tab-bar-controls feed-controls">
               <div id="detailSearchContainer" class="feed-search"></div>
               <div id="detailTypeFilterBtns" class="detail-type-filter-btns type-filter-btns"></div>
             </div>
@@ -297,7 +290,7 @@
             <div class="state-loading"><div class="state-loading-spinner"></div><span>불러오는 중…</span></div>
           </div>
 
-          <div id="detailFlatView" class="detail-content">
+          <div id="detailRequestsView" class="detail-content">
             <table>
               <colgroup>
                 <col style="width:100px">

@@ -1,41 +1,9 @@
-// 좌측 패널 모듈 — 프로젝트/세션/툴 렌더링
+// 좌측 패널 모듈 — 프로젝트/세션 렌더링
+// (툴 통계는 left-panel-observability-revamp ADR-001로 obs-panel.js 위젯으로 이동.
+//  detail view 도구 매트릭스는 ts-mx 가 단일 진실 소스.)
 import { fmt, fmtToken, escHtml } from './formatters.js';
-import { makeSkeletonRows, makeSessionRow, toolIconHtml } from './renderers.js';
+import { makeSkeletonRows, makeSessionRow } from './renderers.js';
 import { getSelectedProject, getSelectedSession } from './state.js';
-
-// ADR-016: tool-categories 6 카테고리 색상 매핑
-const CATEGORY_COLORS = {
-  FileOps: '#34d399',
-  Search:  '#fbbf24',
-  Bash:    '#fb923c',
-  MCP:     '#22d3ee',
-  Agent:   '#f59e0b',
-  Other:   '#94a3b8',
-};
-
-/**
- * ADR-016 — Tool 카테고리 분포 렌더 (api-spec §7).
- * 6 카테고리, 가로 막대 + percentage.
- */
-export function renderToolCategories(categories) {
-  const el = document.getElementById('toolCategories');
-  if (!el) return;
-  if (!Array.isArray(categories) || !categories.length || categories.every(c => !c.request_count)) {
-    el.innerHTML = '<div class="state-empty" style="padding:0;font-size:var(--font-meta)">데이터가 없습니다</div>';
-    return;
-  }
-  const max = Math.max(1, ...categories.map(c => c.request_count || 0));
-  el.innerHTML = categories.map(c => {
-    const pct = Math.round((c.request_count || 0) / max * 100);
-    const color = CATEGORY_COLORS[c.category] || CATEGORY_COLORS.Other;
-    return `<div class="cat-row">
-      <span class="cat-name">${escHtml(c.category)}</span>
-      <div class="cat-bar"><div class="cat-bar-fill" style="width:${pct}%;background:${color}"></div></div>
-      <span class="cat-count num">${c.request_count}</span>
-      <span class="cat-pct">${(c.percentage ?? 0).toFixed(1)}%</span>
-    </div>`;
-  }).join('');
-}
 
 let _allProjects     = [];
 let _allSessions     = [];
@@ -99,34 +67,9 @@ export function renderProjects(list) {
   renderBrowserProjects();
 }
 
-export function renderTools(list) {
-  if (!list.length) {
-    document.getElementById('toolCount').textContent = '—';
-    document.getElementById('toolsBody').innerHTML   = makeSkeletonRows(4, 2);
-    return;
-  }
-  document.getElementById('toolCount').textContent = `${list.length}개`;
-  const body = document.getElementById('toolsBody');
-  const maxC = Math.max(...list.map(t => t.call_count || 0), 1);
-
-  body.innerHTML = list.map(t => {
-    const detailText = t.tool_detail
-      ? (t.tool_detail.length > 50 ? t.tool_detail.slice(0, 50) + '…' : t.tool_detail)
-      : '';
-    return `<tr>
-      <td><div class="tool-cell">
-        <span class="tool-main">${toolIconHtml(t.tool_name)}${escHtml(t.tool_name || '—')}</span>
-        ${detailText ? `<span class="tool-sub" title="${escHtml(t.tool_detail)}">${escHtml(detailText)}</span>` : ''}
-      </div></td>
-      <td class="num num-hi cell-token">${fmt(t.call_count)}</td>
-      <td class="num cell-token">${t.avg_tokens > 0 ? fmtToken(Math.round(t.avg_tokens)) : '—'}</td>
-      <td><div class="bar-cell">
-        <div class="bar-track"><div class="bar-fill" style="width:${Math.round((t.call_count || 0) / maxC * 100)}%;background:var(--green)"></div></div>
-        <span class="bar-label">${Math.round((t.call_count || 0) / maxC * 100)}%</span>
-      </div></td>
-    </tr>`;
-  }).join('');
-}
+// renderTools (4컬럼 툴 통계 테이블 렌더러)는
+// left-panel-observability-revamp ADR-001에 따라 obs-panel.js의 위젯 5종으로 대체되어
+// 제거되었습니다. 정밀 통계는 detail view ts-mx (tool-stats.js) 단일 진실 소스를 사용하세요.
 
 export function showSkeletonSessions() {
   document.getElementById('browserSessionsBody').innerHTML = makeSkeletonRows(4, 2);

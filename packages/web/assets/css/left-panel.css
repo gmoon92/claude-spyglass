@@ -1,9 +1,25 @@
 /* ── LEFT PANEL ─────────────────────────────────────────────────────────── */
+/* ADR-004: grid-template-rows = auto / 세션 고정 / 1fr (툴 통계 남은 공간 흡수) */
+/* ADR-003: padding + gap 으로 카드형 영역 분리 — border-right 는 panel-resize-handle 영역과 분리 */
+/*
+  세션 트랙은 minmax(220px, var(--session-panel-height))로 안전 하한을 둠
+  — 작은 뷰포트에서 다른 섹션(특히 툴 통계 1fr)이 0으로 짓눌리는 것을 방지
+*/
+/* left-panel-observability-revamp ADR-001:
+   3번째 트랙(옵저빌리티)에 카드 4개가 모두 보이도록 minmax 하한을 280px로 상향.
+   세션 트랙은 변경 없음 — 작은 화면에서 자연 스크롤 폴백. */
 .left-panel {
   position: relative;
   display: grid;
-  grid-template-rows: var(--project-panel-height) 1fr var(--tool-stats-height);
-  overflow: hidden; border-right: 1px solid var(--border);
+  grid-template-rows: auto minmax(220px, var(--session-panel-height)) minmax(280px, 1fr);
+  border-radius: var(--radius-md);
+  gap: var(--space-2);
+  padding: var(--space-2);
+  max-height: 100vh;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-right: 1px solid var(--border);
   background: var(--surface);
 }
 
@@ -27,18 +43,24 @@
   .panel-resize-handle { display: none; }
 }
 
+/* ── PANEL SECTION (카드형) — ADR-003 ───────────────────────────────────── */
 .panel-section {
   display: flex; flex-direction: column;
-  overflow: hidden; border-bottom: 1px solid var(--border); min-height: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
 }
 .panel-section.flex-section { min-height: 0; }
-.panel-section:last-child { border-bottom: none; }
 
 .panel-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 14px;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
+  border-top-left-radius: var(--radius-md);
+  border-top-right-radius: var(--radius-md);
   flex-shrink: 0;
   min-height: 36px;
 }
@@ -89,13 +111,13 @@
   white-space: nowrap;
 }
 
-.tool-stats-section { max-height: var(--tool-stats-height); }
-.tool-stats-section .panel-body { max-height: calc(var(--tool-stats-height) - 29px); }
+/* ADR-004: tool-stats-section 은 grid 1fr 트랙이 남은 공간을 흡수 — max-height 제약 제거 */
+.tool-stats-section .panel-body { min-height: 0; }
 
 /* ── BAR CELLS ──────────────────────────────────────────────────────────── */
 .bar-cell  { display: flex; align-items: center; gap: 8px; }
-.bar-track { flex: 1; height: 4px; background: var(--raised); border-radius: 2px; overflow: hidden; min-width: 40px; }
-.bar-fill  { height: 100%; background: var(--success); border-radius: 2px; transition: width .4s ease; }
+.bar-track { flex: 1; height: 4px; background: var(--raised); border-radius: var(--radius-sm); overflow: hidden; min-width: 40px; }
+.bar-fill  { height: 100%; background: var(--grad-success); border-radius: var(--radius-sm); transition: width .4s ease; box-shadow: 0 0 6px rgba(52, 211, 153, 0.50); }
 .bar-label {
   font-family: var(--font-data);
   font-size: var(--text-small);
@@ -149,69 +171,8 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;
 }
 
-/* ── ADR-016: Tool mode toggle (tool / category) ───────────────────────── */
-.tool-mode-toggle {
-  display: flex; gap: 2px;
-  background: var(--surface-alt);
-  border-radius: var(--radius-sm);
-  padding: 2px;
-  margin-left: var(--space-2);
-}
-.tool-mode-btn {
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  font-family: inherit;
-  font-size: var(--font-micro);
-  font-weight: var(--weight-strong);
-  padding: 2px var(--space-1);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: color 0.12s, background 0.12s;
-}
-.tool-mode-btn:hover { color: var(--text); }
-.tool-mode-btn.active {
-  background: var(--accent-dim);
-  color: var(--accent);
-}
 
-/* Tool 카테고리 분포 행 */
-.tool-categories {
-  padding: var(--space-2);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.cat-row {
-  display: grid;
-  grid-template-columns: 60px 1fr 36px 36px;
-  gap: var(--space-1);
-  align-items: center;
-  font-size: var(--font-meta);
-  padding: 2px 0;
-}
-.cat-name {
-  color: var(--text);
-  font-weight: var(--weight-strong);
-}
-.cat-bar {
-  height: 6px;
-  background: var(--border);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.cat-bar-fill {
-  display: block;
-  height: 100%;
-  transition: width 0.3s ease;
-}
-.cat-count {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
-}
-.cat-pct {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-dim);
-}
+/* left-panel-observability-revamp ADR-001:
+   .tool-categories / .cat-row / .cat-name / .cat-bar / .cat-count / .cat-pct
+   는 obs-panel.css의 .obs-cat-* 클래스로 대체되어 제거되었습니다.
+   detail view 도구 매트릭스는 tool-stats.css의 ts-mx-* 클래스를 사용하세요. */

@@ -29,6 +29,7 @@ import { initToolStats } from './tool-stats.js';
 import { initCacheTooltip } from './cache-tooltip.js';
 import { initStatTooltip } from './stat-tooltip.js';
 import { initCachePanelTooltip } from './cache-panel-tooltip.js';
+import { initObsTooltip } from './obs-tooltip.js';
 import { connectSSE } from './sse.js';
 import {
   setChartMode, prependRequest, renderRightPanel,
@@ -239,11 +240,12 @@ function init() {
     },
   });
   initColResize(document.querySelector('#feedBody table'));
-  initColResize(document.querySelector('#detailFlatView table'));
+  initColResize(document.querySelector('#detailRequestsView table'));
   initPanelResize(document.querySelector('.left-panel'), document.querySelector('.panel-resize-handle'));
   initCacheTooltip();
   initStatTooltip();
   initCachePanelTooltip();
+  initObsTooltip();
   initContextChart();
   initToolColors();
   initToolStats();

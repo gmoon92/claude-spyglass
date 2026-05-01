@@ -62,6 +62,25 @@ export interface ToolCategoryRawRow {
   request_count: number;
 }
 
+/** Burn Rate 1시간 버킷 (left-panel-observability-revamp ADR-003) */
+export interface BurnRateBucketRow {
+  /** 버킷 시작 ms (UTC, 1h 정렬) */
+  hour_ts: number;
+  /** prompt 레코드 tokens_total 합 (tokens_confidence='high' 한정) */
+  tokens: number;
+  /** prompt 레코드 수 */
+  requests: number;
+}
+
+/** Cache Trend 1시간 버킷 (left-panel-observability-revamp ADR-003) */
+export interface CacheTrendBucketRow {
+  hour_ts: number;
+  /** cache_read / (tokens_input + cache_read), denom=0이면 null */
+  hit_rate: number | null;
+  /** cache_read_tokens (절감 토큰 = 캐시로 재사용된 input) */
+  savings_tokens: number;
+}
+
 export interface AnomalyInputRow {
   id: string;
   session_id: string;
@@ -354,6 +373,84 @@ export function getToolCategoryRawCounts(
     WHERE ${conds.join(' AND ')}
     GROUP BY tool_name
   `).all(...params) as ToolCategoryRawRow[];
+}
+
+// =============================================================================
+// 옵저빌리티 사이드바 (left-panel-observability-revamp)
+// =============================================================================
+
+/**
+ * Burn Rate — 1시간 버킷 토큰 합 + 요청 수
+ *
+ * - prompt 레코드 기준 (실제 모델 호출 단위)
+ * - tokens_confidence='high'만 합산 (Spyglass SSoT 정책)
+ * - hour_ts: floor(timestamp / 3_600_000) * 3_600_000 (UTC 1시간 정렬)
+ * - 빈 버킷은 SQL 결과에 없으므로 응답 단계에서 0으로 채운다
+ */
+export function getBurnRateBuckets(
+  db: Database,
+  fromTs?: number,
+  toTs?: number
+): BurnRateBucketRow[] {
+  const params: number[] = [];
+  const conds = ["type = 'prompt'", "tokens_confidence = 'high'"];
+  conds.push(...buildTimeWindow('timestamp', fromTs, toTs, params));
+
+  return db.query(`
+    SELECT
+      (CAST(timestamp / 3600000 AS INTEGER) * 3600000) AS hour_ts,
+      COALESCE(SUM(tokens_total), 0) AS tokens,
+      COUNT(*)                       AS requests
+    FROM requests
+    WHERE ${conds.join(' AND ')}
+    GROUP BY hour_ts
+    ORDER BY hour_ts ASC
+  `).all(...params) as BurnRateBucketRow[];
+}
+
+/**
+ * Cache Trend — 1시간 버킷 hit_rate + 절감 토큰
+ *
+ * - prompt 레코드 기준, tokens_confidence='high'만
+ * - hit_rate = cache_read / (tokens_input + cache_read), denom=0이면 null
+ * - 빈 버킷은 응답 단계에서 0으로 채운다
+ */
+export function getCacheTrendBuckets(
+  db: Database,
+  fromTs?: number,
+  toTs?: number
+): CacheTrendBucketRow[] {
+  const params: number[] = [];
+  const conds = ["type = 'prompt'", "tokens_confidence = 'high'"];
+  conds.push(...buildTimeWindow('timestamp', fromTs, toTs, params));
+
+  // .all()은 unknown[]을 반환하므로 raw row 타입을 명시적으로 cast 후 map
+  const rawRows = db.query(`
+    SELECT
+      (CAST(timestamp / 3600000 AS INTEGER) * 3600000)  AS hour_ts,
+      COALESCE(SUM(tokens_input), 0)                    AS total_input,
+      COALESCE(SUM(cache_read_tokens), 0)               AS cache_read,
+      COALESCE(SUM(cache_creation_tokens), 0)           AS cache_create
+    FROM requests
+    WHERE ${conds.join(' AND ')}
+    GROUP BY hour_ts
+    ORDER BY hour_ts ASC
+  `).all(...params) as Array<{
+    hour_ts: number;
+    total_input: number;
+    cache_read: number;
+    cache_create: number;
+  }>;
+
+  return rawRows.map((r) => {
+    const denom = r.total_input + r.cache_read;
+    const hit_rate = denom > 0 ? r.cache_read / denom : null;
+    return {
+      hour_ts: r.hour_ts,
+      hit_rate: hit_rate !== null ? Math.round(hit_rate * 10_000) / 10_000 : null,
+      savings_tokens: r.cache_read,
+    };
+  });
 }
 
 /**

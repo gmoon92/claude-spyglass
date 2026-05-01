@@ -2,7 +2,11 @@
 import { fmt, fmtToken, formatDuration } from './formatters.js';
 import { setTypeData, drawDonut, renderTypeLegend } from './chart.js';
 import { clearError, setLastUpdated, showError } from './infra.js';
-import { renderProjects, renderTools, getAllSessions, setAllSessions, renderBrowserSessions } from './left-panel.js';
+import { renderProjects, getAllSessions, setAllSessions, renderBrowserSessions } from './left-panel.js';
+import {
+  renderBurnRate, renderCacheHealth, renderLivePulse,
+  renderToolCategoriesCard, renderAnomalyBadge,
+} from './obs-panel.js';
 import { RECENT_REQ_COLS } from './renderers.js';
 import { detectAnomalies } from './anomaly.js';
 import { renderCachePanel } from './cache-panel.js';
@@ -88,12 +92,14 @@ export async function fetchDashboard() {
     }
 
     renderProjects(d.projects || []);
-    renderTools(d.tools || []);
     setTypeData((d.types || []).sort((a, b) => b.count - a.count));
     drawDonut();
     renderTypeLegend();
     clearError();
     setLastUpdated();
+    // 옵저빌리티 패널은 dashboard 갱신 트리거에 맞춰 함께 갱신
+    // (left-panel-observability-revamp ADR-003 — 별도 Promise.all 병렬)
+    fetchObservability();
   } catch (err) {
     showError(`대시보드 로드 실패: ${err.message}`);
   }
@@ -158,4 +164,65 @@ export async function fetchSessionsByProject(projectName) {
     setAllSessions([...others, ...(json.data || [])]);
     renderBrowserSessions();
   } catch { /* silent */ }
+}
+
+// ── Observability Panel (좌측 사이드바 4 카드 + Anomaly Badge) ──────────────
+// left-panel-observability-revamp ADR-003/004:
+//   /api/metrics/* 라우트 4개 병렬 호출 → 위젯별 raw payload 그대로 전달.
+//   fetch 실패 시 위젯은 함수 내부에서 빈 상태 처리 (콘솔 throw 금지).
+async function safeJson(url) {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const j = await res.json();
+    return j?.data ?? null;
+  } catch { return null; }
+}
+
+export async function fetchObservability() {
+  const [burn, cache, tools, active] = await Promise.all([
+    safeJson(buildQuery(`${API}/api/metrics/burn-rate`,      { range: '24h' })),
+    safeJson(buildQuery(`${API}/api/metrics/cache-trend`,    { range: '24h' })),
+    safeJson(buildQuery(`${API}/api/metrics/tool-categories`, { range: '24h' })),
+    safeJson(`${API}/api/sessions/active`),
+  ]);
+
+  renderBurnRate(burn);
+  renderCacheHealth(cache);
+  renderToolCategoriesCard(Array.isArray(tools) ? tools : []);
+
+  // Live Pulse (Phase 1 간소형) — 활성 세션 수 + 마지막 활동 시각만.
+  // recent_calls sparkline은 Phase 2.
+  const activeArr = Array.isArray(active) ? active : [];
+  const lastEventTs = activeArr.reduce((m, s) => Math.max(m, s.last_activity_at || 0), 0) || null;
+  renderLivePulse({
+    active_count: activeArr.length,
+    last_event_ts: lastEventTs,
+    recent_calls: [],
+  });
+
+  // Anomaly Badge — Phase 2에서 정확화. 현재는 hidden 유지.
+  renderAnomalyBadge(null);
+}
+
+// ── Proxy Requests ──────────────────────────────────────────────────────────
+export async function fetchProxyRequests(limit = 50) {
+  try {
+    const url  = `${API}/api/proxy-requests?limit=${limit}`;
+    const res  = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    return json.data || [];
+  } catch { return []; }
+}
+
+export async function fetchProxyStats(since) {
+  try {
+    const sinceMs = since ?? (Date.now() - 24 * 60 * 60 * 1000);
+    const url  = `${API}/api/proxy-requests/stats?since=${sinceMs}`;
+    const res  = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    return json.data ?? json;
+  } catch { return null; }
 }

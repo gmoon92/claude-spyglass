@@ -172,6 +172,9 @@ export {
   // Tier 3
   getToolCategoryRawCounts,
   getAnomalyTimeSeriesInputs,
+  // 옵저빌리티 사이드바 (left-panel-observability-revamp)
+  getBurnRateBuckets,
+  getCacheTrendBuckets,
   // 타입
   type ModelUsageRow,
   type ModelCacheMatrixRow,
@@ -180,6 +183,8 @@ export {
   type TurnsPerSessionRow,
   type ToolCategoryRawRow,
   type AnomalyInputRow,
+  type BurnRateBucketRow,
+  type CacheTrendBucketRow,
 } from './queries/metrics';
 
 // =============================================================================
@@ -194,3 +199,18 @@ export {
   type ModelPricingEntry,
   type ModelPricing,
 } from './pricing';
+
+// =============================================================================
+// Proxy Request CRUD (HTTP 레벨 메트릭)
+// =============================================================================
+
+export {
+  createProxyRequest,
+  getRecentProxyRequests,
+  getProxyStats,
+  getLatestProxyResponseBefore,
+  type ProxyRequest,
+  type CreateProxyRequestParams,
+  type ProxyStats,
+  type LatestProxyResponse,
+} from './queries/proxy';
