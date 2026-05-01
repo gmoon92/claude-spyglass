@@ -113,6 +113,19 @@ function startSSE() {
       clearTimeout(refreshDebounce);
       refreshDebounce = setTimeout(() => fetchDashboard(), 1000);
     },
+    // 프록시 데이터 SSE 채널 — 후방 호환을 위해 옵션 콜백.
+    // 현재 웹 대시보드에는 proxy 패널이 없으므로 'spyglass:proxy-request' 커스텀 이벤트로
+    // 디스패치해 후속 패널 도입 시 1줄로 구독할 수 있게 한다.
+    // @see ${CLAUDE_PROJECT_DIR}/.claude/docs/plans/proxy-sse-integration/adr.md ADR-003
+    onNewProxyRequest(e) {
+      try {
+        const evt = JSON.parse(e.data);
+        // window 레벨 커스텀 이벤트로 디스패치 (구독자가 없으면 no-op)
+        document.dispatchEvent(new CustomEvent('spyglass:proxy-request', {
+          detail: evt.data,
+        }));
+      } catch { /* silent */ }
+    },
     onOpen() {
       clearError();
       setIsSSEConnected(true);

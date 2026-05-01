@@ -14,6 +14,8 @@
 
 import type { Database } from 'bun:sqlite';
 import { createProxyRequest } from '@spyglass/storage';
+import { broadcastNewProxyRequest, type ProxyBroadcastPayload } from './sse';
+import { invalidateDashboardCache } from './api';
 
 // =============================================================================
 // 설정
@@ -349,6 +351,25 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
           error_type: state.errorType, error_message: state.errorMessage,
           first_token_ms: state.firstTokenMs, api_request_id: state.apiRequestId,
         });
+        // DB 저장 성공 직후에만 캐시 무효화 + SSE 브로드캐스트
+        // @see docs/plans/proxy-sse-integration/plan.md Phase A
+        invalidateDashboardCache();
+        const broadcastPayload: ProxyBroadcastPayload = {
+          id: requestId, timestamp: startMs, method, path: url.pathname,
+          status_code: statusCode, response_time_ms: ms,
+          model: state.model,
+          tokens_input: state.usage.input_tokens ?? 0,
+          tokens_output: state.usage.output_tokens ?? 0,
+          cache_creation_tokens: state.usage.cache_creation_input_tokens ?? 0,
+          cache_read_tokens: state.usage.cache_read_input_tokens ?? 0,
+          tokens_per_second: tps, is_stream: true,
+          messages_count: reqMeta.messagesCount, max_tokens: reqMeta.maxTokens,
+          tools_count: reqMeta.toolsCount, request_preview: reqMeta.requestPreview,
+          stop_reason: state.stopReason, response_preview: state.responsePreview,
+          error_type: state.errorType, error_message: state.errorMessage,
+          first_token_ms: state.firstTokenMs, api_request_id: state.apiRequestId,
+        };
+        broadcastNewProxyRequest(broadcastPayload);
       } catch (err) {
         console.warn('[PROXY] DB save error:', err);
       }
@@ -421,6 +442,25 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
       error_type: state.errorType, error_message: state.errorMessage,
       first_token_ms: null, api_request_id: state.apiRequestId,
     });
+    // DB 저장 성공 직후에만 캐시 무효화 + SSE 브로드캐스트
+    // @see docs/plans/proxy-sse-integration/plan.md Phase A
+    invalidateDashboardCache();
+    const broadcastPayload: ProxyBroadcastPayload = {
+      id: requestId, timestamp: startMs, method, path: url.pathname,
+      status_code: statusCode, response_time_ms: ms,
+      model: state.model,
+      tokens_input: state.usage.input_tokens ?? 0,
+      tokens_output: state.usage.output_tokens ?? 0,
+      cache_creation_tokens: state.usage.cache_creation_input_tokens ?? 0,
+      cache_read_tokens: state.usage.cache_read_input_tokens ?? 0,
+      tokens_per_second: null, is_stream: false,
+      messages_count: reqMeta.messagesCount, max_tokens: reqMeta.maxTokens,
+      tools_count: reqMeta.toolsCount, request_preview: reqMeta.requestPreview,
+      stop_reason: state.stopReason, response_preview: state.responsePreview,
+      error_type: state.errorType, error_message: state.errorMessage,
+      first_token_ms: null, api_request_id: state.apiRequestId,
+    };
+    broadcastNewProxyRequest(broadcastPayload);
   } catch (err) {
     console.warn('[PROXY] DB save error:', err);
   }

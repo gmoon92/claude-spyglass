@@ -11,9 +11,15 @@
 
 /**
  * SSE 이벤트 타입
+ *
+ * - 'new_request'       : 훅(hooks) 데이터 (requests 테이블 신규 행)
+ * - 'new_proxy_request' : 프록시 데이터 (proxy_requests 테이블 신규 행)
+ *                         별도 채널 — payload 시그니처가 다르고 source='proxy' 마커 포함
+ *                         @see docs/plans/proxy-sse-integration/adr.md ADR-001
  */
 export type SSEEventType =
   | 'new_request'
+  | 'new_proxy_request'
   | 'session_update'
   | 'token_update'
   | 'stats_update'
@@ -127,6 +133,47 @@ export function broadcastNewRequest(requestData: {
   broadcastUpdate({
     type: 'new_request',
     data: requestData,
+  });
+}
+
+/**
+ * 프록시 신규 요청 브로드캐스트 — proxy.ts 전용
+ *
+ * 훅 데이터(`broadcastNewRequest`)와 별도 채널로 흘려보낸다.
+ * payload에 `source: 'proxy'` 마커를 명시해 클라이언트가 출처를 구분할 수 있게 한다.
+ *
+ * @see docs/plans/proxy-sse-integration/adr.md ADR-001
+ */
+export interface ProxyBroadcastPayload {
+  id: string;
+  timestamp: number;
+  method: string;
+  path: string;
+  status_code: number | null;
+  response_time_ms: number | null;
+  model: string | null;
+  tokens_input: number;
+  tokens_output: number;
+  cache_creation_tokens: number;
+  cache_read_tokens: number;
+  tokens_per_second: number | null;
+  is_stream: boolean;
+  messages_count: number;
+  max_tokens: number | null;
+  tools_count: number;
+  request_preview: string | null;
+  stop_reason: string | null;
+  response_preview: string | null;
+  error_type: string | null;
+  error_message: string | null;
+  first_token_ms: number | null;
+  api_request_id: string | null;
+}
+
+export function broadcastNewProxyRequest(p: ProxyBroadcastPayload): void {
+  broadcastUpdate({
+    type: 'new_proxy_request',
+    data: { source: 'proxy', ...p },
   });
 }
 
