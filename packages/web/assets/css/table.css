@@ -100,6 +100,38 @@ tr[data-type="tool_call"] td:first-child { padding-left: 6px; }
 tr[data-type="system"]    td:first-child { padding-left: 6px; }
 tr.row-selected td:first-child { border-left: 2px solid !important; padding-left: 6px !important; }
 
+/* ── SUBAGENT CHILD ROW (subagent-children-ui ADR-001) ─────────────────── */
+/* 자식 도구 호출 행: parent_tool_use_id가 있을 때 부모 직속임을 시각화한다.
+   - 첫 셀(.cell-time)에 들여쓰기 + 좌측 트리 가이드 라인
+   - .cell-target에 보조 들여쓰기로 부모 영역과 시각적 구분
+   - 색상은 var(--border) — 다크/라이트 자동 대응 (장식 요소: WCAG 적용 외) */
+tr.row-child td:first-child {
+  position: relative;
+  padding-left: 28px;
+}
+tr.row-child td:first-child::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+tr.row-child td:first-child::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  width: 10px;
+  height: 1px;
+  background: var(--border);
+}
+tr.row-child td.cell-target {
+  padding-left: 18px;
+}
+/* row-child가 row-selected와 충돌할 때 selected가 우선되도록 — 기존 row-selected 규칙은 !important */
+
 /* ── PROMPT EXPAND ──────────────────────────────────────────────────────── */
 .prompt-expand-row td { padding: 0 !important; border-bottom: 1px solid var(--border); }
 .prompt-expand-box {

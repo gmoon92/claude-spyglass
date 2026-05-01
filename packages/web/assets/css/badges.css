@@ -65,6 +65,41 @@
 .badge-slow::before  { content: '◷'; margin-right: 1px; }
 .badge-slow    { background: rgba(240,183,47,0.15); color: var(--warn); }
 
+/* ── CHILD COUNT BADGE (subagent-children-ui ADR-001) ─────────────────── */
+/* Agent 등 부모 도구가 자식 도구 호출을 가질 때 Target 셀에 합성된다.
+   neutral 위계 — typeBadge/anomaly 배지보다 시각 무게가 낮아야 한다.
+   var(--surface-alt) on row 배경 → 명암비 1.24:1 (장식 + 텍스트 var(--text-3) 5.5:1 AA) */
+.child-count-badge::before {
+  content: '⌐';
+  margin-right: 3px;
+  color: var(--text-4);
+  font-weight: 400;
+}
+.child-count-badge {
+  background: var(--surface-alt);
+  color: var(--text-3);
+  border: 1px solid var(--border);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: lowercase;
+}
+/* Agent chip 내부 inline 변형 — Turn 탭 chip 안에서 사용 */
+.tool-chip .child-count-badge,
+.agent-chip .child-count-badge {
+  margin-left: 6px;
+  padding: 1px 5px;
+  font-size: 10px;
+  background: transparent;
+  border-color: currentColor;
+  color: inherit;
+  opacity: 0.8;
+}
+.tool-chip .child-count-badge::before,
+.agent-chip .child-count-badge::before {
+  color: inherit;
+  opacity: 0.6;
+}
+
 /* ── RUNNING ICON ANIMATION ─────────────────────────────────────────────── */
 @keyframes tool-running-pulse {
   0%, 100% { opacity: 1;   transform: scale(1);    }

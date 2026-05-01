@@ -2,7 +2,7 @@
 import { createSearchBox } from './components/search-box.js';
 import { subTypeOf, SUB_TYPES } from './request-types.js';
 import { escHtml, fmtToken, fmtDate, fmtTime, formatDuration } from './formatters.js';
-import { makeRequestRow, typeBadge, contextPreview, toolStatusBadge, toolResponseHint, toolIconHtml, targetInnerHtml, modelChipHtml, trustOf, FLAT_VIEW_COLS, togglePromptExpand, _promptCache } from './renderers.js';
+import { makeRequestRow, typeBadge, contextPreview, toolStatusBadge, toolResponseHint, toolIconHtml, targetInnerHtml, modelChipHtml, trustOf, FLAT_VIEW_COLS, togglePromptExpand, _promptCache, buildChildCountMap, childCountBadgeHtml } from './renderers.js';
 import { clearContextChart } from './context-chart.js';
 import { TOOL_COLORS } from './tool-colors.js';
 import { loadToolStats, clearToolStats } from './tool-stats.js';
@@ -41,10 +41,13 @@ export function renderDetailRequests(list, anomalyMap = new Map()) {
     return;
   }
   // ADR-011: detail flat view에도 anomaly 배지 적용
+  // subagent-children-ui ADR-001: parent_tool_use_id별 자식 카운트 맵을 1회 순회로 구성
+  const childCountMap = buildChildCountMap(list);
   const rows = list.map(r => makeRequestRow(r, {
     showSession: false,
     fmtTime: fmtDate,
     anomalyFlags: anomalyMap.get(r.id) || null,
+    childCount:   r.tool_use_id ? (childCountMap.get(r.tool_use_id) || 0) : 0,
   })).join('');
   const typeCounts = {};
   list.forEach(r => { typeCounts[r.type] = (typeCounts[r.type] || 0) + 1; });
@@ -452,6 +455,12 @@ export function renderTurnCards(turns, badgeTurns) {
   // SSE 갱신 전 프롬프트 확장 상태 캡처
   const expandedFor = container.querySelector('[data-expand-for]')?.dataset.expandFor ?? null;
 
+  // subagent-children-ui ADR-001: 부모-자식 카운트 맵을 _detailAllRequests에서 구성
+  // (Turn API의 tool_calls는 tool_use_id/parent_tool_use_id를 포함하지 않으므로 SSoT는 평면 requests)
+  // chip 렌더 시 그룹의 각 item.id로 매칭된 raw request에서 자식 카운트를 합산한다.
+  const turnChildMap = buildChildCountMap(_detailAllRequests);
+  const reqIdToToolUseId = new Map(_detailAllRequests.map(r => [r.id, r.tool_use_id || null]));
+
   container.innerHTML = turns.slice().sort((a, b) => b.turn_index - a.turn_index).map(turn => {
     // 복잡도 배지
     const toolCount = turn.summary.tool_call_count;
@@ -467,15 +476,23 @@ export function renderTurnCards(turns, badgeTurns) {
       : '';
 
     // 도구 흐름 chip — compressContinuousTools + fmtActionLabel 재사용 (SSoT)
-    const chips = compressContinuousTools(turn.tool_calls).map(({ name, count, isAgent, agentName }) => {
+    // subagent-children-ui ADR-001: Agent chip(또는 자식 보유 도구 chip)에 자식 카운트 배지 합성
+    const chips = compressContinuousTools(turn.tool_calls).map(({ name, count, isAgent, agentName, items }) => {
       const base  = name.split('__').pop();
       const color = TOOL_COLORS[base] || TOOL_COLORS.default;
+      // 그룹 내 모든 item의 자식 카운트 합산 (raw 데이터로 함수 내부 판단)
+      // Turn API tool_calls는 tool_use_id가 없으므로 id → tool_use_id 매핑으로 조회
+      const groupChildCount = items.reduce((sum, tc) => {
+        const tuid = tc.tool_use_id || reqIdToToolUseId.get(tc.id) || null;
+        return sum + (tuid ? (turnChildMap.get(tuid) || 0) : 0);
+      }, 0);
+      const childBadge      = childCountBadgeHtml(groupChildCount);
       if (isAgent && agentName) {
         const countSuffix = count > 1 ? `×${count}` : '';
         const fullLabel   = agentName + (countSuffix ? ` ${countSuffix}` : '');
-        return `<span class="tool-chip agent-chip" style="border-color:${color};color:${color}" title="${escHtml(fullLabel)}">${toolIconHtml(base)}<span class="agent-chip-name">${escHtml(agentName)}</span>${countSuffix ? `<span class="turn-group-count"> ${escHtml(countSuffix)}</span>` : ''}</span>`;
+        return `<span class="tool-chip agent-chip" style="border-color:${color};color:${color}" title="${escHtml(fullLabel)}">${toolIconHtml(base)}<span class="agent-chip-name">${escHtml(agentName)}</span>${countSuffix ? `<span class="turn-group-count"> ${escHtml(countSuffix)}</span>` : ''}${childBadge}</span>`;
       }
-      return `<span class="tool-chip" style="border-color:${color};color:${color}">${fmtActionLabel(base, count)}</span>`;
+      return `<span class="tool-chip" style="border-color:${color};color:${color}">${fmtActionLabel(base, count)}${childBadge}</span>`;
     }).join('<svg class="chip-arrow" width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2 5 L7 5 M5 2.5 L7.5 5 L5 7.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
 
     // 푸터 메트릭

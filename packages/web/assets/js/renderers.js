@@ -401,9 +401,23 @@ function anomalyBadgesHtml(flags) {
 }
 
 
+/**
+ * 자식 카운트 배지 HTML (subagent-children-ui ADR-001)
+ * Agent 등 부모 도구의 Target 셀에 합성 — "subagent N" 형태로 자식 도구 호출 수 노출.
+ * 호출 측 boolean 재계산 금지: 숫자 childCount만 받고 함수 내부에서 표시 여부 판단.
+ */
+export function childCountBadgeHtml(childCount) {
+  const n = Number(childCount) || 0;
+  if (n <= 0) return '';
+  return `<span class="mini-badge child-count-badge" data-mini-badge-tooltip="자식 도구 호출 ${n}건">${n} children</span>`;
+}
+
 export function makeRequestRow(r, opts = {}) {
   const fmtTs  = opts.fmtTime || fmtTimestamp;
   const flags  = opts.anomalyFlags || null;
+  // subagent-children-ui ADR-001: 자식 도구 호출 행 분기 (호출 측 boolean 재계산 금지)
+  const isChild     = !!r.parent_tool_use_id;
+  const childCount  = Number(opts.childCount) || 0;
   const sessTd = opts.showSession
     ? `<td class="cell-sess"><span class="sess-id sess-id-link" data-goto-session="${escHtml(r.session_id||'')}" data-goto-project="${escHtml(r.project_name||'')}" title="${escHtml(r.session_id||'')}">${r.session_id ? r.session_id.slice(0,12)+'…' : '—'}</span></td>`
     : '';
@@ -414,12 +428,14 @@ export function makeRequestRow(r, opts = {}) {
 
   const spikeLoopBadges = flags ? anomalyBadgesHtml(new Set([...flags].filter(f => f !== 'slow'))) : '';
   const slowBadge       = flags && flags.has('slow') ? `<span class="mini-badge badge-slow" data-mini-badge-tooltip="slow">slow</span>` : '';
+  const childBadge      = childCountBadgeHtml(childCount);
 
   const trustCls = rowTrustClass(r);
-  return `<tr class="${trustCls.trim()}" data-type="${escHtml(r.type||'')}" data-sub-type="${subTypeOf(r)}" data-trust="${trustOf(r)}" data-request-id="${escHtml(r.id||'')}">
+  const rowCls   = `${trustCls.trim()}${isChild ? ' row-child' : ''}`.trim();
+  return `<tr class="${rowCls}" data-type="${escHtml(r.type||'')}" data-sub-type="${subTypeOf(r)}" data-trust="${trustOf(r)}" data-request-id="${escHtml(r.id||'')}"${isChild ? ` data-parent-tool-use-id="${escHtml(r.parent_tool_use_id)}"` : ''}>
     <td class="cell-time num">${fmtTs(r.timestamp)}</td>
     <td class="cell-action">${makeActionCell(r)}</td>
-    ${makeTargetCellWithBadges(r, spikeLoopBadges)}
+    ${makeTargetCellWithBadges(r, (childBadge || '') + (spikeLoopBadges || ''))}
     ${makeModelCell(r)}
     <td class="cell-msg">${msgHtml}</td>
     <td class="cell-token num">${r.tokens_input  > 0 ? fmtToken(r.tokens_input)  : '—'}</td>
@@ -433,8 +449,25 @@ export function makeRequestRow(r, opts = {}) {
 function makeTargetCellWithBadges(r, extraBadges) {
   if (!extraBadges) return makeTargetCell(r);
   const base = makeTargetCell(r);
-  // </td> 직전에 배지 삽입
+  // </td> 직전에 배지 삽입 (.target-cell-inner 외부, td 내부)
   return base.replace(/<\/td>$/, `${extraBadges}</td>`);
+}
+
+/**
+ * rows 배열에서 parent_tool_use_id별 자식 카운트 맵을 1회 순회로 구성한다.
+ * 호출 측이 row 렌더 시 r.tool_use_id 키로 조회하여 makeRequestRow opts.childCount로 전달한다.
+ * @param {Array} rows
+ * @returns {Map<string, number>}
+ */
+export function buildChildCountMap(rows) {
+  const map = new Map();
+  if (!rows) return map;
+  for (const r of rows) {
+    const pid = r && r.parent_tool_use_id;
+    if (!pid) continue;
+    map.set(pid, (map.get(pid) || 0) + 1);
+  }
+  return map;
 }
 
 export function extractFirstPrompt(payload) {
@@ -476,10 +509,21 @@ export function renderRequests(container, list, anomalyMap = new Map()) {
     container.innerHTML = `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty">데이터가 없습니다</td></tr>`;
     return;
   }
-  container.innerHTML = list.map(r => makeRequestRow(r, { showSession: true, anomalyFlags: anomalyMap.get(r.id) || null })).join('');
+  // subagent-children-ui ADR-001: 1회 순회로 부모-자식 카운트 맵 구성
+  const childCountMap = buildChildCountMap(list);
+  container.innerHTML = list.map(r => makeRequestRow(r, {
+    showSession: true,
+    anomalyFlags: anomalyMap.get(r.id) || null,
+    childCount:   r.tool_use_id ? (childCountMap.get(r.tool_use_id) || 0) : 0,
+  })).join('');
 }
 
 export function appendRequests(container, list, anomalyMap = new Map()) {
   if (!list.length) return;
-  container.insertAdjacentHTML('beforeend', list.map(r => makeRequestRow(r, { showSession: true, anomalyFlags: anomalyMap.get(r.id) || null })).join(''));
+  const childCountMap = buildChildCountMap(list);
+  container.insertAdjacentHTML('beforeend', list.map(r => makeRequestRow(r, {
+    showSession: true,
+    anomalyFlags: anomalyMap.get(r.id) || null,
+    childCount:   r.tool_use_id ? (childCountMap.get(r.tool_use_id) || 0) : 0,
+  })).join(''));
 }
