@@ -20,6 +20,7 @@
 .type-prompt    { background: var(--type-prompt-bg);    color: var(--type-prompt-color); }
 .type-tool_call { background: var(--type-tool_call-bg); color: var(--type-tool_call-color); }
 .type-system    { background: var(--type-system-bg);    color: var(--type-system-color); }
+.type-response  { background: var(--type-response-bg);  color: var(--type-response-color); }
 .type-unknown   { background: var(--unknown-bg);       color: var(--text-3); }
 
 .role-badge { margin-left: 4px; }
@@ -121,7 +122,6 @@
 .cache-tooltip-value { font-variant-numeric: tabular-nums; }
 .cache-tooltip-value.read  { color: var(--blue); }
 .cache-tooltip-value.write { color: var(--orange); }
-.cache-tooltip-cost { color: var(--text-dim); font-size: 10px; margin-left: 4px; }
 
 /* ── STAT TOOLTIP ───────────────────────────────────────────────────────── */
 .stat-tooltip {
@@ -160,8 +160,9 @@
   font-size: var(--text-body);
   font-weight: 500;
 }
-.role-badge-user   { color: var(--type-prompt-color); }
-.role-badge-system { color: var(--type-system-color); }
+.role-badge-user      { color: var(--type-prompt-color); }
+.role-badge-system    { color: var(--type-system-color); }
+.role-badge-assistant { color: var(--type-response-color); }
 .role-icon { font-size: var(--text-meta); }
 
 /* ── TOOL CELL ──────────────────────────────────────────────────────────── */
@@ -226,18 +227,6 @@ tr[data-type="tool_call"] td.cell-msg .prompt-preview {
 }
 .prompt-preview:hover { color: var(--text-2); text-decoration: underline dotted; }
 
-/* ── GANTT TOOLTIP ──────────────────────────────────────────────────────── */
-.gantt-tooltip {
-  min-width: 180px;
-  max-width: 240px;
-  font-size: 11px;
-}
-.gantt-tooltip .stat-tooltip-desc > div {
-  margin-bottom: 2px;
-  font-size: 11px;
-  line-height: 1.6;
-}
-
 /* ── TYPE FILTER BUTTON COLOR (defaultView + detailView 공유) ───────────────── */
 .type-filter-prompt.active     { color: var(--type-prompt-color);    border-color: var(--type-prompt-color);    background: var(--type-prompt-bg); }
 .type-filter-tool_call.active  { color: var(--type-tool_call-color); border-color: var(--type-tool_call-color); background: var(--type-tool_call-bg); }
@@ -252,3 +241,107 @@ tr[data-type="tool_call"] td.cell-msg .prompt-preview {
 .type-filter-skill:hover       { color: var(--type-skill-color);     border-color: var(--type-skill-color); }
 .type-filter-mcp:hover         { color: var(--type-mcp-color);       border-color: var(--type-mcp-color); }
 
+
+/* ── MODEL CHIP (ADR-data-trust-visual-001) ─────────────────────────────── */
+.model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  cursor: default;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.model-chip::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: currentColor;
+  opacity: 0.85;
+}
+.model-chip-haiku     { color: var(--model-haiku-color);     background: var(--model-haiku-bg);     border-color: var(--model-haiku-border); }
+.model-chip-sonnet    { color: var(--model-sonnet-color);    background: var(--model-sonnet-bg);    border-color: var(--model-sonnet-border); }
+.model-chip-opus      { color: var(--model-opus-color);      background: var(--model-opus-bg);      border-color: var(--model-opus-border); }
+.model-chip-external  { color: var(--model-external-color);  background: var(--model-external-bg);  border-color: var(--model-external-border); }
+.model-chip-synthetic { color: var(--model-synthetic-color); background: var(--model-synthetic-bg); border-color: var(--model-synthetic-border); }
+.model-chip-synthetic::before { background: var(--model-synthetic-color); opacity: 0.6; }
+.model-chip-unknown   { color: var(--model-unknown-color);   background: var(--model-unknown-bg);   border-color: var(--model-unknown-border); border-style: dashed; }
+.model-chip-unknown::before { display: none; }
+
+/* mini variant — turn view 도구 행에 사용 */
+.model-chip-mini {
+  padding: 1px 5px;
+  font-size: 10px;
+  border-radius: 3px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.model-chip-mini::before { width: 5px; height: 5px; }
+
+/* ── ROW TRUST INDICATORS ───────────────────────────────────────────────── */
+/* 신뢰할 수 없는 행 — opacity로 시각 무게 감소 + 좌측 보더로 분류 명시 */
+tr.row-trust-estimated > td:first-child {
+  box-shadow: inset 2px 0 0 var(--trust-estimated-border);
+}
+tr.row-trust-estimated  { opacity: var(--trust-estimated-opacity); }
+tr.row-trust-estimated:hover { opacity: 0.95; }
+
+tr.row-trust-synthetic > td:first-child {
+  box-shadow: inset 2px 0 0 var(--trust-synthetic-border);
+}
+tr.row-trust-synthetic  { opacity: var(--trust-synthetic-opacity); }
+tr.row-trust-synthetic:hover { opacity: 0.85; }
+
+tr.row-trust-unknown > td:first-child {
+  box-shadow: inset 2px 0 0 var(--trust-unknown-border);
+}
+tr.row-trust-unknown    { opacity: var(--trust-unknown-opacity); }
+tr.row-trust-unknown:hover { opacity: 0.95; }
+
+/* turn view 행 (div 기반) — data-trust 속성 사용 */
+.turn-row[data-trust="estimated"] {
+  opacity: var(--trust-estimated-opacity);
+  border-left: 2px solid var(--trust-estimated-border);
+  padding-left: 6px;
+}
+.turn-row[data-trust="synthetic"] {
+  opacity: var(--trust-synthetic-opacity);
+  border-left: 2px solid var(--trust-synthetic-border);
+  padding-left: 6px;
+}
+.turn-row[data-trust="unknown"] {
+  opacity: var(--trust-unknown-opacity);
+  border-left: 2px solid var(--trust-unknown-border);
+  padding-left: 6px;
+}
+.turn-row[data-trust="estimated"]:hover,
+.turn-row[data-trust="synthetic"]:hover,
+.turn-row[data-trust="unknown"]:hover { opacity: 0.95; }
+
+/* ── TRUST LABEL (모델 칩 옆 작은 보조 라벨) ─────────────────────────────── */
+.trust-label {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-4);
+  background: var(--white-bg-subtle);
+  border: 1px dashed rgba(110,118,129,0.30);
+  vertical-align: middle;
+}

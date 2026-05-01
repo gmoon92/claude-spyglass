@@ -361,7 +361,8 @@ export function isServerRunning(): boolean {
 
 if (import.meta.main) {
   // 프로세스 관리 (싱글톤)
-  const pidFile = `${process.env.HOME}/.spyglass/server.pid`;
+  // 운영/임시 인스턴스 분리: 환경변수로 PID 파일 경로 오버라이드 가능
+  const pidFile = process.env.SPYGLASS_PID_FILE || `${process.env.HOME}/.spyglass/server.pid`;
 
   // 명령어 처리
   const command = process.argv[2];
@@ -396,10 +397,11 @@ if (import.meta.main) {
       // 3. 서버 시작
       startServer();
 
-      // PID 파일 저장
+      // PID 파일 저장 (pidFile 디렉토리는 동적으로 결정)
       try {
         const fs = require('fs');
-        fs.mkdirSync(`${process.env.HOME}/.spyglass`, { recursive: true });
+        const path = require('path');
+        fs.mkdirSync(path.dirname(pidFile), { recursive: true });
         fs.writeFileSync(pidFile, process.pid.toString());
       } catch {}
 
@@ -489,7 +491,8 @@ if (import.meta.main) {
 
       // 6. 서버 시작
       startServer();
-      fs.mkdirSync(`${process.env.HOME}/.spyglass`, { recursive: true });
+      const path = require('path');
+      fs.mkdirSync(path.dirname(pidFile), { recursive: true });
       fs.writeFileSync(pidFile, process.pid.toString());
       console.log(`[Server] Restarted (PID: ${process.pid})`);
 

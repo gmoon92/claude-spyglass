@@ -35,6 +35,7 @@ export interface CreateRequestParams {
   event_type?: string | null;
   tokens_confidence?: string;
   tokens_source?: string;
+  parent_tool_use_id?: string | null;
 }
 
 /** 요청 생성 SQL */
@@ -43,8 +44,8 @@ const SQL_CREATE_REQUEST = `
     id, session_id, timestamp, type, tool_name, tool_detail, turn_id, model,
     tokens_input, tokens_output, tokens_total, duration_ms, payload, source,
     cache_creation_tokens, cache_read_tokens, preview, tool_use_id, event_type,
-    tokens_confidence, tokens_source
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    tokens_confidence, tokens_source, parent_tool_use_id
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 /**
@@ -75,7 +76,8 @@ export function createRequest(
     params.tool_use_id ?? null,
     params.event_type ?? null,
     params.tokens_confidence ?? 'high',
-    params.tokens_source ?? 'transcript'
+    params.tokens_source ?? 'transcript',
+    params.parent_tool_use_id ?? null
   );
   return params.id;
 }
@@ -111,7 +113,8 @@ export function createRequests(
         item.tool_use_id ?? null,
         item.event_type ?? null,
         item.tokens_confidence ?? 'high',
-        item.tokens_source ?? 'transcript'
+        item.tokens_source ?? 'transcript',
+        item.parent_tool_use_id ?? null
       );
     }
   });
@@ -177,6 +180,50 @@ export function getRequestsBySession(
   return db.query(
     "SELECT * FROM requests WHERE session_id = ? AND (event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent') ORDER BY timestamp DESC LIMIT ?"
   ).all(sessionId, limit) as RequestQueryResult[];
+}
+
+/**
+ * 부모 Agent tool_use_id에 해당하는 자식 도구 호출 조회 (서브에이전트 transcript에서 수집된 행)
+ *
+ * UI에서 Agent 행을 펼칠 때 사용. 시간순 오름차순 정렬.
+ *
+ * @see Migration 017
+ */
+export function getChildRequestsByParentToolUseId(
+  db: Database,
+  parentToolUseId: string
+): RequestQueryResult[] {
+  return db.query(
+    `SELECT * FROM requests
+     WHERE parent_tool_use_id = ?
+     ORDER BY timestamp ASC`
+  ).all(parentToolUseId) as RequestQueryResult[];
+}
+
+/**
+ * 여러 부모 tool_use_id에 대한 자식 호출들을 한번에 조회 (N+1 방지)
+ *
+ * 반환 형식: { [parentToolUseId]: RequestQueryResult[] }
+ */
+export function getChildRequestsByParents(
+  db: Database,
+  parentToolUseIds: string[]
+): Record<string, RequestQueryResult[]> {
+  if (parentToolUseIds.length === 0) return {};
+  const placeholders = parentToolUseIds.map(() => '?').join(',');
+  const rows = db.query(
+    `SELECT * FROM requests
+     WHERE parent_tool_use_id IN (${placeholders})
+     ORDER BY timestamp ASC`
+  ).all(...parentToolUseIds) as RequestQueryResult[];
+
+  const grouped: Record<string, RequestQueryResult[]> = {};
+  for (const row of rows) {
+    const key = row.parent_tool_use_id ?? '';
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(row);
+  }
+  return grouped;
 }
 
 /**
@@ -856,6 +903,18 @@ export interface TurnToolCall {
   model: string | null;
 }
 
+/** 턴 내 assistant 응답 (Stop 훅의 last_assistant_message) */
+export interface TurnResponse {
+  id: string;
+  timestamp: number;
+  preview: string | null;
+  payload: string | null;
+  tokens_input: number;
+  tokens_output: number;
+  tokens_total: number;
+  model: string | null;
+}
+
 /** 턴 항목 */
 export interface TurnItem {
   turn_id: string;
@@ -875,6 +934,8 @@ export interface TurnItem {
     context_tokens: number;
   } | null;
   tool_calls: TurnToolCall[];
+  /** 턴의 마지막 assistant 응답 (없을 수 있음) */
+  response: TurnResponse | null;
   summary: {
     tool_call_count: number;
     tokens_input: number;
@@ -962,6 +1023,26 @@ export function getTurnsBySession(
     model: string | null;
   }>;
 
+  // 3-bis. 각 턴의 assistant response 행 조회 (Stop 훅의 last_assistant_message 저장분)
+  // 한 턴에 응답이 여러 건이면 가장 마지막(최신) 행을 선택
+  const responseRows = db.query(`
+    SELECT turn_id, id, timestamp, preview, payload,
+           tokens_input, tokens_output, tokens_total, model
+    FROM requests
+    WHERE session_id = ? AND turn_id IS NOT NULL AND type = 'response'
+    ORDER BY turn_id, timestamp ASC
+  `).all(sessionId) as Array<{
+    turn_id: string;
+    id: string;
+    timestamp: number;
+    preview: string | null;
+    payload: string | null;
+    tokens_input: number;
+    tokens_output: number;
+    tokens_total: number;
+    model: string | null;
+  }>;
+
   // 4. 데이터 구성
   const promptMap = new Map(promptRows.map(p => [p.turn_id, p]));
   const toolCallsByTurn = new Map<string, typeof toolRows>();
@@ -971,10 +1052,16 @@ export function getTurnsBySession(
     }
     toolCallsByTurn.get(tool.turn_id)!.push(tool);
   }
+  // 같은 turn_id에 응답이 여러 건이면 timestamp 오름차순으로 들어와 마지막 entry가 최신
+  const responseMap = new Map<string, typeof responseRows[number]>();
+  for (const r of responseRows) {
+    responseMap.set(r.turn_id, r);
+  }
 
   const turns: TurnItem[] = turnSummaries.map((summary, idx) => {
     const prompt = promptMap.get(summary.turn_id);
     const toolCalls = toolCallsByTurn.get(summary.turn_id) || [];
+    const respRow  = responseMap.get(summary.turn_id) || null;
 
     // prompt 캐시 정보 계산
     let promptCacheRead = 0;
@@ -1031,6 +1118,16 @@ export function getTurnsBySession(
         event_type: t.event_type,
         model: t.model,
       })),
+      response: respRow ? {
+        id: respRow.id,
+        timestamp: respRow.timestamp,
+        preview: respRow.preview,
+        payload: respRow.payload,
+        tokens_input: respRow.tokens_input,
+        tokens_output: respRow.tokens_output,
+        tokens_total: respRow.tokens_total,
+        model: respRow.model,
+      } : null,
       summary: {
         tool_call_count: summary.tool_call_count,
         tokens_input: summary.prompt_tokens_input,

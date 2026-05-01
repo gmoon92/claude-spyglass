@@ -39,7 +39,7 @@
   --orange:      var(--warn);
   --red:         var(--error);
   --blue:        var(--info);
-  --purple:      #a78bfa;   /* 미사용 (Gantt Task는 --info로 통일) */
+  --purple:      #a78bfa;   /* 미사용 (Task 도구는 --info로 통일) */
   --pink:        #f472b6;   /* WebSearch/WebFetch 전용 */
 
   /* ── L4. Typography 이중 계층 (ADR-WDO-006) ── */
@@ -90,6 +90,8 @@
   --type-tool_call-bg:     rgba(63,185,80,0.15);
   --type-system-color:     var(--warn);
   --type-system-bg:        rgba(240,183,47,0.15);
+  --type-response-color:   #79c0ff; /* assistant blue */
+  --type-response-bg:      rgba(121,192,255,0.15);
   --type-agent-color:      var(--warn);
   --type-agent-bg:         rgba(240,183,47,0.15);
   --type-skill-color:      var(--warn);
@@ -126,7 +128,36 @@
   --unknown-bg:     rgba(110,118,129,0.20);
   --model-badge-bg: rgba(255,122,69,0.15);
 
-  /* ── 도구 색상 토큰 (Gantt/카드뷰 — 활성 시에만 사용) ── */
+  /* ── 모델 시각 구분 (ADR-data-trust-visual-001) ───────────────────────── */
+  /* Haiku=sky / Sonnet=accent orange / Opus=violet / external=pink / synthetic=neutral / unknown=dim */
+  --model-haiku-color:     #7dd3fc;          /* sky */
+  --model-haiku-bg:        rgba(125,211,252,0.12);
+  --model-haiku-border:    rgba(125,211,252,0.35);
+  --model-sonnet-color:    var(--accent);    /* orange */
+  --model-sonnet-bg:       rgba(255,122,69,0.12);
+  --model-sonnet-border:   rgba(255,122,69,0.35);
+  --model-opus-color:      #a78bfa;          /* violet */
+  --model-opus-bg:         rgba(167,139,250,0.14);
+  --model-opus-border:     rgba(167,139,250,0.40);
+  --model-external-color:  #f472b6;          /* pink (kimi-*) */
+  --model-external-bg:     rgba(244,114,182,0.12);
+  --model-external-border: rgba(244,114,182,0.35);
+  --model-synthetic-color: var(--text-4);    /* dim neutral */
+  --model-synthetic-bg:    rgba(110,118,129,0.10);
+  --model-synthetic-border:rgba(110,118,129,0.30);
+  --model-unknown-color:   var(--text-4);
+  --model-unknown-bg:      transparent;
+  --model-unknown-border:  rgba(110,118,129,0.25);
+
+  /* ── 신뢰도 표지 (행 단위 dim + 좌측 border) ──────────────────────────── */
+  --trust-estimated-opacity: 0.62;
+  --trust-estimated-border:  var(--neutral);    /* dashed neutral */
+  --trust-synthetic-opacity: 0.50;
+  --trust-synthetic-border:  var(--text-4);
+  --trust-unknown-opacity:   0.62;
+  --trust-unknown-border:    var(--neutral);
+
+  /* ── 도구 색상 토큰 (턴 카드뷰 chip — 활성 시에만 사용) ── */
   --tool-agent:   var(--warn);
   --tool-task:    var(--info);
   --tool-fs:      #34d399;

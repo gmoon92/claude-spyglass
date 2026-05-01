@@ -14,7 +14,7 @@ export function makeSkeletonRows(cols, count = 2) {
 }
 
 export function typeBadge(type) {
-  const known = ['prompt', 'tool_call', 'system'];
+  const known = ['prompt', 'tool_call', 'system', 'response'];
   const cls   = known.includes(type) ? type : 'unknown';
   const label = known.includes(type) ? type : (type || '?');
   return `<span class="type-badge type-${cls}" title="${escHtml(type)}" aria-label="${escHtml(type)}">${escHtml(label)}</span>`;
@@ -99,6 +99,9 @@ export function targetInnerHtml(r) {
   if (r.type === 'prompt') {
     return { html: `<span class="target-role-badge role-badge-user"><span class="role-icon">◉</span>user</span>`, empty: false };
   }
+  if (r.type === 'response') {
+    return { html: `<span class="target-role-badge role-badge-assistant"><span class="role-icon">◉</span>assistant</span>`, empty: false };
+  }
   if (r.type === 'system') {
     return { html: `<span class="target-role-badge role-badge-system"><span class="role-icon">◉</span>system</span>`, empty: false };
   }
@@ -126,11 +129,111 @@ export function makeTargetCell(r) {
     : `<td class="cell-target">${html}</td>`;
 }
 
+/**
+ * 모델 분류 — ADR-data-trust-visual-001
+ * @param {string|null} model
+ * @returns {'haiku'|'sonnet'|'opus'|'external'|'synthetic'|'unknown'}
+ */
+export function modelClassOf(model) {
+  if (!model) return 'unknown';
+  const m = String(model).toLowerCase();
+  if (m === 'synthetic' || m === '<synthetic>') return 'synthetic';
+  // claude-haiku-..., claude-3-5-haiku, claude-3.5-haiku-... 모두 매칭
+  if (m.includes('haiku'))  return 'haiku';
+  if (m.includes('sonnet')) return 'sonnet';
+  if (m.includes('opus'))   return 'opus';
+  if (m.startsWith('kimi-') || m.startsWith('kimi'))           return 'external';
+  return 'unknown';
+}
+
+/**
+ * 신뢰도 분류 — ADR-data-trust-visual-001
+ * model이 estimated 신호와 충돌하면 더 약한 신뢰도(synthetic > unknown > estimated)를 우선.
+ * external은 데이터 자체는 정확하므로 row dim 적용 안 함 (UI는 trusted로 처리).
+ * @param {{model?: string|null, tokens_source?: string|null}} r
+ * @returns {'trusted'|'estimated'|'synthetic'|'unknown'}
+ */
+export function trustOf(r) {
+  const cls = modelClassOf(r?.model);
+  if (cls === 'synthetic') return 'synthetic';
+  if (cls === 'unknown')   return 'unknown';
+  if (r?.tokens_source === 'unavailable') return 'estimated';
+  return 'trusted';
+}
+
+/**
+ * 모델 칩의 짧은 라벨 — ADR-data-trust-visual-001
+ * 예: "claude-sonnet-4-5-20250929" → "Sonnet 4.5"
+ *     "claude-opus-4-7-20260101"   → "Opus 4.7"
+ *     "kimi-k2-0905-preview"        → "Kimi k2"
+ *     null                          → "모델불명"
+ *     "<synthetic>" / "synthetic"   → "SDK 합성"
+ */
+export function modelChipLabel(model, cls) {
+  if (cls === 'unknown')   return '모델불명';
+  if (cls === 'synthetic') return 'SDK 합성';
+  if (cls === 'external') {
+    const m = String(model);
+    const head = m.split('-').slice(0, 2).join(' ');
+    return head.charAt(0).toUpperCase() + head.slice(1);
+  }
+  // claude-{family}-{major}-{minor}-{date} 또는 claude-{major}-{minor}-{family}-{date}
+  const m = String(model);
+  // 신형: claude-(haiku|sonnet|opus)-{major}-{minor}
+  let match = m.match(/claude-(haiku|sonnet|opus)-(\d+)(?:[-.](\d+))?/i);
+  if (match) {
+    const family = match[1].charAt(0).toUpperCase() + match[1].slice(1);
+    const ver = match[3] ? `${match[2]}.${match[3]}` : match[2];
+    return `${family} ${ver}`;
+  }
+  // 구형: claude-{major}-{minor}-(haiku|sonnet|opus)
+  match = m.match(/claude-(\d+)(?:[-.](\d+))?-(haiku|sonnet|opus)/i);
+  if (match) {
+    const family = match[3].charAt(0).toUpperCase() + match[3].slice(1);
+    const ver = match[2] ? `${match[1]}.${match[2]}` : match[1];
+    return `${family} ${ver}`;
+  }
+  // 기타 — family 단어만 추출
+  const fm = m.match(/(haiku|sonnet|opus)/i);
+  if (fm) return fm[1].charAt(0).toUpperCase() + fm[1].slice(1);
+  return model;
+}
+
+/**
+ * 모델 칩 HTML — title 속성에 풀네임 보관
+ * trustExtra: 'estimated' 등이 들어오면 칩 옆 trust-label 추가
+ */
+export function modelChipHtml(r, opts = {}) {
+  const cls   = modelClassOf(r?.model);
+  const label = modelChipLabel(r?.model, cls);
+  const titleText = r?.model
+    ? `${r.model}${r?.tokens_source === 'unavailable' ? '\n토큰 출처: 추정 (transcript 파싱 실패)' : ''}`
+    : '모델 정보 없음';
+  const sizeCls = opts.mini ? ' model-chip-mini' : '';
+  const trust   = trustOf(r);
+  const trustLabel = (trust === 'estimated')
+    ? `<span class="trust-label" title="토큰 값이 transcript에서 추정됨">추정</span>`
+    : '';
+  return `<span class="model-chip model-chip-${cls}${sizeCls}" title="${escHtml(titleText)}">${escHtml(label)}</span>${trustLabel}`;
+}
+
 export function makeModelCell(r) {
-  if (!r.model || r.model === 'synthetic') {
+  // tool_call 등 모델이 의미 없는 행: 기존처럼 빈 셀
+  if (r.type === 'tool_call' || r.type === 'system') {
     return `<td class="cell-model cell-empty">—</td>`;
   }
-  return `<td class="cell-model"><span class="model-name">${escHtml(r.model)}</span></td>`;
+  return `<td class="cell-model">${modelChipHtml(r)}</td>`;
+}
+
+/**
+ * row trust 클래스 (synthetic / unknown / estimated만 부여, trusted/external은 dim 안 함)
+ */
+function rowTrustClass(r) {
+  // 모델 정보가 의미없는 행은 dim 적용 안 함 (tool_call/system)
+  if (r.type === 'tool_call' || r.type === 'system') return '';
+  const t = trustOf(r);
+  if (t === 'trusted' || t === 'external') return '';
+  return ` row-trust-${t}`;
 }
 
 export function makeCacheCell(r) {
@@ -159,6 +262,7 @@ export function getContextText(r) {
     return r.tool_detail || null;
   }
   if (r.type === 'prompt')   return extractPromptText(r) || null;
+  if (r.type === 'response') return extractAssistantText(r) || null;
   if (r.type === 'system')   return extractPromptText(r) || null;
   return null;
 }
@@ -198,6 +302,7 @@ function getDetailText(r) {
     return r.tool_detail || null;
   }
   if (r.type === 'prompt' || r.type === 'system') return extractPromptText(r) || null;
+  if (r.type === 'response') return extractAssistantText(r) || null;
   return null;
 }
 
@@ -228,6 +333,20 @@ export function extractPromptText(r) {
     } catch { /* 파싱 실패 시 fallback */ }
   }
   // fallback: DB에 저장된 preview (payload 파싱 실패 또는 prompt 필드 없을 때)
+  if (r.preview && typeof r.preview === 'string' && r.preview.trim()) return r.preview;
+  return '';
+}
+
+// type='response' 행의 본문 추출 — Stop 훅의 last_assistant_message
+// payload 우선, preview fallback (extractPromptText와 같은 패턴)
+export function extractAssistantText(r) {
+  if (r.payload) {
+    try {
+      const p = typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
+      const fromPayload = p?.last_assistant_message ?? p?.preview ?? '';
+      if (fromPayload && typeof fromPayload === 'string' && fromPayload.trim()) return fromPayload;
+    } catch { /* 파싱 실패 시 fallback */ }
+  }
   if (r.preview && typeof r.preview === 'string' && r.preview.trim()) return r.preview;
   return '';
 }
@@ -296,7 +415,8 @@ export function makeRequestRow(r, opts = {}) {
   const spikeLoopBadges = flags ? anomalyBadgesHtml(new Set([...flags].filter(f => f !== 'slow'))) : '';
   const slowBadge       = flags && flags.has('slow') ? `<span class="mini-badge badge-slow" data-mini-badge-tooltip="slow">slow</span>` : '';
 
-  return `<tr data-type="${escHtml(r.type||'')}" data-sub-type="${subTypeOf(r)}" data-request-id="${escHtml(r.id||'')}">
+  const trustCls = rowTrustClass(r);
+  return `<tr class="${trustCls.trim()}" data-type="${escHtml(r.type||'')}" data-sub-type="${subTypeOf(r)}" data-trust="${trustOf(r)}" data-request-id="${escHtml(r.id||'')}">
     <td class="cell-time num">${fmtTs(r.timestamp)}</td>
     <td class="cell-action">${makeActionCell(r)}</td>
     ${makeTargetCellWithBadges(r, spikeLoopBadges)}

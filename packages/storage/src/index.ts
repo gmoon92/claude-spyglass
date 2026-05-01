@@ -94,6 +94,8 @@ export {
   getRequestById,
   getAllRequests,
   getRequestsBySession,
+  getChildRequestsByParentToolUseId,
+  getChildRequestsByParents,
   getRequestsByType,
   getRequestsWithFilter,
   getTopTokenRequests,

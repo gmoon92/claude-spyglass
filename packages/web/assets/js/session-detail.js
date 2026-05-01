@@ -2,15 +2,15 @@
 import { createSearchBox } from './components/search-box.js';
 import { subTypeOf, SUB_TYPES } from './request-types.js';
 import { escHtml, fmtToken, fmtDate, fmtTime, formatDuration } from './formatters.js';
-import { makeRequestRow, typeBadge, contextPreview, toolStatusBadge, toolResponseHint, toolIconHtml, targetInnerHtml, FLAT_VIEW_COLS, togglePromptExpand, _promptCache } from './renderers.js';
+import { makeRequestRow, typeBadge, contextPreview, toolStatusBadge, toolResponseHint, toolIconHtml, targetInnerHtml, modelChipHtml, trustOf, FLAT_VIEW_COLS, togglePromptExpand, _promptCache } from './renderers.js';
 import { clearContextChart } from './context-chart.js';
-import { renderGantt, clearGantt, TOOL_COLORS } from './turn-gantt.js';
+import { TOOL_COLORS } from './tool-colors.js';
 import { loadToolStats, clearToolStats } from './tool-stats.js';
 import { detectAnomalies } from './anomaly.js';
 // ADR-017: 세션 모드일 때 chartSection의 donut/cache panel을 세션 데이터로 갱신
 import { setTypeData, drawDonut, renderTypeLegend } from './chart.js';
 import { renderCachePanel, computeSessionCacheStats } from './cache-panel.js';
-import { GANTT_TURN_CLICK, DETAIL_FILTER_CHANGED } from './events.js';
+import { DETAIL_FILTER_CHANGED } from './events.js';
 
 export const API = '';
 
@@ -171,13 +171,10 @@ document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
 export function setDetailView(tab) {
   document.getElementById('detailFlatView').style.display   = tab === 'flat'  ? '' : 'none';
   document.getElementById('detailTurnView').style.display   = tab === 'turn'  ? '' : 'none';
-  document.getElementById('detailGanttView').style.display  = tab === 'gantt' ? '' : 'none';
   document.getElementById('detailToolsView').style.display  = tab === 'tools' ? '' : 'none';
   document.getElementById('tabFlat').classList.toggle('active',   tab === 'flat');
   document.getElementById('tabTurn').classList.toggle('active',   tab === 'turn');
-  document.getElementById('tabGantt').classList.toggle('active',  tab === 'gantt');
   document.getElementById('tabTools').classList.toggle('active',  tab === 'tools');
-  if (tab === 'gantt') renderGantt(_detailAllTurns, _detailTurnAnomalyMap);
   if (tab === 'tools' && _currentSessionId) loadToolStats(_currentSessionId);
 }
 
@@ -323,6 +320,7 @@ function renderToolRow(tc) {
   const tcTarget    = targetInnerHtml(tcData).html;
   // 첫 번째 span에 statusBadge가 없으면 &nbsp;로 공간 유지하여 아이콘 정렬 일치
   const statusCell  = statusBadge || '&nbsp;';
+  // tool_call 자체는 모델 의미 없음 → trust 표시 생략
   return `<div class="turn-row turn-row-tool" data-type="tool_call">
       <span>${statusCell}</span>
       <div class="tool-cell">
@@ -345,11 +343,15 @@ function buildTurnDetailRows(turn) {
   const promptData        = turn.prompt ? { ...turn.prompt, type: 'prompt' } : null;
   const promptPreviewHtml = promptData ? contextPreview(promptData, 80) : '';
   const promptTarget      = promptData ? targetInnerHtml(promptData).html : '';
+  const promptTrust       = promptData ? trustOf(promptData) : 'trusted';
+  const promptTrustAttr   = (promptTrust === 'estimated' || promptTrust === 'synthetic' || promptTrust === 'unknown')
+    ? ` data-trust="${promptTrust}"` : '';
+  const promptModelChip   = promptData ? modelChipHtml(promptData, { mini: true }) : '';
   const promptRow         = promptData ? `
-    <div class="turn-row turn-row-prompt" data-type="prompt">
+    <div class="turn-row turn-row-prompt" data-type="prompt"${promptTrustAttr}>
       <span></span>
       <div class="tool-cell">
-        <span class="tool-main">${promptTarget}</span>
+        <span class="tool-main">${promptTarget}${promptModelChip}</span>
         ${promptPreviewHtml ? `<span class="tool-sub">${promptPreviewHtml}</span>` : ''}
       </div>
       <span class="num cell-token">${promptData.tokens_input  > 0 ? fmtToken(promptData.tokens_input)  : '—'}</span>
@@ -384,7 +386,31 @@ function buildTurnDetailRows(turn) {
     <div class="turn-row-group-children">${childRows}</div>`;
   }).join('');
 
-  return promptRow + (toolRows || '<div class="turn-row-empty">도구 호출 없음</div>');
+  // assistant 응답 행 — turns API의 turn.response 필드 사용 (없으면 빈 문자열)
+  const responseData = turn.response ? {
+    ...turn.response,
+    type: 'response',
+  } : null;
+  const responsePreviewHtml = responseData ? contextPreview(responseData, 80) : '';
+  const responseTarget      = responseData ? targetInnerHtml(responseData).html : '';
+  const responseTrust       = responseData ? trustOf(responseData) : 'trusted';
+  const responseTrustAttr   = (responseTrust === 'estimated' || responseTrust === 'synthetic' || responseTrust === 'unknown')
+    ? ` data-trust="${responseTrust}"` : '';
+  const responseModelChip   = responseData ? modelChipHtml(responseData, { mini: true }) : '';
+  const responseRow         = responseData ? `
+    <div class="turn-row turn-row-response" data-type="response"${responseTrustAttr}>
+      <span></span>
+      <div class="tool-cell">
+        <span class="tool-main">${responseTarget}${responseModelChip}</span>
+        ${responsePreviewHtml ? `<span class="tool-sub">${responsePreviewHtml}</span>` : ''}
+      </div>
+      <span class="num cell-token">${responseData.tokens_input  > 0 ? fmtToken(responseData.tokens_input)  : '—'}</span>
+      <span class="num cell-token">${responseData.tokens_output > 0 ? fmtToken(responseData.tokens_output) : '—'}</span>
+      <span class="num cell-token text-dim">—</span>
+      <span class="num cell-time text-dim">${fmtDate(responseData.timestamp)}</span>
+    </div>` : '';
+
+  return promptRow + (toolRows || '<div class="turn-row-empty">도구 호출 없음</div>') + responseRow;
 }
 
 // setTurnViewMode는 하위 호환성을 위해 no-op stub으로 유지
@@ -512,7 +538,6 @@ export async function refreshDetailSession(sessionId) {
 
 export async function loadSessionDetail(sessionId, opts = {}) {
   clearContextChart();
-  clearGantt();
   clearToolStats();
   _currentSessionId  = sessionId;
   _detailSearchQuery = '';
@@ -568,12 +593,3 @@ export function toggleCardExpand(turnId) {
   }
 }
 
-// G7: Gantt 클릭 → 턴뷰 연동 이벤트 리스너 등록
-export function initGanttNavigation() {
-  document.addEventListener(GANTT_TURN_CLICK, (e) => {
-    const { turnId } = e.detail;
-    setDetailView('turn');
-    // 약간의 딜레이로 DOM 렌더링 후 펼침
-    requestAnimationFrame(() => toggleTurn(turnId));
-  });
-}

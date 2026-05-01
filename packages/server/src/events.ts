@@ -2,10 +2,22 @@
  * Events Collector - POST /events
  *
  * @description 와일드카드 훅에서 전달되는 raw hook payload를 claude_events 테이블에 저장
+ *              + Stop 이벤트의 last_assistant_message를 requests 테이블에 'response' 타입으로 저장
  */
 
+import { randomUUID } from 'node:crypto';
 import type { Database } from 'bun:sqlite';
-import { createEvent, endSession, reactivateSession, type ClaudeEvent } from '@spyglass/storage';
+import {
+  createEvent,
+  createRequest,
+  endSession,
+  getSessionById,
+  reactivateSession,
+  type ClaudeEvent,
+} from '@spyglass/storage';
+import { getLastTurnId, parseTranscript } from './collect';
+import { broadcastNewRequest } from './sse';
+import { invalidateDashboardCache } from './api';
 
 export interface RawHookPayload {
   hook_event_name: string;
@@ -14,6 +26,8 @@ export interface RawHookPayload {
   cwd?: string;
   agent_id?: string;
   agent_type?: string;
+  /** Stop 이벤트에서 Claude의 마지막 assistant 메시지 본문 */
+  last_assistant_message?: string;
   [key: string]: unknown;
 }
 
@@ -67,12 +81,107 @@ export async function eventsCollectHandler(req: Request, db: Database): Promise<
     } else if (event.event_type === 'SessionStart') {
       // compact/resume: 동일 session_id로 SessionStart 재발생 시 ended_at 클리어
       reactivateSession(db, event.session_id);
+    } else if (event.event_type === 'Stop') {
+      // Stop: 사용자가 본 Claude 응답 텍스트를 requests 테이블에 'response' 타입으로 저장
+      saveAssistantResponse(db, payload, event.timestamp);
     }
 
     return json({ success: true, event_id: event.event_id });
   } catch (error) {
     console.error('[Events] Failed to save event:', error);
     return json({ error: 'Failed to save event' }, 500);
+  }
+}
+
+/**
+ * Stop 이벤트의 last_assistant_message를 requests 테이블에 'response' 타입으로 INSERT 후 SSE 브로드캐스트.
+ *
+ * 동작 원칙:
+ *  - last_assistant_message 부재 시 no-op (조용히 종료)
+ *  - turn_id는 직전 prompt의 turn_id와 동일하게 매핑 → Turn 탭에서 같은 카드에 표시
+ *  - tokens/model은 transcript 마지막 assistant 라인에서 best-effort로 추출
+ *  - 실패해도 /events 응답 200 유지 (claude_events 저장은 이미 성공)
+ */
+function saveAssistantResponse(
+  db: Database,
+  payload: RawHookPayload,
+  timestamp: number,
+): void {
+  try {
+    const message = typeof payload.last_assistant_message === 'string'
+      ? payload.last_assistant_message
+      : null;
+    if (!message || !message.trim()) return;
+
+    const sessionId = payload.session_id;
+    const transcriptPath = payload.transcript_path ?? '';
+
+    // tokens/model: transcript 파싱 best-effort
+    const usage = transcriptPath ? parseTranscript(transcriptPath) : null;
+    const tokensInput = usage?.inputTokens.value ?? 0;
+    const tokensOutput = usage?.outputTokens.value ?? 0;
+    const cacheCreate = usage?.cacheCreationTokens.value ?? 0;
+    const cacheRead   = usage?.cacheReadTokens.value ?? 0;
+    const model       = usage?.model || null;
+
+    const inputConfidence  = usage?.inputTokens.confidence ?? 'error';
+    const outputConfidence = usage?.outputTokens.confidence ?? 'error';
+    const tokensConfidence = (inputConfidence === 'error' || outputConfidence === 'error')
+      ? 'error'
+      : 'high';
+    const tokensSource = tokensConfidence === 'error' ? 'unavailable' : 'transcript';
+
+    // turn_id 매핑: 직전 prompt의 turn_id 재사용 (없으면 NULL)
+    const turnId = getLastTurnId(db, sessionId) ?? undefined;
+
+    const id = `resp-${timestamp}-${randomUUID().slice(0, 8)}`;
+    const previewText = message.slice(0, 2000);
+
+    createRequest(db, {
+      id,
+      session_id: sessionId,
+      timestamp,
+      type: 'response',
+      tool_name: undefined,
+      tool_detail: undefined,
+      turn_id: turnId,
+      model: model ?? undefined,
+      tokens_input: tokensInput,
+      tokens_output: tokensOutput,
+      tokens_total: tokensInput + tokensOutput,
+      duration_ms: 0,
+      payload: JSON.stringify(payload),
+      source: 'claude-code-hook',
+      cache_creation_tokens: cacheCreate,
+      cache_read_tokens: cacheRead,
+      preview: previewText,
+      tool_use_id: null,
+      event_type: 'assistant_response',
+      tokens_confidence: tokensConfidence,
+      tokens_source: tokensSource,
+    });
+
+    invalidateDashboardCache();
+
+    const session = getSessionById(db, sessionId);
+    broadcastNewRequest({
+      id,
+      session_id: sessionId,
+      type: 'response',
+      request_type: 'response',
+      tool_name: null,
+      tool_detail: null,
+      tokens_input: tokensInput,
+      tokens_output: tokensOutput,
+      tokens_total: tokensInput + tokensOutput,
+      duration_ms: 0,
+      model,
+      timestamp,
+      payload: JSON.stringify({ preview: previewText, last_assistant_message: previewText }),
+      session_total_tokens: session?.total_tokens ?? (tokensInput + tokensOutput),
+    });
+  } catch (error) {
+    console.error('[Events] Failed to save assistant response:', error);
   }
 }
 

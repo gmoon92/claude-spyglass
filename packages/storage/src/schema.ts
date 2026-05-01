@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS requests (
   id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL,
   timestamp INTEGER NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('prompt', 'tool_call', 'system')),
+  type TEXT NOT NULL CHECK (type IN ('prompt', 'tool_call', 'system', 'response')),
   tool_name TEXT,
   model TEXT,
   tokens_input INTEGER DEFAULT 0,
@@ -102,8 +102,13 @@ export interface Session {
 
 /**
  * 요청 타입 열거형
+ *
+ * - 'prompt'    : 사용자 입력 (UserPromptSubmit 훅)
+ * - 'tool_call' : 도구 호출 (PreToolUse / PostToolUse 훅)
+ * - 'system'    : 시스템 이벤트 (SessionStart, Notification 등)
+ * - 'response'  : Claude 응답 (Stop 훅의 last_assistant_message)
  */
-export type RequestType = 'prompt' | 'tool_call' | 'system';
+export type RequestType = 'prompt' | 'tool_call' | 'system' | 'response';
 
 /**
  * 요청 엔티티 타입
@@ -130,6 +135,7 @@ export interface Request {
   event_type?: string | null;
   tokens_confidence?: string;
   tokens_source?: string;
+  parent_tool_use_id?: string | null;
   created_at?: number;
 }
 
@@ -140,12 +146,18 @@ export interface Request {
 /**
  * 현재 스키마 버전
  * 마이그레이션 파일 기준: packages/storage/migrations/NNN-*.sql
+ *
+ * 버전 이력:
+ *   - v14: 014-add-proxy-requests.sql (다른 워크트리에서 추가, proxy_requests 테이블)
+ *   - v15: 015-proxy-requests-enrich.sql (proxy_requests 컬럼 + correlated_requests VIEW)
+ *   - v16: 016-add-response-type.sql (requests.type CHECK 'response' 추가)
+ *   - v17: 017-add-parent-tool-use-id.sql (requests.parent_tool_use_id + 인덱스)
  */
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 17;
 
 export const SCHEMA_META = {
   version: SCHEMA_VERSION,
-  tables: ['sessions', 'requests', 'claude_events'],
+  tables: ['sessions', 'requests', 'claude_events', 'proxy_requests'],
   indexes: [
     'idx_sessions_started_at',
     'idx_sessions_project',
@@ -156,5 +168,6 @@ export const SCHEMA_META = {
     'idx_events_session_time',
     'idx_events_type_time',
     'idx_requests_tool_use_id',
+    'idx_requests_parent_tool_use_id',
   ],
 } as const;

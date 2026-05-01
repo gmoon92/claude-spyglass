@@ -220,6 +220,112 @@ export function resolveSubagentTranscriptPath(
   return `${dir}/${sessionId}/subagents/agent-${agentId}.jsonl`;
 }
 
+// =============================================================================
+// 서브에이전트 자식 도구 호출 추출 (Migration 017)
+// =============================================================================
+
+/**
+ * 서브 transcript에서 발견된 도구 호출 1건
+ *
+ * @see extractSubagentToolCalls
+ */
+export interface SubagentChildToolCall {
+  toolUseId: string;
+  toolName: string;
+  toolInput: Record<string, unknown>;
+  timestampMs: number;
+  model: string;
+  tokensInput: number;
+  tokensOutput: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+}
+
+/**
+ * 서브에이전트 transcript JSONL을 파싱하여 모든 tool_use 항목을 추출.
+ *
+ * - 표준 Anthropic message format 가정:
+ *   각 line = {type: 'assistant', timestamp: ISO8601, message: {model, usage, content: [...]}}
+ *   content[].type === 'tool_use' → {id, name, input}
+ *
+ * - usage/model은 같은 assistant 행의 메타데이터를 그대로 사용
+ *   (한 assistant 응답 안에 여러 tool_use가 있으면 같은 usage가 복제될 수 있는데,
+ *    스펙상 첫 tool_use에만 부여하는 것이 통계 왜곡 방지에 좋음)
+ *
+ * - 파일 미존재 / 파싱 실패 시 빈 배열 반환 (수집은 계속 진행)
+ */
+export function extractSubagentToolCalls(
+  subTranscriptPath: string
+): SubagentChildToolCall[] {
+  let content: string;
+  try {
+    content = readFileSync(subTranscriptPath, 'utf-8');
+  } catch {
+    return [];
+  }
+
+  const result: SubagentChildToolCall[] = [];
+  const lines = content.split('\n').filter((l: string) => l.trim());
+
+  for (const line of lines) {
+    let entry: Record<string, unknown>;
+    try {
+      entry = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    if (entry.type !== 'assistant') continue;
+
+    const message = entry.message as Record<string, unknown> | undefined;
+    if (!message) continue;
+
+    const contentArr = message.content as Array<Record<string, unknown>> | undefined;
+    if (!Array.isArray(contentArr)) continue;
+
+    const usage = (message.usage ?? {}) as Record<string, unknown>;
+    const model = (message.model as string) ?? '';
+    const ts = entry.timestamp as string | undefined;
+    const timestampMs = ts ? Date.parse(ts) : Date.now();
+
+    let firstToolUseInResponse = true;
+    for (const block of contentArr) {
+      if (block.type !== 'tool_use') continue;
+      const id = block.id as string | undefined;
+      const name = block.name as string | undefined;
+      if (!id || !name) continue;
+
+      // usage는 첫 tool_use에만 부여 (assistant 응답당 1회 청구)
+      const tokensInput = firstToolUseInResponse
+        ? ((usage.input_tokens as number) ?? 0)
+        : 0;
+      const tokensOutput = firstToolUseInResponse
+        ? ((usage.output_tokens as number) ?? 0)
+        : 0;
+      const cacheCreationTokens = firstToolUseInResponse
+        ? ((usage.cache_creation_input_tokens as number) ?? 0)
+        : 0;
+      const cacheReadTokens = firstToolUseInResponse
+        ? ((usage.cache_read_input_tokens as number) ?? 0)
+        : 0;
+
+      result.push({
+        toolUseId: id,
+        toolName: name,
+        toolInput: (block.input ?? {}) as Record<string, unknown>,
+        timestampMs: Number.isFinite(timestampMs) ? timestampMs : Date.now(),
+        model,
+        tokensInput,
+        tokensOutput,
+        cacheCreationTokens,
+        cacheReadTokens,
+      });
+      firstToolUseInResponse = false;
+    }
+  }
+
+  return result;
+}
+
 /**
  * 훅 payload 기준으로 실제 usage/model을 읽어올 transcript 데이터를 반환.
  *
@@ -459,8 +565,10 @@ function assignTurnId(db: Database, sessionId: string): string {
 
 /**
  * 현재 세션의 마지막 turn_id 조회 (tool_call 저장 시 사용)
+ *
+ * Stop 이벤트(events.ts)에서도 동일 로직으로 응답 행을 직전 prompt의 turn에 매핑한다.
  */
-function getLastTurnId(db: Database, sessionId: string): string | null {
+export function getLastTurnId(db: Database, sessionId: string): string | null {
   const row = db.query(
     `SELECT turn_id FROM requests WHERE session_id = ? AND type = 'prompt' ORDER BY timestamp DESC LIMIT 1`
   ).get(sessionId) as { turn_id: string } | null;
@@ -612,6 +720,65 @@ function saveRequest(db: Database, payload: CollectPayload): { saved: boolean; w
 // =============================================================================
 // Collect 핸들러
 // =============================================================================
+
+/**
+ * 서브에이전트 자식 도구 호출들을 requests에 일괄 INSERT (Migration 017).
+ *
+ * - turn_id는 부모 Agent와 동일 (메인 세션의 같은 turn)
+ * - parent_tool_use_id는 부모 Agent의 tool_use_id
+ * - source='subagent-transcript', event_type='tool'
+ * - 중복 방지: 동일 tool_use_id가 이미 존재하면 skip
+ *
+ * @returns 저장된 행 수
+ */
+export function persistSubagentChildren(
+  db: Database,
+  children: SubagentChildToolCall[],
+  context: { parentToolUseId: string; sessionId: string; turnId?: string }
+): number {
+  let inserted = 0;
+  for (const child of children) {
+    // 이미 동일 tool_use_id가 존재하면 skip (재실행 안전성)
+    const exists = db.query(
+      'SELECT 1 FROM requests WHERE tool_use_id = ? LIMIT 1'
+    ).get(child.toolUseId) as { 1: number } | null;
+    if (exists) continue;
+
+    const tokensTotal = child.tokensInput + child.tokensOutput;
+    const toolDetail = extractToolDetail(child.toolName, child.toolInput);
+    const id = `sub-${child.timestampMs}-${randomUUID().slice(0, 8)}`;
+
+    try {
+      createRequest(db, {
+        id,
+        session_id: context.sessionId,
+        timestamp: child.timestampMs,
+        type: 'tool_call',
+        tool_name: child.toolName,
+        tool_detail: toolDetail ?? undefined,
+        turn_id: context.turnId,
+        model: child.model || undefined,
+        tokens_input: child.tokensInput,
+        tokens_output: child.tokensOutput,
+        tokens_total: tokensTotal,
+        duration_ms: 0,
+        payload: JSON.stringify({ tool_input: child.toolInput, source: 'subagent-transcript' }),
+        source: 'subagent-transcript',
+        cache_creation_tokens: child.cacheCreationTokens,
+        cache_read_tokens: child.cacheReadTokens,
+        tool_use_id: child.toolUseId,
+        event_type: 'tool',
+        tokens_confidence: 'high',
+        tokens_source: 'transcript',
+        parent_tool_use_id: context.parentToolUseId,
+      });
+      inserted++;
+    } catch (e) {
+      console.error('[Collect] Failed to insert subagent child:', e);
+    }
+  }
+  return inserted;
+}
 
 /**
  * /collect 엔드포인트 핸들러 (정제된 CollectPayload 기반 저장)
@@ -841,6 +1008,41 @@ export async function rawCollectHandler(req: Request, db: SpyglassDatabase): Pro
     };
 
     const result = handleCollect(db.instance, collectPayload);
+
+    // Agent tool 완료 시 서브 transcript에서 자식 도구 호출 추출하여 INSERT
+    // (Migration 017: parent_tool_use_id 매핑)
+    if (
+      result.success &&
+      tool_name === 'Agent' &&
+      tool_use_id &&
+      raw.transcript_path &&
+      raw.session_id
+    ) {
+      const subAgentId = (raw.tool_response as { agentId?: string } | undefined)?.agentId;
+      if (subAgentId) {
+        try {
+          const subPath = resolveSubagentTranscriptPath(
+            raw.transcript_path, raw.session_id, subAgentId
+          );
+          const childCalls = extractSubagentToolCalls(subPath);
+          if (childCalls.length > 0) {
+            const parentTurnId = getLastTurnId(db.instance, raw.session_id) ?? undefined;
+            persistSubagentChildren(
+              db.instance,
+              childCalls,
+              {
+                parentToolUseId: tool_use_id,
+                sessionId: raw.session_id,
+                turnId: parentTurnId,
+              }
+            );
+          }
+        } catch (e) {
+          console.error('[Collect] Failed to persist subagent children:', e);
+        }
+      }
+    }
+
     return new Response(JSON.stringify(result), {
       status: result.success ? 200 : 400,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },

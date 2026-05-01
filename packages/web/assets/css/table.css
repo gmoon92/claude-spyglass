@@ -75,11 +75,13 @@ td.cell-target {
 }
 td.cell-model  {
   overflow: hidden;
-  font-family: var(--font-data);
+  font-family: var(--font-ui);
   font-size: var(--text-small);
   color: var(--text-4);
   white-space: nowrap;
   text-overflow: ellipsis;
+  padding-top: 2px;
+  padding-bottom: 2px;
 }
 .target-cell-inner { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; overflow: hidden; }
 .model-name    {
