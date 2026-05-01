@@ -33,6 +33,9 @@ type ApiToolCall = {
   payload?: string | null;
   event_type?: string | null;
   model?: string | null;
+  /** data-honesty-ui */
+  parent_tool_use_id?: string | null;
+  tokens_confidence?: string | null;
 };
 
 type ApiPrompt = {
@@ -78,6 +81,8 @@ function mapToolCallToRequest(tc: ApiToolCall, sessionId: string): Request {
     tool_name: tc.tool_name ?? null,
     tool_detail: tc.tool_detail ?? null,
     tool_use_id: tc.id,
+    parent_tool_use_id: tc.parent_tool_use_id ?? null,
+    tokens_confidence: tc.tokens_confidence ?? null,
     event_type: (tc.event_type as Request['event_type']) ?? undefined,
     tokens_input: tc.tokens_input ?? 0,
     tokens_output: tc.tokens_output ?? 0,
@@ -145,6 +150,8 @@ function mapApiTurnToTurn(at: ApiTurn, sessionId: string): Turn {
     prompt,
     startedAt: at.started_at,
     endedAt,
+    // data-honesty-ui: DB에 turn 단위 stop_reason이 저장되지 않으므로 null 유지.
+    // TurnCard는 null인 경우 가짜 'end_turn'을 합성하지 않고 '—'를 표시한다.
     endReason: null,
     tools,
     totalTokens,

@@ -47,9 +47,22 @@ export function TurnCard({ turn, width = 110, showTokenTree = false }: TurnCardP
       ? tokens.color.primary.fg
       : tokens.color.muted.fg;
 
-  const endReason = turn.endReason ?? (turn.state === 'running' ? '' : 'end_turn');
-  const endIcon =
-    turn.state === 'error' ? tokens.icon.state.err : turn.state === 'running' ? '' : tokens.icon.state.ok;
+  // data-honesty-ui: 가짜 'end_turn' 합성 금지. DB stop_reason(turn.endReason) 그대로 노출.
+  // running 상태는 표지 없음. 그 외 endReason 부재 시 '—'.
+  const endReason = turn.state === 'running'
+    ? ''
+    : (turn.endReason ?? '—');
+  const endIcon = turn.state === 'error'
+    ? tokens.icon.state.err
+    : turn.state === 'running' || endReason === '—'
+    ? ''
+    : tokens.icon.state.ok;
+
+  const endColor = turn.state === 'error'
+    ? tokens.color.danger.fg
+    : endReason === '—'
+    ? tokens.color.muted.fg
+    : tokens.color.success.fg;
 
   const title = (
     <Box flexDirection="row">
@@ -58,8 +71,8 @@ export function TurnCard({ turn, width = 110, showTokenTree = false }: TurnCardP
       {endReason && (
         <>
           <Text color={tokens.color.muted.fg}>  </Text>
-          <Text color={turn.state === 'error' ? tokens.color.danger.fg : tokens.color.success.fg}>
-            {endIcon} {endReason}
+          <Text color={endColor}>
+            {endIcon ? `${endIcon} ` : ''}{endReason}
           </Text>
         </>
       )}

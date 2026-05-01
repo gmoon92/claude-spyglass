@@ -215,7 +215,7 @@ function renderMain(args: RenderMainArgs) {
   const { view, sessions, selectedIndex, activeSessionId, project, width, rows, sseStatus, frozen, timeRange } = args;
   switch (view) {
     case 'live':
-      return <LiveFeed width={width} rows={rows} sseStatus={sseStatus} frozen={frozen} />;
+      return <LiveFeed width={width} rows={rows} sseStatus={sseStatus} frozen={frozen} apiUrl={API_URL} />;
     case 'sessions':
       return (
         <Sessions
@@ -240,7 +240,7 @@ function renderMain(args: RenderMainArgs) {
     case 'anomalies':
       return <Anomalies apiUrl={API_URL} timeRange={timeRange} />;
     default:
-      return <LiveFeed width={width} rows={rows} sseStatus={sseStatus} frozen={frozen} />;
+      return <LiveFeed width={width} rows={rows} sseStatus={sseStatus} frozen={frozen} apiUrl={API_URL} />;
   }
 }
 

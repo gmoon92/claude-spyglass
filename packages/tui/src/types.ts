@@ -15,6 +15,8 @@ export type Request = {
   tool_name?: string | null;
   tool_detail?: string | null;
   tool_use_id?: string | null;
+  /** data-honesty-ui: 부모 Agent 호출의 tool_use_id (sub-agent transcript 자식). */
+  parent_tool_use_id?: string | null;
   event_type?: EventType;
   tokens_input?: number;
   tokens_output?: number;
@@ -27,6 +29,8 @@ export type Request = {
   payload?: string | null;
   turn_id?: string | null;
   status?: 'ok' | 'error' | string | null;
+  /** data-honesty-ui: 토큰 메타 신뢰도 ('high'|'low'|'error'). */
+  tokens_confidence?: string | null;
   /** Local UI marker — when did this row arrive? */
   arrivedAt?: number;
 };
@@ -75,6 +79,8 @@ export type ToolStat = {
   p95_duration_ms?: number;
   error_rate?: number;
   trend?: number[];
+  /** data-honesty-ui: 행 내 신뢰도 비-high 토큰이 1건이라도 있으면 true. */
+  has_low_confidence?: boolean;
 };
 
 /** Pulse Wave state. */

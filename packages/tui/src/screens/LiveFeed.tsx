@@ -17,6 +17,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { useFeed } from '../hooks/useFeed';
 import { useFollowMode } from '../hooks/useFollowMode';
+import { useProxyRequests } from '../hooks/useProxyRequests';
+import type { ProxyRequestSummary } from '../hooks/useProxyRequests';
 import { ToolRow } from '../components/display/ToolRow';
 import { RowAccent } from '../components/feedback/RowAccent';
 import { Spinner } from '../components/feedback/Spinner';
@@ -34,10 +36,12 @@ export type LiveFeedProps = {
   rows: number;
   sseStatus: string;
   frozen: boolean;
+  apiUrl: string;
 };
 
-export function LiveFeed({ width, rows, sseStatus, frozen }: LiveFeedProps): JSX.Element {
+export function LiveFeed({ width, rows, sseStatus, frozen, apiUrl }: LiveFeedProps): JSX.Element {
   const feed = useFeed();
+  const { latestEndTurn } = useProxyRequests(apiUrl, 30_000);
   const {
     followState,
     selectedIdx,
@@ -153,11 +157,12 @@ export function LiveFeed({ width, rows, sseStatus, frozen }: LiveFeedProps): JSX
     });
   }, [feed, searchQuery]);
 
-  // Visible slice calculation: account for expanded detail box (+4 rows).
+  // Visible slice calculation: account for expanded detail box (+4 rows) and response panel (+1 row).
   const hasExpand = expandedId != null;
   const expandRows = hasExpand ? 5 : 0;
   const searchBarRows = searchActive || searchQuery ? 1 : 0;
-  const visible = Math.max(4, rows - 2 - expandRows - searchBarRows);
+  const responseRows = latestEndTurn ? 1 : 0;
+  const visible = Math.max(4, rows - 2 - expandRows - searchBarRows - responseRows);
   const slice = filteredFeed.slice(0, visible + (hasExpand ? 1 : 0));
 
   const title = titleNode(feed.length, frozen, followState, searchActive, searchQuery, filteredFeed.length);
@@ -165,6 +170,7 @@ export function LiveFeed({ width, rows, sseStatus, frozen }: LiveFeedProps): JSX
   if (feed.length === 0) {
     return (
       <Card title={title} focused>
+        {latestEndTurn && <LatestResponseBar record={latestEndTurn} width={width} />}
         <EmptyState sseStatus={sseStatus} />
       </Card>
     );
@@ -173,6 +179,8 @@ export function LiveFeed({ width, rows, sseStatus, frozen }: LiveFeedProps): JSX
   return (
     <Card title={title} focused>
       <Box flexDirection="column">
+        {/* 최신 어시스턴트 응답 */}
+        {latestEndTurn && <LatestResponseBar record={latestEndTurn} width={width} />}
         {/* 검색바 */}
         {(searchActive || searchQuery) && (
           <Box flexDirection="row" marginBottom={0}>
@@ -312,6 +320,41 @@ function titleNode(
       {followState === 'paused' && (
         <Text color={tokens.color.warning.fg}>  paused ‖</Text>
       )}
+    </Box>
+  );
+}
+
+/**
+ * One-line bar showing the most recent end_turn assistant response from the proxy.
+ * Truncated to fit the available width.
+ */
+function LatestResponseBar({
+  record,
+  width,
+}: {
+  record: ProxyRequestSummary;
+  width: number;
+}): JSX.Element {
+  const modelShort = record.model
+    ? record.model.replace(/^claude-/, '').replace(/-\d{8}$/, '')
+    : '—';
+  const preview = record.response_preview ?? '';
+  // Reserve space for prefix: "◆ [end_turn] modelShort  " + 2 padding
+  const prefixLen = 4 + 9 + modelShort.length + 2;
+  const maxPreview = Math.max(10, width - prefixLen - 4);
+  const truncated = preview.length > maxPreview
+    ? preview.slice(0, maxPreview - 1) + '…'
+    : preview;
+
+  return (
+    <Box flexDirection="row" marginBottom={0}>
+      <Text color={tokens.color.accent.fg}>{'◆ '}</Text>
+      <Text color={tokens.color.muted.fg}>{'['}</Text>
+      <Text color={tokens.color.success.fg}>{'end_turn'}</Text>
+      <Text color={tokens.color.muted.fg}>{'] '}</Text>
+      <Text color={tokens.color.info.fg}>{modelShort}</Text>
+      <Text color={tokens.color.muted.fg}>{'  '}</Text>
+      <Text color={tokens.color.fg.fg}>{truncated}</Text>
     </Box>
   );
 }

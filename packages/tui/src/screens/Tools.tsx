@@ -77,6 +77,7 @@ function TokensView({ tools }: { tools: ToolStat[] }): JSX.Element {
   }
 
   const peakAvg = Math.max(...sorted.map((t) => t.avg_tokens ?? 0), 1);
+  const hasAnyLowConf = sorted.some((t) => t.has_low_confidence);
 
   return (
     <Box flexDirection="column" gap={0}>
@@ -88,15 +89,26 @@ function TokensView({ tools }: { tools: ToolStat[] }): JSX.Element {
       {sorted.map((t) => {
         const ratio = (t.avg_tokens ?? 0) / peakAvg;
         const icon = toolIconForRecord({ tool_name: t.tool_name });
+        // data-honesty-ui (ADR-002): low confidence 행은 dim + ' *' 표지
+        const isLow = !!t.has_low_confidence;
+        const nameColor = isLow ? tokens.color.muted.fg : tokens.color.fg.fg;
         return (
           <Box key={t.tool_name} flexDirection="row">
-            <Text color={icon.color}>{icon.glyph} </Text>
-            <Text color={tokens.color.fg.fg}>{(t.tool_name ?? '').padEnd(15).slice(0, 15)}</Text>
-            <Text color={tokens.color.info.fg}>{bar(ratio, 24)}</Text>
+            <Text color={icon.color} dimColor={isLow}>{icon.glyph} </Text>
+            <Text color={nameColor} dimColor={isLow}>{(t.tool_name ?? '').padEnd(15).slice(0, 15)}</Text>
+            <Text color={tokens.color.info.fg} dimColor={isLow}>{bar(ratio, 24)}</Text>
             <Text color={tokens.color.muted.fg}> {formatTokens(t.avg_tokens)}</Text>
+            {isLow && <Text color={tokens.color.muted.fg} dimColor> *</Text>}
           </Box>
         );
       })}
+      {hasAnyLowConf && (
+        <Box marginTop={1}>
+          <Text color={tokens.color.muted.fg} dimColor>
+            * 토큰 신뢰도 낮음 (transcript 파싱 실패 또는 proxy fallback)
+          </Text>
+        </Box>
+      )}
     </Box>
   );
 }
@@ -207,6 +219,7 @@ function PerfView({ tools }: { tools: ToolStat[] }): JSX.Element {
     .slice(0, 10);
 
   const maxDur = Math.max(...sorted.map((t) => t.p95_duration_ms ?? 0), 1);
+  const hasAnyLowConf = sorted.some((t) => t.has_low_confidence);
 
   return (
     <Box flexDirection="column">
@@ -220,6 +233,7 @@ function PerfView({ tools }: { tools: ToolStat[] }): JSX.Element {
         const dur = t.p95_duration_ms ?? 0;
         const errRate = t.error_rate ?? 0;
         const durRatio = dur / maxDur;
+        const isLow = !!t.has_low_confidence;
         const durColor =
           durRatio > 0.8
             ? tokens.color.danger.fg
@@ -233,16 +247,28 @@ function PerfView({ tools }: { tools: ToolStat[] }): JSX.Element {
             ? tokens.color.warning.fg
             : tokens.color.muted.fg;
         const icon = toolIconForRecord({ tool_name: t.tool_name });
+        // data-honesty-ui (ADR-002): low confidence 행은 dim + ' *' 표지
+        // duration 0 → '—' (formatDuration이 처리하지만 명시적으로 ADR-003 준수 확인)
+        const durText = dur > 0 ? formatDuration(dur) : '—';
+        const nameColor = isLow ? tokens.color.muted.fg : tokens.color.fg.fg;
         return (
           <Box key={t.tool_name} flexDirection="row">
-            <Text color={icon.color}>{icon.glyph} </Text>
-            <Text color={tokens.color.fg.fg}>{(t.tool_name ?? '').padEnd(14).slice(0, 14)}</Text>
-            <Text color={durColor}>{formatDuration(dur).padEnd(10)}</Text>
-            <Text color={errColor}>{(errRate * 100).toFixed(1).padEnd(8)}%</Text>
+            <Text color={icon.color} dimColor={isLow}>{icon.glyph} </Text>
+            <Text color={nameColor} dimColor={isLow}>{(t.tool_name ?? '').padEnd(14).slice(0, 14)}</Text>
+            <Text color={durColor} dimColor={isLow}>{durText.padEnd(10)}</Text>
+            <Text color={errColor} dimColor={isLow}>{(errRate * 100).toFixed(1).padEnd(8)}%</Text>
             <Text color={tokens.color.muted.fg}>{t.calls}</Text>
+            {isLow && <Text color={tokens.color.muted.fg} dimColor> *</Text>}
           </Box>
         );
       })}
+      {hasAnyLowConf && (
+        <Box marginTop={1}>
+          <Text color={tokens.color.muted.fg} dimColor>
+            * 토큰 신뢰도 낮음 (transcript 파싱 실패 또는 proxy fallback)
+          </Text>
+        </Box>
+      )}
     </Box>
   );
 }

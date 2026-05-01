@@ -46,6 +46,10 @@ type RawToolRow = {
   max_duration_ms?: unknown;
   p95_duration_ms?: unknown;
   error_count?: unknown;
+  /** data-honesty-ui */
+  confidence_low_count?: unknown;
+  confidence_error_count?: unknown;
+  has_low_confidence?: unknown;
 };
 
 type RawByTypeRow = {
@@ -65,12 +69,19 @@ type RawCacheData = {
 function mapToolRow(t: RawToolRow): ToolStat {
   const callCount = Number(t.call_count ?? t.calls ?? 0);
   const errorCount = Number(t.error_count ?? 0);
+  // data-honesty-ui: server has_low_confidence 우선, 없으면 raw 카운트로 파생
+  const lowCount = Number(t.confidence_low_count ?? 0);
+  const errConfCount = Number(t.confidence_error_count ?? 0);
+  const hasLowConf = typeof t.has_low_confidence === 'boolean'
+    ? t.has_low_confidence
+    : (lowCount + errConfCount > 0);
   return {
     tool_name: String(t.tool_name ?? ''),
     calls: callCount,
     avg_tokens: Number(t.avg_tokens ?? 0),
     p95_duration_ms: Number(t.p95_duration_ms ?? t.max_duration_ms ?? t.avg_duration_ms ?? 0),
     error_rate: callCount > 0 ? errorCount / callCount : 0,
+    has_low_confidence: hasLowConf,
   };
 }
 
