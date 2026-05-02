@@ -129,7 +129,7 @@ export function getModelUsageStats(
   toTs?: number
 ): ModelUsageRow[] {
   const params: number[] = [];
-  const conds = ["type = 'prompt'", 'model IS NOT NULL'];
+  const conds = ["type = 'prompt'", 'model IS NOT NULL', "model NOT LIKE '<%>'"];
   conds.push(...buildTimeWindow('timestamp', fromTs, toTs, params));
 
   return db.query(`
