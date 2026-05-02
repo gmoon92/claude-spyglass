@@ -22,7 +22,7 @@
  *      → diagJson 'proxy-payload' phase=out-*         ─ 진단
  *      → extractResponseHeaders (audit-headers)       ─ Anthropic 메타
  *      → createProxyRequest (DB)
- *      → backfillRequestModelFromProxy (hook 행 model 채움)
+ *      → backfillRequestFromProxy (hook 행 model + tokens + api_request_id 채움)
  *      → invalidateDashboardCache + broadcastNewProxyRequest
  *      → client에 응답 반환
  *
@@ -51,7 +51,7 @@ import { parseRequestBody } from './request-parser';
 import { parseSSEChunk } from './sse-state';
 import { extractClientHeaders, extractResponseHeaders } from './audit-headers';
 import { logResult } from './log-result';
-import { backfillRequestModelFromProxy } from './backfill';
+import { backfillRequestFromProxy } from './backfill';
 
 /**
  * /v1/* 요청을 upstream으로 포워딩하고 메타를 수집·저장.
@@ -193,8 +193,18 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
           metadata_user_id: reqMeta.metadataUserId, client_meta_json: clientMeta,
         });
 
-        // hook 측 NULL model 행을 같은 session_id + 시간 윈도우로 즉시 채움
-        backfillRequestModelFromProxy(db, sessionId, state.model, startMs);
+        // hook 측 미완성 행(model NULL 또는 tokens_source='unavailable')을
+        // 같은 session_id + 시간 윈도우로 일괄 채움 — model + tokens + api_request_id
+        backfillRequestFromProxy(db, {
+          sessionId,
+          model: state.model,
+          apiRequestId: state.apiRequestId,
+          tokensInput: state.usage.input_tokens ?? 0,
+          tokensOutput: state.usage.output_tokens ?? 0,
+          cacheCreationTokens: state.usage.cache_creation_input_tokens ?? 0,
+          cacheReadTokens: state.usage.cache_read_input_tokens ?? 0,
+          proxyStartMs: startMs,
+        });
 
         // DB 저장 성공 직후에만 캐시 무효화 + SSE 브로드캐스트
         // @see docs/plans/proxy-sse-integration/plan.md Phase A
@@ -297,7 +307,16 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
       system_preview: reqMeta.systemPreview, tool_names: reqMeta.toolNames,
       metadata_user_id: reqMeta.metadataUserId, client_meta_json: clientMeta,
     });
-    backfillRequestModelFromProxy(db, sessionId, state.model, startMs);
+    backfillRequestFromProxy(db, {
+      sessionId,
+      model: state.model,
+      apiRequestId: state.apiRequestId,
+      tokensInput: state.usage.input_tokens ?? 0,
+      tokensOutput: state.usage.output_tokens ?? 0,
+      cacheCreationTokens: state.usage.cache_creation_input_tokens ?? 0,
+      cacheReadTokens: state.usage.cache_read_input_tokens ?? 0,
+      proxyStartMs: startMs,
+    });
 
     invalidateDashboardCache();
     const broadcastPayload: ProxyBroadcastPayload = {
