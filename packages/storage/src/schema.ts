@@ -168,12 +168,16 @@ export interface Request {
  *           감사·분석용 메타 16개 컬럼 추가)
  *   - v21: 021-proxy-payload-compression.sql (proxy_requests 및 requests에
  *           zstd 압축 payload 저장 컬럼 + system_reminder 추가)
+ *   - v22: 022-system-prompts.sql (system_prompts 정규화 dedup 테이블 +
+ *           proxy_requests.system_hash/system_byte_size 추가).
+ *           v21 system_reminder(user 메시지 내 reminder)와 v22 system_hash(body.system 본문)는
+ *           직교(orthogonal) 책임 — 컬럼 의미를 절대 섞지 말 것 (ADR-007).
  */
-export const SCHEMA_VERSION = 21;
+export const SCHEMA_VERSION = 22;
 
 export const SCHEMA_META = {
   version: SCHEMA_VERSION,
-  tables: ['sessions', 'requests', 'claude_events', 'proxy_requests'],
+  tables: ['sessions', 'requests', 'claude_events', 'proxy_requests', 'system_prompts'],
   indexes: [
     'idx_sessions_started_at',
     'idx_sessions_project',
@@ -185,5 +189,8 @@ export const SCHEMA_META = {
     'idx_events_type_time',
     'idx_requests_tool_use_id',
     'idx_requests_parent_tool_use_id',
+    'idx_system_prompts_last_seen',
+    'idx_system_prompts_ref_count',
+    'idx_proxy_requests_system_hash',
   ],
 } as const;
