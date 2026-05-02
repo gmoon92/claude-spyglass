@@ -112,6 +112,37 @@ export function extractToolDetail(
       return first ? first.slice(0, 80) : null;
     }
 
+    case 'TaskCreate': {
+      // 작업 제목이 가장 의미 있음. 없으면 description fallback.
+      const subject = toolInput.subject as string | undefined;
+      if (subject) return subject.slice(0, 80);
+      const desc = toolInput.description as string | undefined;
+      return desc ? desc.slice(0, 80) : null;
+    }
+
+    case 'TaskUpdate': {
+      // "#<id> → <status>" 또는 "#<id> <subject>" 형식 — 변경된 핵심 필드만 표시
+      const taskId = toolInput.taskId as string | undefined;
+      if (!taskId) return null;
+      const status = toolInput.status as string | undefined;
+      if (status) return `#${taskId} → ${status}`.slice(0, 80);
+      const subject = toolInput.subject as string | undefined;
+      if (subject) return `#${taskId} ${subject}`.slice(0, 80);
+      const owner = toolInput.owner as string | undefined;
+      if (owner) return `#${taskId} owner=${owner}`.slice(0, 80);
+      return `#${taskId}`;
+    }
+
+    case 'TaskGet': {
+      const taskId = toolInput.taskId as string | undefined;
+      return taskId ? `#${taskId}` : null;
+    }
+
+    case 'TaskList': {
+      // 인자 없음 — 목록 조회 액션임을 명시
+      return '(list)';
+    }
+
     default: {
       // mcp__* 공통: 첫 번째 의미 있는 문자열 필드 반환
       if (toolName.startsWith('mcp__')) {
