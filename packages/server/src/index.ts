@@ -10,7 +10,7 @@ import {
   getDatabase,
   closeDatabase,
   getDefaultDbPath,
-  deleteOldSessions,
+  deleteOldData,
   getMetadata,
   setMetadata,
 } from '@spyglass/storage';
@@ -117,7 +117,7 @@ function todayDateString(): string {
  * - 서버 시작 시 즉시 호출
  * - 이후 1시간 간격 인터벌에서도 호출 (날짜가 바뀐 시점을 놓치지 않기 위해)
  *
- * SPYGLASS_RETENTION_DAYS 환경변수로 보존 기간 설정 (기본: 90일)
+ * SPYGLASS_RETENTION_DAYS 환경변수로 보존 기간 설정 (기본: 1일)
  */
 function runDailyMaintenanceIfNeeded(database: SpyglassDatabase): void {
   try {
@@ -125,9 +125,9 @@ function runDailyMaintenanceIfNeeded(database: SpyglassDatabase): void {
     const lastRun = getMetadata(database.instance, METADATA_KEY_LAST_CLEANUP);
     if (lastRun === today) return;
 
-    const retentionDays = parseInt(process.env.SPYGLASS_RETENTION_DAYS ?? '90', 10);
+    const retentionDays = parseInt(process.env.SPYGLASS_RETENTION_DAYS ?? '1', 10);
     const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
-    const deleted = deleteOldSessions(database.instance, cutoff);
+    const deleted = deleteOldData(database.instance, cutoff);
     database.instance.run('PRAGMA VACUUM');
 
     setMetadata(database.instance, METADATA_KEY_LAST_CLEANUP, today);
