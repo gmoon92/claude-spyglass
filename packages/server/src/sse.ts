@@ -178,12 +178,23 @@ export function broadcastNewProxyRequest(p: ProxyBroadcastPayload): void {
 }
 
 /**
- * 세션 업데이트 브로드캐스트
+ * 세션 업데이트 브로드캐스트.
+ *
+ * 발생 케이스:
+ *  - 'token_update': hook이 새 요청을 저장해 total_tokens 증가했을 때
+ *  - 'started'     : 새 세션 첫 hook 도달 또는 SessionStart 훅
+ *  - 'ended'       : SessionEnd 훅 도달 (ended_at 채워짐)
+ *
+ * 웹 측은 'session_update' 이벤트 listener에서 캐시 갱신 + 사이드바 재렌더.
  */
 export function broadcastSessionUpdate(sessionData: {
   session_id: string;
-  total_tokens: number;
+  total_tokens?: number;
   request_count?: number;
+  action?: 'started' | 'ended' | 'token_update';
+  started_at?: number;
+  ended_at?: number | null;
+  project_name?: string;
 }): void {
   broadcastUpdate({
     type: 'session_update',

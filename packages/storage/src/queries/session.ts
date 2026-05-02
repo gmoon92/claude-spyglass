@@ -88,7 +88,13 @@ export function getSessionById(
 
 /**
  * 모든 세션 조회 (최근순, first_prompt_payload 포함, 날짜 필터 지원)
- * 개선: LEFT JOIN + GROUP BY로 N+1 쿼리 제거
+ *
+ * 개선:
+ *  - LEFT JOIN + GROUP BY로 N+1 쿼리 제거
+ *  - v22: HAVING last_activity_at IS NOT NULL — requests가 0건인 빈 세션 hide
+ *    (사용자가 데이터 삭제·정리한 뒤 sessions 테이블에만 남은 잔존 행이 사이드바에
+ *     노이즈로 노출되던 문제 해결. 활성 세션은 첫 hook 도달 시 last_activity_at이 채워지므로
+ *     영향 없음.)
  */
 export function getAllSessions(
   db: Database,
@@ -113,6 +119,7 @@ export function getAllSessions(
       AND (r.event_type IS NULL OR r.event_type != 'pre_tool' OR r.tool_name = 'Agent')
     ${where}
     GROUP BY s.id
+    HAVING last_activity_at IS NOT NULL
     ORDER BY (s.ended_at IS NULL) DESC, COALESCE(MAX(r.timestamp), s.started_at) DESC
     LIMIT ?
   `).all(...params, limit) as SessionQueryResult[];
@@ -180,6 +187,7 @@ export function getSessionsByProject(
       AND (r.event_type IS NULL OR r.event_type != 'pre_tool' OR r.tool_name = 'Agent')
     WHERE ${conditions.join(' AND ')}
     GROUP BY s.id
+    HAVING last_activity_at IS NOT NULL
     ORDER BY (s.ended_at IS NULL) DESC, COALESCE(MAX(r.timestamp), s.started_at) DESC
     LIMIT ?
   `).all(...params) as SessionQueryResult[];

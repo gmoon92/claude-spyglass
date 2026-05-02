@@ -17,7 +17,7 @@ import {
   type ClaudeEvent,
 } from '@spyglass/storage';
 import { getLastTurnId, parseTranscript } from './hook';
-import { broadcastNewRequest } from './sse';
+import { broadcastNewRequest, broadcastSessionUpdate } from './sse';
 import { invalidateDashboardCache } from './api';
 import { diagJson } from './diag-log';
 
@@ -90,9 +90,21 @@ export async function eventsCollectHandler(req: Request, db: Database): Promise<
 
     if (event.event_type === 'SessionEnd') {
       endSession(db, event.session_id, event.timestamp);
+      // v22: 활성 → 비활성 전환 실시간 브로드캐스트 (sidebar 마커 즉시 갱신)
+      broadcastSessionUpdate({
+        session_id: event.session_id,
+        action: 'ended',
+        ended_at: event.timestamp,
+      });
     } else if (event.event_type === 'SessionStart') {
       // compact/resume: 동일 session_id로 SessionStart 재발생 시 ended_at 클리어
       reactivateSession(db, event.session_id);
+      broadcastSessionUpdate({
+        session_id: event.session_id,
+        action: 'started',
+        started_at: event.timestamp,
+        ended_at: null,
+      });
     } else if (event.event_type === 'Stop') {
       // Stop: 사용자가 본 Claude 응답 텍스트를 requests 테이블에 'response' 타입으로 저장
       saveAssistantResponse(db, payload, event.timestamp);

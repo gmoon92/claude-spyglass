@@ -133,6 +133,23 @@ function startSSE() {
       clearTimeout(refreshDebounce);
       refreshDebounce = setTimeout(() => fetchDashboard(), 1000);
     },
+    // v22: 세션 활성/비활성 전환 — SessionStart/SessionEnd 시 즉시 사이드바 마커 갱신
+    // payload.action: 'started' | 'ended' | 'token_update'
+    onSessionUpdate(e) {
+      try {
+        const evt = JSON.parse(e.data);
+        const d = evt.data || {};
+        const sess = getAllSessions().find(s => s.id === d.session_id);
+        if (sess) {
+          if (d.action === 'ended' && d.ended_at != null)   sess.ended_at = d.ended_at;
+          if (d.action === 'started')                        sess.ended_at = null;
+          renderBrowserSessions();
+        } else {
+          // 캐시에 없는 새 세션이면 전체 갱신 (started 케이스)
+          fetchAllSessions();
+        }
+      } catch { /* silent */ }
+    },
     onOpen() {
       clearError();
       setIsSSEConnected(true);
