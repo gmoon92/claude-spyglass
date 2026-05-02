@@ -35,7 +35,21 @@ export interface ProxyRequest {
   first_token_ms: number | null;
   api_request_id: string | null;
   created_at: number;
+  // v19: hook ↔ proxy 정확 매칭용 컬럼 (헤더 x-claude-code-session-id 직접 저장)
   session_id: string | null;
+  turn_id: string | null;
+  // v20: 클라이언트/요청/응답 메타 (감사·분석 활용)
+  client_user_agent: string | null;
+  client_app: string | null;
+  anthropic_beta: string | null;
+  anthropic_org_id: string | null;
+  anthropic_request_id: string | null;
+  thinking_type: string | null;
+  temperature: number | null;
+  system_preview: string | null;
+  tool_names: string | null;
+  metadata_user_id: string | null;
+  client_meta_json: string | null;
 }
 
 export interface CreateProxyRequestParams {
@@ -62,6 +76,19 @@ export interface CreateProxyRequestParams {
   error_message?: string | null;
   first_token_ms?: number | null;
   api_request_id?: string | null;
+  session_id?: string | null;
+  turn_id?: string | null;
+  client_user_agent?: string | null;
+  client_app?: string | null;
+  anthropic_beta?: string | null;
+  anthropic_org_id?: string | null;
+  anthropic_request_id?: string | null;
+  thinking_type?: string | null;
+  temperature?: number | null;
+  system_preview?: string | null;
+  tool_names?: string | null;
+  metadata_user_id?: string | null;
+  client_meta_json?: string | null;
 }
 
 // =============================================================================
@@ -77,37 +104,53 @@ const SQL_CREATE = `
     tokens_per_second, is_stream,
     messages_count, max_tokens, tools_count, request_preview,
     stop_reason, response_preview, error_type, error_message,
-    first_token_ms, api_request_id
+    first_token_ms, api_request_id,
+    session_id, turn_id,
+    client_user_agent, client_app, anthropic_beta,
+    anthropic_org_id, anthropic_request_id,
+    thinking_type, temperature, system_preview,
+    tool_names, metadata_user_id, client_meta_json
   ) VALUES (
     ?, ?, ?, ?, ?, ?,
     ?, ?, ?, ?, ?,
     ?, ?,
     ?, ?, ?, ?,
     ?, ?, ?, ?,
-    ?, ?
+    ?, ?,
+    ?, ?,
+    ?, ?, ?,
+    ?, ?,
+    ?, ?, ?,
+    ?, ?, ?
   )
 `;
 
 // proxy 요청은 자체적으로 session_id를 갖지 않으므로 timestamp 기반으로 hook 데이터와 매칭한다.
 // 매칭 우선순위: (1) ±5s 이내 prompt 행, (2) ±10s 이내 같은 turn의 tool_call 행 (앞·뒤 모두 허용).
-// 단순 "직전 prompt만" 보던 기존 쿼리는 매칭률이 3% 수준이었음.
-const SQL_GET_RECENT = `
-  SELECT *,
-    COALESCE(
-      (SELECT session_id FROM requests
-       WHERE type = 'prompt'
-         AND timestamp BETWEEN proxy_requests.timestamp - 5000 AND proxy_requests.timestamp + 2000
-       ORDER BY ABS(timestamp - proxy_requests.timestamp) ASC
-       LIMIT 1),
-      (SELECT session_id FROM requests
-       WHERE type = 'tool_call'
-         AND timestamp BETWEEN proxy_requests.timestamp - 10000 AND proxy_requests.timestamp + 5000
-       ORDER BY ABS(timestamp - proxy_requests.timestamp) ASC
-       LIMIT 1)
-    ) AS session_id
-  FROM proxy_requests
+//
+// 과거에는 SELECT 안의 상관 서브쿼리로 한 번에 조인했으나, Bun SQLite가 상관 서브쿼리 안에서
+// outer 테이블/alias 컬럼 참조("no such column: proxy_requests.timestamp" / "pr.timestamp")를
+// 해석하지 못하는 케이스가 있어, 단순 SELECT + JS 후처리로 분리한다. limit 50 수준이라 N+1 비용 무시 가능.
+const SQL_GET_RECENT_BASE = `
+  SELECT * FROM proxy_requests
   ORDER BY timestamp DESC
   LIMIT ?
+`;
+
+const SQL_FIND_PROMPT_SESSION = `
+  SELECT session_id FROM requests
+  WHERE type = 'prompt'
+    AND timestamp BETWEEN $lo AND $hi
+  ORDER BY ABS(timestamp - $pivot) ASC
+  LIMIT 1
+`;
+
+const SQL_FIND_TOOL_SESSION = `
+  SELECT session_id FROM requests
+  WHERE type = 'tool_call'
+    AND timestamp BETWEEN $lo AND $hi
+  ORDER BY ABS(timestamp - $pivot) ASC
+  LIMIT 1
 `;
 
 const SQL_GET_STATS = `
@@ -142,11 +185,40 @@ export function createProxyRequest(db: Database, p: CreateProxyRequestParams): v
     p.stop_reason ?? null, p.response_preview ?? null,
     p.error_type ?? null, p.error_message ?? null,
     p.first_token_ms ?? null, p.api_request_id ?? null,
+    p.session_id ?? null, p.turn_id ?? null,
+    p.client_user_agent ?? null, p.client_app ?? null, p.anthropic_beta ?? null,
+    p.anthropic_org_id ?? null, p.anthropic_request_id ?? null,
+    p.thinking_type ?? null,
+    p.temperature ?? null,
+    p.system_preview ?? null,
+    p.tool_names ?? null,
+    p.metadata_user_id ?? null,
+    p.client_meta_json ?? null,
   ]);
 }
 
 export function getRecentProxyRequests(db: Database, limit = 50): ProxyRequest[] {
-  return db.query<ProxyRequest, [number]>(SQL_GET_RECENT).all(limit);
+  const baseRows = db.query<ProxyRequest, [number]>(SQL_GET_RECENT_BASE).all(limit);
+  const findPrompt = db.query<{ session_id: string }, { $lo: number; $hi: number; $pivot: number }>(
+    SQL_FIND_PROMPT_SESSION,
+  );
+  const findTool = db.query<{ session_id: string }, { $lo: number; $hi: number; $pivot: number }>(
+    SQL_FIND_TOOL_SESSION,
+  );
+
+  // v19+: row.session_id가 헤더로 직접 저장되면 그대로 사용. 구 데이터(NULL)는 timestamp 휴리스틱 fallback.
+  return baseRows.map((row) => {
+    if (row.session_id) return row;
+    const ts = row.timestamp;
+    const promptHit = findPrompt.get({ $lo: ts - 5000, $hi: ts + 2000, $pivot: ts });
+    const toolHit = promptHit
+      ? null
+      : findTool.get({ $lo: ts - 10000, $hi: ts + 5000, $pivot: ts });
+    return {
+      ...row,
+      session_id: promptHit?.session_id ?? toolHit?.session_id ?? null,
+    };
+  });
 }
 
 export interface ProxyStats {

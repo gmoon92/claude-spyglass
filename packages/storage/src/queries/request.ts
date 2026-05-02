@@ -35,6 +35,14 @@ export interface CreateRequestParams {
   tokens_confidence?: string;
   tokens_source?: string;
   parent_tool_use_id?: string | null;
+  // v19: Anthropic API 응답 ID — proxy_requests와 cross-link 키
+  api_request_id?: string | null;
+  // v20: hook raw 페이로드 감사 메타
+  permission_mode?: string | null;
+  agent_id?: string | null;
+  agent_type?: string | null;
+  tool_interrupted?: number | null;
+  tool_user_modified?: number | null;
 }
 
 /** 요청 생성 SQL */
@@ -43,8 +51,9 @@ const SQL_CREATE_REQUEST = `
     id, session_id, timestamp, type, tool_name, tool_detail, turn_id, model,
     tokens_input, tokens_output, tokens_total, duration_ms, payload, source,
     cache_creation_tokens, cache_read_tokens, preview, tool_use_id, event_type,
-    tokens_confidence, tokens_source, parent_tool_use_id
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    tokens_confidence, tokens_source, parent_tool_use_id, api_request_id,
+    permission_mode, agent_id, agent_type, tool_interrupted, tool_user_modified
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 /**
@@ -76,7 +85,13 @@ export function createRequest(
     params.event_type ?? null,
     params.tokens_confidence ?? 'high',
     params.tokens_source ?? 'transcript',
-    params.parent_tool_use_id ?? null
+    params.parent_tool_use_id ?? null,
+    params.api_request_id ?? null,
+    params.permission_mode ?? null,
+    params.agent_id ?? null,
+    params.agent_type ?? null,
+    params.tool_interrupted ?? null,
+    params.tool_user_modified ?? null
   );
   return params.id;
 }
@@ -113,7 +128,13 @@ export function createRequests(
         item.event_type ?? null,
         item.tokens_confidence ?? 'high',
         item.tokens_source ?? 'transcript',
-        item.parent_tool_use_id ?? null
+        item.parent_tool_use_id ?? null,
+        item.api_request_id ?? null,
+        item.permission_mode ?? null,
+        item.agent_id ?? null,
+        item.agent_type ?? null,
+        item.tool_interrupted ?? null,
+        item.tool_user_modified ?? null
       );
     }
   });

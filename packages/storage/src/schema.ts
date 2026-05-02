@@ -136,6 +136,13 @@ export interface Request {
   tokens_confidence?: string;
   tokens_source?: string;
   parent_tool_use_id?: string | null;
+  api_request_id?: string | null;
+  // v20: hook raw 페이로드에서 추출한 감사용 메타
+  permission_mode?: string | null;
+  agent_id?: string | null;
+  agent_type?: string | null;
+  tool_interrupted?: number | null;
+  tool_user_modified?: number | null;
   created_at?: number;
 }
 
@@ -154,8 +161,12 @@ export interface Request {
  *   - v17: 017-add-parent-tool-use-id.sql (requests.parent_tool_use_id + 인덱스)
  *   - v18: 018-cleanup-and-correlation.sql (sentinel 삭제, visible_requests 제거,
  *           correlated_requests를 prompt+tool_call 매칭으로 재정의)
+ *   - v19: 019-proxy-hook-cross-link.sql (proxy_requests.session_id/turn_id,
+ *           requests.api_request_id 추가 — 헤더 직접 매칭으로 휴리스틱 대체)
+ *   - v20: 020-payload-audit-fields.sql (proxy/hook raw payload에서 발견한
+ *           감사·분석용 메타 16개 컬럼 추가)
  */
-export const SCHEMA_VERSION = 18;
+export const SCHEMA_VERSION = 20;
 
 export const SCHEMA_META = {
   version: SCHEMA_VERSION,
