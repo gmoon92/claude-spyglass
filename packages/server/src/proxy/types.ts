@@ -26,6 +26,8 @@ export interface RequestMeta {
   systemPreview: string | null;
   toolNames: string | null; // JSON array string
   metadataUserId: string | null;
+  // v21: system-reminder 원문 추출
+  systemReminder: string | null;
 }
 
 /** Anthropic API usage 구조 (요청·응답 본문에서 추출) */

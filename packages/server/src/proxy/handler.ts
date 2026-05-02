@@ -68,8 +68,20 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
     model: null, messagesCount: 0, maxTokens: null,
     toolsCount: 0, requestPreview: null, isStreamReq: false,
     thinkingType: null, temperature: null, systemPreview: null,
-    toolNames: null, metadataUserId: null,
+    toolNames: null, metadataUserId: null, systemReminder: null,
   };
+
+  // v21: 요청 본문 zstd 압축 — bodyBuffer가 없거나 0 byte면 압축 생략 (DB에는 NULL).
+  let payload: Uint8Array | null = null;
+  let payloadRawSize: number | null = null;
+  if (bodyBuffer && bodyBuffer.byteLength > 0) {
+    try {
+      payload = Bun.zstdCompressSync(new Uint8Array(bodyBuffer));
+      payloadRawSize = bodyBuffer.byteLength;
+    } catch (err) {
+      console.warn('[PROXY] Payload compression failed:', err);
+    }
+  }
 
   // 2. hook ↔ proxy 매칭 키 (v19) + 클라이언트 헤더 메타 (v20)
   const sessionId = req.headers.get('x-claude-code-session-id') || null;
@@ -189,8 +201,13 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
           client_user_agent: clientUserAgent, client_app: clientApp, anthropic_beta: anthropicBeta,
           anthropic_org_id: anthropicOrgId, anthropic_request_id: anthropicRequestId,
           thinking_type: reqMeta.thinkingType, temperature: reqMeta.temperature,
-          system_preview: reqMeta.systemPreview, tool_names: reqMeta.toolNames,
+          system_preview: reqMeta.systemPreview, system_reminder: reqMeta.systemReminder,
+          tool_names: reqMeta.toolNames,
           metadata_user_id: reqMeta.metadataUserId, client_meta_json: clientMeta,
+          // v21: compressed payload
+          payload,
+          payload_raw_size: payloadRawSize,
+          payload_algo: payload ? 'zstd' : null,
         });
 
         // hook 측 미완성 행(model NULL 또는 tokens_source='unavailable')을
@@ -304,8 +321,13 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
       client_user_agent: clientUserAgent, client_app: clientApp, anthropic_beta: anthropicBeta,
       anthropic_org_id: anthropicOrgId, anthropic_request_id: anthropicRequestId,
       thinking_type: reqMeta.thinkingType, temperature: reqMeta.temperature,
-      system_preview: reqMeta.systemPreview, tool_names: reqMeta.toolNames,
+      system_preview: reqMeta.systemPreview, system_reminder: reqMeta.systemReminder,
+      tool_names: reqMeta.toolNames,
       metadata_user_id: reqMeta.metadataUserId, client_meta_json: clientMeta,
+      // v21: compressed payload
+      payload,
+      payload_raw_size: payloadRawSize,
+      payload_algo: payload ? 'zstd' : null,
     });
     backfillRequestFromProxy(db, {
       sessionId,

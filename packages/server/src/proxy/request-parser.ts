@@ -32,7 +32,7 @@ export function parseRequestBody(buffer: ArrayBuffer): RequestMeta {
     model: null, messagesCount: 0, maxTokens: null,
     toolsCount: 0, requestPreview: null, isStreamReq: false,
     thinkingType: null, temperature: null, systemPreview: null,
-    toolNames: null, metadataUserId: null,
+    toolNames: null, metadataUserId: null, systemReminder: null,
   };
   if (!buffer || buffer.byteLength === 0) return meta;
 
@@ -66,20 +66,8 @@ export function parseRequestBody(buffer: ArrayBuffer): RequestMeta {
 
     if (Array.isArray(body.messages)) {
       meta.messagesCount = body.messages.length;
-      // 마지막 user 메시지를 preview로 추출 (UI 행에 표시용)
-      const lastUser = [...body.messages].reverse().find((m: { role?: string }) => m.role === 'user');
-      if (lastUser) {
-        const content = lastUser.content;
-        const text = typeof content === 'string'
-          ? content
-          : Array.isArray(content)
-            ? content
-                .filter((c: { type?: string }) => c.type === 'text')
-                .map((c: { text?: string }) => c.text ?? '')
-                .join(' ')
-            : '';
-        meta.requestPreview = text.slice(0, 200) || null;
-      }
+      meta.systemReminder = extractSystemReminders(body.messages);
+      meta.requestPreview = extractLastUserPreview(body.messages);
     }
 
     if (Array.isArray(body.tools)) {
@@ -94,4 +82,63 @@ export function parseRequestBody(buffer: ArrayBuffer): RequestMeta {
   }
 
   return meta;
+}
+
+/**
+ * 모든 user 메시지의 content에서 <system-reminder> 블록을 모아 반환 (v21).
+ *
+ * 책임:
+ *  - role==='user' 메시지를 전부 순회해 reminder가 들어있는 text 항목 수집.
+ *  - content가 string 형태인 경우(레거시 호환)도 동일 검사.
+ *  - 멀티턴 대화에서 reminder는 첫 user에만 있는 게 아니라 후속 user에도 누적되므로 전부 모은다.
+ *
+ * 호출자: parseRequestBody (메시지 파싱 직후 1회)
+ * 의존성: 없음 (순수 함수)
+ *
+ * @returns 발견된 reminder들을 \n으로 연결한 문자열, 없으면 null
+ */
+function extractSystemReminders(messages: ReadonlyArray<unknown>): string | null {
+  const reminders: string[] = [];
+  for (const raw of messages) {
+    const m = raw as { role?: string; content?: unknown };
+    if (m?.role !== 'user') continue;
+    const content = m.content;
+    if (typeof content === 'string') {
+      if (content.includes('<system-reminder>')) reminders.push(content);
+      continue;
+    }
+    if (!Array.isArray(content)) continue;
+    for (const part of content) {
+      const c = part as { type?: string; text?: string };
+      if (c?.type === 'text' && typeof c.text === 'string'
+        && c.text.includes('<system-reminder>')) {
+        reminders.push(c.text);
+      }
+    }
+  }
+  return reminders.length > 0 ? reminders.join('\n') : null;
+}
+
+/**
+ * 마지막 user 메시지의 텍스트 200자 미리보기 (UI 행 표시용).
+ * content는 string 또는 [{type:'text',text}] 배열 둘 다 처리.
+ *
+ * 호출자: parseRequestBody
+ */
+function extractLastUserPreview(messages: ReadonlyArray<unknown>): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i] as { role?: string; content?: unknown };
+    if (m?.role !== 'user') continue;
+    const content = m.content;
+    const text = typeof content === 'string'
+      ? content
+      : Array.isArray(content)
+        ? content
+            .filter((c) => (c as { type?: string }).type === 'text')
+            .map((c) => (c as { text?: string }).text ?? '')
+            .join(' ')
+        : '';
+    return text.slice(0, 200) || null;
+  }
+  return null;
 }

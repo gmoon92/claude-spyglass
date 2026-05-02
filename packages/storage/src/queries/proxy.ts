@@ -47,9 +47,14 @@ export interface ProxyRequest {
   thinking_type: string | null;
   temperature: number | null;
   system_preview: string | null;
+  system_reminder: string | null;
   tool_names: string | null;
   metadata_user_id: string | null;
   client_meta_json: string | null;
+  // v21: zstd compressed payload
+  payload: Uint8Array | null;
+  payload_raw_size: number | null;
+  payload_algo: string | null;
 }
 
 export interface CreateProxyRequestParams {
@@ -86,9 +91,14 @@ export interface CreateProxyRequestParams {
   thinking_type?: string | null;
   temperature?: number | null;
   system_preview?: string | null;
+  system_reminder?: string | null;
   tool_names?: string | null;
   metadata_user_id?: string | null;
   client_meta_json?: string | null;
+  // v21
+  payload?: Uint8Array | null;
+  payload_raw_size?: number | null;
+  payload_algo?: string | null;
 }
 
 // =============================================================================
@@ -108,8 +118,9 @@ const SQL_CREATE = `
     session_id, turn_id,
     client_user_agent, client_app, anthropic_beta,
     anthropic_org_id, anthropic_request_id,
-    thinking_type, temperature, system_preview,
-    tool_names, metadata_user_id, client_meta_json
+    thinking_type, temperature, system_preview, system_reminder,
+    tool_names, metadata_user_id, client_meta_json,
+    payload, payload_raw_size, payload_algo
   ) VALUES (
     ?, ?, ?, ?, ?, ?,
     ?, ?, ?, ?, ?,
@@ -120,6 +131,7 @@ const SQL_CREATE = `
     ?, ?,
     ?, ?, ?,
     ?, ?,
+    ?, ?, ?, ?,
     ?, ?, ?,
     ?, ?, ?
   )
@@ -191,9 +203,13 @@ export function createProxyRequest(db: Database, p: CreateProxyRequestParams): v
     p.thinking_type ?? null,
     p.temperature ?? null,
     p.system_preview ?? null,
+    p.system_reminder ?? null,
     p.tool_names ?? null,
     p.metadata_user_id ?? null,
     p.client_meta_json ?? null,
+    p.payload ?? null,
+    p.payload_raw_size ?? null,
+    p.payload_algo ?? null,
   ]);
 }
 

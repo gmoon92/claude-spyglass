@@ -147,13 +147,14 @@ export class SpyglassDatabase {
 
   /** WAL 모드 활성화 */
   private enableWalMode(): void {
-    const pragmas = WAL_MODE_PRAGMAS.split(';').filter(p => p.trim());
+    const pragmas = WAL_MODE_PRAGMAS
+      .replace(/--[^\n]*/g, '')
+      .split(';')
+      .map(p => p.trim())
+      .filter(p => p.length > 0);
 
     for (const pragma of pragmas) {
-      const trimmed = pragma.trim();
-      if (trimmed) {
-        this.db.prepare(trimmed).run();
-      }
+      this.db.prepare(pragma).run();
     }
 
     if (this.options.debug) {

@@ -76,6 +76,7 @@ PRAGMA busy_timeout = 5000;
 PRAGMA synchronous = NORMAL;
 PRAGMA cache_size = -64000;  -- 64MB cache
 PRAGMA foreign_keys = ON;
+PRAGMA journal_size_limit = 104857600;  -- 100MB WAL size limit
 `;
 
 // =============================================================================
@@ -165,8 +166,10 @@ export interface Request {
  *           requests.api_request_id 추가 — 헤더 직접 매칭으로 휴리스틱 대체)
  *   - v20: 020-payload-audit-fields.sql (proxy/hook raw payload에서 발견한
  *           감사·분석용 메타 16개 컬럼 추가)
+ *   - v21: 021-proxy-payload-compression.sql (proxy_requests 및 requests에
+ *           zstd 압축 payload 저장 컬럼 + system_reminder 추가)
  */
-export const SCHEMA_VERSION = 20;
+export const SCHEMA_VERSION = 21;
 
 export const SCHEMA_META = {
   version: SCHEMA_VERSION,
