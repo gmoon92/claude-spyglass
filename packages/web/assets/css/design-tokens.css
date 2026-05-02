@@ -46,22 +46,28 @@
   --font-ui:   'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', sans-serif;
   --font-data: 'SF Mono', 'SFMono-Regular', ui-monospace, 'Menlo', 'JetBrains Mono', 'Consolas', monospace;
 
-  /* ── 폰트 사이즈 스케일 (4-Level + 추가 단계) ── */
-  --text-hero:  32px;    /* Hero 비용 수치 */
-  --text-h1:    24px;    /* 큰 메트릭 */
-  --text-h2:    20px;    /* 섹션 제목 */
-  --text-h3:    18px;    /* 카드 헤드라인 */
-  --text-body:  14px;    /* 본문 */
-  --text-data:  13px;    /* 테이블 데이터 (mono) */
-  --text-meta:  12px;    /* 레이블, 메타 */
-  --text-small: 11px;    /* 미니 레이블 (uppercase) */
+  /* ── 폰트 사이즈 스케일 (web-design-balance-pass ADR-001 — 80% 비례 다운스케일)
+     원본 → 현재(0.8 비례, 본문은 12px 하한 가독성 보호):
+       hero  32→26 / h1 24→20 / h2 20→16 / h3 18→15
+       body  14→12(하한) / data 13→12(하한) / meta 12→11 / small 11px 유지(가독성 한계)
+     12px 하한 근거: 본문/데이터의 가독성 한계로 11px 이하는 mono에서 약자 식별 어려움. */
+  --text-hero:  26px;    /* Hero 비용 수치 */
+  --text-h1:    20px;    /* 큰 메트릭 */
+  --text-h2:    16px;    /* 섹션 제목 */
+  --text-h3:    15px;    /* 카드 헤드라인 */
+  --text-body:  12px;    /* 본문 (12px 하한) */
+  --text-data:  12px;    /* 테이블 데이터 (mono, 12px 하한) */
+  --text-meta:  11px;    /* 레이블, 메타 */
+  --text-small: 11px;    /* 미니 레이블 (uppercase) — 11px 가독성 하한 */
 
-  /* ── 호환성 alias (기존 CSS) ── */
-  --font-hero:   var(--text-h1);    /* 기존 24px 유지 */
-  --font-major:  var(--text-h3);    /* 18px */
-  --font-body:   var(--text-data);  /* 13px (mono 데이터 컬럼) */
-  --font-meta:   var(--text-meta);  /* 12px */
-  --font-micro:  var(--text-small); /* 11px (9px 폐기 — legibility 한계) */
+  /* ── 호환성 alias (기존 CSS) — 80% 다운스케일 후 실제 px 갱신
+     원본 alias 의미: hero=24 / major=18 / body=13 / meta=12 / micro=11
+     현재(SSoT 토큰 따라감):  hero=20 / major=15 / body=12 / meta=11 / micro=11 */
+  --font-hero:   var(--text-h1);    /* 20px (was 24) */
+  --font-major:  var(--text-h3);    /* 15px (was 18) */
+  --font-body:   var(--text-data);  /* 12px (mono 데이터 컬럼, was 13) */
+  --font-meta:   var(--text-meta);  /* 11px (was 12) */
+  --font-micro:  var(--text-small); /* 11px (가독성 하한 — 더 줄이지 말 것) */
 
   /* ── 폰트 굵기 ── */
   --weight-hero:   600;     /* Hero 수치 */
@@ -75,14 +81,31 @@
   --dur-base:     200ms;     /* 일반 전환 */
   --dur-drawer:   280ms;     /* drawer slide-in */
 
-  /* ── 레이아웃 ── */
-  --left-panel-width:          280px;
-  --tool-stats-height:         160px;
-  --project-panel-height:      215px;
-  --session-panel-height:      420px;   /* 세션 행 ~56px × 7 + 헤더 ~36px (ADR-001) */
-  --panel-resize-min:          180px;
-  --panel-resize-max:          480px;
+  /* ── 레이아웃 (web-design-balance-pass ADR-001 — 80% 비례 다운스케일)
+     원본 → 현재: 280→224 / 160→128 / 215→172 / 420→336 / 180→144 / 480→384
+     handle-width 4px는 픽셀 격자 보호 위해 그대로 유지. */
+  --left-panel-width:          224px;
+  --tool-stats-height:         128px;
+  --project-panel-height:      172px;
+  --session-panel-height:      336px;   /* 세션 행 ~45px × 7 + 헤더 ~29px */
+  --panel-resize-min:          144px;
+  --panel-resize-max:          384px;
   --panel-resize-handle-width: 4px;
+
+  /* ── Turn-row 좌측 정렬 SSoT (web-design-balance-pass ADR-005) ──────────
+   * 펼친 turn 카드 안의 6종 행(prompt / tool 단독 / group 머리 / group-children /
+   * response / response--empty)이 동일한 좌측 edge를 갖도록 하기 위한 토큰.
+   *
+   *   --turn-row-marker-w : 첫 컬럼(상태 배지/chevron/마커 아이콘 슬롯) 폭
+   *   --turn-row-indent   : .turn-row의 padding-left (모든 행 공통 base)
+   *   --turn-row-border-w : 좌측 accent border 두께 (border-left를 padding에서 흡수)
+   *
+   * 산식 일관성: border 있는 변종은 padding-left = (turn-row-indent - border-w)로
+   * 좌측 edge를 동일하게 유지. 토큰 한 곳만 바꾸면 6종 모두 자동 정렬.
+   * 기존 하드코딩(28/30/32px)은 다운스케일 변경에 깨졌음 — 토큰화로 회귀 차단. */
+  --turn-row-marker-w: 22px;
+  --turn-row-indent:   var(--space-5);  /* 20px @ 80% 다운스케일 — 기존 32px 대비 0.8배 */
+  --turn-row-border-w: 2px;
 
   /* ── 타입별 색상 SSoT (ADR-003) — 사용 영역 축소: 배지/필터 활성 상태만 ── */
   --type-prompt-color:     #FFB088;
@@ -93,6 +116,10 @@
   --type-system-bg:        linear-gradient(135deg, rgba(240,183,47,0.26) 0%, rgba(255,122,69,0.14) 100%);
   --type-response-color:   #79c0ff; /* assistant blue */
   --type-response-bg:      rgba(121,192,255,0.15);
+  /* 행 단위 dim 배경 — turn-row-response의 "마디(beat)" 강조 (web-design-balance-pass ADR-002).
+     기존 --type-response-bg(0.15)는 배지/칩에 적합한 농도이고, 행 배경에는 너무 강함.
+     0.04 = 인접 도구 행과 시각 균형을 깨지 않으면서도 mark 인지 가능한 최소 농도. */
+  --type-response-row-bg:  rgba(121,192,255,0.04);
   --type-agent-color:      var(--warn);
   --type-agent-bg:         linear-gradient(135deg, rgba(240,183,47,0.26) 0%, rgba(255,122,69,0.14) 100%);
   --type-skill-color:      var(--warn);
@@ -172,13 +199,15 @@
   --radius-md: 6px;
   --radius-lg: 8px;
 
-  /* ── Spacing Scale (8px Grid) ── */
+  /* ── Spacing Scale (web-design-balance-pass ADR-001 — 80% 비례 다운스케일)
+     원본 → 현재: 4→4 / 8→6 / 12→10 / 16→13 / 24→20 / 32→26
+     space-1=4px는 픽셀 격자 보호를 위해 그대로 유지(이하로 떨어지면 정렬이 깨짐). */
   --space-1:   4px;
-  --space-2:   8px;
-  --space-3:  12px;
-  --space-4:  16px;
-  --space-5:  24px;
-  --space-6:  32px;
+  --space-2:   6px;
+  --space-3:  10px;
+  --space-4:  13px;
+  --space-5:  20px;
+  --space-6:  26px;
 
   /* ── Card surface (다크는 box-shadow 대신 배경 명도) ── */
   --card-bg:        var(--surface-alt);

@@ -38,14 +38,21 @@
 .turn-children { display: none; padding: var(--space-1) 0 var(--space-2); }
 .turn-item.open .turn-children { display: block; }
 
-/* turn-row grid:
-   - 첫 컬럼 28px(var(--space-6) 보다 작아 토큰 미사용 — chevron 폭 상수)
-   - 정렬 상수: margin 16 + border 0 + padding 32 = 48px (border 있는 변종은 padding 30으로 흡수). */
+/* turn-row grid (web-design-balance-pass ADR-005 — 좌측 정렬 SSoT):
+ *   - 첫 컬럼 폭은 --turn-row-marker-w 토큰. 모든 행이 같은 첫 컬럼 폭 → 마커 슬롯 일관.
+ *   - padding-left는 --turn-row-indent 토큰. 변종 행도 산식으로 동일 좌측 edge 유지.
+ *   - 토큰만 바꾸면 6종 행 자동 재정렬 — 다운스케일 같은 변경에 회귀 안 발생.
+ *
+ * 산식 약속:
+ *   border-left 없음     → padding-left = var(--turn-row-indent)
+ *   border-left 있음     → padding-left = calc(var(--turn-row-indent) - var(--turn-row-border-w))
+ * 두 경우 모두 두번째 grid 컬럼 시작 x좌표가 동일.
+ */
 .turn-row {
   display: grid;
-  grid-template-columns: 28px minmax(140px, 1fr) 56px 56px 72px 80px;
+  grid-template-columns: var(--turn-row-marker-w) minmax(140px, 1fr) 56px 56px 72px 80px;
   align-items: center;
-  padding: var(--space-1) var(--space-4) var(--space-1) var(--space-6);
+  padding: var(--space-1) var(--space-4) var(--space-1) var(--turn-row-indent);
   font-size: var(--text-meta);
 }
 .turn-row > * { min-width: 0; }
@@ -53,30 +60,60 @@
 .turn-row .cell-token { text-align: right; }
 .turn-row .cell-time  { text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .turn-row:hover { background: var(--accent-bg-light); }
-/* 정렬 상수: margin 16 + border 2 + padding 30 = 48px — 모든 행 타입에서 동일한
-   두번째 grid 컬럼 시작 x좌표(48px)를 유지하기 위해 border-left를 padding에서 흡수한다.
-   (chevron 유무와 무관하게 ◉/✓/× 아이콘 수직선 일치 — ADR turn-view-chevron-alignment) */
+/* prompt: 좌측 border-left 2px → padding-left에서 border-w 흡수해 좌측 edge 일치. */
 .turn-row-prompt {
   background: var(--white-bg-subtle);
-  border-left: 2px solid var(--text-3);
+  border-left: var(--turn-row-border-w) solid var(--text-3);
   margin: 0 var(--space-4) var(--space-1);
   border-radius: var(--radius-sm);
-  padding-left: 30px;
+  padding-left: calc(var(--turn-row-indent) - var(--turn-row-border-w));
 }
 .turn-row-tool  { margin: 0 var(--space-4); }
 .turn-row-empty {
   color: var(--text-3);
   font-size: var(--text-small);
-  padding: var(--space-2) var(--space-6);
+  /* "도구 호출 없음" 안내. ADR-005 정렬 산식 따라 좌측 edge 일치 (turn-row-indent + space-4 margin). */
+  padding: var(--space-2) var(--space-4) var(--space-2) calc(var(--space-4) + var(--turn-row-indent));
+}
+
+/* ── 응답 행을 시각적 "마디(beat)"로 (web-design-balance-pass ADR-002 + ADR-005) ──
+ * 한 턴 안에서 도구 호출 사이사이에 어시스턴트 텍스트 응답이 인터리빙된다.
+ * 시간 흐름 "도구 → 응답 → 도구 → 응답 → …"를 시선이 자연스럽게 따라가도록,
+ * 응답 행에 좌측 accent border (info 톤)와 옅은 배경 dim을 부여한다.
+ *
+ * ADR-005 회귀 수정: padding-left를 토큰 산식(--turn-row-indent - --turn-row-border-w)으로
+ * 통일해 다른 5종 행과 좌측 edge가 정확히 일치. 응답 마커 아이콘은 첫 컬럼 슬롯에 배치
+ * (turn-rows.js의 renderResponseRow가 toolIconHtml 패턴으로 추가). */
+.turn-row-response {
+  margin: 0 var(--space-4);
+  border-left: var(--turn-row-border-w) solid var(--type-response-color);
+  padding-left: calc(var(--turn-row-indent) - var(--turn-row-border-w));
+  background: var(--type-response-row-bg);
+  border-radius: var(--radius-sm);
+}
+.turn-row-response:hover {
+  /* 응답 행 hover는 dim accent로만 (border는 그대로 유지). */
+  background: var(--accent-bg-light);
+}
+
+/* 응답 행 첫 컬럼 마커 아이콘 — toolIconHtml 패턴과 시각 어휘 일관 (◉/◎ 형제).
+ * info 톤 dot으로 "어시스턴트 응답"임을 한눈에 표시. */
+.tool-icon-response {
+  font-size: var(--text-data);
+  color: var(--type-response-color);
+  line-height: 1;
 }
 
 /* ── data-honesty-ui (ADR-004): tool-only turn 응답 부재 placeholder ─────── */
 /* response 행이 없는 turn은 프롬프트가 도구만 호출하고 텍스트 응답을 생성하지 않은
- * 상태. 사용자가 데이터 누락으로 오인하지 않도록 명시적 한 줄 표시. */
+ * 상태. 사용자가 데이터 누락으로 오인하지 않도록 명시적 한 줄 표시.
+ * empty placeholder는 "정보 없음"이므로 beat 강조에서 제외 — accent border 제거하되
+ * 좌측 edge는 다른 행과 일치시키기 위해 padding-left에 border-w를 더해 보정. */
 .turn-row-response--empty {
   margin: 0 var(--space-4);
-  padding-left: 30px;
+  padding-left: var(--turn-row-indent);
   background: transparent;
+  border-left: 0;
 }
 .turn-row-response--empty .tool-sub {
   color: var(--text-3);
@@ -298,17 +335,16 @@
 
 /* ── CARD BAR PCT (위 .turn-card-footer 섹션에 정의됨) ───────────────────── */
 
-/* ── TOOL CALL GROUP ROW ────────────────────────────────────────────────── */
-/* 연속 동일 도구 그룹화 헤더 행 (buildTurnDetailRows)
-   정렬 상수: margin 16 + border 2 + padding 30 = 48px — 단독 tool 행(border 0 + padding 32)과
-   두번째 grid 컬럼 시작 x좌표를 일치시키기 위해 padding-left를 30px로 축소한다. */
+/* ── TOOL CALL GROUP ROW (web-design-balance-pass ADR-005 — 토큰 산식) ───
+ * 연속 동일 도구 그룹화 헤더 행 (buildTurnDetailRows). border-left를 padding에서
+ * 흡수해 단독 tool 행과 좌측 edge가 정확히 일치하도록 토큰 산식 사용. */
 .turn-row-group {
   cursor: pointer;
   user-select: none;
   background: var(--surface-alt);
-  border-left: 2px solid var(--accent-border);    /* ADR-008: 그룹임을 시각적으로 강조 */
+  border-left: var(--turn-row-border-w) solid var(--accent-border);    /* ADR-008: 그룹임을 시각적으로 강조 */
   margin: 2px var(--space-4) 0;
-  padding-left: 30px;
+  padding-left: calc(var(--turn-row-indent) - var(--turn-row-border-w));
   border-radius: var(--radius-sm);
   transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
 }
@@ -341,22 +377,26 @@
   font-weight: 600;
 }
 
-/* 그룹 하위 행 컨테이너 — 기본 숨김, .open 시 표시 (ADR-008 — 옅은 강조) */
+/* 그룹 하위 행 컨테이너 — 기본 숨김, .open 시 표시.
+ * (web-design-balance-pass ADR-005 — 부모-자식 위계 명시 indent)
+ * 컨테이너의 좌측 border-left는 부모 그룹과 시각 연결되도록 같은 accent를 사용.
+ * 자식 tool 행은 부모보다 한 단계 더 들여써서 위계가 시선에 즉시 들어오게 한다. */
 .turn-row-group-children {
   display: none;
   background: var(--white-bg-subtle);
-  border-left: 2px solid var(--accent-border);
+  border-left: var(--turn-row-border-w) solid var(--accent-border);
   margin: 0 var(--space-4) 2px;
   border-radius: 0 0 var(--radius-sm) var(--radius-sm);
 }
 .turn-row-group.open + .turn-row-group-children {
   display: block;
 }
-/* 그룹 하위 행은 컨테이너의 margin만 적용 — ◉ 아이콘 x좌표를 그룹 헤더 행과 일치시킴.
-   정렬 상수: 부모 컨테이너 margin 16 + 부모 border 2 + 자식 padding 30 = 48px. */
+/* 자식 행 좌측 정렬 산식 (ADR-005):
+ *   부모 컨테이너의 border-left(turn-row-border-w)를 자식 padding-left에서 흡수하여
+ *   첫 컬럼 anchor 일치 + 부모 헤더 대비 한 단계 추가 indent(--space-3)로 위계 표시. */
 .turn-row-group-children .turn-row-tool {
   margin: 0;
-  padding-left: 30px;
+  padding-left: calc(var(--turn-row-indent) - var(--turn-row-border-w) + var(--space-3));
   border-bottom: 1px solid var(--border);
 }
 .turn-row-group-children .turn-row-tool:last-child {
@@ -381,6 +421,119 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* ── ASK USER QUESTION (web-design-balance-pass ADR-004) ───────────────────
+ * AskUserQuestion 도구의 펼침 영역 시각화.
+ * payload.tool_input의 questions[]·options[]·answers를 buildAskUserQuestionHtml가
+ * 구조화 HTML로 만들고, togglePromptExpand가 HTML 모드로 직접 렌더한다.
+ *
+ * 디자인 원칙:
+ *  - 질문 카드는 옅은 surface 톤으로 묶어 "한 질문 = 한 단위"로 인지.
+ *  - 옵션은 좌측 marker(○/●/☐/☑)로 단일/멀티 선택 형태와 결과를 동시에 표현.
+ *  - 선택된 답만 accent 톤으로 강조 — 다른 옵션은 default text-2.
+ *  - description은 마우스 hover(title)와 작은 inline dim 텍스트로 이중 노출. */
+.askq-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  line-height: 1.5;
+}
+
+.askq-q {
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.askq-q-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.askq-header {
+  display: inline-block;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--badge-grad-info);
+  color: var(--info);
+  font-size: var(--text-small);
+  font-weight: var(--weight-strong);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.askq-question {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-1);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-medium);
+  word-break: break-word;
+}
+
+.askq-multi-hint {
+  color: var(--text-3);
+  font-size: var(--text-small);
+  font-style: italic;
+}
+
+.askq-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.askq-option {
+  display: grid;
+  grid-template-columns: 18px minmax(0, auto) 1fr;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  cursor: help;
+}
+
+.askq-option-marker {
+  color: var(--text-3);
+  font-size: var(--text-meta);
+  text-align: center;
+  line-height: 1;
+}
+
+.askq-option-label {
+  color: var(--text-2);
+  font-weight: var(--weight-normal);
+  word-break: break-word;
+}
+
+.askq-option-desc {
+  color: var(--text-3);
+  font-size: var(--text-small);
+  word-break: break-word;
+}
+
+/* 선택된 옵션 — accent 톤 + 굵은 라벨 + dim 배경. */
+.askq-option-selected {
+  background: var(--type-response-row-bg);
+  border-left: 2px solid var(--type-response-color);
+  padding-left: calc(var(--space-2) - 2px);  /* border-left 흡수 — 좌측 정렬 유지 */
+}
+.askq-option-selected .askq-option-marker { color: var(--type-response-color); }
+.askq-option-selected .askq-option-label  {
+  color: var(--text-1);
+  font-weight: var(--weight-strong);
 }
 
 /* ── UTILITY ────────────────────────────────────────────────────────────── */
