@@ -39,7 +39,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { createProxyRequest } from '@spyglass/storage';
+import { createProxyRequest, upsertSystemPrompt } from '@spyglass/storage';
 import { broadcastNewProxyRequest, type ProxyBroadcastPayload } from '../sse';
 import { invalidateDashboardCache } from '../api';
 import { diagJson } from '../diag-log';
@@ -181,37 +181,46 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
 
       try {
         const { anthropicOrgId, anthropicRequestId } = extractResponseHeaders(response);
-        createProxyRequest(db, {
-          id: requestId, timestamp: startMs, method, path: url.pathname,
-          status_code: statusCode, response_time_ms: ms,
-          model: state.model,
-          tokens_input: state.usage.input_tokens ?? 0,
-          tokens_output: state.usage.output_tokens ?? 0,
-          cache_creation_tokens: state.usage.cache_creation_input_tokens ?? 0,
-          cache_read_tokens: state.usage.cache_read_input_tokens ?? 0,
-          tokens_per_second: tps, is_stream: true,
-          messages_count: reqMeta.messagesCount, max_tokens: reqMeta.maxTokens,
-          tools_count: reqMeta.toolsCount, request_preview: reqMeta.requestPreview,
-          stop_reason: state.stopReason, response_preview: state.responsePreview,
-          error_type: state.errorType, error_message: state.errorMessage,
-          first_token_ms: state.firstTokenMs, api_request_id: state.apiRequestId,
-          // v19: cross-link 키
-          session_id: sessionId, turn_id: turnId,
-          // v20: 감사 메타
-          client_user_agent: clientUserAgent, client_app: clientApp, anthropic_beta: anthropicBeta,
-          anthropic_org_id: anthropicOrgId, anthropic_request_id: anthropicRequestId,
-          thinking_type: reqMeta.thinkingType, temperature: reqMeta.temperature,
-          system_preview: reqMeta.systemPreview, system_reminder: reqMeta.systemReminder,
-          tool_names: reqMeta.toolNames,
-          metadata_user_id: reqMeta.metadataUserId, client_meta_json: clientMeta,
-          // v21: compressed payload
-          payload,
-          payload_raw_size: payloadRawSize,
-          payload_algo: payload ? 'zstd' : null,
-        });
+        // v22: system_prompts UPSERT + proxy_requests INSERT 원자화 (ADR-005).
+        // trx 내부에서 throw 시 자동 롤백 — 고아 system_prompts 행 방지.
+        db.transaction(() => {
+          maybeUpsertSystemPrompt(db, reqMeta, startMs);
+          createProxyRequest(db, {
+            id: requestId, timestamp: startMs, method, path: url.pathname,
+            status_code: statusCode, response_time_ms: ms,
+            model: state.model,
+            tokens_input: state.usage.input_tokens ?? 0,
+            tokens_output: state.usage.output_tokens ?? 0,
+            cache_creation_tokens: state.usage.cache_creation_input_tokens ?? 0,
+            cache_read_tokens: state.usage.cache_read_input_tokens ?? 0,
+            tokens_per_second: tps, is_stream: true,
+            messages_count: reqMeta.messagesCount, max_tokens: reqMeta.maxTokens,
+            tools_count: reqMeta.toolsCount, request_preview: reqMeta.requestPreview,
+            stop_reason: state.stopReason, response_preview: state.responsePreview,
+            error_type: state.errorType, error_message: state.errorMessage,
+            first_token_ms: state.firstTokenMs, api_request_id: state.apiRequestId,
+            // v19: cross-link 키
+            session_id: sessionId, turn_id: turnId,
+            // v20: 감사 메타
+            client_user_agent: clientUserAgent, client_app: clientApp, anthropic_beta: anthropicBeta,
+            anthropic_org_id: anthropicOrgId, anthropic_request_id: anthropicRequestId,
+            thinking_type: reqMeta.thinkingType, temperature: reqMeta.temperature,
+            system_preview: reqMeta.systemPreview, system_reminder: reqMeta.systemReminder,
+            tool_names: reqMeta.toolNames,
+            metadata_user_id: reqMeta.metadataUserId, client_meta_json: clientMeta,
+            // v21: compressed payload
+            payload,
+            payload_raw_size: payloadRawSize,
+            payload_algo: payload ? 'zstd' : null,
+            // v22: system_prompts cross-link
+            system_hash: reqMeta.systemHash ?? null,
+            system_byte_size: reqMeta.systemByteSize ?? null,
+          });
+        })();
 
         // hook 측 미완성 행(model NULL 또는 tokens_source='unavailable')을
-        // 같은 session_id + 시간 윈도우로 일괄 채움 — model + tokens + api_request_id
+        // 같은 session_id + 시간 윈도우로 일괄 채움 — model + tokens + api_request_id.
+        // 트랜잭션 외부 — 다른 테이블 UPDATE라 별 흐름.
         backfillRequestFromProxy(db, {
           sessionId,
           model: state.model,
@@ -223,25 +232,30 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
           proxyStartMs: startMs,
         });
 
-        // DB 저장 성공 직후에만 캐시 무효화 + SSE 브로드캐스트
+        // DB 저장 성공 직후에만 캐시 무효화 + SSE 브로드캐스트.
+        // 별도 try/catch로 격리 — broadcast 실패가 client 응답에 영향 안 주게.
         // @see docs/plans/proxy-sse-integration/plan.md Phase A
-        invalidateDashboardCache();
-        const broadcastPayload: ProxyBroadcastPayload = {
-          id: requestId, timestamp: startMs, method, path: url.pathname,
-          status_code: statusCode, response_time_ms: ms,
-          model: state.model,
-          tokens_input: state.usage.input_tokens ?? 0,
-          tokens_output: state.usage.output_tokens ?? 0,
-          cache_creation_tokens: state.usage.cache_creation_input_tokens ?? 0,
-          cache_read_tokens: state.usage.cache_read_input_tokens ?? 0,
-          tokens_per_second: tps, is_stream: true,
-          messages_count: reqMeta.messagesCount, max_tokens: reqMeta.maxTokens,
-          tools_count: reqMeta.toolsCount, request_preview: reqMeta.requestPreview,
-          stop_reason: state.stopReason, response_preview: state.responsePreview,
-          error_type: state.errorType, error_message: state.errorMessage,
-          first_token_ms: state.firstTokenMs, api_request_id: state.apiRequestId,
-        };
-        broadcastNewProxyRequest(broadcastPayload);
+        try {
+          invalidateDashboardCache();
+          const broadcastPayload: ProxyBroadcastPayload = {
+            id: requestId, timestamp: startMs, method, path: url.pathname,
+            status_code: statusCode, response_time_ms: ms,
+            model: state.model,
+            tokens_input: state.usage.input_tokens ?? 0,
+            tokens_output: state.usage.output_tokens ?? 0,
+            cache_creation_tokens: state.usage.cache_creation_input_tokens ?? 0,
+            cache_read_tokens: state.usage.cache_read_input_tokens ?? 0,
+            tokens_per_second: tps, is_stream: true,
+            messages_count: reqMeta.messagesCount, max_tokens: reqMeta.maxTokens,
+            tools_count: reqMeta.toolsCount, request_preview: reqMeta.requestPreview,
+            stop_reason: state.stopReason, response_preview: state.responsePreview,
+            error_type: state.errorType, error_message: state.errorMessage,
+            first_token_ms: state.firstTokenMs, api_request_id: state.apiRequestId,
+          };
+          broadcastNewProxyRequest(broadcastPayload);
+        } catch (err) {
+          console.warn('[PROXY] Broadcast error:', err);
+        }
       } catch (err) {
         console.warn('[PROXY] DB save error:', err);
       }
@@ -303,32 +317,39 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
 
   try {
     const { anthropicOrgId, anthropicRequestId } = extractResponseHeaders(response);
-    createProxyRequest(db, {
-      id: requestId, timestamp: startMs, method, path: url.pathname,
-      status_code: statusCode, response_time_ms: ms,
-      model: state.model,
-      tokens_input: state.usage.input_tokens ?? 0,
-      tokens_output: state.usage.output_tokens ?? 0,
-      cache_creation_tokens: state.usage.cache_creation_input_tokens ?? 0,
-      cache_read_tokens: state.usage.cache_read_input_tokens ?? 0,
-      tokens_per_second: null, is_stream: false,
-      messages_count: reqMeta.messagesCount, max_tokens: reqMeta.maxTokens,
-      tools_count: reqMeta.toolsCount, request_preview: reqMeta.requestPreview,
-      stop_reason: state.stopReason, response_preview: state.responsePreview,
-      error_type: state.errorType, error_message: state.errorMessage,
-      first_token_ms: null, api_request_id: state.apiRequestId,
-      session_id: sessionId, turn_id: turnId,
-      client_user_agent: clientUserAgent, client_app: clientApp, anthropic_beta: anthropicBeta,
-      anthropic_org_id: anthropicOrgId, anthropic_request_id: anthropicRequestId,
-      thinking_type: reqMeta.thinkingType, temperature: reqMeta.temperature,
-      system_preview: reqMeta.systemPreview, system_reminder: reqMeta.systemReminder,
-      tool_names: reqMeta.toolNames,
-      metadata_user_id: reqMeta.metadataUserId, client_meta_json: clientMeta,
-      // v21: compressed payload
-      payload,
-      payload_raw_size: payloadRawSize,
-      payload_algo: payload ? 'zstd' : null,
-    });
+    // v22: system_prompts UPSERT + proxy_requests INSERT 원자화 (ADR-005)
+    db.transaction(() => {
+      maybeUpsertSystemPrompt(db, reqMeta, startMs);
+      createProxyRequest(db, {
+        id: requestId, timestamp: startMs, method, path: url.pathname,
+        status_code: statusCode, response_time_ms: ms,
+        model: state.model,
+        tokens_input: state.usage.input_tokens ?? 0,
+        tokens_output: state.usage.output_tokens ?? 0,
+        cache_creation_tokens: state.usage.cache_creation_input_tokens ?? 0,
+        cache_read_tokens: state.usage.cache_read_input_tokens ?? 0,
+        tokens_per_second: null, is_stream: false,
+        messages_count: reqMeta.messagesCount, max_tokens: reqMeta.maxTokens,
+        tools_count: reqMeta.toolsCount, request_preview: reqMeta.requestPreview,
+        stop_reason: state.stopReason, response_preview: state.responsePreview,
+        error_type: state.errorType, error_message: state.errorMessage,
+        first_token_ms: null, api_request_id: state.apiRequestId,
+        session_id: sessionId, turn_id: turnId,
+        client_user_agent: clientUserAgent, client_app: clientApp, anthropic_beta: anthropicBeta,
+        anthropic_org_id: anthropicOrgId, anthropic_request_id: anthropicRequestId,
+        thinking_type: reqMeta.thinkingType, temperature: reqMeta.temperature,
+        system_preview: reqMeta.systemPreview, system_reminder: reqMeta.systemReminder,
+        tool_names: reqMeta.toolNames,
+        metadata_user_id: reqMeta.metadataUserId, client_meta_json: clientMeta,
+        // v21: compressed payload
+        payload,
+        payload_raw_size: payloadRawSize,
+        payload_algo: payload ? 'zstd' : null,
+        // v22: system_prompts cross-link
+        system_hash: reqMeta.systemHash ?? null,
+        system_byte_size: reqMeta.systemByteSize ?? null,
+      });
+    })();
     backfillRequestFromProxy(db, {
       sessionId,
       model: state.model,
@@ -340,28 +361,62 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
       proxyStartMs: startMs,
     });
 
-    invalidateDashboardCache();
-    const broadcastPayload: ProxyBroadcastPayload = {
-      id: requestId, timestamp: startMs, method, path: url.pathname,
-      status_code: statusCode, response_time_ms: ms,
-      model: state.model,
-      tokens_input: state.usage.input_tokens ?? 0,
-      tokens_output: state.usage.output_tokens ?? 0,
-      cache_creation_tokens: state.usage.cache_creation_input_tokens ?? 0,
-      cache_read_tokens: state.usage.cache_read_input_tokens ?? 0,
-      tokens_per_second: null, is_stream: false,
-      messages_count: reqMeta.messagesCount, max_tokens: reqMeta.maxTokens,
-      tools_count: reqMeta.toolsCount, request_preview: reqMeta.requestPreview,
-      stop_reason: state.stopReason, response_preview: state.responsePreview,
-      error_type: state.errorType, error_message: state.errorMessage,
-      first_token_ms: null, api_request_id: state.apiRequestId,
-    };
-    broadcastNewProxyRequest(broadcastPayload);
+    // SSE 브로드캐스트 격리 — broadcast 실패가 client 응답에 영향 안 주게 (T-06 ADR-005)
+    try {
+      invalidateDashboardCache();
+      const broadcastPayload: ProxyBroadcastPayload = {
+        id: requestId, timestamp: startMs, method, path: url.pathname,
+        status_code: statusCode, response_time_ms: ms,
+        model: state.model,
+        tokens_input: state.usage.input_tokens ?? 0,
+        tokens_output: state.usage.output_tokens ?? 0,
+        cache_creation_tokens: state.usage.cache_creation_input_tokens ?? 0,
+        cache_read_tokens: state.usage.cache_read_input_tokens ?? 0,
+        tokens_per_second: null, is_stream: false,
+        messages_count: reqMeta.messagesCount, max_tokens: reqMeta.maxTokens,
+        tools_count: reqMeta.toolsCount, request_preview: reqMeta.requestPreview,
+        stop_reason: state.stopReason, response_preview: state.responsePreview,
+        error_type: state.errorType, error_message: state.errorMessage,
+        first_token_ms: null, api_request_id: state.apiRequestId,
+      };
+      broadcastNewProxyRequest(broadcastPayload);
+    } catch (err) {
+      console.warn('[PROXY] Broadcast error:', err);
+    }
   } catch (err) {
     console.warn('[PROXY] DB save error:', err);
   }
 
   return new Response(bodyText, { status: statusCode, headers: responseHeaders });
+}
+
+// =============================================================================
+// system_prompts 헬퍼 — UPSERT 호출 전 RequestMeta 4 필드 NULL 가드
+// =============================================================================
+
+/**
+ * RequestMeta에 systemHash 등 4 필드가 모두 채워졌을 때만 system_prompts UPSERT 호출.
+ *
+ * 책임:
+ *  - body.system 미존재(또는 정규화 결과 빈값) 시 UPSERT 생략 — proxy_requests.system_hash NULL 적재.
+ *  - 4 필드(hash/content/byteSize/segmentCount) 중 하나라도 누락이면 일관성을 위해 전체 생략.
+ *
+ * 호출자: handleProxy 안의 db.transaction 클로저 (stream / non-stream 두 경로 공통)
+ * 의존성: @spyglass/storage upsertSystemPrompt
+ */
+function maybeUpsertSystemPrompt(db: Database, meta: RequestMeta, nowMs: number): void {
+  if (!meta.systemHash || !meta.systemContent
+    || typeof meta.systemByteSize !== 'number'
+    || typeof meta.systemSegmentCount !== 'number') {
+    return;
+  }
+  upsertSystemPrompt(db, {
+    hash: meta.systemHash,
+    content: meta.systemContent,
+    byteSize: meta.systemByteSize,
+    segmentCount: meta.systemSegmentCount,
+    nowMs,
+  });
 }
 
 // =============================================================================
