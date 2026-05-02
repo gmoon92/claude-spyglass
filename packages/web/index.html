@@ -279,6 +279,7 @@
               <button class="view-tab active" id="tabRequests" data-tab="requests">요청</button>
               <button class="view-tab" id="tabTurn" data-tab="turn">턴 뷰</button>
               <button class="view-tab" id="tabLlm" data-tab="llm">LLM Input</button>
+              <button class="view-tab" id="tabSysLib" data-tab="syslib">System 라이브러리</button>
               <button class="view-tab" id="tabTools" data-tab="tools">도구</button>
             </div>
             <div class="view-tab-bar-controls feed-controls">
@@ -318,6 +319,13 @@
           <div id="detailLlmInputView" class="detail-content" style="display:none">
             <div id="llmInputBody" class="llm-input-body" role="region" aria-label="LLM Input">
               <div class="state-empty"><span class="state-empty-title">최신 프록시 요청을 불러오는 중…</span></div>
+            </div>
+          </div>
+
+          <!-- v22 System Prompt 라이브러리 탭 (ADR-004 옵션 B) — dedup 카탈로그 -->
+          <div id="detailSysLibView" class="detail-content" style="display:none">
+            <div id="sysLibBody" class="syslib-body" role="region" aria-label="System Prompt Library">
+              <div class="state-empty"><span class="state-empty-title">시스템 프롬프트 카탈로그 불러오는 중…</span></div>
             </div>
           </div>
 
