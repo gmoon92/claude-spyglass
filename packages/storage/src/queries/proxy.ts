@@ -55,6 +55,11 @@ export interface ProxyRequest {
   payload: Uint8Array | null;
   payload_raw_size: number | null;
   payload_algo: string | null;
+  // v22: system_prompts 정규화 dedup 참조 (ADR-001 / ADR-007)
+  // hash는 system_prompts.hash로 JOIN, byte_size는 UI 'X KB' 라벨용 hot data.
+  // system_reminder(v21)와 직교 — body.system 본문 vs user 메시지 안 reminder.
+  system_hash: string | null;
+  system_byte_size: number | null;
 }
 
 export interface CreateProxyRequestParams {
@@ -99,6 +104,9 @@ export interface CreateProxyRequestParams {
   payload?: Uint8Array | null;
   payload_raw_size?: number | null;
   payload_algo?: string | null;
+  // v22: system_prompts 참조 (system_hash NULL 허용 — body.system 미존재 또는 backfill 미수행 행 보존)
+  system_hash?: string | null;
+  system_byte_size?: number | null;
 }
 
 // =============================================================================
@@ -120,7 +128,8 @@ const SQL_CREATE = `
     anthropic_org_id, anthropic_request_id,
     thinking_type, temperature, system_preview, system_reminder,
     tool_names, metadata_user_id, client_meta_json,
-    payload, payload_raw_size, payload_algo
+    payload, payload_raw_size, payload_algo,
+    system_hash, system_byte_size
   ) VALUES (
     ?, ?, ?, ?, ?, ?,
     ?, ?, ?, ?, ?,
@@ -133,7 +142,8 @@ const SQL_CREATE = `
     ?, ?,
     ?, ?, ?, ?,
     ?, ?, ?,
-    ?, ?, ?
+    ?, ?, ?,
+    ?, ?
   )
 `;
 
@@ -210,6 +220,8 @@ export function createProxyRequest(db: Database, p: CreateProxyRequestParams): v
     p.payload ?? null,
     p.payload_raw_size ?? null,
     p.payload_algo ?? null,
+    p.system_hash ?? null,
+    p.system_byte_size ?? null,
   ]);
 }
 
