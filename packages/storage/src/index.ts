@@ -214,3 +214,17 @@ export {
   type ProxyStats,
   type LatestProxyResponse,
 } from './queries/proxy';
+
+// =============================================================================
+// System Prompt Catalog (v22 — content-addressable dedup)
+// =============================================================================
+
+export {
+  upsertSystemPrompt,
+  getSystemPromptByHash,
+  listSystemPrompts,
+  type SystemPromptRow,
+  type SystemPromptSummary,
+  type UpsertSystemPromptParams,
+  type SystemPromptOrderBy,
+} from './queries/system-prompt';
