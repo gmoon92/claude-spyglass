@@ -20,6 +20,7 @@ import {
 } from './api.js';
 import { fmtToken } from './formatters.js';
 import { togglePromptExpand } from './renderers.js';
+import { renderLlmInput } from './llm-input-view.js';
 import { initColResize } from './col-resize.js';
 import { initPanelResize } from './panel-resize.js';
 import { initContextChart } from './context-chart.js';
@@ -241,6 +242,17 @@ function initEventDelegation() {
       const container = promptEl.closest('tr') || promptEl.closest('.turn-row');
       if (container) togglePromptExpand(promptEl.dataset.expandId, container);
     }
+  });
+
+  // 평면 행 더블클릭 → LLM Input 탭 라우팅 (system-prompt-exposure 후속)
+  // 단클릭은 prompt-preview expand로 보존, 더블클릭만 라우팅 — 충돌 회피.
+  // tr.dataset.requestId는 makeRequestRow가 부여 (data-request-id).
+  document.getElementById('detailView').addEventListener('dblclick', e => {
+    const tr = e.target.closest('tr[data-request-id]');
+    if (!tr || !tr.dataset.requestId) return;
+    setDetailTab('llm');
+    setDetailView('llm');
+    renderLlmInput(tr.dataset.requestId);
   });
 
   document.getElementById('detailView').addEventListener('keydown', e => {
