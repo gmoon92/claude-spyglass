@@ -17,11 +17,16 @@
  *  - mcp__*: 첫 의미 있는 문자열 필드
  *  - 기타: null
  *
- * 외부 노출: extractToolDetail(toolName, toolInput)
+ * 외부 노출: extractToolDetail(toolName, toolInput, toolResponse?)
  *
  * 호출자:
- *  - raw-handler.ts: PreToolUse/PostToolUse 처리 시
- *  - persist.ts: 서브에이전트 자식 tool_use 저장 시 (persistSubagentChildren)
+ *  - handlers/pre-tool-use.handler.ts : tool_response 없음 (PreToolUse 시점)
+ *  - handlers/post-tool-use.handler.ts: tool_response 함께 전달 (PostToolUse 시점)
+ *  - persist.ts (서브에이전트 자식): tool_response 없음 (transcript에서 추출)
+ *
+ * tool_response 활용 (v22+, PostToolUse 한정):
+ *  - TaskUpdate: response.statusChange로 "#1 in_progress→completed" 표시
+ *  - 다른 도구는 PreToolUse 표시와 동일하게 fallback
  *
  * 의존성: 없음 (순수 함수)
  */
@@ -29,13 +34,15 @@
 /**
  * 도구별 파라미터 요약 문자열 반환.
  *
- * @param toolName  도구 이름 (Read, Bash, Skill, Agent, mcp__*, ...)
- * @param toolInput hook payload의 tool_input 객체
- * @returns        80자 이내 요약 문자열 또는 null
+ * @param toolName     도구 이름 (Read, Bash, Skill, Agent, mcp__*, Task*, ...)
+ * @param toolInput    hook payload의 tool_input 객체
+ * @param toolResponse hook payload의 tool_response (PostToolUse만 보유, 옵션)
+ * @returns           80자 이내 요약 문자열 또는 null
  */
 export function extractToolDetail(
   toolName: string,
   toolInput: Record<string, unknown>,
+  toolResponse?: unknown,
 ): string | null {
   if (!toolInput) return null;
 
@@ -121,15 +128,21 @@ export function extractToolDetail(
     }
 
     case 'TaskUpdate': {
-      // "#<id> → <status>" 또는 "#<id> <subject>" 형식 — 변경된 핵심 필드만 표시
+      // PostToolUse 시점: tool_response.statusChange 우선 ("in_progress→completed" 형식의 string)
+      // PreToolUse 시점: tool_input의 status/subject/owner 등 변경 필드 표시
       const taskId = toolInput.taskId as string | undefined;
       if (!taskId) return null;
+      const tr = toolResponse as { statusChange?: string; updatedFields?: string[] } | undefined;
+      if (tr?.statusChange) {
+        return `#${taskId} ${tr.statusChange}`.slice(0, 80);
+      }
       const status = toolInput.status as string | undefined;
       if (status) return `#${taskId} → ${status}`.slice(0, 80);
       const subject = toolInput.subject as string | undefined;
       if (subject) return `#${taskId} ${subject}`.slice(0, 80);
       const owner = toolInput.owner as string | undefined;
       if (owner) return `#${taskId} owner=${owner}`.slice(0, 80);
+      // PreToolUse에서 인자 없이 호출된 경우 (드물지만) — taskId만이라도 표시
       return `#${taskId}`;
     }
 

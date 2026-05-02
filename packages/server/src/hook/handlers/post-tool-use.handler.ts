@@ -44,8 +44,9 @@ export class PostToolUseHandler implements HookEventHandler {
     }
 
     const { transcriptData, modelOverride } = resolveTranscriptContext(raw);
+    // v22: tool_response를 함께 전달 → TaskUpdate 등에서 statusChange 같은 결과값 활용
     const toolDetail = raw.tool_name && raw.tool_input
-      ? extractToolDetail(raw.tool_name, raw.tool_input)
+      ? extractToolDetail(raw.tool_name, raw.tool_input, raw.tool_response)
       : null;
 
     const tokensInput = transcriptData?.inputTokens.value ?? 0;
