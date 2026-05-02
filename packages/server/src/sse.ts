@@ -143,6 +143,10 @@ export function broadcastNewRequest(requestData: {
  * payload에 `source: 'proxy'` 마커를 명시해 클라이언트가 출처를 구분할 수 있게 한다.
  *
  * @see docs/plans/proxy-sse-integration/adr.md ADR-001
+ *
+ * v22 (system-prompt-exposure ADR-005): system_hash·system_byte_size 두 필드 추가.
+ *  - system 본문(content, 최대 28KB)은 절대 동봉하지 않음 — N 클라이언트 부하 방지.
+ *  - 본문 lazy-fetch는 GET /api/system-prompts/:hash (T-08).
  */
 export interface ProxyBroadcastPayload {
   id: string;
@@ -168,6 +172,10 @@ export interface ProxyBroadcastPayload {
   error_message: string | null;
   first_token_ms: number | null;
   api_request_id: string | null;
+  /** v22: system_prompts 참조. 본문은 미동봉, lazy-fetch는 GET /api/system-prompts/:hash. */
+  system_hash?: string | null;
+  /** v22: UI 'X KB' 라벨용 hot data. */
+  system_byte_size?: number | null;
 }
 
 export function broadcastNewProxyRequest(p: ProxyBroadcastPayload): void {

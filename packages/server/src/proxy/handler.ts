@@ -251,6 +251,9 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
             stop_reason: state.stopReason, response_preview: state.responsePreview,
             error_type: state.errorType, error_message: state.errorMessage,
             first_token_ms: state.firstTokenMs, api_request_id: state.apiRequestId,
+            // v22: system_prompts cross-link (본문 미동봉)
+            system_hash: reqMeta.systemHash ?? null,
+            system_byte_size: reqMeta.systemByteSize ?? null,
           };
           broadcastNewProxyRequest(broadcastPayload);
         } catch (err) {
@@ -378,6 +381,9 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
         stop_reason: state.stopReason, response_preview: state.responsePreview,
         error_type: state.errorType, error_message: state.errorMessage,
         first_token_ms: null, api_request_id: state.apiRequestId,
+        // v22: system_prompts cross-link (본문 미동봉)
+        system_hash: reqMeta.systemHash ?? null,
+        system_byte_size: reqMeta.systemByteSize ?? null,
       };
       broadcastNewProxyRequest(broadcastPayload);
     } catch (err) {
