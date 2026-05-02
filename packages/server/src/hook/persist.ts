@@ -10,8 +10,10 @@
  *  3. Agent tool 종료 후 서브 transcript에서 추출한 자식 tool_use 일괄 INSERT (Migration 017)
  *
  * 외부 노출 (collect/ 내부 사용 위주):
- *  - saveRequest(db, payload)                           : 단일 요청 저장 (Upsert 분기 포함)
- *  - persistSubagentChildren(db, children, context)     : 서브에이전트 자식 일괄 저장
+ *  - saveRequest(db, payload)                                      : 단일 요청 저장 (Upsert 분기 포함)
+ *  - persistSubagentChildren(db, children, context)                : 서브에이전트 자식 일괄 저장
+ *  - persistAssistantTextResponses(db, entries, context)            : v22 — 중간 assistant text 응답 저장
+ *    (PostToolUse 시 transcript에서 추출, message_id 기반 idempotent INSERT OR IGNORE)
  *
  * 호출자:
  *  - handler.ts (processHookEvent): 모든 hook 이벤트의 저장 단계
@@ -29,6 +31,7 @@ import type { Database } from 'bun:sqlite';
 import { createRequest } from '@spyglass/storage';
 import type { Request as DbRequest } from '@spyglass/storage';
 import type { NormalizedHookPayload, SubagentChildToolCall } from './types';
+import type { AssistantTextEntry } from './transcript';
 import { assignTurnId, getLastTurnId } from './turn';
 import { extractPreview, extractToolUseId } from './preview';
 import { extractToolDetail } from './tool-detail';
@@ -223,6 +226,78 @@ export function persistSubagentChildren(
       inserted++;
     } catch (e) {
       console.error('[Collect] Failed to insert subagent child:', e);
+    }
+  }
+  return inserted;
+}
+
+/**
+ * v22 — transcript에서 추출한 assistant text 응답들을 requests에 응답 행으로 INSERT.
+ *
+ * 배경:
+ *  - Stop 훅은 turn 종료 시 1회만 발생 + last_assistant_message는 마지막 1건만 보존
+ *  - 한 turn 안의 도구 호출 사이사이 출력된 어시스턴트 텍스트는 완전히 누락되던 문제
+ *
+ * 동작:
+ *  - extractAssistantTextEntries로 transcript의 모든 text 응답 entry 확보
+ *  - 각 entry의 message_id를 idempotent 키로 사용 → id=`resp-msg-<message_id>`
+ *  - INSERT OR IGNORE로 중복 시 silent skip → 매 PostToolUse마다 호출해도 중복 행 없음
+ *  - turn_id는 호출자가 결정 (현재 PostToolUse 시점의 turn — getLastTurnId 결과)
+ *
+ * 호출 시점: PostToolUseHandler 매 호출. 비용은 transcript 크기에 비례하지만 PostToolUse가
+ *  이미 transcript를 읽고 있어 추가 부담 미미.
+ *
+ * @returns 새로 INSERT된 응답 행 수
+ */
+export function persistAssistantTextResponses(
+  db: Database,
+  entries: AssistantTextEntry[],
+  context: { sessionId: string; turnId?: string; projectName: string },
+): number {
+  if (entries.length === 0) return 0;
+
+  // INSERT OR IGNORE — id가 PRIMARY KEY라 중복 시 silent skip
+  // requests 테이블의 모든 컬럼을 채워야 하므로 raw SQL 사용 (createRequest는 일반 INSERT)
+  const stmt = db.prepare(`
+    INSERT OR IGNORE INTO requests (
+      id, session_id, timestamp, type, tool_name, tool_detail, turn_id, model,
+      tokens_input, tokens_output, tokens_total, duration_ms, payload, source,
+      cache_creation_tokens, cache_read_tokens, preview, tool_use_id, event_type,
+      tokens_confidence, tokens_source, parent_tool_use_id, api_request_id,
+      permission_mode, agent_id, agent_type, tool_interrupted, tool_user_modified
+    ) VALUES (
+      ?, ?, ?, 'response', NULL, NULL, ?, ?,
+      ?, ?, ?, 0, ?, 'transcript-assistant-text',
+      ?, ?, ?, NULL, 'assistant_response',
+      'high', 'transcript', NULL, NULL,
+      NULL, NULL, NULL, NULL, NULL
+    )
+  `);
+
+  let inserted = 0;
+  for (const entry of entries) {
+    const id = `resp-msg-${entry.messageId}`;
+    const previewText = entry.text.slice(0, 2000);
+    const tokensTotal = entry.tokensInput + entry.tokensOutput;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = (stmt as any).run(
+        id,
+        context.sessionId,
+        entry.timestampMs,
+        context.turnId ?? null,
+        entry.model || null,
+        entry.tokensInput,
+        entry.tokensOutput,
+        tokensTotal,
+        JSON.stringify({ message_id: entry.messageId, text: entry.text, source: 'transcript' }),
+        entry.cacheCreationTokens,
+        entry.cacheReadTokens,
+        previewText,
+      );
+      if (result.changes > 0) inserted++;
+    } catch (e) {
+      console.error('[Hook] Failed to insert assistant text response:', e);
     }
   }
   return inserted;

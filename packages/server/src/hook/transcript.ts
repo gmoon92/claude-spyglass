@@ -9,10 +9,11 @@
  *  - parseTranscript(path)              : 단일 transcript에서 마지막 assistant의 usage·model 추출
  *  - resolveSubagentTranscriptPath(...) : 서브에이전트 전용 transcript 경로 계산
  *  - extractSubagentToolCalls(path)     : 서브 transcript에서 모든 tool_use 항목 추출
+ *  - extractAssistantTextEntries(path)  : 모든 assistant text 응답 entry 추출 (v22 — 중간 응답 보존용)
  *
  * 호출자:
  *  - transcript-context.ts: hook payload 컨텍스트에 따라 어느 transcript를 볼지 결정 후 호출
- *  - raw-handler.ts (PostToolUse Agent 분기): 자식 tool_use 추출 후 persistSubagentChildren에 전달
+ *  - handlers/post-tool-use.handler.ts: Agent 분기에서 자식 tool_use 추출 + 매 PostToolUse마다 중간 응답 추출
  *
  * 의존성:
  *  - node:fs (readFileSync) — 동기 파일 읽기 (collect 흐름은 한 번에 한 hook 처리이므로 OK)
@@ -230,6 +231,94 @@ export function extractSubagentToolCalls(
       });
       firstToolUseInResponse = false;
     }
+  }
+
+  return result;
+}
+
+/**
+ * v22 — 메인 transcript의 모든 assistant 텍스트 응답 entry 추출.
+ *
+ * 배경:
+ *  - Stop 훅은 turn 종료 시 1회만 발생하고 last_assistant_message는 마지막 1건만 담음.
+ *  - 한 turn 안에서 어시스턴트가 도구 호출 사이사이 여러 번 텍스트를 출력하지만 hook으로는
+ *    중간 응답이 보존되지 않음 → 사용자 화면에 마지막 응답만 보이는 문제.
+ *
+ * 동작:
+ *  - transcript의 모든 assistant entry 중 content[].type='text' 블록이 있는 entry를 모두 추출.
+ *  - 한 entry의 모든 text 블록은 join하여 한 응답으로 취급.
+ *  - message_id를 idempotent 키로 노출 → 호출자가 응답 행 id를 `resp-msg-<message_id>`로 만들어
+ *    INSERT OR IGNORE로 중복 방지.
+ *
+ * 토큰 부여:
+ *  - usage는 한 entry에 한 번만. text 블록만 있는 entry는 그대로 usage 사용.
+ *  - 같은 message_id의 다른 entry(예: tool_use 분리 entry)와 중복 카운트 방지를 위해
+ *    호출자는 first-seen-only 정책으로 INSERT OR IGNORE.
+ */
+export interface AssistantTextEntry {
+  messageId: string;
+  text: string;
+  timestampMs: number;
+  model: string;
+  tokensInput: number;
+  tokensOutput: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+}
+
+export function extractAssistantTextEntries(
+  transcriptPath: string,
+): AssistantTextEntry[] {
+  let content: string;
+  try {
+    content = readFileSync(transcriptPath, 'utf-8');
+  } catch {
+    return [];
+  }
+
+  const result: AssistantTextEntry[] = [];
+  const lines = content.split('\n').filter((l: string) => l.trim());
+
+  for (const line of lines) {
+    let entry: Record<string, unknown>;
+    try {
+      entry = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    if (entry.type !== 'assistant') continue;
+
+    const message = entry.message as Record<string, unknown> | undefined;
+    if (!message) continue;
+    const messageId = message.id as string | undefined;
+    if (!messageId) continue;
+
+    const contentArr = message.content as Array<Record<string, unknown>> | undefined;
+    if (!Array.isArray(contentArr)) continue;
+
+    // 한 entry의 text 블록 모두 합침 (대부분 1개지만 안전하게)
+    const textParts = contentArr
+      .filter((c) => c.type === 'text' && typeof c.text === 'string')
+      .map((c) => c.text as string);
+    if (textParts.length === 0) continue;
+    const text = textParts.join('\n').trim();
+    if (!text) continue;
+
+    const usage = (message.usage ?? {}) as Record<string, unknown>;
+    const model = (message.model as string) ?? '';
+    const ts = entry.timestamp as string | undefined;
+    const timestampMs = ts ? Date.parse(ts) : Date.now();
+
+    result.push({
+      messageId,
+      text,
+      timestampMs: Number.isFinite(timestampMs) ? timestampMs : Date.now(),
+      model,
+      tokensInput: (usage.input_tokens as number) ?? 0,
+      tokensOutput: (usage.output_tokens as number) ?? 0,
+      cacheCreationTokens: (usage.cache_creation_input_tokens as number) ?? 0,
+      cacheReadTokens: (usage.cache_read_input_tokens as number) ?? 0,
+    });
   }
 
   return result;

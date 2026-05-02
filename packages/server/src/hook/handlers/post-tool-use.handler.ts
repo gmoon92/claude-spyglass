@@ -15,13 +15,17 @@
 import { diagLog } from '../../diag-log';
 import type { ClaudeHookPayload, HookProcessResult, NormalizedHookPayload } from '../types';
 import type { HookEventHandler, HookContext } from '../event-handler';
-import { resolveSubagentTranscriptPath, extractSubagentToolCalls } from '../transcript';
+import {
+  resolveSubagentTranscriptPath,
+  extractSubagentToolCalls,
+  extractAssistantTextEntries,
+} from '../transcript';
 import { resolveTranscriptContext } from '../transcript-context';
 import { extractToolDetail } from '../tool-detail';
 import { extractHookAuditMeta } from '../audit-meta';
 import { toolTimingMap } from '../timing';
 import { getLastTurnId } from '../turn';
-import { persistSubagentChildren } from '../persist';
+import { persistSubagentChildren, persistAssistantTextResponses } from '../persist';
 import { processHookEvent } from '../processor';
 import { makeRequestId, deriveTokensConfidence } from './_shared';
 
@@ -88,6 +92,25 @@ export class PostToolUseHandler implements HookEventHandler {
     };
 
     const result = processHookEvent(db, payload);
+
+    // v22: 메인 transcript의 모든 어시스턴트 텍스트 응답을 message_id 기반으로 INSERT OR IGNORE.
+    // turn 내 도구 호출 사이사이의 중간 응답이 보존되어 사용자 화면에 마지막 한 건만 보이던
+    // 현상이 해소된다. message_id 충돌 시 silent skip이라 매 PostToolUse 호출 안전.
+    if (result.success && raw.transcript_path && raw.session_id) {
+      try {
+        const entries = extractAssistantTextEntries(raw.transcript_path);
+        if (entries.length > 0) {
+          const turnId = getLastTurnId(db, raw.session_id) ?? undefined;
+          persistAssistantTextResponses(db, entries, {
+            sessionId: raw.session_id,
+            turnId,
+            projectName: ctx.projectName,
+          });
+        }
+      } catch (e) {
+        console.error('[Hook] Failed to persist assistant text responses:', e);
+      }
+    }
 
     // Agent tool 완료 시 서브 transcript의 자식 tool_use 일괄 INSERT (Migration 017).
     // parent_tool_use_id로 부모 Agent에 매핑되어 같은 turn에 트리 구조로 묶임.
