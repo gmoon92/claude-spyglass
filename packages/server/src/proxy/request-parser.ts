@@ -14,13 +14,21 @@
  *    - system          : 첫 200자 (변경 추적)
  *    - tools[].name    : JSON array string (어떤 도구가 컨텍스트에 노출됐는지)
  *    - metadata.user_id: Anthropic 측 디바이스/계정 식별자
+ *  v21 강화:
+ *    - systemReminder  : 모든 user 메시지의 <system-reminder> 블록 누적
+ *  v22 dedup (ADR-001/002/007):
+ *    - systemHash / systemContent / systemByteSize / systemSegmentCount
+ *      body.system 본문 정규화(billing-header 제외 + cache_control 무시) → SHA-256.
+ *      v21 systemReminder(user 메시지 안 reminder)와 직교 책임 — 절대 섞지 말 것.
+ *      RequestMeta의 4개 필드는 optional `?:` 선언 — handler.ts fallback 객체 리터럴 변경 회피.
  *
  * 외부 노출: parseRequestBody(buffer)
  * 호출자: handler.ts (요청 진입 직후)
- * 의존성: types
+ * 의존성: types, system-hash (v22 — normalizeSystem 단일 진입점)
  */
 
 import type { RequestMeta } from './types';
+import { normalizeSystem } from './system-hash';
 
 /**
  * 요청 본문 ArrayBuffer를 파싱하여 RequestMeta로 반환.
@@ -62,6 +70,17 @@ export function parseRequestBody(buffer: ArrayBuffer): RequestMeta {
         .map((s: { text?: string }) => s.text ?? '')
         .join(' ');
       meta.systemPreview = joined.slice(0, 200) || null;
+    }
+
+    // v22: body.system 정규화 + SHA-256 hash (system_prompts 테이블 dedup용).
+    // billing-header(매 요청 변동 prefix)·cache_control(메타) 제외 후 idx[1]+ text만 결합.
+    // 정규화 단일 진입점 — ADR-002. 같은 페르소나는 항상 동일 hash 보장.
+    const norm = normalizeSystem(body.system);
+    if (norm) {
+      meta.systemHash = norm.hash;
+      meta.systemContent = norm.normalized;
+      meta.systemByteSize = norm.byteSize;
+      meta.systemSegmentCount = norm.segmentCount;
     }
 
     if (Array.isArray(body.messages)) {

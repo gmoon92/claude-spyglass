@@ -12,6 +12,10 @@
  * 요청 본문 파싱 결과 — DB의 proxy_requests 컬럼에 저장될 메타.
  *
  * v20: 감사 필드(thinkingType, temperature, systemPreview, toolNames, metadataUserId) 추가.
+ * v21: systemReminder 추가 (user 메시지 내 <system-reminder> 블록).
+ * v22: system_* dedup 필드 4개 추가 (ADR-001 / ADR-002 / ADR-007).
+ *      - body.system 본문을 정규화하여 SHA-256 hash로 dedup. system_reminder와 직교.
+ *      - optional `?:` 선언 — handler.ts의 RequestMeta fallback 객체 리터럴에 영향 없게.
  */
 export interface RequestMeta {
   model: string | null;
@@ -26,8 +30,17 @@ export interface RequestMeta {
   systemPreview: string | null;
   toolNames: string | null; // JSON array string
   metadataUserId: string | null;
-  // v21: system-reminder 원문 추출
+  // v21: system-reminder 원문 추출 (user 메시지 안 reminder 블록 — body.system과 직교)
   systemReminder: string | null;
+  // v22: body.system 정규화 dedup (system_prompts 테이블 참조용)
+  /** SHA-256(normalized) hex 64자. system_prompts.hash로 사용. body.system 미존재 시 null/undefined. */
+  systemHash?: string | null;
+  /** 정규화된 system 본문. system_prompts.content INSERT용 (handler.ts UPSERT 직전 1회 사용). */
+  systemContent?: string | null;
+  /** UTF-8 byte 길이. proxy_requests.system_byte_size · system_prompts.byte_size 양쪽 사용. */
+  systemByteSize?: number | null;
+  /** 정규화에 사용된 text 항목 수. system_prompts.segment_count INSERT용. */
+  systemSegmentCount?: number | null;
 }
 
 /** Anthropic API usage 구조 (요청·응답 본문에서 추출) */
