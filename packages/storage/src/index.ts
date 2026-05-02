@@ -70,6 +70,7 @@ export {
   deleteSession,
   deleteSessions,
   deleteOldSessions,
+  deleteOldData,
   // 집계
   getSessionStats,
   getProjectStats,
