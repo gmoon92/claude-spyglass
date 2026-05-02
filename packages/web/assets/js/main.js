@@ -198,11 +198,22 @@ function initEventDelegation() {
   const detailFilterBar = createFilterBar('detailTypeFilterBtns', {
     dataAttr: 'detail-filter',
     onChange(filter) {
+      // ── ADR-008: 'system' 필터 클릭 시 System 라이브러리 탭으로 자동 전환 ──
+      // 카운트의 의미(distinct system_hash 수 = 카탈로그 크기)와 동작 위치(라이브러리 탭)를 일치.
+      // filter 상태는 변경하지 않음 — 사용자가 라이브러리 → 평면 탭 복귀 시 이전 컨텍스트 보존.
+      if (filter === 'system') {
+        setDetailTab('syslib');
+        setDetailView('syslib');
+        return;
+      }
       setDetailFilter(filter);
       applyDetailFilter();
     },
   });
   setDetailFilterBar(detailFilterBar);
+  // ADR-008 시각 hint — 외부 이동 어휘를 다른 필터와 분리 (↗ glyph는 syslib.css의 ::after).
+  document.querySelector('[data-detail-filter="system"]')
+    ?.setAttribute('title', 'System 라이브러리 탭으로 이동');
 
   document.getElementById('detailView').addEventListener('click', e => {
     const turnBtn  = e.target.closest('[data-toggle-turn]');

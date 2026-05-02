@@ -1,0 +1,296 @@
+/**
+ * syslib.css — System Prompt 라이브러리 패널 시각 정의 (web-design-balance-pass ADR-007 + ADR-008)
+ *
+ * 책임:
+ *  - system-prompt-library.js가 출력하는 dedup 카탈로그 표 + 정렬 토글 + 모달의 시각 폴리싱.
+ *  - sort 토글 active 상태를 accent 톤으로 명확히 (1맥락 정책 — 사용자 액션으로 활성화된 컨트롤).
+ *  - ref_count Top 25%(.syslib-ref-hot)는 ▲ glyph + accent 텍스트로 자주 쓰이는 페르소나 부각.
+ *  - byte_size 임계: >16KB warn / >32KB error — cache miss 비용 신호.
+ *  - modal: backdrop + floating 톤 카드 + 가독 pre.
+ *  - ADR-008 시각 hint: 평면 뷰의 [data-detail-filter="system"] 버튼에 ↗ 외부 이동 글리프.
+ *
+ * 의존성 토큰 (모두 design-tokens.css SSoT — 하드코딩 0):
+ *  - 색: --accent, --brand-primary, --warn, --error, --text-1/2/3/4,
+ *        --surface, --surface-alt, --raised, --floating, --border, --border-strong,
+ *        --accent-bg-medium, --accent-bg-light, --accent-border
+ *  - 간격·radius: --space-1~6, --radius-sm/md/lg
+ *  - 타이포: --font-data, --text-meta/small/body/h2/h3, --weight-medium/strong
+ *
+ * 호출 마크업: packages/web/assets/js/system-prompt-library.js renderHtml() 참조
+ */
+
+/* === 컨테이너 ============================================================= */
+.syslib-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  font-size: var(--text-body);
+  color: var(--text-2);
+}
+
+/* === Sort 토글 바 ========================================================= */
+.syslib-sort-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.syslib-sort-label {
+  margin-right: var(--space-2);
+  font-size: var(--text-meta);
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: var(--weight-medium);
+}
+.syslib-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-medium);
+  color: var(--text-3);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+.syslib-sort-btn:hover {
+  background: var(--raised);
+  color: var(--text-2);
+}
+.syslib-sort-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.syslib-sort-btn.active {
+  background: var(--accent-bg-medium);
+  color: var(--brand-primary);
+  border-color: var(--accent-border);
+}
+.syslib-sort-btn.active:hover {
+  background: var(--accent-bg-medium);
+}
+
+/* === 카탈로그 표 ========================================================== */
+.syslib-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  font-size: var(--text-body);
+}
+.syslib-table thead th {
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-strong);
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  color: var(--text-3);
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.syslib-table thead th.num,
+.syslib-table tbody td.num {
+  text-align: right;
+  font-family: var(--font-data);
+}
+.syslib-row {
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+.syslib-row + .syslib-row td { border-top: 1px solid var(--border); }
+.syslib-row td {
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-2);
+  font-size: var(--text-body);
+  vertical-align: middle;
+}
+.syslib-row:hover { background: var(--raised); }
+.syslib-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: var(--raised);
+}
+.syslib-hash code {
+  font-family: var(--font-data);
+  font-size: var(--text-data);
+  color: var(--text-3);
+}
+
+/* === 임계 신호 (ADR-007) ================================================== */
+/* ref_count Top 25% — 자주 쓰이는 페르소나 부각 (sort key가 ref_count일 때만 부여) */
+.syslib-ref-hot {
+  color: var(--accent);
+  font-weight: var(--weight-strong);
+}
+.syslib-ref-hot::before {
+  content: '▲';
+  display: inline-block;
+  margin-right: var(--space-1);
+  font-size: 0.85em;
+  vertical-align: 1px;
+}
+/* byte_size > 16KB — cache miss 비용 신호 */
+.syslib-size-warn {
+  color: var(--warn);
+}
+/* byte_size > 32KB — 강한 비용 신호 */
+.syslib-size-large {
+  color: var(--error);
+  font-weight: var(--weight-strong);
+}
+.syslib-size-large::after {
+  content: ' \00B7';
+  margin-left: var(--space-1);
+  color: var(--error);
+}
+
+/* === Modal (행 클릭 → 본문 lazy-fetch) ==================================== */
+.syslib-detail-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  animation: syslib-modal-fade var(--dur-base) var(--ease);
+}
+.syslib-detail-modal[hidden] { display: none; }
+
+@keyframes syslib-modal-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.syslib-detail-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 880px;
+  max-height: calc(100vh - 64px);
+  padding: var(--space-5);
+  background: var(--floating);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+.syslib-detail-close {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+.syslib-detail-close:hover {
+  background: var(--raised);
+  color: var(--text-1);
+}
+.syslib-detail-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.syslib-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding-right: 32px;          /* close 버튼 영역 회피 */
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-meta);
+  color: var(--text-3);
+}
+.syslib-detail-head span {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-data);
+  font-size: var(--text-small);
+}
+.syslib-detail-hash {
+  font-family: var(--font-data);
+  font-size: var(--text-data);
+  color: var(--text-2);
+  word-break: break-all;
+}
+
+.syslib-detail-content {
+  flex: 1;
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-data);
+  font-size: var(--text-data);
+  line-height: 1.55;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
+  tab-size: 4;
+}
+.syslib-detail-content::-webkit-scrollbar { width: 8px; height: 8px; }
+.syslib-detail-content::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+.syslib-detail-content::-webkit-scrollbar-track { background: transparent; }
+
+.syslib-dim {
+  color: var(--text-4);
+  font-size: var(--text-meta);
+  font-style: italic;
+}
+
+/* === ADR-008: system 필터 클릭 → System 라이브러리 탭 자동 전환 hint =====
+ * 평면 뷰의 일반 필터(prompt/tool_call 등)와 동작 어휘가 다름을 시각으로 안내.
+ * pseudo-element로 처리해 DOM 추가 없음. 다른 필터에는 영향 없음. */
+[data-detail-filter="system"]::after {
+  content: ' ↗';
+  margin-left: var(--space-1);
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+[data-detail-filter="system"].active::after,
+[data-detail-filter="system"]:hover::after {
+  opacity: 1;
+  color: var(--accent);
+}

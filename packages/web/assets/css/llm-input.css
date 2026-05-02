@@ -1,0 +1,288 @@
+/**
+ * llm-input.css — LLM Input 탭 시각 정의 (web-design-balance-pass ADR-006)
+ *
+ * 책임:
+ *  - llm-input-view.js가 출력하는 마크업의 시각 폴리싱.
+ *  - system 본문은 amber/warn accent로 user/assistant 응답(blue) 톤과 시각 어휘 분리.
+ *  - role chip 4종(user/assistant/tool/system)으로 멀티턴 발화자 즉시 식별.
+ *  - 28KB system 본문도 가독 컨테이너(--llm-input-pre-max-h, 480px) 안에서 스크롤.
+ *  - decode_error는 --error 톤으로 즉시 인지.
+ *
+ * 의존성 토큰 (모두 design-tokens.css SSoT — 하드코딩 0):
+ *  - 색: --type-system-color, --type-response-color, --type-mcp-color, --error,
+ *        --yellow-bg-light, --type-response-row-bg, --blue-bg-light,
+ *        --text-1/2/3, --surface-alt, --floating, --border, --warn
+ *  - 간격·radius: --space-1~6, --radius-sm/md/lg
+ *  - 타이포: --font-data, --text-meta/small/body/h3, --weight-medium/strong
+ *  - 컨테이너: --llm-input-pre-max-h, --turn-row-border-w
+ *
+ * 호출 마크업: packages/web/assets/js/llm-input-view.js renderHtml() 참조
+ */
+
+/* === 컨테이너 (탭 진입 영역) =============================================== */
+.llm-input-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-4);
+  font-size: var(--text-body);
+  color: var(--text-2);
+}
+
+/* === 헤더: request id · system hash · size · decode_error ================= */
+.llm-input-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-meta);
+  color: var(--text-3);
+}
+.llm-input-header code {
+  color: var(--text-2);
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+}
+.llm-input-rid,
+.llm-input-hash,
+.llm-input-size {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.llm-input-hash--empty {
+  color: var(--text-4);
+  font-style: italic;
+}
+.llm-input-error {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  background: var(--red-bg-light);
+  color: var(--error);
+  border-left: var(--turn-row-border-w) solid var(--error);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-medium);
+}
+.llm-input-error::before {
+  content: '⚠';
+  font-size: 1em;
+}
+
+/* === System 섹션: amber/warn accent (응답 blue와 시각 어휘 분리) =========== */
+.llm-input-system {
+  position: relative;
+  padding: var(--space-4) var(--space-4) var(--space-4) calc(var(--space-4) + var(--space-1));
+  background: var(--yellow-bg-light);
+  border-left: var(--turn-row-border-w) solid var(--type-system-color);
+  border-radius: var(--radius-md);
+}
+.llm-input-system h3 {
+  font-size: var(--text-h3);
+  font-weight: var(--weight-strong);
+  color: var(--text-2);
+  margin-bottom: var(--space-2);
+}
+.llm-input-system--empty,
+.llm-input-system--loading {
+  background: var(--surface-alt);
+  border-left-color: var(--text-4);
+}
+.llm-input-system--empty p,
+.llm-input-system--loading p {
+  color: var(--text-3);
+  font-size: var(--text-meta);
+}
+
+/* meta line: segment_count · byte_size · ref_count chip */
+.llm-input-system-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  font-family: var(--font-data);
+  font-size: var(--text-small);
+  color: var(--text-3);
+}
+.llm-input-system-meta span {
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+/* system 본문 pre — 28KB도 가독 컨테이너 안에서 스크롤 */
+.llm-input-system-content {
+  max-height: var(--llm-input-pre-max-h);
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-data);
+  font-size: var(--text-data);
+  line-height: 1.55;
+  color: var(--text-2);
+  tab-size: 4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.llm-input-system-content::-webkit-scrollbar { width: 8px; height: 8px; }
+.llm-input-system-content::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+.llm-input-system-content::-webkit-scrollbar-track { background: transparent; }
+
+/* === Messages 섹션 ======================================================== */
+.llm-input-messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.llm-input-messages h3 {
+  font-size: var(--text-h3);
+  font-weight: var(--weight-strong);
+  color: var(--text-2);
+  margin-bottom: var(--space-2);
+}
+
+/* 개별 메시지 article 카드 */
+.llm-input-msg {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* head: role chip + idx mini badge */
+.llm-input-msg-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.llm-input-msg-role {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-small);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  background: var(--surface-alt);
+  color: var(--text-3);
+}
+.llm-input-msg-idx {
+  font-family: var(--font-data);
+  font-size: var(--text-small);
+  color: var(--text-4);
+}
+
+/* role chip 4종 — 시각 어휘로 발화자 즉시 식별
+   user      : neutral (기본 chip)
+   assistant : blue    (응답 — type-response-color SSoT, ADR-002 beat 어휘 일관)
+   tool      : teal    (mcp 어휘 — 도구 결과)
+   system    : amber   (system block accent와 일관) */
+.llm-input-msg--user .llm-input-msg-role {
+  background: var(--surface-alt);
+  color: var(--text-2);
+}
+.llm-input-msg--assistant .llm-input-msg-role {
+  background: var(--type-response-row-bg);
+  color: var(--type-response-color);
+}
+.llm-input-msg--tool .llm-input-msg-role,
+.llm-input-msg--tool_use .llm-input-msg-role,
+.llm-input-msg--tool_result .llm-input-msg-role {
+  background: var(--blue-bg-light);
+  color: var(--type-mcp-color);
+}
+.llm-input-msg--system .llm-input-msg-role {
+  background: var(--yellow-bg-light);
+  color: var(--type-system-color);
+}
+.llm-input-msg--unknown .llm-input-msg-role {
+  background: var(--surface-alt);
+  color: var(--text-4);
+  font-style: italic;
+}
+
+/* body: pre 텍스트 + tool_* details */
+.llm-input-msg-body {
+  padding: var(--space-3);
+}
+.llm-input-msg-text {
+  margin: 0;
+  font-family: var(--font-data);
+  font-size: var(--text-data);
+  line-height: 1.55;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+  tab-size: 4;
+}
+.llm-input-msg-text + .llm-input-msg-text,
+.llm-input-msg-text + .llm-input-msg-part,
+.llm-input-msg-part + .llm-input-msg-text,
+.llm-input-msg-part + .llm-input-msg-part {
+  margin-top: var(--space-3);
+}
+
+.llm-input-msg-part {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.llm-input-msg-part > summary {
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-data);
+  font-size: var(--text-small);
+  color: var(--text-3);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+.llm-input-msg-part > summary::-webkit-details-marker { display: none; }
+.llm-input-msg-part > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: var(--space-2);
+  color: var(--text-4);
+  transition: transform var(--dur-fast) var(--ease);
+}
+.llm-input-msg-part[open] > summary::before { transform: rotate(90deg); }
+.llm-input-msg-part > summary:hover { background: var(--raised); }
+.llm-input-msg-part > pre {
+  margin: 0;
+  padding: var(--space-3);
+  border-top: 1px solid var(--border);
+  font-family: var(--font-data);
+  font-size: var(--text-data);
+  line-height: 1.55;
+  color: var(--text-3);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: var(--llm-input-pre-max-h);
+  overflow-y: auto;
+  tab-size: 4;
+}
+
+/* dim 보조 텍스트 */
+.llm-input-dim {
+  color: var(--text-4);
+  font-size: var(--text-meta);
+  font-style: italic;
+}

@@ -92,6 +92,12 @@
   --panel-resize-max:          384px;
   --panel-resize-handle-width: 4px;
 
+  /* ── LLM Input 탭 — system pre 본문 컨테이너 max-height (web-design-balance-pass ADR-006)
+   *   28KB 메인 system 본문이 들어와도 화면 viewport(80% 다운스케일 후 ~720~880px)의
+   *   대략 절반 안에서 스크롤로 가독성 유지. messages 섹션이 그 아래 정상 노출되도록 한다.
+   *   값 산출: 600px(원본) × 0.8(다운스케일) = 480px. */
+  --llm-input-pre-max-h: 480px;
+
   /* ── Turn-row 좌측 정렬 SSoT (web-design-balance-pass ADR-005) ──────────
    * 펼친 turn 카드 안의 6종 행(prompt / tool 단독 / group 머리 / group-children /
    * response / response--empty)이 동일한 좌측 edge를 갖도록 하기 위한 토큰.
