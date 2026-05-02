@@ -16,9 +16,10 @@ import {
   reactivateSession,
   type ClaudeEvent,
 } from '@spyglass/storage';
-import { getLastTurnId, parseTranscript } from './collect';
+import { getLastTurnId, parseTranscript } from './hook';
 import { broadcastNewRequest } from './sse';
 import { invalidateDashboardCache } from './api';
+import { diagJson } from './diag-log';
 
 export interface RawHookPayload {
   hook_event_name: string;
@@ -47,6 +48,16 @@ export async function eventsCollectHandler(req: Request, db: Database): Promise<
   if (!payload.hook_event_name || !payload.session_id) {
     return json({ error: 'Missing required fields: hook_event_name, session_id' }, 400);
   }
+
+  // /collect와 동일하게 hook-payload.jsonl로 raw 보존 (SessionStart/End/Stop/Notification 등)
+  diagJson('hook-payload', {
+    hook_event_name: payload.hook_event_name,
+    session_id: payload.session_id,
+    tool_name: null,
+    tool_use_id: null,
+    cwd: payload.cwd ?? null,
+    raw: payload,
+  });
 
   const p = payload as Record<string, unknown>;
   const stopHookActive = typeof p.stop_hook_active === 'boolean'
@@ -166,6 +177,15 @@ function saveAssistantResponse(
     // turn_id 매핑: 직전 prompt의 turn_id 재사용 (없으면 NULL)
     const turnId = getLastTurnId(db, sessionId) ?? undefined;
 
+    // v19: 응답 행에 같은 session의 가장 최근 proxy_requests의 api_request_id를 cross-link.
+    // Stop 시점엔 해당 turn의 proxy 응답이 모두 끝나 있어 신뢰 가능.
+    const apiReqIdRow = db.query<{ api_request_id: string }, [string, number]>(
+      `SELECT api_request_id FROM proxy_requests
+       WHERE session_id = ? AND api_request_id IS NOT NULL
+         AND timestamp <= ?
+       ORDER BY timestamp DESC LIMIT 1`,
+    ).get(sessionId, timestamp);
+
     const id = `resp-${timestamp}-${randomUUID().slice(0, 8)}`;
     const previewText = message.slice(0, 2000);
 
@@ -191,6 +211,7 @@ function saveAssistantResponse(
       event_type: 'assistant_response',
       tokens_confidence: tokensConfidence,
       tokens_source: tokensSource,
+      api_request_id: apiReqIdRow?.api_request_id ?? null,
     });
 
     invalidateDashboardCache();
