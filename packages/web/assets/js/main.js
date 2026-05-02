@@ -117,6 +117,10 @@ function startSSE() {
     // 현재 웹 대시보드에는 proxy 패널이 없으므로 'spyglass:proxy-request' 커스텀 이벤트로
     // 디스패치해 후속 패널 도입 시 1줄로 구독할 수 있게 한다.
     // @see ${CLAUDE_PROJECT_DIR}/.claude/docs/plans/proxy-sse-integration/adr.md ADR-003
+    //
+    // v21 fix: 메인 세션이 다른 곳에서 활동하여 hook은 안 들어오고 proxy만 들어오는 시나리오
+    //   (예: 자동 백그라운드 호출, 다른 세션의 동시 진행)에서도 도넛/옵저빌리티 패널이 갱신되도록
+    //   debounce 후 fetchDashboard 트리거. hook 채널과 동일한 1초 debounce 큐를 공유.
     onNewProxyRequest(e) {
       try {
         const evt = JSON.parse(e.data);
@@ -125,6 +129,9 @@ function startSSE() {
           detail: evt.data,
         }));
       } catch { /* silent */ }
+
+      clearTimeout(refreshDebounce);
+      refreshDebounce = setTimeout(() => fetchDashboard(), 1000);
     },
     onOpen() {
       clearError();

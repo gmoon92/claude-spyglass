@@ -1,6 +1,6 @@
 // API / Fetch 모듈
 import { fmt, fmtToken, formatDuration } from './formatters.js';
-import { setTypeData, drawDonut, renderTypeLegend } from './chart.js';
+import { setTypeData, setSourceData, drawDonut, renderTypeLegend, getDonutMode } from './chart.js';
 import { clearError, setLastUpdated, showError } from './infra.js';
 import { renderProjects, getAllSessions, setAllSessions, renderBrowserSessions } from './left-panel.js';
 import {
@@ -10,6 +10,7 @@ import {
 import { RECENT_REQ_COLS } from './renderers.js';
 import { detectAnomalies } from './anomaly.js';
 import { renderCachePanel } from './cache-panel.js';
+import { fetchModelUsage } from './metrics-api.js';
 import { FEED_UPDATED } from './events.js';
 
 export const API = '';
@@ -93,6 +94,17 @@ export async function fetchDashboard() {
 
     renderProjects(d.projects || []);
     setTypeData((d.types || []).sort((a, b) => b.count - a.count));
+
+    // v21 fix: SSE 도착 시 도넛 갱신 보장 — model 분포는 별도 metrics 엔드포인트라
+    //   default-view.setChartMode가 페이지 로드 시 1회만 fetch했던 한계로 SSE 도착 후
+    //   stale 채로 남는 버그가 있었음. donutMode가 'model'이면 매 fetchDashboard마다 같이 갱신.
+    if (getDonutMode() === 'model') {
+      try {
+        const modelData = await fetchModelUsage({ range: '24h' });
+        setSourceData('model', modelData || []);
+      } catch { /* silent — 도넛 stale 유지 */ }
+    }
+
     drawDonut();
     renderTypeLegend();
     clearError();
