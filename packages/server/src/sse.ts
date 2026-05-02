@@ -1,8 +1,8 @@
 /**
  * SSE (Server-Sent Events) Streaming
  *
- * @description 실시간 데이터 변경 브로드캐스트
- * @see docs/planning/02-prd.md - 실시간 토큰 카운터
+ * @description 실시간 데이터 변경 브로드캐스트 — hook(requests)과 proxy(proxy_requests) 두 채널을
+ *              브라우저로 push. 채널별 이벤트 타입: 'new_request' / 'new_proxy_request'.
  */
 
 // =============================================================================
