@@ -114,9 +114,20 @@ export function extractToolDetail(
     }
 
     case 'AskUserQuestion': {
-      const questions = toolInput.questions as Array<{ question: string }> | undefined;
+      // PostToolUse: tool_input.answers — 사용자가 실제 선택한 답이 question→label 매핑으로 들어옴
+      // PreToolUse: 답이 아직 없으니 첫 질문 텍스트로 폴백
+      // 여러 질문이면 'Q×N' 표시 + 첫 질문/답을 같이 노출
+      const questions = toolInput.questions as
+        Array<{ question: string; options?: Array<{ label: string }> }> | undefined;
       const first = questions?.[0]?.question;
-      return first ? first.slice(0, 80) : null;
+      if (!first) return null;
+      const answers = toolInput.answers as Record<string, string> | undefined;
+      const firstAnswer = answers ? answers[first] : undefined;
+      const qPrefix = (questions && questions.length > 1) ? `Q×${questions.length} ` : '';
+      if (firstAnswer) {
+        return `${qPrefix}${first} → ${firstAnswer}`.slice(0, 80);
+      }
+      return `${qPrefix}${first}`.slice(0, 80);
     }
 
     case 'TaskCreate': {
@@ -128,13 +139,22 @@ export function extractToolDetail(
     }
 
     case 'TaskUpdate': {
-      // PostToolUse 시점: tool_response.statusChange 우선 ("in_progress→completed" 형식의 string)
+      // PostToolUse 시점: tool_response.statusChange 우선.
+      //   실측: statusChange는 객체 {from, to}로 들어옴 — 객체를 string 템플릿에 박으면
+      //   '[object Object]'로 강제 변환되므로 명시적으로 풀어 from→to로 표기.
+      //   문자열 형태(미래 호환)도 폴백으로 지원.
       // PreToolUse 시점: tool_input의 status/subject/owner 등 변경 필드 표시
       const taskId = toolInput.taskId as string | undefined;
       if (!taskId) return null;
-      const tr = toolResponse as { statusChange?: string; updatedFields?: string[] } | undefined;
-      if (tr?.statusChange) {
-        return `#${taskId} ${tr.statusChange}`.slice(0, 80);
+      const tr = toolResponse as
+        { statusChange?: string | { from?: string; to?: string }; updatedFields?: string[] }
+        | undefined;
+      const sc = tr?.statusChange;
+      if (sc && typeof sc === 'object' && (sc.from || sc.to)) {
+        return `#${taskId} ${sc.from ?? '?'}→${sc.to ?? '?'}`.slice(0, 80);
+      }
+      if (typeof sc === 'string' && sc.length > 0) {
+        return `#${taskId} ${sc}`.slice(0, 80);
       }
       const status = toolInput.status as string | undefined;
       if (status) return `#${taskId} → ${status}`.slice(0, 80);
