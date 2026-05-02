@@ -446,6 +446,5 @@ cp "$(ls -1t ${HOME}/.claude/settings.json.bak-* 2>/dev/null | head -1)" "${HOME
 ## 참고
 
 - [README.md](../README.md) — 프로젝트 개요와 기능 설명
-- [architecture.md](./architecture.md) — 아키텍처 상세
 - [examples/settings.hooks.minimal.json](./examples/settings.hooks.minimal.json) — 최소 훅 프로파일
 - [examples/settings.hooks.full.json](./examples/settings.hooks.full.json) — 권장(전체) 훅 프로파일
