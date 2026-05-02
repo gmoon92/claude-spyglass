@@ -13,7 +13,8 @@
     "tui": "bun run packages/tui/src/index.tsx",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "prepare": "git config core.hooksPath .githooks"
+    "prepare": "git config core.hooksPath .githooks",
+    "backfill:system-prompts": "bun run packages/server/scripts/backfill-system-prompts.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
