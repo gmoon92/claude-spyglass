@@ -12,7 +12,7 @@ import {
   getAllRequests,
   getSessionById,
 } from '@spyglass/storage';
-import { handleCollect, collectHandler, CollectPayload } from '../collect';
+import { processHookEvent, collectHandler, type NormalizedHookPayload } from '../hook';
 
 const TEST_DB_PATH = `/tmp/spyglass-collect-test-${Date.now()}.db`;
 
@@ -30,9 +30,9 @@ describe('Collect API', () => {
     } catch {}
   });
 
-  describe('handleCollect', () => {
+  describe('processHookEvent', () => {
     it('should create new session on first request', () => {
-      const payload: CollectPayload = {
+      const payload: NormalizedHookPayload = {
         id: 'req-1',
         session_id: 'session-1',
         project_name: 'test-project',
@@ -46,7 +46,7 @@ describe('Collect API', () => {
         source: 'test',
       };
 
-      const result = handleCollect(db.instance, payload);
+      const result = processHookEvent(db.instance, payload);
 
       expect(result.success).toBe(true);
       expect(result.saved).toBe(true);
@@ -58,7 +58,7 @@ describe('Collect API', () => {
     });
 
     it('should save request with correct data', () => {
-      const payload: CollectPayload = {
+      const payload: NormalizedHookPayload = {
         id: 'req-2',
         session_id: 'session-2',
         project_name: 'test-project',
@@ -73,7 +73,7 @@ describe('Collect API', () => {
         source: 'test',
       };
 
-      handleCollect(db.instance, payload);
+      processHookEvent(db.instance, payload);
 
       // 요청 저장 확인
       const requests = getAllRequests(db.instance);
@@ -88,7 +88,7 @@ describe('Collect API', () => {
       const sessionId = 'session-3';
 
       // 첫 번째 요청
-      handleCollect(db.instance, {
+      processHookEvent(db.instance, {
         id: 'req-3a',
         session_id: sessionId,
         project_name: 'test',
@@ -102,7 +102,7 @@ describe('Collect API', () => {
       });
 
       // 두 번째 요청
-      handleCollect(db.instance, {
+      processHookEvent(db.instance, {
         id: 'req-3b',
         session_id: sessionId,
         project_name: 'test',
@@ -121,7 +121,7 @@ describe('Collect API', () => {
     });
 
     it('should reject invalid payload', () => {
-      const result = handleCollect(db.instance, {
+      const result = processHookEvent(db.instance, {
         id: '',
         session_id: '',
         project_name: 'test',
@@ -151,7 +151,7 @@ describe('Collect API', () => {
     });
 
     it('should handle valid POST request', async () => {
-      const payload: CollectPayload = {
+      const payload: NormalizedHookPayload = {
         id: 'http-req-1',
         session_id: 'http-session',
         project_name: 'http-test',
@@ -209,7 +209,7 @@ describe('Collect API', () => {
       ];
 
       for (const req of requests) {
-        handleCollect(db.instance, {
+        processHookEvent(db.instance, {
           id: req.id,
           session_id: sessionId,
           project_name: 'multi-test',

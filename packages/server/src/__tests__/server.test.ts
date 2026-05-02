@@ -13,7 +13,7 @@ import {
   getRequestById,
 } from '@spyglass/storage';
 import { startServer, stopServer, isServerRunning } from '../index';
-import { collectHandler } from '../collect';
+import { collectHandler } from '../hook';
 import { apiRouter } from '../api';
 import { sseRouter } from '../sse';
 
