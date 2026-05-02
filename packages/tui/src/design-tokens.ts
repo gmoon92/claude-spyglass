@@ -114,10 +114,12 @@ export const tokens = {
       glacial: 800,
     },
     spinner: {
-      tool: { frames: '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'.split(''), interval: 80 },
-      net: { frames: '◜◠◝◞◡◟'.split(''), interval: 100 },
-      bg: { frames: '⢄⢂⢁⡁⡈⡐⡠'.split(''), interval: 150 },
-      agent: { frames: '◜◝◞◟'.split(''), interval: 250 },
+      // ASCII narrow 1자 spinner — tui-glyph-ascii ADR-001 (정렬 보장).
+      // 모든 프레임은 ASCII printable이므로 visual width 항상 1.
+      tool: { frames: '|/-\\'.split(''), interval: 100 },
+      net: { frames: '|/-\\'.split(''), interval: 100 },
+      bg: { frames: '.oOo'.split(''), interval: 150 },
+      agent: { frames: '|/-\\'.split(''), interval: 250 },
     },
     highlight: {
       enter: 80,
@@ -125,22 +127,33 @@ export const tokens = {
       decay: 500,
     },
   },
+  /**
+   * ASCII narrow 1-character icons — tui-glyph-ascii ADR-001.
+   *
+   * 모든 글리프는 ASCII printable(0x20–0x7E) 1자로 통일하여
+   * 어떤 터미널·폰트·로케일에서도 visual width = 1 보장.
+   * 의미 구분은 색상 토큰(success/warning/danger/info/accent)으로 유지.
+   *
+   * 미관은 trade-off로 수용. 향후 환경 진단 도구 도입 시 unicode 복원 가능.
+   */
   icon: {
-    file: { read: '▤', edit: '✎', write: '✚', delete: '✕' },
-    search: { grep: '⌕', glob: '⌕', web: '⊕' },
-    bash: { exec: '▶', kill: '■' },
-    mcp: { default: '◇' },
-    agent: { d0: '▼', d1: '▼▼', d2: '▼▼▼' },
+    file: { read: 'R', edit: 'E', write: 'W', delete: 'X' },
+    search: { grep: '?', glob: '?', web: '@' },
+    bash: { exec: '$', kill: 'K' },
+    mcp: { default: 'M' },
+    // d1/d2는 호출처가 단일 글리프 가정으로 사용하지만 현재 사용처 없음.
+    // 단일 'A'로 통일하여 정렬 깨짐 방지 (이전 '▼▼▼'은 visual 4~6칸으로 위험).
+    agent: { d0: 'A', d1: 'A', d2: 'A' },
     state: {
-      ok: '✓',
-      err: '✗',
-      warn: '⚠',
-      info: 'ⓘ',
-      running: '●',
-      idle: '○',
+      ok: '+',
+      err: '!',
+      warn: '?',
+      info: 'i',
+      running: '*',
+      idle: '.',
     },
-    other: '·',
-    stripe: '▌',
+    other: '.',
+    stripe: '|',
   },
   layout: {
     breakpoint: { sm: 80, md: 100, lg: 140, xl: 180 },
