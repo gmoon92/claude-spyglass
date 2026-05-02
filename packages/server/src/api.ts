@@ -31,6 +31,7 @@ import {
   getEventsByType,
   getEventStats,
   getRecentProxyRequests,
+  getProxyRequestById,
   getProxyStats,
   // v22 — system_prompts 정규화 dedup 카탈로그 (system-prompt-exposure)
   listSystemPrompts,
@@ -346,6 +347,39 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     const row = getSystemPromptByHash(db, hash);
     if (!row) return jsonResponse({ success: false, error: 'system prompt not found' }, 404);
     return jsonResponse({ success: true, data: row });
+  }
+
+  // GET /api/proxy-requests/:id/messages — payload(zstd) 디코드 후 user messages + system_hash 반환
+  // T-09 LLM Input 탭이 의존. 본문(system content)은 미동봉 — 클라이언트가 system_hash로 별도 lazy-fetch.
+  if (path.match(/^\/api\/proxy-requests\/[^\/]+\/messages$/) && method === 'GET') {
+    const id = path.split('/')[3];
+    const row = getProxyRequestById(db, id);
+    if (!row) return jsonResponse({ success: false, error: 'proxy request not found' }, 404);
+
+    // payload BLOB → zstd 디코드 → JSON.parse → body.messages 추출 (graceful — 실패해도 200 with empty)
+    let messages: unknown[] = [];
+    let decodeError: string | null = null;
+    if (row.payload instanceof Uint8Array && row.payload.byteLength > 0) {
+      try {
+        const raw = Bun.zstdDecompressSync(row.payload);
+        const text = new TextDecoder().decode(raw);
+        const body = JSON.parse(text) as { messages?: unknown };
+        if (Array.isArray(body.messages)) messages = body.messages;
+      } catch (err) {
+        decodeError = (err as Error).message ?? 'decode failed';
+      }
+    }
+
+    return jsonResponse({
+      success: true,
+      data: {
+        id: row.id,
+        system_hash: row.system_hash,
+        system_byte_size: row.system_byte_size,
+        messages,
+        ...(decodeError ? { decode_error: decodeError } : {}),
+      },
+    });
   }
 
   // 404

@@ -225,6 +225,19 @@ export function createProxyRequest(db: Database, p: CreateProxyRequestParams): v
   ]);
 }
 
+/**
+ * 단건 proxy_requests 조회 — `/api/proxy-requests/:id/messages` 백엔드.
+ *
+ * payload(zstd BLOB)을 디코드해 LLM Input 탭(T-09)이 user 메시지 시퀀스를 노출할 수 있게 한다.
+ * 디코드/JSON.parse는 호출자(api.ts)가 담당 — 본 함수는 row 자체만 반환.
+ *
+ * @param id  proxy_requests.id (요청 UUID)
+ * @returns ProxyRequest 또는 미존재 시 null
+ */
+export function getProxyRequestById(db: Database, id: string): ProxyRequest | null {
+  return (db.query('SELECT * FROM proxy_requests WHERE id = ?').get(id) as ProxyRequest | null) ?? null;
+}
+
 export function getRecentProxyRequests(db: Database, limit = 50): ProxyRequest[] {
   const baseRows = db.query<ProxyRequest, [number]>(SQL_GET_RECENT_BASE).all(limit);
   const findPrompt = db.query<{ session_id: string }, { $lo: number; $hi: number; $pivot: number }>(

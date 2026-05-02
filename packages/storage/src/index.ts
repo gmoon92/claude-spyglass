@@ -207,6 +207,7 @@ export {
 export {
   createProxyRequest,
   getRecentProxyRequests,
+  getProxyRequestById,
   getProxyStats,
   getLatestProxyResponseBefore,
   type ProxyRequest,
