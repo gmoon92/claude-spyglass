@@ -22,6 +22,7 @@ import { clearToolStats } from '../tool-stats.js';
 import {
   setCurrentSessionId, setDetailRequests, setDetailTurns,
   setSearchQuery, clearExpandedTurnIds, getSearchBox, setSearchBox,
+  setSystemHashCount,
 } from './state.js';
 import { applyDetailFilter } from './flat-view.js';
 
@@ -51,13 +52,16 @@ export let detailSearchBox = null;
 export async function refreshDetailSession(sessionId) {
   if (!sessionId) return;
   try {
-    const [reqRes, turnRes] = await Promise.all([
+    const [reqRes, turnRes, sysRes] = await Promise.all([
       fetch(`${API}/api/sessions/${encodeURIComponent(sessionId)}/requests?limit=200`),
       fetch(`${API}/api/sessions/${encodeURIComponent(sessionId)}/turns`),
+      // v22 (T-11): system_prompts 카탈로그 크기로 system 필터 라벨 표시
+      fetch(`${API}/api/system-prompts?limit=500`),
     ]);
-    const [reqJson, turnJson] = await Promise.all([reqRes.json(), turnRes.json()]);
+    const [reqJson, turnJson, sysJson] = await Promise.all([reqRes.json(), turnRes.json(), sysRes.json()]);
     setDetailRequests(reqJson.data  || []);
     setDetailTurns(turnJson.data || []);
+    setSystemHashCount(Array.isArray(sysJson?.data) ? sysJson.data.length : 0);
     applyDetailFilter();
   } catch { /* silent */ }
 }
@@ -76,13 +80,16 @@ export async function loadSessionDetail(sessionId, opts = {}) {
   getSearchBox()?.clear();
   const { signal } = opts;
   const fetchOpts = signal ? { signal } : {};
-  const [reqRes, turnRes] = await Promise.all([
+  const [reqRes, turnRes, sysRes] = await Promise.all([
     fetch(`${API}/api/sessions/${encodeURIComponent(sessionId)}/requests?limit=200`, fetchOpts),
     fetch(`${API}/api/sessions/${encodeURIComponent(sessionId)}/turns`, fetchOpts),
+    // v22 (T-11): system_prompts 카탈로그 크기 — system 필터 라벨용
+    fetch(`${API}/api/system-prompts?limit=500`, fetchOpts),
   ]);
-  const [reqJson, turnJson] = await Promise.all([reqRes.json(), turnRes.json()]);
+  const [reqJson, turnJson, sysJson] = await Promise.all([reqRes.json(), turnRes.json(), sysRes.json()]);
   setDetailRequests(reqJson.data  || []);
   setDetailTurns(turnJson.data || []);
+  setSystemHashCount(Array.isArray(sysJson?.data) ? sysJson.data.length : 0);
   applyDetailFilter();
 }
 

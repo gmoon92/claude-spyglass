@@ -30,6 +30,7 @@ import { DETAIL_FILTER_CHANGED } from '../events.js';
 import {
   getDetailFilter, getDetailRequests, getDetailTurns, getSearchQuery,
   setFlatFiltered, setFlatAnomalyMap, setTurnFiltered, setTurnAnomalyMap,
+  getSystemHashCount,
 } from './state.js';
 import { renderTurnCards } from './turn-views.js';
 
@@ -82,10 +83,13 @@ export function applyDetailFilter() {
   const requests = getDetailRequests();
   const turns    = getDetailTurns();
 
-  // 카운트 집계 + 라벨 갱신
-  const countMap = { all: requests.length, prompt: 0, tool_call: 0, system: 0, agent: 0, skill: 0, mcp: 0 };
+  // 카운트 집계 + 라벨 갱신.
+  // v22 (ADR-004 옵션 D, T-11): system 카운트는 hook의 requests.type='system'(항상 0) 대신
+  // proxy_requests의 distinct system_hash 수(= /api/system-prompts 카탈로그 크기)를 사용.
+  // hash가 새로 등장한 첫 요청 = 신규 페르소나 등장 시점이라는 의미 부여.
+  const countMap = { all: requests.length, prompt: 0, tool_call: 0, system: getSystemHashCount(), agent: 0, skill: 0, mcp: 0 };
   requests.forEach(r => {
-    if (r.type in countMap) countMap[r.type]++;
+    if (r.type in countMap && r.type !== 'system') countMap[r.type]++;
     const sub = subTypeOf(r);
     if (sub) countMap[sub]++;
   });

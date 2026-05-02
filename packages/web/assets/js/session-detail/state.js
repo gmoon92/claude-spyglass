@@ -32,6 +32,14 @@ let _turnFiltered    = [];
 let _detailTurnAnomalyMap = new Map();
 
 // =============================================================================
+// v22 system_prompts 카탈로그 카운트 (T-11 ADR-004 옵션 D)
+//  - 평면 뷰 필터 라벨의 system(N) — N = distinct system_hash (proxy_requests 카탈로그)
+//  - loadSessionDetail / refreshDetailSession에서 GET /api/system-prompts 결과 size로 갱신
+//  - 0이면 카탈로그 비어있음(서버 재시작 직후 또는 v22 미적용 행만)
+// =============================================================================
+let _systemHashCount = 0;
+
+// =============================================================================
 // 1차 입력 — getter/setter
 // =============================================================================
 
@@ -62,3 +70,5 @@ export function getTurnFiltered()         { return _turnFiltered; }
 export function setTurnFiltered(list)     { _turnFiltered = list; }
 export function getTurnAnomalyMap()       { return _detailTurnAnomalyMap; }
 export function setTurnAnomalyMap(map)    { _detailTurnAnomalyMap = map; }
+export function getSystemHashCount()      { return _systemHashCount; }
+export function setSystemHashCount(n)     { _systemHashCount = (typeof n === 'number' && n >= 0) ? n : 0; }
