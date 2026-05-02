@@ -37,7 +37,13 @@
  *  - proxy/handler (요청·응답 raw payload 기록)
  *  - events.ts (Stop 등 비-collect hook 통합)
  */
-import { existsSync, mkdirSync, appendFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  appendFileSync,
+  readdirSync,
+  truncateSync,
+} from 'node:fs';
 import { join, resolve } from 'node:path';
 
 /**
@@ -104,4 +110,40 @@ export function diagJson(category: string, payload: Record<string, unknown>): vo
 
 export function getDiagLogDir(): string {
   return LOG_DIR;
+}
+
+/**
+ * LOG_DIR 안의 진단 로그 파일을 모두 0바이트로 truncate.
+ *
+ * 책임:
+ *  - `*.log`, `*.jsonl` 확장자만 정리 (다른 파일은 보존).
+ *  - 디렉토리 자체는 유지 — 다음 ensureDir() 호출 비용 회피.
+ *
+ * 호출 시점:
+ *  - 서버 시작(startServer) 진입 시 1회 — DIAG ON/OFF와 무관하게 호출.
+ *    "ON → 재현 → 분석 → OFF로 재시작" 라이프사이클 종료점이 곧 다음 분석의 시작점이므로,
+ *    재시작 시 깨끗한 상태로 리셋해 누적 로그가 디스크를 점유하지 않게 한다.
+ *
+ * 의존성: 파일 시스템(node:fs). 디렉토리 부재/권한 오류는 본 흐름을 막지 않는다.
+ *
+ * @returns 정리한 파일 개수. 디렉토리가 없으면 0.
+ */
+export function clearDiagLogs(): number {
+  if (!existsSync(LOG_DIR)) return 0;
+  let cleared = 0;
+  try {
+    const entries = readdirSync(LOG_DIR);
+    for (const name of entries) {
+      if (!name.endsWith('.log') && !name.endsWith('.jsonl')) continue;
+      try {
+        truncateSync(join(LOG_DIR, name), 0);
+        cleared++;
+      } catch {
+        // 개별 파일 실패는 무시 — 다음 파일 계속 처리
+      }
+    }
+  } catch {
+    // 디렉토리 read 실패 시 0 반환
+  }
+  return cleared;
 }

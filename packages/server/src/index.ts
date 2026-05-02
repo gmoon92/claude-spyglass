@@ -19,6 +19,7 @@ import { eventsCollectHandler } from './events';
 import { apiRouter, invalidateDashboardCache } from './api';
 import { sseRouter } from './sse';
 import { handleProxy } from './proxy';
+import { clearDiagLogs, getDiagLogDir } from './diag-log';
 
 // =============================================================================
 // 설정
@@ -312,6 +313,12 @@ export function startServer(options: {
   if (server) {
     console.log(`[Server] Already running on ${HOST}:${PORT}`);
     return server;
+  }
+
+  // 진단 로그 디렉토리 정리 — DIAG ON/OFF 무관, 새 서버 라이프사이클은 깨끗한 상태에서 시작
+  const cleared = clearDiagLogs();
+  if (cleared > 0) {
+    console.log(`[Server] Cleared ${cleared} diagnostic log file(s) at ${getDiagLogDir()}`);
   }
 
   // 데이터베이스 연결
