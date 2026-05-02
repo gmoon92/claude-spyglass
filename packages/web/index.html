@@ -278,6 +278,7 @@
             <div class="view-tab-group">
               <button class="view-tab active" id="tabRequests" data-tab="requests">요청</button>
               <button class="view-tab" id="tabTurn" data-tab="turn">턴 뷰</button>
+              <button class="view-tab" id="tabLlm" data-tab="llm">LLM Input</button>
               <button class="view-tab" id="tabTools" data-tab="tools">도구</button>
             </div>
             <div class="view-tab-bar-controls feed-controls">
@@ -310,6 +311,13 @@
           <div id="detailTurnView" class="detail-content" style="display:none">
             <div id="turnUnifiedBody" role="region" aria-label="턴 목록">
               <div class="state-loading"><div class="state-loading-spinner"></div><span>불러오는 중…</span></div>
+            </div>
+          </div>
+
+          <!-- v22 LLM Input 탭 (system-prompt-exposure ADR-004 옵션 A) — system blocks + user messages 합본 -->
+          <div id="detailLlmInputView" class="detail-content" style="display:none">
+            <div id="llmInputBody" class="llm-input-body" role="region" aria-label="LLM Input">
+              <div class="state-empty"><span class="state-empty-title">최신 프록시 요청을 불러오는 중…</span></div>
             </div>
           </div>
 

@@ -17,6 +17,7 @@ import { escHtml, fmtToken, fmtTime, formatDuration } from '../formatters.js';
 import { toolIconHtml, _promptCache, togglePromptExpand } from '../renderers.js';
 import { TOOL_COLORS } from '../tool-colors.js';
 import { loadToolStats } from '../tool-stats.js';
+import { showLatestLlmInput } from '../llm-input-view.js';
 import {
   buildTurnDetailRows, compressContinuousTools, fmtActionLabel,
 } from './turn-rows.js';
@@ -34,18 +35,26 @@ import {
 const BAR_PCT_TITLE = '이 턴이 세션 전체 토큰에서 차지하는 비중. 같은 세션의 모든 턴 합이 100% (Turn IN+OUT ÷ 세션 누적 토큰).';
 
 /**
- * 탭(요청/턴/도구) 표시 전환.
- * tools 탭 진입 시 도구 통계를 lazy 로드한다.
+ * 탭(요청/턴/LLM Input/도구) 표시 전환.
+ *  - tools 탭 진입 시 도구 통계 lazy 로드.
+ *  - llm 탭 진입 시 가장 최근 proxy 요청의 LLM Input 골격 렌더 (T-09 ADR-004 옵션 A).
  */
 export function setDetailView(tab) {
-  document.getElementById('detailRequestsView').style.display = tab === 'requests' ? '' : 'none';
-  document.getElementById('detailTurnView').style.display     = tab === 'turn'     ? '' : 'none';
-  document.getElementById('detailToolsView').style.display    = tab === 'tools'    ? '' : 'none';
-  document.getElementById('tabRequests').classList.toggle('active', tab === 'requests');
-  document.getElementById('tabTurn').classList.toggle('active',     tab === 'turn');
-  document.getElementById('tabTools').classList.toggle('active',    tab === 'tools');
+  const reqView = document.getElementById('detailRequestsView');
+  const turnView = document.getElementById('detailTurnView');
+  const llmView = document.getElementById('detailLlmInputView');
+  const toolsView = document.getElementById('detailToolsView');
+  if (reqView)   reqView.style.display   = tab === 'requests' ? '' : 'none';
+  if (turnView)  turnView.style.display  = tab === 'turn'     ? '' : 'none';
+  if (llmView)   llmView.style.display   = tab === 'llm'      ? '' : 'none';
+  if (toolsView) toolsView.style.display = tab === 'tools'    ? '' : 'none';
+  document.getElementById('tabRequests')?.classList.toggle('active', tab === 'requests');
+  document.getElementById('tabTurn')?.classList.toggle('active',     tab === 'turn');
+  document.getElementById('tabLlm')?.classList.toggle('active',      tab === 'llm');
+  document.getElementById('tabTools')?.classList.toggle('active',    tab === 'tools');
   const sessionId = getCurrentSessionId();
   if (tab === 'tools' && sessionId) loadToolStats(sessionId);
+  if (tab === 'llm') showLatestLlmInput();
 }
 
 /**
