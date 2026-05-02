@@ -309,12 +309,8 @@ tr[data-type="tool_call"] td.cell-msg .prompt-preview {
 
 /* ── ROW TRUST INDICATORS ───────────────────────────────────────────────── */
 /* 신뢰할 수 없는 행 — opacity로 시각 무게 감소 + 좌측 보더로 분류 명시 */
-tr.row-trust-estimated > td:first-child {
-  box-shadow: inset 2px 0 0 var(--trust-estimated-border);
-}
-tr.row-trust-estimated  { opacity: var(--trust-estimated-opacity); }
-tr.row-trust-estimated:hover { opacity: 0.95; }
-
+/* 'estimated' 표지 제거됨 (ADR-token-trust-cleanup-001) — proxy backfill로 자연 소멸. */
+/* 'synthetic'/'unknown'은 운영자가 알아야 하는 비정상 상태이므로 유지. */
 tr.row-trust-synthetic > td:first-child {
   box-shadow: inset 2px 0 0 var(--trust-synthetic-border);
 }
@@ -328,11 +324,6 @@ tr.row-trust-unknown    { opacity: var(--trust-unknown-opacity); }
 tr.row-trust-unknown:hover { opacity: 0.95; }
 
 /* turn view 행 (div 기반) — data-trust 속성 사용 */
-.turn-row[data-trust="estimated"] {
-  opacity: var(--trust-estimated-opacity);
-  border-left: 2px solid var(--trust-estimated-border);
-  padding-left: 6px;
-}
 .turn-row[data-trust="synthetic"] {
   opacity: var(--trust-synthetic-opacity);
   border-left: 2px solid var(--trust-synthetic-border);
@@ -343,23 +334,5 @@ tr.row-trust-unknown:hover { opacity: 0.95; }
   border-left: 2px solid var(--trust-unknown-border);
   padding-left: 6px;
 }
-.turn-row[data-trust="estimated"]:hover,
 .turn-row[data-trust="synthetic"]:hover,
 .turn-row[data-trust="unknown"]:hover { opacity: 0.95; }
-
-/* ── TRUST LABEL (모델 칩 옆 작은 보조 라벨) ─────────────────────────────── */
-.trust-label {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 4px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  font-family: var(--font-ui);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  color: var(--text-4);
-  background: var(--white-bg-subtle);
-  border: 1px dashed rgba(110,118,129,0.30);
-  vertical-align: middle;
-}

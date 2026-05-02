@@ -147,17 +147,34 @@ export function modelClassOf(model) {
 }
 
 /**
- * 신뢰도 분류 — ADR-data-trust-visual-001
- * model이 estimated 신호와 충돌하면 더 약한 신뢰도(synthetic > unknown > estimated)를 우선.
- * external은 데이터 자체는 정확하므로 row dim 적용 안 함 (UI는 trusted로 처리).
+ * 신뢰도 분류 — ADR-data-trust-visual-001 / ADR-token-trust-cleanup-001
+ *
+ * 책임:
+ *   행(prompt/response) 렌더링 시 model/토큰 신뢰도를 단일 키워드로 분류한다.
+ *
+ * 호출자:
+ *   - makeRequestRow → rowTrustClass / data-trust 속성
+ *   - session-detail.buildTurnDetailRows → turn-row data-trust 속성
+ *   - modelChipHtml 내부 (보조 라벨 결정용 — 현재는 라벨 없음)
+ *
+ * 우선순위:
+ *   synthetic > unknown > trusted (external은 trusted로 처리)
+ *
+ * 'estimated' 제거 사유 (ADR-token-trust-cleanup-001):
+ *   - 'estimated'는 토큰 출처 추정이지 model 추정이 아닌데,
+ *     UI에서는 model 칩 옆에 라벨링되어 명칭 오용 발생.
+ *   - server proxy backfill 확장으로 hook 행의 tokens_source가
+ *     proxy 응답 시점에 'proxy'/'high'로 승격되므로 'unavailable'은
+ *     1~2초 transient 상태로만 존재 → 시각 표지 가치 소멸.
+ *   - synthetic/unknown은 운영자가 알아야 하는 비정상 상태이므로 유지.
+ *
  * @param {{model?: string|null, tokens_source?: string|null}} r
- * @returns {'trusted'|'estimated'|'synthetic'|'unknown'}
+ * @returns {'trusted'|'synthetic'|'unknown'}
  */
 export function trustOf(r) {
   const cls = modelClassOf(r?.model);
   if (cls === 'synthetic') return 'synthetic';
   if (cls === 'unknown')   return 'unknown';
-  if (r?.tokens_source === 'unavailable') return 'estimated';
   return 'trusted';
 }
 
@@ -201,20 +218,34 @@ export function modelChipLabel(model, cls) {
 
 /**
  * 모델 칩 HTML — title 속성에 풀네임 보관
- * trustExtra: 'estimated' 등이 들어오면 칩 옆 trust-label 추가
+ *
+ * 책임:
+ *   model 식별 칩(둥근 dot + family-version 라벨)을 단일 HTML 토큰으로 반환.
+ *   호출자는 prompt/response/tool_call 행 어디에서나 동일 칩을 재사용한다.
+ *
+ * 호출자:
+ *   - makeModelCell (테이블 셀)
+ *   - session-detail.buildTurnDetailRows (turn-row main span, mini variant)
+ *   - targetInnerHtml (Skill/Agent target에서 model 보조 표시)
+ *
+ * 의존성:
+ *   - modelClassOf, modelChipLabel — 칩 클래스/라벨 결정
+ *   - escHtml — XSS 방어
+ *
+ * @param {object} r 행 raw 데이터 (model, tokens_source 필드 사용)
+ * @param {object} [opts]
+ * @param {boolean} [opts.mini] turn view용 mini variant 적용
+ *
+ * 'trust-label' 제거 (ADR-token-trust-cleanup-001):
+ *   기존에는 tokens_source==='unavailable' 시 칩 옆 dashed "추정" 라벨을 부착했으나,
+ *   명칭 오용 + transient 상태라 제거. trustOf 분기에서도 'estimated'가 사라졌다.
  */
 export function modelChipHtml(r, opts = {}) {
-  const cls   = modelClassOf(r?.model);
-  const label = modelChipLabel(r?.model, cls);
-  const titleText = r?.model
-    ? `${r.model}${r?.tokens_source === 'unavailable' ? '\n토큰 출처: 추정 (transcript 파싱 실패)' : ''}`
-    : '모델 정보 없음';
+  const cls     = modelClassOf(r?.model);
+  const label   = modelChipLabel(r?.model, cls);
+  const title   = r?.model || '모델 정보 없음';
   const sizeCls = opts.mini ? ' model-chip-mini' : '';
-  const trust   = trustOf(r);
-  const trustLabel = (trust === 'estimated')
-    ? `<span class="trust-label" title="토큰 값이 transcript에서 추정됨">추정</span>`
-    : '';
-  return `<span class="model-chip model-chip-${cls}${sizeCls}" title="${escHtml(titleText)}">${escHtml(label)}</span>${trustLabel}`;
+  return `<span class="model-chip model-chip-${cls}${sizeCls}" title="${escHtml(title)}">${escHtml(label)}</span>`;
 }
 
 export function makeModelCell(r) {
@@ -227,10 +258,25 @@ export function makeModelCell(r) {
 }
 
 /**
- * row trust 클래스 (synthetic / unknown / estimated만 부여, trusted/external은 dim 안 함)
+ * row trust 클래스 — synthetic / unknown 행에만 ' row-trust-{name}' 클래스 부여.
+ *
+ * 책임:
+ *   makeRequestRow의 <tr> 클래스 결정. 비정상 신뢰도 행만 시각 dim 처리.
+ *
+ * 호출자:
+ *   - makeRequestRow (단일 호출 지점)
+ *
+ * 의존성:
+ *   - trustOf — 신뢰도 분류
+ *
+ * 분기:
+ *   - tool_call / system: model 무의미 → dim 적용 안 함
+ *   - trusted / external: 정상 → dim 적용 안 함
+ *   - synthetic / unknown: ' row-trust-{name}' 클래스 부여
+ *
+ * 'estimated' 분기는 ADR-token-trust-cleanup-001로 제거됨.
  */
 function rowTrustClass(r) {
-  // 모델 정보가 의미없는 행은 dim 적용 안 함 (tool_call/system)
   if (r.type === 'tool_call' || r.type === 'system') return '';
   const t = trustOf(r);
   if (t === 'trusted' || t === 'external') return '';

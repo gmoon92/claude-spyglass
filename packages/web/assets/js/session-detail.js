@@ -339,16 +339,37 @@ function renderToolRow(tc) {
 }
 
 /**
- * 턴 내 세부 행(prompt + tool_call)을 HTML 문자열로 조립합니다.
+ * 턴 내 세부 행(prompt + tool_call + response)을 HTML 문자열로 조립합니다.
  * renderTurnView와 renderTurnCards 양쪽에서 재사용합니다.
- * 연속 동일 도구는 그룹 헤더 행으로 묶고 기본 접힘 상태로 표시합니다.
+ *
+ * 책임:
+ *   - 단일 turn 객체를 받아 prompt 행 / tool_call 행(연속 그룹화) / response 행 HTML 반환.
+ *   - data-trust 속성으로 행 단위 시각 무게 분류 (synthetic/unknown만 부여).
+ *   - response 행의 model은 같은 turn의 prompt model로 폴백 (ADR-token-trust-cleanup-002).
+ *
+ * 호출자:
+ *   - renderTurnView (테이블형 turn 뷰)
+ *   - renderTurnCards (카드형 turn 뷰)
+ *
+ * 의존성:
+ *   - trustOf, modelChipHtml, targetInnerHtml, contextPreview, confidenceMarkHtml
+ *   - compressContinuousTools — 연속 동일 도구 그룹화
+ *
+ * 'estimated' 분기 제거 사유 (ADR-token-trust-cleanup-001):
+ *   trustOf에서 'estimated'가 더 이상 발행되지 않으므로 분기 정리.
+ *
+ * response.model 폴백 사유 (ADR-token-trust-cleanup-002):
+ *   saveAssistantResponse가 transcript/proxy fallback에 모두 실패하면 model NULL로 저장된다.
+ *   같은 turn에서 prompt model이 곧 응답 model이므로 UI 단계에서 폴백한다.
+ *   DB 정합성은 보존 (응답 행 INSERT 시 model 복제 안 함).
  */
 function buildTurnDetailRows(turn) {
   const promptData        = turn.prompt ? { ...turn.prompt, type: 'prompt' } : null;
   const promptPreviewHtml = promptData ? contextPreview(promptData, 80) : '';
   const promptTarget      = promptData ? targetInnerHtml(promptData).html : '';
   const promptTrust       = promptData ? trustOf(promptData) : 'trusted';
-  const promptTrustAttr   = (promptTrust === 'estimated' || promptTrust === 'synthetic' || promptTrust === 'unknown')
+  // synthetic/unknown만 data-trust 부여 (trusted/external은 dim 안 함)
+  const promptTrustAttr   = (promptTrust === 'synthetic' || promptTrust === 'unknown')
     ? ` data-trust="${promptTrust}"` : '';
   const promptModelChip   = promptData ? modelChipHtml(promptData, { mini: true }) : '';
   // data-honesty-ui (ADR-002): prompt의 tokens_confidence 가 비-high면 '*' 마크
@@ -395,14 +416,18 @@ function buildTurnDetailRows(turn) {
   // assistant 응답 행 — turns API의 turn.response 필드 사용
   // data-honesty-ui (ADR-004): response 부재 시 placeholder row로 명시
   // data-honesty-ui (ADR-002): tokens_confidence 비-high 시 '*' 마크
+  // ADR-token-trust-cleanup-002: response.model이 NULL이면 같은 turn의 prompt.model로 폴백.
+  //   같은 API 호출 단위라 둘은 항상 동일하다. DB는 그대로 두고 UI에서만 채운다.
   const responseData = turn.response ? {
     ...turn.response,
     type: 'response',
+    model: turn.response.model ?? turn.prompt?.model ?? null,
   } : null;
   const responsePreviewHtml = responseData ? contextPreview(responseData, 80) : '';
   const responseTarget      = responseData ? targetInnerHtml(responseData).html : '';
   const responseTrust       = responseData ? trustOf(responseData) : 'trusted';
-  const responseTrustAttr   = (responseTrust === 'estimated' || responseTrust === 'synthetic' || responseTrust === 'unknown')
+  // synthetic/unknown만 data-trust 부여 (estimated 제거됨 — ADR-token-trust-cleanup-001)
+  const responseTrustAttr   = (responseTrust === 'synthetic' || responseTrust === 'unknown')
     ? ` data-trust="${responseTrust}"` : '';
   const responseModelChip   = responseData ? modelChipHtml(responseData, { mini: true }) : '';
   const responseConfMark    = responseData

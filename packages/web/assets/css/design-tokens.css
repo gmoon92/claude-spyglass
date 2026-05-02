@@ -151,8 +151,8 @@
   --model-unknown-border:  rgba(110,118,129,0.25);
 
   /* ── 신뢰도 표지 (행 단위 dim + 좌측 border) ──────────────────────────── */
-  --trust-estimated-opacity: 0.62;
-  --trust-estimated-border:  var(--neutral);    /* dashed neutral */
+  /* 'estimated' 토큰 제거됨 (ADR-token-trust-cleanup-001) — proxy backfill로 자연 소멸. */
+  /* synthetic = SDK 합성 메시지 / unknown = model NULL — 두 상태 모두 비정상이라 유지. */
   --trust-synthetic-opacity: 0.50;
   --trust-synthetic-border:  var(--text-4);
   --trust-unknown-opacity:   0.62;
