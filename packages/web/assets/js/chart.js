@@ -278,10 +278,11 @@ export function renderTypeLegend() {
     const label = donutMode === 'cache' ? d.label : (donutMode === 'model' ? d.model : d.type);
     const key   = label || donutItemKey(d, idx);
     const pct   = Math.round(count / total * 100);
+    const safeKey = key.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     // 모델 이름은 길 수 있어 ellipsis로 자름
     return `<div class="legend-item">
       <div class="legend-dot" style="background:${color}"></div>
-      <span class="legend-name" title="${key.replace(/"/g, '&quot;')}">${key}</span>
+      <span class="legend-name" title="${safeKey.replace(/"/g, '&quot;')}">${safeKey}</span>
       <span class="legend-val">${count.toLocaleString('ko-KR')}</span>
       <span class="legend-pct">${pct}%</span>
     </div>`;
