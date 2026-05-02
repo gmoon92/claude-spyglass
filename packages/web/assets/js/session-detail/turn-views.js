@@ -201,12 +201,24 @@ export function renderTurnCards(turns, badgeTurns) {
   const expandedFor = container.querySelector('[data-expand-for]')?.dataset.expandFor ?? null;
   const expandedTurnIds = getExpandedTurnIds();
 
+  // v22 (system-prompt-exposure 후속): turn 카드 헤더에 system 변경 표지.
+  // "이전 turn"은 turn_index가 1 작은 turn — chronological 직전. 정렬 순서와 무관하게 lookup.
+  // hash 변경(또는 첫 등장)이면 ▲ 마커, 같으면 표시 안 함(시각 노이즈 회피).
+  const sysHashByIdx = new Map(turns.map(t => [t.turn_index, t.system_hash]));
+
   container.innerHTML = turns.slice().sort((a, b) => b.turn_index - a.turn_index).map(turn => {
     const toolCount = turn.summary.tool_call_count;
     const complexBadge = toolCount > 15
       ? '<span class="turn-complexity high">복잡</span>'
       : toolCount > 5
       ? '<span class="turn-complexity mid">중간</span>'
+      : '';
+
+    // system 변경 표지 — turn.system_hash가 직전 turn의 hash와 다르면 ▲ + 8자 hex
+    const prevHash = sysHashByIdx.get(turn.turn_index - 1);
+    const sysChanged = turn.system_hash && turn.system_hash !== prevHash;
+    const systemBadge = sysChanged
+      ? `<span class="turn-system-changed" title="이 turn에서 system prompt가 ${prevHash ? '변경되었습니다' : '시작되었습니다'} (hash 8자 prefix)">▲ <code>${escHtml(turn.system_hash.slice(0, 8))}</code></span>`
       : '';
 
     const promptText = turn.prompt?.preview
@@ -241,6 +253,7 @@ export function renderTurnCards(turns, badgeTurns) {
         <div class="turn-card-header">
           <span class="turn-card-index">T${turn.turn_index}</span>
           ${promptText ? `<span class="turn-card-preview">${promptText}</span>` : ''}
+          ${systemBadge}
           ${complexBadge}
           <span class="turn-card-expand-btn"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
         </div>
