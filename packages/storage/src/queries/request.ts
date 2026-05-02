@@ -866,7 +866,12 @@ export interface TurnToolCall {
   tokens_confidence: string | null;
 }
 
-/** 턴 내 assistant 응답 (Stop 훅의 last_assistant_message) */
+/**
+ * 턴 내 assistant 응답.
+ * v22 이후 한 turn 안에 여러 건 존재 가능 (도구 호출 사이사이의 중간 텍스트 응답).
+ * - source='claude-code-hook'  : Stop 훅의 last_assistant_message (턴 종료 시 1건)
+ * - source='transcript-assistant-text' : transcript에서 추출한 중간 응답 (PostToolUse마다 보강)
+ */
 export interface TurnResponse {
   id: string;
   timestamp: number;
@@ -901,8 +906,11 @@ export interface TurnItem {
     tokens_confidence: string | null;
   } | null;
   tool_calls: TurnToolCall[];
-  /** 턴의 마지막 assistant 응답 (없을 수 있음) */
-  response: TurnResponse | null;
+  /**
+   * 턴 내 모든 assistant 응답 (timestamp 오름차순).
+   * 빈 배열이면 tool-only turn. v22 이전엔 단수 `response`였으나 중간 응답 보존을 위해 배열로 확장.
+   */
+  responses: TurnResponse[];
   summary: {
     tool_call_count: number;
     tokens_input: number;
@@ -993,8 +1001,9 @@ export function getTurnsBySession(
     tokens_confidence: string | null;
   }>;
 
-  // 3-bis. 각 턴의 assistant response 행 조회 (Stop 훅의 last_assistant_message 저장분)
-  // 한 턴에 응답이 여러 건이면 가장 마지막(최신) 행을 선택
+  // 3-bis. 각 턴의 assistant response 행 조회.
+  // v22+: 한 턴에 여러 건 존재 가능 (도구 호출 사이사이 중간 텍스트 응답).
+  // 모든 행을 timestamp 오름차순으로 수집해 호출자에게 배열로 반환.
   const responseRows = db.query(`
     SELECT turn_id, id, timestamp, preview, payload,
            tokens_input, tokens_output, tokens_total, model, tokens_confidence
@@ -1023,16 +1032,19 @@ export function getTurnsBySession(
     }
     toolCallsByTurn.get(tool.turn_id)!.push(tool);
   }
-  // 같은 turn_id에 응답이 여러 건이면 timestamp 오름차순으로 들어와 마지막 entry가 최신
-  const responseMap = new Map<string, typeof responseRows[number]>();
+  // 같은 turn_id의 응답을 모두 보존 (timestamp 오름차순 push).
+  // 단순 set→get 매핑이면 중간 응답이 마지막 1건에 덮어쓰기되어 누락된다.
+  const responsesByTurn = new Map<string, typeof responseRows>();
   for (const r of responseRows) {
-    responseMap.set(r.turn_id, r);
+    const arr = responsesByTurn.get(r.turn_id);
+    if (arr) arr.push(r);
+    else responsesByTurn.set(r.turn_id, [r]);
   }
 
   const turns: TurnItem[] = turnSummaries.map((summary, idx) => {
     const prompt = promptMap.get(summary.turn_id);
     const toolCalls = toolCallsByTurn.get(summary.turn_id) || [];
-    const respRow  = responseMap.get(summary.turn_id) || null;
+    const respRows = responsesByTurn.get(summary.turn_id) || [];
 
     // prompt 캐시 정보 계산
     let promptCacheRead = 0;
@@ -1087,17 +1099,17 @@ export function getTurnsBySession(
         parent_tool_use_id: t.parent_tool_use_id,
         tokens_confidence: t.tokens_confidence,
       })),
-      response: respRow ? {
-        id: respRow.id,
-        timestamp: respRow.timestamp,
-        preview: respRow.preview,
-        payload: respRow.payload,
-        tokens_input: respRow.tokens_input,
-        tokens_output: respRow.tokens_output,
-        tokens_total: respRow.tokens_total,
-        model: respRow.model,
-        tokens_confidence: respRow.tokens_confidence,
-      } : null,
+      responses: respRows.map(r => ({
+        id: r.id,
+        timestamp: r.timestamp,
+        preview: r.preview,
+        payload: r.payload,
+        tokens_input: r.tokens_input,
+        tokens_output: r.tokens_output,
+        tokens_total: r.tokens_total,
+        model: r.model,
+        tokens_confidence: r.tokens_confidence,
+      })),
       summary: {
         tool_call_count: summary.tool_call_count,
         tokens_input: summary.prompt_tokens_input,
