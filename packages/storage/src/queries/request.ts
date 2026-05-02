@@ -905,6 +905,13 @@ export interface TurnItem {
     /** data-honesty-ui: prompt 메타 신뢰도 ('high'|'low'|'error') */
     tokens_confidence: string | null;
   } | null;
+  /**
+   * v22 (system-prompt-exposure) — 이 turn에 흐른 첫 proxy 요청의 system_hash.
+   * 같은 turn에 여러 LLM 호출이 있어도 페르소나는 보통 동일하므로 첫 hash로 대표.
+   * UI는 이전 turn과 비교해 system 변경 표지(▲)를 그릴 때 사용.
+   */
+  system_hash: string | null;
+  system_byte_size: number | null;
   tool_calls: TurnToolCall[];
   /**
    * 턴 내 모든 assistant 응답 (timestamp 오름차순).
@@ -1041,10 +1048,28 @@ export function getTurnsBySession(
     else responsesByTurn.set(r.turn_id, [r]);
   }
 
+  // v22 (system-prompt-exposure): turn별 system_hash + system_byte_size 합류.
+  // 같은 turn_id에 여러 proxy 요청이 있을 수 있어 timestamp ASC 첫 hash를 대표로 채택
+  // (페르소나는 보통 turn 전체에서 동일). ROW_NUMBER OVER로 PARTITION 1행만 선택.
+  const systemRows = db.query(`
+    SELECT turn_id, system_hash, system_byte_size FROM (
+      SELECT turn_id, system_hash, system_byte_size,
+             ROW_NUMBER() OVER (PARTITION BY turn_id ORDER BY timestamp ASC) AS rn
+      FROM proxy_requests
+      WHERE session_id = ? AND turn_id IS NOT NULL AND system_hash IS NOT NULL
+    ) WHERE rn = 1
+  `).all(sessionId) as Array<{
+    turn_id: string;
+    system_hash: string;
+    system_byte_size: number | null;
+  }>;
+  const systemByTurn = new Map(systemRows.map(s => [s.turn_id, s]));
+
   const turns: TurnItem[] = turnSummaries.map((summary, idx) => {
     const prompt = promptMap.get(summary.turn_id);
     const toolCalls = toolCallsByTurn.get(summary.turn_id) || [];
     const respRows = responsesByTurn.get(summary.turn_id) || [];
+    const sysRow = systemByTurn.get(summary.turn_id) ?? null;
 
     // prompt 캐시 정보 계산
     let promptCacheRead = 0;
@@ -1110,6 +1135,8 @@ export function getTurnsBySession(
         model: r.model,
         tokens_confidence: r.tokens_confidence,
       })),
+      system_hash: sysRow?.system_hash ?? null,
+      system_byte_size: sysRow?.system_byte_size ?? null,
       summary: {
         tool_call_count: summary.tool_call_count,
         tokens_input: summary.prompt_tokens_input,
