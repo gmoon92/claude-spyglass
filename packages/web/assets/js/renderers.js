@@ -454,10 +454,13 @@ export function makeRequestRow(r, opts = {}) {
   const sessTd = opts.showSession
     ? `<td class="cell-sess"><span class="sess-id sess-id-link" data-goto-session="${escHtml(r.session_id||'')}" data-goto-project="${escHtml(r.project_name||'')}" title="${escHtml(r.session_id||'')}">${r.session_id ? r.session_id.slice(0,12)+'…' : '—'}</span></td>`
     : '';
+  // ADR-row-empty-msg-001: 메시지가 없는 행(예: TaskList, 인자 없는 도구 등)은
+  // dash('—') 대신 빈 셀로 노출. 사용자 피드백: dash가 시각 노이즈만 만들고 정보 가치 0.
+  // 다만 빈 span은 a11y용으로 유지 (스크린리더/aria 라벨 보존).
   const msgPreview = contextPreview(r);
   const msgHtml    = msgPreview
     ? msgPreview
-    : `<span class="cell-msg-empty" aria-label="메시지 없음">—</span>`;
+    : `<span class="cell-msg-empty" aria-label="메시지 없음"></span>`;
 
   const spikeLoopBadges = flags ? anomalyBadgesHtml(new Set([...flags].filter(f => f !== 'slow'))) : '';
   const slowBadge       = flags && flags.has('slow') ? `<span class="mini-badge badge-slow" data-mini-badge-tooltip="slow">slow</span>` : '';
