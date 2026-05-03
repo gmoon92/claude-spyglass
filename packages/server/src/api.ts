@@ -39,6 +39,7 @@ import {
   type SystemPromptOrderBy,
 } from '@spyglass/storage';
 import { metricsRouter } from './metrics';
+import { normalizeRequests, normalizeTurns } from './domain/request-normalizer';
 
 // =============================================================================
 // API 응답 타입
@@ -100,11 +101,12 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     return jsonResponse({ success: true, data: sessions });
   }
 
-  // GET /api/sessions/:id/requests
+  // GET /api/sessions/:id/requests — ADR-001: 응답 직전 정규화
   if (path.match(/^\/api\/sessions\/[^\/]+\/requests$/) && method === 'GET') {
     const sessionId = path.split('/')[3];
     const limit = parseInt(url.searchParams.get('limit') || '100', 10);
-    const requests = getRequestsBySession(db, sessionId, limit);
+    const rawRequests = getRequestsBySession(db, sessionId, limit);
+    const requests = normalizeRequests(rawRequests);
     return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit } });
   }
 
@@ -115,10 +117,11 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     return jsonResponse({ success: true, data: stats });
   }
 
-  // GET /api/sessions/:id/turns
+  // GET /api/sessions/:id/turns — ADR-001/006: 정규화 + items[] 인터리빙
   if (path.match(/^\/api\/sessions\/[^\/]+\/turns$/) && method === 'GET') {
     const sessionId = path.split('/')[3];
-    const turns = getTurnsBySession(db, sessionId);
+    const rawTurns = getTurnsBySession(db, sessionId);
+    const turns = normalizeTurns(rawTurns, sessionId);
     return jsonResponse({ success: true, data: turns, meta: { total: turns.length } });
   }
 
@@ -155,12 +158,13 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     return jsonResponse({ success: true, data: sessions, meta: { total: sessions.length, limit } });
   }
 
-  // GET /api/requests
+  // GET /api/requests — ADR-001: 응답 직전 정규화
   if (path === '/api/requests' && method === 'GET') {
     const limit = parseInt(url.searchParams.get('limit') || '100', 10);
     const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
     const toTs = url.searchParams.get('to') ? parseInt(url.searchParams.get('to')!, 10) : undefined;
-    const requests = getAllRequests(db, limit, fromTs, toTs);
+    const rawRequests = getAllRequests(db, limit, fromTs, toTs);
+    const requests = normalizeRequests(rawRequests);
     const p95DurationMs = getP95DurationMs(db, fromTs, toTs);
     return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit, p95DurationMs } });
   }
@@ -173,14 +177,15 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
     return jsonResponse({ success: true, data: requests });
   }
 
-  // GET /api/requests/by-type/:type
+  // GET /api/requests/by-type/:type — ADR-001: 응답 직전 정규화
   if (path.match(/^\/api\/requests\/by-type\/[^\/]+$/) && method === 'GET') {
     const type = path.split('/')[4] as 'prompt' | 'tool_call' | 'system';
     const limit = parseInt(url.searchParams.get('limit') || '100', 10);
     const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10));
     const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
     const toTs   = url.searchParams.get('to')   ? parseInt(url.searchParams.get('to')!,   10) : undefined;
-    const requests = getRequestsByType(db, type, limit, offset, fromTs, toTs);
+    const rawRequests = getRequestsByType(db, type, limit, offset, fromTs, toTs);
+    const requests = normalizeRequests(rawRequests);
     return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit, offset } });
   }
 

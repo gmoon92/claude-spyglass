@@ -50,63 +50,94 @@ interface BackfillParams {
  *  - 두 조건은 별개일 수 있음 (model은 정상인데 토큰만 실패한 케이스 등)
  *
  * sessionId 또는 model이 null이면 no-op (안전).
+ *
+ * ADR-004: affected request ID 배열 반환.
+ *   호출자(`handler.ts`)가 이 ID로 정규화된 행을 다시 SELECT 후 SSE `event_phase: 'updated'`로 송출.
+ *   storage/도메인 모듈이 SSE에 직접 의존하지 않도록 하기 위함.
+ *
+ * @returns 백필로 갱신된 request ID 배열 (단계 1·2 합집합, 중복 제거)
  */
-export function backfillRequestFromProxy(db: Database, p: BackfillParams): void {
-  if (!p.sessionId || !p.model) return;
+export function backfillRequestFromProxy(db: Database, p: BackfillParams): string[] {
+  if (!p.sessionId || !p.model) return [];
   const lo = p.proxyStartMs - 30_000;
   const hi = p.proxyStartMs + 5_000;
 
-  try {
-    // 단계 1: model NULL 행에 model + (있으면) api_request_id 채움
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db as any).run(
-      `UPDATE requests
-       SET model = ?,
-           api_request_id = COALESCE(api_request_id, ?)
-       WHERE session_id = ?
-         AND model IS NULL
-         AND timestamp BETWEEN ? AND ?`,
-      p.model,
-      p.apiRequestId,
-      p.sessionId,
-      lo,
-      hi,
-    );
+  const affected = new Set<string>();
 
-    // 단계 2: 토큰 출처가 'unavailable'(transcript 파싱 실패)인 행에 proxy usage로 채움.
+  try {
+    // 단계 1: model NULL 후보 ID 수집 → UPDATE
+    const stage1Candidates = db.query(
+      `SELECT id FROM requests
+        WHERE session_id = ?
+          AND model IS NULL
+          AND timestamp BETWEEN ? AND ?`,
+    ).all(p.sessionId, lo, hi) as Array<{ id: string }>;
+
+    if (stage1Candidates.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db as any).run(
+        `UPDATE requests
+         SET model = ?,
+             api_request_id = COALESCE(api_request_id, ?)
+         WHERE session_id = ?
+           AND model IS NULL
+           AND timestamp BETWEEN ? AND ?`,
+        p.model,
+        p.apiRequestId,
+        p.sessionId,
+        lo,
+        hi,
+      );
+      for (const r of stage1Candidates) affected.add(r.id);
+    }
+
+    // 단계 2: tokens_source='unavailable' 후보 ID 수집 → UPDATE
     //   - 'high'/'transcript'로 이미 정상 추출된 행은 건드리지 않음.
     //   - api_request_id도 함께 채움(이미 있으면 보존).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db as any).run(
-      `UPDATE requests
-       SET tokens_input = ?,
-           tokens_output = ?,
-           tokens_total = ?,
-           cache_creation_tokens = ?,
-           cache_read_tokens = ?,
-           tokens_confidence = 'high',
-           tokens_source = 'proxy',
-           api_request_id = COALESCE(api_request_id, ?)
-       WHERE session_id = ?
-         AND tokens_source = 'unavailable'
-         AND timestamp BETWEEN ? AND ?`,
-      p.tokensInput,
-      p.tokensOutput,
-      p.tokensInput + p.tokensOutput,
-      p.cacheCreationTokens,
-      p.cacheReadTokens,
-      p.apiRequestId,
-      p.sessionId,
-      lo,
-      hi,
-    );
+    const stage2Candidates = db.query(
+      `SELECT id FROM requests
+        WHERE session_id = ?
+          AND tokens_source = 'unavailable'
+          AND timestamp BETWEEN ? AND ?`,
+    ).all(p.sessionId, lo, hi) as Array<{ id: string }>;
+
+    if (stage2Candidates.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db as any).run(
+        `UPDATE requests
+         SET tokens_input = ?,
+             tokens_output = ?,
+             tokens_total = ?,
+             cache_creation_tokens = ?,
+             cache_read_tokens = ?,
+             tokens_confidence = 'high',
+             tokens_source = 'proxy',
+             api_request_id = COALESCE(api_request_id, ?)
+         WHERE session_id = ?
+           AND tokens_source = 'unavailable'
+           AND timestamp BETWEEN ? AND ?`,
+        p.tokensInput,
+        p.tokensOutput,
+        p.tokensInput + p.tokensOutput,
+        p.cacheCreationTokens,
+        p.cacheReadTokens,
+        p.apiRequestId,
+        p.sessionId,
+        lo,
+        hi,
+      );
+      for (const r of stage2Candidates) affected.add(r.id);
+    }
   } catch (err) {
     console.warn('[PROXY] backfill UPDATE failed:', err);
   }
+
+  return Array.from(affected);
 }
 
 /**
  * @deprecated v21에서 backfillRequestFromProxy로 확장됨. 외부 호환을 위해 alias 유지.
+ *   ADR-004 이후 affected ID를 반환하지만, alias 호출자는 무시해도 됨(`void` 의미 보존).
  */
 export function backfillRequestModelFromProxy(
   db: Database,

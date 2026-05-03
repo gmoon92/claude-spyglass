@@ -12,12 +12,14 @@ import {
   createRequest,
   endSession,
   getLatestProxyResponseBefore,
+  getRequestById,
   getSessionById,
   reactivateSession,
   type ClaudeEvent,
 } from '@spyglass/storage';
 import { getLastTurnId, parseTranscript } from './hook';
 import { broadcastNewRequest, broadcastSessionUpdate } from './sse';
+import { normalizeRequest } from './domain/request-normalizer';
 import { invalidateDashboardCache } from './api';
 import { diagJson } from './diag-log';
 
@@ -229,22 +231,15 @@ function saveAssistantResponse(
     invalidateDashboardCache();
 
     const session = getSessionById(db, sessionId);
-    broadcastNewRequest({
-      id,
-      session_id: sessionId,
-      type: 'response',
-      request_type: 'response',
-      tool_name: null,
-      tool_detail: null,
-      tokens_input: tokensInput,
-      tokens_output: tokensOutput,
-      tokens_total: tokensInput + tokensOutput,
-      duration_ms: 0,
-      model,
-      timestamp,
-      payload: JSON.stringify({ preview: previewText, last_assistant_message: previewText }),
-      session_total_tokens: session?.total_tokens ?? (tokensInput + tokensOutput),
-    });
+    // ADR-001/002: 저장된 raw 행을 다시 SELECT → 정규화 → 송출 (페이로드 SSoT 단일화)
+    const rawRow = getRequestById(db, id);
+    if (rawRow) {
+      const normalized = normalizeRequest(rawRow);
+      broadcastNewRequest(normalized, {
+        session_total_tokens: session?.total_tokens ?? (tokensInput + tokensOutput),
+        event_phase: 'created',
+      });
+    }
   } catch (error) {
     console.error('[Events] Failed to save assistant response:', error);
   }

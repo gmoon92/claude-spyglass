@@ -29,8 +29,9 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { getSessionById } from '@spyglass/storage';
+import { getSessionById, getRequestById } from '@spyglass/storage';
 import { broadcastNewRequest } from '../sse';
+import { normalizeRequest } from '../domain/request-normalizer';
 import type { NormalizedHookPayload, HookProcessResult } from './types';
 import { ensureSession, updateSessionTotalTokens } from './session';
 import { saveRequest } from './persist';
@@ -84,25 +85,20 @@ export function processHookEvent(
     }
 
     // SSE 브로드캐스트 — pre_tool은 제외 (미완성 레코드라 UI 중복 노출 방지)
+    // ADR-001/002: 저장된 raw 행을 다시 SELECT → 정규화 → 송출 (페이로드 SSoT 단일화)
     if (payload.event_type !== 'pre_tool') {
       const updatedSession = getSessionById(db, payload.session_id);
-      broadcastNewRequest({
-        // savedId(pre-xxx)가 있으면 그걸 사용 → fetchRequests에서 가져오는 id와 일치
-        id: savedId ?? payload.id,
-        session_id: payload.session_id,
-        type: payload.request_type,
-        request_type: payload.request_type,
-        tool_name: payload.tool_name ?? null,
-        tool_detail: payload.tool_detail ?? null,
-        tokens_input: payload.tokens_input,
-        tokens_output: payload.tokens_output,
-        tokens_total: payload.tokens_total,
-        duration_ms: payload.duration_ms || 0,
-        model: payload.model ?? null,
-        timestamp: payload.timestamp,
-        payload: payload.payload ?? null,
-        session_total_tokens: updatedSession?.total_tokens ?? payload.tokens_total,
-      });
+      const broadcastId = savedId ?? payload.id;
+      const rawRow = getRequestById(db, broadcastId);
+      if (rawRow) {
+        const normalized = normalizeRequest(rawRow);
+        broadcastNewRequest(normalized, {
+          session_total_tokens: updatedSession?.total_tokens ?? payload.tokens_total,
+          // Upsert(pre_tool → tool 병합)는 사실상 'updated'지만, 클라가 첫 visible 노출이라
+          // 'created'로 통일 (ADR-008 점진 롤아웃: in-place 갱신은 backfill 흐름에서만 사용).
+          event_phase: 'created',
+        });
+      }
     }
   }
 

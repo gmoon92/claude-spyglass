@@ -8,6 +8,20 @@ import type { Database } from 'bun:sqlite';
 import type { Request, RequestType } from '../schema';
 
 // =============================================================================
+// SQL Fragments (SSoT — ADR-003)
+// =============================================================================
+
+/**
+ * pre_tool 이벤트는 미완성 레코드(토큰 0, 응답 없음)이므로 사용자에게 노출하지 않는다.
+ * 단 tool_name='Agent'는 펼침 트리거 용도로 예외 허용.
+ *
+ * 이 조건이 storage 쿼리에 6회 이상 복붙되어 있어 한 곳을 빼먹으면 즉각 데이터 불일치가 발생.
+ * SSoT를 위해 상수로 추출. (post_tool만 카운트하는 통계 쿼리는 별개 상수 사용 권장)
+ */
+export const ACTIVE_REQUEST_FILTER_SQL =
+  "(event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')";
+
+// =============================================================================
 // 생성 (Create)
 // =============================================================================
 
@@ -180,7 +194,7 @@ export function getAllRequests(
   fromTs?: number,
   toTs?: number
 ): RequestQueryResult[] {
-  const conditions: string[] = ["(event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')"];
+  const conditions: string[] = [ACTIVE_REQUEST_FILTER_SQL];
   const params: (string | number)[] = [];
   if (fromTs) { conditions.push('timestamp >= ?'); params.push(fromTs); }
   if (toTs)   { conditions.push('timestamp <= ?'); params.push(toTs); }
@@ -198,7 +212,7 @@ export function getRequestsBySession(
   limit: number = 100
 ): RequestQueryResult[] {
   return db.query(
-    "SELECT * FROM requests WHERE session_id = ? AND (event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent') ORDER BY timestamp DESC LIMIT ?"
+    `SELECT * FROM requests WHERE session_id = ? AND ${ACTIVE_REQUEST_FILTER_SQL} ORDER BY timestamp DESC LIMIT ?`
   ).all(sessionId, limit) as RequestQueryResult[];
 }
 
@@ -257,7 +271,7 @@ export function getRequestsByType(
   fromTs?: number,
   toTs?: number
 ): RequestQueryResult[] {
-  const conditions = ["type = ?", "(event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')"];
+  const conditions = ["type = ?", ACTIVE_REQUEST_FILTER_SQL];
   const params: (string | number)[] = [type];
   if (fromTs !== undefined) { conditions.push('timestamp >= ?'); params.push(fromTs); }
   if (toTs   !== undefined) { conditions.push('timestamp <= ?'); params.push(toTs); }
@@ -947,7 +961,7 @@ export function getTurnsBySession(
            COUNT(CASE WHEN type = 'tool_call' THEN 1 END) as tool_call_count
     FROM requests
     WHERE session_id = ? AND turn_id IS NOT NULL
-      AND (event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')
+      AND ${ACTIVE_REQUEST_FILTER_SQL}
     GROUP BY turn_id
     ORDER BY started_at ASC
   `).all(sessionId) as Array<{
@@ -965,7 +979,7 @@ export function getTurnsBySession(
            model, payload, cache_read_tokens, cache_creation_tokens, tokens_confidence
     FROM requests
     WHERE session_id = ? AND turn_id IS NOT NULL AND type = 'prompt'
-      AND (event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')
+      AND ${ACTIVE_REQUEST_FILTER_SQL}
     ORDER BY timestamp ASC
   `).all(sessionId) as Array<{
     turn_id: string;
@@ -989,7 +1003,7 @@ export function getTurnsBySession(
            payload, event_type, model, parent_tool_use_id, tokens_confidence
     FROM requests
     WHERE session_id = ? AND turn_id IS NOT NULL AND type = 'tool_call'
-      AND (event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')
+      AND ${ACTIVE_REQUEST_FILTER_SQL}
     ORDER BY turn_id, timestamp ASC
   `).all(sessionId) as Array<{
     turn_id: string;

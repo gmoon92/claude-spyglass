@@ -23,6 +23,7 @@ import { fmtDate } from '../formatters.js';
 import {
   makeRequestRow, typeBadge, FLAT_VIEW_COLS, togglePromptExpand, _promptCache,
 } from '../renderers.js';
+import { captureInteraction, restoreInteraction } from '../dom-preserve.js';
 import { detectAnomalies } from '../anomaly.js';
 import { setSourceData, drawDonut, renderTypeLegend } from '../chart.js';
 import { renderCachePanel, computeSessionCacheStats } from '../cache-panel.js';
@@ -38,16 +39,22 @@ import { renderTurnCards } from './turn-views.js';
  * 평면 요청 리스트(필터링된 결과)를 detailRequestsBody에 렌더한다.
  * 행 단위 anomaly 배지 적용(ADR-011).
  * SSE 갱신으로 다시 그릴 때 열린 프롬프트 확장 행은 캐시로 복원.
+ *
+ * ADR-007: scrollTop·expand row 보존을 dom-preserve.js 유틸로 통합.
+ *   기존엔 본 함수에 inline으로 흩어져 있던 보존 로직을 captureInteraction/restoreInteraction으로 이전.
  */
 export function renderDetailRequests(list, anomalyMap = new Map()) {
   const body     = document.getElementById('detailRequestsBody');
   const scrollEl = document.getElementById('detailRequestsView');
-  const savedScroll = scrollEl?.scrollTop ?? 0;
 
-  const expandedFor = body.querySelector('[data-expand-for]')?.dataset.expandFor ?? null;
+  // ADR-007: scrollTop + 펼침 상태 캡처
+  const preserved = captureInteraction(scrollEl);
+  // body는 별도 컨테이너이므로 expand row 캡처는 body 기준으로 보강
+  const bodyExpanded = captureInteraction(body);
 
   if (!list.length) {
     body.innerHTML = `<tr><td colspan="${FLAT_VIEW_COLS}" class="state-empty-cell">데이터가 없습니다</td></tr>`;
+    restoreInteraction(scrollEl, preserved);
     return;
   }
   const rows = list.map(r => makeRequestRow(r, {
@@ -64,12 +71,15 @@ export function renderDetailRequests(list, anomalyMap = new Map()) {
   const subtotalRow = `<tr class="flat-subtotal"><td colspan="${FLAT_VIEW_COLS}" style="text-align:right">${subtotalParts}</td></tr>`;
   body.innerHTML = rows + subtotalRow;
 
-  if (scrollEl && savedScroll) scrollEl.scrollTop = savedScroll;
+  // ADR-007: scrollTop 자동 복원
+  restoreInteraction(scrollEl, preserved);
 
-  if (expandedFor && _promptCache.has(expandedFor)) {
-    const previewEl = body.querySelector(`[data-expand-id="${CSS.escape(expandedFor)}"]`);
+  // expand row는 컨테이너 외부 함수(togglePromptExpand) 의존이라 호출자가 직접 복원
+  for (const expandedId of bodyExpanded.expandedRequestIds) {
+    if (!_promptCache.has(expandedId)) continue;
+    const previewEl = body.querySelector(`[data-expand-id="${CSS.escape(expandedId)}"]`);
     const tr = previewEl?.closest('tr') ?? null;
-    if (tr) togglePromptExpand(expandedFor, tr, FLAT_VIEW_COLS);
+    if (tr) togglePromptExpand(expandedId, tr, FLAT_VIEW_COLS);
   }
 }
 

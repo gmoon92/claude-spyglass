@@ -125,8 +125,8 @@ export function targetInnerHtml(r) {
 export function makeTargetCell(r) {
   const { html, empty } = targetInnerHtml(r);
   return empty
-    ? `<td class="cell-target cell-empty">${html}</td>`
-    : `<td class="cell-target">${html}</td>`;
+    ? `<td class="cell-target cell-empty" data-cell="target">${html}</td>`
+    : `<td class="cell-target" data-cell="target">${html}</td>`;
 }
 
 /**
@@ -251,10 +251,11 @@ export function modelChipHtml(r, opts = {}) {
 export function makeModelCell(r) {
   // 모든 타입에서 model을 표시. model이 없으면 "—".
   // (이전: tool_call/system은 무조건 "—" 처리 → 사용자가 LLM 모델을 알 수 없음)
+  // ADR-001: 서버 정규화로 raw model이 NULL이어도 turn 폴백된 model이 들어와 있다.
   if (!r?.model) {
-    return `<td class="cell-model cell-empty">—</td>`;
+    return `<td class="cell-model cell-empty" data-cell="model">—</td>`;
   }
-  return `<td class="cell-model">${modelChipHtml(r)}</td>`;
+  return `<td class="cell-model" data-cell="model">${modelChipHtml(r)}</td>`;
 }
 
 /**
@@ -285,11 +286,11 @@ function rowTrustClass(r) {
 
 export function makeCacheCell(r) {
   if (r.type !== 'prompt' || !r.cache_read_tokens || r.cache_read_tokens <= 0) {
-    return `<td class="cell-token num cell-empty">—</td>`;
+    return `<td class="cell-token num cell-empty" data-cell="cache">—</td>`;
   }
   const readVal  = r.cache_read_tokens;
   const writeVal = r.cache_creation_tokens || 0;
-  return `<td class="cell-token num cache-cell" data-cache-read="${readVal}" data-cache-write="${writeVal}">${fmtToken(readVal)}</td>`;
+  return `<td class="cell-token num cache-cell" data-cell="cache" data-cache-read="${readVal}" data-cache-write="${writeVal}">${fmtToken(readVal)}</td>`;
 }
 
 export function getContextText(r) {
@@ -576,11 +577,18 @@ function anomalyBadgesHtml(flags) {
 }
 
 
+/**
+ * 단일 행 진입점 (table 변형) — 전체 피드 + 세션 flat 뷰 공용 (ADR-005).
+ *
+ * 모든 td에 `data-cell` 속성을 부여해 SSE in-place 갱신 시 셀 단위로 교체할 수 있도록 한다 (ADR-007).
+ * 셀 빌더(`makeActionCell`/`makeTargetCell`/`makeModelCell`/`makeCacheCell`)는 SSoT —
+ * turn 변형(`makeTurnRow`)도 동일 빌더를 호출하여 분기 일치 보장.
+ */
 export function makeRequestRow(r, opts = {}) {
   const fmtTs  = opts.fmtTime || fmtTimestamp;
   const flags  = opts.anomalyFlags || null;
   const sessTd = opts.showSession
-    ? `<td class="cell-sess"><span class="sess-id sess-id-link" data-goto-session="${escHtml(r.session_id||'')}" data-goto-project="${escHtml(r.project_name||'')}" title="${escHtml(r.session_id||'')}">${r.session_id ? r.session_id.slice(0,12)+'…' : '—'}</span></td>`
+    ? `<td class="cell-sess" data-cell="sess"><span class="sess-id sess-id-link" data-goto-session="${escHtml(r.session_id||'')}" data-goto-project="${escHtml(r.project_name||'')}" title="${escHtml(r.session_id||'')}">${r.session_id ? r.session_id.slice(0,12)+'…' : '—'}</span></td>`
     : '';
   // ADR-row-empty-msg-001: 메시지가 없는 행(예: TaskList, 인자 없는 도구 등)은
   // dash('—') 대신 빈 셀로 노출. 사용자 피드백: dash가 시각 노이즈만 만들고 정보 가치 0.
@@ -595,15 +603,15 @@ export function makeRequestRow(r, opts = {}) {
 
   const trustCls = rowTrustClass(r);
   return `<tr class="${trustCls.trim()}" data-type="${escHtml(r.type||'')}" data-sub-type="${subTypeOf(r)}" data-trust="${trustOf(r)}" data-request-id="${escHtml(r.id||'')}">
-    <td class="cell-time num">${fmtTs(r.timestamp)}</td>
-    <td class="cell-action">${makeActionCell(r)}</td>
+    <td class="cell-time num" data-cell="time">${fmtTs(r.timestamp)}</td>
+    <td class="cell-action" data-cell="action">${makeActionCell(r)}</td>
     ${makeTargetCellWithBadges(r, spikeLoopBadges)}
     ${makeModelCell(r)}
-    <td class="cell-msg">${msgHtml}</td>
-    <td class="cell-token num">${r.tokens_input  > 0 ? fmtToken(r.tokens_input)  : '—'}</td>
-    <td class="cell-token num">${r.tokens_output > 0 ? fmtToken(r.tokens_output) : '—'}</td>
+    <td class="cell-msg" data-cell="msg">${msgHtml}</td>
+    <td class="cell-token num" data-cell="in">${r.tokens_input  > 0 ? fmtToken(r.tokens_input)  : '—'}</td>
+    <td class="cell-token num" data-cell="out">${r.tokens_output > 0 ? fmtToken(r.tokens_output) : '—'}</td>
     ${makeCacheCell(r)}
-    <td class="cell-token num">${formatDuration(r.duration_ms)}${slowBadge}</td>
+    <td class="cell-token num" data-cell="duration">${formatDuration(r.duration_ms)}${slowBadge}</td>
     ${sessTd}
   </tr>`;
 }
