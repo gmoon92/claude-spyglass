@@ -128,15 +128,16 @@ function renderToolSegmentHtml(toolCalls) {
 
 /**
  * 단일 assistant 응답 행 HTML.
- * model NULL일 때 promptModel로 폴백 (ADR-token-trust-cleanup-002).
- * synthetic/unknown trust만 data-trust 부여, 그 외는 dim 처리하지 않음.
+ *
+ * ADR-001 (log-view-unification): 서버 정규화로 response.model이 이미 turn.prompt.model로
+ *   폴백 적용된 상태로 도착 (`NormalizedRequest.model_fallback_applied`로 추적 가능).
+ *   따라서 클라에서의 자체 폴백 (`rawResp.model ?? promptModel ?? null`)은 제거됨.
+ *
+ * @deprecated `promptModel` 인자는 호환성을 위해 시그니처에 남기지만 무시됨.
+ *   서버 정규화가 이미 폴백을 처리한다 (ADR-001).
  */
-function renderResponseRow(rawResp, promptModel) {
-  const respData = {
-    ...rawResp,
-    type: 'response',
-    model: rawResp.model ?? promptModel ?? null,
-  };
+function renderResponseRow(rawResp, _promptModel /* unused — server already filled (ADR-001) */) {
+  const respData = { ...rawResp, type: 'response' };
   const previewHtml = contextPreview(respData, 80);
   const target      = targetInnerHtml(respData).html;
   const trust       = trustOf(respData);
@@ -175,9 +176,11 @@ function renderEmptyResponseRow() {
 
 /**
  * tool_calls와 responses를 timestamp 기준으로 시간순 머지하여 HTML을 조립한다.
- *  - responses는 storage 단에서 timestamp 오름차순으로 들어옴 (가정).
- *  - 두 포인터로 toolCalls를 응답 timestamp 경계마다 슬라이스해 segments 구성.
- *  - 마지막 응답 이후 남은 도구들은 trailing segment로 별도 표시.
+ *
+ * @deprecated ADR-006 (log-view-unification): 서버가 `turn.items[]`로 이미 인터리빙된
+ *   `{kind:'tool'|'response', request}` 배열을 보내준다.
+ *   호환성을 위해 함수는 보존 (구버전 응답 또는 다른 호출자 대비)하지만, `buildTurnDetailRows`는
+ *   `turn.items`가 있으면 `renderItemsHtml`을 우선 사용한다.
  */
 function interleaveToolsAndResponses(toolCalls, responses, promptModel) {
   const tools = toolCalls || [];
@@ -198,6 +201,38 @@ function interleaveToolsAndResponses(toolCalls, responses, promptModel) {
   if (i < tools.length) {
     parts.push(renderToolSegmentHtml(tools.slice(i)));
   }
+  return parts.join('');
+}
+
+/**
+ * 서버에서 인터리빙된 `turn.items[]`를 HTML로 조립 (ADR-006).
+ *
+ * `items`는 timestamp 오름차순으로 정렬된 `{kind:'tool'|'response', request:NormalizedRequest}` 배열.
+ * 연속된 `kind:'tool'` 항목들은 하나의 segment로 묶어 `renderToolSegmentHtml`로 그룹화하고,
+ * `kind:'response'` 항목마다 `renderResponseRow`를 호출한다.
+ *
+ * 클라는 더 이상 인터리빙·시간순 정렬 책임을 지지 않는다.
+ */
+function renderItemsHtml(items) {
+  if (!items || items.length === 0) return '';
+  const parts = [];
+  let segTools = [];
+  const flushTools = () => {
+    if (segTools.length > 0) {
+      parts.push(renderToolSegmentHtml(segTools));
+      segTools = [];
+    }
+  };
+  for (const it of items) {
+    if (it.kind === 'tool') {
+      segTools.push(it.request);
+    } else if (it.kind === 'response') {
+      flushTools();
+      // promptModel 인자는 서버 폴백 적용으로 무시됨 (ADR-001)
+      parts.push(renderResponseRow(it.request, null));
+    }
+  }
+  flushTools();
   return parts.join('');
 }
 
@@ -245,9 +280,12 @@ export function buildTurnDetailRows(turn) {
       <span class="num cell-time text-dim">${fmtDate(promptData.timestamp)}</span>
     </div>` : '';
 
-  const tools     = turn.tool_calls || [];
-  const responses = turn.responses  || [];
-  const mergedRows  = interleaveToolsAndResponses(tools, responses, turn.prompt?.model);
+  // ADR-006: 서버 정규화로 turn.items가 제공되면 우선 사용 (인터리빙 책임 서버 이관).
+  // 호환성: items가 없는 응답이면 기존 tool_calls/responses 폴백 경로.
+  const responses = turn.responses || [];
+  const mergedRows = turn.items
+    ? renderItemsHtml(turn.items)
+    : interleaveToolsAndResponses(turn.tool_calls || [], responses, turn.prompt?.model);
   const responseRow = (responses.length === 0) ? renderEmptyResponseRow() : '';
 
   return promptRow + (mergedRows || '<div class="turn-row-empty">도구 호출 없음</div>') + responseRow;
