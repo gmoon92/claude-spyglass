@@ -225,8 +225,13 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
 
       try {
         const { anthropicOrgId, anthropicRequestId } = extractResponseHeaders(response);
-        // v22: system_prompts UPSERT + proxy_requests INSERT 원자화 (ADR-005).
-        // trx 내부에서 throw 시 자동 롤백 — 고아 system_prompts 행 방지.
+        // ADR-004 (log-view-unification): system_prompts UPSERT + proxy_requests INSERT
+        //   + backfillRequestFromProxy를 단일 트랜잭션으로 원자화.
+        //   - 트랜잭션 내부에서 throw 시 자동 롤백 → proxy_requests INSERT 후 backfill만
+        //     실패해 부분 일관 상태가 되는 race를 차단.
+        //   - SSE 브로드캐스트는 commit 후 별도 try/catch로 격리(broadcast 실패가
+        //     트랜잭션 롤백을 일으키면 안 되므로).
+        let backfilledIds: string[] = [];
         db.transaction(() => {
           maybeUpsertSystemPrompt(db, reqMeta, startMs);
           createProxyRequest(db, {
@@ -260,21 +265,20 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
             system_hash: reqMeta.systemHash ?? null,
             system_byte_size: reqMeta.systemByteSize ?? null,
           });
+          // hook 측 미완성 행(model NULL 또는 tokens_source='unavailable')을
+          // 같은 session_id + 시간 윈도우로 일괄 채움 — 같은 트랜잭션 내에서 원자 처리.
+          backfilledIds = backfillRequestFromProxy(db, {
+            sessionId,
+            model: state.model,
+            apiRequestId: state.apiRequestId,
+            tokensInput: state.usage.input_tokens ?? 0,
+            tokensOutput: state.usage.output_tokens ?? 0,
+            cacheCreationTokens: state.usage.cache_creation_input_tokens ?? 0,
+            cacheReadTokens: state.usage.cache_read_input_tokens ?? 0,
+            proxyStartMs: startMs,
+          });
         })();
-
-        // hook 측 미완성 행(model NULL 또는 tokens_source='unavailable')을
-        // 같은 session_id + 시간 윈도우로 일괄 채움 — model + tokens + api_request_id.
-        // ADR-004: affected ID 배열을 받아 SSE 'updated' 재브로드캐스트.
-        const backfilledIds = backfillRequestFromProxy(db, {
-          sessionId,
-          model: state.model,
-          apiRequestId: state.apiRequestId,
-          tokensInput: state.usage.input_tokens ?? 0,
-          tokensOutput: state.usage.output_tokens ?? 0,
-          cacheCreationTokens: state.usage.cache_creation_input_tokens ?? 0,
-          cacheReadTokens: state.usage.cache_read_input_tokens ?? 0,
-          proxyStartMs: startMs,
-        });
+        // commit 후 SSE 'updated' 재브로드캐스트 (broadcast 실패는 client 응답 무관)
         broadcastBackfilledRequests(db, sessionId, backfilledIds);
 
         // DB 저장 성공 직후에만 캐시 무효화 + SSE 브로드캐스트.
@@ -365,7 +369,10 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
 
   try {
     const { anthropicOrgId, anthropicRequestId } = extractResponseHeaders(response);
-    // v22: system_prompts UPSERT + proxy_requests INSERT 원자화 (ADR-005)
+    // ADR-004 (log-view-unification): system_prompts UPSERT + proxy_requests INSERT
+    //   + backfillRequestFromProxy를 단일 트랜잭션으로 원자화.
+    //   부분 실패 차단을 위해 backfill도 같은 트랜잭션 안에 포함.
+    let backfilledIdsJson: string[] = [];
     db.transaction(() => {
       maybeUpsertSystemPrompt(db, reqMeta, startMs);
       createProxyRequest(db, {
@@ -397,18 +404,18 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
         system_hash: reqMeta.systemHash ?? null,
         system_byte_size: reqMeta.systemByteSize ?? null,
       });
+      backfilledIdsJson = backfillRequestFromProxy(db, {
+        sessionId,
+        model: state.model,
+        apiRequestId: state.apiRequestId,
+        tokensInput: state.usage.input_tokens ?? 0,
+        tokensOutput: state.usage.output_tokens ?? 0,
+        cacheCreationTokens: state.usage.cache_creation_input_tokens ?? 0,
+        cacheReadTokens: state.usage.cache_read_input_tokens ?? 0,
+        proxyStartMs: startMs,
+      });
     })();
-    // ADR-004: affected ID 배열을 받아 SSE 'updated' 재브로드캐스트.
-    const backfilledIdsJson = backfillRequestFromProxy(db, {
-      sessionId,
-      model: state.model,
-      apiRequestId: state.apiRequestId,
-      tokensInput: state.usage.input_tokens ?? 0,
-      tokensOutput: state.usage.output_tokens ?? 0,
-      cacheCreationTokens: state.usage.cache_creation_input_tokens ?? 0,
-      cacheReadTokens: state.usage.cache_read_input_tokens ?? 0,
-      proxyStartMs: startMs,
-    });
+    // commit 후 SSE 'updated' 재브로드캐스트
     broadcastBackfilledRequests(db, sessionId, backfilledIdsJson);
 
     // SSE 브로드캐스트 격리 — broadcast 실패가 client 응답에 영향 안 주게 (T-06 ADR-005)
