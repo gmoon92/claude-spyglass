@@ -21,6 +21,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
+import { ACTIVE_REQUEST_FILTER_SQL } from './request';
 
 // =============================================================================
 // 타입
@@ -225,7 +226,7 @@ export function getActivityHeatmap(
   toTs?: number
 ): ActivityHeatmapRow[] {
   const params: number[] = [];
-  const conds = ["(event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')"];
+  const conds = [ACTIVE_REQUEST_FILTER_SQL];
   conds.push(...buildTimeWindow('timestamp', fromTs, toTs, params));
 
   return db.query(`
@@ -466,9 +467,7 @@ export function getAnomalyTimeSeriesInputs(
   toTs?: number
 ): AnomalyInputRow[] {
   const params: number[] = [];
-  const conds = [
-    "(event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')",
-  ];
+  const conds = [ACTIVE_REQUEST_FILTER_SQL];
   conds.push(...buildTimeWindow('timestamp', fromTs, toTs, params));
 
   return db.query(`
