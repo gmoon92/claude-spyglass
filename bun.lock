@@ -21,6 +21,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@spyglass/storage": "workspace:*",
+        "@spyglass/types": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -39,6 +40,7 @@
       "dependencies": {
         "@spyglass/server": "workspace:*",
         "@spyglass/storage": "workspace:*",
+        "@spyglass/types": "workspace:*",
         "@types/eventsource": "^3.0.0",
         "asciichart": "^1.5.25",
         "eventsource": "^4.1.0",

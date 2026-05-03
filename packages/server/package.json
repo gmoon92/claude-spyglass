@@ -12,7 +12,8 @@
     "test": "bun test src/__tests__"
   },
   "dependencies": {
-    "@spyglass/storage": "workspace:*"
+    "@spyglass/storage": "workspace:*",
+    "@spyglass/types": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "latest"
