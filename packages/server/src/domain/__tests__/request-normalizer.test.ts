@@ -7,8 +7,8 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-import type { Request } from '@spyglass/storage';
-import { normalizeRequest, normalizeRequests } from '../request-normalizer';
+import type { Request, TurnItem } from '@spyglass/storage';
+import { normalizeRequest, normalizeRequests, normalizeTurns } from '../request-normalizer';
 
 // =============================================================================
 // fixture
@@ -188,5 +188,166 @@ describe('normalizeRequest — raw 필드 보존', () => {
     expect(r.tokens_source).toBe('transcript');
     expect(r.parent_tool_use_id).toBe('parent-1');
     expect(r.api_request_id).toBe('api-1');
+  });
+});
+
+// =============================================================================
+// normalizeTurns (ADR-006: 인터리빙 책임 서버 이관)
+// =============================================================================
+
+function makeTurnItem(overrides: Partial<TurnItem> = {}): TurnItem {
+  return {
+    turn_id: 't-1',
+    turn_index: 1,
+    started_at: 1_000_000_000_000,
+    prompt: null,
+    tool_calls: [],
+    responses: [],
+    system_hash: null,
+    system_byte_size: null,
+    summary: {
+      tool_call_count: 0,
+      tokens_input: 0,
+      tokens_output: 0,
+      total_tokens: 0,
+      duration_ms: 0,
+    },
+    ...overrides,
+  };
+}
+
+describe('normalizeTurns — items[] 인터리빙', () => {
+  test('tool_calls와 responses를 timestamp 오름차순으로 머지', () => {
+    const turn = makeTurnItem({
+      tool_calls: [
+        { id: 't-tool-1', type: 'tool_call', timestamp: 1000, tool_name: 'Bash',
+          tool_detail: null, tokens_input: 0, tokens_output: 0, tokens_total: 0,
+          duration_ms: 0, payload: null, event_type: 'tool', model: 'claude-opus-4-7',
+          parent_tool_use_id: null, tokens_confidence: 'high' },
+        { id: 't-tool-2', type: 'tool_call', timestamp: 3000, tool_name: 'Read',
+          tool_detail: null, tokens_input: 0, tokens_output: 0, tokens_total: 0,
+          duration_ms: 0, payload: null, event_type: 'tool', model: 'claude-opus-4-7',
+          parent_tool_use_id: null, tokens_confidence: 'high' },
+      ],
+      responses: [
+        { id: 't-resp-1', timestamp: 2000, preview: 'mid', payload: null,
+          tokens_input: 0, tokens_output: 0, tokens_total: 0,
+          model: 'claude-opus-4-7', tokens_confidence: 'high' },
+      ],
+    });
+    const [out] = normalizeTurns([turn], 'sess-1');
+    expect(out.items.length).toBe(3);
+    expect(out.items[0].kind).toBe('tool');
+    expect(out.items[0].request.id).toBe('t-tool-1');
+    expect(out.items[1].kind).toBe('response');
+    expect(out.items[1].request.id).toBe('t-resp-1');
+    expect(out.items[2].kind).toBe('tool');
+    expect(out.items[2].request.id).toBe('t-tool-2');
+  });
+
+  test('items에 prompt는 포함되지 않음 (헤더 책임 분리, ADR-005)', () => {
+    const turn = makeTurnItem({
+      prompt: {
+        id: 'p-1', timestamp: 500, tokens_input: 100, tokens_output: 0, tokens_total: 100,
+        duration_ms: 0, model: 'claude-opus-4-7', payload: null,
+        cache_read_tokens: 0, cache_creation_tokens: 0, context_tokens: 100,
+        tokens_confidence: 'high',
+      },
+      tool_calls: [
+        { id: 't-1', type: 'tool_call', timestamp: 1000, tool_name: 'Bash',
+          tool_detail: null, tokens_input: 0, tokens_output: 0, tokens_total: 0,
+          duration_ms: 0, payload: null, event_type: 'tool', model: null,
+          parent_tool_use_id: null, tokens_confidence: 'high' },
+      ],
+    });
+    const [out] = normalizeTurns([turn], 'sess-1');
+    expect(out.items.length).toBe(1);
+    expect(out.items.every((i) => i.kind !== 'response' || i.request.type === 'response')).toBe(true);
+    // items에는 tool/response만, prompt는 별도 turn.prompt에 그대로 보존
+    expect(out.prompt?.id).toBe('p-1');
+  });
+
+  test('turn 안 tool_call의 model NULL이 같은 turn의 prompt model로 폴백됨', () => {
+    const turn = makeTurnItem({
+      prompt: {
+        id: 'p-1', timestamp: 500, tokens_input: 0, tokens_output: 0, tokens_total: 0,
+        duration_ms: 0, model: 'claude-opus-4-7', payload: null,
+        cache_read_tokens: 0, cache_creation_tokens: 0, context_tokens: 0,
+        tokens_confidence: 'high',
+      },
+      tool_calls: [
+        { id: 't-1', type: 'tool_call', timestamp: 1000, tool_name: 'Bash',
+          tool_detail: null, tokens_input: 0, tokens_output: 0, tokens_total: 0,
+          duration_ms: 0, payload: null, event_type: 'tool', model: null,
+          parent_tool_use_id: null, tokens_confidence: 'high' },
+      ],
+      responses: [
+        { id: 'r-1', timestamp: 2000, preview: null, payload: null,
+          tokens_input: 0, tokens_output: 0, tokens_total: 0,
+          model: null, tokens_confidence: 'high' },
+      ],
+    });
+    const [out] = normalizeTurns([turn], 'sess-1');
+    const tool = out.items.find((i) => i.kind === 'tool');
+    const resp = out.items.find((i) => i.kind === 'response');
+    expect(tool?.request.model).toBe('claude-opus-4-7');
+    expect(tool?.request.model_fallback_applied).toBe(true);
+    expect(resp?.request.model).toBe('claude-opus-4-7');
+    expect(resp?.request.model_fallback_applied).toBe(true);
+  });
+
+  test('prompt model 없으면 폴백 안 됨 — model: null 유지', () => {
+    const turn = makeTurnItem({
+      prompt: null,
+      tool_calls: [
+        { id: 't-1', type: 'tool_call', timestamp: 1000, tool_name: 'Bash',
+          tool_detail: null, tokens_input: 0, tokens_output: 0, tokens_total: 0,
+          duration_ms: 0, payload: null, event_type: 'tool', model: null,
+          parent_tool_use_id: null, tokens_confidence: 'high' },
+      ],
+    });
+    const [out] = normalizeTurns([turn], 'sess-1');
+    expect(out.items[0].request.model).toBeNull();
+    expect(out.items[0].request.model_fallback_applied).toBe(false);
+  });
+
+  test('동일 timestamp는 입력 순서 유지 (안정 정렬)', () => {
+    const turn = makeTurnItem({
+      tool_calls: [
+        { id: 't-1', type: 'tool_call', timestamp: 1000, tool_name: 'A',
+          tool_detail: null, tokens_input: 0, tokens_output: 0, tokens_total: 0,
+          duration_ms: 0, payload: null, event_type: 'tool', model: null,
+          parent_tool_use_id: null, tokens_confidence: 'high' },
+      ],
+      responses: [
+        { id: 'r-same', timestamp: 1000, preview: null, payload: null,
+          tokens_input: 0, tokens_output: 0, tokens_total: 0,
+          model: null, tokens_confidence: 'high' },
+      ],
+    });
+    const [out] = normalizeTurns([turn], 'sess-1');
+    expect(out.items[0].request.id).toBe('t-1');
+    expect(out.items[1].request.id).toBe('r-same');
+  });
+
+  test('빈 turn은 items=[] 반환', () => {
+    const turn = makeTurnItem();
+    const [out] = normalizeTurns([turn], 'sess-1');
+    expect(out.items).toEqual([]);
+  });
+
+  test('turn_id가 NormalizedRequest에 주입됨 (turn 컨텍스트 유지)', () => {
+    const turn = makeTurnItem({
+      turn_id: 't-99',
+      tool_calls: [
+        { id: 't-1', type: 'tool_call', timestamp: 1000, tool_name: 'Bash',
+          tool_detail: null, tokens_input: 0, tokens_output: 0, tokens_total: 0,
+          duration_ms: 0, payload: null, event_type: 'tool', model: 'claude-opus-4-7',
+          parent_tool_use_id: null, tokens_confidence: 'high' },
+      ],
+    });
+    const [out] = normalizeTurns([turn], 'sess-1');
+    expect(out.items[0].request.turn_id).toBe('t-99');
+    expect(out.items[0].request.session_id).toBe('sess-1');
   });
 });
