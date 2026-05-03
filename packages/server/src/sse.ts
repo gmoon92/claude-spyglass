@@ -119,6 +119,40 @@ export function broadcastUpdate(event: Omit<SSEEvent, 'timestamp'>): void {
 }
 
 /**
+ * `new_request` SSE 이벤트 메타.
+ *  - `session_total_tokens`: 세션 누적 토큰 (사이드바 갱신용)
+ *  - `event_phase`: 'created' (default) | 'updated' — discriminator (ADR-002)
+ */
+export interface NewRequestMeta {
+  session_total_tokens: number;
+  event_phase?: 'created' | 'updated';
+}
+
+/**
+ * SSE `new_request` 페이로드 빌더 (pure function — 테스트 가능, ADR-002).
+ *
+ * NormalizedRequest 본문에 메타(session_total_tokens, event_phase)를 합쳐
+ * SSE 이벤트로 송출할 객체를 만든다. 외부 effect 없음.
+ *
+ * 분리 목적:
+ *  - broadcastNewRequest는 connections Set에 의존(외부 effect)이라 단위 테스트 어렵다.
+ *  - 페이로드 contract만 검증하기 위해 pure function으로 추출.
+ */
+export function buildNewRequestEvent(
+  req: NormalizedRequest,
+  meta: NewRequestMeta,
+): Omit<SSEEvent, 'timestamp'> {
+  return {
+    type: 'new_request',
+    data: {
+      ...req,
+      session_total_tokens: meta.session_total_tokens,
+      event_phase: meta.event_phase ?? 'created',
+    },
+  };
+}
+
+/**
  * 새/갱신 요청 알림 브로드캐스트 (ADR-002).
  *
  * @param req - 정규화된 Request 본문 (NormalizedRequest, sub_type/trust_level/model 폴백 포함)
@@ -130,19 +164,9 @@ export function broadcastUpdate(event: Omit<SSEEvent, 'timestamp'>): void {
  */
 export function broadcastNewRequest(
   req: NormalizedRequest,
-  meta: {
-    session_total_tokens: number;
-    event_phase?: 'created' | 'updated';
-  },
+  meta: NewRequestMeta,
 ): void {
-  broadcastUpdate({
-    type: 'new_request',
-    data: {
-      ...req,
-      session_total_tokens: meta.session_total_tokens,
-      event_phase: meta.event_phase ?? 'created',
-    },
-  });
+  broadcastUpdate(buildNewRequestEvent(req, meta));
 }
 
 /**
