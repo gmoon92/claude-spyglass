@@ -39,11 +39,21 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { createProxyRequest, upsertSystemPrompt } from '@spyglass/storage';
-import { broadcastNewProxyRequest, type ProxyBroadcastPayload } from '../sse';
+import {
+  createProxyRequest,
+  getRequestById,
+  getSessionById,
+  upsertSystemPrompt,
+} from '@spyglass/storage';
+import {
+  broadcastNewProxyRequest,
+  broadcastNewRequest,
+  type ProxyBroadcastPayload,
+} from '../sse';
 import { invalidateDashboardCache } from '../api';
 import { diagJson } from '../diag-log';
 import { getLastTurnId } from '../hook';
+import { normalizeRequest } from '../domain/request-normalizer';
 
 import type { RequestMeta, StreamState } from './types';
 import { selectUpstreamUrl, buildForwardHeaders, UPSTREAM_URL } from './upstream';
@@ -52,6 +62,40 @@ import { parseSSEChunk } from './sse-state';
 import { extractClientHeaders, extractResponseHeaders } from './audit-headers';
 import { logResult } from './log-result';
 import { backfillRequestFromProxy } from './backfill';
+
+/**
+ * backfill로 갱신된 행들을 SSE `event_phase: 'updated'`로 재브로드캐스트 (ADR-004).
+ *
+ * 이 함수는 `proxy/handler.ts`가 책임지는 흐름:
+ *   1. backfill UPDATE → affected ID 배열 반환
+ *   2. 각 ID로 raw row를 다시 SELECT
+ *   3. NormalizedRequest로 정규화 → SSE 송출
+ *
+ * storage/도메인 모듈이 SSE에 의존하지 않도록 broadcast 책임은 여기서 격리.
+ * broadcast 실패는 client 응답에 영향 없게 try/catch로 격리.
+ */
+function broadcastBackfilledRequests(
+  db: Database,
+  sessionId: string | null,
+  affectedIds: string[],
+): void {
+  if (!sessionId || affectedIds.length === 0) return;
+  try {
+    const session = getSessionById(db, sessionId);
+    const sessionTotalTokens = session?.total_tokens ?? 0;
+    for (const id of affectedIds) {
+      const rawRow = getRequestById(db, id);
+      if (!rawRow) continue;
+      const normalized = normalizeRequest(rawRow);
+      broadcastNewRequest(normalized, {
+        session_total_tokens: sessionTotalTokens,
+        event_phase: 'updated',
+      });
+    }
+  } catch (err) {
+    console.warn('[PROXY] backfill broadcast error:', err);
+  }
+}
 
 /**
  * /v1/* 요청을 upstream으로 포워딩하고 메타를 수집·저장.
@@ -220,8 +264,8 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
 
         // hook 측 미완성 행(model NULL 또는 tokens_source='unavailable')을
         // 같은 session_id + 시간 윈도우로 일괄 채움 — model + tokens + api_request_id.
-        // 트랜잭션 외부 — 다른 테이블 UPDATE라 별 흐름.
-        backfillRequestFromProxy(db, {
+        // ADR-004: affected ID 배열을 받아 SSE 'updated' 재브로드캐스트.
+        const backfilledIds = backfillRequestFromProxy(db, {
           sessionId,
           model: state.model,
           apiRequestId: state.apiRequestId,
@@ -231,6 +275,7 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
           cacheReadTokens: state.usage.cache_read_input_tokens ?? 0,
           proxyStartMs: startMs,
         });
+        broadcastBackfilledRequests(db, sessionId, backfilledIds);
 
         // DB 저장 성공 직후에만 캐시 무효화 + SSE 브로드캐스트.
         // 별도 try/catch로 격리 — broadcast 실패가 client 응답에 영향 안 주게.
@@ -353,7 +398,8 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
         system_byte_size: reqMeta.systemByteSize ?? null,
       });
     })();
-    backfillRequestFromProxy(db, {
+    // ADR-004: affected ID 배열을 받아 SSE 'updated' 재브로드캐스트.
+    const backfilledIdsJson = backfillRequestFromProxy(db, {
       sessionId,
       model: state.model,
       apiRequestId: state.apiRequestId,
@@ -363,6 +409,7 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
       cacheReadTokens: state.usage.cache_read_input_tokens ?? 0,
       proxyStartMs: startMs,
     });
+    broadcastBackfilledRequests(db, sessionId, backfilledIdsJson);
 
     // SSE 브로드캐스트 격리 — broadcast 실패가 client 응답에 영향 안 주게 (T-06 ADR-005)
     try {
