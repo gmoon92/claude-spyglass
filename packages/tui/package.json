@@ -14,6 +14,7 @@
   "dependencies": {
     "@spyglass/server": "workspace:*",
     "@spyglass/storage": "workspace:*",
+    "@spyglass/types": "workspace:*",
     "@types/eventsource": "^3.0.0",
     "asciichart": "^1.5.25",
     "eventsource": "^4.1.0",

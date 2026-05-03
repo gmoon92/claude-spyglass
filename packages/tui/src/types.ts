@@ -1,8 +1,33 @@
 /**
- * types.ts — Shared TUI types.
+ * types.ts — TUI 전용 타입 + @spyglass/types에서 가져온 공유 타입.
  *
- * Mirrors server response shapes; keep in sync with packages/server/src/api.ts.
+ * srp-redesign ADR-006 (Phase 1B 부분 적용):
+ *   `Session` 타입은 @spyglass/types/Session에서 import (server-TUI 단일 정의).
+ *   `Request` 타입은 본 PR 범위에서 TUI 자체 정의 유지 — 매핑 어댑터(useSessionTurns 등)가
+ *   `null` 친화 패턴이라 RequestRow(`undefined` 친화)와 호환 작업이 추가로 필요.
+ *   이 호환 정리는 다음 Phase로 인계 (PR 단위 SRP 준수: 변경 이유 단일화).
+ *
+ * 다음 Phase (예정):
+ *   - useSessionTurns/useSSE 어댑터의 null/undefined 정책 통일
+ *   - TUI Request 타입을 NormalizedRequest 기반으로 교체
  */
+
+import type { Session as SharedSession } from '@spyglass/types';
+
+// =============================================================================
+// 공유 타입 re-export
+// =============================================================================
+
+/** Session summary. @see @spyglass/types/Session */
+export type Session = SharedSession & {
+  /** TUI 전용 — 활성 세션 카운트 표시용 */
+  request_count?: number;
+  current_turn?: number;
+};
+
+// =============================================================================
+// TUI 전용 타입 (본 PR 범위에서 자체 정의 유지)
+// =============================================================================
 
 export type EventType = 'pre_tool' | 'tool' | 'prompt' | 'system' | null | undefined;
 
@@ -45,17 +70,6 @@ export type StripStats = {
   error_rate?: number;
   cache_hit_rate?: number;
   context_usage?: number;
-};
-
-/** Session summary. */
-export type Session = {
-  id: string;
-  project_name?: string | null;
-  started_at: number;
-  ended_at?: number | null;
-  total_tokens?: number;
-  request_count?: number;
-  current_turn?: number;
 };
 
 /** Anomaly row. */

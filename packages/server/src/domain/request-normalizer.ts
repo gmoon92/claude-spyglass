@@ -25,85 +25,58 @@
  *   - packages/server/src/sse.ts — SSE 브로드캐스트 직전 매핑
  *   - packages/server/src/proxy/handler.ts — backfill 후 갱신 알림 시
  *
+
  * 의존성:
  *   - @spyglass/storage: Request raw 타입
+ *   - @spyglass/types: 공유 데이터 contract (NormalizedRequest, RequestSubType, TrustLevel, EventPhase, NormalizedTurnItem)
+ *
+ * srp-redesign ADR-006: 데이터 contract는 @spyglass/types 패키지에 모이고,
+ *   server는 그 타입을 import + re-export하여 외부 시그니처(`from './domain/request-normalizer'`) 호환 유지.
+ *   "NormalizedRequest 필드 추가" = 변경 이유 단일 → packages/types에서만 수정.
  */
 
 import type { Request, TurnItem } from '@spyglass/storage';
 
+// 공유 contract import (런타임 코드 0줄, 타입 선언만)
+import type {
+  EventPhase as SharedEventPhase,
+  NormalizedRequest as SharedNormalizedRequest,
+  NormalizedTurnItem as SharedNormalizedTurnItem,
+  RequestSubType as SharedRequestSubType,
+  TrustLevel as SharedTrustLevel,
+} from '@spyglass/types';
+
 // =============================================================================
-// 타입 정의
+// 타입 re-export (외부 import 호환 유지)
 // =============================================================================
 
 /**
- * 행 sub_type — UI 표시 분류용.
- * `null`은 일반 prompt/tool_call/response/system.
+ * 행 sub_type — UI 표시 분류용. @see @spyglass/types/RequestSubType
+ */
+export type RequestSubType = SharedRequestSubType;
+
+/**
+ * 행 신뢰도 — UI dim 처리/확신도 표시용. @see @spyglass/types/TrustLevel
+ */
+export type TrustLevel = SharedTrustLevel;
+
+/**
+ * `event_phase` — SSE 페이로드 discriminator. @see @spyglass/types/EventPhase
+ */
+export type EventPhase = SharedEventPhase;
+
+/**
+ * 정규화된 Request — 클라이언트 공통 입력 모델. @see @spyglass/types/NormalizedRequest
  *
- * 매핑 규칙(`deriveSubType` 내부):
- *  - tool_name === 'Agent'                  → 'agent'
- *  - tool_name === 'Skill'                  → 'skill'
- *  - tool_name === 'Task'                   → 'task'
- *  - tool_name?.startsWith('mcp__')         → 'mcp'
- *  - 그 외                                  → null
+ * server는 이 타입을 직접 정의하지 않고 @spyglass/types에서 re-export.
+ * "NormalizedRequest 필드 추가"는 packages/types/src/request.ts 한 곳만 수정 = SRP 준수.
  */
-export type RequestSubType = 'agent' | 'skill' | 'task' | 'mcp' | null;
+export type NormalizedRequest = SharedNormalizedRequest;
 
 /**
- * 행 신뢰도 — UI dim 처리/확신도 표시용.
- *  - 'trusted'   : 정상 데이터 (tokens_confidence='high' && model 존재)
- *  - 'unknown'   : model NULL이거나 tokens_source='unavailable'
- *  - 'synthetic' : SDK가 합성한 model (예: '<synthetic>'으로 시작) — 사용자 의도 외 호출
- *  - 'estimated' : tokens_source='proxy'로 보충된 행 (transcript 추출 실패 시)
+ * Turn 응답 안의 단위 항목 (ADR-006). @see @spyglass/types/NormalizedTurnItem
  */
-export type TrustLevel = 'trusted' | 'unknown' | 'synthetic' | 'estimated';
-
-/**
- * `event_phase` — SSE 페이로드 discriminator (ADR-002).
- *  - 'created' : 첫 INSERT (또는 pre_tool→tool 병합 첫 노출)
- *  - 'updated' : 기존 행이 backfill/UPDATE로 갱신됨 → 클라가 in-place 갱신
- */
-export type EventPhase = 'created' | 'updated';
-
-/**
- * 정규화된 Request — 클라이언트 3개 뷰 공통 입력 모델.
- *
- * raw `Request`의 모든 필드를 보존하면서, 도메인 규칙으로 파생된 필드를 추가한다.
- * 클라이언트는 이 구조만 보면 model 폴백·sub_type 분기·신뢰도 분류를 다시 할 필요가 없다.
- *
- * `model`은 raw `Request.model`(string | undefined)을 turn 폴백 후 `string | null`로 정규화.
- * Omit으로 raw model을 제외하고 정규화된 타입으로 재선언.
- */
-export interface NormalizedRequest extends Omit<Request, 'model'> {
-  /** UI 표시용 sub_type. `null`은 일반 행. */
-  sub_type: RequestSubType;
-
-  /** 행 신뢰도 분류 (UI dim/뱃지용). */
-  trust_level: TrustLevel;
-
-  /**
-   * 정규화된 model.
-   *
-   * raw의 `model`(string | undefined)을 turn 컨텍스트로 폴백 적용한 결과.
-   *  - response 행: rawResp.model ?? same_turn.prompt.model ?? null
-   *  - tool_call 행: raw.model ?? same_turn.prompt.model ?? null
-   *  - prompt/system: raw.model 그대로 (없으면 null)
-   *
-   * raw가 비어있어 폴백으로 채워졌으면 `model_fallback_applied: true`.
-   */
-  model: string | null;
-
-  /** 폴백으로 model이 채워졌는지 여부 (관측·테스트용). */
-  model_fallback_applied: boolean;
-}
-
-/**
- * Turn 응답 안의 단위 항목 (ADR-006).
- * timestamp 오름차순으로 인터리빙된 배열 `items`로 사용.
- */
-export interface NormalizedTurnItem {
-  kind: 'tool' | 'response';
-  request: NormalizedRequest;
-}
+export type NormalizedTurnItem = SharedNormalizedTurnItem;
 
 /**
  * 정규화 컨텍스트.
