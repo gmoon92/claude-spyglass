@@ -3,7 +3,14 @@
  *
  * @description 실시간 데이터 변경 브로드캐스트 — hook(requests)과 proxy(proxy_requests) 두 채널을
  *              브라우저로 push. 채널별 이벤트 타입: 'new_request' / 'new_proxy_request'.
+ *
+ * ADR-002 (log-view-unification):
+ *   `new_request` 이벤트는 hook 채널 단일 진입점이며, 페이로드는 NormalizedRequest + event_phase.
+ *   `event_phase: 'created' | 'updated'` discriminator로 신규/갱신을 구분 (별도 이벤트 타입 신설 X).
+ *   클라이언트는 `data-request-id` 존재 여부로 in-place 갱신 vs prepend 분기.
  */
+
+import type { NormalizedRequest } from './domain/request-normalizer';
 
 // =============================================================================
 // 타입 정의
@@ -112,27 +119,29 @@ export function broadcastUpdate(event: Omit<SSEEvent, 'timestamp'>): void {
 }
 
 /**
- * 새 요청 알림 브로드캐스트
+ * 새/갱신 요청 알림 브로드캐스트 (ADR-002).
+ *
+ * @param req - 정규화된 Request 본문 (NormalizedRequest, sub_type/trust_level/model 폴백 포함)
+ * @param meta - 추가 메타: event_phase ('created'|'updated'), session_total_tokens
+ *
+ * `event_phase`:
+ *  - 'created' (default) — 첫 INSERT (또는 pre_tool→tool 병합 첫 노출)
+ *  - 'updated' — 기존 행이 backfill/UPDATE로 갱신됨 → 클라가 in-place 갱신 (ADR-007)
  */
-export function broadcastNewRequest(requestData: {
-  id: string;
-  session_id: string;
-  type: string;
-  request_type: string;
-  tool_name?: string | null;
-  tool_detail?: string | null;
-  tokens_input: number;
-  tokens_output: number;
-  tokens_total: number;
-  duration_ms: number;
-  model?: string | null;
-  timestamp: number;
-  payload?: string | null;
-  session_total_tokens: number;
-}): void {
+export function broadcastNewRequest(
+  req: NormalizedRequest,
+  meta: {
+    session_total_tokens: number;
+    event_phase?: 'created' | 'updated';
+  },
+): void {
   broadcastUpdate({
     type: 'new_request',
-    data: requestData,
+    data: {
+      ...req,
+      session_total_tokens: meta.session_total_tokens,
+      event_phase: meta.event_phase ?? 'created',
+    },
   });
 }
 
