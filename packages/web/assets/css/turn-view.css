@@ -539,3 +539,73 @@
 /* ── UTILITY ────────────────────────────────────────────────────────────── */
 /* inline style="color:var(--text-3)" 대체용 (HTML 직접 작성 최소화) */
 .text-dim { color: var(--text-3); }
+
+/* ── 세션 프롤로그 (ADR-001 P1) ─────────────────────────────────────────────
+ * prompt가 등록되기 전에 도착한 도구·응답 행. 일반 turn과 시각 어휘를 공유하되
+ * 좌측 dim accent border + 옅은 배경으로 "정상 turn 아님"을 명시한다. */
+.turn-prologue-card {
+  margin: 0 var(--space-4) var(--space-3);
+  border-left: var(--turn-row-border-w) solid var(--text-3);
+  border-radius: var(--radius-sm);
+  background: var(--white-bg-subtle);
+  padding: var(--space-2) var(--space-3) var(--space-2)
+           calc(var(--turn-row-indent) - var(--turn-row-border-w));
+}
+.turn-prologue-header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-size: var(--text-meta);
+  margin-bottom: var(--space-2);
+}
+.turn-prologue-title {
+  color: var(--text-2);
+  font-weight: var(--weight-strong);
+}
+.turn-prologue-count {
+  color: var(--text-3);
+  font-family: var(--font-data);
+}
+.turn-prologue-hint {
+  color: var(--text-3);
+  font-size: var(--text-small);
+  cursor: help;
+}
+.turn-prologue-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.prologue-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(200px, 2fr) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  font-size: var(--text-meta);
+  border-bottom: 1px dotted var(--border);
+}
+.prologue-row:last-child { border-bottom: none; }
+.prologue-row-target { min-width: 0; overflow: hidden; }
+.prologue-row-preview {
+  color: var(--text-3);
+  font-family: var(--font-data);
+  font-size: var(--text-small);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prologue-source-tag {
+  font-family: var(--font-data);
+  font-size: var(--text-small);
+  color: var(--text-3);
+  background: var(--bg-1);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+}
+.prologue-row-time {
+  color: var(--text-3);
+  font-family: var(--font-data);
+  font-size: var(--text-small);
+}

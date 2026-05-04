@@ -31,8 +31,9 @@ import {
   getSessionsByProject,
   getSessionToolStats,
   getTurnsBySession,
+  getOrphanRowsBySession,
 } from '@spyglass/storage';
-import { normalizeRequests, normalizeTurns } from '../domain/request-normalizer';
+import { normalizeRequest, normalizeRequests, normalizeTurns } from '../domain/request-normalizer';
 import { jsonResponse, type RouteHandler } from './_shared';
 
 export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
@@ -68,11 +69,20 @@ export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
   }
 
   // GET /api/sessions/:id/turns — ADR-001/006: 정규화 + items[] 인터리빙
+  // ADR-001 P1 (session-prologue): turn_id가 NULL인 행도 별도 prologue 배열로 노출.
+  //   비어 있으면 클라가 섹션 자체를 안 그림 (일반 세션은 prologue 없음).
   if (path.match(/^\/api\/sessions\/[^\/]+\/turns$/) && method === 'GET') {
     const sessionId = path.split('/')[3];
     const rawTurns = getTurnsBySession(db, sessionId);
     const turns = normalizeTurns(rawTurns, sessionId);
-    return jsonResponse({ success: true, data: turns, meta: { total: turns.length } });
+    const rawOrphans = getOrphanRowsBySession(db, sessionId);
+    const prologue = rawOrphans.map((r) => normalizeRequest(r));
+    return jsonResponse({
+      success: true,
+      data: turns,
+      prologue,
+      meta: { total: turns.length, prologue_count: prologue.length },
+    });
   }
 
   // GET /api/sessions/:id/tool-stats

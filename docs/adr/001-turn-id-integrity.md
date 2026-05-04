@@ -62,11 +62,33 @@ claude-spyglass의 "턴(turn)" 개념은 사용자 프롬프트 입력을 시작
 
 수정: `packages/web/assets/js/render/extract.js`의 `getDetailText`에 위 도구별 핸들러 추가 — `payload.tool_input`의 풍부한 필드(description, message, prompt 등)를 합쳐서 보여줌.
 
-#### P1 — 잔여 항목 (이번 워크트리 미포함)
+#### P1-C: orphan UI 노출 (session-prologue) — 완료
 
-- **이슈 #2 (orphan UI)**: `turn_id NULL` 행을 "session-prologue"로 명시 분류 + turn-view UI 노출. 한 세션(88건)에 집중되어 있고 P1-A로 신규 발생을 차단했지만, 과거 데이터의 시각화는 별도 작업.
-- **api_request_id 기반 정확 매칭**: 시간 윈도우 의존을 점진적으로 제거. hook 페이로드에 api_request_id가 들어오는지부터 조사 필요.
-- **모니터링 메트릭 자동 노출**: 위 모니터링 쿼리들을 `/api/integrity` 같은 엔드포인트에 노출.
+`turn_id IS NULL`인 행을 `getOrphanRowsBySession`으로 조회해 turns API 응답에 `prologue` 필드로 별도 노출. turn-view 상단에 "세션 프롤로그" 카드를 그려 prompt 등록 이전 활동을 시각적으로 보존. 빈 배열이면 카드 미렌더 (일반 세션은 노이즈 없음). 사용자가 정의한 "사용자 프롬프트 = 턴" 원칙은 그대로 유지.
+
+상세 구현: `packages/storage/src/queries/request/turn.ts (getOrphanRowsBySession)`, `packages/server/src/routes/sessions.ts`, `packages/web/assets/js/session-detail/{turn-views,index,state}.js`, `packages/web/assets/css/turn-view.css` 참조.
+
+#### P1-D: 무결성 모니터링 + 데이터 정합성 자동 보정 — 완료
+
+`bun run packages/server/src/cli.ts doctor`에 5개 무결성 체크 추가:
+
+1. orphan 행 (turn_id NULL) 카운트 — warn
+2. response 0개 turn 카운트 — warn
+3. 120s 초과 proxy 응답 카운트 — warn
+4. 중복 response 행 쌍 (preview 동일 + 1초 이내) — fail
+5. mismatched turn_id (timestamp 기준 prompt와 불일치) — fail
+
+`doctor --fix`에서 4·5번을 자동 보정:
+- 중복 response: claude-code-hook 행 삭제 + transcript-assistant-text 행 보존 (후자가 토큰·모델 메타 더 정확).
+- mismatched turn_id: 자기 timestamp 이전의 가장 최근 prompt turn_id로 UPDATE.
+
+운영 데이터(481MB DB) 적용 결과: 중복 29쌍 제거, mismatched 75건 교정. 신규 데이터는 코드 수정으로 발생 차단.
+
+상세 구현: `packages/server/src/cli/checks/integrity.ts`, `packages/server/src/cli/fix.ts`, `packages/server/src/cli/doctor.ts` 참조.
+
+#### P1-E: api_request_id 기반 정확 매칭 — 미진행 (합의)
+
+조사 결과 hook payload에 api_request_id가 직접 노출되지 않는다 (proxy 측에서만 추출). 시간 윈도우 의존을 완전히 제거하려면 hook schema 변경 또는 hook handler에서 transcript→api_request_id 추출 로직 필요. 운영 평균 60s 응답이 P0 120초 윈도우로 cover되어 실 영향이 작아, 비용 대비 ROI 낮음 — 추후 hook schema가 노출되면 재검토.
 
 ### 채택하지 않는 옵션
 
@@ -87,19 +109,7 @@ claude-spyglass의 "턴(turn)" 개념은 사용자 프롬프트 입력을 시작
 
 ### 모니터링 (운영)
 
-다음 쿼리로 정기 점검 권장 (이번 변경에 코드 추가는 안 함, 운영자가 수동 확인):
-
-```sql
--- orphan 행 (이슈 #2)
-SELECT COUNT(*) FROM requests WHERE turn_id IS NULL;
-
--- response 0개 turn (이슈 #3)
-SELECT p.turn_id FROM requests p
-LEFT JOIN requests r ON r.turn_id=p.turn_id AND r.type='response'
-WHERE p.type='prompt' GROUP BY p.turn_id HAVING COUNT(r.id)=0;
-
--- 30초 초과 proxy 응답 (이슈 #5 잔여 위험)
-SELECT COUNT(*) FROM proxy_requests WHERE response_time_ms > 120000;
+P1-D에서 `doctor` CLI에 5개 무결성 체크가 자동 등록됨. 상세 쿼리는 `packages/server/src/cli/checks/integrity.ts` 참조. `doctor --fix`로 중복 response·mismatched turn_id 자동 보정.
 ```
 
 ## Implementation

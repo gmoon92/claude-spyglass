@@ -21,12 +21,16 @@ export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
+  /** ADR-001 P1: turn_id가 NULL인 행 (session-prologue) — turns 응답 옵션 필드 */
+  prologue?: unknown;
   meta?: {
     total?: number;
     page?: number;
     limit?: number;
     offset?: number;
     p95DurationMs?: number;
+    /** ADR-001 P1: prologue 배열 길이 (편의용) */
+    prologue_count?: number;
   };
 }
 

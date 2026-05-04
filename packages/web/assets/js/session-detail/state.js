@@ -39,6 +39,9 @@ let _detailTurnAnomalyMap = new Map();
 // =============================================================================
 let _systemHashCount = 0;
 
+// ADR-001 P1: turn에 묶이지 않은 행 (session-prologue). 비면 UI 안 그림.
+let _detailPrologue = [];
+
 // =============================================================================
 // 1차 입력 — getter/setter
 // =============================================================================
@@ -51,6 +54,8 @@ export function getDetailRequests()     { return _detailAllRequests; }
 export function setDetailRequests(reqs) { _detailAllRequests = reqs; }
 export function getDetailTurns()        { return _detailAllTurns; }
 export function setDetailTurns(turns)   { _detailAllTurns = turns; }
+export function getDetailPrologue()     { return _detailPrologue; }
+export function setDetailPrologue(rows) { _detailPrologue = Array.isArray(rows) ? rows : []; }
 export function getSearchQuery()        { return _detailSearchQuery; }
 export function setSearchQuery(q)       { _detailSearchQuery = q; }
 export function getExpandedTurnIds()    { return _expandedTurnIds; }

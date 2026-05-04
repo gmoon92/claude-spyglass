@@ -17,6 +17,13 @@ import {
   checkRecentActivity,
 } from './checks/database';
 import { checkServerPort } from './checks/server';
+import {
+  checkOrphanRows,
+  checkZeroResponseTurns,
+  checkLongProxyResponses,
+  checkDuplicateResponses,
+  checkMismatchedTurnIds,
+} from './checks/integrity';
 import { applyFixes } from './fix';
 
 export async function doctor(fix: boolean = false): Promise<void> {
@@ -31,6 +38,12 @@ export async function doctor(fix: boolean = false): Promise<void> {
     { name: 'DB 스키마 버전', fn: checkDbSchemaVersion },
     { name: '서버 포트', fn: checkServerPort },
     { name: '최근 수집 활동', fn: checkRecentActivity },
+    // ADR-001 P1: turn 무결성 체크
+    { name: 'orphan 행 (turn_id NULL)', fn: checkOrphanRows },
+    { name: 'response 0개 turn', fn: checkZeroResponseTurns },
+    { name: '120s 초과 proxy 응답', fn: checkLongProxyResponses },
+    { name: '중복 response 행', fn: checkDuplicateResponses },
+    { name: 'mismatched turn_id', fn: checkMismatchedTurnIds },
   ];
 
   let failCount = 0;

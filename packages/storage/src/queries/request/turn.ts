@@ -21,6 +21,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
+import type { Request } from '../../schema';
 import { ACTIVE_REQUEST_FILTER_SQL } from './read';
 
 // =============================================================================
@@ -329,4 +330,34 @@ export function getTurnsBySession(
   });
 
   return turns.reverse();
+}
+
+// =============================================================================
+// orphan(NULL turn_id) 행 조회 — ADR-001 P1 (session-prologue)
+// =============================================================================
+
+/**
+ * 같은 세션에서 turn_id가 NULL인 행을 timestamp 오름차순으로 반환.
+ *
+ * "session-prologue" 데이터: prompt가 등록되기 전에 hook이 도달한 tool_call/response.
+ * 세션 resume/compact 같은 케이스에서 발생할 수 있으며, 어느 turn에도 묶이지 않아
+ * UI에서 누락된다. 이 쿼리는 turn-view 상단 "프롤로그" 섹션 노출용.
+ *
+ * 정책: ACTIVE_REQUEST_FILTER_SQL을 적용해 일반 turn 쿼리와 노출 정책을 통일.
+ *
+ * @returns 빈 배열이면 프롤로그 없음 — 호출자가 UI 섹션을 그리지 않음.
+ */
+export function getOrphanRowsBySession(db: Database, sessionId: string): Request[] {
+  return db.query(`
+    SELECT id, session_id, timestamp, type, tool_name, tool_detail, turn_id, model,
+           tokens_input, tokens_output, tokens_total, duration_ms, payload, source,
+           cache_creation_tokens, cache_read_tokens, preview, tool_use_id, event_type,
+           tokens_confidence, tokens_source, parent_tool_use_id, api_request_id,
+           permission_mode, agent_id, agent_type, tool_interrupted, tool_user_modified,
+           created_at
+    FROM requests
+    WHERE session_id = ? AND turn_id IS NULL
+      AND ${ACTIVE_REQUEST_FILTER_SQL}
+    ORDER BY timestamp ASC
+  `).all(sessionId) as Request[];
 }

@@ -20,7 +20,7 @@ import { createSearchBox } from '../components/search-box.js';
 import { clearContextChart } from '../context-chart.js';
 import { clearToolStats } from '../tool-stats.js';
 import {
-  setCurrentSessionId, setDetailRequests, setDetailTurns,
+  setCurrentSessionId, setDetailRequests, setDetailTurns, setDetailPrologue,
   setSearchQuery, clearExpandedTurnIds, getSearchBox, setSearchBox,
   setSystemHashCount,
 } from './state.js';
@@ -61,6 +61,7 @@ export async function refreshDetailSession(sessionId) {
     const [reqJson, turnJson, sysJson] = await Promise.all([reqRes.json(), turnRes.json(), sysRes.json()]);
     setDetailRequests(reqJson.data  || []);
     setDetailTurns(turnJson.data || []);
+    setDetailPrologue(turnJson.prologue || []);
     setSystemHashCount(Array.isArray(sysJson?.data) ? sysJson.data.length : 0);
     applyDetailFilter();
   } catch { /* silent */ }
@@ -89,6 +90,7 @@ export async function loadSessionDetail(sessionId, opts = {}) {
   const [reqJson, turnJson, sysJson] = await Promise.all([reqRes.json(), turnRes.json(), sysRes.json()]);
   setDetailRequests(reqJson.data  || []);
   setDetailTurns(turnJson.data || []);
+  setDetailPrologue(turnJson.prologue || []);
   setSystemHashCount(Array.isArray(sysJson?.data) ? sysJson.data.length : 0);
   applyDetailFilter();
 }

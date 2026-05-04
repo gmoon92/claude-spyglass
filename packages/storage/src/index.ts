@@ -118,6 +118,7 @@ export {
   getCacheStats,
   // 턴 집계
   getTurnsBySession,
+  getOrphanRowsBySession,
   // 세션 범위 도구 성능 통계
   getSessionToolStats,
   // 타입

@@ -23,8 +23,9 @@ import {
   buildTurnDetailRows, compressContinuousTools, fmtActionLabel,
 } from './turn-rows.js';
 import {
-  getCurrentSessionId, getDetailTurns, getExpandedTurnIds,
+  getCurrentSessionId, getDetailTurns, getDetailPrologue, getExpandedTurnIds,
 } from './state.js';
+import { targetInnerHtml, contextPreview } from '../renderers.js';
 
 /**
  * 턴 카드 푸터 .turn-card-bar-pct에 hover 시 노출되는 의미 설명 (web-design-balance-pass ADR-003).
@@ -161,11 +162,47 @@ export function renderTurnView(turns, badgeTurns) {
 }
 
 /**
+ * ADR-001 P1 — 세션 프롤로그 카드 HTML.
+ *
+ * prompt 등록 이전에 도착한 tool_call/response 행(turn_id NULL)을 turn-view 상단에
+ * 별도 섹션으로 렌더한다. 사용자가 정의한 "사용자 프롬프트 = 턴" 원칙을 깨지 않으면서
+ * 데이터 누락을 시각적으로 보존한다. 빈 배열이면 호출자가 호출하지 않는 것을 권장.
+ *
+ * 행 렌더는 turn-row와 같은 그리드 컬럼·셀빌더를 재사용해 시각 일관성 유지.
+ */
+function renderPrologueCardHtml(prologue) {
+  if (!prologue || prologue.length === 0) return '';
+  const rows = prologue.map((r) => {
+    const targetHtml = targetInnerHtml(r).html;
+    const previewHtml = contextPreview(r, 60);
+    const ts = fmtTime(r.timestamp);
+    const sourceTag = r.source === 'transcript-assistant-text'
+      ? '<span class="prologue-source-tag" title="transcript에서 보충된 어시스턴트 응답">transcript</span>'
+      : (r.source ? `<span class="prologue-source-tag">${escHtml(r.source)}</span>` : '');
+    return `<div class="prologue-row" data-type="${escHtml(r.type)}">
+        <span class="prologue-row-target">${targetHtml}</span>
+        <span class="prologue-row-preview">${previewHtml || ''}</span>
+        ${sourceTag}
+        <span class="prologue-row-time">${escHtml(ts)}</span>
+      </div>`;
+  }).join('');
+  return `<div class="turn-prologue-card" role="region" aria-label="세션 프롤로그">
+      <div class="turn-prologue-header">
+        <span class="turn-prologue-title">세션 프롤로그</span>
+        <span class="turn-prologue-count">${prologue.length}건</span>
+        <span class="turn-prologue-hint" title="첫 사용자 프롬프트가 등록되기 전에 도착한 도구·응답입니다. 세션 resume 또는 hook 누락으로 발생할 수 있습니다.">prompt 등록 이전 활동</span>
+      </div>
+      <div class="turn-prologue-body">${rows}</div>
+    </div>`;
+}
+
+/**
  * 통합 카드형 turn 뷰 — 현재 활성화된 메인 뷰.
  *  - 헤더: T번호 + prompt 미리보기 + 복잡도 배지 + 펼침 버튼
  *  - 본문: 도구 흐름 chip (compressContinuousTools 재사용)
  *  - 푸터: IN/OUT/⏱ + 비율(%) — 비율은 세션 누적 토큰 대비
  *  - 펼침: buildTurnDetailRows로 세부 행 lazy 렌더 (펼친 카드만)
+ *  - ADR-001 P1: prologue 비면 카드 안 그림. 있으면 turn 카드들 위에 별도 섹션.
  */
 export function renderTurnCards(turns, badgeTurns) {
   const container = document.getElementById('turnUnifiedBody');
@@ -191,8 +228,12 @@ export function renderTurnCards(turns, badgeTurns) {
     badgesEl.classList.add('detail-agg-badges--hidden');
   }
 
+  // ADR-001 P1: 프롤로그 (turn_id NULL 행) — turn 카드들 위에 별도 섹션. 비면 빈 문자열.
+  const prologueHtml = renderPrologueCardHtml(getDetailPrologue());
+
   if (!turns.length) {
-    container.innerHTML = '<div class="state-empty"><span class="state-empty-title">데이터가 없습니다</span></div>';
+    container.innerHTML = prologueHtml
+      || '<div class="state-empty"><span class="state-empty-title">데이터가 없습니다</span></div>';
     return;
   }
 
@@ -206,7 +247,7 @@ export function renderTurnCards(turns, badgeTurns) {
   // hash 변경(또는 첫 등장)이면 ▲ 마커, 같으면 표시 안 함(시각 노이즈 회피).
   const sysHashByIdx = new Map(turns.map(t => [t.turn_index, t.system_hash]));
 
-  container.innerHTML = turns.slice().sort((a, b) => b.turn_index - a.turn_index).map(turn => {
+  container.innerHTML = prologueHtml + turns.slice().sort((a, b) => b.turn_index - a.turn_index).map(turn => {
     const toolCount = turn.summary.tool_call_count;
     const complexBadge = toolCount > 15
       ? '<span class="turn-complexity high">복잡</span>'
