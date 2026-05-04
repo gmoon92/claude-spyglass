@@ -106,6 +106,13 @@ claude-spyglass의 "턴(turn)" 개념은 사용자 프롬프트 입력을 시작
 
 **효과.** 시간 윈도우 의존이 hook ↔ proxy cross-link 경로에서 0초로 사라짐. 224초+ 응답도 정확 매칭. v23 이전 데이터는 fallback 경로로 그대로 처리(호환).
 
+#### P1-E polish: backfill·subagent에도 정확 매칭 일관 적용
+
+재시작 후 신규 데이터 검증(매칭 1/1) 결과 추가 다관점 회의에서 도출된 미세 개선 2건:
+
+- `persistAssistantTextResponses`의 INSERT가 `api_request_id`를 hard-coded NULL로 보내던 문제. id 컬럼은 이미 `resp-msg-${entry.messageId}` 패턴으로 msg_id를 포함하지만, 컬럼을 채워두면 응답 행 단독 SELECT만으로 cross-link이 즉시 가능. `entry.messageId`를 그대로 `api_request_id`에 INSERT.
+- `persistSubagentChildren`도 자식 도구의 `tool_use_id`가 부모 Agent 응답에서 발행된 ID이므로, 같은 `resolveApiRequestId` 패턴으로 proxy_tool_uses에서 직접 매칭 가능. 미스 시 NULL 유지(fallback).
+
 ### 채택하지 않는 옵션
 
 - "윈도우만 확대 (session_id 필터 없이)": 다른 세션 응답을 잘못 매칭할 가능성으로 기각.

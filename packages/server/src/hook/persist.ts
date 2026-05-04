@@ -220,6 +220,9 @@ export function persistSubagentChildren(
     const tokensTotal = child.tokensInput + child.tokensOutput;
     const toolDetail = extractToolDetail(child.toolName, child.toolInput);
     const id = `sub-${child.timestampMs}-${randomUUID().slice(0, 8)}`;
+    // ADR-001 P1-E (polish): subagent 자식 도구도 부모 Agent 응답에서 발행된 tool_use_id를
+    // 가지므로, proxy_tool_uses에서 정확한 api_request_id 조회 가능. 미스 시 NULL 유지.
+    const childApiRequestId = resolveApiRequestId(db, child.toolUseId);
 
     try {
       createRequest(db, {
@@ -244,6 +247,7 @@ export function persistSubagentChildren(
         tokens_confidence: 'high',
         tokens_source: 'transcript',
         parent_tool_use_id: context.parentToolUseId,
+        api_request_id: childApiRequestId,
       });
       inserted++;
     } catch (e) {
@@ -280,6 +284,8 @@ export function persistAssistantTextResponses(
 
   // INSERT OR IGNORE — id가 PRIMARY KEY라 중복 시 silent skip
   // requests 테이블의 모든 컬럼을 채워야 하므로 raw SQL 사용 (createRequest는 일반 INSERT)
+  // ADR-001 P1-E (polish): api_request_id를 entry.messageId로 채움 — id에 포함된 msgid와
+  //   동일하지만 컬럼을 채워두면 응답 행 단독 SELECT만으로 cross-link이 즉시 가능.
   const stmt = db.prepare(`
     INSERT OR IGNORE INTO requests (
       id, session_id, timestamp, type, tool_name, tool_detail, turn_id, model,
@@ -291,7 +297,7 @@ export function persistAssistantTextResponses(
       ?, ?, ?, 'response', NULL, NULL, ?, ?,
       ?, ?, ?, 0, ?, 'transcript-assistant-text',
       ?, ?, ?, NULL, 'assistant_response',
-      'high', 'transcript', NULL, NULL,
+      'high', 'transcript', NULL, ?,
       NULL, NULL, NULL, NULL, NULL
     )
   `);
@@ -322,6 +328,7 @@ export function persistAssistantTextResponses(
         entry.cacheCreationTokens,
         entry.cacheReadTokens,
         previewText,
+        entry.messageId, // api_request_id — entry.messageId가 곧 Anthropic msg_xxx
       );
       if (result.changes > 0) inserted++;
     } catch (e) {
