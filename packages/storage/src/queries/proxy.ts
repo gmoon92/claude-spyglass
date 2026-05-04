@@ -286,7 +286,8 @@ const SQL_LATEST_RESPONSE_PREVIEW_BEFORE = `
   SELECT response_preview, model, tokens_input, tokens_output,
          cache_creation_tokens, cache_read_tokens, stop_reason
   FROM proxy_requests
-  WHERE timestamp <= ?
+  WHERE session_id = ?
+    AND timestamp <= ?
     AND timestamp >= ?
     AND response_preview IS NOT NULL
     AND length(response_preview) > 0
@@ -305,15 +306,25 @@ export interface LatestProxyResponse {
 }
 
 /**
- * Stop 훅의 last_assistant_message가 비어 있을 때 fallback으로 사용.
- * 직전 windowMs(기본 30s) 내 가장 최근 proxy 응답 미리보기를 반환.
+ * Stop 훅의 last_assistant_message가 비어 있을 때 fallback으로 사용 (ADR-001).
+ *
+ * 같은 `sessionId`의 proxy_requests에서 `beforeMs - windowMs ≤ timestamp ≤ beforeMs`
+ * 구간에 있는 가장 최근 응답을 반환한다. 다른 세션의 proxy 응답이 잘못 매칭되지 않도록
+ * session_id 필터는 필수. 윈도우 기본값 120s는 운영 데이터 평균 응답시간(~60s) ·
+ * 최대 ~224s를 고려한 ADR-001 P0 결정값. 그보다 오래 걸린 응답은 누락될 수 있으며,
+ * 이는 P1 (api_request_id 기반 정확 매칭)에서 해결 예정.
+ *
+ * @param sessionId Stop 훅을 발생시킨 세션의 id — proxy_requests 행과 동일 세션만 매칭
+ * @param beforeMs   기준 시각 (보통 Stop 훅 timestamp). 이 시각 이전의 proxy 응답만 후보
+ * @param windowMs   기준 시각 이전으로 거슬러 올라갈 최대 시간(ms). 기본 120000
  */
 export function getLatestProxyResponseBefore(
   db: Database,
+  sessionId: string,
   beforeMs: number,
-  windowMs = 30_000,
+  windowMs = 120_000,
 ): LatestProxyResponse | null {
   return db
-    .query<LatestProxyResponse, [number, number]>(SQL_LATEST_RESPONSE_PREVIEW_BEFORE)
-    .get(beforeMs, beforeMs - windowMs) ?? null;
+    .query<LatestProxyResponse, [string, number, number]>(SQL_LATEST_RESPONSE_PREVIEW_BEFORE)
+    .get(sessionId, beforeMs, beforeMs - windowMs) ?? null;
 }

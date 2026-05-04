@@ -143,9 +143,10 @@ function saveAssistantResponse(
       : null;
     let proxyFallback: ReturnType<typeof getLatestProxyResponseBefore> = null;
 
-    // 2차: 비어 있으면 proxy_requests의 최근 response_preview로 fallback
+    // 2차: 비어 있으면 같은 session의 최근 proxy 응답으로 fallback (ADR-001 P0).
+    // 윈도우 120s — 운영 평균 응답 ~60s, 최대 ~224s를 고려한 절충값.
     if (!message || !message.trim()) {
-      proxyFallback = getLatestProxyResponseBefore(db, timestamp, 30_000);
+      proxyFallback = getLatestProxyResponseBefore(db, sessionId, timestamp, 120_000);
       if (proxyFallback?.response_preview && proxyFallback.response_preview.trim()) {
         message = proxyFallback.response_preview;
       } else {
