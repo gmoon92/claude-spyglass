@@ -12,7 +12,7 @@
  *
  * 의존성:
  *  - formatters: escHtml, fmtToken, fmtDate, formatDuration
- *  - renderers : contextPreview, toolStatusBadge, toolResponseHint, toolIconHtml,
+ *  - renderers : contextPreview, toolIconHtml,
  *                targetInnerHtml, modelChipHtml, trustOf
  *
  * 설계 메모:
@@ -24,7 +24,7 @@
 
 import { escHtml, fmtToken, fmtDate, formatDuration } from '../formatters.js';
 import {
-  contextPreview, toolStatusBadge, toolResponseHint, toolIconHtml,
+  contextPreview, toolIconHtml,
   targetInnerHtml, modelChipHtml, trustOf,
 } from '../renderers.js';
 
@@ -77,17 +77,14 @@ function emptyResponseMarkerHtml() {
 
 /** 단일 tool_call 행 HTML. tool_call 자체는 모델 의미 없으므로 trust 표시 생략. */
 function renderToolRow(tc) {
-  const tcData      = { ...tc, type: 'tool_call' };
-  const tcPreview   = contextPreview(tcData, 60);
-  const hint        = toolResponseHint(tcData);
-  const statusBadge = toolStatusBadge(tcData);
-  const tcTarget    = targetInnerHtml(tcData).html;
-  const statusCell  = statusBadge || '&nbsp;'; // 첫 칸 공간 유지로 아이콘 정렬 일치
+  const tcData    = { ...tc, type: 'tool_call' };
+  const tcPreview = contextPreview(tcData, 60); // toolResponseHint 힌트 포함 (중복 제거)
+  const tcTarget  = targetInnerHtml(tcData).html; // toolStatusBadge 인라인 포함 (중복 제거)
   return `<div class="turn-row turn-row-tool" data-type="tool_call">
-      <span>${statusCell}</span>
+      <span>&nbsp;</span>
       <div class="tool-cell">
         <span class="tool-main">${tcTarget}</span>
-        <span class="tool-sub">${tcPreview || ''}${hint ? `${tcPreview ? ' ' : ''}<span class="tool-response-hint">${escHtml(hint)}</span>` : ''}</span>
+        <span class="tool-sub">${tcPreview || ''}</span>
       </div>
       <span class="num cell-token">${tc.tokens_input  > 0 ? fmtToken(tc.tokens_input)  : '—'}</span>
       <span class="num cell-token">${tc.tokens_output > 0 ? fmtToken(tc.tokens_output) : '—'}</span>
