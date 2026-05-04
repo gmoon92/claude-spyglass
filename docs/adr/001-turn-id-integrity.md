@@ -113,6 +113,19 @@ claude-spyglass의 "턴(turn)" 개념은 사용자 프롬프트 입력을 시작
 - `persistAssistantTextResponses`의 INSERT가 `api_request_id`를 hard-coded NULL로 보내던 문제. id 컬럼은 이미 `resp-msg-${entry.messageId}` 패턴으로 msg_id를 포함하지만, 컬럼을 채워두면 응답 행 단독 SELECT만으로 cross-link이 즉시 가능. `entry.messageId`를 그대로 `api_request_id`에 INSERT.
 - `persistSubagentChildren`도 자식 도구의 `tool_use_id`가 부모 Agent 응답에서 발행된 ID이므로, 같은 `resolveApiRequestId` 패턴으로 proxy_tool_uses에서 직접 매칭 가능. 미스 시 NULL 유지(fallback).
 
+#### P1-E race-fix: proxy commit과 hook 도착이 동시 발생할 때의 영구 NULL 회귀
+
+운영 데이터(2026-05-04 23:06:42 케이스) 검증 결과, hook의 PostToolUse가 proxy의 commit과 같은 초에 도착하면 hook이 `resolveApiRequestId` 호출 시점에 proxy_tool_uses 행이 아직 commit 전이라 NULL을 받아 영구 NULL로 INSERT되는 회귀가 확인됐다. 한 번 NULL로 INSERT된 행은 후속 backfill 메커니즘이 없어 결코 채워지지 않았다.
+
+**해결.** proxy 트랜잭션의 마지막 단계에서 `backfillRequestApiRequestIdByToolUse(tool_use_id, api_request_id)` UPDATE를 실행. 같은 `tool_use_id`의 hook 행 중 `api_request_id IS NULL`인 행을 정확한 값으로 채움. COALESCE로 기존 매칭된 값은 보존. 양방향 backfill(hook→proxy via `resolveApiRequestId`, proxy→hook via 본 함수)이 모든 도착 순서를 cover하여 race 윈도우가 0초가 됐다.
+
+**상세.** `packages/storage/src/queries/proxy.ts: backfillRequestApiRequestIdByToolUse`, `packages/server/src/proxy/handler/persist.ts` 트랜잭션 안 호출 지점.
+
+#### P1-E doctor 정밀화
+
+- `checkUnlinkedToolCalls`: 표본 < 5건이면 매칭률 평가 skip — 재시작 직후 단일 미매칭이 100%로 잡히던 false alarm 차단.
+- `checkLongProxyResponses`: hint를 "v23 정확 매칭 경로는 영향 없음, fallback 시간 기반 cross-link에서만 잔여 위험 — 정보성"으로 정밀화. P1-E 도입 후 misleading했던 메시지 수정.
+
 ### 채택하지 않는 옵션
 
 - "윈도우만 확대 (session_id 필터 없이)": 다른 세션 응답을 잘못 매칭할 가능성으로 기각.

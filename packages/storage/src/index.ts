@@ -216,6 +216,7 @@ export {
   persistProxyToolUses,
   getProxyToolUseById,
   getProxyResponseByApiRequestId,
+  backfillRequestApiRequestIdByToolUse,
   type ProxyRequest,
   type CreateProxyRequestParams,
   type ProxyStats,

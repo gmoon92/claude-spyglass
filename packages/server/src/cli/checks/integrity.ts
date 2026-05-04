@@ -100,8 +100,8 @@ export function checkLongProxyResponses(): CheckResult {
   if (count === 0) return { status: 'ok', message: '120s 초과 proxy 응답 0건' };
   return {
     status: 'warn',
-    message: `120s 초과 proxy 응답 ${count}건 — fallback 윈도우 초과 잔여 위험`,
-    hint: 'ADR-001 P1: api_request_id 정확 매칭 도입 시 해소. 현재는 모니터링만',
+    message: `120s 초과 proxy 응답 ${count}건`,
+    hint: 'v23(P1-E) 정확 매칭 경로는 영향 없음. fallback 시간 기반 cross-link 경로에서만 잔여 위험 — 정보성',
   };
 }
 
@@ -191,6 +191,13 @@ export function checkUnlinkedToolCalls(): CheckResult {
 
   if (!stats) return { status: 'warn', message: 'tool_call api_request_id 매칭 확인 불가' };
   if (stats.total === 0) return { status: 'ok', message: '최근 1시간 내 tool_call 없음 (체크 skip)' };
+  // 표본 < 5건이면 통계적으로 무의미 — 단일 미매칭이 100%로 보고되는 false alarm 방지.
+  if (stats.total < 5) {
+    return {
+      status: 'ok',
+      message: `tool_call ${stats.total}건 (표본 부족, 매칭률 평가 skip)`,
+    };
+  }
   const pct = Math.round(100 * stats.unlinked / stats.total);
   if (stats.unlinked === 0) {
     return { status: 'ok', message: `tool_call api_request_id 매칭 100% (${stats.total}건)` };

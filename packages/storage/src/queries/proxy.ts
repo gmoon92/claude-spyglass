@@ -413,3 +413,33 @@ export function getProxyResponseByApiRequestId(
     )
     .get(apiRequestId) ?? null;
 }
+
+/**
+ * proxy commit 시 같은 tool_use_id를 가진 hook 행(requests)에 api_request_id를 backfill —
+ * ADR-001 P1-E race-fix.
+ *
+ * 배경: hook PostToolUse가 proxy commit과 동일 시각에 도착하면 hook의 resolveApiRequestId
+ * 시점엔 proxy_tool_uses 행이 아직 commit 전이라 NULL을 받게 된다. 한 번 NULL로 INSERT된
+ * 행은 후속 backfill 메커니즘이 없어 영구 NULL이 됐다.
+ *
+ * 이 함수는 proxy 트랜잭션의 마지막 단계에서 호출되어, 같은 tool_use_id의 hook 행이 이미
+ * INSERT되어 있고 api_request_id가 NULL이면 정확한 값으로 채운다. COALESCE로 기존 값
+ * (이미 매칭 성공한 행)은 보존.
+ *
+ * @returns 실제로 갱신된 행 수 (보통 0 또는 1)
+ */
+export function backfillRequestApiRequestIdByToolUse(
+  db: Database,
+  toolUseId: string,
+  apiRequestId: string,
+): number {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = (db as any).run(
+    `UPDATE requests
+     SET api_request_id = COALESCE(api_request_id, ?)
+     WHERE tool_use_id = ? AND api_request_id IS NULL`,
+    apiRequestId,
+    toolUseId,
+  );
+  return (result?.changes as number) ?? 0;
+}

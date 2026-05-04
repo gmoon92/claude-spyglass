@@ -18,6 +18,7 @@ import {
   createProxyRequest,
   upsertSystemPrompt,
   persistProxyToolUses,
+  backfillRequestApiRequestIdByToolUse,
   type CreateProxyRequestParams,
 } from '@spyglass/storage';
 import type { RequestMeta, StreamState } from '../types';
@@ -145,6 +146,13 @@ export function persistProxyRequest(
     // 이후 hook의 PostToolUse가 tool_use_id로 정확한 api_request_id를 역조회 가능.
     if (state.apiRequestId && state.toolUses.length > 0) {
       persistProxyToolUses(db, state.apiRequestId, state.toolUses);
+
+      // ADR-001 P1-E race-fix: hook PostToolUse가 proxy commit과 동일 시각에 도착하면
+      // hook의 resolveApiRequestId 시점에 proxy_tool_uses 행이 아직 commit 전이라 NULL을
+      // 받게 된다. proxy commit 트랜잭션 마지막에 UPDATE로 backfill하여 영구 NULL 회귀 차단.
+      for (const t of state.toolUses) {
+        backfillRequestApiRequestIdByToolUse(db, t.tool_use_id, state.apiRequestId);
+      }
     }
 
     // hook 측 미완성 행(model NULL 또는 tokens_source='unavailable')을
