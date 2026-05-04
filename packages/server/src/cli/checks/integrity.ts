@@ -168,6 +168,68 @@ export function checkMismatchedTurnIds(): CheckResult {
   };
 }
 
+/**
+ * ADR-001 P1-E (v23): proxy_tool_uses 등장 이후로 PostToolUse 행의 api_request_id가
+ * 정확 매칭으로 채워져야 한다. 최근 1시간 내 tool_call 중 NULL 비율 추적.
+ * 절대 0건은 보장 못 함 (proxy 우회 도구 호출 등).
+ */
+export function checkUnlinkedToolCalls(): CheckResult {
+  const stats = withDb<{ total: number; unlinked: number } | null>((db) => {
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    const row = db.prepare(`
+      SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN api_request_id IS NULL THEN 1 ELSE 0 END) as unlinked
+      FROM requests
+      WHERE type = 'tool_call'
+        AND event_type = 'tool'
+        AND timestamp > ?
+        AND (source IS NULL OR source != 'subagent-transcript')
+    `).get(oneHourAgo) as { total: number; unlinked: number } | undefined;
+    return row ? { total: row.total ?? 0, unlinked: row.unlinked ?? 0 } : null;
+  }, null);
+
+  if (!stats) return { status: 'warn', message: 'tool_call api_request_id 매칭 확인 불가' };
+  if (stats.total === 0) return { status: 'ok', message: '최근 1시간 내 tool_call 없음 (체크 skip)' };
+  const pct = Math.round(100 * stats.unlinked / stats.total);
+  if (stats.unlinked === 0) {
+    return { status: 'ok', message: `tool_call api_request_id 매칭 100% (${stats.total}건)` };
+  }
+  if (pct < 10) {
+    return {
+      status: 'ok',
+      message: `tool_call api_request_id 미매칭 ${stats.unlinked}/${stats.total} (${pct}%)`,
+    };
+  }
+  return {
+    status: 'warn',
+    message: `tool_call api_request_id 미매칭 ${stats.unlinked}/${stats.total} (${pct}%)`,
+    hint: 'proxy SSE의 tool_use 캡처 누락 또는 hook 도착 순서 역전 의심 (ADR-001 P1-E)',
+  };
+}
+
+/**
+ * proxy_tool_uses orphan: 참조하는 hook tool_call이 없는 행 카운트.
+ * 사용자가 도구 실행을 거부/취소했거나 hook 미도착인 케이스 — 정보성.
+ */
+export function checkOrphanProxyToolUses(): CheckResult {
+  const count = withDb<number>((db) => {
+    const row = db.prepare(`
+      SELECT COUNT(*) as c
+      FROM proxy_tool_uses ptu
+      LEFT JOIN requests r ON r.tool_use_id = ptu.tool_use_id AND r.event_type = 'tool'
+      WHERE r.id IS NULL
+    `).get() as { c: number } | undefined;
+    return row?.c ?? 0;
+  }, -1);
+  if (count < 0) return { status: 'warn', message: 'proxy_tool_uses orphan 확인 불가' };
+  if (count === 0) return { status: 'ok', message: 'proxy_tool_uses orphan 0건' };
+  return {
+    status: 'ok',
+    message: `proxy_tool_uses orphan ${count}건 (보통 사용자 취소된 tool_use)`,
+  };
+}
+
 export function getIntegrityCounts(): IntegrityCounts | null {
   return withDb<IntegrityCounts | null>((db) => {
     const orphan = (db.prepare(`SELECT COUNT(*) as c FROM requests WHERE turn_id IS NULL`)

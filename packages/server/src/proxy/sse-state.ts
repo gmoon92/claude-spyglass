@@ -7,7 +7,7 @@
  *
  * 추출 이벤트:
  *  - message_start       : model, apiRequestId, usage(input/cache)
- *  - content_block_start : firstTokenMs (TTFT) 측정
+ *  - content_block_start : firstTokenMs (TTFT) 측정 + tool_use 블록 메타 캡처 (v23 ADR-001 P1-E)
  *  - content_block_delta : firstTokenMs/lastTokenMs, responsePreview 누적 (200자 캡)
  *  - message_delta       : stop_reason, output_tokens (lastTokenMs 갱신)
  *  - error               : errorType, errorMessage
@@ -62,9 +62,20 @@ export function parseSSEChunk(text: string, state: StreamState, startMs: number)
         }
         break;
       }
-      case 'content_block_start':
+      case 'content_block_start': {
         if (state.firstTokenMs === null) state.firstTokenMs = Date.now() - startMs;
+        // v23 (ADR-001 P1-E): tool_use 블록의 id·name·index를 캡처해 hook ↔ proxy 정확 매칭에 사용.
+        // SSE schema: { index, content_block: { type: 'tool_use', id: 'toolu_...', name: '...' } }
+        const block = data.content_block as Record<string, unknown> | undefined;
+        if (block && block.type === 'tool_use' && typeof block.id === 'string') {
+          state.toolUses.push({
+            tool_use_id: block.id,
+            tool_name: typeof block.name === 'string' ? block.name : null,
+            block_index: typeof data.index === 'number' ? data.index : null,
+          });
+        }
         break;
+      }
       case 'content_block_delta': {
         if (state.firstTokenMs === null) state.firstTokenMs = Date.now() - startMs;
         state.lastTokenMs = Date.now() - startMs;

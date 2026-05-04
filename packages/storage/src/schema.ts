@@ -172,8 +172,10 @@ export interface Request {
  *           proxy_requests.system_hash/system_byte_size 추가).
  *           v21 system_reminder(user 메시지 내 reminder)와 v22 system_hash(body.system 본문)는
  *           직교(orthogonal) 책임 — 컬럼 의미를 절대 섞지 말 것 (ADR-007).
+ *   - v23: 023-proxy-tool-uses.sql (ADR-001 P1-E — proxy SSE에서 추출한 tool_use_id를
+ *           api_request_id에 매핑해 hook ↔ proxy 시간 윈도우 의존 0초로).
  */
-export const SCHEMA_VERSION = 22;
+export const SCHEMA_VERSION = 23;
 
 export const SCHEMA_META = {
   version: SCHEMA_VERSION,

@@ -212,10 +212,15 @@ export {
   getProxyRequestById,
   getProxyStats,
   getLatestProxyResponseBefore,
+  // ADR-001 P1-E (v23): tool_use_id ↔ api_request_id 정확 매핑
+  persistProxyToolUses,
+  getProxyToolUseById,
+  getProxyResponseByApiRequestId,
   type ProxyRequest,
   type CreateProxyRequestParams,
   type ProxyStats,
   type LatestProxyResponse,
+  type ProxyToolUse,
 } from './queries/proxy';
 
 // =============================================================================

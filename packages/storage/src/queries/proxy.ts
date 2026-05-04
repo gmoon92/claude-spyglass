@@ -328,3 +328,88 @@ export function getLatestProxyResponseBefore(
     .query<LatestProxyResponse, [string, number, number]>(SQL_LATEST_RESPONSE_PREVIEW_BEFORE)
     .get(sessionId, beforeMs, beforeMs - windowMs) ?? null;
 }
+
+// =============================================================================
+// proxy_tool_uses — tool_use_id ↔ api_request_id 매핑 (ADR-001 P1-E, v23)
+// =============================================================================
+
+/**
+ * proxy SSE에서 추출한 tool_use 블록 한 건의 메타.
+ * Anthropic 응답 메시지(api_request_id) 안에 포함된 tool_use 블록의 id와 이름을 보존하여,
+ * 이후 hook PostToolUse가 tool_use_id로 정확한 api_request_id를 역조회할 수 있게 한다.
+ */
+export interface ProxyToolUse {
+  tool_use_id: string;
+  api_request_id: string;
+  tool_name: string | null;
+  block_index: number | null;
+  created_at?: number;
+}
+
+/**
+ * proxy SSE 파싱 결과의 tool_use 메타들을 일괄 INSERT.
+ *
+ * tool_use_id가 PRIMARY KEY이므로 중복 시 INSERT OR IGNORE — 같은 응답이 두 번 처리될 일이
+ * 없지만 idempotent 보장. api_request_id가 빈 문자열이면 skip (proxy SSE 파싱 실패 케이스).
+ *
+ * @returns 실제로 INSERT된 행 수
+ */
+export function persistProxyToolUses(
+  db: Database,
+  apiRequestId: string,
+  toolUses: Array<{ tool_use_id: string; tool_name: string | null; block_index: number | null }>,
+): number {
+  if (!apiRequestId || toolUses.length === 0) return 0;
+  const stmt = db.prepare(`
+    INSERT OR IGNORE INTO proxy_tool_uses (
+      tool_use_id, api_request_id, tool_name, block_index
+    ) VALUES (?, ?, ?, ?)
+  `);
+  let inserted = 0;
+  for (const t of toolUses) {
+    if (!t.tool_use_id) continue;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = (stmt as any).run(t.tool_use_id, apiRequestId, t.tool_name, t.block_index);
+      if (result.changes > 0) inserted++;
+    } catch (e) {
+      console.error('[Storage] persistProxyToolUses INSERT failed:', e);
+    }
+  }
+  return inserted;
+}
+
+/**
+ * tool_use_id로 발행 응답의 api_request_id를 조회 — hook PostToolUse 정확 매칭용.
+ *
+ * @returns 매핑 행 또는 null (proxy 응답 미수신, 다른 client가 발행 등)
+ */
+export function getProxyToolUseById(
+  db: Database,
+  toolUseId: string,
+): ProxyToolUse | null {
+  return db
+    .query<ProxyToolUse, [string]>(
+      `SELECT tool_use_id, api_request_id, tool_name, block_index, created_at
+       FROM proxy_tool_uses WHERE tool_use_id = ? LIMIT 1`,
+    )
+    .get(toolUseId) ?? null;
+}
+
+/**
+ * api_request_id로 proxy 응답을 직접 조회 — Stop hook의 transcript msg_id 매칭용.
+ *
+ * proxy_requests.api_request_id 인덱스 사용. 일치하는 응답 1건 또는 null.
+ */
+export function getProxyResponseByApiRequestId(
+  db: Database,
+  apiRequestId: string,
+): LatestProxyResponse | null {
+  return db
+    .query<LatestProxyResponse, [string]>(
+      `SELECT response_preview, model, tokens_input, tokens_output,
+              cache_creation_tokens, cache_read_tokens, stop_reason
+       FROM proxy_requests WHERE api_request_id = ? LIMIT 1`,
+    )
+    .get(apiRequestId) ?? null;
+}

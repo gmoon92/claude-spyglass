@@ -86,9 +86,25 @@ claude-spyglass의 "턴(turn)" 개념은 사용자 프롬프트 입력을 시작
 
 상세 구현: `packages/server/src/cli/checks/integrity.ts`, `packages/server/src/cli/fix.ts`, `packages/server/src/cli/doctor.ts` 참조.
 
-#### P1-E: api_request_id 기반 정확 매칭 — 미진행 (합의)
+#### P1-E: api_request_id 기반 정확 매칭 — 완료 (v23 schema 변경)
 
-조사 결과 hook payload에 api_request_id가 직접 노출되지 않는다 (proxy 측에서만 추출). 시간 윈도우 의존을 완전히 제거하려면 hook schema 변경 또는 hook handler에서 transcript→api_request_id 추출 로직 필요. 운영 평균 60s 응답이 P0 120초 윈도우로 cover되어 실 영향이 작아, 비용 대비 ROI 낮음 — 추후 hook schema가 노출되면 재검토.
+**재합의 배경.** 디버그 로그(SPYGLASS_DIAG_ENABLED=1)로 운영 페이로드를 직접 분석한 결과, hook payload에는 `tool_use_id`가, proxy SSE에는 `content_block_start` 이벤트의 `tool_use` 블록 안에 같은 `id`가 포함됨을 확인. 두 경로가 동일 ID를 공유하므로, 별도 매핑 테이블 하나만 추가하면 시간 윈도우 의존을 완전히 제거할 수 있다. 초기에 ROI 낮다고 판단했던 결론을 뒤집고 진행.
+
+**스키마 변경 (v23 migration):** `proxy_tool_uses(tool_use_id PK, api_request_id, tool_name, block_index, created_at)` 신설. proxy 응답 종료 시 SSE에서 캡처한 tool_use 블록을 일괄 INSERT. hook PostToolUse 시점에 `tool_use_id`로 PK 조회하여 정확한 `api_request_id`를 즉시 채움.
+
+**Stop 훅 처리 갱신.** 기존 `events.ts:197-202`의 시간 기반 cross-link도 transcript 마지막 entry의 `message_id`(=Anthropic의 api_request_id 그 자체)로 직접 채우도록 수정. 미스 시 기존 시간 기반으로 폴백하여 v23 이전 데이터 호환.
+
+**상세 구현:**
+- `packages/storage/migrations/023-proxy-tool-uses.sql`
+- `packages/storage/src/queries/proxy.ts` — `persistProxyToolUses`, `getProxyToolUseById`, `getProxyResponseByApiRequestId`
+- `packages/server/src/proxy/sse-state.ts` — `content_block_start`의 tool_use 캡처
+- `packages/server/src/proxy/handler/non-stream.ts` — JSON 응답 분기에서도 동일 캡처
+- `packages/server/src/proxy/handler/persist.ts` — 트랜잭션 안에서 `persistProxyToolUses` 호출
+- `packages/server/src/hook/persist.ts` — `resolveApiRequestId`로 PostToolUse 시점에 정확한 api_request_id 채움 (UPDATE/INSERT 양쪽)
+- `packages/server/src/events.ts` — Stop 훅에서 transcript 마지막 msg_id를 직접 사용
+- `packages/server/src/cli/checks/integrity.ts` — 신규 체크 2개: `checkUnlinkedToolCalls`(매칭률 모니터), `checkOrphanProxyToolUses`(정보성)
+
+**효과.** 시간 윈도우 의존이 hook ↔ proxy cross-link 경로에서 0초로 사라짐. 224초+ 응답도 정확 매칭. v23 이전 데이터는 fallback 경로로 그대로 처리(호환).
 
 ### 채택하지 않는 옵션
 

@@ -57,6 +57,17 @@ export async function handleJsonResponse(
         .map((c: { text?: string }) => c.text ?? '')
         .join('');
       state.responsePreview = texts.slice(0, 200) || null;
+
+      // v23 (ADR-001 P1-E): tool_use 블록 캡처 — non-stream JSON 분기에서도 동일 정책.
+      json.content.forEach((c: { type?: string; id?: string; name?: string }, idx: number) => {
+        if (c.type === 'tool_use' && typeof c.id === 'string') {
+          state.toolUses.push({
+            tool_use_id: c.id,
+            tool_name: typeof c.name === 'string' ? c.name : null,
+            block_index: idx,
+          });
+        }
+      });
     }
 
     // 에러 응답

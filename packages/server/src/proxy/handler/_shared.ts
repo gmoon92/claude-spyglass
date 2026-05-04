@@ -66,5 +66,6 @@ export function createInitialState(
     errorMessage: null,
     firstTokenMs: null,
     lastTokenMs: null,
+    toolUses: [], // v23 (ADR-001 P1-E): SSE content_block_start에서 누적
   };
 }

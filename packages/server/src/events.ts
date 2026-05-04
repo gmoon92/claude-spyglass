@@ -230,14 +230,19 @@ function saveAssistantResponse(
       ?? getLastTurnId(db, sessionId)
       ?? undefined;
 
-    // v19: 응답 행에 같은 session의 가장 최근 proxy_requests의 api_request_id를 cross-link.
-    // Stop 시점엔 해당 turn의 proxy 응답이 모두 끝나 있어 신뢰 가능.
-    const apiReqIdRow = db.query<{ api_request_id: string }, [string, number]>(
-      `SELECT api_request_id FROM proxy_requests
-       WHERE session_id = ? AND api_request_id IS NOT NULL
-         AND timestamp <= ?
-       ORDER BY timestamp DESC LIMIT 1`,
-    ).get(sessionId, timestamp);
+    // ADR-001 P1-E: transcript 마지막 entry의 message_id가 곧 proxy의 api_request_id.
+    // 이 매칭은 시간 윈도우 의존이 0초이며 Anthropic 외부 ID 동일성으로 확정적이다.
+    // 미스 시(transcript 미존재 등) 기존 v19 시간 기반 cross-link로 폴백.
+    let resolvedApiRequestId: string | null = lastEntryMessageId ?? null;
+    if (!resolvedApiRequestId) {
+      const apiReqIdRow = db.query<{ api_request_id: string }, [string, number]>(
+        `SELECT api_request_id FROM proxy_requests
+         WHERE session_id = ? AND api_request_id IS NOT NULL
+           AND timestamp <= ?
+         ORDER BY timestamp DESC LIMIT 1`,
+      ).get(sessionId, timestamp);
+      resolvedApiRequestId = apiReqIdRow?.api_request_id ?? null;
+    }
 
     const id = `resp-${timestamp}-${randomUUID().slice(0, 8)}`;
     const previewText = message.slice(0, 2000);
@@ -264,7 +269,7 @@ function saveAssistantResponse(
       event_type: 'assistant_response',
       tokens_confidence: tokensConfidence,
       tokens_source: tokensSource,
-      api_request_id: apiReqIdRow?.api_request_id ?? null,
+      api_request_id: resolvedApiRequestId,
     });
 
     invalidateDashboardCache();

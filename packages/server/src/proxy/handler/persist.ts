@@ -17,6 +17,7 @@ import type { Database } from 'bun:sqlite';
 import {
   createProxyRequest,
   upsertSystemPrompt,
+  persistProxyToolUses,
   type CreateProxyRequestParams,
 } from '@spyglass/storage';
 import type { RequestMeta, StreamState } from '../types';
@@ -139,6 +140,13 @@ export function persistProxyRequest(
     args.status_code = statusCode;
     args.response_time_ms = responseTimeMs;
     createProxyRequest(db, args);
+
+    // v23 (ADR-001 P1-E): 응답 안의 tool_use 블록 메타를 proxy_tool_uses에 일괄 기록.
+    // 이후 hook의 PostToolUse가 tool_use_id로 정확한 api_request_id를 역조회 가능.
+    if (state.apiRequestId && state.toolUses.length > 0) {
+      persistProxyToolUses(db, state.apiRequestId, state.toolUses);
+    }
+
     // hook 측 미완성 행(model NULL 또는 tokens_source='unavailable')을
     // 같은 session_id + 시간 윈도우로 일괄 채움 — 같은 트랜잭션 내에서 원자 처리.
     backfilledIds = backfillRequestFromProxy(db, {

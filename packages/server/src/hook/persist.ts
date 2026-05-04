@@ -28,7 +28,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Database } from 'bun:sqlite';
-import { createRequest } from '@spyglass/storage';
+import { createRequest, getProxyToolUseById } from '@spyglass/storage';
 import type { Request as DbRequest } from '@spyglass/storage';
 import type { NormalizedHookPayload, SubagentChildToolCall } from './types';
 import type { AssistantTextEntry } from './transcript';
@@ -63,7 +63,9 @@ function mergePostToolIntoPreTool(
   db: Database,
   preToolId: string,
   payload: NormalizedHookPayload,
+  apiRequestId: string | null,
 ): boolean {
+  // ADR-001 P1-E: api_request_id를 COALESCE로 채워 기존 값 보존(동시 backfill 회피).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result = (db as any).run(
     `UPDATE requests
@@ -75,7 +77,8 @@ function mergePostToolIntoPreTool(
          cache_read_tokens = ?,
          model = COALESCE(?, model),
          payload = ?,
-         event_type = 'tool'
+         event_type = 'tool',
+         api_request_id = COALESCE(api_request_id, ?)
      WHERE id = ?`,
     payload.duration_ms || 0,
     payload.tokens_input,
@@ -85,9 +88,20 @@ function mergePostToolIntoPreTool(
     payload.cache_read_tokens ?? 0,
     payload.model ?? null,
     payload.payload ?? null,
+    apiRequestId,
     preToolId,
   );
   return result.changes > 0;
+}
+
+/**
+ * tool_use_id로 proxy_tool_uses에서 정확한 api_request_id 조회 (ADR-001 P1-E).
+ * 미수신/타사 client 발행 등으로 미스 시 null — 호출자는 시간 기반 fallback으로 진행.
+ */
+function resolveApiRequestId(db: Database, toolUseId: string | null): string | null {
+  if (!toolUseId) return null;
+  const row = getProxyToolUseById(db, toolUseId);
+  return row?.api_request_id ?? null;
 }
 
 /**
@@ -114,11 +128,16 @@ export function saveRequest(
     const toolUseId = extractToolUseId(payload.payload);
     const isPostTool = payload.event_type === 'tool' && payload.request_type === 'tool_call';
 
+    // ADR-001 P1-E: PostToolUse일 때 tool_use_id로 정확한 api_request_id 조회.
+    // PreToolUse 시점엔 아직 응답 도착 전이라 null. 응답이 늦게 도착해도 PostToolUse 시점엔
+    // proxy_tool_uses에 INSERT 완료된 상태이므로 조회 가능.
+    const resolvedApiRequestId = isPostTool ? resolveApiRequestId(db, toolUseId) : null;
+
     // PostToolUse: 기존 pre_tool 레코드 Upsert 시도
     if (isPostTool && toolUseId) {
       const preToolRecord = findPreToolRecord(db, payload.session_id, toolUseId);
       if (preToolRecord) {
-        const merged = mergePostToolIntoPreTool(db, preToolRecord.id, payload);
+        const merged = mergePostToolIntoPreTool(db, preToolRecord.id, payload, resolvedApiRequestId);
         if (merged) {
           // savedId: DB의 실제 id(pre-xxx) — fetchRequests/SSE와 id 일치 보장
           return { saved: true, wasUpsert: true, savedId: preToolRecord.id };
@@ -156,6 +175,9 @@ export function saveRequest(
       event_type: payload.event_type || null,
       tokens_confidence: payload.tokens_confidence,
       tokens_source: payload.tokens_source,
+      // ADR-001 P1-E: PostToolUse는 proxy_tool_uses에서 직접 매칭, 그 외는 NULL
+      // (events.ts/proxy backfill의 시간 기반 cross-link이 후속 채움 담당).
+      api_request_id: resolvedApiRequestId,
       // v20: hook raw 페이로드 감사 메타
       permission_mode: payload.permission_mode ?? null,
       agent_id: payload.agent_id ?? null,

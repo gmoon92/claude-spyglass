@@ -56,6 +56,10 @@ export interface AnthropicUsage {
  *
  * - parseSSEChunk가 chunk별로 mutate
  * - 핸들러가 응답 종료 시점에 한 번에 읽어 createProxyRequest로 전달
+ *
+ * v23 (ADR-001 P1-E): toolUses — content_block_start의 tool_use 블록 메타.
+ *   응답 종료 시 proxy_tool_uses 테이블에 일괄 INSERT되어 hook의 PostToolUse가
+ *   tool_use_id로 정확한 api_request_id를 역조회 가능하게 한다.
  */
 export interface StreamState {
   model: string | null;
@@ -67,4 +71,9 @@ export interface StreamState {
   errorMessage: string | null;
   firstTokenMs: number | null;
   lastTokenMs: number | null;
+  toolUses: Array<{
+    tool_use_id: string;
+    tool_name: string | null;
+    block_index: number | null;
+  }>;
 }

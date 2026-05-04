@@ -23,6 +23,8 @@ import {
   checkLongProxyResponses,
   checkDuplicateResponses,
   checkMismatchedTurnIds,
+  checkUnlinkedToolCalls,
+  checkOrphanProxyToolUses,
 } from './checks/integrity';
 import { applyFixes } from './fix';
 
@@ -44,6 +46,9 @@ export async function doctor(fix: boolean = false): Promise<void> {
     { name: '120s 초과 proxy 응답', fn: checkLongProxyResponses },
     { name: '중복 response 행', fn: checkDuplicateResponses },
     { name: 'mismatched turn_id', fn: checkMismatchedTurnIds },
+    // ADR-001 P1-E (v23): proxy_tool_uses 정확 매칭 도입 후 신규 체크
+    { name: 'tool_call api_request_id 매칭', fn: checkUnlinkedToolCalls },
+    { name: 'proxy_tool_uses orphan', fn: checkOrphanProxyToolUses },
   ];
 
   let failCount = 0;
