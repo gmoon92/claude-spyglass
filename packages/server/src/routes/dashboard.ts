@@ -22,6 +22,7 @@ import {
   getSessionStats,
   getStripStats,
   getToolStats,
+  LIVE_STALE_THRESHOLD_MS,
 } from '@spyglass/storage';
 import { jsonResponse, type RouteHandler } from './_shared';
 
@@ -51,18 +52,22 @@ export const dashboardRouter: RouteHandler = (_req, db: Database, url, path, met
     const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
     const toTs = url.searchParams.get('to') ? parseInt(url.searchParams.get('to')!, 10) : undefined;
 
-    // 캐시 키에 날짜 범위 포함
-    const cacheKey = `${fromTs || 'all'}-${toTs || 'all'}`;
+    // 캐시 키에 날짜 범위 + 라이브 술어 시간 버킷 포함.
+    // 시간 버킷(floor(now/STALE_THRESHOLD)) 변경 = stale 경계 통과 → 자연 무효화.
+    // 이렇게 하면 INSERT 트리거 외에도 시간 흐름만으로 LIVE 카운트가 줄어들 때 fresh 응답을 받는다.
+    const liveBucket = Math.floor(now / LIVE_STALE_THRESHOLD_MS);
+    const cacheKey = `${fromTs || 'all'}-${toTs || 'all'}-${liveBucket}`;
     if (_dashboardCache && _dashboardCache.key === cacheKey && now - _dashboardCache.ts < DASHBOARD_CACHE_TTL) {
       return jsonResponse({ success: true, data: _dashboardCache.data });
     }
 
-    const sessionStats = getSessionStats(db, fromTs, toTs);
+    // now를 한 응답 안에서 1회 결정 → 모든 LIVE 카운트가 같은 시각 기준으로 일관 보장.
+    const sessionStats = getSessionStats(db, now, fromTs, toTs);
     const requestStats = getRequestStats(db, fromTs, toTs);
-    const projectStats = getProjectStats(db, 5, fromTs, toTs);
+    const projectStats = getProjectStats(db, 5, now, fromTs, toTs);
     const toolStats = getToolStats(db, 5, fromTs, toTs);
     const typeStats = getRequestStatsByType(db, fromTs, toTs);
-    const activeSessions = getActiveSessions(db);
+    const activeSessions = getActiveSessions(db, now);
     const _avgRaw = getAvgPromptDurationMs(db, fromTs, toTs);
     const avgDurationMs = _avgRaw > 0 ? Math.round(_avgRaw) : null;
     const stripStats = getStripStats(db, fromTs, toTs);

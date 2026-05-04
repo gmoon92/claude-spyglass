@@ -117,10 +117,12 @@ describe('Session CRUD', () => {
       expect(sessions[0].id).toBe('session-2');
     });
 
-    it('should get active sessions', () => {
-      // 모든 세션은 ended_at이 null이므로 활성 상태
+    it('should get active sessions (LIVE predicate: ended_at NULL + recent visible request)', () => {
+      // 새 LIVE 정의: ended_at NULL 만으로는 부족. 최근 STALE_THRESHOLD 이내
+      // visible request가 있어야 LIVE로 분류된다.
+      // 이 테스트의 세션들은 requests를 만들지 않았으므로 LIVE 카운트는 0이어야 한다.
       const active = getActiveSessions(db.instance);
-      expect(active).toHaveLength(3);
+      expect(active).toHaveLength(0);
     });
   });
 
@@ -222,7 +224,8 @@ describe('Session CRUD', () => {
       expect(stats.total_sessions).toBe(3);
       expect(stats.total_tokens).toBe(600);
       expect(stats.avg_tokens_per_session).toBe(200);
-      expect(stats.active_sessions).toBe(3);
+      // 새 LIVE 정의: visible request가 없는 세션은 LIVE에서 제외 → 0
+      expect(stats.active_sessions).toBe(0);
     });
 
     it('should get project statistics', () => {
@@ -231,10 +234,12 @@ describe('Session CRUD', () => {
 
       const projectA = stats.find(s => s.project_name === 'project-a');
       expect(projectA?.session_count).toBe(2);
+      expect(projectA?.active_count).toBe(0); // visible request 없음
       expect(projectA?.total_tokens).toBe(300);
 
       const projectB = stats.find(s => s.project_name === 'project-b');
       expect(projectB?.session_count).toBe(1);
+      expect(projectB?.active_count).toBe(0);
       expect(projectB?.total_tokens).toBe(300);
     });
   });

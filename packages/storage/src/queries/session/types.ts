@@ -43,6 +43,12 @@ export interface SessionStats {
 /** 프로젝트별 세션 통계 결과 */
 export interface ProjectStats {
   project_name: string;
+  /** 누적 세션 수 (빈 세션·종료 세션 포함). 운영 통계용. */
   session_count: number;
+  /**
+   * 라이브 세션 수 — `_shared.buildLiveSessionPredicate` 정의.
+   * 헤더 LIVE 카운트와 동일한 정의 (ended_at IS NULL AND 직전 STALE_THRESHOLD 이내 visible request).
+   */
+  active_count: number;
   total_tokens: number;
 }

@@ -74,6 +74,8 @@ export {
   // 집계
   getSessionStats,
   getProjectStats,
+  // LIVE 술어 SSoT
+  LIVE_STALE_THRESHOLD_MS,
   // 타입
   type CreateSessionParams,
   type UpdateSessionParams,

@@ -7,7 +7,10 @@
 
 import type { Database } from 'bun:sqlite';
 import type { SessionFilterOptions, SessionQueryResult } from './types';
-import { ACTIVE_SESSION_REQUEST_JOIN_SQL } from './_shared';
+import {
+  ACTIVE_SESSION_REQUEST_JOIN_SQL,
+  buildLiveSessionPredicate,
+} from './_shared';
 
 /**
  * 세션 단건 조회 (ID 기준)
@@ -125,11 +128,35 @@ export function getSessionsByProject(
 }
 
 /**
- * 활성 세션 조회 (ended_at이 NULL인 세션)
+ * 라이브 세션 조회 — "ended_at IS NULL AND 최근 STALE_THRESHOLD_MS 이내 활동" 술어 적용.
+ *
+ * 변경 이력:
+ *  - v(이번): SessionEnd hook 누락(Ctrl+C, 크래시 등)으로 ended_at이 영원히 NULL인
+ *    stale 세션이 헤더 LIVE 카운트와 사이드바 ●에 stale active로 누적되던 문제 해결.
+ *    `_shared.buildLiveSessionPredicate`로 SSoT를 격리해 헤더/프로젝트 active_count/
+ *    Live Pulse 카드가 같은 정의를 공유하도록 한다.
+ *  - 이전: `WHERE ended_at IS NULL`만 사용 → stale·빈 세션 모두 LIVE로 카운트.
+ *
+ * @param db   DB 핸들
+ * @param now  현재 시각(ms). 라우트 레이어에서 1회 결정 후 같은 응답에서 재사용
+ *             해야 카운트 일관성 보장. 미지정 시 Date.now() (테스트용 편의 시그니처).
+ *
+ * 반환 컬럼: sessions.*  + last_activity_at (사이드바·UI가 의존)
  */
 export function getActiveSessions(
-  db: Database
+  db: Database,
+  now: number = Date.now(),
 ): SessionQueryResult[] {
-  return db.query('SELECT * FROM sessions WHERE ended_at IS NULL ORDER BY started_at DESC')
-    .all() as SessionQueryResult[];
+  const params: number[] = [];
+  const livePredicate = buildLiveSessionPredicate(now, 's', params);
+  return db.query(`
+    SELECT s.*,
+      (SELECT MAX(r.timestamp) FROM requests r
+       WHERE r.session_id = s.id
+         AND (r.event_type IS NULL OR r.event_type != 'pre_tool' OR r.tool_name = 'Agent')
+      ) as last_activity_at
+    FROM sessions s
+    WHERE ${livePredicate}
+    ORDER BY s.started_at DESC
+  `).all(...params) as SessionQueryResult[];
 }

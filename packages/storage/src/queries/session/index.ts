@@ -42,3 +42,6 @@ export { deleteOldData } from './retention';
 
 // 집계
 export { getSessionStats, getProjectStats } from './aggregate';
+
+// LIVE 술어 SSoT (외부 라우트 캐시 키 버킷화 등에서 참조)
+export { LIVE_STALE_THRESHOLD_MS } from './_shared';
