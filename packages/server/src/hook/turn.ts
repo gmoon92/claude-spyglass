@@ -11,6 +11,8 @@
  * 외부 노출:
  *  - assignTurnId(db, sessionId): 새 turn_id 발급 (prompt 시점에만 호출)
  *  - getLastTurnId(db, sessionId): 직전 prompt의 turn_id 조회 (tool_call/response/proxy 측에서 사용)
+ *  - getTurnIdAt(db, sessionId, beforeMs): 특정 시각 이전의 가장 최근 prompt turn_id 조회
+ *      (transcript 백필처럼 메시지의 자체 시각을 기준으로 매핑할 때 사용 — ADR-001 P1)
  *
  * 호출자:
  *  - persist.ts: saveRequest에서 prompt면 assignTurnId, 아니면 getLastTurnId
@@ -51,5 +53,29 @@ export function getLastTurnId(db: Database, sessionId: string): string | null {
   const row = db.query(
     `SELECT turn_id FROM requests WHERE session_id = ? AND type = 'prompt' ORDER BY timestamp DESC LIMIT 1`,
   ).get(sessionId) as { turn_id: string } | null;
+  return row?.turn_id ?? null;
+}
+
+/**
+ * 특정 시각(`beforeMs`) 이전의 가장 최근 prompt turn_id 조회 — ADR-001 P1.
+ *
+ * transcript 백필처럼 entry의 자체 timestamp를 기준으로 turn_id를 매핑할 때 사용한다.
+ * 같은 세션이라도 entry가 발생한 시점에 따라 서로 다른 turn에 속할 수 있어,
+ * `getLastTurnId`(현재 최신 turn)로는 이전 turn 메시지가 다음 turn에 잘못 태깅된다.
+ *
+ * 동작:
+ *  - 같은 sessionId의 type='prompt' 행 중 timestamp <= beforeMs 인 가장 최근 행 반환.
+ *  - 해당 시각 이전에 prompt가 없으면 null (= orphan, ADR-001의 session-prologue 케이스).
+ */
+export function getTurnIdAt(
+  db: Database,
+  sessionId: string,
+  beforeMs: number,
+): string | null {
+  const row = db.query(
+    `SELECT turn_id FROM requests
+     WHERE session_id = ? AND type = 'prompt' AND timestamp <= ?
+     ORDER BY timestamp DESC LIMIT 1`,
+  ).get(sessionId, beforeMs) as { turn_id: string } | null;
   return row?.turn_id ?? null;
 }

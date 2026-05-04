@@ -80,6 +80,49 @@ function getDetailText(r) {
         const keys = Object.keys(ti);
         if (keys.length > 0) return JSON.stringify(ti, null, 2);
       }
+      // ADR-001 P1 (UX): Task*/SendMessage/Web* 등은 subject·summary만 tool_detail로 들어와
+      // 펼침이 행 미리보기와 동일해진다. payload.tool_input의 풍부한 필드를 합쳐 노출.
+      if (r.tool_name === 'TaskCreate') {
+        const lines = [
+          ti.subject ? `Subject: ${ti.subject}` : null,
+          ti.activeForm ? `Active form: ${ti.activeForm}` : null,
+          ti.description ? `\nDescription:\n${ti.description}` : null,
+        ].filter(Boolean);
+        return lines.length > 0 ? lines.join('\n') : (r.tool_detail || null);
+      }
+      if (r.tool_name === 'TaskUpdate') {
+        const fields = ['status', 'subject', 'description', 'activeForm', 'owner']
+          .filter((k) => ti[k] != null)
+          .map((k) => `${k}: ${typeof ti[k] === 'string' ? ti[k] : JSON.stringify(ti[k])}`);
+        const head = ti.taskId ? `Task #${ti.taskId}` : 'TaskUpdate';
+        return [head, ...fields].join('\n') || (r.tool_detail || null);
+      }
+      if (r.tool_name === 'SendMessage') {
+        const head = ti.to ? `→ ${ti.to}` : 'SendMessage';
+        const summary = ti.summary ? `Summary: ${ti.summary}` : null;
+        const body = typeof ti.message === 'string'
+          ? `\nMessage:\n${ti.message}`
+          : (ti.message ? `\nMessage:\n${JSON.stringify(ti.message, null, 2)}` : null);
+        const out = [head, summary, body].filter(Boolean).join('\n');
+        return out || (r.tool_detail || null);
+      }
+      if (r.tool_name === 'WebFetch') {
+        const out = [
+          ti.url ? `URL: ${ti.url}` : null,
+          ti.prompt ? `\nPrompt:\n${ti.prompt}` : null,
+        ].filter(Boolean).join('\n');
+        return out || (r.tool_detail || null);
+      }
+      if (r.tool_name === 'WebSearch') {
+        const out = [
+          ti.query ? `Query: ${ti.query}` : null,
+          Array.isArray(ti.allowed_domains) && ti.allowed_domains.length
+            ? `Allowed: ${ti.allowed_domains.join(', ')}` : null,
+          Array.isArray(ti.blocked_domains) && ti.blocked_domains.length
+            ? `Blocked: ${ti.blocked_domains.join(', ')}` : null,
+        ].filter(Boolean).join('\n');
+        return out || (r.tool_detail || null);
+      }
     } catch {}
     return r.tool_detail || null;
   }

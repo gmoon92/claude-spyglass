@@ -17,7 +17,9 @@ import {
   reactivateSession,
   type ClaudeEvent,
 } from '@spyglass/storage';
-import { getLastTurnId, parseTranscript } from './hook';
+import { getLastTurnId, getTurnIdAt, parseTranscript } from './hook';
+import { extractAssistantTextEntries } from './hook/transcript';
+import { persistAssistantTextResponses } from './hook/persist';
 import { broadcastNewRequest, broadcastSessionUpdate } from './sse';
 import { normalizeRequest } from './domain/request-normalizer';
 import { invalidateDashboardCache } from './api';
@@ -137,6 +139,26 @@ function saveAssistantResponse(
     const sessionId = payload.session_id;
     const transcriptPath = payload.transcript_path ?? '';
 
+    // ADR-001 P1: turn 마지막 어시스턴트 메시지를 transcript 백필로 먼저 INSERT.
+    // 이렇게 하면 같은 메시지가 다음 turn의 PostToolUse 백필에서 중복 INSERT 되는 일이 없고,
+    // entry별 자체 timestamp로 turn_id가 정확히 매핑된다.
+    // (PostToolUse가 더 발생하지 않는 turn 종료 직전 메시지는 여기서만 살릴 수 있다.)
+    let lastEntryMessageId: string | null = null;
+    if (transcriptPath) {
+      try {
+        const entries = extractAssistantTextEntries(transcriptPath);
+        if (entries.length > 0) {
+          persistAssistantTextResponses(db, entries, {
+            sessionId,
+            projectName: '',
+          });
+          lastEntryMessageId = entries[entries.length - 1].messageId;
+        }
+      } catch (e) {
+        console.error('[Events] transcript backfill on Stop failed:', e);
+      }
+    }
+
     // 1차: Stop 훅 payload에서 last_assistant_message 추출
     let message = typeof payload.last_assistant_message === 'string'
       ? payload.last_assistant_message
@@ -150,6 +172,18 @@ function saveAssistantResponse(
       if (proxyFallback?.response_preview && proxyFallback.response_preview.trim()) {
         message = proxyFallback.response_preview;
       } else {
+        return;
+      }
+    }
+
+    // ADR-001 P1: 마지막 메시지가 transcript 백필로 이미 저장됐다면 자체 INSERT 생략.
+    // 백필 행이 토큰/모델 메타를 더 정확히 보유하므로 그대로 SSoT로 채택.
+    if (lastEntryMessageId) {
+      const existsRow = db.query<{ 1: number }, [string]>(
+        'SELECT 1 FROM requests WHERE id = ? LIMIT 1',
+      ).get(`resp-msg-${lastEntryMessageId}`);
+      if (existsRow) {
+        invalidateDashboardCache();
         return;
       }
     }
@@ -189,8 +223,12 @@ function saveAssistantResponse(
       tokensSource = 'unavailable';
     }
 
-    // turn_id 매핑: 직전 prompt의 turn_id 재사용 (없으면 NULL)
-    const turnId = getLastTurnId(db, sessionId) ?? undefined;
+    // turn_id 매핑: Stop 시각 기준 가장 가까운 prompt의 turn_id (ADR-001 P1).
+    // 단순히 getLastTurnId를 쓰면 다음 turn이 시작된 직후 도착한 Stop 처리 시
+    // 새 turn에 잘못 묶일 수 있어 시각 기반 조회를 우선한다.
+    const turnId = getTurnIdAt(db, sessionId, timestamp)
+      ?? getLastTurnId(db, sessionId)
+      ?? undefined;
 
     // v19: 응답 행에 같은 session의 가장 최근 proxy_requests의 api_request_id를 cross-link.
     // Stop 시점엔 해당 turn의 proxy 응답이 모두 끝나 있어 신뢰 가능.

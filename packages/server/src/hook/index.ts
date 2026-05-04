@@ -47,7 +47,7 @@ export {
 } from './http-entry';
 export { processHookEvent } from './processor';
 export { parseTranscript } from './transcript';
-export { getLastTurnId } from './turn';
+export { getLastTurnId, getTurnIdAt } from './turn';
 export { dispatchHookEvent, listRegisteredEventTypes } from './dispatcher';
 export type { HookEventHandler, HookContext } from './event-handler';
 

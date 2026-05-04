@@ -32,7 +32,7 @@ import { createRequest } from '@spyglass/storage';
 import type { Request as DbRequest } from '@spyglass/storage';
 import type { NormalizedHookPayload, SubagentChildToolCall } from './types';
 import type { AssistantTextEntry } from './transcript';
-import { assignTurnId, getLastTurnId } from './turn';
+import { assignTurnId, getLastTurnId, getTurnIdAt } from './turn';
 import { extractPreview, extractToolUseId } from './preview';
 import { extractToolDetail } from './tool-detail';
 
@@ -274,18 +274,24 @@ export function persistAssistantTextResponses(
     )
   `);
 
+  // ADR-001 P1: entry별 turn_id를 메시지 시각 기준으로 결정해 transcript backfill의
+  // turn 잘못 태깅 회귀를 차단. context.turnId는 fallback으로만 사용 (호출자가 단일 turn임을
+  // 명시한 경우 — 일반적으로 인자 생략).
   let inserted = 0;
   for (const entry of entries) {
     const id = `resp-msg-${entry.messageId}`;
     const previewText = entry.text.slice(0, 2000);
     const tokensTotal = entry.tokensInput + entry.tokensOutput;
+    const entryTurnId = getTurnIdAt(db, context.sessionId, entry.timestampMs)
+      ?? context.turnId
+      ?? null;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = (stmt as any).run(
         id,
         context.sessionId,
         entry.timestampMs,
-        context.turnId ?? null,
+        entryTurnId,
         entry.model || null,
         entry.tokensInput,
         entry.tokensOutput,
