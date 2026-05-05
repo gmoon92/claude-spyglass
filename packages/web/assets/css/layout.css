@@ -55,30 +55,18 @@ body {
   transition: opacity 120ms ease-out;
 }
 
-/* ── 펼치기 버튼 — hide 상태 전용, viewport 좌상단 sticky ──────────────── */
+/* ── 펼치기 버튼 — hide 상태 전용 inline ───────────────────────────────────
+   panel-collapse-redesign 후속 (사용자 피드백 "fixed 버튼이 콘텐츠 카드 위에 떠있어 이질감"):
+   viewport 좌상단 fixed → chart-section view-section-header 좌측 끝 inline.
+   `.btn-panel-toggle`(접기 버튼과 동일 사각 ghost) 위에 추가 modifier로 동작.
+   기본 hide, .left-panel-hidden 시에만 표시. */
 .btn-panel-expand {
   display: none;
-  position: fixed;
-  top: var(--space-4);
-  left: var(--space-4);
-  z-index: 30;
-  width: 24px; height: 24px;
-  padding: 0;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-dim);
-  cursor: pointer;
-  align-items: center; justify-content: center;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  margin-right: var(--space-2);
 }
-.btn-panel-expand:hover {
-  background: var(--raised);
-  border-color: var(--accent);
-  color: var(--accent);
+.main-layout.left-panel-hidden .btn-panel-expand {
+  display: inline-flex;
 }
-.main-layout.left-panel-hidden .btn-panel-expand { display: inline-flex; }
-.btn-panel-expand svg { display: block; }
 
 /* ── FOOTER ─────────────────────────────────────────────────────────────── */
 .footer {

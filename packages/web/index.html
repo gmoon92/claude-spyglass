@@ -40,16 +40,6 @@
 
   <div class="main-layout">
 
-    <!-- 패널 hide 상태 전용 펼치기 버튼 — viewport 좌상단에 sticky 노출.
-         펼침 상태에선 .left-panel-hidden 클래스 부재로 자동 hide (CSS).
-         5라운드 디자인 회의 합의 — 메인 영역 헤더 좌측에 사각 ghost 버튼. -->
-    <button class="btn-panel-expand" id="btnPanelExpand" type="button"
-            title="왼쪽 패널 펼치기 (⌘B)" aria-label="왼쪽 패널 펼치기">
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </button>
-
     <aside class="left-panel">
       <div class="panel-resize-handle" title="드래그: 너비 조절 · 더블클릭: 콘텐츠 너비에 맞춤"></div>
       <!-- left-panel-observability-revamp ADR-006: Anomaly 발생 시에만 표시 (floating, 우상단) -->
@@ -132,6 +122,15 @@
 
       <div class="view-section card card--compact" id="chartSection">
         <div class="view-section-header">
+          <!-- panel-collapse-redesign 후속: hide 상태에서만 표시되는 inline 펼치기 토글.
+               이전 viewport 좌상단 fixed 버튼은 콘텐츠 카드 위에 떠있어 "고아 버튼" 문제 재발 →
+               콘텐츠 헤더 좌측 끝에 자연스럽게 자리잡도록 통합. -->
+          <button class="btn-panel-toggle btn-panel-expand" id="btnPanelExpand" type="button"
+                  title="왼쪽 패널 펼치기 (⌘B)" aria-label="왼쪽 패널 펼치기">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
           <div class="chart-default-meta">
             <span class="panel-label">요청 추이 (실시간)</span>
             <!-- chart-section-filter-sync ADR-002 — chartSubtitle은 timelineChart 본질(30분 sliding · 실시간)에 고정.
