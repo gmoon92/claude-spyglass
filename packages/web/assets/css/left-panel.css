@@ -1,24 +1,28 @@
 /* ── LEFT PANEL ─────────────────────────────────────────────────────────── */
-/* ADR-004: grid-template-rows = auto / 세션 고정 / 1fr (툴 통계 남은 공간 흡수) */
-/* ADR-003: padding + gap 으로 카드형 영역 분리 — border-right 는 panel-resize-handle 영역과 분리 */
-/*
-  세션 트랙은 minmax(220px, var(--session-panel-height))로 안전 하한을 둠
-  — 작은 뷰포트에서 다른 섹션(특히 툴 통계 1fr)이 0으로 짓눌리는 것을 방지
-*/
-/* left-panel-observability-revamp ADR-001:
-   3번째 트랙(옵저빌리티)에 카드 4개가 모두 보이도록 minmax 하한을 280px로 상향.
-   세션 트랙은 변경 없음 — 작은 화면에서 자연 스크롤 폴백. */
+/* header-removal 이후 4 row grid (이전 3 row):
+     1) brand-strip   : auto (브랜드 + LIVE 배지)
+     2) 프로젝트 표   : minmax(0, var(--projects-panel-height, 180px))
+                        — 3~4행만 노출, 데이터 늘면 panel-body가 자체 스크롤.
+                        남는 픽셀을 panelTools(1fr)에 양보하기 위해 상한 고정.
+     3) 세션 리스트   : minmax(220px, var(--session-panel-height)) — 기존 동작.
+     4) panelTools    : minmax(280px, 1fr) — 남는 공간 흡수.
+
+   panel-resize-handle / anomaly-badge / btn-panel-collapse는 absolute라 grid 자동 배치
+   대상이 아니므로 트랙 카운트에 영향 없음. */
 .left-panel {
   position: relative;
   display: grid;
-  grid-template-rows: auto minmax(220px, var(--session-panel-height)) minmax(280px, 1fr);
+  grid-template-rows:
+    auto
+    minmax(0, var(--projects-panel-height, 180px))
+    minmax(220px, var(--session-panel-height))
+    minmax(280px, 1fr);
   border-radius: var(--radius-md);
   gap: var(--space-2);
   padding: var(--space-2);
   max-height: 100vh;
   min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   border-right: 1px solid var(--border);
   background: var(--surface);
 }

@@ -1,5 +1,6 @@
 /* ── BODY ───────────────────────────────────────────────────────────────── */
-/* web-design-overhaul ADR-WDO-006: UI Font 디폴트 (Inter), Data Font는 셀별 분기 */
+/* header-removal: 글로벌 헤더 제거 후 body 자식 = error-banner / main-layout / footer.
+   3 row grid로 재정렬. 1fr이 main-layout에 가야 콘텐츠가 viewport 채움. */
 body {
   font-family: var(--font-ui);
   background: var(--bg);
@@ -7,7 +8,7 @@ body {
   font-size: var(--text-body);
   line-height: 1.5;
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto 1fr auto;
   height: 100vh;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
@@ -47,6 +48,7 @@ body {
 }
 
 .main-layout.left-panel-hidden .left-panel .panel-section,
+.main-layout.left-panel-hidden .left-panel .brand-strip,
 .main-layout.left-panel-hidden .panel-resize-handle {
   display: none;
 }
