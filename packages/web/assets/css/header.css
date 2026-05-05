@@ -29,22 +29,19 @@
 }
 .logo span { color: var(--accent); }
 
-/* ── LIVE BADGE — header-removal 후 사이드바에서도 그대로 사용 ────────────
-   SSoT: badge-live·dot·header-stat 클래스. infra.js setLiveStatus가 toggle.
+/* ── LIVE BADGE — 도트 + 라이브 카운트 (미니멀)
+   "LIVE" 라벨·구분선 제거: 펄스 도트가 이미 라이브 상태를 시각화하므로 글자 중복.
+   상세 정의는 hover 시 stat-tooltip(`data-stat-tooltip="active"`)으로 노출.
    ────────────────────────────────────────────────────────────────────── */
 .badge-live {
   display: inline-flex; align-items: center; gap: var(--space-2);
   background: var(--badge-grad-success);
   border: 1px solid rgba(63,185,80,0.30);
-  color: var(--success);
-  padding: 3px 8px;
+  padding: 3px 9px;
   border-radius: 999px;
   font-family: var(--font-ui);
-  font-size: var(--text-small);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   flex-shrink: 0;
+  cursor: default;
 }
 .badge-live .dot {
   width: 6px; height: 6px; border-radius: 50%;
@@ -53,49 +50,23 @@
   animation: pulse 1.8s ease-in-out infinite;
   flex-shrink: 0;
 }
-.badge-live-label {
-  color: var(--success);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-}
-@keyframes pulse {
-  0%,100% { opacity: 1; transform: scale(1); }
-  50%      { opacity: 0.4; transform: scale(0.8); }
-}
-.badge-live.disconnected {
-  background: var(--red-dim); border-color: var(--red-border); color: var(--red);
-}
-.badge-live.disconnected .dot { background: var(--red); animation: none; }
-.badge-live.disconnected .badge-live-label { color: var(--red); }
-
-/* 활성 세션 chip (LIVE 배지 안 통합) */
-.badge-live .header-stat {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0;
-  padding: 0 0 0 var(--space-2);
-  margin-left: 2px;
-  border-left: 1px solid rgba(63,185,80,0.30);
-  background: transparent;
-}
 .badge-live .header-stat-value {
   font-family: var(--font-data);
   font-size: var(--text-small);
   color: var(--success);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0;
   line-height: 1;
 }
-.badge-live.disconnected .header-stat {
-  border-left-color: var(--red-border);
+@keyframes pulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.8); }
 }
-.badge-live.disconnected .header-stat-value {
-  color: var(--red);
+.badge-live.disconnected {
+  background: var(--red-dim); border-color: var(--red-border);
 }
-/* live-dot이 이미 시각 dot을 담당하므로 chip의 .is-active-indicator::before 무력화 */
-.badge-live .header-stat::before { display: none !important; }
-.badge-live .header-stat.is-active-indicator .header-stat-value { color: var(--green); }
+.badge-live.disconnected .dot { background: var(--red); animation: none; }
+.badge-live.disconnected .header-stat-value { color: var(--red); }
 
 /* ── ERROR BANNER ───────────────────────────────────────────────────────── */
 .error-banner {
@@ -144,5 +115,4 @@
 /* ── 반응형 ───────────────────────────────────────────────────────────── */
 @media (max-width: 480px) {
   .badge-live { padding: 2px var(--space-2); }
-  .badge-live-label { display: none; }
 }

@@ -63,14 +63,9 @@ export async function fetchDashboard() {
     document.getElementById('statSessions').textContent    = fmt(d.summary?.totalSessions ?? 0);
     document.getElementById('statRequests').textContent    = fmt(d.summary?.totalRequests ?? 0);
     document.getElementById('statTokens').textContent      = fmtToken(d.summary?.totalTokens ?? 0);
-    const activeCount = d.summary?.activeSessions ?? 0;
-    const activeEl    = document.getElementById('statActive');
-    activeEl.textContent = fmt(activeCount);
-    const activeCard = activeEl.closest('.header-stat');
-    if (activeCard) {
-      activeCard.classList.toggle('active', activeCount > 0);
-      activeCard.classList.toggle('is-active-indicator', activeCount > 0);
-    }
+    // 라이브 카운트는 사이드바 brand-strip의 `.badge-live` 안 #statActive에 노출.
+    // 색상 강조는 도트(녹/적)와 펄스 애니메이션이 SSoT — chip 클래스 토글은 제거.
+    document.getElementById('statActive').textContent = fmt(d.summary?.activeSessions ?? 0);
     document.getElementById('statAvgDuration').textContent =
       formatDuration(d.summary?.avgDurationMs ?? d.requests?.avg_duration_ms ?? null);
 

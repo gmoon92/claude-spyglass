@@ -25,16 +25,16 @@ export function jumpToLatest() {
 }
 
 /**
- * LIVE 배지 연결 상태 갱신 (header-summary-merge ADR-007).
- * SSoT: liveBadge 안의 chip(`#activeCard` / `#statActive`)은 보존하고 라벨/클래스만 토글.
- * 이전엔 innerHTML 통째 덮어쓰기로 chip을 날려서 fetchDashboard 재호출 시 null 참조 에러 발생.
+ * LIVE 배지 연결 상태 토글.
+ *
+ * 마크업: `<span.badge-live>` 안에 펄스 도트 + 라이브 카운트(#statActive).
+ * 연결 시 녹색·도트 펄스, 끊김 시 빨강·정적. "LIVE/OFFLINE" 글자는 펄스 도트가 이미
+ * 시각화하므로 제거(시각 노이즈) — 상세 정의는 `data-stat-tooltip="active"` hover에서.
  */
 export function setLiveStatus(connected) {
   const b = document.getElementById('liveBadge');
   if (!b) return;
   b.className = connected ? 'badge-live' : 'badge-live disconnected';
-  const label = b.querySelector('.badge-live-label');
-  if (label) label.textContent = connected ? 'LIVE' : 'OFFLINE';
 }
 
 export function showError(msg) {

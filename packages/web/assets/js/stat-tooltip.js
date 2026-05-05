@@ -28,8 +28,8 @@ const STAT_TOOLTIP_CONTENT = {
     desc:  '입력 + 출력 토큰의 합산.\ncache_creation · cache_read 토큰 포함.',
   },
   active: {
-    title: 'Active Sessions',
-    desc:  '현재 실시간으로 실행 중인 세션 수.\n최근 60초 내 요청이 있는 세션 기준.',
+    title: 'LIVE Sessions',
+    desc:  '지금 실시간으로 실행 중인 세션 수.\nended_at NULL + 직전 30분 이내 활동 기준 (storage/_shared.LIVE_STALE_THRESHOLD_MS).\n도트 색: 녹색=SSE 연결됨, 빨강=끊김.',
   },
   'avg-duration': {
     title: 'Avg Response Time',
