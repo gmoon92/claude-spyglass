@@ -14,6 +14,9 @@
 -- ADR: ${CLAUDE_PROJECT_DIR}/.claude/docs/plans/subagent-children/adr.md
 --   (response-collect ADR 통합)
 
+-- 고아 requests 정리: sessions에 없는 session_id를 가진 행은 FOREIGN KEY 제약 위반이므로 사전 삭제
+DELETE FROM requests WHERE session_id NOT IN (SELECT id FROM sessions);
+
 ALTER TABLE requests RENAME TO requests_old_v013;
 
 CREATE TABLE requests (
