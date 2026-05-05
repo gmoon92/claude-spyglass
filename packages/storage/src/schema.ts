@@ -88,7 +88,14 @@ PRAGMA journal_size_limit = 104857600;  -- 100MB WAL size limit
 // =============================================================================
 
 /**
- * 세션 엔티티 타입
+ * 세션 라이브 상태 (서버 단일 결정 — _shared.buildLiveStateColumn 산출).
+ */
+export type SessionLiveState = 'live' | 'stale' | 'ended';
+
+/**
+ * 세션 엔티티 타입.
+ *
+ * `live_state`는 DB 컬럼이 아니라 응답용 derive — read.ts SELECT에 CASE로 산출.
  */
 export interface Session {
   id: string;
@@ -99,6 +106,7 @@ export interface Session {
   created_at?: number;
   first_prompt_payload?: string | null;
   last_activity_at?: number | null;
+  live_state?: SessionLiveState;
 }
 
 /**

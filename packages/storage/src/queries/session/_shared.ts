@@ -96,3 +96,38 @@ export function buildLiveSessionPredicate(
       AND (r2.event_type IS NULL OR r2.event_type != 'pre_tool' OR r2.tool_name = 'Agent')
   ))`;
 }
+
+/**
+ * live_state SELECT 컬럼식 빌더 — sessions 응답 페이로드에 'live' | 'stale' | 'ended' 한 값으로 노출.
+ *
+ * 정의:
+ *   ended  : ended_at IS NOT NULL (정상 종료)
+ *   live   : ended_at NULL + 마지막 visible 활동이 cutoff 이상
+ *   stale  : ended_at NULL + 마지막 visible 활동이 cutoff 미만 (또는 활동 자체 없음)
+ *
+ * `buildLiveSessionPredicate`와 같은 LIVE_STALE_THRESHOLD_MS·visible 정의를 공유한다.
+ * 둘은 같은 술어의 다른 표현(WHERE/EXISTS vs SELECT/CASE) — 한 상수에 의존하므로 SSoT 무결.
+ *
+ * 사용 시 SELECT 절에 derive된 last_activity_at(예: MAX(r.timestamp)) 표현식이
+ * 이미 있어야 한다 (LEFT JOIN + GROUP BY가 일반적). cutoff ?를 1개 push 한다.
+ *
+ * @param now 현재 시각(ms). 라우트에서 1회 결정한 값을 그대로 전달.
+ * @param endedAtExpr "s.ended_at" 등 ended_at 컬럼 표현식.
+ * @param lastActivityAtExpr "MAX(r.timestamp)" 등 derive된 마지막 활동 표현식.
+ * @param params SQL params 배열 (cutoff timestamp가 push 됨).
+ * @returns SQL 조각 (CASE 식).
+ */
+export function buildLiveStateColumn(
+  now: number,
+  endedAtExpr: string,
+  lastActivityAtExpr: string,
+  params: number[],
+): string {
+  const cutoff = now - LIVE_STALE_THRESHOLD_MS;
+  params.push(cutoff);
+  return `CASE
+    WHEN ${endedAtExpr} IS NOT NULL THEN 'ended'
+    WHEN ${lastActivityAtExpr} IS NOT NULL AND ${lastActivityAtExpr} >= ? THEN 'live'
+    ELSE 'stale'
+  END`;
+}

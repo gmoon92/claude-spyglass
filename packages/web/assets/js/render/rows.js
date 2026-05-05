@@ -56,33 +56,21 @@ function makeTargetCellWithBadges(r, extraBadges) {
   return base.replace(/<\/td>$/, `${extraBadges}</td>`);
 }
 
-// LIVE 술어 stale 임계값 — storage/_shared.ts의 LIVE_STALE_THRESHOLD_MS와 동일 값.
-// (web은 storage 패키지를 직접 import 하지 않으므로 클라 측 상수로 미러. 변경 시 양쪽 함께 수정.)
-const LIVE_STALE_THRESHOLD_MS = 30 * 60 * 1000;
-
 export function makeSessionRow(s, isSelected) {
-  // 사이드바 활성도 마커 — 헤더 LIVE 카운트와 동일 정의 공유.
-  //   ● active : ended_at 없음 + 직전 30분 이내 activity 있음
-  //   ◐ stale  : ended_at 없음 + 직전 30분 이상 activity 없음 (SessionEnd 누락 의심)
-  //   ○ ended  : ended_at 있음 (정상 종료)
-  // stale은 reactivateSession 흐름에서 새 hook 도달 시 자동 ●로 복귀한다 (DB UPDATE 없음).
-  const lastAct = s.last_activity_at || s.started_at || 0;
-  const sinceLastMs = Date.now() - lastAct;
-  let statusGlyph;
-  let statusCls;
-  let statusTitle;
-  if (s.ended_at) {
-    statusGlyph = '○';
-    statusCls = '';
-    statusTitle = '종료된 세션';
-  } else if (sinceLastMs > LIVE_STALE_THRESHOLD_MS) {
-    statusGlyph = '◐';
-    statusCls = ' stale';
-    statusTitle = `stale — 30분 이상 활동 없음 (SessionEnd 누락 의심)`;
+  // 사이드바 활성도 마커 — 서버가 결정한 live_state 단일 분기.
+  //   ● live   : 라이브 세션 (storage._shared.buildLiveStateColumn에서 산출)
+  //   ◐ stale  : SessionEnd 누락 의심 — reactivateSession 흐름에서 새 hook 도달 시 자동 ●로 복귀
+  //   ○ ended  : 정상 종료 (ended_at IS NOT NULL)
+  // 클라가 자체 시각으로 stale 판정하면 서버 권위와 어긋나므로 금지.
+  // 구버전 응답(live_state 없음) 호환: ended_at만 보고 ●/○로 폴백.
+  const liveState = s.live_state || (s.ended_at ? 'ended' : 'live');
+  let statusGlyph, statusCls, statusTitle;
+  if (liveState === 'ended') {
+    statusGlyph = '○'; statusCls = ''; statusTitle = '종료된 세션';
+  } else if (liveState === 'stale') {
+    statusGlyph = '◐'; statusCls = ' stale'; statusTitle = 'stale — SessionEnd 누락 의심';
   } else {
-    statusGlyph = '●';
-    statusCls = ' active';
-    statusTitle = '라이브 세션';
+    statusGlyph = '●'; statusCls = ' active'; statusTitle = '라이브 세션';
   }
   const shortId  = s.id.slice(0, 8);
   const preview  = extractFirstPrompt(s.first_prompt_payload);

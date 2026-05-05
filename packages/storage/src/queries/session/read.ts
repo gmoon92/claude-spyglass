@@ -10,6 +10,7 @@ import type { SessionFilterOptions, SessionQueryResult } from './types';
 import {
   ACTIVE_SESSION_REQUEST_JOIN_SQL,
   buildLiveSessionPredicate,
+  buildLiveStateColumn,
 } from './_shared';
 
 /**
@@ -36,7 +37,8 @@ export function getAllSessions(
   db: Database,
   limit: number = 100,
   fromTs?: number,
-  toTs?: number
+  toTs?: number,
+  now: number = Date.now(),
 ): SessionQueryResult[] {
   const conditions: string[] = [];
   const params: (string | number)[] = [];
@@ -44,12 +46,17 @@ export function getAllSessions(
   if (toTs)   { conditions.push('s.started_at <= ?'); params.push(toTs); }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
+  // live_state SSoT — 클라가 자체 판정하지 않도록 서버에서 결정.
+  // params 순서: [fromTs?, toTs?, live_state cutoff, limit]
+  const liveStateCol = buildLiveStateColumn(now, 's.ended_at', 'MAX(r.timestamp)', params as number[]);
+
   return db.query(`
     SELECT s.*,
       (SELECT r.payload FROM requests r
        WHERE r.session_id = s.id AND r.type = 'prompt'
        ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload,
-      MAX(r.timestamp) as last_activity_at
+      MAX(r.timestamp) as last_activity_at,
+      ${liveStateCol} as live_state
     FROM sessions s
     ${ACTIVE_SESSION_REQUEST_JOIN_SQL}
     ${where}
@@ -101,7 +108,8 @@ export function getSessionsByProject(
   projectName: string,
   limit: number = 100,
   fromTs?: number,
-  toTs?: number
+  toTs?: number,
+  now: number = Date.now(),
 ): SessionQueryResult[] {
   const conditions: string[] = ['s.project_name = ?'];
   const params: (string | number)[] = [projectName];
@@ -109,6 +117,9 @@ export function getSessionsByProject(
   if (fromTs) { conditions.push('s.started_at >= ?'); params.push(fromTs); }
   if (toTs) { conditions.push('s.started_at <= ?'); params.push(toTs); }
 
+  // live_state SSoT — getAllSessions와 동일 정의 공유.
+  // params 순서: [project, fromTs?, toTs?, live_state cutoff, limit]
+  const liveStateCol = buildLiveStateColumn(now, 's.ended_at', 'MAX(r.timestamp)', params as number[]);
   params.push(limit.toString());
 
   return db.query(`
@@ -116,7 +127,8 @@ export function getSessionsByProject(
       (SELECT r.payload FROM requests r
        WHERE r.session_id = s.id AND r.type = 'prompt'
        ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload,
-      MAX(r.timestamp) as last_activity_at
+      MAX(r.timestamp) as last_activity_at,
+      ${liveStateCol} as live_state
     FROM sessions s
     ${ACTIVE_SESSION_REQUEST_JOIN_SQL}
     WHERE ${conditions.join(' AND ')}
@@ -130,33 +142,40 @@ export function getSessionsByProject(
 /**
  * 라이브 세션 조회 — "ended_at IS NULL AND 최근 STALE_THRESHOLD_MS 이내 활동" 술어 적용.
  *
+ * 반환 컬럼: sessions.* + last_activity_at + live_state ('live' 고정 — WHERE에서 선별).
+ *
+ * 다른 read 함수(getAllSessions/getSessionsByProject)와 last_activity_at 계산 형태,
+ * visible request 정의(ACTIVE_SESSION_REQUEST_JOIN_SQL), live_state derive를 모두
+ * 동일 패턴으로 사용한다 → 응답 페이로드 모양 일관.
+ *
  * 변경 이력:
- *  - v(이번): SessionEnd hook 누락(Ctrl+C, 크래시 등)으로 ended_at이 영원히 NULL인
- *    stale 세션이 헤더 LIVE 카운트와 사이드바 ●에 stale active로 누적되던 문제 해결.
- *    `_shared.buildLiveSessionPredicate`로 SSoT를 격리해 헤더/프로젝트 active_count/
- *    Live Pulse 카드가 같은 정의를 공유하도록 한다.
- *  - 이전: `WHERE ended_at IS NULL`만 사용 → stale·빈 세션 모두 LIVE로 카운트.
+ *  - v(이번): live_state SELECT 컬럼 추가 + LEFT JOIN GROUP BY 형태로 통일.
+ *    클라이언트가 stale 판정 로직을 가지지 않도록 서버에서 SSoT로 결정.
+ *  - v(직전): SessionEnd hook 누락(Ctrl+C, 크래시 등)으로 ended_at이 영원히 NULL인
+ *    stale 세션이 헤더 LIVE 카운트에 누적되던 문제 해결. buildLiveSessionPredicate
+ *    SSoT로 헤더/프로젝트 active_count/Live Pulse 카드 정의 통일.
  *
  * @param db   DB 핸들
  * @param now  현재 시각(ms). 라우트 레이어에서 1회 결정 후 같은 응답에서 재사용
  *             해야 카운트 일관성 보장. 미지정 시 Date.now() (테스트용 편의 시그니처).
- *
- * 반환 컬럼: sessions.*  + last_activity_at (사이드바·UI가 의존)
  */
 export function getActiveSessions(
   db: Database,
   now: number = Date.now(),
 ): SessionQueryResult[] {
   const params: number[] = [];
+  // params 순서: [livePredicate cutoff, liveStateCol cutoff].
+  // 두 빌더는 같은 LIVE_STALE_THRESHOLD_MS 상수를 참조하므로 SSoT 무결.
   const livePredicate = buildLiveSessionPredicate(now, 's', params);
+  const liveStateCol = buildLiveStateColumn(now, 's.ended_at', 'MAX(r.timestamp)', params);
   return db.query(`
     SELECT s.*,
-      (SELECT MAX(r.timestamp) FROM requests r
-       WHERE r.session_id = s.id
-         AND (r.event_type IS NULL OR r.event_type != 'pre_tool' OR r.tool_name = 'Agent')
-      ) as last_activity_at
+      MAX(r.timestamp) as last_activity_at,
+      ${liveStateCol} as live_state
     FROM sessions s
+    ${ACTIVE_SESSION_REQUEST_JOIN_SQL}
     WHERE ${livePredicate}
+    GROUP BY s.id
     ORDER BY s.started_at DESC
   `).all(...params) as SessionQueryResult[];
 }
