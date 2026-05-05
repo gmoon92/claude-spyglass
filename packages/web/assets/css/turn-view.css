@@ -274,6 +274,21 @@
   white-space: nowrap;
 }
 
+/* 어시스턴트 응답 chip — 시간순 흐름에서 도구 사이에 끼는 텍스트 응답 표지.
+   본문 행의 ◆ 마커(`responseMarkerHtml`)와 동일 글리프·색상 SSoT 공유. */
+.tool-chip.response-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 1px 6px;
+  color: var(--type-response-color, var(--text-2));
+  border-color: var(--type-response-color, var(--text-2));
+  background: transparent;
+  font-size: 11px;
+  line-height: 1;
+}
+
 /* Agent/Skill 계열 chip — .tool-chip 위에 추가 적용 (ADR-001) */
 .agent-chip {
   display: inline-flex;

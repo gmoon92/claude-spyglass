@@ -60,6 +60,69 @@ export function compressContinuousTools(toolCalls) {
 }
 
 /**
+ * 도구 + 어시스턴트 응답을 시간순 흐름 chip 시퀀스로 변환한다 (turn 카드 헤더 chip SSoT).
+ *
+ * 반환 항목:
+ *   { kind: 'tool', name, count, isAgent, agentName, items }   — 기존 compressContinuousTools 그룹
+ *   { kind: 'response' }                                       — 어시스턴트 중간/최종 응답
+ *
+ * 입력 우선순위:
+ *  1) turn.items[] (서버 ADR-006 인터리빙) — 사용 가능하면 그대로 신뢰.
+ *  2) 폴백: turn.tool_calls + turn.responses를 timestamp 기준 머지.
+ *
+ * 그룹화 규칙: tool은 인접 동일 이름끼리 count 증가. 사이에 response가 끼면 그룹 끊기.
+ * 결과적으로 화면 chip이 "Bash → Read → ◆ → Edit → ◆ → Edit → ◆ → Edit ×2"처럼
+ * 실제 흐름과 일치 — 이전엔 응답이 chip에서 누락되어 "Edit ×4"로 보이는 오해 발생.
+ *
+ * @param turn TurnItem (server normalized)
+ * @returns 흐름 항목 배열
+ */
+export function compressFlowWithResponses(turn) {
+  if (turn?.items && turn.items.length) return compressItemsFlow(turn.items);
+  return compressLegacyFlow(turn?.tool_calls || [], turn?.responses || []);
+}
+
+function compressItemsFlow(items) {
+  const flow = [];
+  let toolBuf = [];
+  const flushTools = () => {
+    if (toolBuf.length) {
+      compressContinuousTools(toolBuf).forEach(g => flow.push({ kind: 'tool', ...g }));
+      toolBuf = [];
+    }
+  };
+  for (const it of items) {
+    if (it.kind === 'tool') toolBuf.push(it.request);
+    else if (it.kind === 'response') {
+      flushTools();
+      flow.push({ kind: 'response' });
+    }
+  }
+  flushTools();
+  return flow;
+}
+
+function compressLegacyFlow(toolCalls, responses) {
+  const tools = toolCalls.slice().sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  const resps = responses.slice().sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  if (resps.length === 0) {
+    return compressContinuousTools(tools).map(g => ({ kind: 'tool', ...g }));
+  }
+  const flow = [];
+  let i = 0;
+  for (const r of resps) {
+    const seg = [];
+    while (i < tools.length && (tools[i].timestamp || 0) <= (r.timestamp || 0)) seg.push(tools[i++]);
+    if (seg.length) compressContinuousTools(seg).forEach(g => flow.push({ kind: 'tool', ...g }));
+    flow.push({ kind: 'response' });
+  }
+  if (i < tools.length) {
+    compressContinuousTools(tools.slice(i)).forEach(g => flow.push({ kind: 'tool', ...g }));
+  }
+  return flow;
+}
+
+/**
  * 턴 행 첫 컬럼 마커 아이콘 SSoT (web-design-balance-pass ADR-005).
  *  - 응답 행: `◆` info 톤 dot — 어시스턴트 텍스트 응답 표지.
  *  - 응답이 없는 tool-only turn placeholder: `—` dim 글리프(작게).

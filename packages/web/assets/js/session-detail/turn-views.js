@@ -20,7 +20,7 @@ import { loadToolStats } from '../tool-stats.js';
 import { showLatestLlmInput } from '../llm-input-view.js';
 import { loadSystemPromptLibrary } from '../system-prompt-library.js';
 import {
-  buildTurnDetailRows, compressContinuousTools, fmtActionLabel,
+  buildTurnDetailRows, compressFlowWithResponses, fmtActionLabel,
 } from './turn-rows.js';
 import {
   getCurrentSessionId, getDetailTurns, getDetailPrologue, getExpandedTurnIds,
@@ -266,8 +266,15 @@ export function renderTurnCards(turns, badgeTurns) {
       ? escHtml(turn.prompt.preview.slice(0, 60)) + (turn.prompt.preview.length > 60 ? '…' : '')
       : '';
 
-    // 도구 흐름 chip — compressContinuousTools + fmtActionLabel 재사용 (SSoT)
-    const chips = compressContinuousTools(turn.tool_calls).map(({ name, count, isAgent, agentName }) => {
+    // 흐름 chip — 도구 + 어시스턴트 응답을 시간순으로 인터리빙 (SSoT: compressFlowWithResponses).
+    // 응답은 ◆ 마커 chip으로 노출 → "Bash → Read → ◆ → Edit → ◆ → Edit ×2" 형태로
+    // 실제 turn 흐름과 일치. 이전엔 tool_calls만 chip으로 만들어 응답이 누락되어
+    // "Edit ×4"로 묶여 보이는 오해가 있었음.
+    const chips = compressFlowWithResponses(turn).map(item => {
+      if (item.kind === 'response') {
+        return `<span class="tool-chip response-chip" title="어시스턴트 응답" aria-label="어시스턴트 응답">◆</span>`;
+      }
+      const { name, count, isAgent, agentName } = item;
       const base  = name.split('__').pop();
       const color = TOOL_COLORS[base] || TOOL_COLORS.default;
       if (isAgent && agentName) {
