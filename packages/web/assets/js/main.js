@@ -280,7 +280,19 @@ function init() {
   restorePanelHiddenState();
   restoreChartCollapsedState();
   document.getElementById('btnPanelCollapse').addEventListener('click', toggleLeftPanel);
+  document.getElementById('btnPanelExpand')?.addEventListener('click', toggleLeftPanel);
   document.getElementById('btnToggleChart').addEventListener('click', toggleChartCollapse);
+
+  // panel-collapse-redesign 5라운드 회의: 키보드 단축키 ⌘B / Ctrl+B.
+  // input/textarea/contenteditable 포커스 시는 무시 — 텍스트 편집과 충돌 방지.
+  document.addEventListener('keydown', e => {
+    if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'b') return;
+    const ae = document.activeElement;
+    const tag = ae?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || ae?.isContentEditable) return;
+    e.preventDefault();
+    toggleLeftPanel();
+  });
   initEventDelegation();
   // chart-section-filter-sync ADR-001 — 초기 활성 범위에 맞춰 timeline-meta 라벨 동기화.
   // 인자 생략 시 default-view 내부에서 getActiveRange()로 SSoT 일치.

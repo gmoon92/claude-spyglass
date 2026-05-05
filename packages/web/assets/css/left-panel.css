@@ -7,7 +7,7 @@
      3) 세션 리스트   : minmax(220px, var(--session-panel-height)) — 기존 동작.
      4) panelTools    : minmax(280px, 1fr) — 남는 공간 흡수.
 
-   panel-resize-handle / anomaly-badge / btn-panel-collapse는 absolute라 grid 자동 배치
+   panel-resize-handle / anomaly-badge는 absolute라 grid 자동 배치
    대상이 아니므로 트랙 카운트에 영향 없음. */
 .left-panel {
   position: relative;
@@ -86,27 +86,28 @@
 .panel-body::-webkit-scrollbar { width: 3px; }
 .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-/* ── PANEL COLLAPSE BUTTON (< 토글) — border 위 floating, 세로 가운데 ── */
-.btn-panel-collapse {
-  position: absolute;
-  top: 50%;
-  right: -12px;
-  transform: translateY(-50%);
-  z-index: 20;
-  display: flex; align-items: center; justify-content: center;
+/* ── PANEL TOGGLE BUTTONS — 5라운드 디자인 회의 합의 ────────────────────────
+   floating 둥근 버튼 폐기 → 사각 ghost 28×28. brand-strip 안 / 메인 좌상단 두 곳.
+   "버튼이 어디 매달려 있는지" 모호한 경계 침범 디자인을 제거하고 컨테이너 안에 자리잡음.
+   ────────────────────────────────────────────────────────────────────────── */
+.btn-panel-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
   width: 24px; height: 24px;
-  background: var(--surface-alt);
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  color: var(--text-dim); cursor: pointer;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+  flex-shrink: 0;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.btn-panel-collapse:hover {
-  background: var(--surface-alt);
-  border-color: var(--accent);
-  color: var(--accent);
+.btn-panel-toggle:hover {
+  background: var(--raised);
+  border-color: var(--border);
+  color: var(--text-1);
 }
-.btn-panel-collapse svg { transition: transform 0.2s ease; display: block; }
+.btn-panel-toggle svg { display: block; }
 
 /* ── PROJECT NAME CELL ──────────────────────────────────────────────────── */
 .cell-proj-name {

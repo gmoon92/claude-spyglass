@@ -40,28 +40,37 @@
 
   <div class="main-layout">
 
+    <!-- 패널 hide 상태 전용 펼치기 버튼 — viewport 좌상단에 sticky 노출.
+         펼침 상태에선 .left-panel-hidden 클래스 부재로 자동 hide (CSS).
+         5라운드 디자인 회의 합의 — 메인 영역 헤더 좌측에 사각 ghost 버튼. -->
+    <button class="btn-panel-expand" id="btnPanelExpand" type="button"
+            title="왼쪽 패널 펼치기 (⌘B)" aria-label="왼쪽 패널 펼치기">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+
     <aside class="left-panel">
       <div class="panel-resize-handle" title="드래그: 너비 조절 · 더블클릭: 콘텐츠 너비에 맞춤"></div>
       <!-- left-panel-observability-revamp ADR-006: Anomaly 발생 시에만 표시 (floating, 우상단) -->
       <button class="anomaly-badge" id="anomalyBadge" hidden type="button" aria-label="이상 감지 알림"></button>
-      <button class="btn-panel-collapse" id="btnPanelCollapse" title="왼쪽 패널 숨기기 / 펼치기" aria-label="왼쪽 패널 숨기기">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <path d="M7.5 2.5L3.5 6L7.5 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
-
-      <!-- header-removal: 브랜드 + LIVE 배지 흡수.
+      <!-- header-removal: 브랜드 + LIVE 배지 + 패널 토글.
+           5라운드 디자인 회의 합의: floating 둥근 버튼 폐기 → brand-strip 우측 사각 ghost 버튼.
            SSE 연결 상태(점)·라이브 카운트(숫자)는 모니터링 도구 핵심 신호이므로 보존.
            시계는 OS 메뉴바와 중복이라 제거. -->
       <div class="brand-strip">
         <div class="logo">Claude<span>Spyglass</span></div>
-        <!-- 도트(SSE 펄스 + 연결 상태 색)와 라이브 카운트만 노출.
-             "LIVE" 라벨/구분선은 도트가 이미 라이브 상태를 시각화하므로 시각 노이즈로 제거.
-             상세 정의는 stat-tooltip.js의 'active' 키에서 hover 시 노출. -->
+        <!-- 도트(SSE 펄스 + 연결 상태 색)와 라이브 카운트만 노출. 정의는 stat-tooltip 'active' hover. -->
         <span class="badge-live" id="liveBadge" data-stat-tooltip="active">
           <span class="dot"></span>
           <span class="header-stat-value" id="statActive">--</span>
         </span>
+        <button class="btn-panel-toggle" id="btnPanelCollapse" type="button"
+                title="왼쪽 패널 숨기기 (⌘B)" aria-label="왼쪽 패널 숨기기">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M9 3L5 7L9 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
       </div>
 
       <div class="panel-section flex-section">

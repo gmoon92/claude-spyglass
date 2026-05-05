@@ -23,7 +23,11 @@ body {
 
 /* ── MAIN LAYOUT ────────────────────────────────────────────────────────── */
 /* WDO Phase 2 — 헤더와 좌·우 패널 간 동일한 16px 외곽 호흡 (Linear/Notion 패턴).
-   페이지 배경(--bg)이 16px 노출되어 헤더(--surface)와 명도차로 분리됨. */
+   페이지 배경(--bg)이 16px 노출되어 헤더(--surface)와 명도차로 분리됨.
+   panel-collapse-redesign(5라운드 회의):
+     - grid-template-columns 트랜지션 200ms cubic-bezier로 hide/show 자연 동작
+     - hide 시 0px (이전 36px 어색한 스트립 폐기) — 재진입은 fixed 위치 펼치기 버튼·⌘B
+*/
 .main-layout {
   display: grid;
   grid-template-columns: var(--left-panel-width) 1fr;
@@ -32,31 +36,49 @@ body {
   padding: var(--space-4);
   overflow: hidden;
   min-height: 0;
+  transition: grid-template-columns 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ── LEFT PANEL HIDDEN ──────────────────────────────────────────────────── */
-/* 숨김 상태: 좁은 스트립만 남기고 토글 버튼만 노출 (재펼침 접근성 확보) */
+/* ── LEFT PANEL HIDDEN — 5라운드 회의 합의 ──────────────────────────────── */
+/* 0px hide: 메인 콘텐츠가 viewport 전체 차지. 재진입은 .btn-panel-expand(좌상단 fixed) 또는 ⌘B. */
 .main-layout.left-panel-hidden {
-  grid-template-columns: 36px 1fr;
+  grid-template-columns: 0 1fr;
+  /* gap도 함께 사라지도록 — 0 column이지만 gap 16px이 남으면 메인 영역이 16px 들여쓰기됨 */
+  gap: 0 var(--space-4);
 }
 
-/* 숨김 상태: panel-section 전체 숨김, overflow 해제(버튼이 border 밖으로 나오므로)
-   — .left-panel의 첫 자식은 .panel-resize-handle이므로 :first-child 선택자는 안 됨 */
+/* 사이드바 자체는 0px width로 grid가 잘라냄. 트랜지션 stagger를 위한 opacity·pointer-events. */
 .main-layout.left-panel-hidden .left-panel {
-  overflow: visible;
-  grid-template-rows: 1fr;
+  opacity: 0;
+  pointer-events: none;
+  border-right: none;
+  transition: opacity 120ms ease-out;
 }
 
-.main-layout.left-panel-hidden .left-panel .panel-section,
-.main-layout.left-panel-hidden .left-panel .brand-strip,
-.main-layout.left-panel-hidden .panel-resize-handle {
+/* ── 펼치기 버튼 — hide 상태 전용, viewport 좌상단 sticky ──────────────── */
+.btn-panel-expand {
   display: none;
+  position: fixed;
+  top: var(--space-4);
+  left: var(--space-4);
+  z-index: 30;
+  width: 24px; height: 24px;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+  align-items: center; justify-content: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-
-/* 숨김 상태: 화살표 방향 반전 (오른쪽 → 펼치기) */
-.main-layout.left-panel-hidden .btn-panel-collapse svg {
-  transform: rotate(180deg);
+.btn-panel-expand:hover {
+  background: var(--raised);
+  border-color: var(--accent);
+  color: var(--accent);
 }
+.main-layout.left-panel-hidden .btn-panel-expand { display: inline-flex; }
+.btn-panel-expand svg { display: block; }
 
 /* ── FOOTER ─────────────────────────────────────────────────────────────── */
 .footer {
