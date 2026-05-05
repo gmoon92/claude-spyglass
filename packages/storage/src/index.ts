@@ -86,6 +86,24 @@ export {
 } from './queries/session';
 
 // =============================================================================
+// Session Status — 도메인 결과 함수 SSoT (visible/LIVE 정의 통일)
+// 새 라우트는 queries/* 가 아닌 이쪽을 우선 사용. queries/session/{read,aggregate}.ts는
+// 외부 시그니처 호환을 위한 thin wrapper.
+// =============================================================================
+
+export {
+  countLiveSessions,
+  countVisibleSessions,
+  listLiveSessions,
+  listVisibleSessions,
+  aggregateSessionStatus,
+  aggregateProjectStatus,
+  type SessionStatusFilter,
+  type SessionStatusAggregate,
+  type ProjectStatusMetrics,
+} from './domain/session-status';
+
+// =============================================================================
 // Request CRUD
 // =============================================================================
 

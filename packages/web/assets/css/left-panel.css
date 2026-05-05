@@ -169,14 +169,9 @@
   filter: drop-shadow(0 0 3px rgba(210,153,34,0.4));
 }
 
-.cell-proj-sess .proj-active {
+.cell-proj-sess.proj-active {
   color: var(--success);
   font-weight: 600;
-}
-.cell-proj-sess .proj-sess-sep {
-  color: var(--text-4);
-  margin: 0 1px;
-  opacity: 0.6;
 }
 .sess-row-preview {
   font-family: var(--font-ui);

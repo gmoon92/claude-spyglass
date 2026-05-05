@@ -1,23 +1,30 @@
 /**
- * Session 모듈 내부 공유 SQL 조각 + 시간 윈도우 빌더 + LIVE predicate SSoT.
+ * Session 모듈 내부 공유 SQL 조각 — **저수준 빌더**.
  *
- * 책임:
+ * # 책임
+ *
  *  - "유의미한 request"(visible request) JOIN 보조절 정의
  *  - 시간 윈도우 WHERE 빌더 (fromTs/toTs)
- *  - "라이브(LIVE) 세션" 술어 정의 — 헤더 LIVE 카운트, 프로젝트 active_count,
- *    Live Pulse 카드, 사이드바 ● 마커가 모두 같은 정의를 공유하기 위한 SSoT
+ *  - LIVE / visible / live_state 술어 빌더 (SSoT 한 단계)
  *
- * 의존성: 외부 의존 없음 (SQL 텍스트만 노출)
- * 호출자:
- *  - read.ts (getActiveSessions, getAllSessions, getSessionsByProject 등)
- *  - aggregate.ts (getSessionStats, getProjectStats)
- *  - server/routes/dashboard.ts (캐시 키 버킷화)
+ * # 가시성 (중요)
  *
- * 변경 이유:
- *  - "활성 요청"의 정의(LEFT JOIN 보조절)가 바뀔 때 ACTIVE_SESSION_REQUEST_JOIN_SQL만 수정.
- *  - 시간 필터 의미(half-open 등) 변경 시 buildTimeWindow만 수정.
- *  - "라이브"의 정의(stale 임계값, 추가 조건 등) 변경 시 LIVE_STALE_THRESHOLD_MS와
- *    buildLiveSessionPredicate만 수정.
+ *  - **이 모듈의 빌더들을 외부(routes/* 등)에서 직접 import하지 말 것.**
+ *    "결과 함수 SSoT"는 한 단계 위(`storage/src/domain/session-status.ts`)에 있다.
+ *    빌더는 도메인 모듈 내부 구현이며, 호출자가 SQL 조각을 조립하면 화면별 정의
+ *    분기(예: 5 vs 4 visible 불일치)가 재발한다.
+ *
+ *  - 허용 호출자:
+ *    1) `domain/session-status.ts` (도메인 결과 함수)
+ *    2) `queries/session/read.ts` `aggregate.ts` (도메인 함수의 thin wrapper)
+ *    3) `server/routes/dashboard.ts`의 캐시 키 버킷용 `LIVE_STALE_THRESHOLD_MS` 상수
+ *       (값 1개만 참조, SQL 빌더는 사용 안 함)
+ *
+ * # 변경 이유
+ *
+ *  - "활성 요청" 정의(LEFT JOIN 보조절) 변경 시 `ACTIVE_SESSION_REQUEST_JOIN_SQL`만 수정.
+ *  - "LIVE" 정의 변경 시 `LIVE_STALE_THRESHOLD_MS`와 `buildLiveSessionPredicate`만 수정.
+ *  - "visible" 정의 변경 시 `buildVisibleSessionPredicate`만 수정.
  *
  * NOTE: buildTimeWindow는 metrics/_shared.ts와 의도적으로 동일한 구현이다.
  *       모듈 간 의존을 만드는 비용보다 디커플 가치가 크다고 판단.
@@ -48,6 +55,29 @@ export function buildTimeWindow(
  */
 export const ACTIVE_SESSION_REQUEST_JOIN_SQL = `LEFT JOIN requests r ON r.session_id = s.id
       AND (r.event_type IS NULL OR r.event_type != 'pre_tool' OR r.tool_name = 'Agent')`;
+
+/**
+ * "visible 세션" 술어 빌더 — 적어도 1개의 visible request가 존재하는 세션.
+ *
+ * 사이드바·프로젝트 카운트·세션 통계 모두 같은 "세션" 정의를 사용해야 사용자
+ * 화면 숫자가 일치한다. read.ts의 LEFT JOIN + `HAVING MAX(r.timestamp) IS NOT NULL`
+ * 패턴과 의미적으로 동치 — read.ts는 last_activity_at 컬럼 derive 때문에 LEFT JOIN/MAX
+ * 형태를 유지하고, 집계 쿼리(GROUP BY project 등)에서는 이 EXISTS 술어로 컴팩트하게 표현.
+ *
+ * 빈 세션 정의(visible_req = 0): 사용자가 데이터를 정리한 뒤 sessions 테이블에만
+ * 잔존하거나, SessionEnd만 도달하고 다른 hook은 도달 안 한 ghost 행. 사이드바에
+ * 노이즈로 노출되지 않으므로 카운트에서도 제외해야 일관.
+ *
+ * @param sessionAlias sessions 테이블 별칭 (기본 's').
+ * @returns SQL 조각 (boolean 식, 파라미터 없음).
+ */
+export function buildVisibleSessionPredicate(sessionAlias: string): string {
+  return `EXISTS (
+    SELECT 1 FROM requests r3
+    WHERE r3.session_id = ${sessionAlias}.id
+      AND (r3.event_type IS NULL OR r3.event_type != 'pre_tool' OR r3.tool_name = 'Agent')
+  )`;
+}
 
 /**
  * "라이브" 세션 stale 임계값(ms).

@@ -22,19 +22,15 @@ export function renderBrowserProjects() {
   body.innerHTML = _allProjects.map(p => {
     const isSelected = getSelectedProject() === p.project_name;
     const pct        = Math.max(1, Math.round((p.total_tokens || 0) / maxT * 100));
-    // 세션 컬럼: "활성/전체" 형태. 활성 0이면 전체만 표시 (시각 노이즈 최소화).
-    // tooltip으로 의미 명시 — 컬럼 헤더 "세션" 단어로는 둘 다 같이 표현하기 어려움.
-    const total  = p.session_count || 0;
+    // 세션 컬럼: 라이브 세션 수만 표시 (사용자 요청 — 누적은 사이드바 세션 리스트에서 직접 확인 가능).
+    // total_count 별도 노출은 의미 모호성·시각 노이즈 유발 → active 단일 SSoT 표시.
     const active = p.active_count ?? 0;
-    const sessLabel = active > 0
-      ? `<span class="proj-active">${fmt(active)}</span><span class="proj-sess-sep">/</span>${fmt(total)}`
-      : fmt(total);
-    const sessTitle = active > 0
-      ? `라이브 ${active}개 / 전체 ${total}개`
-      : `전체 ${total}개`;
+    const total  = p.session_count || 0;
+    const sessCls = active > 0 ? ' proj-active' : '';
+    const sessTitle = `라이브 ${active}개 (전체 ${total}개)`;
     return `<tr class="clickable${isSelected ? ' row-selected' : ''}" data-project="${escHtml(p.project_name)}">
       <td class="cell-proj-name" title="${escHtml(p.project_name || '')}">${escHtml(p.project_name || '—')}</td>
-      <td class="num cell-proj-sess" style="text-align:right" title="${sessTitle}">${sessLabel}</td>
+      <td class="num cell-proj-sess${sessCls}" style="text-align:right" title="${sessTitle}">${fmt(active)}</td>
       <td>
         <div class="bar-cell" style="justify-content:flex-end;gap:4px">
           <div class="bar-track" style="min-width:36px"><div class="bar-fill" style="width:${pct}%"></div></div>

@@ -221,26 +221,18 @@ describe('Session CRUD', () => {
 
     it('should get session statistics', () => {
       const stats = getSessionStats(db.instance);
-      expect(stats.total_sessions).toBe(3);
-      expect(stats.total_tokens).toBe(600);
-      expect(stats.avg_tokens_per_session).toBe(200);
-      // 새 LIVE 정의: visible request가 없는 세션은 LIVE에서 제외 → 0
+      // 새 정의: total_sessions/total_tokens/avg는 visible 세션만 카운트.
+      // 이 테스트의 세션들은 requests 없음 → visible 0 → 모두 0.
+      expect(stats.total_sessions).toBe(0);
+      expect(stats.total_tokens).toBe(0);
+      expect(stats.avg_tokens_per_session).toBe(0);
       expect(stats.active_sessions).toBe(0);
     });
 
     it('should get project statistics', () => {
+      // visible 세션이 0이면 HAVING session_count > 0 으로 제외 → 빈 배열.
       const stats = getProjectStats(db.instance);
-      expect(stats).toHaveLength(2);
-
-      const projectA = stats.find(s => s.project_name === 'project-a');
-      expect(projectA?.session_count).toBe(2);
-      expect(projectA?.active_count).toBe(0); // visible request 없음
-      expect(projectA?.total_tokens).toBe(300);
-
-      const projectB = stats.find(s => s.project_name === 'project-b');
-      expect(projectB?.session_count).toBe(1);
-      expect(projectB?.active_count).toBe(0);
-      expect(projectB?.total_tokens).toBe(300);
+      expect(stats).toHaveLength(0);
     });
   });
 });

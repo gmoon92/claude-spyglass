@@ -1,17 +1,25 @@
 /**
- * Session 조회(Read) 쿼리.
+ * Session 조회(Read) — 외부 호환 표면.
  *
- * 변경 이유: 세션 조회 정책(빈 세션 hide, 정렬 우선순위, 첫 prompt payload 포함 등)
- * 이 바뀔 때 수정.
+ * # 책임
+ *
+ * `domain/session-status.ts`의 결과 함수에 위임하는 thin wrapper + 단순 단건 조회 등
+ * 도메인 분류가 필요 없는 직접 조회.
+ *
+ * # 왜 thin wrapper인가
+ *
+ * "visible/LIVE 정의" SSoT가 도메인 모듈에 있어야 화면별 분기 재발이 차단된다 (3차례 회귀
+ * 학습). 이 파일은 외부에서 import되는 시그니처를 보존하기 위한 호환층.
+ *
+ * 변경 이유: 시그니처 호환·단건 조회 정책이 바뀔 때만 수정.
  */
 
 import type { Database } from 'bun:sqlite';
 import type { SessionFilterOptions, SessionQueryResult } from './types';
 import {
-  ACTIVE_SESSION_REQUEST_JOIN_SQL,
-  buildLiveSessionPredicate,
-  buildLiveStateColumn,
-} from './_shared';
+  listLiveSessions,
+  listVisibleSessions,
+} from '../../domain/session-status';
 
 /**
  * 세션 단건 조회 (ID 기준)
@@ -24,14 +32,10 @@ export function getSessionById(
 }
 
 /**
- * 모든 세션 조회 (최근순, first_prompt_payload 포함, 날짜 필터 지원)
+ * 모든 visible 세션 조회 — 도메인 함수(`listVisibleSessions`)에 위임.
  *
- * 개선:
- *  - LEFT JOIN + GROUP BY로 N+1 쿼리 제거
- *  - v22: HAVING last_activity_at IS NOT NULL — requests가 0건인 빈 세션 hide
- *    (사용자가 데이터 삭제·정리한 뒤 sessions 테이블에만 남은 잔존 행이 사이드바에
- *     노이즈로 노출되던 문제 해결. 활성 세션은 첫 hook 도달 시 last_activity_at이 채워지므로
- *     영향 없음.)
+ * "visible 정의 SSoT가 한 곳" 원칙을 지키기 위해 SQL은 도메인 모듈이 보유한다.
+ * 외부 시그니처는 호환성을 위해 그대로.
  */
 export function getAllSessions(
   db: Database,
@@ -40,32 +44,7 @@ export function getAllSessions(
   toTs?: number,
   now: number = Date.now(),
 ): SessionQueryResult[] {
-  // 자기완결형 SQL 조각 — 외부 params 배열 push 패턴은 SQL 등장 순서와 어긋나는
-  // 회귀를 반복 유발했기에 폐기. 호출 측이 SQL 텍스트를 쓰는 라인에서 곧바로
-  // `...frag.params`로 spread하여 자리·순서를 명시 결합한다.
-  const live = buildLiveStateColumn(now, 's.ended_at', 'MAX(r.timestamp)');
-
-  const whereConds: string[] = [];
-  const whereParams: number[] = [];
-  if (fromTs) { whereConds.push('s.started_at >= ?'); whereParams.push(fromTs); }
-  if (toTs)   { whereConds.push('s.started_at <= ?'); whereParams.push(toTs); }
-  const where = whereConds.length ? `WHERE ${whereConds.join(' AND ')}` : '';
-
-  return db.query(`
-    SELECT s.*,
-      (SELECT r.payload FROM requests r
-       WHERE r.session_id = s.id AND r.type = 'prompt'
-       ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload,
-      MAX(r.timestamp) as last_activity_at,
-      ${live.sql} as live_state
-    FROM sessions s
-    ${ACTIVE_SESSION_REQUEST_JOIN_SQL}
-    ${where}
-    GROUP BY s.id
-    HAVING last_activity_at IS NOT NULL
-    ORDER BY (s.ended_at IS NULL) DESC, COALESCE(MAX(r.timestamp), s.started_at) DESC
-    LIMIT ?
-  `).all(...live.params, ...whereParams, limit) as SessionQueryResult[];
+  return listVisibleSessions(db, limit, { fromTs, toTs }, now) as SessionQueryResult[];
 }
 
 /**
@@ -101,8 +80,7 @@ export function getSessionsWithFilter(
 }
 
 /**
- * 프로젝트별 세션 조회
- * 개선: LEFT JOIN + GROUP BY로 N+1 쿼리 제거
+ * 프로젝트별 visible 세션 조회 — 도메인 함수(`listVisibleSessions`)에 projectName 필터 적용.
  */
 export function getSessionsByProject(
   db: Database,
@@ -112,66 +90,15 @@ export function getSessionsByProject(
   toTs?: number,
   now: number = Date.now(),
 ): SessionQueryResult[] {
-  const live = buildLiveStateColumn(now, 's.ended_at', 'MAX(r.timestamp)');
-
-  const whereConds: string[] = ['s.project_name = ?'];
-  const whereParams: (string | number)[] = [projectName];
-  if (fromTs) { whereConds.push('s.started_at >= ?'); whereParams.push(fromTs); }
-  if (toTs)   { whereConds.push('s.started_at <= ?'); whereParams.push(toTs); }
-
-  return db.query(`
-    SELECT s.*,
-      (SELECT r.payload FROM requests r
-       WHERE r.session_id = s.id AND r.type = 'prompt'
-       ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload,
-      MAX(r.timestamp) as last_activity_at,
-      ${live.sql} as live_state
-    FROM sessions s
-    ${ACTIVE_SESSION_REQUEST_JOIN_SQL}
-    WHERE ${whereConds.join(' AND ')}
-    GROUP BY s.id
-    HAVING last_activity_at IS NOT NULL
-    ORDER BY (s.ended_at IS NULL) DESC, COALESCE(MAX(r.timestamp), s.started_at) DESC
-    LIMIT ?
-  `).all(...live.params, ...whereParams, limit) as SessionQueryResult[];
+  return listVisibleSessions(db, limit, { fromTs, toTs, projectName }, now) as SessionQueryResult[];
 }
 
 /**
- * 라이브 세션 조회 — "ended_at IS NULL AND 최근 STALE_THRESHOLD_MS 이내 활동" 술어 적용.
- *
- * 반환 컬럼: sessions.* + last_activity_at + live_state ('live' 고정 — WHERE에서 선별).
- *
- * 다른 read 함수(getAllSessions/getSessionsByProject)와 last_activity_at 계산 형태,
- * visible request 정의(ACTIVE_SESSION_REQUEST_JOIN_SQL), live_state derive를 모두
- * 동일 패턴으로 사용한다 → 응답 페이로드 모양 일관.
- *
- * 변경 이력:
- *  - v(이번): live_state SELECT 컬럼 추가 + LEFT JOIN GROUP BY 형태로 통일.
- *    클라이언트가 stale 판정 로직을 가지지 않도록 서버에서 SSoT로 결정.
- *  - v(직전): SessionEnd hook 누락(Ctrl+C, 크래시 등)으로 ended_at이 영원히 NULL인
- *    stale 세션이 헤더 LIVE 카운트에 누적되던 문제 해결. buildLiveSessionPredicate
- *    SSoT로 헤더/프로젝트 active_count/Live Pulse 카드 정의 통일.
- *
- * @param db   DB 핸들
- * @param now  현재 시각(ms). 라우트 레이어에서 1회 결정 후 같은 응답에서 재사용
- *             해야 카운트 일관성 보장. 미지정 시 Date.now() (테스트용 편의 시그니처).
+ * LIVE 세션 조회 — 도메인 함수(`listLiveSessions`)에 위임.
  */
 export function getActiveSessions(
   db: Database,
   now: number = Date.now(),
 ): SessionQueryResult[] {
-  // 두 빌더는 같은 LIVE_STALE_THRESHOLD_MS 상수를 참조하므로 SSoT 무결.
-  // SQL `?` 등장 순서: SELECT의 liveStateCol → WHERE의 livePredicate → spread 순서 동일.
-  const liveStateCol = buildLiveStateColumn(now, 's.ended_at', 'MAX(r.timestamp)');
-  const livePred = buildLiveSessionPredicate(now, 's');
-  return db.query(`
-    SELECT s.*,
-      MAX(r.timestamp) as last_activity_at,
-      ${liveStateCol.sql} as live_state
-    FROM sessions s
-    ${ACTIVE_SESSION_REQUEST_JOIN_SQL}
-    WHERE ${livePred.sql}
-    GROUP BY s.id
-    ORDER BY s.started_at DESC
-  `).all(...liveStateCol.params, ...livePred.params) as SessionQueryResult[];
+  return listLiveSessions(db, now) as SessionQueryResult[];
 }
