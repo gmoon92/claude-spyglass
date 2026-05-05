@@ -28,23 +28,29 @@ Was it the subagent that went deep? The loop that read 40 files? The context tha
 
 ## Quick Start
 
-**Requires:** [Bun](https://bun.sh) 1.2+, Claude Code
+**Requires:** [Bun](https://bun.sh) 1.2+, [Claude Code](https://claude.ai/code)
 
 ```bash
-# Clone & start
+# 1. Claude Code 설치 (미설치 시)
+curl -fsSL https://claude.ai/install.sh | bash
+
+# 2. Bun 설치 (미설치 시)
+curl -fsSL https://bun.sh/install | bash
+
+# 3. Clone & start
 git clone <repository-url> ~/.spyglass-src
 cd ~/.spyglass-src && bun install && bun run dev
 
-# Verify
+# 4. Verify
 curl -sf http://127.0.0.1:9999/health && echo OK
 
-# Open dashboard
+# 5. Open dashboard
 open http://localhost:9999
 ```
 
-Then wire up Claude Code hooks so spyglass receives data from every session — including future projects automatically.
+### 채널 A — 훅 (툴 타임라인·세션)
 
-Copy the `env` and `hooks` keys from one of the examples below into your **global** `~/.claude/settings.json`:
+`~/.claude/settings.json`(글로벌)에 `env`와 `hooks` 키를 병합합니다:
 
 | Profile | Hooks | Coverage |
 |---------|-------|----------|
@@ -52,6 +58,31 @@ Copy the `env` and `hooks` keys from one of the examples below into your **globa
 | **Full ★** | **27** | **+ Subagent · Task · Permission · Compact · Worktree** |
 
 Examples: [`settings.hooks.minimal.json`](./docs/examples/settings.hooks.minimal.json) · [`settings.hooks.full.json`](./docs/examples/settings.hooks.full.json)
+
+### 채널 B — 프록시 (토큰·비용·시스템 프롬프트)
+
+spyglass가 실행 중일 때만 경유하도록 `.zshrc` / `.bashrc`에 추가:
+
+```bash
+claude() {
+  if curl -sf http://localhost:9999/health > /dev/null 2>&1; then
+    ANTHROPIC_BASE_URL=http://localhost:9999 command claude "$@"
+  else
+    command claude "$@"
+  fi
+}
+```
+
+또는 `~/.claude/settings.json`에서 항상 경유:
+
+```jsonc
+{
+  "env": {
+    "SPYGLASS_DIR": "/Users/<your-name>/.spyglass-src",
+    "ANTHROPIC_BASE_URL": "http://localhost:9999"
+  }
+}
+```
 
 Full guide → [docs/install-guide.md](./docs/install-guide.md)
 

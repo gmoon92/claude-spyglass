@@ -81,6 +81,16 @@ spyglass는 호스트에서 **Bun 프로세스로 직접 실행**되며, 두 가
 | **curl** | 호스트 기본 | `curl --version` |
 | **jq** (권장) | 1.6 이상 | `jq --version` — `~/.claude/settings.json` 자동 병합용 |
 
+### Claude Code 미설치 시
+
+```bash
+# macOS / Linux / WSL — 권장 (자동 업데이트 포함)
+curl -fsSL https://claude.ai/install.sh | bash
+
+# macOS Homebrew (수동 업그레이드 필요)
+brew install --cask claude-code
+```
+
 ### Bun 미설치 시
 
 ```bash
