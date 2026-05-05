@@ -53,9 +53,16 @@ export function Ambient({ pulseBuckets, lastEventAt, stats, width, rows }: Ambie
           {formatClock(now)} · sessions {stats?.active_sessions ?? 0} · {formatTokens(stats?.total_tokens ?? 0)} tok
         </Text>
       </Box>
-      <Box width={Math.min(width - 4, 80)} marginBottom={2}>
-        <PulseWave buckets={pulseBuckets} state={state} width={Math.min(width - 4, 80)} />
-      </Box>
+      {/* chartW는 컨테이너 Box와 PulseWave에 같은 값을 전달해야 폭 정합 보장.
+          하한 20은 PulseWave 내부 dataWidth(8) + Y축 라벨(8) + 여유 4. */}
+      {(() => {
+        const chartW = Math.max(20, Math.min(width - 4, 80));
+        return (
+          <Box width={chartW} marginBottom={2}>
+            <PulseWave buckets={pulseBuckets} state={state} width={chartW} />
+          </Box>
+        );
+      })()}
       <Box marginTop={2}>
         <Text color={tokens.color.muted.fg}>m exit ambient · q quit</Text>
       </Box>

@@ -280,7 +280,6 @@ function init() {
   restorePanelHiddenState();
   restoreChartCollapsedState();
   document.getElementById('btnPanelCollapse').addEventListener('click', toggleLeftPanel);
-  document.getElementById('btnPanelExpand')?.addEventListener('click', toggleLeftPanel);
   document.getElementById('btnToggleChart').addEventListener('click', toggleChartCollapse);
 
   // panel-collapse-redesign 5라운드 회의: 키보드 단축키 ⌘B / Ctrl+B.

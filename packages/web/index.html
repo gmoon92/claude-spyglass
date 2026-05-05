@@ -44,10 +44,9 @@
       <div class="panel-resize-handle" title="드래그: 너비 조절 · 더블클릭: 콘텐츠 너비에 맞춤"></div>
       <!-- left-panel-observability-revamp ADR-006: Anomaly 발생 시에만 표시 (floating, 우상단) -->
       <button class="anomaly-badge" id="anomalyBadge" hidden type="button" aria-label="이상 감지 알림"></button>
-      <!-- header-removal: 브랜드 + LIVE 배지 + 패널 토글.
-           5라운드 디자인 회의 합의: floating 둥근 버튼 폐기 → brand-strip 우측 사각 ghost 버튼.
-           SSE 연결 상태(점)·라이브 카운트(숫자)는 모니터링 도구 핵심 신호이므로 보존.
-           시계는 OS 메뉴바와 중복이라 제거. -->
+      <!-- header-removal: 브랜드 + LIVE 배지.
+           panel-toggle-unification(이번): 사이드바 안 토글 제거. 차트 헤더 좌측 끝의
+           단일 토글이 펼침/접힘 양 상태에서 같은 위치에 노출되어 발견성·SSoT 보장. -->
       <div class="brand-strip">
         <div class="logo">Claude<span>Spyglass</span></div>
         <!-- 도트(SSE 펄스 + 연결 상태 색)와 라이브 카운트만 노출. 정의는 stat-tooltip 'active' hover. -->
@@ -55,12 +54,6 @@
           <span class="dot"></span>
           <span class="header-stat-value" id="statActive">--</span>
         </span>
-        <button class="btn-panel-toggle" id="btnPanelCollapse" type="button"
-                title="왼쪽 패널 숨기기 (⌘B)" aria-label="왼쪽 패널 숨기기">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <path d="M9 3L5 7L9 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
       </div>
 
       <div class="panel-section flex-section">
@@ -118,19 +111,22 @@
 
     </aside>
 
+    <!-- 사이드바와 메인 사이의 경계선 중앙에 위치하는 토글.
+         panel-toggle-edge-redesign(사용자 피드백 "차트 헤더 ownership 이질감"):
+         양 상태 모두 같은 픽셀 좌표(`left: var(--left-panel-width)`)에 위치 →
+         사이드바 펼침/접힘에 자동 따라감(panel-resize.js가 var 갱신).
+         사각 형태(이전 둥근 폐기) + 평소 dim, hover 시 강조 + chevron 회전. -->
+    <button class="sidebar-edge-toggle" id="btnPanelCollapse" type="button"
+            title="왼쪽 패널 토글 (⌘B)" aria-label="왼쪽 패널 토글">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M7.5 2L3.5 6L7.5 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+
     <main class="right-panel">
 
       <div class="view-section card card--compact" id="chartSection">
         <div class="view-section-header">
-          <!-- panel-collapse-redesign 후속: hide 상태에서만 표시되는 inline 펼치기 토글.
-               이전 viewport 좌상단 fixed 버튼은 콘텐츠 카드 위에 떠있어 "고아 버튼" 문제 재발 →
-               콘텐츠 헤더 좌측 끝에 자연스럽게 자리잡도록 통합. -->
-          <button class="btn-panel-toggle btn-panel-expand" id="btnPanelExpand" type="button"
-                  title="왼쪽 패널 펼치기 (⌘B)" aria-label="왼쪽 패널 펼치기">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
           <div class="chart-default-meta">
             <span class="panel-label">요청 추이 (실시간)</span>
             <!-- chart-section-filter-sync ADR-002 — chartSubtitle은 timelineChart 본질(30분 sliding · 실시간)에 고정.

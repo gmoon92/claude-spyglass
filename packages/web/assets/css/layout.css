@@ -40,7 +40,7 @@ body {
 }
 
 /* ── LEFT PANEL HIDDEN — 5라운드 회의 합의 ──────────────────────────────── */
-/* 0px hide: 메인 콘텐츠가 viewport 전체 차지. 재진입은 .btn-panel-expand(좌상단 fixed) 또는 ⌘B. */
+/* 0px hide: 메인 콘텐츠가 viewport 전체 차지. 재진입은 차트 헤더 좌측 단일 토글 또는 ⌘B. */
 .main-layout.left-panel-hidden {
   grid-template-columns: 0 1fr;
   /* gap도 함께 사라지도록 — 0 column이지만 gap 16px이 남으면 메인 영역이 16px 들여쓰기됨 */
@@ -55,17 +55,57 @@ body {
   transition: opacity 120ms ease-out;
 }
 
-/* ── 펼치기 버튼 — hide 상태 전용 inline ───────────────────────────────────
-   panel-collapse-redesign 후속 (사용자 피드백 "fixed 버튼이 콘텐츠 카드 위에 떠있어 이질감"):
-   viewport 좌상단 fixed → chart-section view-section-header 좌측 끝 inline.
-   `.btn-panel-toggle`(접기 버튼과 동일 사각 ghost) 위에 추가 modifier로 동작.
-   기본 hide, .left-panel-hidden 시에만 표시. */
-.btn-panel-expand {
-  display: none;
-  margin-right: var(--space-2);
+/* ── 사이드바 경계 토글 — panel-toggle-edge-redesign ───────────────────────
+   사용자 피드백 "차트 섹션 안에 사이드바 토글이 있어 ownership 이질감" 해결안:
+   사이드바와 메인 사이의 경계선 중앙에 위치 → 토글의 ownership이 "경계 자체"가 됨.
+
+   양 상태 동일 좌표 전략:
+     `left: var(--left-panel-width)` (panel-resize.js가 user resize 시 갱신)
+     접힘 시 `--left-panel-width` 자체는 그대로지만 grid가 0으로 hide하므로
+     CSS에서 `.left-panel-hidden` 시 left를 0(+ padding)으로 별도 보정.
+
+   transform: translate(-50%, -50%)로 경계선 위에 정확히 가운데 정렬.
+   사각 형태 16×40 (이전 둥근 폐기) + 평소 opacity 0.6, hover 시 1.0 + accent 강조.
+   chevron은 .left-panel-hidden 시 180도 회전 (200ms transition). */
+.main-layout { position: relative; }
+.sidebar-edge-toggle {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--space-4) + var(--left-panel-width) + var(--space-2));
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  width: 16px; height: 40px;
+  padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+  opacity: 0.55;
+  transition:
+    left 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.15s,
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
 }
-.main-layout.left-panel-hidden .btn-panel-expand {
-  display: inline-flex;
+.sidebar-edge-toggle:hover {
+  opacity: 1;
+  background: var(--raised);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.sidebar-edge-toggle svg {
+  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  display: block;
+}
+.main-layout.left-panel-hidden .sidebar-edge-toggle {
+  /* 사이드바 0px hide 시 토글이 좌측 끝(외곽 padding 안쪽)에 노출 */
+  left: var(--space-4);
+}
+.main-layout.left-panel-hidden .sidebar-edge-toggle svg {
+  transform: rotate(180deg);
 }
 
 /* ── FOOTER ─────────────────────────────────────────────────────────────── */

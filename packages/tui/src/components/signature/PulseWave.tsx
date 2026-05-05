@@ -34,7 +34,11 @@ function headerLabel(state: PulseState): string {
 }
 
 export function PulseWave({ buckets, state, width = 80, height = 10 }: PulseWaveProps): JSX.Element {
-  const dataWidth = Math.max(16, width - Y_AXIS_COLS - 2);
+  // dataWidth는 항상 (컨테이너 width - Y축 - 여유 2칸) 안에 들어가야 한다.
+  // 이전 floor 16은 width가 작을 때(터미널 확대로 columns 축소) 차트가 컨테이너를 넘어
+  // ink가 자동 wrap → x축 라벨이 다음 줄로 밀려 footer와 겹쳐 보이는 회귀가 있었음.
+  // 진짜 안전 하한은 8 (-30m 라벨 4자 + now 라벨 3자 + 최소 1칸).
+  const dataWidth = Math.max(8, width - Y_AXIS_COLS - 2);
   // Reserve 2 rows for header + axis, the rest for chart.
   const chartHeight = Math.max(3, Math.min(8, height - 3));
 
@@ -68,14 +72,18 @@ export function PulseWave({ buckets, state, width = 80, height = 10 }: PulseWave
   const gap = Math.max(1, width - left.length - right.length);
 
   return (
-    <Box flexDirection="column">
-      <Text>
+    <Box flexDirection="column" width={width}>
+      <Text wrap="truncate-end">
         <Text color={inkLineColor(state)} bold>{left}</Text>
         <Text>{' '.repeat(gap)}</Text>
         <Text dimColor>{right}</Text>
       </Text>
-      <Text color={inkLineColor(state)}>{chart}</Text>
-      <Text dimColor>{buildTimeAxis(dataWidth)}</Text>
+      {/* asciichart 출력은 멀티라인 — 각 줄이 컨테이너 너비를 넘으면 ink가 wrap해
+          x축 라벨/footer 영역과 겹친다. 줄별로 truncate해 안전 폭을 강제. */}
+      {chart.split('\n').map((line, i) => (
+        <Text key={i} color={inkLineColor(state)} wrap="truncate-end">{line}</Text>
+      ))}
+      <Text dimColor wrap="truncate-end">{buildTimeAxis(dataWidth)}</Text>
     </Box>
   );
 }

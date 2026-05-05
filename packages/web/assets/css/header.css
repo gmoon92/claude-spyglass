@@ -3,10 +3,7 @@
    브랜드 + LIVE 배지(SSE 연결 상태 + 라이브 카운트) 한 줄.
    날짜 필터는 차트 섹션 view-section-header로 이동(콘텐츠 컨텍스트 옆).
    ────────────────────────────────────────────────────────────────────────── */
-/* 좌측 묶음(로고 + LIVE 배지) + 우측 토글.
-   panel-collapse-redesign 후속 (사용자 피드백 "LIVE 배지가 가운데 떠있어 이상"):
-   space-between 분배 폐기 → flex 자연 흐름 + 토글에만 margin-left:auto 적용해
-   "로고/LIVE는 정보 위계상 좌측 묶음, 토글은 우측 끝" 의도 명확화. */
+/* 로고 + LIVE 배지 좌측 묶음 (panel-toggle-edge-redesign 이후 토글은 main-layout 외부 element). */
 .brand-strip {
   display: flex; align-items: center;
   padding: var(--space-3) var(--space-4);
@@ -16,7 +13,6 @@
   font-family: var(--font-ui);
   min-width: 0;
 }
-.brand-strip .btn-panel-toggle { margin-left: auto; }
 
 /* ── LOGO ──────────────────────────────────────────────────────────────── */
 .logo {

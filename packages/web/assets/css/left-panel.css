@@ -86,28 +86,9 @@
 .panel-body::-webkit-scrollbar { width: 3px; }
 .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-/* ── PANEL TOGGLE BUTTONS — 5라운드 디자인 회의 합의 ────────────────────────
-   floating 둥근 버튼 폐기 → 사각 ghost 28×28. brand-strip 안 / 메인 좌상단 두 곳.
-   "버튼이 어디 매달려 있는지" 모호한 경계 침범 디자인을 제거하고 컨테이너 안에 자리잡음.
-   ────────────────────────────────────────────────────────────────────────── */
-.btn-panel-toggle {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 24px; height: 24px;
-  padding: 0;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  color: var(--text-dim);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-.btn-panel-toggle:hover {
-  background: var(--raised);
-  border-color: var(--border);
-  color: var(--text-1);
-}
-.btn-panel-toggle svg { display: block; }
+/* panel-toggle-edge-redesign: 사이드바 토글은 main-layout 자식 .sidebar-edge-toggle
+   (layout.css 정의)로 통합. brand-strip / 차트 헤더 안 토글 폐기로 .btn-panel-toggle
+   클래스도 함께 제거. */
 
 /* ── PROJECT NAME CELL ──────────────────────────────────────────────────── */
 .cell-proj-name {
