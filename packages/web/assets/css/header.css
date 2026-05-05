@@ -1,55 +1,43 @@
-/* ── HEADER ─────────────────────────────────────────────────────────────────
-   header-summary-merge ADR-004: 헤더는 글로벌 네비/필터 전용.
-   구조: [.header-left | .header-right] (justify-content: space-between)
-   stats chip(`.header-stats / .header-stat*`)은 default-view.css에서
-   `#chartSection .view-section-header` 내부 SSoT로 정의됨.
+/* ── BRAND STRIP (사이드바 상단) ───────────────────────────────────────────
+   header-removal: 가로 헤더 영역 제거 후 핵심만 사이드바 상단으로 흡수.
+   브랜드 + LIVE 배지(SSE 연결 상태 + 라이브 카운트) 한 줄.
+   날짜 필터는 차트 섹션 view-section-header로 이동(콘텐츠 컨텍스트 옆).
    ────────────────────────────────────────────────────────────────────────── */
-.header {
+.brand-strip {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 var(--space-5);
-  height: 56px;
-  gap: var(--space-4);
-  background: var(--surface);
+  padding: var(--space-3) var(--space-4);
+  gap: var(--space-3);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  min-width: 0;
   font-family: var(--font-ui);
-}
-.header-left {
-  display: flex; align-items: center;
-  gap: var(--space-3);
-  flex-shrink: 0;
   min-width: 0;
-}
-.header-right {
-  display: flex; align-items: center;
-  gap: var(--space-3);
-  flex-shrink: 0;
 }
 
 /* ── LOGO ──────────────────────────────────────────────────────────────── */
 .logo {
   font-family: var(--font-ui);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-1);
   letter-spacing: -0.01em;
   cursor: pointer;
   user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 .logo span { color: var(--accent); }
 
-/* ── LIVE BADGE — header-summary-merge ADR-007: 활성 세션 chip 통합 ────────
-   구조: dot(SSE 연결 상태) + badge-live-label(LIVE) + .header-stat(active sessions chip).
-   chip은 .header-stat SSoT로 stat-tooltip / api.js와 호환.
-   .live-dot이 SSE pulse를 담당하므로 chip의 ::before는 무력화.
+/* ── LIVE BADGE — header-removal 후 사이드바에서도 그대로 사용 ────────────
+   SSoT: badge-live·dot·header-stat 클래스. infra.js setLiveStatus가 toggle.
    ────────────────────────────────────────────────────────────────────── */
 .badge-live {
   display: inline-flex; align-items: center; gap: var(--space-2);
   background: var(--badge-grad-success);
   border: 1px solid rgba(63,185,80,0.30);
   color: var(--success);
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
   font-family: var(--font-ui);
   font-size: var(--text-small);
@@ -80,7 +68,7 @@
 .badge-live.disconnected .dot { background: var(--red); animation: none; }
 .badge-live.disconnected .badge-live-label { color: var(--red); }
 
-/* 활성 세션 chip (LIVE 배지 안 통합) — ADR-007 */
+/* 활성 세션 chip (LIVE 배지 안 통합) */
 .badge-live .header-stat {
   display: inline-flex;
   align-items: baseline;
@@ -107,16 +95,7 @@
 }
 /* live-dot이 이미 시각 dot을 담당하므로 chip의 .is-active-indicator::before 무력화 */
 .badge-live .header-stat::before { display: none !important; }
-/* 활성 세션 > 0 — chip 값 green (LIVE 배지 컨텍스트에서도 동일 의미) */
 .badge-live .header-stat.is-active-indicator .header-stat-value { color: var(--green); }
-
-.last-updated {
-  font-family: var(--font-data);
-  color: var(--text-3);
-  font-size: var(--text-meta);
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
-}
 
 /* ── ERROR BANNER ───────────────────────────────────────────────────────── */
 .error-banner {
@@ -133,18 +112,20 @@
 }
 .retry-btn:hover { background: var(--red-dim); }
 
-/* ── DATE FILTER ────────────────────────────────────────────────────────── */
+/* ── DATE FILTER (차트 섹션 chart-actions로 이동) ─────────────────────────
+   header-removal: 데이터 컨텍스트(차트) 옆에 위치 → 의미적 응집.
+   ────────────────────────────────────────────────────────────────────── */
 .date-filter {
   display: flex; gap: 2px; align-items: center; flex-shrink: 0;
   background: var(--surface-alt);
-  padding: 3px;
+  padding: 2px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
 }
 .filter-btn {
   background: transparent; border: none;
   color: var(--text-3);
-  padding: 4px 12px;
+  padding: 3px 10px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-family: var(--font-ui);
@@ -161,13 +142,7 @@
 }
 
 /* ── 반응형 ───────────────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .header { gap: var(--space-3); padding: 0 var(--space-3); }
-  .last-updated { display: none; }
-}
 @media (max-width: 480px) {
-  /* ADR-007: badge-live는 활성 세션 chip을 포함하므로 480에서도 노출 (핵심 정보).
-     공간 절약은 padding 축소 + label 짧게. */
-  .badge-live { padding: 3px var(--space-2); }
+  .badge-live { padding: 2px var(--space-2); }
   .badge-live-label { display: none; }
 }

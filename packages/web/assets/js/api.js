@@ -1,7 +1,7 @@
 // API / Fetch 모듈
 import { fmt, fmtToken, formatDuration } from './formatters.js';
 import { setTypeData, setSourceData, drawDonut, renderTypeLegend, getDonutMode } from './chart.js';
-import { clearError, setLastUpdated, showError } from './infra.js';
+import { clearError, showError } from './infra.js';
 import { renderProjects, getAllSessions, setAllSessions, renderBrowserSessions } from './left-panel.js';
 import {
   renderBurnRate, renderCacheHealth, renderLivePulse,
@@ -108,7 +108,6 @@ export async function fetchDashboard() {
     drawDonut();
     renderTypeLegend();
     clearError();
-    setLastUpdated();
     // 옵저빌리티 패널은 dashboard 갱신 트리거에 맞춰 함께 갱신
     // (left-panel-observability-revamp ADR-003 — 별도 Promise.all 병렬)
     fetchObservability();

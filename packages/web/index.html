@@ -30,27 +30,6 @@
 </head>
 <body>
 
-  <header class="header">
-    <div class="header-left">
-      <div class="logo">Claude<span>Spyglass</span></div>
-      <span class="badge-live" id="liveBadge" title="SSE 실시간 연결 상태 + 활성 세션 수">
-        <span class="dot"></span>
-        <span class="badge-live-label">LIVE</span>
-        <span class="header-stat" id="activeCard" data-stat-tooltip="active">
-          <span class="header-stat-value" id="statActive">--</span>
-        </span>
-      </span>
-    </div>
-    <div class="header-right">
-      <div class="date-filter" id="dateFilter">
-        <button class="filter-btn active" data-range="all" title="수집된 전체 기간 데이터 표시">전체</button>
-        <button class="filter-btn" data-range="today" title="오늘 00:00(로컬 시간) 이후 데이터만 표시">오늘</button>
-        <button class="filter-btn" data-range="week" title="이번 주 월요일 00:00(로컬 시간) 이후 데이터만 표시">이번주</button>
-      </div>
-      <span class="last-updated" id="lastUpdated">—</span>
-    </div>
-  </header>
-
   <div class="error-banner" id="errorBanner">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
       <circle cx="8" cy="8" r="6.5"/><line x1="8" y1="5" x2="8" y2="9"/><circle cx="8" cy="11.5" r="0.6" fill="currentColor"/>
@@ -70,6 +49,20 @@
           <path d="M7.5 2.5L3.5 6L7.5 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
+
+      <!-- header-removal: 브랜드 + LIVE 배지 흡수.
+           SSE 연결 상태(점)·라이브 카운트(숫자)는 모니터링 도구 핵심 신호이므로 보존.
+           시계는 OS 메뉴바와 중복이라 제거. -->
+      <div class="brand-strip">
+        <div class="logo">Claude<span>Spyglass</span></div>
+        <span class="badge-live" id="liveBadge" title="SSE 실시간 연결 상태 · 라이브 세션 수">
+          <span class="dot"></span>
+          <span class="badge-live-label">LIVE</span>
+          <span class="header-stat" id="activeCard" data-stat-tooltip="active">
+            <span class="header-stat-value" id="statActive">--</span>
+          </span>
+        </span>
+      </div>
 
       <div class="panel-section flex-section">
         <div class="panel-body">
@@ -144,6 +137,13 @@
             <div class="detail-agg-badges detail-agg-badges--hidden" id="detailBadges"></div>
           </div>
           <div class="chart-actions">
+            <!-- header-removal: 날짜 필터를 데이터 컨텍스트(차트) 옆으로 이동.
+                 ID `dateFilter` 보존 → main.js 이벤트 핸들러 수정 불필요. -->
+            <div class="date-filter" id="dateFilter">
+              <button class="filter-btn active" data-range="all" title="수집된 전체 기간 데이터 표시">전체</button>
+              <button class="filter-btn" data-range="today" title="오늘 00:00(로컬 시간) 이후 데이터만 표시">오늘</button>
+              <button class="filter-btn" data-range="week" title="이번 주 월요일 00:00(로컬 시간) 이후 데이터만 표시">이번주</button>
+            </div>
             <button class="btn-toggle" id="btnToggleChart" title="접기 / 펼치기" aria-label="접기">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>

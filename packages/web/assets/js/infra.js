@@ -48,6 +48,3 @@ export function clearError() {
   setLiveStatus(true);
 }
 
-export function setLastUpdated() {
-  document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString('ko-KR');
-}
