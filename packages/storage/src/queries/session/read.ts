@@ -40,15 +40,16 @@ export function getAllSessions(
   toTs?: number,
   now: number = Date.now(),
 ): SessionQueryResult[] {
-  const conditions: string[] = [];
-  const params: (string | number)[] = [];
-  if (fromTs) { conditions.push('s.started_at >= ?'); params.push(fromTs); }
-  if (toTs)   { conditions.push('s.started_at <= ?'); params.push(toTs); }
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  // 자기완결형 SQL 조각 — 외부 params 배열 push 패턴은 SQL 등장 순서와 어긋나는
+  // 회귀를 반복 유발했기에 폐기. 호출 측이 SQL 텍스트를 쓰는 라인에서 곧바로
+  // `...frag.params`로 spread하여 자리·순서를 명시 결합한다.
+  const live = buildLiveStateColumn(now, 's.ended_at', 'MAX(r.timestamp)');
 
-  // live_state SSoT — 클라가 자체 판정하지 않도록 서버에서 결정.
-  // params 순서: [fromTs?, toTs?, live_state cutoff, limit]
-  const liveStateCol = buildLiveStateColumn(now, 's.ended_at', 'MAX(r.timestamp)', params as number[]);
+  const whereConds: string[] = [];
+  const whereParams: number[] = [];
+  if (fromTs) { whereConds.push('s.started_at >= ?'); whereParams.push(fromTs); }
+  if (toTs)   { whereConds.push('s.started_at <= ?'); whereParams.push(toTs); }
+  const where = whereConds.length ? `WHERE ${whereConds.join(' AND ')}` : '';
 
   return db.query(`
     SELECT s.*,
@@ -56,7 +57,7 @@ export function getAllSessions(
        WHERE r.session_id = s.id AND r.type = 'prompt'
        ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload,
       MAX(r.timestamp) as last_activity_at,
-      ${liveStateCol} as live_state
+      ${live.sql} as live_state
     FROM sessions s
     ${ACTIVE_SESSION_REQUEST_JOIN_SQL}
     ${where}
@@ -64,7 +65,7 @@ export function getAllSessions(
     HAVING last_activity_at IS NOT NULL
     ORDER BY (s.ended_at IS NULL) DESC, COALESCE(MAX(r.timestamp), s.started_at) DESC
     LIMIT ?
-  `).all(...params, limit) as SessionQueryResult[];
+  `).all(...live.params, ...whereParams, limit) as SessionQueryResult[];
 }
 
 /**
@@ -111,16 +112,12 @@ export function getSessionsByProject(
   toTs?: number,
   now: number = Date.now(),
 ): SessionQueryResult[] {
-  const conditions: string[] = ['s.project_name = ?'];
-  const params: (string | number)[] = [projectName];
+  const live = buildLiveStateColumn(now, 's.ended_at', 'MAX(r.timestamp)');
 
-  if (fromTs) { conditions.push('s.started_at >= ?'); params.push(fromTs); }
-  if (toTs) { conditions.push('s.started_at <= ?'); params.push(toTs); }
-
-  // live_state SSoT — getAllSessions와 동일 정의 공유.
-  // params 순서: [project, fromTs?, toTs?, live_state cutoff, limit]
-  const liveStateCol = buildLiveStateColumn(now, 's.ended_at', 'MAX(r.timestamp)', params as number[]);
-  params.push(limit.toString());
+  const whereConds: string[] = ['s.project_name = ?'];
+  const whereParams: (string | number)[] = [projectName];
+  if (fromTs) { whereConds.push('s.started_at >= ?'); whereParams.push(fromTs); }
+  if (toTs)   { whereConds.push('s.started_at <= ?'); whereParams.push(toTs); }
 
   return db.query(`
     SELECT s.*,
@@ -128,15 +125,15 @@ export function getSessionsByProject(
        WHERE r.session_id = s.id AND r.type = 'prompt'
        ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload,
       MAX(r.timestamp) as last_activity_at,
-      ${liveStateCol} as live_state
+      ${live.sql} as live_state
     FROM sessions s
     ${ACTIVE_SESSION_REQUEST_JOIN_SQL}
-    WHERE ${conditions.join(' AND ')}
+    WHERE ${whereConds.join(' AND ')}
     GROUP BY s.id
     HAVING last_activity_at IS NOT NULL
     ORDER BY (s.ended_at IS NULL) DESC, COALESCE(MAX(r.timestamp), s.started_at) DESC
     LIMIT ?
-  `).all(...params) as SessionQueryResult[];
+  `).all(...live.params, ...whereParams, limit) as SessionQueryResult[];
 }
 
 /**
@@ -163,19 +160,18 @@ export function getActiveSessions(
   db: Database,
   now: number = Date.now(),
 ): SessionQueryResult[] {
-  const params: number[] = [];
-  // params 순서: [livePredicate cutoff, liveStateCol cutoff].
   // 두 빌더는 같은 LIVE_STALE_THRESHOLD_MS 상수를 참조하므로 SSoT 무결.
-  const livePredicate = buildLiveSessionPredicate(now, 's', params);
-  const liveStateCol = buildLiveStateColumn(now, 's.ended_at', 'MAX(r.timestamp)', params);
+  // SQL `?` 등장 순서: SELECT의 liveStateCol → WHERE의 livePredicate → spread 순서 동일.
+  const liveStateCol = buildLiveStateColumn(now, 's.ended_at', 'MAX(r.timestamp)');
+  const livePred = buildLiveSessionPredicate(now, 's');
   return db.query(`
     SELECT s.*,
       MAX(r.timestamp) as last_activity_at,
-      ${liveStateCol} as live_state
+      ${liveStateCol.sql} as live_state
     FROM sessions s
     ${ACTIVE_SESSION_REQUEST_JOIN_SQL}
-    WHERE ${livePredicate}
+    WHERE ${livePred.sql}
     GROUP BY s.id
     ORDER BY s.started_at DESC
-  `).all(...params) as SessionQueryResult[];
+  `).all(...liveStateCol.params, ...livePred.params) as SessionQueryResult[];
 }

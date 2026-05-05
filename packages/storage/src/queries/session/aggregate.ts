@@ -36,27 +36,25 @@ export function getSessionStats(
   fromTs?: number,
   toTs?: number,
 ): SessionStats {
-  const conditions: string[] = [];
-  const params: number[] = [];
+  // SELECT의 livePredicate cutoff을 먼저 spread, 이어서 WHERE의 fromTs/toTs.
+  // SQL `?` 등장 순서와 spread 순서가 한 라인에 같이 보여 정합 자명.
+  const live = buildLiveSessionPredicate(now, 's');
 
-  if (fromTs) { conditions.push('s.started_at >= ?'); params.push(fromTs); }
-  if (toTs) { conditions.push('s.started_at <= ?'); params.push(toTs); }
-
-  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-  // 라이브 predicate는 SELECT 식 안에서 CASE의 boolean으로 사용된다.
-  // params 순서: [fromTs?, toTs?, livePredicate cutoff]
-  const livePredicate = buildLiveSessionPredicate(now, 's', params);
+  const whereConds: string[] = [];
+  const whereParams: number[] = [];
+  if (fromTs) { whereConds.push('s.started_at >= ?'); whereParams.push(fromTs); }
+  if (toTs)   { whereConds.push('s.started_at <= ?'); whereParams.push(toTs); }
+  const whereClause = whereConds.length > 0 ? `WHERE ${whereConds.join(' AND ')}` : '';
 
   const result = db.query(`
     SELECT
       COUNT(*) as total_sessions,
       COALESCE(SUM(s.total_tokens), 0) as total_tokens,
       COALESCE(AVG(s.total_tokens), 0) as avg_tokens_per_session,
-      SUM(CASE WHEN ${livePredicate} THEN 1 ELSE 0 END) as active_sessions
+      SUM(CASE WHEN ${live.sql} THEN 1 ELSE 0 END) as active_sessions
     FROM sessions s
     ${whereClause}
-  `).get(...params) as SessionStats;
+  `).get(...live.params, ...whereParams) as SessionStats;
 
   return result;
 }
@@ -81,27 +79,26 @@ export function getProjectStats(
   fromTs?: number,
   toTs?: number,
 ): ProjectStats[] {
-  const conditions: string[] = [];
-  const params: (number | string)[] = [];
+  const live = buildLiveSessionPredicate(now, 's');
 
-  if (fromTs) { conditions.push('s.started_at >= ?'); params.push(fromTs); }
-  if (toTs) { conditions.push('s.started_at <= ?'); params.push(toTs); }
+  const whereConds: string[] = [];
+  const whereParams: number[] = [];
+  if (fromTs) { whereConds.push('s.started_at >= ?'); whereParams.push(fromTs); }
+  if (toTs)   { whereConds.push('s.started_at <= ?'); whereParams.push(toTs); }
+  const whereClause = whereConds.length > 0 ? `WHERE ${whereConds.join(' AND ')}` : '';
 
-  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  // params 순서: [fromTs?, toTs?, livePredicate cutoff, limit]
-  const livePredicate = buildLiveSessionPredicate(now, 's', params as number[]);
-  params.push(limit.toString());
-
+  // SQL `?` 등장 순서: SELECT의 live cutoff → WHERE fromTs/toTs → LIMIT.
+  // .all() spread 순서를 같은 모양으로 맞춰 정합 자명.
   return db.query(`
     SELECT
       s.project_name,
       COUNT(*) as session_count,
-      SUM(CASE WHEN ${livePredicate} THEN 1 ELSE 0 END) as active_count,
+      SUM(CASE WHEN ${live.sql} THEN 1 ELSE 0 END) as active_count,
       SUM(s.total_tokens) as total_tokens
     FROM sessions s
     ${whereClause}
     GROUP BY s.project_name
     ORDER BY total_tokens DESC
     LIMIT ?
-  `).all(...params) as ProjectStats[];
+  `).all(...live.params, ...whereParams, limit) as ProjectStats[];
 }
