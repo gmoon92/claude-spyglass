@@ -5,7 +5,7 @@
  */
 
 import { SpyglassDatabase, getDatabase, closeDatabase } from '@spyglass/storage';
-import { clearDiagLogs, getDiagLogDir } from '../diag-log';
+import { clearDiagLogs, getDiagLogDir, logDiagStatus } from '../diag-log';
 import { PORT, HOST, DB_PATH } from './config';
 import { startMaintenanceSchedule, stopMaintenanceSchedule } from './maintenance';
 import { handleRequest } from './dispatch';
@@ -55,6 +55,9 @@ export function startServer(options: {
 
   console.log(`[Server] Running on http://${host}:${port}`);
   console.log(`[Server] Health check: http://${host}:${port}/health`);
+
+  // 진단 로그 모드 상태/활성화 방법을 부팅 배너에 출력 (self-documenting boot message)
+  logDiagStatus();
 
   return server;
 }

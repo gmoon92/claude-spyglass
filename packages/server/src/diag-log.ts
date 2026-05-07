@@ -113,6 +113,40 @@ export function getDiagLogDir(): string {
 }
 
 /**
+ * 서버 부팅 배너에 진단 로그 모드 안내를 출력.
+ *
+ * 책임:
+ *  - 현재 SPYGLASS_DIAG_ENABLED 상태(ON/OFF)와 활성화 방법을 한 블록으로 표시.
+ *  - 사용자가 "어떻게 켜더라" 묻지 않게 하기 위한 self-documenting 부팅 메시지.
+ *
+ * 호출 시점:
+ *  - runtime/lifecycle.ts의 startServer()에서 서버 listen 직후 1회.
+ *
+ * 의존성: console (no-op safe — 항상 출력).
+ */
+export function logDiagStatus(): void {
+  if (ENABLED) {
+    console.log(
+      `[Diag] SPYGLASS_DIAG_ENABLED=1 → diagnostic logs ON at ${LOG_DIR}\n`
+        + `       categories: model-trace.log, hook-payload.jsonl, proxy-payload.jsonl\n`
+        + `       (To disable: unset SPYGLASS_DIAG_ENABLED and restart)`,
+    );
+  } else {
+    console.log(
+      `[Diag] Diagnostic logs OFF (default). To enable raw hook/proxy payload capture, restart with one of:\n`
+        + `       1) inline prefix : SPYGLASS_DIAG_ENABLED=1 bun run dev    # space, no '&'\n`
+        + `       2) env wrapper   : env SPYGLASS_DIAG_ENABLED=1 bun run dev\n`
+        + `       3) export (shell): export SPYGLASS_DIAG_ENABLED=1 && bun run dev\n`
+        + `       NOTE: 'SPYGLASS_DIAG_ENABLED=1 & bun run dev' is WRONG — '&' backgrounds the\n`
+        + `             assignment as a separate process; the var won't reach 'bun run dev'.\n`
+        + `       optional flags : SPYGLASS_DIAG_LOG_DIR=<path>  SPYGLASS_DIAG_RAW_SSE=1\n`
+        + `       categories ON  : model-trace.log, hook-payload.jsonl, proxy-payload.jsonl\n`
+        + `       default log dir: ${DEFAULT_LOG_DIR}`,
+    );
+  }
+}
+
+/**
  * LOG_DIR 안의 진단 로그 파일을 모두 0바이트로 truncate.
  *
  * 책임:
