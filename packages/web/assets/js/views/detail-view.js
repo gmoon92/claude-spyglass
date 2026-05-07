@@ -3,7 +3,7 @@
 import { getAllSessions, renderBrowserSessions } from '../left-panel.js';
 import {
   getSelectedSession, setSelectedSession,
-  setRightView, getDetailTab, setDetailTab,
+  setRightView, getDetailTab,
   getDetailFilterBar,
 } from '../state.js';
 import {
@@ -25,14 +25,23 @@ export async function loadSession(id) {
   setSelectedSession(id);
   renderBrowserSessions();
   setRightView('detail');
-  setDetailTab('requests');
+  // 세션 전환 시 마지막에 보던 탭을 유지한다(getDetailTab()는 모듈 수준 _detailTab을 그대로 반환).
+  // setDetailView(getDetailTab())이 finally에서 새 세션의 데이터로 lazy 갱신해 준다.
   document.getElementById('detailView').classList.remove('detail-collapsed');
   setChartMode('detail');
   renderRightPanel();
 
   document.getElementById('detailLoading').style.display = 'block';
+  // 로딩 중에는 모든 탭 뷰를 숨겨 이전 세션 데이터의 깜빡임을 방지한다.
+  // 데이터 fetch 완료 후 setDetailView(getDetailTab())이 현재 탭만 다시 표시한다.
   document.getElementById('detailRequestsView').style.display = 'none';
   document.getElementById('detailTurnView').style.display = 'none';
+  const llmViewEl    = document.getElementById('detailLlmInputView');
+  const sysLibViewEl = document.getElementById('detailSysLibView');
+  const toolsViewEl  = document.getElementById('detailToolsView');
+  if (llmViewEl)    llmViewEl.style.display    = 'none';
+  if (sysLibViewEl) sysLibViewEl.style.display = 'none';
+  if (toolsViewEl)  toolsViewEl.style.display  = 'none';
 
   const session = getAllSessions().find(s => s.id === id);
   const detailIdEl = document.getElementById('detailSessionId');
