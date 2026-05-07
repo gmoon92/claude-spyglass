@@ -184,6 +184,8 @@ export function saveRequest(
       agent_type: payload.agent_type ?? null,
       tool_interrupted: payload.tool_interrupted ?? null,
       tool_user_modified: payload.tool_user_modified ?? null,
+      // v24: 메타 문서 카탈로그 매칭용 슬래시 커맨드 이름
+      slash_command: payload.slash_command ?? null,
     });
     return { saved: true, wasUpsert: false };
   } catch (error) {

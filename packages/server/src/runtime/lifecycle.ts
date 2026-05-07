@@ -9,6 +9,7 @@ import { clearDiagLogs, getDiagLogDir, logDiagStatus } from '../diag-log';
 import { PORT, HOST, DB_PATH } from './config';
 import { startMaintenanceSchedule, stopMaintenanceSchedule } from './maintenance';
 import { handleRequest } from './dispatch';
+import { bootstrapSync as bootstrapMetaDocsSync } from '../meta-docs';
 
 /** 서버 인스턴스 */
 let server: ReturnType<typeof Bun.serve> | null = null;
@@ -44,6 +45,14 @@ export function startServer(options: {
 
   // 일별 유지보수 스케줄 시작 (시작 시 즉시 + 1시간 인터벌로 날짜 변경 감지)
   startMaintenanceSchedule(db);
+
+  // v24: 메타 문서 카탈로그 부팅 동기화 — 글로벌(`~/.claude`) 1회 스캔.
+  //  실패해도 부팅은 성공해야 하므로 try/catch로 격리. project chain은 SessionStart에서 lazy 동기화.
+  try {
+    bootstrapMetaDocsSync(db.instance);
+  } catch (e) {
+    console.error('[Server] meta-docs bootstrap sync failed:', e);
+  }
 
   // 서버 시작
   server = Bun.serve({

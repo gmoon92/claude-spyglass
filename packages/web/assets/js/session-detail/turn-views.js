@@ -19,6 +19,7 @@ import { TOOL_COLORS } from '../tool-colors.js';
 import { loadToolStats } from '../tool-stats.js';
 import { showLatestLlmInput } from '../llm-input-view.js';
 import { loadSystemPromptLibrary } from '../system-prompt-library.js';
+import { loadMetaDocsLibrary } from '../meta-docs-view.js';
 import {
   buildTurnDetailRows, compressFlowWithResponses, fmtActionLabel,
 } from './turn-rows.js';
@@ -46,21 +47,25 @@ export function setDetailView(tab) {
   const turnView = document.getElementById('detailTurnView');
   const llmView = document.getElementById('detailLlmInputView');
   const sysLibView = document.getElementById('detailSysLibView');
+  const metaDocsView = document.getElementById('detailMetaDocsView');
   const toolsView = document.getElementById('detailToolsView');
-  if (reqView)    reqView.style.display    = tab === 'requests' ? '' : 'none';
-  if (turnView)   turnView.style.display   = tab === 'turn'     ? '' : 'none';
-  if (llmView)    llmView.style.display    = tab === 'llm'      ? '' : 'none';
-  if (sysLibView) sysLibView.style.display = tab === 'syslib'   ? '' : 'none';
-  if (toolsView)  toolsView.style.display  = tab === 'tools'    ? '' : 'none';
+  if (reqView)      reqView.style.display      = tab === 'requests' ? '' : 'none';
+  if (turnView)     turnView.style.display     = tab === 'turn'     ? '' : 'none';
+  if (llmView)      llmView.style.display      = tab === 'llm'      ? '' : 'none';
+  if (sysLibView)   sysLibView.style.display   = tab === 'syslib'   ? '' : 'none';
+  if (metaDocsView) metaDocsView.style.display = tab === 'metadocs' ? '' : 'none';
+  if (toolsView)    toolsView.style.display    = tab === 'tools'    ? '' : 'none';
   document.getElementById('tabRequests')?.classList.toggle('active', tab === 'requests');
   document.getElementById('tabTurn')?.classList.toggle('active',     tab === 'turn');
   document.getElementById('tabLlm')?.classList.toggle('active',      tab === 'llm');
   document.getElementById('tabSysLib')?.classList.toggle('active',   tab === 'syslib');
+  document.getElementById('tabMetaDocs')?.classList.toggle('active', tab === 'metadocs');
   document.getElementById('tabTools')?.classList.toggle('active',    tab === 'tools');
   const sessionId = getCurrentSessionId();
   if (tab === 'tools' && sessionId) loadToolStats(sessionId);
   if (tab === 'llm') showLatestLlmInput();
   if (tab === 'syslib') loadSystemPromptLibrary();
+  if (tab === 'metadocs') loadMetaDocsLibrary();
 }
 
 /**

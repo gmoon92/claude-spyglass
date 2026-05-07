@@ -24,6 +24,7 @@ import { broadcastNewRequest, broadcastSessionUpdate } from './sse';
 import { normalizeRequest } from './domain/request-normalizer';
 import { invalidateDashboardCache } from './api';
 import { diagJson } from './diag-log';
+import { syncCwd as syncMetaDocsCwd } from './meta-docs';
 
 export interface RawHookPayload {
   hook_event_name: string;
@@ -109,6 +110,16 @@ export async function eventsCollectHandler(req: Request, db: Database): Promise<
         started_at: event.timestamp,
         ended_at: null,
       });
+      // v24: 메타 문서 카탈로그 동기화 — 해당 cwd의 project chain 스캔.
+      //  - 5초 in-memory throttle 보호 (synchronizer 내부)
+      //  - 실패해도 SessionStart 처리 200 유지: try/catch로 격리
+      if (event.cwd) {
+        try {
+          syncMetaDocsCwd(db, event.cwd);
+        } catch (e) {
+          console.error('[meta-docs] syncCwd failed on SessionStart:', e);
+        }
+      }
     } else if (event.event_type === 'Stop') {
       // Stop: 사용자가 본 Claude 응답 텍스트를 requests 테이블에 'response' 타입으로 저장
       saveAssistantResponse(db, payload, event.timestamp);

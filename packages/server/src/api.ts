@@ -30,6 +30,7 @@ import { dashboardRouter, invalidateDashboardCache } from './routes/dashboard';
 import { eventsRouter } from './routes/events';
 import { proxyRouter } from './routes/proxy';
 import { systemPromptsRouter } from './routes/system-prompts';
+import { metaDocsRouter } from './routes/meta-docs';
 
 // 외부 호환: invalidateDashboardCache는 dashboard 라우터로 이전됐으나
 // 기존 import 경로(`./api`)를 보존하기 위해 re-export.
@@ -68,6 +69,10 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
   // /api/metrics/* — 별도 비동기 라우터 (UI Redesign Phase 2 시각 지표)
   const metricsResponse = await metricsRouter(req, db);
   if (metricsResponse) return metricsResponse;
+
+  // /api/meta-docs/* — 비동기 라우터 (POST refresh 본문 파싱이 async)
+  const metaDocsResponse = await metaDocsRouter(req, db);
+  if (metaDocsResponse) return metaDocsResponse;
 
   for (const handler of SYNC_ROUTERS) {
     const res = handler(req, db, url, path, method);

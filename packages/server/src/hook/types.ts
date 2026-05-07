@@ -81,6 +81,10 @@ export interface NormalizedHookPayload {
   agent_type?: string | null;
   tool_interrupted?: number | null;
   tool_user_modified?: number | null;
+  // v24: UserPromptSubmit prompt에서 추출한 슬래시 커맨드 이름.
+  //  - 사용자가 `/foo` 입력 시 prompt에 <command-name>foo</command-name>로 들어옴
+  //  - 메타 문서(type='command') 카탈로그와 매칭되는 키
+  slash_command?: string | null;
 }
 
 /** /collect 엔드포인트 응답 본문 */

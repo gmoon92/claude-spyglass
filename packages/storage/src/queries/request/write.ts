@@ -52,6 +52,8 @@ export interface CreateRequestParams {
   agent_type?: string | null;
   tool_interrupted?: number | null;
   tool_user_modified?: number | null;
+  // v24: UserPromptSubmit prompt에서 추출한 슬래시 커맨드 이름 (메타 문서 카탈로그 매칭 키)
+  slash_command?: string | null;
 }
 
 /** 요청 생성 SQL */
@@ -61,8 +63,9 @@ const SQL_CREATE_REQUEST = `
     tokens_input, tokens_output, tokens_total, duration_ms, payload, source,
     cache_creation_tokens, cache_read_tokens, preview, tool_use_id, event_type,
     tokens_confidence, tokens_source, parent_tool_use_id, api_request_id,
-    permission_mode, agent_id, agent_type, tool_interrupted, tool_user_modified
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    permission_mode, agent_id, agent_type, tool_interrupted, tool_user_modified,
+    slash_command
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 /**
@@ -100,7 +103,8 @@ export function createRequest(
     params.agent_id ?? null,
     params.agent_type ?? null,
     params.tool_interrupted ?? null,
-    params.tool_user_modified ?? null
+    params.tool_user_modified ?? null,
+    params.slash_command ?? null
   );
   return params.id;
 }
@@ -143,7 +147,8 @@ export function createRequests(
         item.agent_id ?? null,
         item.agent_type ?? null,
         item.tool_interrupted ?? null,
-        item.tool_user_modified ?? null
+        item.tool_user_modified ?? null,
+        item.slash_command ?? null
       );
     }
   });

@@ -24,6 +24,7 @@
   <link rel="stylesheet" href="/assets/css/turn-view.css">
   <link rel="stylesheet" href="/assets/css/llm-input.css">
   <link rel="stylesheet" href="/assets/css/syslib.css">
+  <link rel="stylesheet" href="/assets/css/meta-docs.css">
   <link rel="stylesheet" href="/assets/css/context-chart.css">
   <link rel="stylesheet" href="/assets/css/tool-stats.css">
   <link rel="stylesheet" href="/assets/css/obs-panel.css">
@@ -286,6 +287,7 @@
               <button class="view-tab" id="tabTurn" data-tab="turn">턴 뷰</button>
               <button class="view-tab" id="tabLlm" data-tab="llm">LLM Input</button>
               <button class="view-tab" id="tabSysLib" data-tab="syslib">System 라이브러리</button>
+              <button class="view-tab" id="tabMetaDocs" data-tab="metadocs" title="프로젝트/글로벌 .claude에 등록된 메타 문서 카탈로그 + 호출 빈도">메타 문서</button>
               <button class="view-tab" id="tabTools" data-tab="tools">도구</button>
             </div>
             <div class="view-tab-bar-controls feed-controls">
@@ -332,6 +334,13 @@
           <div id="detailSysLibView" class="detail-content" style="display:none">
             <div id="sysLibBody" class="syslib-body" role="region" aria-label="System Prompt Library">
               <div class="state-empty"><span class="state-empty-title">시스템 프롬프트 카탈로그 불러오는 중…</span></div>
+            </div>
+          </div>
+
+          <!-- v24 메타 문서 카탈로그 + 히팅률 (Migration 024) -->
+          <div id="detailMetaDocsView" class="detail-content" style="display:none">
+            <div id="metaDocsBody" class="meta-docs-body" role="region" aria-label="메타 문서 카탈로그">
+              <div class="state-empty"><span class="state-empty-title">메타 문서 카탈로그 불러오는 중…</span></div>
             </div>
           </div>
 

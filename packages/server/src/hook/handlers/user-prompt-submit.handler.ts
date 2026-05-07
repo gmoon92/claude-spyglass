@@ -19,6 +19,7 @@ import type { HookEventHandler, HookContext } from '../event-handler';
 import { resolveTranscriptContext } from '../transcript-context';
 import { extractHookAuditMeta } from '../audit-meta';
 import { processHookEvent } from '../processor';
+import { extractSlashCommand } from '../slash-command';
 import { makeRequestId, deriveTokensConfidence } from './_shared';
 
 export class UserPromptSubmitHandler implements HookEventHandler {
@@ -43,6 +44,13 @@ export class UserPromptSubmitHandler implements HookEventHandler {
         + `override='${modelOverride ?? ''}' → finalModel='${finalPromptModel ?? '(undefined)'}'`,
     );
 
+    // v24: prompt에 <command-name>/foo</command-name>가 포함되면 슬래시 커맨드 호출.
+    //  메타 문서 카탈로그(type='command')와 직접 매칭하려고 별도 컬럼에 정규화 저장.
+    const promptText = typeof (raw as { prompt?: unknown }).prompt === 'string'
+      ? (raw as { prompt: string }).prompt
+      : undefined;
+    const slashCommand = extractSlashCommand(promptText);
+
     const payload: NormalizedHookPayload = {
       id: makeRequestId('prompt', now),
       session_id: raw.session_id,
@@ -62,6 +70,7 @@ export class UserPromptSubmitHandler implements HookEventHandler {
       cache_read_tokens: transcriptData?.cacheReadTokens.value ?? 0,
       tokens_confidence: tokensConfidence,
       tokens_source: tokensSource,
+      slash_command: slashCommand,
       ...extractHookAuditMeta(raw),
     };
 

@@ -257,3 +257,22 @@ export {
   type UpsertSystemPromptParams,
   type SystemPromptOrderBy,
 } from './queries/system-prompt';
+
+// =============================================================================
+// Meta Document Catalog (v24 — Migration 024)
+// =============================================================================
+
+export {
+  upsertMetaDocument,
+  markMissingAsDeleted,
+  replaceResolutionsForCwd,
+  listMetaDocsWithUsage,
+  getMetaDocByFilePath,
+  countMetaDocs,
+  type MetaDocType,
+  type MetaDocSource,
+  type MetaDocumentRow,
+  type UpsertMetaDocParams,
+  type MetaDocUsageRow,
+  type ListMetaDocsFilter,
+} from './queries/meta-document';
