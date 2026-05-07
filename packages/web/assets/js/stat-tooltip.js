@@ -51,6 +51,10 @@ export function initStatTooltip() {
   tooltip.style.display = 'none';
   document.body.appendChild(tooltip);
 
+  // ctx-point-hover 활성 시 일반 ctx-tooltip 표시 억제
+  let _pointHoverActive = false;
+  let _currentCtxKey    = null;
+
   function show(e, key) {
     const content = STAT_TOOLTIP_CONTENT[key];
     if (!content) return;
@@ -75,11 +79,26 @@ export function initStatTooltip() {
     tooltip.style.top  = `${y}px`;
   }
 
+  function positionAt(clientX, clientY) {
+    const tw = tooltip.offsetWidth  || 220;
+    const th = tooltip.offsetHeight || 60;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let x = clientX + 12;
+    let y = clientY - th - 10;
+    if (x + tw > vw) x = clientX - tw - 12;
+    if (y < 4)        y = clientY + 12;
+    if (y + th > vh)  y = vh - th - 4;
+    tooltip.style.left = `${x}px`;
+    tooltip.style.top  = `${y}px`;
+  }
+
   function hide() {
     tooltip.style.display = 'none';
   }
 
   function showCtx(e, key) {
+    if (_pointHoverActive) return; // 포인트 호버 중에는 설명 툴팁 억제
     const content = CTX_TOOLTIP_CONTENT[key];
     if (!content) return;
     tooltip.innerHTML = `
@@ -100,7 +119,11 @@ export function initStatTooltip() {
 
   document.addEventListener('mouseover', e => {
     const ctxEl = e.target.closest('[data-ctx-tooltip]');
-    if (ctxEl) { showCtx(e, ctxEl.dataset.ctxTooltip); return; }
+    if (ctxEl) {
+      _currentCtxKey = ctxEl.dataset.ctxTooltip;
+      showCtx(e, _currentCtxKey);
+      return;
+    }
     const badge = e.target.closest('[data-mini-badge-tooltip]');
     if (badge) { showBadge(e, badge.dataset.miniBadgeTooltip); return; }
     const card = e.target.closest('[data-stat-tooltip]');
@@ -110,12 +133,47 @@ export function initStatTooltip() {
 
   document.addEventListener('mousemove', e => {
     if (tooltip.style.display === 'none') return;
-    if (!e.target.closest('[data-stat-tooltip]') && !e.target.closest('[data-ctx-tooltip]') && !e.target.closest('[data-mini-badge-tooltip]')) { hide(); return; }
+    if (_pointHoverActive) { position(e); return; } // 포인트 호버 중엔 위치만 갱신
+    if (!e.target.closest('[data-stat-tooltip]') && !e.target.closest('[data-ctx-tooltip]') && !e.target.closest('[data-mini-badge-tooltip]')) {
+      _currentCtxKey = null;
+      hide();
+      return;
+    }
     position(e);
   });
 
   document.addEventListener('mouseout', e => {
     if (!e.target.closest('[data-stat-tooltip]') && !e.target.closest('[data-ctx-tooltip]') && !e.target.closest('[data-mini-badge-tooltip]')) return;
+    if (_pointHoverActive) return;
     hide();
+  });
+
+  // 차트 데이터 포인트 hover — 실제 수치 툴팁으로 전환
+  document.addEventListener('ctx-point-hover', e => {
+    const detail = e.detail;
+    if (detail && detail.turnIndex !== undefined) {
+      _pointHoverActive = true;
+      const deltaLine = detail.formattedDelta
+        ? `<br><span style="opacity:0.6">전 턴 대비 ${detail.formattedDelta} tokens</span>`
+        : '';
+      tooltip.innerHTML = `
+        <div class="stat-tooltip-title">Turn ${detail.turnIndex}</div>
+        <div class="stat-tooltip-desc">누적 ${detail.formattedValue} tokens${deltaLine}</div>
+      `;
+      tooltip.style.display = 'block';
+      positionAt(detail.clientX, detail.clientY);
+    } else {
+      _pointHoverActive = false;
+      // 차트 영역 위에 있을 경우 설명 툴팁으로 복원
+      if (_currentCtxKey && tooltip.style.display !== 'none') {
+        const content = CTX_TOOLTIP_CONTENT[_currentCtxKey];
+        if (content) {
+          tooltip.innerHTML = `
+            <div class="stat-tooltip-title">${content.title}</div>
+            <div class="stat-tooltip-desc">${content.desc.replace(/\n/g, '<br>')}</div>
+          `;
+        }
+      }
+    }
   });
 }

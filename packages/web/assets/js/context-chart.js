@@ -3,10 +3,13 @@ import { DETAIL_FILTER_CHANGED } from './events.js';
 
 const REFERENCE_SCALE_TOKENS = 200_000; // Claude 모델 참고 스케일 (실제 한도는 모델별 상이)
 
-let _canvas = null;
-let _footer = null;
+let _canvas    = null;
+let _footer    = null;
 let _indicator = null;
-let _empty = null;
+let _empty     = null;
+let _pointData = []; // [{cx, cy, turnIndex, value, delta}] — 마우스 hit-test 용
+let _hoveredIdx = -1;
+let _lastTurns  = null;
 
 function getCssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -39,6 +42,11 @@ export function initContextChart() {
   _indicator = document.getElementById('ctxUsageIndicator');
   _empty     = document.getElementById('contextChartEmpty');
 
+  if (_canvas) {
+    _canvas.addEventListener('mousemove', _onCanvasMouseMove);
+    _canvas.addEventListener('mouseleave', _onCanvasMouseLeave);
+  }
+
   // DETAIL_FILTER_CHANGED 구독 — 컨텍스트 차트 갱신
   document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
     const { allTurns } = e.detail;
@@ -46,8 +54,62 @@ export function initContextChart() {
   });
 }
 
+function _onCanvasMouseMove(e) {
+  if (!_pointData.length) return;
+  const rect = _canvas.getBoundingClientRect();
+  const mx   = e.clientX - rect.left;
+  const my   = e.clientY - rect.top;
+
+  let nearestIdx = -1;
+  let minDist    = Infinity;
+  _pointData.forEach((pt, i) => {
+    const d = Math.hypot(pt.cx - mx, pt.cy - my);
+    if (d < minDist) { minDist = d; nearestIdx = i; }
+  });
+
+  const hitIdx = minDist < 15 ? nearestIdx : -1;
+
+  if (hitIdx !== _hoveredIdx) {
+    _hoveredIdx = hitIdx;
+    renderContextChart(_lastTurns);
+  }
+
+  _canvas.style.cursor = hitIdx >= 0 ? 'crosshair' : '';
+
+  if (hitIdx >= 0) {
+    const pt = _pointData[hitIdx];
+    document.dispatchEvent(new CustomEvent('ctx-point-hover', {
+      detail: {
+        turnIndex:      pt.turnIndex,
+        formattedValue: fmtK(pt.value),
+        formattedDelta: pt.delta !== null ? _fmtDelta(pt.delta) : null,
+        clientX:        e.clientX,
+        clientY:        e.clientY,
+      },
+    }));
+  } else {
+    document.dispatchEvent(new CustomEvent('ctx-point-hover', { detail: null }));
+  }
+}
+
+function _onCanvasMouseLeave() {
+  if (_hoveredIdx !== -1) {
+    _hoveredIdx = -1;
+    renderContextChart(_lastTurns);
+  }
+  _canvas.style.cursor = '';
+  document.dispatchEvent(new CustomEvent('ctx-point-hover', { detail: null }));
+}
+
+function _fmtDelta(n) {
+  const sign = n >= 0 ? '+' : '-';
+  const abs  = Math.abs(n);
+  return sign + (abs >= 1000 ? `${(abs / 1000).toFixed(1)}K` : String(abs));
+}
+
 export function renderContextChart(turns) {
   if (!_canvas) return;
+  _lastTurns = turns;
 
   // 유효 데이터가 하나라도 있는지 확인 (빈 상태 표시 여부 판단)
   const hasValid = (turns || []).some(t => t.prompt && (t.prompt.context_tokens > 0 || t.prompt.tokens_input > 0));
@@ -93,10 +155,22 @@ export function renderContextChart(turns) {
   const cW = W - PAD.left - PAD.right;
   const cH = H - PAD.top  - PAD.bottom;
 
-  const cols    = getColors();
-  const n       = values.length;
-  const scaleY  = (v) => PAD.top + cH - (v / maxVal) * cH;
-  const scaleX  = (i) => PAD.left + (n === 1 ? cW / 2 : (i / (n - 1)) * cW);
+  const cols   = getColors();
+  const n      = values.length;
+  const scaleY = (v) => PAD.top + cH - (v / maxVal) * cH;
+  const scaleX = (i) => PAD.left + (n === 1 ? cW / 2 : (i / (n - 1)) * cW);
+
+  // CSS pixel 좌표 미리 계산 (hit-test 와 동일 좌표계)
+  const pts = values.map((v, i) => ({ cx: scaleX(i), cy: scaleY(v) }));
+
+  // 마우스 hit-test 용 포인트 데이터 갱신
+  _pointData = sorted.map((t, i) => ({
+    cx:        pts[i].cx,
+    cy:        pts[i].cy,
+    turnIndex: t.turn_index,
+    value:     values[i],
+    delta:     i > 0 ? values[i] - values[i - 1] : null,
+  }));
 
   // 격자선
   ctx.strokeStyle = cols.gridLine;
@@ -108,28 +182,58 @@ export function renderContextChart(turns) {
 
   // 영역 fill
   ctx.beginPath();
-  ctx.moveTo(scaleX(0), scaleY(values[0]));
-  for (let i = 1; i < n; i++) ctx.lineTo(scaleX(i), scaleY(values[i]));
-  ctx.lineTo(scaleX(n - 1), PAD.top + cH);
-  ctx.lineTo(scaleX(0),     PAD.top + cH);
+  ctx.moveTo(pts[0].cx, pts[0].cy);
+  for (let i = 1; i < n; i++) ctx.lineTo(pts[i].cx, pts[i].cy);
+  ctx.lineTo(pts[n - 1].cx, PAD.top + cH);
+  ctx.lineTo(pts[0].cx,     PAD.top + cH);
   ctx.closePath();
   ctx.fillStyle = cols.fillNorm;
   ctx.fill();
 
   // 라인
   ctx.beginPath();
-  ctx.moveTo(scaleX(0), scaleY(values[0]));
-  for (let i = 1; i < n; i++) ctx.lineTo(scaleX(i), scaleY(values[i]));
+  ctx.moveTo(pts[0].cx, pts[0].cy);
+  for (let i = 1; i < n; i++) ctx.lineTo(pts[i].cx, pts[i].cy);
   ctx.strokeStyle = cols.stroke;
   ctx.lineWidth   = 1.5;
   ctx.stroke();
 
-  // 데이터 포인트
+  // 호버 포인트 — 수직 점선 가이드
+  if (_hoveredIdx >= 0 && _pointData[_hoveredIdx]) {
+    const hp = _pointData[_hoveredIdx];
+    ctx.save();
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    ctx.moveTo(hp.cx, hp.cy + 6);
+    ctx.lineTo(hp.cx, PAD.top + cH);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // 일반 데이터 포인트
   ctx.fillStyle = cols.stroke;
   for (let i = 0; i < n; i++) {
+    if (i === _hoveredIdx) continue;
     ctx.beginPath();
-    ctx.arc(scaleX(i), scaleY(values[i]), 2.5, 0, Math.PI * 2);
+    ctx.arc(pts[i].cx, pts[i].cy, 2.5, 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  // 호버 포인트 — 확대 + glow
+  if (_hoveredIdx >= 0 && _pointData[_hoveredIdx]) {
+    const hp = _pointData[_hoveredIdx];
+    ctx.save();
+    ctx.fillStyle   = cols.stroke;
+    ctx.shadowColor = cols.stroke;
+    ctx.shadowBlur  = 10;
+    ctx.beginPath();
+    ctx.arc(hp.cx, hp.cy, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur  = 0;
+    ctx.restore();
   }
 }
 
@@ -140,6 +244,9 @@ function fmtK(n) {
 
 export function clearContextChart() {
   if (!_canvas) return;
+  _pointData  = [];
+  _hoveredIdx = -1;
+  _lastTurns  = null;
   setEmptyState(true);
   if (_indicator) { _indicator.textContent = ''; _indicator.className = ''; }
   if (_footer)    _footer.textContent = '';

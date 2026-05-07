@@ -55,54 +55,67 @@ body {
   transition: opacity 120ms ease-out;
 }
 
-/* ── 사이드바 경계 토글 — panel-toggle-edge-redesign ───────────────────────
-   사용자 피드백 "차트 섹션 안에 사이드바 토글이 있어 ownership 이질감" 해결안:
-   사이드바와 메인 사이의 경계선 중앙에 위치 → 토글의 ownership이 "경계 자체"가 됨.
+/* ── 사이드바 경계 토글 — panel-toggle-edge-redesign · ghost-chevron 라운드 2 ──
+   디자인 패러다임 전환: "객체(박스)" → "글리프(chevron 한 점)"
+     이전 사각 16×40 + 배경/테두리 조합이 사용자에게 "빈 영역에 일부러 끼어있는
+     부유물"로 인식됨. 라운드 2 합의안: 배경·테두리를 제거하고 chevron 글리프만
+     남겨, 평소엔 경계선 위에 희미한 표식만 보이고 hover/focus 시에만 accent로
+     점등되는 ghost 패턴 (GitHub diff sidebar / Slack panel 류).
 
-   양 상태 동일 좌표 전략:
-     `left: var(--left-panel-width)` (panel-resize.js가 user resize 시 갱신)
-     접힘 시 `--left-panel-width` 자체는 그대로지만 grid가 0으로 hide하므로
-     CSS에서 `.left-panel-hidden` 시 left를 0(+ padding)으로 별도 보정.
+   위치 전략 (변경 없음):
+     `left: calc(var(--space-4) + var(--left-panel-width) + var(--space-2))`
+       - --space-4: .main-layout outer padding 보정
+       - --left-panel-width: 사이드바 실너비 (panel-resize.js가 user resize 시 갱신)
+       - --space-2: 패널 우측 경계의 미세 정렬 보정
+     접힘 시 grid가 사이드바를 0px hide하므로 `.left-panel-hidden`에서
+     left를 var(--space-4)로 보정 — 좌측 끝(외곽 padding 안쪽)에 노출.
 
-   transform: translate(-50%, -50%)로 경계선 위에 정확히 가운데 정렬.
-   사각 형태 16×40 (이전 둥근 폐기) + 평소 opacity 0.6, hover 시 1.0 + accent 강조.
-   chevron은 .left-panel-hidden 시 180도 회전 (200ms transition). */
+   시각/인터랙션:
+     - 너비 20px / 높이 56px — 시각은 글리프만이지만 hit zone은 Fitts 기준 충족.
+     - 평소 opacity 0.35 — 거의 안 보이는 dim chevron, 부유물 인상 제거.
+     - hover/focus 시 opacity 1 + color accent — "필요할 때만 나타나는 어포던스".
+     - 접힘 상태에서 opacity 0.7 — 펼치라는 cue를 위해 발견성 보강.
+     - chevron 180도 회전(접힘 시) — 방향 cue 유지.
+     - focus-visible: outline 2px accent — 키보드(⌘B 외 Tab) 접근성 보장. */
 .main-layout { position: relative; }
 .sidebar-edge-toggle {
   position: absolute;
   top: 50%;
   left: calc(var(--space-4) + var(--left-panel-width) + var(--space-2));
   transform: translate(-50%, -50%);
-  z-index: 5;
-  width: 16px; height: 40px;
+  z-index: 10;
+  width: 20px; height: 56px;
   padding: 0;
   display: flex; align-items: center; justify-content: center;
-  background: var(--surface-alt);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 0;
   color: var(--text-dim);
   cursor: pointer;
-  opacity: 0.55;
+  opacity: 0.35;
   transition:
     left 200ms cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 0.15s,
-    background 0.15s,
-    border-color 0.15s,
-    color 0.15s;
+    opacity 0.15s ease,
+    color 0.15s ease;
 }
 .sidebar-edge-toggle:hover {
   opacity: 1;
-  background: var(--raised);
-  border-color: var(--accent);
   color: var(--accent);
+}
+.sidebar-edge-toggle:focus-visible {
+  opacity: 1;
+  color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 .sidebar-edge-toggle svg {
   transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
   display: block;
 }
 .main-layout.left-panel-hidden .sidebar-edge-toggle {
-  /* 사이드바 0px hide 시 토글이 좌측 끝(외곽 padding 안쪽)에 노출 */
+  /* 사이드바 0px hide 시 토글이 좌측 끝(외곽 padding 안쪽)에 노출 + 발견성 보강 */
   left: var(--space-4);
+  opacity: 0.7;
 }
 .main-layout.left-panel-hidden .sidebar-edge-toggle svg {
   transform: rotate(180deg);
