@@ -26,7 +26,7 @@ function runDailyMaintenanceIfNeeded(database: SpyglassDatabase): void {
     const lastRun = getMetadata(database.instance, METADATA_KEY_LAST_CLEANUP);
     if (lastRun === today) return;
 
-    const retentionDays = parseInt(process.env.SPYGLASS_RETENTION_DAYS ?? '1', 10);
+    const retentionDays = parseInt(process.env.SPYGLASS_RETENTION_DAYS ?? '30', 10);
     const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
     const deleted = deleteOldData(database.instance, cutoff);
     database.instance.run('PRAGMA VACUUM');

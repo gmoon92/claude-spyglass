@@ -2,13 +2,13 @@
 /**
  * 오래된 데이터 삭제 스크립트
  * 사용: bun run scripts/delete-old-data.ts [days]
- * 기본값: 3일 전 데이터 삭제
+ * 기본값: 30일 전 데이터 삭제
  */
 
 import { Database } from 'bun:sqlite';
 import { getDefaultDbPath } from '../packages/storage/src/connection';
 
-const DAYS = parseInt(process.argv[2] || '2', 10);
+const DAYS = parseInt(process.argv[2] || '30', 10);
 const beforeTs = Date.now() - DAYS * 24 * 60 * 60 * 1000;
 const beforeDate = new Date(beforeTs).toISOString();
 
