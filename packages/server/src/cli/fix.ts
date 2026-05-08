@@ -108,6 +108,32 @@ export function applyFixes(): boolean {
         fixed = true;
       }
 
+      // 3-3. orphan turn_id retroactive 매핑: prompt 이전에 도착한 tool_call/response를
+      //      이후 첫 번째 prompt의 turn_id로 할당. 세션 내 첫 턴의 일부로 재분류.
+      const orphanResult = db.prepare(`
+        UPDATE requests
+        SET turn_id = (
+          SELECT p.turn_id FROM requests p
+          WHERE p.session_id = requests.session_id
+            AND p.type = 'prompt'
+            AND p.turn_id IS NOT NULL
+            AND p.timestamp >= requests.timestamp
+          ORDER BY p.timestamp ASC LIMIT 1
+        )
+        WHERE type IN ('tool_call', 'response')
+          AND turn_id IS NULL
+          AND EXISTS (
+            SELECT 1 FROM requests p
+            WHERE p.session_id = requests.session_id
+              AND p.type = 'prompt'
+              AND p.turn_id IS NOT NULL
+          )
+      `).run();
+      if (orphanResult.changes > 0) {
+        log('ok', `orphan turn_id ${orphanResult.changes}건 retroactive 매핑 (ADR-001 P1-B)`);
+        fixed = true;
+      }
+
       closeDatabase();
     } catch (e) {
       try { closeDatabase(); } catch { /* ignore */ }
