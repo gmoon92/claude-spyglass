@@ -21,5 +21,11 @@ export {
   syncCwd,
   syncGlobalOnce,
   bootstrapSync,
+  syncAllKnownCwds,
   type SyncResult,
+  type SyncAllKnownCwdsResult,
 } from './synchronizer';
+
+export {
+  discoverKnownCwds,
+} from './known-cwds';

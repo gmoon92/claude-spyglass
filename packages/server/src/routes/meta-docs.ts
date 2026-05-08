@@ -11,7 +11,18 @@
  *      ?source_root=<absolute path|null>     ('null'이면 글로벌만)
  *      ?includeDeleted=1                     (기본 false)
  *  - POST /api/meta-docs/refresh             — 동기화 재실행
- *      body: { scope?: 'global'|'project'|'all', cwd?: string, force?: boolean }
+ *      body: {
+ *        scope?: 'global'|'project'|'all',
+ *        cwd?: string,                  // 단일 cwd (project 동기화)
+ *        includeKnownCwds?: boolean,    // 알려진 모든 cwd 일괄 동기화 (모집단 확장)
+ *        force?: boolean,               // throttle 우회
+ *      }
+ *      응답:
+ *        { success: true, data: {
+ *            global?:  SyncResult,
+ *            project?: SyncResult,                     // body.cwd가 주어졌을 때만
+ *            cwds?:    Array<{cwd, result?, error?}>,  // includeKnownCwds=true일 때만
+ *        } }
  *
  * 호출자: api.ts → SYNC_ROUTERS
  *
@@ -24,7 +35,7 @@ import {
   type MetaDocType,
 } from '@spyglass/storage';
 import { jsonResponse } from './_shared';
-import { syncCwd, syncGlobalOnce } from '../meta-docs';
+import { syncCwd, syncGlobalOnce, syncAllKnownCwds } from '../meta-docs';
 
 const ALLOWED_TYPES: MetaDocType[] = ['agent', 'skill', 'command'];
 
@@ -65,7 +76,12 @@ export async function metaDocsRouter(req: Request, db: Database): Promise<Respon
 }
 
 async function refreshHandler(req: Request, db: Database): Promise<Response> {
-  let body: { scope?: string; cwd?: string; force?: boolean } = {};
+  let body: {
+    scope?: string;
+    cwd?: string;
+    includeKnownCwds?: boolean;
+    force?: boolean;
+  } = {};
   try {
     if (req.headers.get('content-type')?.includes('application/json')) {
       body = await req.json();
@@ -76,6 +92,7 @@ async function refreshHandler(req: Request, db: Database): Promise<Response> {
 
   const scope = body.scope ?? 'all';
   const force = body.force === true;
+  const includeKnownCwds = body.includeKnownCwds === true;
 
   const result: Record<string, unknown> = {};
 
@@ -91,10 +108,16 @@ async function refreshHandler(req: Request, db: Database): Promise<Response> {
           error: 'cwd is required for scope=project',
         }, 400);
       }
-      // scope=all이고 cwd 미지정이면 project는 skip
+      // scope=all이고 cwd 미지정이면 project 단일 동기화는 skip — 대신 includeKnownCwds로 처리.
     } else {
-      result.project = syncCwd(db, body.cwd);
+      result.project = syncCwd(db, body.cwd, { force });
     }
+  }
+
+  // 모집단 확장: 알려진 모든 cwd를 일괄 동기화 (orphan 메타 문서 카탈로그 등록).
+  if (includeKnownCwds && (scope === 'project' || scope === 'all')) {
+    const all = syncAllKnownCwds(db, { force });
+    result.cwds = all.cwds;
   }
 
   return jsonResponse({ success: true, data: result });

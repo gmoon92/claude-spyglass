@@ -9,7 +9,11 @@ import { clearDiagLogs, getDiagLogDir, logDiagStatus } from '../diag-log';
 import { PORT, HOST, DB_PATH } from './config';
 import { startMaintenanceSchedule, stopMaintenanceSchedule } from './maintenance';
 import { handleRequest } from './dispatch';
-import { bootstrapSync as bootstrapMetaDocsSync } from '../meta-docs';
+import {
+  bootstrapSync as bootstrapMetaDocsSync,
+  syncAllKnownCwds,
+  discoverKnownCwds,
+} from '../meta-docs';
 
 /** 서버 인스턴스 */
 let server: ReturnType<typeof Bun.serve> | null = null;
@@ -48,8 +52,27 @@ export function startServer(options: {
 
   // v24: 메타 문서 카탈로그 부팅 동기화 — 글로벌(`~/.claude`) 1회 스캔.
   //  실패해도 부팅은 성공해야 하므로 try/catch로 격리. project chain은 SessionStart에서 lazy 동기화.
+  //  추가로, 알려진 모든 cwd(다른 워크스페이스 포함)를 발견해 카탈로그 모집단을 확장한다.
+  //  10개 이상이면 setImmediate 백그라운드로 미뤄 부팅 지연을 막는다.
   try {
-    bootstrapMetaDocsSync(db.instance);
+    const dbInstance = db.instance;
+    const knownCwds = discoverKnownCwds(dbInstance);
+    console.log(`[Server] meta-docs known cwds discovered: ${knownCwds.length}`);
+
+    if (knownCwds.length <= 10) {
+      // 적으면 동기 부팅 (즉시 일관성 확보).
+      bootstrapMetaDocsSync(dbInstance, { activeCwds: knownCwds });
+    } else {
+      // 많으면 글로벌만 동기 처리, cwd별 동기화는 백그라운드로.
+      bootstrapMetaDocsSync(dbInstance);
+      setImmediate(() => {
+        try {
+          syncAllKnownCwds(dbInstance, { force: true });
+        } catch (err) {
+          console.error('[Server] meta-docs background syncAllKnownCwds failed:', err);
+        }
+      });
+    }
   } catch (e) {
     console.error('[Server] meta-docs bootstrap sync failed:', e);
   }

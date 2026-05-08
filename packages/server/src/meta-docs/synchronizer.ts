@@ -35,12 +35,20 @@ import {
 } from '@spyglass/storage';
 import { scanGlobalUserDir, scanRoot, type MetaDocCandidate } from './scanner';
 import { normalizeCwd, resolveProjectChain } from './resolver';
+import { discoverKnownCwds } from './known-cwds';
 
 export interface SyncResult {
   scanned: number;
   upserted: number;
   softDeleted: number;
   resolutions: number;
+  durationMs: number;
+}
+
+/** syncAllKnownCwds 응답 — 각 cwd별 결과 누적 + 에러 격리. */
+export interface SyncAllKnownCwdsResult {
+  scanned: number;                                                  // 발견된 cwd 개수
+  cwds: Array<{ cwd: string; result?: SyncResult; error?: string }>; // cwd별 결과 (실패도 포함)
   durationMs: number;
 }
 
@@ -67,13 +75,16 @@ let lastGlobalSyncAt = 0;
  * 글로벌(`~/.claude`)은 별도 트리거를 통해 갱신한다 — 이 함수는 user 카탈로그를 건드리지 않고
  * "현재 카탈로그 그대로" resolution 후보로 끌어와 매핑만 만든다.
  */
-export function syncCwd(db: Database, cwd: string): SyncResult {
+export function syncCwd(db: Database, cwd: string, options: { force?: boolean } = {}): SyncResult {
   const t0 = Date.now();
   const normalized = normalizeCwd(cwd);
 
-  const last = recentSyncByCwd.get(normalized) ?? 0;
-  if (t0 - last < RECENT_SYNC_TTL_MS) {
-    return { scanned: 0, upserted: 0, softDeleted: 0, resolutions: 0, durationMs: 0 };
+  // force=true 면 throttle 우회 (다중 cwd 일괄 동기화 케이스 — syncAllKnownCwds 에서 사용).
+  if (!options.force) {
+    const last = recentSyncByCwd.get(normalized) ?? 0;
+    if (t0 - last < RECENT_SYNC_TTL_MS) {
+      return { scanned: 0, upserted: 0, softDeleted: 0, resolutions: 0, durationMs: 0 };
+    }
   }
   recentSyncByCwd.set(normalized, t0);
 
@@ -171,6 +182,7 @@ export function syncGlobalOnce(db: Database, options: { force?: boolean } = {}):
  * 데몬 부팅 시 호출되는 진입점.
  *  - 글로벌 1회 동기화.
  *  - (옵션) 추가 cwd들이 주어지면 best-effort로 syncCwd 호출 — 실패해도 부팅은 성공해야 함.
+ *    부팅 시 알려진 cwd는 throttle 우회(force=true)로 즉시 동기화.
  */
 export function bootstrapSync(db: Database, options: { activeCwds?: string[] } = {}): void {
   try {
@@ -180,11 +192,44 @@ export function bootstrapSync(db: Database, options: { activeCwds?: string[] } =
   }
   for (const cwd of options.activeCwds ?? []) {
     try {
-      syncCwd(db, cwd);
+      syncCwd(db, cwd, { force: true });
     } catch (e) {
       console.error(`[meta-docs] bootstrap syncCwd failed for ${cwd}:`, e);
     }
   }
+}
+
+/**
+ * 알려진 모든 cwd를 발견(discoverKnownCwds)한 뒤 각 cwd에 syncCwd 호출.
+ *
+ *  - 한 cwd가 실패해도 다음 cwd는 계속 진행 (error 필드로 격리).
+ *  - force 옵션을 그대로 syncCwd에 전달 — 5초 throttle 우회.
+ *  - 결과 cwd 배열은 입력 순서를 보존 (정렬은 discoverKnownCwds 내부에서 사전순).
+ */
+export function syncAllKnownCwds(
+  db: Database,
+  options: { force?: boolean } = {},
+): SyncAllKnownCwdsResult {
+  const t0 = Date.now();
+  const cwds = discoverKnownCwds(db);
+  const force = options.force === true;
+
+  const results: SyncAllKnownCwdsResult['cwds'] = [];
+  for (const cwd of cwds) {
+    try {
+      const result = syncCwd(db, cwd, { force });
+      results.push({ cwd, result });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      results.push({ cwd, error: message });
+    }
+  }
+
+  return {
+    scanned: cwds.length,
+    cwds: results,
+    durationMs: Date.now() - t0,
+  };
 }
 
 // =============================================================================
