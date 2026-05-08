@@ -5,10 +5,11 @@ import {
   getAllSessions, getAllProjects, renderBrowserProjects, renderBrowserSessions, showSkeletonSessions,
 } from './left-panel.js';
 import {
-  getRightView, setRightView, setDetailTab,
+  getRightView, setRightView, setDetailTab, getDetailTab,
   getSelectedProject, getSelectedSession, setSelectedProject, setSelectedSession,
   setDetailFilterBar,
 } from './state.js';
+import { loadMetaDocsLibrary } from './meta-docs-view.js';
 import {
   setDetailFilter, applyDetailFilter, setDetailView, toggleTurn,
   refreshDetailSession, initDetailSearch,
@@ -59,15 +60,29 @@ function autoActivateProject() {
 function selectProject(name) {
   localStorage.setItem(STORAGE_KEY, name);
   setSelectedProject(name);
-  setSelectedSession(null);
-  if (getRightView() === 'detail') {
-    setRightView('default');
-    renderRightPanel();
+
+  // 메타 문서 탭이 active한 상태로 좌측 프로젝트만 바꾼 경우는 detail 모드를 유지하고
+  // 카탈로그만 새 프로젝트 기준으로 다시 그린다. (사용자 시나리오: rv-iso → claude-spyglass)
+  // 그 외에는 기존처럼 detail을 닫고 default 뷰로 복귀.
+  const isMetaDocsActive = getRightView() === 'detail' && getDetailTab() === 'metadocs';
+
+  if (!isMetaDocsActive) {
+    setSelectedSession(null);
+    if (getRightView() === 'detail') {
+      setRightView('default');
+      renderRightPanel();
+    }
   }
+
   renderBrowserProjects();
   document.getElementById('sessionPaneHint').textContent = `${name} · …`;
   showSkeletonSessions();
   fetchSessionsByProject(name);
+
+  if (isMetaDocsActive) {
+    // 좌측 프로젝트 라벨이 갱신된 직후 카탈로그 재조회 — 새 source_root로 자동 매핑
+    loadMetaDocsLibrary();
+  }
 }
 
 function closeDetail() {
@@ -87,7 +102,31 @@ function manualRefresh() {
   fetchCacheStats();
 }
 
+// SSE 이벤트로 fetchDashboard를 호출할 때 사용하는 debounce + maxWait.
+// 기존 단순 debounce는 활발한 세션(이벤트 1초 미만 간격)에서 timer가 영원히 reset되어
+// _allProjects/_allSessions가 빈 상태로 고정 → 사이드바·도넛이 무한 로딩처럼 보이는 버그.
+// 첫 예약으로부터 MAX_WAIT 경과 시 강제 실행하고, 응답 후 autoActivateProject를 재시도해
+// 빈 DB → 데이터 도착 시점의 race도 함께 복구한다.
 let refreshDebounce = null;
+let refreshScheduledAt = 0;
+const REFRESH_DEBOUNCE_MS = 1000;
+const REFRESH_MAX_WAIT_MS = 3000;
+
+function scheduleDashboardRefresh() {
+  const now = Date.now();
+  if (refreshScheduledAt === 0) refreshScheduledAt = now;
+
+  const fire = async () => {
+    refreshScheduledAt = 0;
+    refreshDebounce = null;
+    await fetchDashboard();
+    autoActivateProject();
+  };
+
+  clearTimeout(refreshDebounce);
+  if (now - refreshScheduledAt >= REFRESH_MAX_WAIT_MS) { fire(); return; }
+  refreshDebounce = setTimeout(fire, REFRESH_DEBOUNCE_MS);
+}
 
 function startSSE() {
   connectSSE({
@@ -111,8 +150,7 @@ function startSSE() {
         if (getSelectedSession() === req.session_id) refreshDetailSession(req.session_id);
       } catch { /* silent */ }
 
-      clearTimeout(refreshDebounce);
-      refreshDebounce = setTimeout(() => fetchDashboard(), 1000);
+      scheduleDashboardRefresh();
     },
     // 프록시 데이터 SSE 채널 — 후방 호환을 위해 옵션 콜백.
     // 현재 웹 대시보드에는 proxy 패널이 없으므로 'spyglass:proxy-request' 커스텀 이벤트로
@@ -131,8 +169,7 @@ function startSSE() {
         }));
       } catch { /* silent */ }
 
-      clearTimeout(refreshDebounce);
-      refreshDebounce = setTimeout(() => fetchDashboard(), 1000);
+      scheduleDashboardRefresh();
     },
     // v22: 세션 활성/비활성 전환 — SessionStart/SessionEnd 시 즉시 사이드바 마커 갱신
     // payload.action: 'started' | 'ended' | 'token_update'
@@ -156,9 +193,8 @@ function startSSE() {
       setIsSSEConnected(true);
       const loadMoreBtn = document.getElementById('loadMoreBtn');
       if (loadMoreBtn) loadMoreBtn.style.display = 'none';
-      fetchDashboard();
+      Promise.all([fetchDashboard(), fetchAllSessions()]).then(() => autoActivateProject());
       fetchRequests();
-      fetchAllSessions();
     },
     onError() {
       setIsSSEConnected(false);
@@ -272,10 +308,11 @@ function init() {
   initBuckets();
   drawTimeline();
   setChartMode('default');
-  fetchDashboard();
   fetchRequests();
   fetchCacheStats();
-  fetchAllSessions().then(() => autoActivateProject());
+  // _allProjects(fetchDashboard)와 _allSessions(fetchAllSessions) 둘 다 채워진 뒤
+  // autoActivateProject를 호출해야 빈 DB → 데이터 도착 시 race로 자동 선택이 누락되지 않음.
+  Promise.all([fetchDashboard(), fetchAllSessions()]).then(() => autoActivateProject());
   startSSE();
   restorePanelHiddenState();
   restoreChartCollapsedState();

@@ -1,13 +1,96 @@
-/* meta-docs.css — 메타 문서 카탈로그 패널 (v24, Migration 024)
+/* meta-docs.css — 메타 문서 카탈로그 패널 (v25, meta-docs-enhance)
  *
  * 패턴: syslib.css와 동일한 detail-tab 안쪽 컨테이너 스타일.
  * 사용처: index.html #detailMetaDocsView > #metaDocsBody
+ *
+ * 토큰 정책: design-tokens.css의 의미 토큰만 사용 (하드코딩 hex 금지).
+ *  - --accent (orange brand) / --warn (yellow) / --success / --error / --info
+ *  - --text-1~4, --raised, --surface-alt, --border, --border-strong
+ *  - 토큰 미정의 환경 대비 var(name, fallback) 패턴.
  */
 
 .meta-docs-body {
   padding: 12px 16px 24px;
   font-size: 13px;
-  color: var(--text-primary, #e5e5e5);
+  color: var(--text, #e5e5e5);
+}
+
+/* ── 스코프 헤더 (선택 프로젝트 ↔ 전체 프로젝트) ─────────────────────── */
+.meta-docs-scope {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: var(--surface-alt, #17171a);
+  border: 1px solid var(--border, #26262b);
+  border-left: 3px solid var(--accent, #FF7A45);
+  border-radius: var(--radius-md, 6px);
+  font-size: 12px;
+}
+.meta-docs-scope-text {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.meta-docs-scope-label {
+  color: var(--text-3, #8B949E);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.meta-docs-scope-name {
+  color: var(--text-1, #F0F6FC);
+  font-weight: 600;
+  font-size: 13px;
+}
+.meta-docs-scope-path {
+  color: var(--text-3, #8B949E);
+  font-family: var(--font-data, monospace);
+  font-size: 11px;
+  cursor: help;
+  border-bottom: 1px dotted var(--border-strong, #3a3a40);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.meta-docs-scope-warn {
+  color: var(--warn, #F0B72F);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border: 1px solid var(--warn, #F0B72F);
+  border-radius: 3px;
+  background: rgba(240, 183, 47, 0.08);
+}
+.meta-docs-scope-toggle {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px solid var(--border-strong, #3a3a40);
+  color: var(--text-2, #C9D1D9);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: background var(--dur-fast, 120ms), color var(--dur-fast, 120ms), border-color var(--dur-fast, 120ms);
+}
+.meta-docs-scope-toggle:hover {
+  background: var(--raised, #1e1e22);
+  color: var(--text-1, #F0F6FC);
+  border-color: var(--accent, #FF7A45);
+}
+
+/* 빈 상태 — 프로젝트 미등록 안내 */
+.state-empty .state-empty-hint {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-3, #8B949E);
+  font-size: 11.5px;
+  line-height: 1.5;
 }
 
 /* ── 상단 요약 ───────────────────────────────────────────────────────── */
@@ -18,30 +101,65 @@
   flex-wrap: wrap;
   padding: 6px 0 12px;
   font-size: 12px;
-  color: var(--text-secondary, #a0a0a0);
-  border-bottom: 1px solid var(--border-subtle, #2a2a2a);
+  color: var(--text-3, #a0a0a0);
+  border-bottom: 1px solid var(--border, #2a2a2a);
 }
 .meta-docs-summary strong {
-  color: var(--text-primary, #e5e5e5);
+  color: var(--text-1, #e5e5e5);
   font-weight: 600;
 }
 .meta-docs-summary .sep { opacity: 0.4; }
 .meta-docs-summary .meta-docs-actions { margin-left: auto; }
+
+.meta-docs-refresh-meta {
+  color: var(--text-3, #8B949E);
+  cursor: help;
+  border-bottom: 1px dotted var(--border-strong, #3a3a40);
+}
+
+/* 동기화 버튼 — 아이콘 + 라벨 inline */
 .meta-docs-summary button {
-  background: var(--bg-elevated, #2a2a2a);
-  border: 1px solid var(--border-default, #3a3a3a);
-  color: var(--text-primary, #e5e5e5);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--raised, #2a2a2a);
+  border: 1px solid var(--border-strong, #3a3a3a);
+  color: var(--text-1, #e5e5e5);
   border-radius: 4px;
   padding: 3px 10px;
   font-size: 12px;
   cursor: pointer;
+  transition: background var(--dur-fast, 120ms), border-color var(--dur-fast, 120ms);
 }
 .meta-docs-summary button:hover {
-  background: var(--bg-hover, #333);
+  background: var(--surface-alt, #333);
+  border-color: var(--accent, #FF7A45);
 }
 .meta-docs-summary button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  opacity: 0.65;
+  cursor: progress;
+}
+
+/* 동기화 아이콘 (회전 화살표) — 정상 시 정지, is-loading 시 회전 */
+.meta-docs-refresh-icon {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-3, #8B949E);
+  border-top-color: var(--accent, #FF7A45);
+  position: relative;
+}
+.meta-docs-summary button:hover .meta-docs-refresh-icon {
+  border-color: var(--accent, #FF7A45);
+  border-top-color: var(--text-1, #fff);
+}
+.meta-docs-summary button.is-loading .meta-docs-refresh-icon {
+  animation: meta-docs-spin 0.9s linear infinite;
+}
+@keyframes meta-docs-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 /* ── 필터 바 ─────────────────────────────────────────────────────────── */
@@ -50,7 +168,7 @@
   flex-wrap: wrap;
   gap: 12px 18px;
   padding: 10px 0;
-  border-bottom: 1px solid var(--border-subtle, #2a2a2a);
+  border-bottom: 1px solid var(--border, #2a2a2a);
   margin-bottom: 8px;
 }
 .meta-docs-filter-group {
@@ -60,26 +178,27 @@
 }
 .meta-docs-filter-label {
   font-size: 11px;
-  color: var(--text-secondary, #a0a0a0);
+  color: var(--text-3, #a0a0a0);
   margin-right: 2px;
 }
 .meta-doc-filter-btn {
   background: transparent;
-  border: 1px solid var(--border-subtle, #2a2a2a);
-  color: var(--text-secondary, #a0a0a0);
+  border: 1px solid var(--border, #2a2a2a);
+  color: var(--text-3, #a0a0a0);
   border-radius: 4px;
   padding: 2px 9px;
   font-size: 12px;
   cursor: pointer;
-  transition: background 80ms;
+  transition: background var(--dur-fast, 80ms), color var(--dur-fast, 80ms);
 }
 .meta-doc-filter-btn:hover {
-  background: var(--bg-hover, #2a2a2a);
+  background: var(--raised, #2a2a2a);
+  color: var(--text-1, #fff);
 }
 .meta-doc-filter-btn.active {
-  background: var(--accent-primary, #5a8dee);
+  background: var(--accent, #5a8dee);
   color: #fff;
-  border-color: var(--accent-primary, #5a8dee);
+  border-color: var(--accent, #5a8dee);
 }
 
 /* ── 표 ──────────────────────────────────────────────────────────────── */
@@ -97,14 +216,47 @@
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-secondary, #a0a0a0);
+  color: var(--text-3, #a0a0a0);
   padding: 6px 8px;
-  border-bottom: 1px solid var(--border-default, #3a3a3a);
+  border-bottom: 1px solid var(--border-strong, #3a3a3a);
+  user-select: none;
 }
 .meta-docs-table thead th.num { text-align: right; }
+
+/* 헤더 정렬 가능 표식 — 모든 컬럼 공통 */
+.meta-docs-table thead th.sortable {
+  cursor: pointer;
+  transition: color var(--dur-fast, 120ms), background var(--dur-fast, 120ms);
+  outline: none;
+}
+.meta-docs-table thead th.sortable:hover {
+  color: var(--text-1, #fff);
+  background: var(--raised, #1e1e22);
+}
+/* 키보드 포커스(tab) 시 가시 표식 — 마우스 outline 제거와 분리 */
+.meta-docs-table thead th.sortable:focus-visible {
+  outline: 2px solid var(--accent, #FF7A45);
+  outline-offset: -2px;
+  border-radius: 3px;
+}
+.meta-docs-table thead th.sort-asc,
+.meta-docs-table thead th.sort-desc {
+  color: var(--accent, #FF7A45);
+}
+.meta-docs-table thead th .sort-arrow {
+  display: inline-block;
+  margin-left: 4px;
+  font-weight: 700;
+  opacity: 0.95;
+}
+.meta-docs-table thead th .sort-arrow-idle {
+  opacity: 0.25;
+  font-weight: 400;
+}
+
 .meta-docs-table tbody td {
   padding: 8px;
-  border-bottom: 1px solid var(--border-subtle, #2a2a2a);
+  border-bottom: 1px solid var(--border, #2a2a2a);
   vertical-align: top;
 }
 .meta-docs-table tbody td.num {
@@ -114,61 +266,174 @@
 
 .meta-doc-name {
   font-weight: 500;
-  color: var(--text-primary, #e5e5e5);
+  color: var(--text-1, #e5e5e5);
 }
 .meta-doc-desc {
   margin-top: 2px;
-  color: var(--text-secondary, #a0a0a0);
+  color: var(--text-3, #a0a0a0);
   font-size: 11.5px;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;             /* 표준 속성 (브라우저 호환성) */
   -webkit-box-orient: vertical;
 }
 .meta-doc-path {
   margin-top: 2px;
-  color: var(--text-tertiary, #707070);
+  color: var(--text-4, #707070);
   font-size: 11px;
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-data, monospace);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.meta-doc-na { color: var(--text-tertiary, #707070); }
+.meta-doc-na { color: var(--text-4, #707070); }
 
-/* ── 타입 뱃지 ───────────────────────────────────────────────────────── */
-.meta-doc-type {
-  display: inline-block;
-  padding: 1px 8px;
-  border-radius: 3px;
-  font-size: 10.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border: 1px solid currentColor;
+/* 출처 셀 — 라벨 + source_root 축약 */
+.meta-doc-source-label {
+  color: var(--text-2, #C9D1D9);
+  font-size: 12px;
+  font-weight: 500;
 }
-.meta-doc-type-agent   { color: #c084fc; }
-.meta-doc-type-skill   { color: #6ee7b7; }
-.meta-doc-type-command { color: #fcd34d; }
+.meta-doc-source-root {
+  margin-top: 2px;
+  color: var(--text-4, #6E7681);
+  font-size: 11px;
+  font-family: var(--font-data, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: help;
+}
 
-/* ── 상태 클래스 ─────────────────────────────────────────────────────── */
+/* ── 타입 뱃지 ───────────────────────────────────────────────────────── *
+ * 턴 뷰 Agent/Skill 칩과 동일 시각 언어 (badges.css `.tool-icon-agent` SSoT +
+ * turn-view.css `.tool-chip` / `.agent-chip` 재사용). agent/skill/command 모두 동일 주황 톤.
+ * 여기서는 메타 문서 표 컨텍스트에 맞춘 미세 조정만 수행 (폰트 굵기·자간) — 색상은
+ * 절대 덮어쓰지 않는다 (SSoT 보존).
+ */
+.meta-doc-type {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.meta-doc-type .agent-chip-name {
+  /* 표 셀 내 좁은 폭에서 ELLIPSIS 자르기를 방지 — 'COMMAND'까지 노출 */
+  max-width: none;
+}
+
+/* ── 상태 클래스 (시각 차별화 강화) ──────────────────────────────────── */
+
+/* unused — 카탈로그O 호출0. 톤 다운 + 미사용 라벨 */
 .meta-doc-row.meta-doc-unused td {
   opacity: 0.55;
 }
 .meta-doc-row.meta-doc-unused .meta-doc-name::after {
   content: ' · 미사용';
   font-size: 10px;
-  color: var(--text-tertiary, #707070);
+  color: var(--text-4, #707070);
   font-weight: 400;
 }
+
+/* deleted — 빨간 배경 + 취소선 + ⚠ */
 .meta-doc-row.meta-doc-deleted td {
-  background: rgba(239, 68, 68, 0.06);
+  background: rgba(244, 113, 116, 0.07);
 }
+.meta-doc-row.meta-doc-deleted .meta-doc-name {
+  text-decoration: line-through;
+  text-decoration-color: var(--error, #F47174);
+  color: var(--text-3, #8B949E);
+}
+
+/* orphan — 노란 톤 강화 (8% bg) + 좌측 보더 강조 */
 .meta-doc-row.meta-doc-orphan td {
-  background: rgba(251, 191, 36, 0.05);
+  background: rgba(240, 183, 47, 0.08);
 }
+.meta-doc-row.meta-doc-orphan td:first-child {
+  border-left: 2px solid var(--warn, #F0B72F);
+  padding-left: 6px;
+}
+
+/* orphan 라벨 — 점선 underline cue (호버 가능 신호) */
 .meta-doc-source-orphan {
-  color: #fbbf24;
-  font-size: 11px;
+  display: inline-block;
+  color: var(--warn, #F0B72F);
+  font-size: 11.5px;
+  font-weight: 500;
+  border-bottom: 1px dotted var(--warn, #F0B72F);
+  cursor: help;
+  padding-bottom: 1px;
+}
+.meta-doc-source-orphan:focus-visible {
+  outline: 2px solid var(--accent, #FF7A45);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ── 토스트 호스트 ───────────────────────────────────────────────────── */
+.meta-docs-toast-host {
+  position: fixed;
+  top: 64px;          /* 헤더(52) + 약간 여백 */
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;        /* 토스트만 pointer-events 활성 */
+  max-width: min(420px, calc(100vw - 40px));
+}
+.meta-docs-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  background: var(--raised, #1e1e22);
+  border: 1px solid var(--border-strong, #3a3a40);
+  color: var(--text-1, #F0F6FC);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  /* 진입 애니메이션: transform-y + opacity */
+  transform: translateY(-8px);
+  opacity: 0;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+.meta-docs-toast.is-shown {
+  transform: translateY(0);
+  opacity: 1;
+}
+.meta-docs-toast.is-leaving {
+  transform: translateY(-8px);
+  opacity: 0;
+}
+
+/* 토스트 좌측 컬러 strip — kind별 보더 색상 */
+.meta-docs-toast-info {
+  border-left: 3px solid var(--info, #58A6FF);
+}
+.meta-docs-toast-success {
+  border-left: 3px solid var(--success, #3FB950);
+}
+.meta-docs-toast-error {
+  border-left: 3px solid var(--error, #F47174);
+}
+
+/* 토스트 아이콘 — kind별 작은 dot */
+.meta-docs-toast-icon {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.meta-docs-toast-info    .meta-docs-toast-icon { background: var(--info,    #58A6FF); }
+.meta-docs-toast-success .meta-docs-toast-icon { background: var(--success, #3FB950); }
+.meta-docs-toast-error   .meta-docs-toast-icon { background: var(--error,   #F47174); }
+
+.meta-docs-toast-msg {
+  flex: 1 1 auto;
+  word-break: keep-all;
 }
