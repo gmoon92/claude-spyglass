@@ -73,8 +73,47 @@
               </tr>
             </thead>
             <tbody id="browserProjectsBody">
-              <tr><td colspan="3" class="table-empty"><span class="skeleton"></span></td></tr>
-              <tr><td colspan="3" class="table-empty"><span class="skeleton"></span></td></tr>
+              <!-- skeleton-loading T-15 — 3컬럼 row 4개로 실제 프로젝트 행 높이 흉내. renderBrowserProjects 호출 시 교체. -->
+              <tr data-skeleton="1">
+                <td class="cell-proj-name"><span class="sk sk-line" style="width:70%"></span></td>
+                <td class="num" style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:20px"></span></td>
+                <td>
+                  <div class="bar-cell" style="justify-content:flex-end;gap:4px">
+                    <div class="bar-track" style="min-width:36px"><span class="sk sk-bar" style="width:60%"></span></div>
+                    <span class="bar-label num-hi" style="min-width:30px"><span class="sk sk-line sk-line--inline" style="width:24px"></span></span>
+                  </div>
+                </td>
+              </tr>
+              <tr data-skeleton="1">
+                <td class="cell-proj-name"><span class="sk sk-line" style="width:62%"></span></td>
+                <td class="num" style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:16px"></span></td>
+                <td>
+                  <div class="bar-cell" style="justify-content:flex-end;gap:4px">
+                    <div class="bar-track" style="min-width:36px"><span class="sk sk-bar" style="width:75%"></span></div>
+                    <span class="bar-label num-hi" style="min-width:30px"><span class="sk sk-line sk-line--inline" style="width:28px"></span></span>
+                  </div>
+                </td>
+              </tr>
+              <tr data-skeleton="1">
+                <td class="cell-proj-name"><span class="sk sk-line" style="width:55%"></span></td>
+                <td class="num" style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:18px"></span></td>
+                <td>
+                  <div class="bar-cell" style="justify-content:flex-end;gap:4px">
+                    <div class="bar-track" style="min-width:36px"><span class="sk sk-bar" style="width:45%"></span></div>
+                    <span class="bar-label num-hi" style="min-width:30px"><span class="sk sk-line sk-line--inline" style="width:22px"></span></span>
+                  </div>
+                </td>
+              </tr>
+              <tr data-skeleton="1">
+                <td class="cell-proj-name"><span class="sk sk-line" style="width:68%"></span></td>
+                <td class="num" style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:14px"></span></td>
+                <td>
+                  <div class="bar-cell" style="justify-content:flex-end;gap:4px">
+                    <div class="bar-track" style="min-width:36px"><span class="sk sk-bar" style="width:30%"></span></div>
+                    <span class="bar-label num-hi" style="min-width:30px"><span class="sk sk-line sk-line--inline" style="width:18px"></span></span>
+                  </div>
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -257,7 +296,27 @@
             <div class="donut-wrap">
               <canvas class="donut-canvas" id="typeChart" width="90" height="90"></canvas>
               <div class="type-legend" id="typeLegend">
-                <div class="state-loading" style="padding:0">불러오는 중…</div>
+                <!-- skeleton-loading T-14 — renderTypeLegend 호출 시 innerHTML 교체 -->
+                <div class="type-legend-item sk-row" data-skeleton="1" style="grid-template-columns: auto 1fr auto; padding:4px 0">
+                  <span class="sk sk-circle sk-circle--sm"></span>
+                  <span class="sk sk-line sk-line--sm" style="width:60%"></span>
+                  <span class="sk sk-line sk-line--sm sk-line--inline" style="width:28px"></span>
+                </div>
+                <div class="type-legend-item sk-row" data-skeleton="1" style="grid-template-columns: auto 1fr auto; padding:4px 0">
+                  <span class="sk sk-circle sk-circle--sm"></span>
+                  <span class="sk sk-line sk-line--sm" style="width:52%"></span>
+                  <span class="sk sk-line sk-line--sm sk-line--inline" style="width:24px"></span>
+                </div>
+                <div class="type-legend-item sk-row" data-skeleton="1" style="grid-template-columns: auto 1fr auto; padding:4px 0">
+                  <span class="sk sk-circle sk-circle--sm"></span>
+                  <span class="sk sk-line sk-line--sm" style="width:48%"></span>
+                  <span class="sk sk-line sk-line--sm sk-line--inline" style="width:26px"></span>
+                </div>
+                <div class="type-legend-item sk-row" data-skeleton="1" style="grid-template-columns: auto 1fr auto; padding:4px 0">
+                  <span class="sk sk-circle sk-circle--sm"></span>
+                  <span class="sk sk-line sk-line--sm" style="width:40%"></span>
+                  <span class="sk sk-line sk-line--sm sk-line--inline" style="width:22px"></span>
+                </div>
               </div>
             </div>
             <div class="donut-meta">
