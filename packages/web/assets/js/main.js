@@ -8,8 +8,11 @@ import {
   getRightView, setRightView, setDetailTab, getDetailTab,
   getSelectedProject, getSelectedSession, setSelectedProject, setSelectedSession,
   setDetailFilterBar,
+  getAppMode, setAppMode,
+  getPrevState, setPrevState, clearPrevState,
 } from './state.js';
-import { loadMetaDocsLibrary } from './meta-docs-view.js';
+import { initAppRail, setRailActive } from './app-rail.js';
+import { loadMetaDocsLibrary, enterMetaDocsMode, openMetaDocViaDeepLink } from './meta-docs-view.js';
 import {
   setDetailFilter, applyDetailFilter, setDetailView, toggleTurn,
   refreshDetailSession, initDetailSearch,
@@ -44,6 +47,66 @@ import { loadSession, abortCurrentSession } from './views/detail-view.js';
 import { renderToolCategoriesCard, resetToolCategoriesMode } from './obs-panel.js';
 
 const STORAGE_KEY = 'spyglass:lastProject';
+
+// ── 앱 모드 라우팅 (ADR-003 left-rail-meta-docs) ─────────────────────────────
+
+/**
+ * appMode 적용 — rail 버튼 동기화 + body 속성 부여 + view 가시성 결정.
+ *
+ * 책임: 단일 진입점 — rail 클릭 / sessionStorage 복원 / 딥링크 / ESC 복귀 모두 이 함수 호출.
+ * 가시성 결정은 view 자체가 아니라 body[data-app-mode] CSS 룰로 처리 (선언적, 재진입 안전).
+ *
+ * @param {'browse' | 'metadocs'} mode
+ */
+function applyAppMode(mode) {
+  if (mode !== 'browse' && mode !== 'metadocs') return;
+  setAppMode(mode);
+  document.body.dataset.appMode = mode;
+  setRailActive(mode);
+  // 메타 모드 진입 시 카탈로그 lazy 로드 — 가시성은 body[data-app-mode] CSS 룰이 처리.
+  // browse 복귀 시는 별도 cleanup 불필요(컨테이너만 hidden, 데이터/상태 유지).
+  if (mode === 'metadocs') {
+    enterMetaDocsMode();
+  }
+}
+
+/**
+ * ADR-003: 메타 모드 진입 직전의 browse 상태를 snapshot — ESC 복귀용.
+ * 이미 metadocs인 상태에서 재진입 시는 snapshot 덮어쓰지 않음 (사용자 직전 browse 상태 보존).
+ */
+function snapshotBrowseState() {
+  if (getAppMode() === 'metadocs' && getPrevState() != null) return;
+  setPrevState({
+    rightView: getRightView(),
+    detailTab: getDetailTab(),
+    sessionId: getSelectedSession(),
+  });
+}
+
+/**
+ * ADR-003: ESC 누름 시 호출 — metadocs → browse 복귀 + 직전 view/tab/session 복원.
+ * snapshot이 없으면 단순 browse 복귀(default-view).
+ */
+function restorePrevState() {
+  const prev = getPrevState();
+  applyAppMode('browse');
+  if (!prev) {
+    clearPrevState();
+    return;
+  }
+  // session/detail 복원은 loadSession이 SSE/fetch 흐름을 관리하므로 단순 view 토글로 충분.
+  // sessionId만 보존하면 사용자가 직접 클릭하지 않고도 같은 detail 화면 유지.
+  if (prev.rightView === 'detail' && prev.sessionId) {
+    // 세션 ID는 selectSession에 의해 이미 set되어 있을 가능성 — view만 토글하면 detail 그대로 노출.
+    setRightView('detail');
+    if (prev.detailTab) setDetailTab(prev.detailTab);
+    renderRightPanel();
+  } else {
+    setRightView('default');
+    renderRightPanel();
+  }
+  clearPrevState();
+}
 
 // ── 메타 문서 Top N 헬퍼 ─────────────────────────────────────────────────────
 
@@ -119,10 +182,9 @@ function selectProject(name) {
   localStorage.setItem(STORAGE_KEY, name);
   setSelectedProject(name);
 
-  // 메타 문서 탭이 active한 상태로 좌측 프로젝트만 바꾼 경우는 detail 모드를 유지하고
-  // 카탈로그만 새 프로젝트 기준으로 다시 그린다. (사용자 시나리오: rv-iso → claude-spyglass)
-  // 그 외에는 기존처럼 detail을 닫고 default 뷰로 복귀.
-  const isMetaDocsActive = getRightView() === 'detail' && getDetailTab() === 'metadocs';
+  // ADR-003 left-rail-meta-docs: 메타 문서 모드(appMode === 'metadocs')에서 좌측 프로젝트만 바꾼 경우는
+  // 메타 카탈로그만 새 프로젝트 기준으로 다시 그린다. browse 모드면 기존처럼 detail을 닫고 default로 복귀.
+  const isMetaDocsActive = getAppMode() === 'metadocs';
 
   if (!isMetaDocsActive) {
     setSelectedSession(null);
@@ -274,6 +336,49 @@ function initEventDelegation() {
     if (sessRow)  { loadSession(sessRow.dataset.sessionId); }
   });
 
+  // ADR-003 left-rail-meta-docs: Agent/Skill 배지 단일 클릭 → 메타 문서 딥링크.
+  // 글로벌 위임 — 턴 카드/세션 plain row 등 모든 chip에서 동작.
+  document.body.addEventListener('click', e => {
+    const chip = e.target.closest('[data-meta-doc-type][data-meta-doc-id]');
+    if (!chip) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const type = chip.dataset.metaDocType;
+    const id   = chip.dataset.metaDocId;
+    if (!type || !id) return;
+    // 현재 browse 상태이면 스냅샷 후 metadocs 진입
+    if (getAppMode() === 'browse') {
+      snapshotBrowseState();
+      applyAppMode('metadocs');
+    }
+    // metadocs 이미 진입 상태든 신규 진입이든 동일하게 딥링크 호출 (검색어 적용 + flash)
+    openMetaDocViaDeepLink({ type, id });
+  });
+
+  // Keyboard activation for chips with role="button" — Space/Enter
+  document.body.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const chip = e.target.closest('[data-meta-doc-type][data-meta-doc-id][role="button"]');
+    if (!chip) return;
+    e.preventDefault();
+    chip.click();
+  });
+
+  // ADR-003: ESC → metadocs 모드일 때 browse 복귀 (input/textarea focus 시는 무시)
+  // stopImmediatePropagation으로 keyboard.js의 기본 ESC 핸들러(detail 닫기)와 충돌 방지 —
+  // metadocs 모드의 ESC는 "메타 모드 종료 + 직전 browse 복귀"가 1차 의미이며,
+  // 직전 browse 상태가 detail이었으면 그대로 detail에 머무는 것이 사용자 기대.
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (getAppMode() !== 'metadocs') return;
+    const ae = document.activeElement;
+    const tag = ae?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || ae?.isContentEditable) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    restorePrevState();
+  }, { capture: true });
+
   document.getElementById('detailTabBar').addEventListener('click', e => {
     const tab = e.target.closest('[data-tab]');
     if (tab) { setDetailTab(tab.dataset.tab); setDetailView(tab.dataset.tab); }
@@ -365,6 +470,20 @@ function initEventDelegation() {
 
 function init() {
   migrateLocalStorage();
+
+  // ADR-003 left-rail-meta-docs: 앱 모드 rail 초기화 + sessionStorage 복원 적용.
+  // applyAppMode를 콜백으로 주입 — rail 모듈은 모드 값만 전달, view 조작은 main 책임.
+  applyAppMode(getAppMode());
+  initAppRail((mode) => {
+    // rail 클릭으로 metadocs 진입 시 직전 browse 상태 snapshot — ESC 복귀용
+    if (mode === 'metadocs' && getAppMode() === 'browse') snapshotBrowseState();
+    if (mode === 'browse' && getAppMode() === 'metadocs') {
+      // rail에서 직접 browse로 — prevState가 있으면 그대로 복원, 없으면 단순 전환
+      restorePrevState();
+      return;
+    }
+    applyAppMode(mode);
+  });
 
   initTypeColors();
   initBuckets();

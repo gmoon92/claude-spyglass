@@ -15,11 +15,12 @@
 
 import { escHtml, fmtToken, fmtTime, formatDuration } from '../formatters.js';
 import { toolIconHtml, _promptCache, togglePromptExpand } from '../renderers.js';
-import { TOOL_COLORS } from '../tool-colors.js';
+import { subTypeOf } from '../request-types.js';
 import { loadToolStats } from '../tool-stats.js';
 import { showLatestLlmInput } from '../llm-input-view.js';
 import { loadSystemPromptLibrary } from '../system-prompt-library.js';
-import { loadMetaDocsLibrary } from '../meta-docs-view.js';
+// ADR-003 left-rail-meta-docs: 메타 문서는 detail 탭에서 좌측 rail 1급 모드로 승격됨.
+// 진입은 main.js의 applyAppMode('metadocs') 또는 enterMetaDocsMode()로 일원화.
 import {
   buildTurnDetailRows, compressFlowWithResponses, fmtActionLabel,
 } from './turn-rows.js';
@@ -43,29 +44,27 @@ const BAR_PCT_TITLE = '이 턴이 세션 전체 토큰에서 차지하는 비중
  *  - llm 탭 진입 시 가장 최근 proxy 요청의 LLM Input 골격 렌더 (T-09 ADR-004 옵션 A).
  */
 export function setDetailView(tab) {
+  // ADR-003 left-rail-meta-docs: 'metadocs' 탭은 제거됨. 5탭만 유효.
+  // 메타 문서 진입은 좌측 rail 또는 Agent/Skill 배지 딥링크로 일원화.
   const reqView = document.getElementById('detailRequestsView');
   const turnView = document.getElementById('detailTurnView');
   const llmView = document.getElementById('detailLlmInputView');
   const sysLibView = document.getElementById('detailSysLibView');
-  const metaDocsView = document.getElementById('detailMetaDocsView');
   const toolsView = document.getElementById('detailToolsView');
   if (reqView)      reqView.style.display      = tab === 'requests' ? '' : 'none';
   if (turnView)     turnView.style.display     = tab === 'turn'     ? '' : 'none';
   if (llmView)      llmView.style.display      = tab === 'llm'      ? '' : 'none';
   if (sysLibView)   sysLibView.style.display   = tab === 'syslib'   ? '' : 'none';
-  if (metaDocsView) metaDocsView.style.display = tab === 'metadocs' ? '' : 'none';
   if (toolsView)    toolsView.style.display    = tab === 'tools'    ? '' : 'none';
   document.getElementById('tabRequests')?.classList.toggle('active', tab === 'requests');
   document.getElementById('tabTurn')?.classList.toggle('active',     tab === 'turn');
   document.getElementById('tabLlm')?.classList.toggle('active',      tab === 'llm');
   document.getElementById('tabSysLib')?.classList.toggle('active',   tab === 'syslib');
-  document.getElementById('tabMetaDocs')?.classList.toggle('active', tab === 'metadocs');
   document.getElementById('tabTools')?.classList.toggle('active',    tab === 'tools');
   const sessionId = getCurrentSessionId();
   if (tab === 'tools' && sessionId) loadToolStats(sessionId);
   if (tab === 'llm') showLatestLlmInput();
   if (tab === 'syslib') loadSystemPromptLibrary();
-  if (tab === 'metadocs') loadMetaDocsLibrary();
 }
 
 /**
@@ -275,19 +274,31 @@ export function renderTurnCards(turns, badgeTurns) {
     // 응답은 ◆ 마커 chip으로 노출 → "Bash → Read → ◆ → Edit → ◆ → Edit ×2" 형태로
     // 실제 turn 흐름과 일치. 이전엔 tool_calls만 chip으로 만들어 응답이 누락되어
     // "Edit ×4"로 묶여 보이는 오해가 있었음.
+    //
+    // 시각 위계 (ADR-007 Inverted Emphasis):
+    //   - 기본 도구(Bash/Read/Edit 등) → .tool-chip 베이스만 → dim 톤 (자주 호출되어 시각 잡음 0)
+    //   - MCP/Agent/Skill → .tool-chip-{sub_type} modifier → chip 토큰 강조 (외부/위임 호출 즉시 인지)
+    //   분류 판정은 request-types.js의 subTypeOf — 분류 뱃지·필터·flow chip이 한 SSoT를 공유.
     const chips = compressFlowWithResponses(turn).map(item => {
       if (item.kind === 'response') {
         return `<span class="tool-chip response-chip" title="어시스턴트 응답" aria-label="어시스턴트 응답">◆</span>`;
       }
-      const { name, count, isAgent, agentName } = item;
-      const base  = name.split('__').pop();
-      const color = TOOL_COLORS[base] || TOOL_COLORS.default;
+      const { name, count, isAgent, agentName, items } = item;
+      const base = name.split('__').pop();
+      // 그룹 내 sub_type은 동일(compressContinuousTools 정책) → 첫 도구로 판정.
+      const sub      = items && items.length ? subTypeOf(items[0]) : '';
+      const subCls   = sub ? ` tool-chip-${sub}` : '';
       if (isAgent && agentName) {
         const countSuffix = count > 1 ? `×${count}` : '';
         const fullLabel   = agentName + (countSuffix ? ` ${countSuffix}` : '');
-        return `<span class="tool-chip agent-chip" style="border-color:${color};color:${color}" title="${escHtml(fullLabel)}">${toolIconHtml(base)}<span class="agent-chip-name">${escHtml(agentName)}</span>${countSuffix ? `<span class="turn-group-count"> ${escHtml(countSuffix)}</span>` : ''}</span>`;
+        // ADR-003 left-rail-meta-docs: agent/skill chip만 메타 문서 딥링크 (Task는 분류는 같지만 카탈로그 대상 아님)
+        // sub === 'agent' | 'skill' 인 경우만 data-meta-doc-* 부여 → 클릭 시 메타 모드 진입
+        const deepLinkAttrs = (sub === 'agent' || sub === 'skill')
+          ? ` data-meta-doc-type="${sub}" data-meta-doc-id="${escHtml(agentName)}" role="button" tabindex="0"`
+          : '';
+        return `<span class="tool-chip agent-chip${subCls}" title="${escHtml(fullLabel)}"${deepLinkAttrs}>${toolIconHtml(base)}<span class="agent-chip-name">${escHtml(agentName)}</span>${countSuffix ? `<span class="turn-group-count"> ${escHtml(countSuffix)}</span>` : ''}</span>`;
       }
-      return `<span class="tool-chip" style="border-color:${color};color:${color}">${fmtActionLabel(base, count)}</span>`;
+      return `<span class="tool-chip${subCls}">${fmtActionLabel(base, count)}</span>`;
     }).join('<svg class="chip-arrow" width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2 5 L7 5 M5 2.5 L7.5 5 L5 7.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
 
     const barPct = sessionTotalTokens > 0
