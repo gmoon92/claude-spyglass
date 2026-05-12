@@ -16,6 +16,7 @@
  */
 
 import { escHtml } from './formatters.js';
+import { skSysLibCards, skBlock } from './render/skeleton.js';
 
 const CONTAINER_ID = 'sysLibBody';
 const DEFAULT_LIMIT = 100;
@@ -50,7 +51,8 @@ export async function loadSystemPromptLibrary(orderBy) {
     _currentOrder = orderBy;
   }
 
-  container.innerHTML = `<div class="state-loading"><div class="state-loading-spinner"></div><span>카탈로그 조회 중…</span></div>`;
+  // skeleton-loading T-11: dedup 카드 4개로 구조 유지. fetch 응답 후 정상 표로 교체.
+  container.innerHTML = skSysLibCards(4);
 
   try {
     const res = await fetchJson(`/api/system-prompts?orderBy=${encodeURIComponent(_currentOrder)}&limit=${DEFAULT_LIMIT}`);
@@ -174,7 +176,8 @@ async function showDetailModal(hash) {
   if (!modal) return;
 
   modal.hidden = false;
-  modal.innerHTML = `<div class="syslib-detail-inner"><div class="state-loading"><div class="state-loading-spinner"></div><span>본문 로딩 중…</span></div></div>`;
+  // skeleton-loading T-11: 본문 큰 블록 영역으로 모달 높이 유지.
+  modal.innerHTML = `<div class="syslib-detail-inner" data-skeleton="1">${skBlock({ height: 320 })}</div>`;
 
   try {
     const res = await fetchJson(`/api/system-prompts/${encodeURIComponent(hash)}`);

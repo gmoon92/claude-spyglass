@@ -24,6 +24,7 @@
  */
 
 import { escHtml } from './formatters.js';
+import { skLlmInputCards } from './render/skeleton.js';
 
 const CONTAINER_ID = 'llmInputBody';
 
@@ -39,7 +40,8 @@ export async function showLatestLlmInput() {
   const container = document.getElementById(CONTAINER_ID);
   if (!container) return;
 
-  container.innerHTML = `<div class="state-loading"><div class="state-loading-spinner"></div><span>최신 프록시 요청 조회 중…</span></div>`;
+  // skeleton-loading T-10: system 카드(큰 본문) + user 카드 2개로 구조 유지.
+  container.innerHTML = skLlmInputCards(2);
 
   try {
     const recent = await fetchJson('/api/proxy-requests?limit=1');
@@ -67,7 +69,8 @@ export async function renderLlmInput(requestId) {
   const container = document.getElementById(CONTAINER_ID);
   if (!container) return;
 
-  container.innerHTML = `<div class="state-loading"><div class="state-loading-spinner"></div><span>LLM Input 조회 중…</span></div>`;
+  // skeleton-loading T-10: 특정 ID 로드 시에도 동일 placeholder 사용 (system 1 + user 2 카드).
+  container.innerHTML = skLlmInputCards(2);
 
   try {
     const msgRes = await fetchJson(`/api/proxy-requests/${encodeURIComponent(requestId)}/messages`);

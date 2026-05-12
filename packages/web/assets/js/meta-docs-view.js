@@ -20,6 +20,7 @@
 import { escHtml, fmtTime } from './formatters.js';
 import { getSelectedProject } from './state.js';
 import { toolIconHtml } from './render/badges.js';
+import { skMetaDocList } from './render/skeleton.js';
 import { initColResize } from './col-resize.js';
 
 const CONTAINER_ID = 'metaDocsBody';
@@ -45,7 +46,8 @@ export async function loadMetaDocsLibrary() {
   const container = document.getElementById(CONTAINER_ID);
   if (!container) return;
 
-  container.innerHTML = `<div class="state-loading"><div class="state-loading-spinner"></div><span>메타 문서 카탈로그 조회 중…</span></div>`;
+  // skeleton-loading T-09: 카탈로그 row 8개로 구조 유지. fetch 응답 후 정상 테이블로 교체.
+  container.innerHTML = skMetaDocList(8);
 
   try {
     // 1) 선택 프로젝트 결정 — scopeMode + 좌측 패널 selectedProject 결합

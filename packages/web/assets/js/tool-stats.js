@@ -3,6 +3,7 @@
 
 import { fmtToken, escHtml } from './formatters.js';
 import { toolIconHtml } from './renderers.js';
+import { skToolMatrix } from './render/skeleton.js';
 
 export const API = '';
 
@@ -18,11 +19,8 @@ export function initToolStats() {
 export async function loadToolStats(sessionId) {
   if (!_container) return;
   _currentSessionId = sessionId;
-  _container.innerHTML = `
-    <div class="state-loading">
-      <div class="state-loading-spinner"></div>
-      <span>불러오는 중…</span>
-    </div>`;
+  // skeleton-loading T-12: 매트릭스 헤더 + 6 row 흉내. renderMatrix 호출 시 innerHTML 교체.
+  _container.innerHTML = skToolMatrix(6);
   try {
     const res  = await fetch(`${API}/api/sessions/${encodeURIComponent(sessionId)}/tool-stats`);
     const json = await res.json();
