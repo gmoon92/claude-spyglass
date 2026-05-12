@@ -1,10 +1,92 @@
-/* ── SKELETON LOADING ───────────────────────────────────────────────────── */
+/* ── SKELETON LOADING (skeleton-loading ADR-001~005) ─────────────────────
+ *   shimmer gradient + animation-delay 80ms (flicker 방지)
+ *   토큰 SSoT: design-tokens.css 의 --border / --surface-alt 만 참조.
+ *   기존 .skeleton(60×11 inline-block)은 호환 alias로 보존 — ADR-002.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* skeleton 토큰 (design-tokens.css 의 일반 토큰을 alias) */
+  --sk-base:   var(--border);        /* dim slate — 정적 배경 */
+  --sk-shine:  var(--surface-alt);   /* 하이라이트 — shimmer slide */
+  --sk-radius: var(--radius-sm);     /* 4px */
+  --sk-delay:  80ms;                 /* ADR-005: flicker 방지 */
+  --sk-dur:    1.4s;                 /* shimmer 한 주기 */
+}
+
+/* ── 베이스 컨테이너 ── */
+.sk {
+  background-color: var(--sk-base);
+  background-image: linear-gradient(
+    90deg,
+    var(--sk-base) 25%,
+    var(--sk-shine) 50%,
+    var(--sk-base) 75%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  border-radius: var(--sk-radius);
+  /* delay 80ms — 빠른 응답(< 80ms) 시 shimmer 자체가 보이지 않음 */
+  animation: sk-shimmer var(--sk-dur) linear var(--sk-delay) infinite;
+  /* 본문 위에 직접 깔리는 경우가 많아 작은 inline-block 도 자연 처리 */
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* ── 모양 variant ── */
+.sk-line          { display: block; width: 100%; height: 11px; }
+.sk-line--sm      { height: 9px; }
+.sk-line--lg      { height: 14px; }
+.sk-line--inline  { display: inline-block; width: 60px; vertical-align: middle; }
+
+.sk-block         { display: block; width: 100%; height: 60px; }
+.sk-block--sm     { height: 32px; }
+.sk-block--lg     { height: 120px; }
+
+.sk-circle        { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+.sk-circle--sm    { width: 8px; height: 8px; }
+.sk-circle--lg    { width: 24px; height: 24px; }
+
+/* sparkline / progress bar 자리 */
+.sk-bar           { display: block; height: 6px; border-radius: 999px; width: 100%; }
+.sk-bar--lg       { height: 8px; }
+
+/* ── 레이아웃 helpers (skeleton 컨테이너 — shimmer 없음, 자식만 .sk) ── */
+.sk-row {
+  display: grid;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 6px var(--space-3);
+}
+
+.sk-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+/* ── 가독성 보조 — 너무 강하지 않게 ── */
+.sk--dim { opacity: 0.65; }
+
+/* shimmer keyframe — 신규 이름.
+ * 기존 @keyframes shimmer 도 유지(아래 alias)하여 .skeleton 호환. */
+@keyframes sk-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── 기존 .skeleton 호환 alias (ADR-002) ─────────────────────────────────
+ * 기존 6 호출처(index.html 헤더 통계 4 + 프로젝트 테이블 2 + 최근 요청 3)는
+ * 코드 수정 없이 그대로 동작. 점진 마이그레이션을 위해 그대로 보존. */
 .skeleton {
   display: inline-block; width: 60px; height: 11px;
   background: linear-gradient(90deg, var(--border) 25%, var(--surface-alt) 50%, var(--border) 75%);
-  background-size: 200% 100%; animation: shimmer 1.4s linear infinite;
-  border-radius: 3px; vertical-align: middle;
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear var(--sk-delay) infinite;
+  border-radius: 3px;
+  vertical-align: middle;
 }
+
 @keyframes shimmer {
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
