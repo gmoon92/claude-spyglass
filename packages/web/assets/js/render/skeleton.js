@@ -139,16 +139,21 @@ export function skObsCard(variant = 'burn') {
 // ──────────────────────────────────────────────────────────────────────────
 
 /**
- * turn 카드 1개. 실제 turn-card 는 카드 헤더 + 본문 슬롯(다중 행) + 메타.
- * 펼침 상태가 아니므로 헤더 + 1줄 메타 정도가 자연.
+ * turn 카드 1개. 실제 turn-card 구조(turn-card-summary > turn-card-header + turn-card-preview)
+ * 와 시각 높이가 일치하도록. 펼침 X — summary 만 노출.
  */
 export function skTurnCard() {
   return `
     <article class="turn-card sk-turn-card" data-skeleton="1">
-      <div class="turn-card-header">
-        <span class="turn-card-num"><span class="sk sk-circle"></span></span>
-        <span class="turn-card-title"><span class="sk sk-line" style="width:55%"></span></span>
-        <span class="turn-card-meta"><span class="sk sk-line sk-line--inline" style="width:60px"></span></span>
+      <div class="turn-card-summary">
+        <div class="turn-card-header">
+          <span class="turn-card-index"><span class="sk sk-line sk-line--inline" style="width:18px;height:9px"></span></span>
+          <span class="sk sk-line" style="width:55%"></span>
+          <span class="sk sk-line sk-line--inline" style="width:48px;margin-left:auto"></span>
+        </div>
+        <div class="turn-card-preview">
+          <span class="sk sk-line" style="width:88%"></span>
+        </div>
       </div>
     </article>
   `;
