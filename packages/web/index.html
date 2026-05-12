@@ -98,6 +98,10 @@
         </div>
       </div>
 
+      <!-- 세션/옵저빌리티 섹션 상하 분할 핸들.
+           left-panel-vertical-resize.js의 initPanelBottomResize가 드래그 로직을 담당. -->
+      <div class="panel-vertical-handle" id="panelVerticalHandleBottom" title="드래그: 높이 조절"></div>
+
       <!-- left-panel-observability-revamp ADR-001/004 + 후속 ADR-008:
            4컬럼 툴 통계 테이블 → 글랜서블 옵저빌리티 위젯 4 카드 + 1 floating badge.
            정밀 통계는 detail view ts-mx 단일 진실 소스로 유지.
@@ -270,9 +274,67 @@
                   <tr><th>Time</th><th>Action</th><th>Target</th><th>Model</th><th>Message</th><th style="text-align:right">in</th><th style="text-align:right">out</th><th style="text-align:right"><span style="text-transform:none">⚡</span>Cache</th><th style="text-align:right">Duration</th><th>Session</th></tr>
                 </thead>
                 <tbody id="requestsBody">
-                  <tr><td colspan="10" class="table-empty"><span class="skeleton"></span></td></tr>
-                  <tr><td colspan="10" class="table-empty"><span class="skeleton"></span></td></tr>
-                  <tr><td colspan="10" class="table-empty"><span class="skeleton"></span></td></tr>
+                  <!-- skeleton-loading T-05 — 실제 컬럼 폭/높이 흉내. SSE 첫 도착 시 prependRequest 가 일괄 제거 (ADR-004). -->
+                  <tr data-skeleton="1">
+                    <td><span class="sk sk-line" style="width:78%"></span></td>
+                    <td><span class="sk sk-line" style="width:62%"></span></td>
+                    <td><span class="sk sk-line" style="width:72%"></span></td>
+                    <td><span class="sk sk-line" style="width:58%"></span></td>
+                    <td><span class="sk sk-line" style="width:90%"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:32px"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:32px"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:34px"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:44px"></span></td>
+                    <td><span class="sk sk-line" style="width:65%"></span></td>
+                  </tr>
+                  <tr data-skeleton="1">
+                    <td><span class="sk sk-line" style="width:74%"></span></td>
+                    <td><span class="sk sk-line" style="width:55%"></span></td>
+                    <td><span class="sk sk-line" style="width:80%"></span></td>
+                    <td><span class="sk sk-line" style="width:50%"></span></td>
+                    <td><span class="sk sk-line" style="width:76%"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:28px"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:36px"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:30px"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:48px"></span></td>
+                    <td><span class="sk sk-line" style="width:60%"></span></td>
+                  </tr>
+                  <tr data-skeleton="1">
+                    <td><span class="sk sk-line" style="width:82%"></span></td>
+                    <td><span class="sk sk-line" style="width:70%"></span></td>
+                    <td><span class="sk sk-line" style="width:65%"></span></td>
+                    <td><span class="sk sk-line" style="width:62%"></span></td>
+                    <td><span class="sk sk-line" style="width:84%"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:30px"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:32px"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:36px"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:42px"></span></td>
+                    <td><span class="sk sk-line" style="width:72%"></span></td>
+                  </tr>
+                  <tr data-skeleton="1">
+                    <td><span class="sk sk-line" style="width:70%"></span></td>
+                    <td><span class="sk sk-line" style="width:58%"></span></td>
+                    <td><span class="sk sk-line" style="width:75%"></span></td>
+                    <td><span class="sk sk-line" style="width:54%"></span></td>
+                    <td><span class="sk sk-line" style="width:70%"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:26px"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:34px"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:30px"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:40px"></span></td>
+                    <td><span class="sk sk-line" style="width:55%"></span></td>
+                  </tr>
+                  <tr data-skeleton="1">
+                    <td><span class="sk sk-line" style="width:76%"></span></td>
+                    <td><span class="sk sk-line" style="width:65%"></span></td>
+                    <td><span class="sk sk-line" style="width:68%"></span></td>
+                    <td><span class="sk sk-line" style="width:60%"></span></td>
+                    <td><span class="sk sk-line" style="width:82%"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:30px"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:30px"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:32px"></span></td>
+                    <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:46px"></span></td>
+                    <td><span class="sk sk-line" style="width:65%"></span></td>
+                  </tr>
                 </tbody>
               </table>
               <div style="padding:8px 12px;text-align:center">
