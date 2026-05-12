@@ -1,5 +1,5 @@
 /**
- * llm-input.css — LLM Input 탭 시각 정의 (web-design-balance-pass ADR-006)
+ * llm-input.css — LLM Input 탭 시각 정의 (v23 llm-input-accordion ADR-002)
  *
  * 책임:
  *  - llm-input-view.js가 출력하는 마크업의 시각 폴리싱.
@@ -8,12 +8,20 @@
  *  - 28KB system 본문도 가독 컨테이너(--llm-input-pre-max-h, 480px) 안에서 스크롤.
  *  - decode_error는 --error 톤으로 즉시 인지.
  *
+ * 메시지 아코디언 (ADR-002):
+ *  - 각 메시지는 <details>로 래핑, 기본 collapsed (system role만 open).
+ *  - <summary>는 role chip + 100자 미리보기 + idx — 한 줄로 훑어보기 가능.
+ *  - 메시지 섹션 상단 컨트롤 바: 검색 + 전체 펼침/접기.
+ *  - 검색 매칭 시 <mark class="llm-input-mark">로 highlight (--accent-bg-medium 톤).
+ *
  * 의존성 토큰 (모두 design-tokens.css SSoT — 하드코딩 0):
  *  - 색: --type-system-color, --type-response-color, --type-mcp-color, --error,
  *        --yellow-bg-light, --type-response-row-bg, --blue-bg-light,
- *        --text-1/2/3, --surface-alt, --floating, --border, --warn
+ *        --text-1/2/3/4, --surface, --surface-alt, --raised, --border, --warn,
+ *        --accent, --accent-bg-medium, --accent-border
  *  - 간격·radius: --space-1~6, --radius-sm/md/lg
- *  - 타이포: --font-data, --text-meta/small/body/h3, --weight-medium/strong
+ *  - 타이포: --font-data, --font-ui, --text-meta/small/body/h3, --weight-medium/strong
+ *  - 모션: --dur-fast, --ease
  *  - 컨테이너: --llm-input-pre-max-h, --turn-row-border-w
  *
  * 호출 마크업: packages/web/assets/js/llm-input-view.js renderHtml() 참조
@@ -148,34 +156,168 @@
   flex-direction: column;
   gap: var(--space-3);
 }
-.llm-input-messages h3 {
+
+/* 섹션 헤더: 타이틀 + 컨트롤 바 한 줄에 배치 (좁은 화면에서 wrap) */
+.llm-input-messages-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-1);
+}
+.llm-input-messages-header h3 {
+  font-size: var(--text-h3);
+  font-weight: var(--weight-strong);
+  color: var(--text-2);
+  margin: 0;
+}
+.llm-input-messages h3 { /* 0건 케이스 fallback */
   font-size: var(--text-h3);
   font-weight: var(--weight-strong);
   color: var(--text-2);
   margin-bottom: var(--space-2);
 }
 
-/* 개별 메시지 article 카드 */
+/* 컨트롤 바: 검색 + 일괄 토글 버튼 — 우측 정렬 */
+.llm-input-messages-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+}
+
+/* 검색 입력 — 아이콘 프리픽스 + native search */
+.llm-input-search {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-meta);
+  color: var(--text-3);
+  transition: border-color var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
+}
+.llm-input-search:hover { background: var(--raised); }
+.llm-input-search:focus-within {
+  border-color: var(--accent-border);
+  background: var(--raised);
+}
+.llm-input-search-icon {
+  font-size: var(--text-meta);
+  color: var(--text-3);
+}
+.llm-input-search-input {
+  flex: 1;
+  min-width: 160px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  color: var(--text-2);
+}
+.llm-input-search-input::placeholder { color: var(--text-4); }
+.llm-input-search-input::-webkit-search-cancel-button {
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+/* 일괄 토글 버튼 그룹 */
+.llm-input-messages-bulk {
+  display: inline-flex;
+  gap: var(--space-1);
+}
+.llm-input-expand-all,
+.llm-input-collapse-all {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+.llm-input-expand-all:hover,
+.llm-input-collapse-all:hover {
+  background: var(--raised);
+  color: var(--text-1);
+}
+.llm-input-expand-all:focus-visible,
+.llm-input-collapse-all:focus-visible {
+  outline: none;
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px var(--accent-bg-medium);
+}
+
+/* 메시지 리스트 컨테이너 — gap으로 카드 분리 */
+.llm-input-messages-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* 개별 메시지 <details> 아코디언 카드 */
 .llm-input-msg {
   background: var(--surface-alt);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   overflow: hidden;
+  transition: border-color var(--dur-fast) var(--ease);
 }
+.llm-input-msg[open] { border-color: var(--border-strong); }
 
-/* head: role chip + idx mini badge */
+/* summary = head: role chip + 미리보기 + idx — 한 줄로 훑어보기 */
 .llm-input-msg-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
   background: var(--surface);
+  cursor: pointer;
+  user-select: none;
+  list-style: none; /* UA marker 제거 (Firefox) */
+}
+/* UA marker 제거 (WebKit) */
+.llm-input-msg-head::-webkit-details-marker { display: none; }
+/* 좌측 토글 caret — open 시 90° 회전 */
+.llm-input-msg-head::before {
+  content: '▸';
+  flex: 0 0 auto;
+  width: 1em;
+  color: var(--text-4);
+  font-size: var(--text-small);
+  transition: transform var(--dur-fast) var(--ease);
+}
+.llm-input-msg[open] > .llm-input-msg-head::before { transform: rotate(90deg); }
+.llm-input-msg-head:hover { background: var(--raised); }
+.llm-input-msg[open] > .llm-input-msg-head {
   border-bottom: 1px solid var(--border);
 }
+.llm-input-msg-head:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent-border);
+}
+
+/* role chip */
 .llm-input-msg-role {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
+  gap: var(--space-1);
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-sm);
   font-size: var(--text-small);
@@ -185,7 +327,30 @@
   background: var(--surface-alt);
   color: var(--text-3);
 }
+.llm-input-msg-role-icon {
+  font-size: 1em;
+  line-height: 1;
+}
+
+/* 미리보기 — 처음 100자 (overflow: ellipsis, role 옆 가운데 영역) */
+.llm-input-msg-preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* details가 펼쳐지면 preview는 시각적 무게 감소 (본문이 보이므로) */
+.llm-input-msg[open] > .llm-input-msg-head > .llm-input-msg-preview {
+  color: var(--text-4);
+  font-style: italic;
+}
+
 .llm-input-msg-idx {
+  flex: 0 0 auto;
   font-family: var(--font-data);
   font-size: var(--text-small);
   color: var(--text-4);
@@ -285,4 +450,16 @@
   color: var(--text-4);
   font-size: var(--text-meta);
   font-style: italic;
+}
+
+/* === 검색 highlight ====================================================== */
+/* applySearchHighlight()가 매칭된 텍스트를 <mark class="llm-input-mark">로 래핑.
+   톤은 --accent-bg-medium (orange 7% 알파) — system amber와 충돌하지 않음. */
+.llm-input-mark {
+  padding: 0 2px;
+  background: var(--accent-bg-medium);
+  color: var(--text-1);
+  border-radius: var(--radius-sm);
+  font-weight: var(--weight-medium);
+  border-bottom: 1px dotted var(--accent-border);
 }
