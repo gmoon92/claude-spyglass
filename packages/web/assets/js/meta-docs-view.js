@@ -3,7 +3,9 @@
  *
  * 책임:
  *  - GET /api/meta-docs 로 카탈로그 + 사용 집계 받아 표 형태로 노출.
- *  - 타입 필터(agent/skill/command/all), 스코프, 표시(전체/미사용/orphan/deleted포함), 정렬.
+ *  - 타입 필터(agent/skill/command/all), 스코프, 표시(전체/미사용/orphan), 정렬.
+ *  - 직교 토글: includeDeleted — 디스크에서 사라진 soft-deleted 정의 포함 여부.
+ *    의미 축이 다르므로 display 라디오와 분리한다 (ADR-001 meta-docs-filter).
  *  - 헤더 클릭 정렬 ↔ 상단 정렬 버튼 양방향 동기화 (단일 분기).
  *  - "호출 0건" 행은 정리 후보로 시각 구분, "카탈로그에 없는 호출"(orphan)은 호버 안내.
  *  - "동기화" 버튼: POST /api/meta-docs/refresh — 비차단 토스트로 시작/완료/실패 단계 노출.
@@ -34,7 +36,9 @@ const state = {
   scopeMode: 'selected',   // 'selected' | 'all'
                            //   'selected' = 좌측 프로젝트 선택값을 따라 source_root로 필터
                            //   'all'      = 모든 프로젝트 카탈로그 합쳐서 표시
-  display: 'all',          // 'all' | 'unused' | 'orphan' | 'with_deleted'
+  display: 'all',          // 'all' | 'unused' | 'orphan' — 행 부분집합 선택 (단일 책임)
+  includeDeleted: false,   // boolean — soft-deleted(디스크 사라진) 정의 포함 여부.
+                           //   display와 직교(orthogonal). ADR-001 meta-docs-filter.
   // 마지막 동기화 결과 메타 (다음 렌더에서 합계 라벨에 노출)
   lastRefresh: null,       // { cwdsCount, summaryText } | null
   // 마지막으로 결정된 source_root 매칭 결과 (헤더 표시 + 빈 상태 처리)
@@ -68,7 +72,7 @@ export async function loadMetaDocsLibrary() {
     // 3) 본 fetch — 매칭된 source_root가 있으면 ?source_root= 부착, 아니면 전체
     const params = new URLSearchParams();
     if (state.type !== 'all') params.set('type', state.type);
-    if (state.display === 'with_deleted') params.set('includeDeleted', '1');
+    if (state.includeDeleted) params.set('includeDeleted', '1');
     if (resolvedSourceRoot) params.set('source_root', resolvedSourceRoot);
     const qs = params.toString();
     const url = '/api/meta-docs' + (qs ? `?${qs}` : '');
@@ -336,11 +340,12 @@ function renderFilters() {
     { v: 'project', label: '프로젝트'},
     { v: 'global',  label: '글로벌'  },
   ];
+  // ADR-001 meta-docs-filter: with_deleted를 별도 boolean(state.includeDeleted)로
+  // 승격. 라디오 그룹은 "행 부분집합 선택" 단일 책임만 담당.
   const displays = [
-    { v: 'all',          label: '전체' },
-    { v: 'unused',       label: '미사용만' },
-    { v: 'orphan',       label: '호출만존재' },
-    { v: 'with_deleted', label: 'deleted포함' },
+    { v: 'all',    label: '전체' },
+    { v: 'unused', label: '미사용만' },
+    { v: 'orphan', label: '호출만존재' },
   ];
 
   const btn = (group, opts, active) => opts.map(o =>
@@ -348,12 +353,25 @@ function renderFilters() {
        class="meta-doc-filter-btn ${o.v === active ? 'active' : ''}">${escHtml(o.label)}</button>`
   ).join('');
 
+  // 직교 토글 — display와 의미 축이 다르므로 라디오 그룹 외부에 체크박스로 분리.
+  // 라벨 능동형 + 🗑 아이콘 + title 툴팁의 3중 시각 단서로 학습 비용 ↓.
+  const includeDeletedHtml = `
+    <label class="meta-docs-include-deleted"
+           title="과거 호출 이력은 있으나 디스크에서 사라진 항목까지 포함합니다">
+      <input type="checkbox"
+             data-meta-include-deleted
+             ${state.includeDeleted ? 'checked' : ''} />
+      <span class="meta-docs-include-deleted-label">🗑 삭제된 정의도 표시</span>
+    </label>
+  `;
+
   // 정렬 컨트롤은 더 이상 상단 필터 바에 두지 않는다 — 표 헤더 클릭으로 일원화.
   return `
     <div class="meta-docs-filters">
       <div class="meta-docs-filter-group"><span class="meta-docs-filter-label">타입</span>${btn('type', types, state.type)}</div>
       <div class="meta-docs-filter-group"><span class="meta-docs-filter-label">스코프</span>${btn('scope', scopes, state.scope)}</div>
       <div class="meta-docs-filter-group"><span class="meta-docs-filter-label">표시</span>${btn('display', displays, state.display)}</div>
+      ${includeDeletedHtml}
     </div>
   `;
 }
@@ -388,6 +406,10 @@ function bindEvents(container) {
   container.dataset.metaBound = '1';
   container.addEventListener('click', onMetaContainerClick);
   container.addEventListener('keydown', onMetaContainerKeydown);
+  // change 이벤트는 click과 의미 축이 달라 별도 리스너로 등록.
+  //   - click  : 라디오/정렬/스코프/동기화 등 "값 선택" 액션
+  //   - change : 체크박스 토글 등 "boolean 상태 전환" 액션
+  container.addEventListener('change', onMetaContainerChange);
 }
 
 /**
@@ -435,6 +457,27 @@ async function onMetaContainerClick(e) {
     await runRefresh(refresh);
     return;
   }
+}
+
+/**
+ * change 이벤트 핸들러 — boolean 상태 전환만 처리.
+ * 현재는 includeDeleted 토글 1건. 향후 동일 패턴 토글이 늘어나면 data-* 분기를 확장.
+ */
+async function onMetaContainerChange(e) {
+  const toggle = e.target.closest('[data-meta-include-deleted]');
+  if (toggle) {
+    setIncludeDeleted(!!toggle.checked);
+    await loadMetaDocsLibrary();
+    return;
+  }
+}
+
+/**
+ * includeDeleted 진입점 — applyFilterChange와 의미 축이 다르므로 별도 헬퍼.
+ * (ADR-001 meta-docs-filter: 단일 책임 원칙 유지)
+ */
+function setIncludeDeleted(value) {
+  state.includeDeleted = !!value;
 }
 
 /** 필터 변경 단일 진입점 — sort 그룹은 dir 토글 규칙 처리 */
@@ -604,9 +647,15 @@ function applyScopeFilter(rows, scope) {
   return rows;
 }
 
-/** 표시 필터 — orphan/unused/deleted 단일 분기 */
+/**
+ * 표시 필터 — 행 부분집합 선택만 담당 (단일 책임).
+ *
+ * ADR-001 meta-docs-filter: with_deleted 분기는 state.includeDeleted로 분리되어
+ * fetch 쿼리 파라미터(includeDeleted=1)에서만 의미를 가진다. 이 함수는 서버 응답이
+ * 이미 적용된 상태의 list를 받아 "어떤 행을 화면에 표시할지"만 결정한다.
+ */
 function applyDisplayFilter(rows, display) {
-  if (display === 'all' || display === 'with_deleted') return rows;
+  if (display === 'all') return rows;
   if (display === 'unused') {
     return rows.filter(r => r.id != null && (r.invocations ?? 0) === 0);
   }
