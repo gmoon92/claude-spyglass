@@ -201,6 +201,50 @@
   border-color: var(--accent, #5a8dee);
 }
 
+/* ── includeDeleted 토글 (ADR-001 meta-docs-filter) ─────────────────────
+   display 라디오와 의미 축이 다른 boolean 컨트롤. 라디오 그룹 우측에 배치하여
+   "행 부분집합 선택"(라디오) ⊥ "기본 제외분 포함"(체크박스) 구조를 시각으로 분리.
+   토큰 풀: --text-3 / --accent / --raised / --border / --accent-border /
+            --dur-fast / --radius-sm / --space-1~2 / --font-meta. 하드코딩 색상 0. */
+.meta-docs-include-deleted {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;            /* 필터 바 우측 끝 정렬 */
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+  font-size: var(--font-meta);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast);
+}
+.meta-docs-include-deleted:hover {
+  background: var(--raised);
+  color: var(--text-1);
+  border-color: var(--border);
+}
+.meta-docs-include-deleted input[type="checkbox"] {
+  margin: 0;
+  width: 13px;
+  height: 13px;
+  accent-color: var(--accent);  /* 체크 시 강조색 — UA 기본 파랑 회피 */
+  cursor: pointer;
+}
+.meta-docs-include-deleted:has(input:checked) {
+  background: var(--accent-bg-medium);
+  color: var(--text-1);
+  border-color: var(--accent-border);
+}
+.meta-docs-include-deleted:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.meta-docs-include-deleted-label {
+  white-space: nowrap;
+}
+
 /* ── 표 ──────────────────────────────────────────────────────────────── */
 .meta-docs-table-wrap {
   overflow-x: auto;
