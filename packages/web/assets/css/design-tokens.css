@@ -84,6 +84,9 @@
   /* ── 레이아웃 (web-design-balance-pass ADR-001 — 80% 비례 다운스케일)
      원본 → 현재: 280→224 / 160→128 / 215→172 / 420→336 / 180→144 / 480→384
      handle-width 4px는 픽셀 격자 보호 위해 그대로 유지. */
+  /* left-rail-meta-docs ADR-003: 좌측 앱 모드 rail 폭. 3-column 그리드의 첫 컬럼.
+     56px = 40 (button hit area) + 16 (padding 8+8). 시각 노이즈 최소화 + Fitts 기준 충족. */
+  --app-rail-width:            56px;
   --left-panel-width:          224px;
   --tool-stats-height:         128px;
   --project-panel-height:      172px;
@@ -113,6 +116,51 @@
   --turn-row-indent:   var(--space-5);  /* 20px @ 80% 다운스케일 — 기존 32px 대비 0.8배 */
   --turn-row-border-w: 2px;
 
+  /* ── Sub-type 색상 SSoT (turn-view-badges ADR-007 R1·R2) ────────────────
+   *   같은 분류(MCP/Agent/Skill/Task)는 어디서 보든 같은 hue를 갖도록 단일 family.
+   *   필터 버튼 active · 분류 뱃지 · turn-row chip · flow chip · llm-input
+   *   섹션 표지 모두 이 family에서 색을 가져온다.
+   *
+   *   * `--sub-type-{kind}-color`        — 라벨/아이콘 텍스트 본색 (AA+ 대비)
+   *   * `--sub-type-{kind}-bg`           — idle 배지/chip 배경 (alpha 0.13)
+   *   * `--sub-type-{kind}-border`       — idle 보더 (alpha 0.32)
+   *   * `--sub-type-{kind}-bg-active`    — 필터 버튼 active 등 강조 배경 (alpha 0.26 gradient)
+   *   * `--sub-type-{kind}-border-active`— 필터 버튼 active 등 강조 보더 (alpha 0.50)
+   *
+   *   hue 결정 (다크 #0a0a0b 대비 AA+ 검증):
+   *     MCP   = cyan    #22D3EE — 외부 서버 연결, 정보 흐름 톤             (5.8:1  AA)
+   *     Agent = warm    #FF9B6E — brand accent 변형, 서브에이전트 위임      (6.0:1  AA)
+   *     Skill = lime    #A3E635 — violet(opus)/orange(sonnet)와 hue 분리   (11.5:1 AAA)
+   *     Task  = pumpkin #F77F00 — 메타 작업. 사용자 요청(ADR-007 R4, 2026-05-12)에
+   *                              따라 magenta(#D946EF)→burnt-orange로 재선정.
+   *                              hue 31° + 채도 100% + 명도 52% 의 깊은 주황 — Agent warm
+   *                              (19°, 명도 73%) / Sonnet `--accent` #FF7A45 (15°, 명도 63%)
+   *                              / warn #F0B72F (47°) 모두와 hue·명도 차이로 시각 분리   (5.6:1 AA)
+   */
+  --sub-type-mcp-color:          #22D3EE;
+  --sub-type-mcp-bg:             rgba(34, 211, 238, 0.13);
+  --sub-type-mcp-border:         rgba(34, 211, 238, 0.32);
+  --sub-type-mcp-bg-active:      linear-gradient(135deg, rgba(34,211,238,0.26) 0%, rgba(34,211,238,0.10) 100%);
+  --sub-type-mcp-border-active:  rgba(34, 211, 238, 0.50);
+
+  --sub-type-agent-color:         #FF9B6E;
+  --sub-type-agent-bg:            rgba(255, 155, 110, 0.13);
+  --sub-type-agent-border:        rgba(255, 155, 110, 0.32);
+  --sub-type-agent-bg-active:     linear-gradient(135deg, rgba(255,155,110,0.26) 0%, rgba(255,155,110,0.10) 100%);
+  --sub-type-agent-border-active: rgba(255, 155, 110, 0.50);
+
+  --sub-type-skill-color:         #A3E635;
+  --sub-type-skill-bg:            rgba(163, 230, 53, 0.13);
+  --sub-type-skill-border:        rgba(163, 230, 53, 0.32);
+  --sub-type-skill-bg-active:     linear-gradient(135deg, rgba(163,230,53,0.26) 0%, rgba(163,230,53,0.10) 100%);
+  --sub-type-skill-border-active: rgba(163, 230, 53, 0.50);
+
+  --sub-type-task-color:          #F77F00;
+  --sub-type-task-bg:             rgba(247, 127, 0, 0.13);
+  --sub-type-task-border:         rgba(247, 127, 0, 0.32);
+  --sub-type-task-bg-active:      linear-gradient(135deg, rgba(247,127,0,0.26) 0%, rgba(247,127,0,0.10) 100%);
+  --sub-type-task-border-active:  rgba(247, 127, 0, 0.50);
+
   /* ── 타입별 색상 SSoT (ADR-003) — 사용 영역 축소: 배지/필터 활성 상태만 ── */
   --type-prompt-color:     #FFB088;
   --type-prompt-bg:        linear-gradient(135deg, rgba(255,176,136,0.28) 0%, rgba(255,212,59,0.14) 100%);
@@ -126,12 +174,17 @@
      기존 --type-response-bg(0.15)는 배지/칩에 적합한 농도이고, 행 배경에는 너무 강함.
      0.04 = 인접 도구 행과 시각 균형을 깨지 않으면서도 mark 인지 가능한 최소 농도. */
   --type-response-row-bg:  rgba(121,192,255,0.04);
-  --type-agent-color:      var(--warn);
-  --type-agent-bg:         linear-gradient(135deg, rgba(240,183,47,0.26) 0%, rgba(255,122,69,0.14) 100%);
-  --type-skill-color:      var(--warn);
-  --type-skill-bg:         linear-gradient(135deg, rgba(240,183,47,0.26) 0%, rgba(255,122,69,0.14) 100%);
-  --type-mcp-color:        #22d3ee;
-  --type-mcp-bg:           linear-gradient(135deg, rgba(34,211,238,0.26) 0%, rgba(88,166,255,0.14) 100%);
+  /* --type-{agent,skill,mcp}-* — turn-view-badges ADR-007 R1 (2026-05-12)로 sub-type SSoT family에 alias.
+     R4 (2026-05-12 audit): `-bg` alias는 idle 톤(`-bg`)에 매핑 — `-bg-active`(강조)와 의미 충돌 차단.
+     호출자가 idle 의도로 사용할 때 자동으로 idle 톤이 적용되며, 강조가 필요하면 알아서 `-bg-active`
+     슬롯을 직접 호출하라(필터 버튼의 `.type-filter-{kind}.active` 셀렉터처럼).
+     현재 직접 호출자 0건(badges.css는 sub-type SSoT 직접 참조) — 외부 모듈/미래 호출자 대비 안전 매핑. */
+  --type-agent-color:      var(--sub-type-agent-color);
+  --type-agent-bg:         var(--sub-type-agent-bg);
+  --type-skill-color:      var(--sub-type-skill-color);
+  --type-skill-bg:         var(--sub-type-skill-bg);
+  --type-mcp-color:        var(--sub-type-mcp-color);
+  --type-mcp-bg:           var(--sub-type-mcp-bg);
 
   /* ── Accent 배경 계층 ── */
   --accent-dim:       rgba(255,122,69,0.10);
@@ -161,6 +214,18 @@
   /* ── 기타 배지 (→ badge-grad-* 토큰으로 대체됨, 하위 호환 alias 유지) ── */
   --unknown-bg:     var(--badge-grad-neutral);
   --model-badge-bg: var(--badge-grad-brand);
+
+  /* 하위 호환 alias — 기존 `--chip-{kind}-*` 사용처는 무수정으로 새 SSoT(`--sub-type-*`)를 흡수.
+     점진적으로 `--sub-type-{kind}-*`로 마이그레이션 (turn-rows.js·badges.css·turn-view.css는 이미 alias 경유로 자동 동작). */
+  --chip-mcp-color:    var(--sub-type-mcp-color);
+  --chip-mcp-bg:       var(--sub-type-mcp-bg);
+  --chip-mcp-border:   var(--sub-type-mcp-border);
+  --chip-agent-color:  var(--sub-type-agent-color);
+  --chip-agent-bg:     var(--sub-type-agent-bg);
+  --chip-agent-border: var(--sub-type-agent-border);
+  --chip-skill-color:  var(--sub-type-skill-color);
+  --chip-skill-bg:     var(--sub-type-skill-bg);
+  --chip-skill-border: var(--sub-type-skill-border);
 
   /* ── 모델 시각 구분 (ADR-data-trust-visual-001) ───────────────────────── */
   /* Haiku=sky / Sonnet=accent orange / Opus=violet / external=pink / synthetic=neutral / unknown=dim */

@@ -28,9 +28,11 @@ body {
      - grid-template-columns 트랜지션 200ms cubic-bezier로 hide/show 자연 동작
      - hide 시 0px (이전 36px 어색한 스트립 폐기) — 재진입은 fixed 위치 펼치기 버튼·⌘B
 */
+/* left-rail-meta-docs ADR-003: 좌측에 56px 앱 모드 rail 추가 — 3-column grid.
+   rail은 항상 노출(left-panel-hidden 상태에서도 rail은 보임). */
 .main-layout {
   display: grid;
-  grid-template-columns: var(--left-panel-width) 1fr;
+  grid-template-columns: var(--app-rail-width) var(--left-panel-width) 1fr;
   grid-template-rows: 1fr;
   gap: var(--space-4);
   padding: var(--space-4);
@@ -40,10 +42,11 @@ body {
 }
 
 /* ── LEFT PANEL HIDDEN — 5라운드 회의 합의 ──────────────────────────────── */
-/* 0px hide: 메인 콘텐츠가 viewport 전체 차지. 재진입은 차트 헤더 좌측 단일 토글 또는 ⌘B. */
+/* 0px hide: left-panel만 0px로 접고 rail은 그대로 노출. 재진입은 차트 헤더 좌측 단일 토글 또는 ⌘B. */
 .main-layout.left-panel-hidden {
-  grid-template-columns: 0 1fr;
-  /* gap도 함께 사라지도록 — 0 column이지만 gap 16px이 남으면 메인 영역이 16px 들여쓰기됨 */
+  grid-template-columns: var(--app-rail-width) 0 1fr;
+  /* gap도 함께 사라지도록 — 0 column이지만 gap 16px이 남으면 메인 영역이 16px 들여쓰기됨.
+     rail-content 사이 gap은 유지 (rail은 노출). */
   gap: 0 var(--space-4);
 }
 
@@ -81,7 +84,8 @@ body {
 .sidebar-edge-toggle {
   position: absolute;
   top: 50%;
-  left: calc(var(--space-4) + var(--left-panel-width) + var(--space-2));
+  /* ADR-003: app-rail 추가로 left-panel 시작 위치가 +(rail-width + gap) 시프트됨 */
+  left: calc(var(--space-4) + var(--app-rail-width) + var(--space-4) + var(--left-panel-width) + var(--space-2));
   transform: translate(-50%, -50%);
   z-index: 10;
   width: 20px; height: 56px;
@@ -113,8 +117,9 @@ body {
   display: block;
 }
 .main-layout.left-panel-hidden .sidebar-edge-toggle {
-  /* 사이드바 0px hide 시 토글이 좌측 끝(외곽 padding 안쪽)에 노출 + 발견성 보강 */
-  left: var(--space-4);
+  /* 사이드바 0px hide 시 토글이 rail 우측 끝에 노출 + 발견성 보강
+     ADR-003: rail은 항상 노출되므로 rail의 우측 가장자리 = space-4 + rail-width */
+  left: calc(var(--space-4) + var(--app-rail-width));
   opacity: 0.7;
 }
 .main-layout.left-panel-hidden .sidebar-edge-toggle svg {

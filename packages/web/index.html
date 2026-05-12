@@ -28,6 +28,7 @@
   <link rel="stylesheet" href="/assets/css/context-chart.css">
   <link rel="stylesheet" href="/assets/css/tool-stats.css">
   <link rel="stylesheet" href="/assets/css/obs-panel.css">
+  <link rel="stylesheet" href="/assets/css/app-rail.css">
 </head>
 <body>
 
@@ -40,6 +41,31 @@
   </div>
 
   <div class="main-layout">
+
+    <!-- ADR-003 left-rail-meta-docs: 56px 앱 모드 rail.
+         🚥 탐색(기본) / 📚 메타 문서 — 모드 전환 시 메인 영역 전체가 교체됨.
+         초기 aria-current는 state.appMode(sessionStorage 복원)에 따라 app-rail.js가 동기화. -->
+    <aside class="app-rail" aria-label="앱 모드">
+      <button type="button" class="app-rail-btn" data-app-mode="browse"
+              aria-current="page" aria-label="탐색 (세션·요청 보기)" title="탐색">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <!-- Lucide-style traffic/signal: 3 가로 막대 (top to bottom) — 세션/턴 흐름 -->
+          <rect x="4"  y="5"  width="16" height="2.5" rx="1"/>
+          <rect x="4"  y="11" width="10" height="2.5" rx="1"/>
+          <rect x="4"  y="17" width="13" height="2.5" rx="1"/>
+        </svg>
+      </button>
+      <button type="button" class="app-rail-btn" data-app-mode="metadocs"
+              aria-label="메타 문서 카탈로그" title="메타 문서">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <!-- Lucide-style book: 펼친 책 — 정의/카탈로그 어휘 -->
+          <path d="M3 4.5C3 3.7 3.7 3 4.5 3H11V20H4.5C3.7 20 3 19.3 3 18.5V4.5Z" stroke-linejoin="round"/>
+          <path d="M21 4.5C21 3.7 20.3 3 19.5 3H13V20H19.5C20.3 20 21 19.3 21 18.5V4.5Z" stroke-linejoin="round"/>
+          <line x1="11" y1="3"  x2="11" y2="20"/>
+          <line x1="13" y1="3"  x2="13" y2="20"/>
+        </svg>
+      </button>
+    </aside>
 
     <aside class="left-panel">
       <div class="panel-resize-handle" title="드래그: 너비 조절 · 더블클릭: 콘텐츠 너비에 맞춤"></div>
@@ -56,6 +82,10 @@
           <span class="header-stat-value" id="statActive">--</span>
         </span>
       </div>
+
+      <!-- ADR-003 left-rail-meta-docs: 메타 모드 좌측 요약 카드 컨테이너.
+           body[data-app-mode="metadocs"] 일 때만 display 노출. meta-docs-view.js가 동적으로 내용 채움. -->
+      <div class="meta-docs-summary-cards" id="metaDocsSummaryCards" hidden></div>
 
       <div class="panel-section flex-section" id="browserProjectsSection">
         <div class="panel-body">
@@ -449,7 +479,8 @@
             <div class="view-tab-group">
               <button class="view-tab active" id="tabTurn" data-tab="turn">턴 뷰</button>
               <button class="view-tab" id="tabRequests" data-tab="requests">요청</button>
-              <button class="view-tab" id="tabMetaDocs" data-tab="metadocs" title="프로젝트/글로벌 .claude에 등록된 메타 문서 카탈로그 + 호출 빈도">메타 문서</button>
+              <!-- ADR-003 left-rail-meta-docs: 메타 문서는 detail 탭에서 좌측 rail 1급 모드로 승격됨.
+                   기존 #detailMetaDocsView 컨테이너는 T-03에서 #metaDocsRoot로 호이스팅 예정. -->
               <button class="view-tab" id="tabTools" data-tab="tools">도구</button>
               <button class="view-tab" id="tabLlm" data-tab="llm">LLM Input</button>
               <button class="view-tab" id="tabSysLib" data-tab="syslib">System 라이브러리</button>
@@ -634,18 +665,8 @@
             </div>
           </div>
 
-          <!-- v24 메타 문서 카탈로그 + 히팅률 (Migration 024) -->
-          <div id="detailMetaDocsView" class="detail-content" style="display:none">
-            <div id="metaDocsBody" class="meta-docs-body" role="region" aria-label="메타 문서 카탈로그">
-              <!-- skeleton-loading T-09 — loadMetaDocsLibrary 호출 시 skMetaDocList 로 교체 -->
-              <table class="meta-docs-table" data-skeleton="1"><tbody>
-                <tr data-skeleton="1"><td><span class="sk sk-line" style="width:70%"></span></td><td><span class="sk sk-line" style="width:80%"></span></td><td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:28px"></span></td><td><span class="sk sk-line sk-line--inline" style="width:40px"></span></td></tr>
-                <tr data-skeleton="1"><td><span class="sk sk-line" style="width:62%"></span></td><td><span class="sk sk-line" style="width:75%"></span></td><td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:24px"></span></td><td><span class="sk sk-line sk-line--inline" style="width:40px"></span></td></tr>
-                <tr data-skeleton="1"><td><span class="sk sk-line" style="width:78%"></span></td><td><span class="sk sk-line" style="width:68%"></span></td><td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:32px"></span></td><td><span class="sk sk-line sk-line--inline" style="width:40px"></span></td></tr>
-                <tr data-skeleton="1"><td><span class="sk sk-line" style="width:55%"></span></td><td><span class="sk sk-line" style="width:82%"></span></td><td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:26px"></span></td><td><span class="sk sk-line sk-line--inline" style="width:40px"></span></td></tr>
-              </tbody></table>
-            </div>
-          </div>
+          <!-- ADR-003 left-rail-meta-docs: 메타 문서 컨테이너는 detail이 아닌 main-layout 레벨로 호이스팅됨.
+               이 위치에는 더 이상 detailMetaDocsView가 없음. -->
 
           <div id="detailToolsView" class="detail-content" style="display:none"></div>
 
@@ -654,6 +675,24 @@
       </div>
 
     </main>
+
+    <!-- ADR-003 left-rail-meta-docs: 메타 문서 카탈로그 컨테이너 (rail 모드 'metadocs' 진입 시 노출).
+         main-layout grid의 마지막 자식이지만 데이터 attribute로 가시성 제어 — appMode='browse' 시 hidden.
+         body[data-app-mode] 룰로 .right-panel과 #metaDocsRoot의 가시성 토글. -->
+    <section id="metaDocsRoot" class="meta-docs-root" aria-label="메타 문서 카탈로그">
+      <!-- 좌측 축약 패널: 프로젝트 셀렉터(기존 좌측 #browserProjectsBody 재사용) + 요약 카드 3개.
+           body[data-app-mode="metadocs"] 일 때 좌측 obs-panel은 hide되고 summary cards가 .left-panel 안에서 노출됨.
+           summary cards 마크업 자체는 meta-docs-view.js가 동적으로 .meta-docs-summary-cards 컨테이너에 inject. -->
+      <div id="metaDocsBody" class="meta-docs-body" role="region" aria-label="메타 문서 본문">
+        <!-- skeleton-loading T-09 — loadMetaDocsLibrary 호출 시 skMetaDocList 로 교체 -->
+        <table class="meta-docs-table" data-skeleton="1"><tbody>
+          <tr data-skeleton="1"><td><span class="sk sk-line" style="width:70%"></span></td><td><span class="sk sk-line" style="width:80%"></span></td><td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:28px"></span></td><td><span class="sk sk-line sk-line--inline" style="width:40px"></span></td></tr>
+          <tr data-skeleton="1"><td><span class="sk sk-line" style="width:62%"></span></td><td><span class="sk sk-line" style="width:75%"></span></td><td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:24px"></span></td><td><span class="sk sk-line sk-line--inline" style="width:40px"></span></td></tr>
+          <tr data-skeleton="1"><td><span class="sk sk-line" style="width:78%"></span></td><td><span class="sk sk-line" style="width:68%"></span></td><td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:32px"></span></td><td><span class="sk sk-line sk-line--inline" style="width:40px"></span></td></tr>
+          <tr data-skeleton="1"><td><span class="sk sk-line" style="width:55%"></span></td><td><span class="sk sk-line" style="width:82%"></span></td><td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:26px"></span></td><td><span class="sk sk-line sk-line--inline" style="width:40px"></span></td></tr>
+        </tbody></table>
+      </div>
+    </section>
   </div>
 
   <footer class="footer">

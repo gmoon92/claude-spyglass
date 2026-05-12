@@ -1,0 +1,87 @@
+/**
+ * app-rail.css — 좌측 앱 모드 rail 시각 (ADR-003 left-rail-meta-docs)
+ *
+ * 책임:
+ *  - .main-layout 첫 컬럼에 위치하는 56px rail 컨테이너 + 모드 버튼.
+ *  - 버튼 4상태: 기본 / hover / [aria-current="page"] (현재 모드) / focus-visible.
+ *  - 디자인 토큰만 사용 (하드코딩 색상 0건).
+ *
+ * 의존성 토큰 (design-tokens.css SSoT):
+ *  - 폭: --app-rail-width (56px)
+ *  - 색: --text-1/2/3/4, --accent, --accent-bg-medium, --accent-border, --raised, --border, --surface, --surface-alt
+ *  - 간격·radius: --space-1~4, --radius-md, --radius-sm
+ *  - 모션: --dur-fast, --ease
+ *
+ * 호출 마크업: packages/web/index.html `<aside class="app-rail">` 참조.
+ */
+
+/* === 컨테이너 ============================================================ */
+.app-rail {
+  /* main-layout grid 첫 컬럼 — width는 grid-template-columns가 강제. min-width로 보호. */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-1);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  /* main-layout이 자식 패널들과 동일 시각 위계 — left-panel과 같은 카드 톤 */
+  overflow: hidden;
+}
+
+/* === 모드 버튼 =========================================================== */
+.app-rail-btn {
+  /* 40×40 hit area — Fitts 충족, 56px 컨테이너에 좌우 8px 여백 */
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-3);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+
+.app-rail-btn:hover {
+  background: var(--raised);
+  color: var(--text-1);
+  border-color: var(--border);
+}
+
+/* 활성 모드 — aria-current="page" */
+.app-rail-btn[aria-current="page"] {
+  background: var(--accent-bg-medium);
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
+.app-rail-btn:focus-visible {
+  outline: none;
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px var(--accent-bg-medium);
+}
+
+/* 활성 상태에서도 focus-visible은 두 효과 모두 노출 */
+.app-rail-btn[aria-current="page"]:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-border);
+}
+
+/* 아이콘(SVG) — currentColor 상속 */
+.app-rail-btn svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.75;
+  stroke: currentColor;
+  fill: none;
+  pointer-events: none;
+}
+
+/* === 좁은 화면(모바일 등) — rail 숨김 또는 가로 변환은 추후 별도 룰 ====== */
+/* 현재 left-panel이 좁은 폭에서 가로 모드로 전환되는 룰 옆에 추가 가능
+   본 PR은 데스크탑 전용 패턴만 정의. */
