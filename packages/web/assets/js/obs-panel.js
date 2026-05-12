@@ -147,12 +147,43 @@ const CATEGORY_CLASS = {
 };
 
 /**
- * @param {Array<{category, request_count, percentage}>} categories
+ * renderToolCategoriesCard — 두 모드를 단일 함수로 처리 (ADR-004 SSoT).
+ *
+ * 모드 A — 전역 (기본, 프로젝트 미선택):
+ *   @param {Array<{category, request_count, percentage}>} payload  카테고리 배열
+ *
+ * 모드 B — 메타 문서 Top N (프로젝트 선택 시):
+ *   @param {{ mode: 'meta-docs', items: Array<{name, invocations}> }} payload
+ *
+ * 호출 측(main.js)은 payload만 전달 — 판단은 이 함수 내부 단일 분기.
  */
-export function renderToolCategoriesCard(categories) {
+export function renderToolCategoriesCard(payload) {
   const el = document.getElementById('cardToolCategories');
   if (!el) return;
-  if (!Array.isArray(categories) || categories.length === 0 || categories.every(c => !c.request_count)) {
+
+  // ── 모드 B: 메타 문서 Top N ──────────────────────────────────────────────
+  if (payload && !Array.isArray(payload) && payload.mode === 'meta-docs') {
+    const items = Array.isArray(payload.items) ? payload.items : [];
+    if (items.length === 0) {
+      el.innerHTML = emptyCard('메타 문서 호출 없음');
+      return;
+    }
+    const max = Math.max(1, ...items.map(i => i.invocations || 0));
+    const rows = items.map(i => {
+      const pct = Math.round((i.invocations || 0) / max * 100);
+      return `<div class="obs-meta-row">
+        <span class="obs-meta-name" title="${escHtml(i.name)}">${escHtml(i.name)}</span>
+        <div class="obs-cat-bar"><span class="obs-cat-bar-fill obs-cat-bar-fill--agent" style="width:${pct}%"></span></div>
+        <span class="obs-cat-pct">${escHtml(String(i.invocations ?? 0))}</span>
+      </div>`;
+    }).join('');
+    el.innerHTML = `<div class="obs-card-tools obs-card-meta-docs">${rows}</div>`;
+    return;
+  }
+
+  // ── 모드 A: 전역 카테고리 막대 (기존 동작) ──────────────────────────────
+  const categories = Array.isArray(payload) ? payload : [];
+  if (categories.length === 0 || categories.every(c => !c.request_count)) {
     el.innerHTML = emptyCard('도구 호출 없음');
     return;
   }

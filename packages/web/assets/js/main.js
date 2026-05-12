@@ -24,6 +24,7 @@ import { togglePromptExpand } from './renderers.js';
 import { renderLlmInput } from './llm-input-view.js';
 import { initColResize } from './col-resize.js';
 import { initPanelResize } from './panel-resize.js';
+import { initPanelVerticalResize } from './left-panel-vertical-resize.js';
 import { initContextChart } from './context-chart.js';
 import { createFilterBar } from './components/filter-bar.js';
 import { initToolColors } from './tool-colors.js';
@@ -40,8 +41,60 @@ import {
   applyRangeLabels,
 } from './views/default-view.js';
 import { loadSession, abortCurrentSession } from './views/detail-view.js';
+import { renderToolCategoriesCard } from './obs-panel.js';
 
 const STORAGE_KEY = 'spyglass:lastProject';
+
+// ── 메타 문서 Top N 헬퍼 ─────────────────────────────────────────────────────
+
+/**
+ * 프로젝트 이름으로 /api/meta-docs 전체 목록에서 source_root를 매핑.
+ * meta-docs-view.js의 findSourceRootByProject와 동일 로직 — 단일 책임 분리.
+ * (호출 측은 raw rows + projectName만 전달, 판단은 이 함수 내부)
+ */
+function resolveMetaDocsSourceRoot(rows, projectName) {
+  if (!rows || !projectName) return null;
+  const seen = new Set();
+  for (const r of rows) {
+    const root = r?.source_root;
+    if (!root || seen.has(root)) continue;
+    seen.add(root);
+    const base = String(root).split('/').filter(Boolean).pop();
+    if (base === projectName) return root;
+  }
+  return null;
+}
+
+/**
+ * 프로젝트 선택 시 메타 문서 호출 수 Top 5 fetch → renderToolCategoriesCard에 전달.
+ * 실패 시 카드 상태 변경 없음 (silent fallback).
+ */
+async function renderMetaDocsTopForProject(projectName) {
+  try {
+    const probeRes = await fetch('/api/meta-docs');
+    if (!probeRes.ok) return;
+    const probeJson = await probeRes.json();
+    const allRows = Array.isArray(probeJson?.data) ? probeJson.data : [];
+
+    const sourceRoot = resolveMetaDocsSourceRoot(allRows, projectName);
+    if (!sourceRoot) return;
+
+    const url = `/api/meta-docs?source_root=${encodeURIComponent(sourceRoot)}`;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const json = await res.json();
+    const rows = Array.isArray(json?.data) ? json.data : [];
+
+    // invocations 내림차순 정렬 → 상위 5건 (호출 없는 행 제외)
+    const top5 = rows
+      .filter(r => r.id != null && (r.invocations ?? 0) > 0)
+      .sort((a, b) => (b.invocations ?? 0) - (a.invocations ?? 0))
+      .slice(0, 5)
+      .map(r => ({ name: r.name, invocations: r.invocations ?? 0 }));
+
+    renderToolCategoriesCard({ mode: 'meta-docs', items: top5 });
+  } catch { /* silent — 카드 상태 유지 */ }
+}
 
 function autoActivateProject() {
   if (getSelectedProject()) return;
@@ -83,6 +136,10 @@ function selectProject(name) {
     // 좌측 프로젝트 라벨이 갱신된 직후 카탈로그 재조회 — 새 source_root로 자동 매핑
     loadMetaDocsLibrary();
   }
+
+  // dashboard-ui-enhancements: 프로젝트 선택 시 하단 Tool Categories 카드를
+  // 해당 프로젝트 메타 문서 호출 Top 5로 교체 (비동기, 실패 시 silent)
+  renderMetaDocsTopForProject(name);
 }
 
 function closeDetail() {
@@ -350,6 +407,11 @@ function init() {
   initColResize(document.querySelector('#feedBody table'));
   initColResize(document.querySelector('#detailRequestsView table'));
   initPanelResize(document.querySelector('.left-panel'), document.querySelector('.panel-resize-handle'));
+  initPanelVerticalResize(
+    document.getElementById('panelVerticalHandle'),
+    document.getElementById('browserProjectsSection'),
+    document.getElementById('browserSessionsSection'),
+  );
   initCacheTooltip();
   initStatTooltip();
   initCachePanelTooltip();
