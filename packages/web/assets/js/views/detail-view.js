@@ -11,6 +11,7 @@ import {
 } from '../session-detail.js';
 import { fmtToken, fmtDate } from '../formatters.js';
 import { setChartMode, renderRightPanel } from './default-view.js';
+import { skTurnCardList } from '../render/skeleton.js';
 
 let _abortController = null;
 
@@ -36,6 +37,13 @@ export async function loadSession(id) {
   // 데이터 fetch 완료 후 setDetailView(getDetailTab())이 현재 탭만 다시 표시한다.
   document.getElementById('detailRequestsView').style.display = 'none';
   document.getElementById('detailTurnView').style.display = 'none';
+
+  // skeleton-loading T-07: 이전 세션 turn 뷰의 잔여 콘텐츠를 skeleton 으로 리셋.
+  // 탭 자체는 display:none 이지만 fetch 완료 후 setDetailView('turn')으로 노출되는
+  // 짧은 순간 이전 데이터가 보이지 않도록 본문을 placeholder로 미리 채움.
+  // turn-views.js 가 정상 렌더 시 innerHTML 교체로 자연 제거.
+  const turnBody = document.getElementById('turnUnifiedBody');
+  if (turnBody) turnBody.innerHTML = skTurnCardList(5);
   const llmViewEl    = document.getElementById('detailLlmInputView');
   const sysLibViewEl = document.getElementById('detailSysLibView');
   const toolsViewEl  = document.getElementById('detailToolsView');

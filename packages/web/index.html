@@ -110,10 +110,49 @@
       <div class="panel-section tool-stats-section" id="panelTools">
         <div class="panel-body">
           <div class="obs-panel" id="obsPanel">
-            <article class="obs-card obs-card--burn"  id="cardBurnRate"     data-obs-tooltip="burn-rate"></article>
-            <article class="obs-card obs-card--cache" id="cardCacheHealth"  data-obs-tooltip="cache-health"></article>
-            <article class="obs-card obs-card--pulse" id="cardLivePulse"    data-obs-tooltip="live-pulse" data-phase="2"></article>
-            <article class="obs-card obs-card--tools" id="cardToolCategories" data-obs-tooltip="tool-categories"></article>
+            <!-- skeleton-loading T-06 — 4 카드 초기 mount. fetchObservability() 가 render* 호출 시 innerHTML 교체로 자연 제거. -->
+            <article class="obs-card obs-card--burn"  id="cardBurnRate"     data-obs-tooltip="burn-rate" data-skeleton="1">
+              <span class="obs-card-value"><span class="sk sk-line" style="width:62%;height:14px"></span></span>
+              <span class="obs-card-trend"><span class="sk sk-line sk-line--inline" style="width:34px"></span></span>
+              <span class="obs-card-sub"><span class="sk sk-line" style="width:70%;height:9px"></span></span>
+              <span class="obs-card-spark"><span class="sk sk-block" style="width:76px;height:24px"></span></span>
+            </article>
+            <article class="obs-card obs-card--cache" id="cardCacheHealth"  data-obs-tooltip="cache-health" data-skeleton="1">
+              <span class="obs-card-value"><span class="sk sk-line" style="width:58%;height:14px"></span></span>
+              <span class="obs-card-trend"><span class="sk sk-circle sk-circle--sm"></span></span>
+              <span class="obs-card-sub"><span class="sk sk-line" style="width:72%;height:9px"></span></span>
+              <span class="obs-card-spark"><span class="sk sk-block" style="width:76px;height:24px"></span></span>
+            </article>
+            <article class="obs-card obs-card--pulse" id="cardLivePulse"    data-obs-tooltip="live-pulse" data-phase="2" data-skeleton="1">
+              <span class="obs-card-value"><span class="sk sk-line" style="width:60%;height:14px"></span></span>
+              <span class="obs-card-trend"><span class="sk sk-line sk-line--inline" style="width:30px"></span></span>
+              <span class="obs-card-sub"><span class="sk sk-line" style="width:68%;height:9px"></span></span>
+              <span class="obs-card-spark"><span class="sk sk-block" style="width:76px;height:24px"></span></span>
+            </article>
+            <article class="obs-card obs-card--tools" id="cardToolCategories" data-obs-tooltip="tool-categories" data-skeleton="1">
+              <div class="obs-card-tools">
+                <div class="obs-cat-row">
+                  <span class="obs-cat-name"><span class="sk sk-line sk-line--sm" style="width:60%"></span></span>
+                  <div class="obs-cat-bar"><span class="sk sk-bar" style="width:75%"></span></div>
+                  <span class="obs-cat-pct"><span class="sk sk-line sk-line--inline" style="width:30px"></span></span>
+                </div>
+                <div class="obs-cat-row">
+                  <span class="obs-cat-name"><span class="sk sk-line sk-line--sm" style="width:50%"></span></span>
+                  <div class="obs-cat-bar"><span class="sk sk-bar" style="width:55%"></span></div>
+                  <span class="obs-cat-pct"><span class="sk sk-line sk-line--inline" style="width:28px"></span></span>
+                </div>
+                <div class="obs-cat-row">
+                  <span class="obs-cat-name"><span class="sk sk-line sk-line--sm" style="width:55%"></span></span>
+                  <div class="obs-cat-bar"><span class="sk sk-bar" style="width:42%"></span></div>
+                  <span class="obs-cat-pct"><span class="sk sk-line sk-line--inline" style="width:26px"></span></span>
+                </div>
+                <div class="obs-cat-row">
+                  <span class="obs-cat-name"><span class="sk sk-line sk-line--sm" style="width:48%"></span></span>
+                  <div class="obs-cat-bar"><span class="sk sk-bar" style="width:30%"></span></div>
+                  <span class="obs-cat-pct"><span class="sk sk-line sk-line--inline" style="width:24px"></span></span>
+                </div>
+              </div>
+            </article>
           </div>
         </div>
       </div>
@@ -385,7 +424,57 @@
 
           <div id="detailTurnView" class="detail-content">
             <div id="turnUnifiedBody" role="region" aria-label="턴 목록">
-              <div class="state-loading"><div class="state-loading-spinner"></div><span>불러오는 중…</span></div>
+              <!-- skeleton-loading T-07 — 첫 세션 선택 시 turn-views.js 가 정상 렌더로 교체 -->
+              <article class="turn-card sk-turn-card" data-skeleton="1">
+                <div class="turn-card-summary">
+                  <div class="turn-card-header">
+                    <span class="turn-card-index"><span class="sk sk-line sk-line--inline" style="width:18px;height:9px"></span></span>
+                    <span class="sk sk-line" style="width:55%"></span>
+                    <span class="sk sk-line sk-line--inline" style="width:48px;margin-left:auto"></span>
+                  </div>
+                  <div class="turn-card-preview"><span class="sk sk-line" style="width:88%"></span></div>
+                </div>
+              </article>
+              <article class="turn-card sk-turn-card" data-skeleton="1">
+                <div class="turn-card-summary">
+                  <div class="turn-card-header">
+                    <span class="turn-card-index"><span class="sk sk-line sk-line--inline" style="width:18px;height:9px"></span></span>
+                    <span class="sk sk-line" style="width:48%"></span>
+                    <span class="sk sk-line sk-line--inline" style="width:48px;margin-left:auto"></span>
+                  </div>
+                  <div class="turn-card-preview"><span class="sk sk-line" style="width:72%"></span></div>
+                </div>
+              </article>
+              <article class="turn-card sk-turn-card" data-skeleton="1">
+                <div class="turn-card-summary">
+                  <div class="turn-card-header">
+                    <span class="turn-card-index"><span class="sk sk-line sk-line--inline" style="width:18px;height:9px"></span></span>
+                    <span class="sk sk-line" style="width:62%"></span>
+                    <span class="sk sk-line sk-line--inline" style="width:48px;margin-left:auto"></span>
+                  </div>
+                  <div class="turn-card-preview"><span class="sk sk-line" style="width:84%"></span></div>
+                </div>
+              </article>
+              <article class="turn-card sk-turn-card" data-skeleton="1">
+                <div class="turn-card-summary">
+                  <div class="turn-card-header">
+                    <span class="turn-card-index"><span class="sk sk-line sk-line--inline" style="width:18px;height:9px"></span></span>
+                    <span class="sk sk-line" style="width:50%"></span>
+                    <span class="sk sk-line sk-line--inline" style="width:48px;margin-left:auto"></span>
+                  </div>
+                  <div class="turn-card-preview"><span class="sk sk-line" style="width:78%"></span></div>
+                </div>
+              </article>
+              <article class="turn-card sk-turn-card" data-skeleton="1">
+                <div class="turn-card-summary">
+                  <div class="turn-card-header">
+                    <span class="turn-card-index"><span class="sk sk-line sk-line--inline" style="width:18px;height:9px"></span></span>
+                    <span class="sk sk-line" style="width:58%"></span>
+                    <span class="sk sk-line sk-line--inline" style="width:48px;margin-left:auto"></span>
+                  </div>
+                  <div class="turn-card-preview"><span class="sk sk-line" style="width:65%"></span></div>
+                </div>
+              </article>
             </div>
           </div>
 
