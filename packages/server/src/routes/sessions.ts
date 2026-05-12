@@ -25,6 +25,7 @@ import {
   getActiveSessions,
   getAllSessions,
   getEventsBySession,
+  getMaxContextProxyForSession,
   getRequestsBySession,
   getRequestStatsBySession,
   getSessionById,
@@ -32,6 +33,8 @@ import {
   getSessionToolStats,
   getTurnsBySession,
   getOrphanRowsBySession,
+  type Request,
+  type TurnItem,
 } from '@spyglass/storage';
 import { normalizeRequest, normalizeRequests, normalizeTurns } from '../domain/request-normalizer';
 import { jsonResponse, type RouteHandler } from './_shared';
@@ -71,11 +74,25 @@ export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
   // GET /api/sessions/:id/turns — ADR-001/006: 정규화 + items[] 인터리빙
   // ADR-001 P1 (session-prologue): turn_id가 NULL인 행도 별도 prologue 배열로 노출.
   //   비어 있으면 클라가 섹션 자체를 안 그림 (일반 세션은 prologue 없음).
+  // 진행 중 세션의 prompt 행이 0건이면 (서버 재시작 직후·resume 등) orphan들을
+  // 단일 implicit turn(T1)으로 합성해 turn-view·context-chart 모두 그려지게 한다.
   if (path.match(/^\/api\/sessions\/[^\/]+\/turns$/) && method === 'GET') {
     const sessionId = path.split('/')[3];
     const rawTurns = getTurnsBySession(db, sessionId);
-    const turns = normalizeTurns(rawTurns, sessionId);
     const rawOrphans = getOrphanRowsBySession(db, sessionId);
+
+    if (rawTurns.length === 0 && rawOrphans.length > 0) {
+      const implicit = buildImplicitTurnFromOrphans(db, sessionId, rawOrphans);
+      const turns = normalizeTurns([implicit], sessionId);
+      return jsonResponse({
+        success: true,
+        data: turns,
+        prologue: [],
+        meta: { total: turns.length, prologue_count: 0, implicit_turn: true },
+      });
+    }
+
+    const turns = normalizeTurns(rawTurns, sessionId);
     const prologue = rawOrphans.map((r) => normalizeRequest(r));
     return jsonResponse({
       success: true,
@@ -116,6 +133,112 @@ export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
     return jsonResponse({ success: true, data: session });
   }
 
+  return helperFallthrough(_req, db, url, path, method);
+};
+
+/**
+ * 진행 중 세션이 prompt 0건 + orphan 다수인 경우 단일 implicit turn으로 합성.
+ *
+ * - turn_id: `implicit-<sessionId>` (고유, 안정)
+ * - turn_index: 1
+ * - prompt 토큰 합: proxy_requests에서 컨텍스트가 가장 큰 행으로 추정. 없으면 0
+ *   → context-chart의 hasValid 체크(context_tokens > 0 || tokens_input > 0)와 자연스럽게 정합
+ * - tool_calls / responses: orphan에서 type별 분기, timestamp 오름차순
+ */
+function buildImplicitTurnFromOrphans(
+  db: Parameters<RouteHandler>[1],
+  sessionId: string,
+  orphans: Request[],
+): TurnItem {
+  const turnId = `implicit-${sessionId}`;
+  const sorted = orphans.slice().sort((a, b) => a.timestamp - b.timestamp);
+  const startedAt = sorted[0]?.timestamp ?? Date.now();
+
+  const proxyCtx = getMaxContextProxyForSession(db, sessionId);
+  const promptInput = proxyCtx?.tokens_input ?? 0;
+  const promptOutput = proxyCtx?.tokens_output ?? 0;
+  const cacheRead = proxyCtx?.cache_read_tokens ?? 0;
+  const cacheCreate = proxyCtx?.cache_creation_tokens ?? 0;
+  const contextTokens = promptInput + cacheRead + cacheCreate;
+
+  const toolCalls: TurnItem['tool_calls'] = sorted
+    .filter((r) => r.type === 'tool_call')
+    .map((r) => ({
+      id: r.id,
+      type: 'tool_call' as const,
+      timestamp: r.timestamp,
+      tool_name: r.tool_name ?? null,
+      tool_detail: r.tool_detail ?? null,
+      tokens_input: r.tokens_input ?? 0,
+      tokens_output: r.tokens_output ?? 0,
+      tokens_total: r.tokens_total ?? 0,
+      duration_ms: r.duration_ms ?? 0,
+      payload: r.payload ?? null,
+      event_type: r.event_type ?? null,
+      model: r.model ?? null,
+      parent_tool_use_id: r.parent_tool_use_id ?? null,
+      tokens_confidence: r.tokens_confidence ?? null,
+    }));
+
+  const responses = sorted
+    .filter((r) => r.type === 'response')
+    .map((r) => ({
+      id: r.id,
+      timestamp: r.timestamp,
+      preview: r.preview ?? null,
+      payload: r.payload ?? null,
+      tokens_input: r.tokens_input ?? 0,
+      tokens_output: r.tokens_output ?? 0,
+      tokens_total: r.tokens_total ?? 0,
+      model: r.model ?? null,
+      tokens_confidence: r.tokens_confidence ?? null,
+    }));
+
+  const totalTokens = toolCalls.reduce((s, t) => s + t.tokens_total, 0)
+    + responses.reduce((s, r) => s + r.tokens_total, 0)
+    + (promptInput + promptOutput);
+
+  const lastTool = toolCalls[toolCalls.length - 1];
+  const duration_ms = lastTool
+    ? Math.max(0, lastTool.timestamp + lastTool.duration_ms - startedAt)
+    : 0;
+
+  return {
+    turn_id: turnId,
+    turn_index: 1,
+    started_at: startedAt,
+    prompt: {
+      id: `${turnId}-prompt`,
+      timestamp: startedAt,
+      tokens_input: promptInput,
+      tokens_output: promptOutput,
+      tokens_total: promptInput + promptOutput,
+      duration_ms: 0,
+      model: proxyCtx?.model ?? null,
+      payload: null,
+      cache_read_tokens: cacheRead,
+      cache_creation_tokens: cacheCreate,
+      context_tokens: contextTokens,
+      tokens_confidence: 'low',
+    },
+    system_hash: null,
+    system_byte_size: null,
+    tool_calls: toolCalls,
+    responses,
+    summary: {
+      tool_call_count: toolCalls.length,
+      tokens_input: promptInput,
+      tokens_output: promptOutput,
+      total_tokens: totalTokens,
+      duration_ms,
+    },
+  };
+}
+
+/**
+ * sessions 라우터의 prefix 매칭이 모두 실패한 경우 — 라우터의 잔여 라우트 처리.
+ */
+const helperFallthrough: RouteHandler = (_req, db, url, path, method) => {
   // GET /api/projects/:name/sessions
   if (path.match(/^\/api\/projects\/[^\/]+\/sessions$/) && method === 'GET') {
     const projectName = path.split('/')[3];

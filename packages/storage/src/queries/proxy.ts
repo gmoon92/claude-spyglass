@@ -330,6 +330,50 @@ export function getLatestProxyResponseBefore(
 }
 
 // =============================================================================
+// 세션 컨텍스트 추정 — orphan(turn_id NULL) 행 보강용
+// =============================================================================
+
+/**
+ * 세션의 "최대 컨텍스트" proxy 행을 반환.
+ *
+ * 사용처: prompt 행이 0건인 세션(서버 재시작 직후 진행 중 세션 등)에서
+ * implicit turn의 prompt context를 합성할 때 입력 토큰 + 캐시 합이 가장 큰 행을 사용.
+ *
+ * @returns 후보 없으면 null
+ */
+export function getMaxContextProxyForSession(
+  db: Database,
+  sessionId: string,
+): {
+  timestamp: number;
+  model: string | null;
+  tokens_input: number;
+  tokens_output: number;
+  cache_read_tokens: number;
+  cache_creation_tokens: number;
+} | null {
+  const row = db.query<{
+    timestamp: number;
+    model: string | null;
+    tokens_input: number;
+    tokens_output: number;
+    cache_read_tokens: number;
+    cache_creation_tokens: number;
+  }, [string]>(
+    `SELECT timestamp, model, tokens_input, tokens_output,
+            cache_read_tokens, cache_creation_tokens
+       FROM proxy_requests
+      WHERE session_id = ?
+      ORDER BY (COALESCE(tokens_input,0)
+              + COALESCE(cache_read_tokens,0)
+              + COALESCE(cache_creation_tokens,0)) DESC,
+               timestamp DESC
+      LIMIT 1`,
+  ).get(sessionId);
+  return row ?? null;
+}
+
+// =============================================================================
 // proxy_tool_uses — tool_use_id ↔ api_request_id 매핑 (ADR-001 P1-E, v23)
 // =============================================================================
 

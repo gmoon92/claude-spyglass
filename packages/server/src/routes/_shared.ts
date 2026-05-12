@@ -31,6 +31,8 @@ export interface ApiResponse<T = unknown> {
     p95DurationMs?: number;
     /** ADR-001 P1: prologue 배열 길이 (편의용) */
     prologue_count?: number;
+    /** prompt 행이 없는 진행 중 세션을 단일 implicit turn으로 합성해 반환한 경우 표지 */
+    implicit_turn?: boolean;
   };
 }
 

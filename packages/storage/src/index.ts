@@ -232,6 +232,7 @@ export {
   getProxyRequestById,
   getProxyStats,
   getLatestProxyResponseBefore,
+  getMaxContextProxyForSession,
   // ADR-001 P1-E (v23): tool_use_id ↔ api_request_id 정확 매핑
   persistProxyToolUses,
   getProxyToolUseById,
