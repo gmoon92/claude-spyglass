@@ -36,7 +36,7 @@ import {
   type Request,
   type TurnItem,
 } from '@spyglass/storage';
-import { normalizeRequest, normalizeRequests, normalizeTurns } from '../domain/request-normalizer';
+import { normalizeRequests, normalizeTurns } from '../domain/request-normalizer';
 import { jsonResponse, type RouteHandler } from './_shared';
 
 export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
@@ -72,10 +72,9 @@ export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
   }
 
   // GET /api/sessions/:id/turns — ADR-001/006: 정규화 + items[] 인터리빙
-  // ADR-001 P1 (session-prologue): turn_id가 NULL인 행도 별도 prologue 배열로 노출.
-  //   비어 있으면 클라가 섹션 자체를 안 그림 (일반 세션은 prologue 없음).
-  // 진행 중 세션의 prompt 행이 0건이면 (서버 재시작 직후·resume 등) orphan들을
-  // 단일 implicit turn(T1)으로 합성해 turn-view·context-chart 모두 그려지게 한다.
+  // 정책: orphan(turn_id NULL) 행은 항상 첫 turn에 흡수해 반환 — 별도 "세션 프롤로그" 섹션 노출 안 함.
+  //  - prompt 0건이면 orphan들로 implicit turn(T1)을 합성
+  //  - prompt 있으면 orphan을 첫 turn의 tool_calls/responses에 합쳐 normalizeTurns에 넘김
   if (path.match(/^\/api\/sessions\/[^\/]+\/turns$/) && method === 'GET') {
     const sessionId = path.split('/')[3];
     const rawTurns = getTurnsBySession(db, sessionId);
@@ -92,13 +91,15 @@ export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
       });
     }
 
-    const turns = normalizeTurns(rawTurns, sessionId);
-    const prologue = rawOrphans.map((r) => normalizeRequest(r));
+    const mergedTurns = rawOrphans.length > 0
+      ? absorbOrphansIntoFirstTurn(rawTurns, rawOrphans)
+      : rawTurns;
+    const turns = normalizeTurns(mergedTurns, sessionId);
     return jsonResponse({
       success: true,
       data: turns,
-      prologue,
-      meta: { total: turns.length, prologue_count: prologue.length },
+      prologue: [],
+      meta: { total: turns.length, prologue_count: 0 },
     });
   }
 
@@ -135,6 +136,92 @@ export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
 
   return helperFallthrough(_req, db, url, path, method);
 };
+
+/**
+ * orphan(turn_id NULL) 행을 첫 turn에 흡수.
+ *
+ * - tool_call orphan은 첫 turn의 tool_calls 앞에 추가 (timestamp ASC 유지)
+ * - response orphan은 첫 turn의 responses 앞에 추가
+ * - summary.tool_call_count / total_tokens / duration_ms도 보정
+ *
+ * c397081의 retroactive 매핑(--fix CLI 전용 SQL)을 실시간 응답 단계에서 무손실로 적용한 등가.
+ */
+function absorbOrphansIntoFirstTurn(turns: TurnItem[], orphans: Request[]): TurnItem[] {
+  if (turns.length === 0 || orphans.length === 0) return turns;
+  // getTurnsBySession는 desc 정렬(최신 turn 먼저) — 첫 turn은 turn_index가 가장 작은 turn.
+  // orphan은 항상 가장 오래된 turn에 흡수되어야 시간 일관성이 맞는다.
+  let firstIdx = 0;
+  let firstIndex = turns[0].turn_index;
+  turns.forEach((t, i) => {
+    if (t.turn_index < firstIndex) { firstIdx = i; firstIndex = t.turn_index; }
+  });
+  const first = turns[firstIdx];
+
+  const orphanTools = orphans
+    .filter((r) => r.type === 'tool_call')
+    .map((r) => ({
+      id: r.id,
+      type: 'tool_call' as const,
+      timestamp: r.timestamp,
+      tool_name: r.tool_name ?? null,
+      tool_detail: r.tool_detail ?? null,
+      tokens_input: r.tokens_input ?? 0,
+      tokens_output: r.tokens_output ?? 0,
+      tokens_total: r.tokens_total ?? 0,
+      duration_ms: r.duration_ms ?? 0,
+      payload: r.payload ?? null,
+      event_type: r.event_type ?? null,
+      model: r.model ?? null,
+      parent_tool_use_id: r.parent_tool_use_id ?? null,
+      tokens_confidence: r.tokens_confidence ?? null,
+    }));
+
+  const orphanResponses = orphans
+    .filter((r) => r.type === 'response')
+    .map((r) => ({
+      id: r.id,
+      timestamp: r.timestamp,
+      preview: r.preview ?? null,
+      payload: r.payload ?? null,
+      tokens_input: r.tokens_input ?? 0,
+      tokens_output: r.tokens_output ?? 0,
+      tokens_total: r.tokens_total ?? 0,
+      model: r.model ?? null,
+      tokens_confidence: r.tokens_confidence ?? null,
+    }));
+
+  const mergedTools = [...orphanTools, ...first.tool_calls]
+    .sort((a, b) => a.timestamp - b.timestamp);
+  const mergedResponses = [...orphanResponses, ...first.responses]
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  const addedTokens = orphans.reduce((s, r) => s + (r.tokens_total ?? 0), 0);
+  const newStartedAt = Math.min(
+    first.started_at,
+    ...orphans.map((r) => r.timestamp),
+  );
+  const lastTool = mergedTools[mergedTools.length - 1];
+  const newDuration = lastTool
+    ? Math.max(first.summary.duration_ms, lastTool.timestamp + lastTool.duration_ms - newStartedAt)
+    : first.summary.duration_ms;
+
+  const newFirst: TurnItem = {
+    ...first,
+    started_at: newStartedAt,
+    tool_calls: mergedTools,
+    responses: mergedResponses,
+    summary: {
+      ...first.summary,
+      tool_call_count: mergedTools.length,
+      total_tokens: first.summary.total_tokens + addedTokens,
+      duration_ms: newDuration,
+    },
+  };
+
+  const next = turns.slice();
+  next[firstIdx] = newFirst;
+  return next;
+}
 
 /**
  * 진행 중 세션이 prompt 0건 + orphan 다수인 경우 단일 implicit turn으로 합성.
