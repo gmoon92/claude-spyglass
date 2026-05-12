@@ -4,10 +4,16 @@
 
 import { escHtml, fmtToken, shortModelName } from '../formatters.js';
 import { typeBadge, toolIconHtml, toolStatusBadge } from './badges.js';
+import { skTableRows } from './skeleton.js';
 
+/**
+ * 호환 wrapper — skeleton-loading T-03 (ADR-003).
+ * 시그니처는 보존(cols: number, count: number)하고 본문은 skeleton.js 의
+ * skTableRows 로 위임한다. 신규 호출은 가능한 skTableRows(colSpecs, count) 의
+ * Array<%> 모드를 사용해 컬럼별 폭을 흉내내는 것을 권장.
+ */
 export function makeSkeletonRows(cols, count = 2) {
-  const row = `<tr><td colspan="${cols}" class="table-empty"><span class="skeleton"></span></td></tr>`;
-  return row.repeat(count);
+  return skTableRows(cols, count);
 }
 
 export function makeActionCell(r) {
