@@ -32,6 +32,13 @@ export function prependRequest(r) {
   const feedBody  = document.getElementById('feedBody');
   const isNearTop = !feedBody || feedBody.scrollTop < 80;
 
+  // skeleton-loading ADR-004: SSE 첫 도착 시점에 남아있는 skeleton row 를 일괄 제거.
+  // skeleton row 는 data-skeleton="1" 표지를 가지며 id 가 없으므로 in-place 매칭 대상이
+  // 아니다. 진짜 row 와 섞이지 않게 prepend 전에 깨끗이 비운다.
+  // skeleton 이 없는 페이지에서는 querySelectorAll 결과가 빈 NodeList → no-op.
+  const skeletonRows = body.querySelectorAll('tr[data-skeleton]');
+  if (skeletonRows.length) skeletonRows.forEach((el) => el.remove());
+
   const prevScrollTop    = feedBody ? feedBody.scrollTop    : 0;
   const prevScrollHeight = feedBody ? feedBody.scrollHeight : 0;
 
