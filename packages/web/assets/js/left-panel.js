@@ -2,7 +2,7 @@
 // (툴 통계는 left-panel-observability-revamp ADR-001로 obs-panel.js 위젯으로 이동.
 //  detail view 도구 매트릭스는 ts-mx 가 단일 진실 소스.)
 import { fmt, fmtToken, escHtml } from './formatters.js';
-import { makeSkeletonRows, makeSessionRow } from './renderers.js';
+import { makeSessionRow, skSessionRows } from './renderers.js';
 import { getSelectedProject, getSelectedSession } from './state.js';
 
 let _allProjects     = [];
@@ -78,5 +78,7 @@ export function renderProjects(list) {
 // 제거되었습니다. 정밀 통계는 detail view ts-mx (tool-stats.js) 단일 진실 소스를 사용하세요.
 
 export function showSkeletonSessions() {
-  document.getElementById('browserSessionsBody').innerHTML = makeSkeletonRows(4, 2);
+  // skeleton-loading T-13: 세션 행 4 컬럼 구조(상태 dot + 이름 + 활성 표시 + 토큰) 흉내.
+  // 4 row 로 평균 세션 리스트 높이를 유지 → 프로젝트 클릭 후 fetch 동안 CLS 0.
+  document.getElementById('browserSessionsBody').innerHTML = skSessionRows(4);
 }
