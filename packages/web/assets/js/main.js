@@ -24,7 +24,7 @@ import { togglePromptExpand } from './renderers.js';
 import { renderLlmInput } from './llm-input-view.js';
 import { initColResize } from './col-resize.js';
 import { initPanelResize } from './panel-resize.js';
-import { initPanelVerticalResize } from './left-panel-vertical-resize.js';
+import { initPanelVerticalResize, initPanelBottomResize } from './left-panel-vertical-resize.js';
 import { initContextChart } from './context-chart.js';
 import { createFilterBar } from './components/filter-bar.js';
 import { initToolColors } from './tool-colors.js';
@@ -41,7 +41,7 @@ import {
   applyRangeLabels,
 } from './views/default-view.js';
 import { loadSession, abortCurrentSession } from './views/detail-view.js';
-import { renderToolCategoriesCard } from './obs-panel.js';
+import { renderToolCategoriesCard, resetToolCategoriesMode } from './obs-panel.js';
 
 const STORAGE_KEY = 'spyglass:lastProject';
 
@@ -111,6 +111,11 @@ function autoActivateProject() {
 }
 
 function selectProject(name) {
+  // 프로젝트 전환(또는 해제) 시 Tool Categories 카드 모드를 초기화.
+  // renderMetaDocsTopForProject가 성공하면 'meta-docs'로 재진입하고,
+  // 새 프로젝트에 메타 문서 호출이 없으면 다음 fetchObservability 배열 payload가 정상 렌더링된다.
+  resetToolCategoriesMode();
+
   localStorage.setItem(STORAGE_KEY, name);
   setSelectedProject(name);
 
@@ -411,6 +416,11 @@ function init() {
     document.getElementById('panelVerticalHandle'),
     document.getElementById('browserProjectsSection'),
     document.getElementById('browserSessionsSection'),
+  );
+  initPanelBottomResize(
+    document.getElementById('panelVerticalHandleBottom'),
+    document.getElementById('browserSessionsSection'),
+    document.getElementById('panelTools'),
   );
   initCacheTooltip();
   initStatTooltip();

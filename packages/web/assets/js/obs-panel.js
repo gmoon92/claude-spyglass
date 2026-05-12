@@ -147,6 +147,21 @@ const CATEGORY_CLASS = {
 };
 
 /**
+ * W4 내부 모드 상태 (SSoT — 호출 측에서 별도 boolean 관리 금지).
+ * 'default'  — 전역 카테고리 막대 (배열 payload)
+ * 'meta-docs' — 프로젝트 메타 문서 Top N
+ */
+let _toolCategoriesMode = 'default';
+
+/**
+ * 프로젝트 해제(전역 복귀) 시 호출 — 모드를 'default'로 리셋.
+ * 다음 배열 payload 호출이 early return 없이 정상 렌더링되도록 보장.
+ */
+export function resetToolCategoriesMode() {
+  _toolCategoriesMode = 'default';
+}
+
+/**
  * renderToolCategoriesCard — 두 모드를 단일 함수로 처리 (ADR-004 SSoT).
  *
  * 모드 A — 전역 (기본, 프로젝트 미선택):
@@ -163,6 +178,7 @@ export function renderToolCategoriesCard(payload) {
 
   // ── 모드 B: 메타 문서 Top N ──────────────────────────────────────────────
   if (payload && !Array.isArray(payload) && payload.mode === 'meta-docs') {
+    _toolCategoriesMode = 'meta-docs';
     const items = Array.isArray(payload.items) ? payload.items : [];
     if (items.length === 0) {
       el.innerHTML = emptyCard('메타 문서 호출 없음');
@@ -182,6 +198,10 @@ export function renderToolCategoriesCard(payload) {
   }
 
   // ── 모드 A: 전역 카테고리 막대 (기존 동작) ──────────────────────────────
+  // 프로젝트 선택으로 'meta-docs' 모드가 활성화된 상태에서 SSE/fetchObservability의
+  // 배열 payload가 들어올 경우 덮어쓰기를 방지한다 (resetToolCategoriesMode 호출 전까지 유지).
+  if (_toolCategoriesMode === 'meta-docs') return;
+
   const categories = Array.isArray(payload) ? payload : [];
   if (categories.length === 0 || categories.every(c => !c.request_count)) {
     el.innerHTML = emptyCard('도구 호출 없음');
