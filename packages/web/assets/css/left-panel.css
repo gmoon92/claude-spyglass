@@ -1,11 +1,12 @@
 /* ── LEFT PANEL ─────────────────────────────────────────────────────────── */
-/* header-removal 이후 4 row grid (이전 3 row):
-     1) brand-strip   : auto (브랜드 + LIVE 배지)
-     2) 프로젝트 표   : minmax(0, var(--projects-panel-height, 180px))
-                        — 3~4행만 노출, 데이터 늘면 panel-body가 자체 스크롤.
-                        남는 픽셀을 panelTools(1fr)에 양보하기 위해 상한 고정.
-     3) 세션 리스트   : minmax(220px, var(--session-panel-height)) — 기존 동작.
-     4) panelTools    : minmax(280px, 1fr) — 남는 공간 흡수.
+/* header-removal 이후 5 row grid (이전 4 row):
+     1) brand-strip            : auto (브랜드 + LIVE 배지)
+     2) 프로젝트 표            : minmax(0, var(--projects-panel-height, 180px))
+                                  — 3~4행만 노출, 데이터 늘면 panel-body가 자체 스크롤.
+                                  남는 픽셀을 panelTools(1fr)에 양보하기 위해 상한 고정.
+     3) vertical-handle        : auto (8px, 상하 분할 드래그 핸들)
+     4) 세션 리스트            : minmax(80px, var(--session-panel-height, 1fr)) — 기존 동작.
+     5) panelTools             : minmax(280px, 1fr) — 남는 공간 흡수.
 
    panel-resize-handle / anomaly-badge는 absolute라 grid 자동 배치
    대상이 아니므로 트랙 카운트에 영향 없음. */
@@ -15,7 +16,8 @@
   grid-template-rows:
     auto
     minmax(0, var(--projects-panel-height, 180px))
-    minmax(220px, var(--session-panel-height))
+    auto
+    minmax(80px, 1fr)
     minmax(280px, 1fr);
   border-radius: var(--radius-md);
   gap: var(--space-2);
@@ -45,6 +47,45 @@
 }
 @media (max-width: 768px) {
   .panel-resize-handle { display: none; }
+}
+
+/* ── PANEL VERTICAL HANDLE (프로젝트/세션 상하 분할) ─────────────────────── */
+/* dashboard-ui-enhancements ADR-002: 드래그로 --projects-panel-height CSS 변수를 갱신.
+   핸들은 grid 트랙 사이에 삽입 → gap 없이 panel-section 경계를 직접 점유. */
+.panel-vertical-handle {
+  height: 8px;
+  cursor: row-resize;
+  background: transparent;
+  border-radius: 4px;
+  transition: background var(--dur-fast) ease;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+}
+.panel-vertical-handle::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 32px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border);
+  transition: background var(--dur-fast, 0.12s) ease,
+              width var(--dur-fast, 0.12s) ease;
+}
+.panel-vertical-handle:hover::before,
+.panel-vertical-handle.dragging::before {
+  background: var(--accent);
+  width: 48px;
+}
+.panel-vertical-handle:hover,
+.panel-vertical-handle.dragging {
+  background: var(--accent-dim);
+}
+@media (max-width: 768px) {
+  .panel-vertical-handle { display: none; }
 }
 
 /* ── PANEL SECTION (카드형) — ADR-003 ───────────────────────────────────── */

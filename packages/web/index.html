@@ -57,7 +57,7 @@
         </span>
       </div>
 
-      <div class="panel-section flex-section">
+      <div class="panel-section flex-section" id="browserProjectsSection">
         <div class="panel-body">
           <table>
             <colgroup>
@@ -80,7 +80,11 @@
         </div>
       </div>
 
-      <div class="panel-section flex-section">
+      <!-- dashboard-ui-enhancements ADR-002: 프로젝트/세션 섹션 상하 분할 핸들.
+           left-panel-vertical-resize.js의 initPanelVerticalResize가 드래그 로직을 담당. -->
+      <div class="panel-vertical-handle" id="panelVerticalHandle" title="드래그: 높이 조절"></div>
+
+      <div class="panel-section flex-section" id="browserSessionsSection">
         <div class="panel-header">
           <span class="panel-label">세션</span>
           <span class="panel-hint" id="sessionPaneHint">프로젝트를 선택하세요</span>
