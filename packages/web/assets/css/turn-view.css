@@ -266,16 +266,46 @@
   min-height: 20px;
 }
 
+/* tool-chip 시각 위계 (turn-view-badges ADR-007 — Inverted Emphasis):
+ *   베이스 = dim — Bash/Read/Edit 등 빈번한 기본 도구는 차분히 물러서게.
+ *   modifier `.tool-chip-{mcp,agent,skill}` = 강조 — 외부 호출·서브에이전트·스킬
+ *   같은 의미 있는 호출만 도드라짐. 색상 토큰은 ADR-003에서 정의한 chip 토큰 재사용.
+ *   이전엔 turn-views.js가 inline `style="border-color:...;color:..."`로 색을 주입했으나
+ *   이번 ADR-007로 inline style 제거 + 클래스로만 위계 결정 (CLAUDE.md "inline style 금지"). */
 .tool-chip {
   font-size: var(--text-small);
   padding: 1px var(--space-2);
-  border: 1px solid;
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
   white-space: nowrap;
+  color: var(--text-3);
+  background: transparent;
+}
+
+.tool-chip-mcp {
+  color:        var(--sub-type-mcp-color);
+  border-color: var(--sub-type-mcp-border);
+  background:   var(--sub-type-mcp-bg);
+}
+.tool-chip-agent {
+  color:        var(--sub-type-agent-color);
+  border-color: var(--sub-type-agent-border);
+  background:   var(--sub-type-agent-bg);
+}
+.tool-chip-skill {
+  color:        var(--sub-type-skill-color);
+  border-color: var(--sub-type-skill-border);
+  background:   var(--sub-type-skill-bg);
+}
+.tool-chip-task {
+  color:        var(--sub-type-task-color);
+  border-color: var(--sub-type-task-border);
+  background:   var(--sub-type-task-bg);
 }
 
 /* 어시스턴트 응답 chip — 시간순 흐름에서 도구 사이에 끼는 텍스트 응답 표지.
-   본문 행의 ◆ 마커(`responseMarkerHtml`)와 동일 글리프·색상 SSoT 공유. */
+   본문 행의 ◆ 마커(`responseMarkerHtml`)와 동일 글리프·색상 SSoT 공유.
+   ADR-007: 기본 도구(dim)와 같은 라인에서 어울리도록 색상 강도는 유지. */
 .tool-chip.response-chip {
   display: inline-flex;
   align-items: center;
@@ -289,17 +319,48 @@
   line-height: 1;
 }
 
-/* Agent/Skill 계열 chip — .tool-chip 위에 추가 적용 (ADR-001) */
+/* Agent/Skill 계열 chip — .tool-chip 위에 layout 추가 (ADR-001).
+   색상은 .tool-chip-agent / .tool-chip-skill modifier가 담당 (ADR-007).
+   .agent-chip 자체는 gap·icon·name layout 전용 — 색상 inline 주입 제거됨. */
 .agent-chip {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  background: var(--tool-agent-bg, rgba(245,158,11,0.10));
+}
+/* ADR-003 left-rail-meta-docs: agent-chip 클릭 시 메타 문서 딥링크 — pointer + focus-visible */
+.agent-chip[data-meta-doc-type] {
+  cursor: pointer;
+  transition: filter var(--dur-fast) var(--ease);
+}
+.agent-chip[data-meta-doc-type]:hover {
+  filter: brightness(1.12);
+}
+.agent-chip[data-meta-doc-type]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-border);
 }
 
 .agent-chip .tool-icon {
   font-size: inherit;
   line-height: 1;
+}
+
+/* ADR-007 R4: agent-chip layout 안 `.tool-icon-agent` 아이콘은 기본 brand-orange gradient
+ * (`--grad-brand`) 대신 부모 chip의 modifier 색을 따른다. 이렇게 해야 Agent(warm)·Skill(lime)·
+ * Task(burnt-orange) chip 안의 ◎ 아이콘이 chip 텍스트와 같은 hue로 인지되어 분류 식별 명확.
+ *
+ *   - `.agent-chip`만 적용: 일반 행 cell-target의 `.tool-icon-agent`는 기존 brand-orange 유지
+ *     (action-name 안 아이콘은 chip이 아니라 본래 brand 톤이 자연스러움).
+ *   - 강제 우선순위 보장 위해 currentColor 사용 — chip modifier가 색상을 결정 →
+ *     ::before/::after 가 아닌 직접 자식이므로 currentColor 상속 안전.
+ *   - 기존 `-webkit-text-fill-color: transparent`로 텍스트가 투명한 상태이므로 그것을 reset. */
+.agent-chip .tool-icon-agent {
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  -webkit-text-fill-color: currentColor;
+  color: currentColor;
+  filter: none;
 }
 
 .agent-chip-name {

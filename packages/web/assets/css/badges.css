@@ -245,19 +245,26 @@ tr[data-type="tool_call"] td.cell-msg .prompt-preview {
 }
 .prompt-preview:hover { color: var(--text-2); text-decoration: underline dotted; }
 
-/* ── TYPE FILTER BUTTON COLOR (defaultView + detailView 공유) ───────────────── */
+/* ── TYPE FILTER BUTTON COLOR (defaultView + detailView 공유) ─────────────────
+ * type 계열(prompt/tool_call/system)은 `--type-{kind}-*` 그대로.
+ * sub-type 계열(Agent/Skill/MCP)은 `--sub-type-{kind}-*` SSoT(ADR-007 R1)에서
+ * 직접 가져와 분류 뱃지·chip·flow chip과 hue 일치 — 사용자 인지 불일치 제거.
+ *   active: border = `*-border-active`, bg = `*-bg-active` (alpha 상승)
+ *   hover : base `*-color` / `*-border` */
 .type-filter-prompt.active     { color: var(--type-prompt-color);    border-color: var(--type-prompt-color);    background: var(--type-prompt-bg); }
 .type-filter-tool_call.active  { color: var(--type-tool_call-color); border-color: var(--type-tool_call-color); background: var(--type-tool_call-bg); }
 .type-filter-system.active     { color: var(--type-system-color);    border-color: var(--type-system-color);    background: var(--type-system-bg); }
-.type-filter-agent.active      { color: var(--type-agent-color);     border-color: var(--type-agent-color);     background: var(--type-agent-bg); }
-.type-filter-skill.active      { color: var(--type-skill-color);     border-color: var(--type-skill-color);     background: var(--type-skill-bg); }
-.type-filter-mcp.active        { color: var(--type-mcp-color);       border-color: var(--type-mcp-color);       background: var(--type-mcp-bg); }
+.type-filter-agent.active      { color: var(--sub-type-agent-color); border-color: var(--sub-type-agent-border-active); background: var(--sub-type-agent-bg-active); }
+.type-filter-skill.active      { color: var(--sub-type-skill-color); border-color: var(--sub-type-skill-border-active); background: var(--sub-type-skill-bg-active); }
+.type-filter-mcp.active        { color: var(--sub-type-mcp-color);   border-color: var(--sub-type-mcp-border-active);   background: var(--sub-type-mcp-bg-active); }
 .type-filter-prompt:hover      { color: var(--type-prompt-color);    border-color: var(--type-prompt-color); }
 .type-filter-tool_call:hover   { color: var(--type-tool_call-color); border-color: var(--type-tool_call-color); }
 .type-filter-system:hover      { color: var(--type-system-color);    border-color: var(--type-system-color); }
-.type-filter-agent:hover       { color: var(--type-agent-color);     border-color: var(--type-agent-color); }
-.type-filter-skill:hover       { color: var(--type-skill-color);     border-color: var(--type-skill-color); }
-.type-filter-mcp:hover         { color: var(--type-mcp-color);       border-color: var(--type-mcp-color); }
+.type-filter-agent:hover       { color: var(--sub-type-agent-color); border-color: var(--sub-type-agent-border); }
+.type-filter-skill:hover       { color: var(--sub-type-skill-color); border-color: var(--sub-type-skill-border); }
+.type-filter-mcp:hover         { color: var(--sub-type-mcp-color);   border-color: var(--sub-type-mcp-border); }
+/* `.type-filter-task` 셀렉터는 ADR-007 R4 (2026-05-12)로 필터 버튼 미노출 — 부활 시
+   `--sub-type-task-{color,border,bg}-active`로 active/hover 한 줄씩 부활하면 됨. */
 
 
 /* ── MODEL CHIP (ADR-data-trust-visual-001) ─────────────────────────────── */
@@ -306,6 +313,64 @@ tr[data-type="tool_call"] td.cell-msg .prompt-preview {
   vertical-align: middle;
 }
 .model-chip-mini::before { width: 5px; height: 5px; }
+
+/* ── SUB-TYPE CHIP (turn-view-badges ADR-002) ───────────────────────────
+ *  MCP / Agent / Skill 분류 라벨. turn-row의 tool-main 안 도구 이름 옆에 부착.
+ *  시각 어휘는 .model-chip-mini와 형제 — 동일 크기·radius·여백, 단 dot 표지 없음.
+ *  model 칩이 'dot+라벨'이라면 sub-type 칩은 '라벨만' → 같은 라인에 나란히 와도
+ *  시각 위계로 구분(model = 도구 본질, sub-type = 분류 표지).
+ *
+ *  호버: cursor:help + title 속성 (네이티브 툴팁)으로 전체 식별자 노출
+ *       (subTypeBadgeHtml이 r.tool_name/tool_detail로 풀네임 주입).
+ */
+.sub-type-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 4px;
+  vertical-align: middle;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  cursor: help;
+  transition: filter var(--dur-fast) var(--ease);
+}
+/* ADR-003 left-rail-meta-docs: agent/skill chip은 메타 문서 딥링크 트리거 — pointer + hover 강조 */
+.sub-type-chip[data-meta-doc-type] {
+  cursor: pointer;
+}
+.sub-type-chip[data-meta-doc-type]:hover {
+  filter: brightness(1.15);
+}
+.sub-type-chip[data-meta-doc-type]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-border);
+}
+.sub-type-chip-mcp {
+  color:        var(--sub-type-mcp-color);
+  background:   var(--sub-type-mcp-bg);
+  border-color: var(--sub-type-mcp-border);
+}
+.sub-type-chip-agent {
+  color:        var(--sub-type-agent-color);
+  background:   var(--sub-type-agent-bg);
+  border-color: var(--sub-type-agent-border);
+}
+.sub-type-chip-skill {
+  color:        var(--sub-type-skill-color);
+  background:   var(--sub-type-skill-bg);
+  border-color: var(--sub-type-skill-border);
+}
+.sub-type-chip-task {
+  color:        var(--sub-type-task-color);
+  background:   var(--sub-type-task-bg);
+  border-color: var(--sub-type-task-border);
+}
 
 /* ── ROW TRUST INDICATORS ───────────────────────────────────────────────── */
 /* 신뢰할 수 없는 행 — opacity로 시각 무게 감소 + 좌측 보더로 분류 명시 */
