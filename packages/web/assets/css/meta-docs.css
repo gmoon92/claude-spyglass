@@ -472,3 +472,125 @@
   flex: 1 1 auto;
   word-break: keep-all;
 }
+
+/* =============================================================================
+ * ADR-003 left-rail-meta-docs: 메타 문서 모드 컨테이너 + 좌측 요약 카드
+ *
+ * 가시성 룰:
+ *   body[data-app-mode="browse"]   → #metaDocsRoot { display: none }, .right-panel { display: ... }
+ *   body[data-app-mode="metadocs"] → #metaDocsRoot { display: ... },  .right-panel { display: none }
+ *
+ * 좌측 패널 축약:
+ *   metadocs 모드에서 .tool-stats-section(obs-panel), 세션 섹션은 숨김.
+ *   대신 #metaDocsSummaryCards (사용/미사용/orphan 3카드)가 노출.
+ * ========================================================================== */
+
+/* === 메인 영역 컨테이너 ================================================== */
+.meta-docs-root {
+  /* main-layout grid의 자식 (3번째 컬럼 슬롯, .right-panel과 같은 위치).
+     browse 모드에서는 hidden, metadocs 모드에서는 .right-panel을 대체. */
+  grid-column: 3 / 4;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* 앱 모드별 가시성 — browse 기본 */
+body[data-app-mode="browse"] .meta-docs-root { display: none; }
+body[data-app-mode="metadocs"] .right-panel { display: none; }
+
+/* 좌측 패널 축약 — metadocs 모드에서 obs-panel + 세션 + 핸들 숨김 */
+body[data-app-mode="metadocs"] #panelTools,
+body[data-app-mode="metadocs"] #browserSessionsSection,
+body[data-app-mode="metadocs"] #panelVerticalHandle,
+body[data-app-mode="metadocs"] #panelVerticalHandleBottom {
+  display: none;
+}
+
+/* metadocs 모드: 프로젝트 섹션이 좌측 패널 최상단으로 확장 */
+body[data-app-mode="metadocs"] #browserProjectsSection {
+  flex: 1 1 auto;
+}
+
+/* 요약 카드 컨테이너 — metadocs 모드에서만 노출 */
+body[data-app-mode="metadocs"] #metaDocsSummaryCards {
+  display: flex !important; /* hidden attribute override */
+}
+body[data-app-mode="browse"] #metaDocsSummaryCards {
+  display: none !important;
+}
+
+/* === 좌측 요약 카드 3개 (사용/미사용/orphan) ============================ */
+.meta-docs-summary-cards {
+  flex-direction: row;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3) 0;
+  flex: 0 0 auto;
+}
+
+.meta-docs-summary-card {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  text-align: center;
+  min-width: 0;
+}
+
+.meta-docs-summary-card-value {
+  font-family: var(--font-data);
+  font-size: var(--text-h2);
+  font-weight: var(--weight-strong);
+  color: var(--text-1);
+  line-height: 1.1;
+}
+
+.meta-docs-summary-card-label {
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  color: var(--text-3);
+  text-transform: lowercase;
+  letter-spacing: 0.03em;
+}
+
+/* 사용 — neutral accent */
+.meta-docs-summary-card--used .meta-docs-summary-card-value {
+  color: var(--accent);
+}
+/* 미사용 — warn 톤 */
+.meta-docs-summary-card--unused .meta-docs-summary-card-value {
+  color: var(--warn);
+}
+.meta-docs-summary-card--unused {
+  background: var(--yellow-bg-light);
+  border-color: var(--warn);
+}
+/* orphan — error 톤(약하게) */
+.meta-docs-summary-card--orphan .meta-docs-summary-card-value {
+  color: var(--error);
+}
+.meta-docs-summary-card--orphan {
+  background: var(--red-bg-subtle);
+  border-color: var(--error);
+}
+
+/* =============================================================================
+ * 딥링크 행 flash 애니메이션 (ADR-003 — T-04에서 활용)
+ * ========================================================================== */
+@keyframes meta-docs-flash {
+  0%   { background: var(--accent-bg-medium); }
+  60%  { background: var(--accent-bg-medium); }
+  100% { background: transparent; }
+}
+.meta-docs-table tr[data-flash="1"] {
+  animation: meta-docs-flash 1.5s var(--ease) 1;
+}

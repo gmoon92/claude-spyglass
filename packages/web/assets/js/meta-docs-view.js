@@ -43,7 +43,101 @@ const state = {
   lastRefresh: null,       // { cwdsCount, summaryText } | null
   // 마지막으로 결정된 source_root 매칭 결과 (헤더 표시 + 빈 상태 처리)
   resolvedSource: null,    // { project, sourceRoot, matched } | null
+  // ADR-003 left-rail-meta-docs: 딥링크 검색어. 행 가시성 필터(이름 부분일치, 대소문자 무시).
+  searchTerm: '',
 };
+
+/**
+ * ADR-003 left-rail-meta-docs: 좌측 rail '📚 메타 문서' 클릭 시 진입점.
+ *
+ *  - applyAppMode('metadocs')는 main.js에서 호출되어 body[data-app-mode] 토글.
+ *  - 본 함수는 카탈로그 lazy 로드만 책임 — 가시성은 CSS 룰이 처리.
+ *
+ * @returns {Promise<void>}
+ */
+export async function enterMetaDocsMode() {
+  await loadMetaDocsLibrary();
+}
+
+/**
+ * ADR-003 left-rail-meta-docs: Agent/Skill 배지 단일 클릭 → 메타 문서 정의로 딥링크.
+ *
+ * 흐름:
+ *  1. state.searchTerm 설정 (예: 'designer')
+ *  2. loadMetaDocsLibrary 호출 — 정상 렌더 + 검색어 입력 보전
+ *  3. 매칭 행에 data-flash="1" 부여 → CSS `@keyframes meta-docs-flash` 1.5s 노출
+ *  4. scrollIntoView({block:'center'})
+ *
+ * 호출자: main.js 글로벌 클릭 위임 [data-meta-doc-type] 핸들러.
+ *
+ * @param {{type:'agent'|'skill', id:string}} link
+ */
+export async function openMetaDocViaDeepLink(link) {
+  if (!link || !link.id) return;
+  state.searchTerm = String(link.id || '').trim();
+  state.type = link.type === 'agent' || link.type === 'skill' ? link.type : 'all';
+  // 매칭 정확도 향상 — 사용자 모드/검색 양쪽 다 설정 후 재렌더
+  await loadMetaDocsLibrary();
+  highlightDeepLinkRow();
+}
+
+/**
+ * 현재 state.searchTerm과 일치하는 첫 메타 문서 행에 flash 트리거 + scrollIntoView.
+ * loadMetaDocsLibrary 직후 호출 — 행은 이미 DOM에 존재.
+ */
+function highlightDeepLinkRow() {
+  const term = (state.searchTerm || '').toLowerCase();
+  if (!term) return;
+  const rows = document.querySelectorAll('.meta-docs-table tbody tr[data-name]');
+  let target = null;
+  for (const r of rows) {
+    const name = String(r.dataset.name || '').toLowerCase();
+    if (name === term) { target = r; break; }
+    if (!target && name.includes(term)) target = r;
+  }
+  if (!target) return;
+  target.dataset.flash = '1';
+  target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  // animation 종료 후 속성 제거 — 재진입 시 다시 트리거 가능
+  setTimeout(() => { target.removeAttribute('data-flash'); }, 1700);
+}
+
+/**
+ * 좌측 축약 패널의 요약 카드 3개(사용/미사용/orphan) 렌더.
+ * loadMetaDocsLibrary() 성공 후 자동 호출됨 (rows 카운트 SSoT 일관).
+ *
+ * @param {{used:number, unused:number, orphan:number}} counts
+ */
+function renderLeftSummaryCards(counts) {
+  const root = document.getElementById('metaDocsSummaryCards');
+  if (!root) return;
+  root.innerHTML = `
+    <div class="meta-docs-summary-card meta-docs-summary-card--used" title="호출이 1회 이상 발생한 메타 문서">
+      <span class="meta-docs-summary-card-value">${counts.used}</span>
+      <span class="meta-docs-summary-card-label">사용</span>
+    </div>
+    <div class="meta-docs-summary-card meta-docs-summary-card--unused" title="카탈로그엔 있으나 호출 0건">
+      <span class="meta-docs-summary-card-value">${counts.unused}</span>
+      <span class="meta-docs-summary-card-label">미사용</span>
+    </div>
+    <div class="meta-docs-summary-card meta-docs-summary-card--orphan" title="호출은 있는데 현재 카탈로그에 없음 (외부/삭제된 정의)">
+      <span class="meta-docs-summary-card-value">${counts.orphan}</span>
+      <span class="meta-docs-summary-card-label">orphan</span>
+    </div>
+  `;
+}
+
+/**
+ * rows 배열에서 사용/미사용/orphan 카운트 계산 — 단일 책임.
+ * renderHtml의 인라인 계산과 동일 로직 — DRY를 위해 추출.
+ */
+function computeRowCounts(rows) {
+  return {
+    used:   rows.filter(r => (r.invocations ?? 0) > 0).length,
+    unused: rows.filter(r => r.id != null && (r.invocations ?? 0) === 0).length,
+    orphan: rows.filter(r => r.id == null).length,
+  };
+}
 
 /** 탭 진입 시 호출 — fetch + 렌더. */
 export async function loadMetaDocsLibrary() {
@@ -97,6 +191,8 @@ export async function loadMetaDocsLibrary() {
     ensureToastHost();
     // ADR-001: 기존 initColResize 재사용 — 신규 코드 없이 동일 UX 적용
     initColResize(container.querySelector('.meta-docs-table'));
+    // ADR-003: 좌측 요약 카드 동기 갱신 (사용/미사용/orphan)
+    renderLeftSummaryCards(computeRowCounts(sorted));
   } catch (err) {
     container.innerHTML = errorHtml(err);
   }
