@@ -283,8 +283,8 @@
 
           <div class="view-tab-bar" id="detailTabBar">
             <div class="view-tab-group">
-              <button class="view-tab active" id="tabRequests" data-tab="requests">요청</button>
-              <button class="view-tab" id="tabTurn" data-tab="turn">턴 뷰</button>
+              <button class="view-tab active" id="tabTurn" data-tab="turn">턴 뷰</button>
+              <button class="view-tab" id="tabRequests" data-tab="requests">요청</button>
               <button class="view-tab" id="tabLlm" data-tab="llm">LLM Input</button>
               <button class="view-tab" id="tabSysLib" data-tab="syslib">System 라이브러리</button>
               <button class="view-tab" id="tabMetaDocs" data-tab="metadocs" title="프로젝트/글로벌 .claude에 등록된 메타 문서 카탈로그 + 호출 빈도">메타 문서</button>
@@ -300,7 +300,7 @@
             <div class="state-loading"><div class="state-loading-spinner"></div><span>불러오는 중…</span></div>
           </div>
 
-          <div id="detailRequestsView" class="detail-content">
+          <div id="detailRequestsView" class="detail-content" style="display:none">
             <table>
               <colgroup>
                 <col style="width:100px">
@@ -317,7 +317,7 @@
             </table>
           </div>
 
-          <div id="detailTurnView" class="detail-content" style="display:none">
+          <div id="detailTurnView" class="detail-content">
             <div id="turnUnifiedBody" role="region" aria-label="턴 목록">
               <div class="state-loading"><div class="state-loading-spinner"></div><span>불러오는 중…</span></div>
             </div>
