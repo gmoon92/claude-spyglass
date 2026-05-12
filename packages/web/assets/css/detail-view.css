@@ -64,12 +64,13 @@
   border: none;
   border-bottom: 2px solid transparent;
   color: var(--text-3);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-2);
   font-family: inherit;
-  font-size: var(--text-small);
+  font-size: var(--text-meta);
   font-weight: var(--weight-strong);
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
   text-transform: uppercase;
+  white-space: nowrap;
   cursor: pointer;
   transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
 }
