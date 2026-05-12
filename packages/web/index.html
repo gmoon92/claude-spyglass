@@ -417,7 +417,62 @@
               </colgroup>
               <thead><tr><th>Time</th><th>Action</th><th>Target</th><th>Model</th><th>Message</th><th style="text-align:right">in</th><th style="text-align:right">out</th><th style="text-align:right"><span style="text-transform:none">⚡</span>Cache</th><th style="text-align:right">Duration</th></tr></thead>
               <tbody id="detailRequestsBody">
-                <tr><td colspan="9" class="table-empty">데이터가 없습니다</td></tr>
+                <!-- skeleton-loading T-08 — 9컬럼 폭 흉내. loadSessionDetail 응답 후 정상 row 로 교체. -->
+                <tr data-skeleton="1">
+                  <td><span class="sk sk-line" style="width:78%"></span></td>
+                  <td><span class="sk sk-line" style="width:62%"></span></td>
+                  <td><span class="sk sk-line" style="width:72%"></span></td>
+                  <td><span class="sk sk-line" style="width:58%"></span></td>
+                  <td><span class="sk sk-line" style="width:90%"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:32px"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:32px"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:34px"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:44px"></span></td>
+                </tr>
+                <tr data-skeleton="1">
+                  <td><span class="sk sk-line" style="width:74%"></span></td>
+                  <td><span class="sk sk-line" style="width:55%"></span></td>
+                  <td><span class="sk sk-line" style="width:80%"></span></td>
+                  <td><span class="sk sk-line" style="width:50%"></span></td>
+                  <td><span class="sk sk-line" style="width:76%"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:28px"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:36px"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:30px"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:48px"></span></td>
+                </tr>
+                <tr data-skeleton="1">
+                  <td><span class="sk sk-line" style="width:82%"></span></td>
+                  <td><span class="sk sk-line" style="width:70%"></span></td>
+                  <td><span class="sk sk-line" style="width:65%"></span></td>
+                  <td><span class="sk sk-line" style="width:62%"></span></td>
+                  <td><span class="sk sk-line" style="width:84%"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:30px"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:32px"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:36px"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:42px"></span></td>
+                </tr>
+                <tr data-skeleton="1">
+                  <td><span class="sk sk-line" style="width:70%"></span></td>
+                  <td><span class="sk sk-line" style="width:58%"></span></td>
+                  <td><span class="sk sk-line" style="width:75%"></span></td>
+                  <td><span class="sk sk-line" style="width:54%"></span></td>
+                  <td><span class="sk sk-line" style="width:70%"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:26px"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:34px"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:30px"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:40px"></span></td>
+                </tr>
+                <tr data-skeleton="1">
+                  <td><span class="sk sk-line" style="width:76%"></span></td>
+                  <td><span class="sk sk-line" style="width:65%"></span></td>
+                  <td><span class="sk sk-line" style="width:68%"></span></td>
+                  <td><span class="sk sk-line" style="width:60%"></span></td>
+                  <td><span class="sk sk-line" style="width:82%"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:30px"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:30px"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:32px"></span></td>
+                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:46px"></span></td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -481,21 +536,55 @@
           <!-- v22 LLM Input 탭 (system-prompt-exposure ADR-004 옵션 A) — system blocks + user messages 합본 -->
           <div id="detailLlmInputView" class="detail-content" style="display:none">
             <div id="llmInputBody" class="llm-input-body" role="region" aria-label="LLM Input">
-              <div class="state-empty"><span class="state-empty-title">최신 프록시 요청을 불러오는 중…</span></div>
+              <!-- skeleton-loading T-10 — showLatestLlmInput / renderLlmInput 시점에 skLlmInputCards 로 교체 -->
+              <section class="llm-input-system sk-card" data-skeleton="1">
+                <header class="llm-input-msg-header"><span class="sk sk-line" style="width:120px;height:10px"></span></header>
+                <div class="llm-input-msg-body"><span class="sk sk-block" style="height:180px"></span></div>
+              </section>
+              <section class="llm-input-msg sk-card" data-skeleton="1">
+                <header class="llm-input-msg-header"><span class="sk sk-line" style="width:80px;height:10px"></span></header>
+                <div class="llm-input-msg-body sk-card">
+                  <span class="sk sk-line" style="width:95%"></span>
+                  <span class="sk sk-line" style="width:88%"></span>
+                  <span class="sk sk-line" style="width:60%"></span>
+                </div>
+              </section>
             </div>
           </div>
 
           <!-- v22 System Prompt 라이브러리 탭 (ADR-004 옵션 B) — dedup 카탈로그 -->
           <div id="detailSysLibView" class="detail-content" style="display:none">
             <div id="sysLibBody" class="syslib-body" role="region" aria-label="System Prompt Library">
-              <div class="state-empty"><span class="state-empty-title">시스템 프롬프트 카탈로그 불러오는 중…</span></div>
+              <!-- skeleton-loading T-11 — loadSystemPromptLibrary 시점에 skSysLibCards 로 교체 -->
+              <article class="syslib-card sk-card" data-skeleton="1">
+                <header><span class="sk sk-line" style="width:60%"></span></header>
+                <div><span class="sk sk-line sk-line--sm" style="width:40%"></span><span class="sk sk-bar" style="width:70%;margin-top:6px"></span></div>
+              </article>
+              <article class="syslib-card sk-card" data-skeleton="1">
+                <header><span class="sk sk-line" style="width:55%"></span></header>
+                <div><span class="sk sk-line sk-line--sm" style="width:35%"></span><span class="sk sk-bar" style="width:55%;margin-top:6px"></span></div>
+              </article>
+              <article class="syslib-card sk-card" data-skeleton="1">
+                <header><span class="sk sk-line" style="width:62%"></span></header>
+                <div><span class="sk sk-line sk-line--sm" style="width:45%"></span><span class="sk sk-bar" style="width:42%;margin-top:6px"></span></div>
+              </article>
+              <article class="syslib-card sk-card" data-skeleton="1">
+                <header><span class="sk sk-line" style="width:50%"></span></header>
+                <div><span class="sk sk-line sk-line--sm" style="width:30%"></span><span class="sk sk-bar" style="width:30%;margin-top:6px"></span></div>
+              </article>
             </div>
           </div>
 
           <!-- v24 메타 문서 카탈로그 + 히팅률 (Migration 024) -->
           <div id="detailMetaDocsView" class="detail-content" style="display:none">
             <div id="metaDocsBody" class="meta-docs-body" role="region" aria-label="메타 문서 카탈로그">
-              <div class="state-empty"><span class="state-empty-title">메타 문서 카탈로그 불러오는 중…</span></div>
+              <!-- skeleton-loading T-09 — loadMetaDocsLibrary 호출 시 skMetaDocList 로 교체 -->
+              <table class="meta-docs-table" data-skeleton="1"><tbody>
+                <tr data-skeleton="1"><td><span class="sk sk-line" style="width:70%"></span></td><td><span class="sk sk-line" style="width:80%"></span></td><td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:28px"></span></td><td><span class="sk sk-line sk-line--inline" style="width:40px"></span></td></tr>
+                <tr data-skeleton="1"><td><span class="sk sk-line" style="width:62%"></span></td><td><span class="sk sk-line" style="width:75%"></span></td><td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:24px"></span></td><td><span class="sk sk-line sk-line--inline" style="width:40px"></span></td></tr>
+                <tr data-skeleton="1"><td><span class="sk sk-line" style="width:78%"></span></td><td><span class="sk sk-line" style="width:68%"></span></td><td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:32px"></span></td><td><span class="sk sk-line sk-line--inline" style="width:40px"></span></td></tr>
+                <tr data-skeleton="1"><td><span class="sk sk-line" style="width:55%"></span></td><td><span class="sk sk-line" style="width:82%"></span></td><td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:26px"></span></td><td><span class="sk sk-line sk-line--inline" style="width:40px"></span></td></tr>
+              </tbody></table>
             </div>
           </div>
 
