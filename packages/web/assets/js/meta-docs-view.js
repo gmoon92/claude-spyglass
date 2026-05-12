@@ -20,6 +20,7 @@
 import { escHtml, fmtTime } from './formatters.js';
 import { getSelectedProject } from './state.js';
 import { toolIconHtml } from './render/badges.js';
+import { initColResize } from './col-resize.js';
 
 const CONTAINER_ID = 'metaDocsBody';
 
@@ -88,6 +89,8 @@ export async function loadMetaDocsLibrary() {
     container.innerHTML = renderHtml(sorted, { project, matched, resolvedSourceRoot });
     bindEvents(container);
     ensureToastHost();
+    // ADR-001: 기존 initColResize 재사용 — 신규 코드 없이 동일 UX 적용
+    initColResize(container.querySelector('.meta-docs-table'));
   } catch (err) {
     container.innerHTML = errorHtml(err);
   }
@@ -177,8 +180,8 @@ function renderHtml(rows, ctx = {}) {
       <table class="meta-docs-table">
         <colgroup>
           <col style="width:80px">
-          <col>
-          <col style="width:160px">
+          <col style="width:220px">
+          <col style="width:240px">
           <col style="width:80px"><col style="width:130px"><col style="width:90px">
           <col style="width:36px">
         </colgroup>
