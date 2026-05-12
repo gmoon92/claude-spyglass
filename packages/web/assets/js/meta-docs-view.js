@@ -211,9 +211,9 @@ function rowHtml(r) {
     ? `<span class="meta-doc-source-orphan" title="${escHtml(ORPHAN_TOOLTIP)}" tabindex="0">호출만 존재</span>`
     : sourceCellHtml(r);
 
-  const desc = r.description ? `<div class="meta-doc-desc" title="${escHtml(r.description)}">${escHtml(r.description)}</div>` : '';
-  const filePath = r.file_path
-    ? `<div class="meta-doc-path" title="${escHtml(r.file_path)}">${escHtml(shortenPath(r.file_path))}</div>`
+  const descClean = cleanDescription(r.description);
+  const desc = descClean
+    ? `<div class="meta-doc-desc" title="${escHtml(r.description ?? '')}">${escHtml(descClean)}</div>`
     : '';
   const lastUsed = r.last_used_at ? escHtml(fmtTime(r.last_used_at)) : '<span class="meta-doc-na">—</span>';
   const tokens = formatTokens(r.total_tokens ?? 0);
@@ -224,7 +224,6 @@ function rowHtml(r) {
       <td>
         <div class="meta-doc-name">${escHtml(r.name)}</div>
         ${desc}
-        ${filePath}
       </td>
       <td>${sourceLabel}</td>
       <td class="num">${(r.invocations ?? 0).toLocaleString()}</td>
@@ -233,6 +232,22 @@ function rowHtml(r) {
       <td>${deleted ? '<span title="현재 디스크에서 사라진 정의 (soft-deleted)">⚠</span>' : ''}</td>
     </tr>
   `;
+}
+
+/**
+ * description 미리보기 정제 — `>` blockquote, `|` 표 셀, 연속 공백/줄바꿈 등
+ * markdown 마커를 단일 공백으로 정리해 한 줄 미리보기로 만든다.
+ * 원본 description 전체는 tooltip(title 속성)에 그대로 보존.
+ */
+function cleanDescription(s) {
+  if (!s) return '';
+  return String(s)
+    .split(/\r?\n/)
+    .map(line => line.replace(/^\s*[>|#]+\s*/, '').trim())
+    .filter(line => line.length > 0)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
@@ -255,13 +270,16 @@ function metaDocTypeBadge(type) {
   </span>`;
 }
 
-/** 출처 셀 — 라벨(우선) + source_root(있으면 축약). 단일 책임 캡슐화. */
+/** 출처 셀 — 라벨(우선) + 실제 파일 경로(file_path, 없으면 source_root). 단일 책임 캡슐화.
+ *  이름 컬럼에 file_path를 별도 노출하지 않고 출처 셀로 통합 — 시각 위계 단순화.
+ */
 function sourceCellHtml(r) {
   const label = r.source ? escHtml(r.source) : '-';
-  const root = r.source_root
-    ? `<div class="meta-doc-source-root" title="${escHtml(r.source_root)}">${escHtml(shortenPath(r.source_root))}</div>`
+  const path = r.file_path || r.source_root || null;
+  const pathHtml = path
+    ? `<div class="meta-doc-source-root" title="${escHtml(path)}">${escHtml(shortenPath(path))}</div>`
     : '';
-  return `<div class="meta-doc-source-label">${label}</div>${root}`;
+  return `<div class="meta-doc-source-label">${label}</div>${pathHtml}`;
 }
 
 /**

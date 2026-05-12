@@ -279,15 +279,6 @@
   line-clamp: 2;             /* 표준 속성 (브라우저 호환성) */
   -webkit-box-orient: vertical;
 }
-.meta-doc-path {
-  margin-top: 2px;
-  color: var(--text-4, #707070);
-  font-size: 11px;
-  font-family: var(--font-data, monospace);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .meta-doc-na { color: var(--text-4, #707070); }
 
 /* 출처 셀 — 라벨 + source_root 축약 */
