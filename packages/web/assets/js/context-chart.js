@@ -1,7 +1,26 @@
 // Accumulated Tokens Chart — Canvas 기반 턴별 누적 토큰 라인 차트
 import { DETAIL_FILTER_CHANGED } from './events.js';
+import {
+  deriveContextWindowSize, formatContextWindowLabel, DEFAULT_CONTEXT_WINDOW,
+} from './context-window.js';
 
-const REFERENCE_SCALE_TOKENS = 200_000; // Claude 모델 참고 스케일 (실제 한도는 모델별 상이)
+/**
+ * 차트 스케일·풋터·툴팁에 쓰일 한도값을 턴 배열에서 추론한다.
+ *  - 가장 최신 prompt 턴의 model + anthropic_beta 기준 (세션 중 모델이 거의 바뀌지 않음).
+ *  - prompt가 하나도 없으면 표준 200K로 안전 폴백.
+ *
+ * 반환값: { size, label, model } — UI 라벨링 일관성을 위해 함께 묶어 반환.
+ */
+function resolveSessionContextWindow(sortedTurns) {
+  for (let i = sortedTurns.length - 1; i >= 0; i--) {
+    const p = sortedTurns[i]?.prompt;
+    if (p && p.model) {
+      const size = deriveContextWindowSize(p.model, p.anthropic_beta);
+      return { size, label: formatContextWindowLabel(size), model: p.model };
+    }
+  }
+  return { size: DEFAULT_CONTEXT_WINDOW, label: formatContextWindowLabel(DEFAULT_CONTEXT_WINDOW), model: null };
+}
 
 let _canvas    = null;
 let _footer    = null;
@@ -10,6 +29,11 @@ let _empty     = null;
 let _pointData = []; // [{cx, cy, turnIndex, value, delta}] — 마우스 hit-test 용
 let _hoveredIdx = -1;
 let _lastTurns  = null;
+/**
+ * 현재 렌더된 세션의 context window 정보. _onCanvasMouseMove가 hover 툴팁에
+ * "사용률 %"·"한도 label"을 함께 전달하기 위해 renderContextChart에서 갱신한다.
+ */
+let _contextWindow = { size: 0, label: '', model: null };
 
 function getCssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -17,10 +41,11 @@ function getCssVar(name) {
 
 function getColors() {
   return {
-    stroke:    getCssVar('--ctx-chart-stroke') || getCssVar('--accent') || '#d97757',
-    fillNorm:  getCssVar('--ctx-chart-fill-normal') || 'rgba(217,119,87,0.12)',
-    gridLine:  getCssVar('--ctx-chart-line-grid')   || 'rgba(255,255,255,0.04)',
-    textDim:   getCssVar('--text-dim')              || 'rgba(255,255,255,0.3)',
+    stroke:        getCssVar('--ctx-chart-stroke')         || getCssVar('--accent') || '#d97757',
+    fillNorm:      getCssVar('--ctx-chart-fill-normal')    || 'rgba(217,119,87,0.22)',
+    fillRemaining: getCssVar('--ctx-chart-fill-remaining') || 'rgba(255,255,255,0.025)',
+    gridLine:      getCssVar('--ctx-chart-line-grid')      || 'rgba(255,255,255,0.04)',
+    textDim:       getCssVar('--text-dim')                 || 'rgba(255,255,255,0.3)',
   };
 }
 
@@ -78,13 +103,20 @@ function _onCanvasMouseMove(e) {
 
   if (hitIdx >= 0) {
     const pt = _pointData[hitIdx];
+    // 모델 한도 대비 사용률(%) — 한도가 0이면 NaN 회피
+    const pctOfWindow = _contextWindow.size > 0
+      ? ((pt.value / _contextWindow.size) * 100).toFixed(1)
+      : null;
     document.dispatchEvent(new CustomEvent('ctx-point-hover', {
       detail: {
-        turnIndex:      pt.turnIndex,
-        formattedValue: fmtK(pt.value),
-        formattedDelta: pt.delta !== null ? _fmtDelta(pt.delta) : null,
-        clientX:        e.clientX,
-        clientY:        e.clientY,
+        turnIndex:       pt.turnIndex,
+        formattedValue:  fmtK(pt.value),
+        formattedDelta:  pt.delta !== null ? _fmtDelta(pt.delta) : null,
+        windowLabel:     _contextWindow.label || null,
+        windowModel:     _contextWindow.model || null,
+        usagePercent:    pctOfWindow,
+        clientX:         e.clientX,
+        clientY:         e.clientY,
       },
     }));
   } else {
@@ -124,19 +156,27 @@ export function renderContextChart(turns) {
   // ctx=0인 턴도 포함 — 성장 곡선의 시작점으로 표시 (필터 없이 prompt 있는 모든 턴 사용)
   const sorted = (turns || []).filter(t => t.prompt).slice().sort((a, b) => a.turn_index - b.turn_index);
   const values = sorted.map(t => t.prompt.context_tokens || t.prompt.tokens_input || 0);
-  const maxVal = Math.max(...values, REFERENCE_SCALE_TOKENS * 0.1); // 최소 스케일
-  const latest = values[values.length - 1];
 
-  // 누적 토큰 인디케이터 업데이트
+  // 모델 기반 실제 context window 한도 추론 — 200K 하드코딩 제거 (Opus 4.7은 1M GA 등)
+  const cw = resolveSessionContextWindow(sorted);
+  _contextWindow = cw; // hover 툴팁이 참조
+  // Y축 상한은 "모델 한도"가 기준 — 사용률(%)이 시각적으로 그대로 드러나야 함.
+  // 한도 초과 이상 케이스에만 values 최댓값으로 확장해 라인이 잘리지 않게 한다.
+  const maxVal = Math.max(cw.size, ...values);
+  const latest = values[values.length - 1];
+  const pctOfWindow = cw.size > 0 ? (latest / cw.size) * 100 : 0;
+
+  // 누적 토큰 인디케이터 — 실제 사용률(%) 함께 노출
   if (_indicator) {
-    _indicator.textContent = `누적 ${fmtK(latest)} tokens`;
+    _indicator.textContent = `누적 ${fmtK(latest)} / ${cw.label} tokens (${pctOfWindow.toFixed(1)}%)`;
     _indicator.className = '';
   }
 
-  // 푸터 힌트
+  // 푸터 힌트 — "참고 스케일" 대신 추론된 모델 한도를 명시
   if (_footer) {
     const last = sorted[sorted.length - 1];
-    _footer.textContent = `Turn ${last.turn_index} · 최대 ${fmtK(Math.max(...values))} tokens · 참고 스케일: ${fmtK(REFERENCE_SCALE_TOKENS)} (모델별 상이)`;
+    const modelSuffix = cw.model ? ` (${cw.model})` : '';
+    _footer.textContent = `Turn ${last.turn_index} · 최대 ${fmtK(Math.max(...values))} tokens · 모델 한도: ${cw.label}${modelSuffix}`;
   }
 
   // DPR 처리
@@ -151,7 +191,9 @@ export function renderContextChart(turns) {
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, W, H);
 
-  const PAD = { top: 8, right: 16, bottom: 8, left: 16 };
+  // 캔버스 내부 여백 — 데이터 영역을 최대한 확보. 좌우는 첫/마지막 점이 잘리지 않을
+  // 최소치, 상하는 라인 두께(1.5px)와 호버 글로우(radius 5)를 감안한 여유만.
+  const PAD = { top: 4, right: 6, bottom: 4, left: 6 };
   const cW = W - PAD.left - PAD.right;
   const cH = H - PAD.top  - PAD.bottom;
 
@@ -180,20 +222,54 @@ export function renderContextChart(turns) {
     ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cW, y); ctx.stroke();
   }
 
-  // 영역 fill
+  // 영역 fill — 라인 위쪽(남은 한도)을 먼저, 그 다음 라인 아래(사용량)를 그려
+  // 사용량 fill이 위에 얹혀 라인 경계가 또렷이 보이도록 한다.
+  // 1) 라인 위쪽 = 남은 한도 (옅은 fill)
   ctx.beginPath();
-  ctx.moveTo(pts[0].cx, pts[0].cy);
-  for (let i = 1; i < n; i++) ctx.lineTo(pts[i].cx, pts[i].cy);
-  ctx.lineTo(pts[n - 1].cx, PAD.top + cH);
-  ctx.lineTo(pts[0].cx,     PAD.top + cH);
+  if (n === 1) {
+    ctx.moveTo(PAD.left,           pts[0].cy);
+    ctx.lineTo(PAD.left,           PAD.top);
+    ctx.lineTo(PAD.left + cW,      PAD.top);
+    ctx.lineTo(PAD.left + cW,      pts[0].cy);
+  } else {
+    ctx.moveTo(pts[0].cx, pts[0].cy);
+    ctx.lineTo(pts[0].cx, PAD.top);
+    ctx.lineTo(pts[n - 1].cx, PAD.top);
+    ctx.lineTo(pts[n - 1].cx, pts[n - 1].cy);
+    for (let i = n - 2; i >= 0; i--) ctx.lineTo(pts[i].cx, pts[i].cy);
+  }
+  ctx.closePath();
+  ctx.fillStyle = cols.fillRemaining;
+  ctx.fill();
+
+  // 2) 라인 아래쪽 = 사용량 (진한 fill)
+  ctx.beginPath();
+  if (n === 1) {
+    // 단일 데이터: 전체 너비에 수평 라인 높이로 fill
+    ctx.moveTo(PAD.left,           pts[0].cy);
+    ctx.lineTo(PAD.left + cW,      pts[0].cy);
+    ctx.lineTo(PAD.left + cW,      PAD.top + cH);
+    ctx.lineTo(PAD.left,           PAD.top + cH);
+  } else {
+    ctx.moveTo(pts[0].cx, pts[0].cy);
+    for (let i = 1; i < n; i++) ctx.lineTo(pts[i].cx, pts[i].cy);
+    ctx.lineTo(pts[n - 1].cx, PAD.top + cH);
+    ctx.lineTo(pts[0].cx,     PAD.top + cH);
+  }
   ctx.closePath();
   ctx.fillStyle = cols.fillNorm;
   ctx.fill();
 
   // 라인
   ctx.beginPath();
-  ctx.moveTo(pts[0].cx, pts[0].cy);
-  for (let i = 1; i < n; i++) ctx.lineTo(pts[i].cx, pts[i].cy);
+  if (n === 1) {
+    // 단일 데이터: 전체 너비에 수평선
+    ctx.moveTo(PAD.left,      pts[0].cy);
+    ctx.lineTo(PAD.left + cW, pts[0].cy);
+  } else {
+    ctx.moveTo(pts[0].cx, pts[0].cy);
+    for (let i = 1; i < n; i++) ctx.lineTo(pts[i].cx, pts[i].cy);
+  }
   ctx.strokeStyle = cols.stroke;
   ctx.lineWidth   = 1.5;
   ctx.stroke();

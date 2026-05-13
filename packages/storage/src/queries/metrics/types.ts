@@ -21,6 +21,12 @@ export interface ModelCacheMatrixRow {
 export interface SessionContextUsageRow {
   session_id: string;
   model: string | null;
+  /**
+   * 세션 마지막 prompt와 동일 turn의 proxy_requests.anthropic_beta.
+   * 라우터가 model-limits.getModelMaxTokens(model, anthropic_beta)로 실제 한도를 결정한다.
+   * (context-1m-2025-08-07 등 1M opt-in beta 헤더 반영용)
+   */
+  anthropic_beta: string | null;
   final_tokens: number;
 }
 

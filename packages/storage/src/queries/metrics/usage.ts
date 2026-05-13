@@ -78,8 +78,13 @@ export function getModelCacheMatrix(
  *
  * - 세션의 마지막 prompt 레코드의 (tokens_input + cache_read + cache_creation)
  *   = 그 시점에 모델이 받은 입력 컨텍스트 크기
- * - 모델별 max_tokens 매핑은 라우트 단계에서 적용 (model-limits.ts)
+ * - 모델별 max_tokens 매핑은 라우트 단계에서 적용 (model-limits.ts).
+ *   1M opt-in 정확도를 위해 같은 turn의 proxy_requests.anthropic_beta도 함께 반환한다.
  * - 버킷화도 라우트 단계 (서비스 로직)
+ *
+ * proxy_beta 서브쿼리: turn당 첫 proxy_request의 anthropic_beta 1건만 채택.
+ *   (한 turn 안에서는 동일 클라이언트가 같은 헤더로 호출하므로 첫 행이 대표.)
+ *   request.turn_id와 매칭하여 LEFT JOIN — turn_id가 없으면 anthropic_beta=NULL.
  */
 export function getSessionContextUsage(
   db: Database,
@@ -87,21 +92,30 @@ export function getSessionContextUsage(
   toTs?: number
 ): SessionContextUsageRow[] {
   const params: number[] = [];
-  const conds = ["type = 'prompt'", "tokens_confidence = 'high'"];
-  conds.push(...buildTimeWindow('timestamp', fromTs, toTs, params));
+  const conds = ["r.type = 'prompt'", "r.tokens_confidence = 'high'"];
+  conds.push(...buildTimeWindow('r.timestamp', fromTs, toTs, params));
 
-  // 세션별 마지막 prompt: timestamp 기준 latest 1건
   return db.query(`
-    WITH ranked AS (
+    WITH proxy_beta AS (
+      SELECT turn_id, anthropic_beta FROM (
+        SELECT turn_id, anthropic_beta,
+               ROW_NUMBER() OVER (PARTITION BY turn_id ORDER BY timestamp ASC) AS rn
+        FROM proxy_requests
+        WHERE turn_id IS NOT NULL
+      ) WHERE rn = 1
+    ),
+    ranked AS (
       SELECT
-        session_id,
-        model,
-        (COALESCE(tokens_input, 0) + COALESCE(cache_read_tokens, 0) + COALESCE(cache_creation_tokens, 0)) AS final_tokens,
-        ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY timestamp DESC) AS rn
-      FROM requests
+        r.session_id,
+        r.model,
+        pb.anthropic_beta,
+        (COALESCE(r.tokens_input, 0) + COALESCE(r.cache_read_tokens, 0) + COALESCE(r.cache_creation_tokens, 0)) AS final_tokens,
+        ROW_NUMBER() OVER (PARTITION BY r.session_id ORDER BY r.timestamp DESC) AS rn
+      FROM requests r
+      LEFT JOIN proxy_beta pb ON pb.turn_id = r.turn_id
       WHERE ${conds.join(' AND ')}
     )
-    SELECT session_id, model, final_tokens
+    SELECT session_id, model, anthropic_beta, final_tokens
     FROM ranked
     WHERE rn = 1 AND final_tokens > 0
   `).all(...params) as SessionContextUsageRow[];

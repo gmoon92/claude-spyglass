@@ -2,9 +2,10 @@
 
 /* ── CSS 변수 (canvas overlay 참조용) ───────────────────────────────────── */
 :root {
-  --ctx-chart-line-grid:   rgba(255,255,255,0.04);  /* 격자선 */
-  --ctx-chart-fill-normal: rgba(217,119,87,0.12);   /* 영역 fill */
-  --ctx-chart-stroke:      var(--accent);           /* 꺾은선 stroke */
+  --ctx-chart-line-grid:      rgba(255,255,255,0.04); /* 격자선 */
+  --ctx-chart-fill-normal:    rgba(217,119,87,0.22);  /* 라인 아래 = 사용량 (진한 fill) */
+  --ctx-chart-fill-remaining: rgba(255,255,255,0.025);/* 라인 위 = 남은 한도 (매우 옅음) */
+  --ctx-chart-stroke:         var(--accent);          /* 꺾은선 stroke */
 }
 
 /* contextGrowthChart canvas는 #chartSection .chart-wrap 안에 timelineChart와 sibling.
@@ -12,7 +13,7 @@
 
 #contextGrowthChart {
   width: 100%;
-  height: 100px;
+  height: 120px;
 }
 
 /* 빈 상태 토글 (legacy 호환 — 현재 main.js에서는 hidden 속성 토글 사용) */

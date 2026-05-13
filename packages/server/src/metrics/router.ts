@@ -109,7 +109,8 @@ export async function metricsRouter(req: Request, db: Database): Promise<Respons
       { label: '>95%',    range: [0.95, Infinity] as [number, number], session_count: 0 },
     ];
     for (const r of rows) {
-      const max = getModelMaxTokens(r.model);
+      // anthropic-beta까지 반영해야 1M opt-in 세션의 사용률이 정확히 계산된다.
+      const max = getModelMaxTokens(r.model, r.anthropic_beta);
       const ratio = max > 0 ? r.final_tokens / max : 0;
       const bucket = buckets.find(b => ratio >= b.range[0] && ratio < b.range[1]) ?? buckets[buckets.length - 1];
       bucket.session_count++;
