@@ -2,7 +2,7 @@
 const CTX_TOOLTIP_CONTENT = {
   'context-growth': {
     title: 'Accumulated Tokens',
-    desc:  '세션 동안 누적된 input_tokens 흐름을 보여줍니다.\n• 스케일은 요청 model + anthropic-beta 헤더로 실제 Context Window 한도를 추론합니다 (Opus 4.7 등 GA 1M 모델은 1M, 그 외 기본 200K).\n• 이 차트는 proxy 관측 기반이며 Claude 런타임의 자동 compact 후 사용률과는 다를 수 있습니다.\n• 실제 한도 관리(compact 발동 등)는 Claude가 자동으로 수행합니다.',
+    desc:  '세션 동안 누적된 input_tokens 흐름을 보여줍니다.\n• 라인 아래(진한 영역) = 사용량, 라인 위(옅은 영역) = 남은 한도.\n• 한도는 DB의 model_limits 시드(Migration 026)를 기준으로 결정합니다 — 운영자는 SQL로 모델 매핑을 직접 갱신할 수 있습니다.\n• 추가 신호: 모델명 [1m] suffix 또는 anthropic-beta 헤더의 context-1m-2025-08-07 토큰이 있으면 1M로 승격.\n• 이 차트는 proxy 관측 기반이며 Claude 런타임의 자동 compact 후 사용률과는 다를 수 있습니다.',
   },
 };
 

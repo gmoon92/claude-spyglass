@@ -110,7 +110,8 @@ export async function metricsRouter(req: Request, db: Database): Promise<Respons
     ];
     for (const r of rows) {
       // anthropic-beta까지 반영해야 1M opt-in 세션의 사용률이 정확히 계산된다.
-      const max = getModelMaxTokens(r.model, r.anthropic_beta);
+      // model_limits DB 시드(Migration 026)를 SSoT로 사용 → db 인자 전달.
+      const max = getModelMaxTokens(db, r.model, r.anthropic_beta);
       const ratio = max > 0 ? r.final_tokens / max : 0;
       const bucket = buckets.find(b => ratio >= b.range[0] && ratio < b.range[1]) ?? buckets[buckets.length - 1];
       bucket.session_count++;
@@ -120,7 +121,7 @@ export async function metricsRouter(req: Request, db: Database): Promise<Respons
       data: {
         buckets,
         total: rows.length,
-        model_limits: getAllModelLimits(),
+        model_limits: getAllModelLimits(db),
       },
       meta,
     });

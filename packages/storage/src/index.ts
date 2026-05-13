@@ -281,3 +281,12 @@ export {
   type MetaDocUsageRow,
   type ListMetaDocsFilter,
 } from './queries/meta-document';
+
+// =============================================================================
+// 모델 한도 (Migration 026 — SSoT for context window mapping)
+// =============================================================================
+
+export {
+  getAllModelLimits as getAllModelLimitsFromDb,
+  type ModelLimitRow,
+} from './queries/model-limits';
