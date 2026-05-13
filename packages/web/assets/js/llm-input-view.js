@@ -29,8 +29,9 @@
  *  GET /api/system-prompts/:hash     → { data: { hash, content, byte_size, segment_count, ... } }
  */
 
-import { escHtml } from './formatters.js';
+import { escHtml, fmtTime, fmtToken, shortModelName } from './formatters.js';
 import { skLlmInputCards } from './render/skeleton.js';
+import { getSelectedSession } from './state.js';
 
 const CONTAINER_ID = 'llmInputBody';
 
@@ -40,14 +41,45 @@ const SUMMARY_PREVIEW_LEN = 100;
 /** 검색 매칭 최소 길이 — 너무 짧은 입력으로 모든 메시지 펼침 방지 */
 const SEARCH_MIN_LEN = 2;
 
-/** role별 아이콘 — summary 좌측 프리픽스 (ADR-002 §결정 §4) */
+/**
+ * role별 아이콘 — summary 좌측 프리픽스 (ADR-002 §결정 §4).
+ *
+ * 이모지에서 인라인 SVG로 교체 (svg-role-icons pass) — 다크 테마 시각 일관성을 위한
+ * line-icon 패밀리. viewBox 0 0 16 16 / stroke 1.5 / round join·cap / currentColor 통일.
+ * 색상은 CSS의 .llm-input-msg--<role> .llm-input-msg-role-icon { color: ... }로 결정.
+ */
+const ROLE_ICON_SVG_ATTRS =
+  'xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="1em" height="1em" '
+  + 'fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"';
+
 const ROLE_ICON = {
-  user: '👤',
-  assistant: '🤖',
-  system: '🔒',
-  tool: '🔧',
-  tool_use: '🔧',
-  tool_result: '🔧',
+  user: `<svg ${ROLE_ICON_SVG_ATTRS}>`
+    + '<circle cx="8" cy="5.5" r="2.5"/>'
+    + '<path d="M2.5 13.5c0-3.038 2.462-5.5 5.5-5.5s5.5 2.462 5.5 5.5"/>'
+    + '</svg>',
+  assistant: `<svg ${ROLE_ICON_SVG_ATTRS}>`
+    + '<rect x="2" y="3" width="12" height="8" rx="2"/>'
+    + '<circle cx="5.5" cy="7" r="1" fill="currentColor" stroke="none"/>'
+    + '<circle cx="10.5" cy="7" r="1" fill="currentColor" stroke="none"/>'
+    + '<path d="M5.5 13.5L8 11l2.5 2.5"/>'
+    + '</svg>',
+  system: `<svg ${ROLE_ICON_SVG_ATTRS}>`
+    + '<rect x="4" y="7" width="8" height="6.5" rx="1"/>'
+    + '<path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>'
+    + '</svg>',
+  tool: `<svg ${ROLE_ICON_SVG_ATTRS}>`
+    + '<path d="M10.5 2a3 3 0 0 1 .6 3.4l-.2.4 3.1 3.1a1 1 0 1 1-1.4 1.4L9.5 7.2l-.4.2A3 3 0 1 1 10.5 2z"/>'
+    + '</svg>',
+  tool_use: `<svg ${ROLE_ICON_SVG_ATTRS}>`
+    + '<path d="M10.5 2a3 3 0 0 1 .6 3.4l-.2.4 3.1 3.1a1 1 0 1 1-1.4 1.4L9.5 7.2l-.4.2A3 3 0 1 1 10.5 2z"/>'
+    + '<path d="M2 13.5l2.5-2.5"/>'
+    + '</svg>',
+  tool_result: `<svg ${ROLE_ICON_SVG_ATTRS}>`
+    + '<rect x="3" y="2" width="10" height="12" rx="1.5"/>'
+    + '<path d="M5.5 6.5h5"/>'
+    + '<path d="M5.5 9h3"/>'
+    + '<path d="M9 11.5l1.5 1.5 2.5-2.5"/>'
+    + '</svg>',
 };
 
 /**
@@ -64,12 +96,58 @@ const state = {
 };
 
 /**
- * 탭 진입 시 가장 최근 proxy 요청 1건을 자동 로드.
+ * 현재 세션의 proxy_requests 캐시 — 드롭다운 선택기 + 딥링크용 (proxy-selector pass).
  *
- * 후속 확장 포인트(디자이너):
- *  - 요청 ID 선택 UI (드롭다운/검색)
- *  - 평면 뷰 행 클릭 → 해당 ID 인자로 호출
- *  - SSE로 새 요청 도착 시 자동 갱신 토글
+ * - sessionId가 바뀌면 무효화. 같은 세션 안에서는 SSE로 새 요청이 들어와도 한 번 fetch한 결과를 재사용
+ *   (현재는 SSE 가입 안 함 — 사용자가 탭 재진입하면 자연 갱신). 향후 SSE 가입은 후속.
+ * - _pendingTargetTs: 턴뷰 → API 페이로드 딥링크 1회용. setPendingProxyTargetTs(ts) 후
+ *   다음 showLatestLlmInput()이 가장 가까운 proxy를 자동 선택하고 nulled out.
+ */
+let _sessionProxyList = [];
+let _sessionProxyListSessionId = null;
+let _pendingTargetTs = null;
+
+/**
+ * 턴뷰 카드의 "API 페이로드" 액션이 호출. 다음 showLatestLlmInput() 1회만 ts에 가장 가까운
+ * proxy를 선택. setDetailView('llm')이 자동으로 showLatestLlmInput을 호출하므로 호출자는
+ * 이 함수 → setDetailTab('llm') → setDetailView('llm') 순서로 부르면 된다.
+ */
+export function setPendingProxyTargetTs(ts) {
+  _pendingTargetTs = typeof ts === 'number' && Number.isFinite(ts) ? ts : null;
+}
+
+async function ensureSessionProxyList(sessionId) {
+  if (!sessionId) return [];
+  if (_sessionProxyListSessionId === sessionId && _sessionProxyList.length > 0) {
+    return _sessionProxyList;
+  }
+  try {
+    const res = await fetchJson(`/api/proxy-requests?session_id=${encodeURIComponent(sessionId)}&limit=500`);
+    _sessionProxyList = Array.isArray(res?.data) ? res.data : [];
+    _sessionProxyListSessionId = sessionId;
+  } catch {
+    _sessionProxyList = [];
+    _sessionProxyListSessionId = sessionId;
+  }
+  return _sessionProxyList;
+}
+
+function findClosestProxyToTs(ts) {
+  if (!_sessionProxyList.length) return null;
+  return _sessionProxyList.reduce((a, b) =>
+    Math.abs((b.timestamp ?? 0) - ts) < Math.abs((a.timestamp ?? 0) - ts) ? b : a);
+}
+
+/**
+ * 탭 진입 시 활성 세션의 proxy 요청을 자동 로드.
+ *
+ * 동작 우선순위:
+ *  1. setPendingProxyTargetTs(ts)가 직전 호출된 상태면 ts에 가장 가까운 proxy 선택 (턴뷰 딥링크).
+ *  2. 활성 세션이 있으면 그 세션의 가장 최근 proxy 선택 (proxy-selector pass).
+ *  3. 활성 세션이 없으면 전역에서 가장 최근 proxy 1건 (탭만 떼서 보는 케이스 폴백).
+ *
+ * 후속 확장 포인트:
+ *  - SSE로 새 proxy 도착 시 드롭다운 자동 갱신 토글
  */
 export async function showLatestLlmInput() {
   const container = document.getElementById(CONTAINER_ID);
@@ -78,7 +156,23 @@ export async function showLatestLlmInput() {
   // skeleton-loading T-10: system 카드(큰 본문) + user 카드 2개로 구조 유지.
   container.innerHTML = skLlmInputCards(2);
 
+  const sessionId = getSelectedSession();
+  const pendingTs = _pendingTargetTs;
+  _pendingTargetTs = null; // 1회용 소비
+
   try {
+    if (sessionId) {
+      const list = await ensureSessionProxyList(sessionId);
+      if (list.length === 0) {
+        container.innerHTML = renderEmptySessionHtml(sessionId);
+        return;
+      }
+      const target = (pendingTs != null && findClosestProxyToTs(pendingTs))
+        || list[list.length - 1];
+      await renderLlmInput(target.id);
+      return;
+    }
+    // 세션 컨텍스트 없는 경우 — 전역 latest로 폴백
     const recent = await fetchJson('/api/proxy-requests?limit=1');
     const list = Array.isArray(recent?.data) ? recent.data : [];
     if (list.length === 0) {
@@ -89,6 +183,13 @@ export async function showLatestLlmInput() {
   } catch (err) {
     container.innerHTML = `<div class="state-empty"><span class="state-empty-title">불러오기 실패: ${escHtml(String(err?.message ?? err))}</span></div>`;
   }
+}
+
+function renderEmptySessionHtml(sessionId) {
+  return `<div class="state-empty">
+    <span class="state-empty-title">이 세션에는 proxy 요청이 없습니다</span>
+    <span class="state-empty-sub">세션 ID: <code>${escHtml(sessionId.slice(0, 12))}…</code></span>
+  </div>`;
 }
 
 /**
@@ -167,6 +268,22 @@ export async function renderLlmInput(requestId) {
  *     └─ <details data-message-id="m-N">...</details> 시퀀스
  */
 function renderHtml(p) {
+  // 배너 — proxy 데이터의 본질(hook 관측과 다름)을 사용자가 즉시 인지 (banner pass).
+  const bannerHtml = `
+    <div class="llm-input-banner" role="note">
+      <span class="llm-input-banner-icon" aria-hidden="true">i</span>
+      <span class="llm-input-banner-text">
+        이 탭은 proxy가 Anthropic API에 전송한 <strong>원본 페이로드</strong>입니다 —
+        훅 관측 데이터(턴 뷰)와 다를 수 있습니다.
+      </span>
+    </div>`;
+
+  // 세션 proxy 선택기 — 현재 세션의 모든 proxy 요청을 timestamp 오름차순으로 노출.
+  // 세션 컨텍스트가 없으면 (전역 latest 폴백) 드롭다운 생략.
+  const selectorHtml = _sessionProxyList.length > 0
+    ? renderProxySelector(p.requestId)
+    : '';
+
   const headerHtml = `
     <header class="llm-input-header">
       <span class="llm-input-rid">request: <code>${escHtml(p.requestId)}</code></span>
@@ -178,12 +295,45 @@ function renderHtml(p) {
     </header>`;
 
   const systemHtml = p.systemHash
-    ? renderSystemSection(p.systemContent, p.systemMeta)
+    ? renderSystemSection(p.systemContent, p.systemMeta, p.systemHash)
     : '<section class="llm-input-system llm-input-system--empty"><p>이 요청에 system 필드가 없습니다.</p></section>';
 
   const messagesHtml = renderMessagesSection(p.messages);
 
-  return headerHtml + systemHtml + messagesHtml;
+  return bannerHtml + selectorHtml + headerHtml + systemHtml + messagesHtml;
+}
+
+/**
+ * 세션 내 proxy 요청 드롭다운 — timestamp 오름차순 + 활성 ID 자동 선택 (proxy-selector pass).
+ *
+ * 옵션 라벨: `#idx HH:mm:ss · {model-short} · IN+OUT · id-12자`
+ * 컨테이너 id `llm-input-proxy-select`는 bindAccordionEvents에서 change 핸들러 매칭에 사용.
+ */
+function renderProxySelector(activeId) {
+  const total = _sessionProxyList.length;
+  const options = _sessionProxyList.map((r, i) => {
+    const idx = i + 1;
+    const ts  = r.timestamp ? fmtTime(r.timestamp) : '—';
+    const model = r.model ? shortModelName(r.model) : '?';
+    const tokIn  = r.tokens_input  ?? 0;
+    const tokOut = r.tokens_output ?? 0;
+    const tok = (tokIn || tokOut)
+      ? `${fmtToken(tokIn)}+${fmtToken(tokOut)}`
+      : '—';
+    const idShort = (r.id || '').slice(0, 12);
+    const label = `#${idx}  ${ts} · ${model} · ${tok} · ${idShort}…`;
+    const selected = r.id === activeId ? ' selected' : '';
+    return `<option value="${escHtml(r.id)}"${selected}>${escHtml(label)}</option>`;
+  }).join('');
+  return `
+    <div class="llm-input-proxy-selector">
+      <label class="llm-input-proxy-selector-label" for="llm-input-proxy-select">
+        Proxy 요청 (${total}건)
+      </label>
+      <select id="llm-input-proxy-select" class="llm-input-proxy-select" data-proxy-select>
+        ${options}
+      </select>
+    </div>`;
 }
 
 /**
@@ -192,29 +342,43 @@ function renderHtml(p) {
  * 정규화 단계에서 idx[0] billing-header는 이미 제거됐으므로 systemContent 자체에는 본문만 들어있음.
  * 단 화면에는 "정규화 본문임" 명시 + segment_count 같은 메타도 표시 — 디버깅 용이.
  *
- * 정책: 시스템 섹션은 항상 펼침 — 아코디언 적용 대상 아님 (ADR-002 §결정 §5).
+ * 정책: 시스템 섹션은 기본 펼침이지만 사용자가 접을 수 있도록 <details open>로 래핑
+ * (system-accordion pass). 긴 system 본문(수십 KB)이 Messages 도달까지 스크롤을 점유하는
+ * 부담을 사용자가 직접 조절 가능. 빈/로딩 변형은 접을 내용이 없으므로 <section> 유지.
  */
-function renderSystemSection(content, meta) {
+function renderSystemSection(content, meta, systemHash) {
   if (!content) {
     return `<section class="llm-input-system llm-input-system--loading">
-      <h3>System (정규화 본문)</h3>
+      <h3>System Prompt</h3>
       <p class="llm-input-dim">본문 로딩 실패 또는 미존재 — system_hash만 알려진 상태.</p>
     </section>`;
   }
 
+  // 메타 칩 — 영어 키(DB 컬럼명 그대로) 라벨 + title 툴팁에 한국어 설명 (label-clarity pass v2).
+  // ref_count는 클릭 가능한 button — 같은 hash 참조 proxy_requests 드릴다운 (ref-drilldown pass).
+  const refCount = meta?.ref_count ?? 0;
+  const refsBtn = systemHash
+    ? `<button type="button" class="llm-input-meta-chip llm-input-refs-toggle"
+        data-refs-hash="${escHtml(systemHash)}"
+        aria-haspopup="dialog" aria-expanded="false"
+        title="클릭으로 이 시스템 프롬프트를 참조한 API 요청 ${refCount}건의 목록 보기.&#10;같은 페르소나·지침이 얼마나 자주 재사용됐는지 = prompt 캐시 재사용 빈도 추적용.">ref_count: ${refCount}</button>`
+    : `<span title="이 시스템 프롬프트(hash 기준)를 참조한 API 요청 수.">ref_count: ${refCount}</span>`;
+
   const metaLine = meta
     ? `<div class="llm-input-system-meta">
-        <span>segment_count: ${meta.segment_count ?? '?'}</span>
-        <span>byte_size: ${formatBytes(meta.byte_size ?? content.length)}</span>
-        <span>ref_count: ${meta.ref_count ?? '?'}</span>
+        <span title="원본 system 배열에서 본문으로 사용된 텍스트 세그먼트 수.&#10;(보통 idx[0]은 결제용 헤더, idx[1] 이후가 본문)">segment_count: ${meta.segment_count ?? '?'}</span>
+        <span title="시스템 프롬프트 본문의 바이트 크기.">byte_size: ${formatBytes(meta.byte_size ?? content.length)}</span>
+        ${refsBtn}
       </div>`
     : '';
 
-  return `<section class="llm-input-system">
-    <h3>System (정규화 본문 — billing-header 제외)</h3>
+  // 제목 "System" — 아래 "Messages" 섹션과 대문자 형식 일치.
+  // 기술 세부(billing-header 제외 정규화)는 summary의 title 툴팁에 보존.
+  return `<details class="llm-input-system" open>
+    <summary class="llm-input-system-summary" title="LLM이 받은 시스템 프롬프트 본문.&#10;원본 system 배열 idx[0]의 결제용(billing) 헤더는 hash 정규화 단계에서 제거됐습니다.">System</summary>
     ${metaLine}
     <pre class="llm-input-system-content">${escHtml(content)}</pre>
-  </section>`;
+  </details>`;
 }
 
 /**
@@ -377,6 +541,13 @@ function bindAccordionEvents(container) {
  *  - state.expandedMessages에 ID 추가/제거하여 동기화
  */
 function onAccordionChange(e) {
+  // Proxy 선택기 변경 — change 이벤트가 <select>에서도 발생하므로 같은 핸들러에서 분기 (proxy-selector pass).
+  const sel = e.target.closest('[data-proxy-select]');
+  if (sel) {
+    const newId = sel.value;
+    if (newId) renderLlmInput(newId);
+    return;
+  }
   const details = e.target.closest('details.llm-input-msg');
   if (!details) return;
   const id = details.dataset.messageId;
@@ -389,15 +560,180 @@ function onAccordionChange(e) {
 }
 
 /**
- * "전체 펼침" / "전체 접기" 버튼 클릭.
+ * "전체 펼침" / "전체 접기" 버튼 클릭 + ref_count 칩 클릭 (ref-drilldown pass).
  *  - 버튼 자체에 data-action 속성으로 분기 (캡슐화: 핸들러 내부 판단)
+ *  - [data-refs-hash] 매칭 시 같은 hash의 참조 proxy_requests 팝오버 토글
+ *  - [data-refs-jump-id] 매칭 시 같은 세션의 다른 proxy로 점프 (renderLlmInput)
  */
 function onControlsClick(e) {
+  // ref_count 칩 — 참조 목록 팝오버 토글 (ref-drilldown pass).
+  // 팝오버 자체는 document.body에 append되어 container 밖이므로 내부 항목 클릭은
+  // onRefsPopoverDocClick에서 별도 처리. 여기서는 칩 토글만.
+  const refsBtn = e.target.closest('[data-refs-hash]');
+  if (refsBtn) {
+    toggleRefsPopover(refsBtn);
+    return;
+  }
+
   const btn = e.target.closest('[data-action]');
   if (!btn) return;
   const action = btn.dataset.action;
   if (action === 'expand-all') setAllExpanded(true);
   else if (action === 'collapse-all') setAllExpanded(false);
+}
+
+// =============================================================================
+// ref_count 드릴다운 팝오버 (ref-drilldown pass)
+// =============================================================================
+
+let _refsPopoverEl = null;       // 현재 열린 팝오버 DOM (또는 null)
+let _refsPopoverHash = null;     // 어느 hash의 팝오버인지 — 같은 칩 재클릭 시 닫기 토글
+let _refsPopoverChip = null;     // anchor chip (aria-expanded 동기화용)
+
+function toggleRefsPopover(chipEl) {
+  const hash = chipEl.dataset.refsHash;
+  if (!hash) return;
+  // 같은 chip 재클릭 → 닫기
+  if (_refsPopoverHash === hash && _refsPopoverEl) {
+    closeRefsPopover();
+    return;
+  }
+  // 다른 chip 열림 상태 → 먼저 닫기
+  closeRefsPopover();
+  openRefsPopover(chipEl, hash);
+}
+
+async function openRefsPopover(chipEl, hash) {
+  _refsPopoverHash = hash;
+  _refsPopoverChip = chipEl;
+  chipEl.setAttribute('aria-expanded', 'true');
+
+  // 로딩 상태 팝오버 먼저 표시 → fetch 완료 후 내용 교체
+  const popover = document.createElement('div');
+  popover.className = 'llm-input-refs-popover';
+  popover.setAttribute('role', 'dialog');
+  popover.setAttribute('aria-label', 'System 프롬프트 참조 목록');
+  popover.innerHTML = `
+    <header class="llm-input-refs-popover-header">
+      <span><strong>참조 목록</strong> <span class="llm-input-refs-popover-sub">불러오는 중…</span></span>
+      <button type="button" class="llm-input-refs-popover-close" data-refs-close aria-label="닫기">×</button>
+    </header>
+    <div class="llm-input-refs-popover-body">
+      <p class="llm-input-dim" style="padding:var(--space-3);">잠시만요…</p>
+    </div>`;
+  document.body.appendChild(popover);
+  _refsPopoverEl = popover;
+  positionRefsPopover(popover, chipEl);
+
+  // 글로벌 listener — 외부 클릭/ESC 닫기 (한번 등록)
+  document.addEventListener('click', onRefsPopoverDocClick, true);
+  document.addEventListener('keydown', onRefsPopoverKeydown);
+
+  // fetch
+  try {
+    const res = await fetchJson(`/api/system-prompts/${encodeURIComponent(hash)}/refs?limit=100`);
+    const refs = Array.isArray(res?.data) ? res.data : [];
+    if (_refsPopoverEl !== popover) return; // 다른 액션으로 이미 닫힘
+    renderRefsPopoverBody(popover, refs, hash);
+    positionRefsPopover(popover, chipEl); // 본문 크기 바뀌면 재정렬
+  } catch (err) {
+    if (_refsPopoverEl !== popover) return;
+    const body = popover.querySelector('.llm-input-refs-popover-body');
+    if (body) body.innerHTML = `<p class="llm-input-dim" style="padding:var(--space-3);color:var(--error)">불러오기 실패: ${escHtml(String(err?.message ?? err))}</p>`;
+  }
+}
+
+function renderRefsPopoverBody(popover, refs, hash) {
+  const currentSession = getSelectedSession();
+  const total = refs.length;
+  const headerSub = popover.querySelector('.llm-input-refs-popover-sub');
+  if (headerSub) headerSub.textContent = `${total}건 · 최근순 · hash ${hash.slice(0, 12)}…`;
+
+  if (total === 0) {
+    const body = popover.querySelector('.llm-input-refs-popover-body');
+    if (body) body.innerHTML = `<p class="llm-input-dim" style="padding:var(--space-3);">참조 요청이 없습니다.</p>`;
+    return;
+  }
+
+  const itemsHtml = refs.map((r, i) => {
+    const idx = i + 1;
+    const ts = r.timestamp ? fmtTime(r.timestamp) : '—';
+    const model = r.model ? shortModelName(r.model) : '?';
+    const tokIn = r.tokens_input ?? 0;
+    const tokOut = r.tokens_output ?? 0;
+    const tok = (tokIn || tokOut) ? `${fmtToken(tokIn)}+${fmtToken(tokOut)}` : '—';
+    const isSameSession = r.session_id && r.session_id === currentSession;
+    const sessionLabel = !r.session_id
+      ? '<span class="ref-cell ref-session ref-other" title="세션 미지정">—</span>'
+      : isSameSession
+        ? '<span class="ref-cell ref-session ref-same">현재 세션</span>'
+        : `<span class="ref-cell ref-session ref-other" title="${escHtml(r.session_id)}">${escHtml(r.session_id.slice(0, 8))}…</span>`;
+    const jumpAttrs = isSameSession
+      ? ` data-refs-jump-id="${escHtml(r.id)}" role="button" tabindex="0" title="이 proxy 요청으로 점프"`
+      : ' title="다른 세션의 참조 — 점프는 현재 세션 내에서만 지원"';
+    const itemCls = `llm-input-ref-item${isSameSession ? ' llm-input-ref-item--same' : ''}`;
+    return `<li class="${itemCls}"${jumpAttrs}>
+      <span class="ref-cell ref-idx">#${idx}</span>
+      <span class="ref-cell ref-time">${ts}</span>
+      <span class="ref-cell ref-model">${escHtml(model)}</span>
+      ${sessionLabel}
+      <span class="ref-cell ref-tokens">${tok}</span>
+    </li>`;
+  }).join('');
+
+  const body = popover.querySelector('.llm-input-refs-popover-body');
+  if (body) body.innerHTML = `<ul class="llm-input-refs-list">${itemsHtml}</ul>`;
+}
+
+function positionRefsPopover(popover, chipEl) {
+  const rect = chipEl.getBoundingClientRect();
+  // 폭은 컨테이너 기준 최대치, 위치는 chip 아래 6px 띄움. 화면 우측 넘침 보정.
+  const maxWidth = Math.min(560, window.innerWidth - 24);
+  popover.style.width = maxWidth + 'px';
+  let left = rect.left;
+  if (left + maxWidth > window.innerWidth - 12) left = window.innerWidth - 12 - maxWidth;
+  if (left < 12) left = 12;
+  popover.style.left = left + 'px';
+  popover.style.top = (rect.bottom + 6) + 'px';
+}
+
+function closeRefsPopover() {
+  if (_refsPopoverChip) _refsPopoverChip.setAttribute('aria-expanded', 'false');
+  if (_refsPopoverEl) _refsPopoverEl.remove();
+  _refsPopoverEl = null;
+  _refsPopoverHash = null;
+  _refsPopoverChip = null;
+  document.removeEventListener('click', onRefsPopoverDocClick, true);
+  document.removeEventListener('keydown', onRefsPopoverKeydown);
+}
+
+function onRefsPopoverDocClick(e) {
+  if (!_refsPopoverEl) return;
+  // 닫기 버튼
+  if (e.target.closest('[data-refs-close]')) {
+    closeRefsPopover();
+    return;
+  }
+  // 같은 세션 참조 항목 클릭 → 해당 proxy로 점프 (팝오버는 container 밖이라 여기서 처리)
+  const refItem = e.target.closest('[data-refs-jump-id]');
+  if (refItem && _refsPopoverEl.contains(refItem)) {
+    const proxyId = refItem.dataset.refsJumpId;
+    closeRefsPopover();
+    if (proxyId) renderLlmInput(proxyId);
+    return;
+  }
+  // 팝오버 내부 그 외 클릭 — 닫지 않음
+  if (_refsPopoverEl.contains(e.target)) return;
+  // chip 자신 클릭은 toggleRefsPopover가 토글 처리 — 여기선 close 안 함
+  if (_refsPopoverChip && _refsPopoverChip.contains(e.target)) return;
+  closeRefsPopover();
+}
+
+function onRefsPopoverKeydown(e) {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeRefsPopover();
+  }
 }
 
 /**

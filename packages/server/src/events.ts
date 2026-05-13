@@ -110,7 +110,7 @@ export async function eventsCollectHandler(req: Request, db: Database): Promise<
         started_at: event.timestamp,
         ended_at: null,
       });
-      // v24: 메타 문서 카탈로그 동기화 — 해당 cwd의 project chain 스캔.
+      // v24: Behavior Definitions 카탈로그 동기화 — 해당 cwd의 project chain 스캔.
       //  - 5초 in-memory throttle 보호 (synchronizer 내부)
       //  - 실패해도 SessionStart 처리 200 유지: try/catch로 격리
       if (event.cwd) {

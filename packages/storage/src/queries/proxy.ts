@@ -153,8 +153,28 @@ const SQL_CREATE = `
 // 과거에는 SELECT 안의 상관 서브쿼리로 한 번에 조인했으나, Bun SQLite가 상관 서브쿼리 안에서
 // outer 테이블/alias 컬럼 참조("no such column: proxy_requests.timestamp" / "pr.timestamp")를
 // 해석하지 못하는 케이스가 있어, 단순 SELECT + JS 후처리로 분리한다. limit 50 수준이라 N+1 비용 무시 가능.
+// perf pass (urgent): SELECT *는 payload(zstd Uint8Array, 수십~수백 KB)도 끌어와
+// JSON 직렬화 시 `{"0":byte,"1":byte,...}` 형태로 폭증(실측 행당 16 MB → 50건 응답 126 MB).
+// 메트릭 카드/드롭다운/딥링크 경로는 payload·미리보기 BLOB이 필요 없으므로 명시 컬럼만 선택.
+// payload 디코드가 필요한 경로는 단건 /api/proxy-requests/:id/messages에서 getProxyRequestById 사용.
 const SQL_GET_RECENT_BASE = `
-  SELECT * FROM proxy_requests
+  SELECT
+    id, timestamp, method, path, status_code, response_time_ms,
+    model, tokens_input, tokens_output,
+    cache_creation_tokens, cache_read_tokens,
+    tokens_per_second, is_stream,
+    messages_count, max_tokens, tools_count,
+    stop_reason,
+    error_type, error_message,
+    first_token_ms, api_request_id,
+    session_id, turn_id,
+    client_user_agent, client_app, anthropic_beta,
+    anthropic_org_id, anthropic_request_id,
+    thinking_type, temperature,
+    system_hash, system_byte_size,
+    payload_raw_size, payload_algo,
+    created_at
+  FROM proxy_requests
   ORDER BY timestamp DESC
   LIMIT ?
 `;
@@ -238,8 +258,101 @@ export function getProxyRequestById(db: Database, id: string): ProxyRequest | nu
   return (db.query('SELECT * FROM proxy_requests WHERE id = ?').get(id) as ProxyRequest | null) ?? null;
 }
 
+/**
+ * 세션 내 proxy 요청 1건의 슬림 메타 — 드롭다운/딥링크 매칭용.
+ *
+ * payload BLOB(수십~수백 KB)을 제외한 hot 컬럼만 노출 — 전체 행 SELECT *로 끌어오면
+ * 한 세션 100+건일 때 MB 단위 네트워크 비용 발생하여 LLM Input 탭 진입이 체감 가능하게 지연.
+ * `getProxyRequestById`(단건 + payload 디코드 포함)와 역할 분리.
+ */
+export interface ProxyRequestSummary {
+  id: string;
+  timestamp: number;
+  model: string | null;
+  tokens_input: number;
+  tokens_output: number;
+  cache_creation_tokens: number;
+  cache_read_tokens: number;
+  system_hash: string | null;
+  system_byte_size: number | null;
+  stop_reason: string | null;
+  api_request_id: string | null;
+}
+
+const SQL_GET_BY_SESSION_SLIM = `
+  SELECT id, timestamp, model,
+         tokens_input, tokens_output,
+         cache_creation_tokens, cache_read_tokens,
+         system_hash, system_byte_size,
+         stop_reason, api_request_id
+  FROM proxy_requests
+  WHERE session_id = ?
+  ORDER BY timestamp ASC
+  LIMIT ?
+`;
+
+/**
+ * 세션 단위 proxy_requests 시간 오름차순 슬림 조회 (perf pass).
+ *
+ * LLM Input 탭의 proxy 요청 선택기(드롭다운) + 턴뷰 → LLM Input 딥링크 매칭에만 사용.
+ * payload·preview·response_preview·tool_names 등 무거운 텍스트/BLOB 컬럼 제외.
+ *
+ * @param sessionId 필터 대상 세션 id
+ * @param limit     최대 행 수 (기본 500 — 한 세션에 보통 수십~수백 건이라 충분)
+ */
+export function getProxyRequestsBySession(
+  db: Database,
+  sessionId: string,
+  limit = 500,
+): ProxyRequestSummary[] {
+  return db.query(SQL_GET_BY_SESSION_SLIM).all(sessionId, limit) as ProxyRequestSummary[];
+}
+
+/**
+ * system_hash로 참조 proxy_requests 슬림 조회 (ref-drilldown pass).
+ *
+ * "이 시스템 프롬프트가 어디서 재사용됐는가" 드릴다운 — System 섹션의 ref_count 칩 클릭 시 호출.
+ * 가장 최근부터 보여주는 게 디버깅 흐름에 자연스러움(DESC 정렬).
+ * session_id를 포함시켜 클라이언트가 "현재 세션 내 참조"와 "타 세션 참조"를 구분 표시.
+ *
+ * @param hash  system_prompts.hash (SHA-256 hex string)
+ * @param limit 최대 행 수 (기본 100 — ref_count가 수천일 수도 있어 UX 한정. 향후 페이지네이션 가능)
+ */
+const SQL_GET_BY_SYSTEM_HASH = `
+  SELECT id, timestamp, model,
+         tokens_input, tokens_output,
+         cache_creation_tokens, cache_read_tokens,
+         system_hash, system_byte_size,
+         stop_reason, api_request_id,
+         session_id
+  FROM proxy_requests
+  WHERE system_hash = ?
+  ORDER BY timestamp DESC
+  LIMIT ?
+`;
+
+export interface ProxyRequestSystemRef extends ProxyRequestSummary {
+  session_id: string | null;
+}
+
+export function getProxyRequestsBySystemHash(
+  db: Database,
+  hash: string,
+  limit = 100,
+): ProxyRequestSystemRef[] {
+  return db.query(SQL_GET_BY_SYSTEM_HASH).all(hash, limit) as ProxyRequestSystemRef[];
+}
+
 export function getRecentProxyRequests(db: Database, limit = 50): ProxyRequest[] {
   const baseRows = db.query<ProxyRequest, [number]>(SQL_GET_RECENT_BASE).all(limit);
+
+  // perf pass P1-B: v19+ 데이터만 있는 환경(헤더로 session_id 직접 저장)은 휴리스틱 N+1이 필요 없음.
+  // 한 번 sweep으로 NULL session_id가 없으면 바로 반환 — 최대 limit×2(=100) SELECT 제거.
+  // 구 데이터가 한 건이라도 섞여 있으면 기존 휴리스틱으로 폴백.
+  if (baseRows.every((r) => r.session_id !== null)) {
+    return baseRows;
+  }
+
   const findPrompt = db.query<{ session_id: string }, { $lo: number; $hi: number; $pivot: number }>(
     SQL_FIND_PROMPT_SESSION,
   );
@@ -351,6 +464,8 @@ export function getMaxContextProxyForSession(
   tokens_output: number;
   cache_read_tokens: number;
   cache_creation_tokens: number;
+  /** context-window-derivation: orphan turn fallback에서도 클라이언트가 한도 추론 가능하도록 함께 노출. */
+  anthropic_beta: string | null;
 } | null {
   const row = db.query<{
     timestamp: number;
@@ -359,9 +474,10 @@ export function getMaxContextProxyForSession(
     tokens_output: number;
     cache_read_tokens: number;
     cache_creation_tokens: number;
+    anthropic_beta: string | null;
   }, [string]>(
     `SELECT timestamp, model, tokens_input, tokens_output,
-            cache_read_tokens, cache_creation_tokens
+            cache_read_tokens, cache_creation_tokens, anthropic_beta
        FROM proxy_requests
       WHERE session_id = ?
       ORDER BY (COALESCE(tokens_input,0)

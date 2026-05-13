@@ -9,6 +9,23 @@ export const FLAT_VIEW_COLS  = 9;  // Time Action Target Model Message in out Ca
 export const RECENT_REQ_COLS = 10; // + Session
 
 /**
+ * 클릭 타깃 → [data-expand-id] 요소 해결.
+ *
+ * 1순위: 클릭이 [data-expand-id]를 직접 포함할 때 (.prompt-preview span — 기존 동작 보존).
+ * 2순위: 클릭이 평면 행의 `<td data-cell="msg">` 안일 때 — 메시지 셀 여백·아이콘 영역까지 펼침 가능.
+ *        cell이 비어있어 내부 expand 요소가 없으면 null.
+ *
+ * 호출자: main.js(#detailView), views/default/feed-interactions.js(#defaultView).
+ */
+export function resolveExpandTarget(target) {
+  const direct = target.closest('[data-expand-id]');
+  if (direct) return direct;
+  const msgCell = target.closest('td[data-cell="msg"]');
+  if (msgCell) return msgCell.querySelector('[data-expand-id]');
+  return null;
+}
+
+/**
  * 펼침 행/박스를 토글한다 (web-design-balance-pass ADR-004).
  *
  * _promptCache 항목 형태에 따라 두 모드로 렌더:

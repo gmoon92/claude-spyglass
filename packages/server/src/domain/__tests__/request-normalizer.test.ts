@@ -205,6 +205,7 @@ function makeTurnItem(overrides: Partial<TurnItem> = {}): TurnItem {
     responses: [],
     system_hash: null,
     system_byte_size: null,
+    system_reminder: null,
     summary: {
       tool_call_count: 0,
       tokens_input: 0,
@@ -251,7 +252,7 @@ describe('normalizeTurns — items[] 인터리빙', () => {
         id: 'p-1', timestamp: 500, tokens_input: 100, tokens_output: 0, tokens_total: 100,
         duration_ms: 0, model: 'claude-opus-4-7', payload: null,
         cache_read_tokens: 0, cache_creation_tokens: 0, context_tokens: 100,
-        tokens_confidence: 'high',
+        tokens_confidence: 'high', anthropic_beta: null,
       },
       tool_calls: [
         { id: 't-1', type: 'tool_call', timestamp: 1000, tool_name: 'Bash',
@@ -273,7 +274,7 @@ describe('normalizeTurns — items[] 인터리빙', () => {
         id: 'p-1', timestamp: 500, tokens_input: 0, tokens_output: 0, tokens_total: 0,
         duration_ms: 0, model: 'claude-opus-4-7', payload: null,
         cache_read_tokens: 0, cache_creation_tokens: 0, context_tokens: 0,
-        tokens_confidence: 'high',
+        tokens_confidence: 'high', anthropic_beta: null,
       },
       tool_calls: [
         { id: 't-1', type: 'tool_call', timestamp: 1000, tool_name: 'Bash',

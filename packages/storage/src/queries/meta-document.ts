@@ -1,8 +1,8 @@
 /**
- * Meta Document CRUD — Claude Code 메타 문서 카탈로그 (v24, Migration 024)
+ * Meta Document CRUD — Claude Code Behavior Definitions 카탈로그 (v24, Migration 024)
  *
  * 책임:
- *  - .claude/{agents,skills,commands} 디렉토리에서 발견된 메타 문서 정의를
+ *  - .claude/{agents,skills,commands} 디렉토리에서 발견된 Behavior Definitions 정의를
  *    DB에 보존 (multi-source row 모델 — 동일 이름이 여러 source에 있을 수 있음).
  *  - cwd → 호출 매핑(meta_doc_resolutions)을 함께 관리.
  *  - 집계 VIEW(v_meta_doc_usage)와 카탈로그를 LEFT JOIN한 결과 조회 함수 제공.
@@ -112,7 +112,7 @@ const SQL_UPSERT_META_DOC = `
 `;
 
 /**
- * 메타 문서 1건 upsert. 동일 (type,name,source,source_root)가 있으면
+ * Behavior Definitions 1건 upsert. 동일 (type,name,source,source_root)가 있으면
  * 메타 정보를 갱신하고 last_seen_at을 새로 찍으며 deleted_at을 NULL로 복원.
  *
  * @returns 해당 행의 id

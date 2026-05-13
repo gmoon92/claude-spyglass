@@ -22,6 +22,6 @@ export {
   getDetailFilter, setDetailFilter, getDetailRequests, getDetailTurns,
   renderDetailRequests, applyDetailFilter,
   setDetailView, toggleTurn, toggleCardExpand, setTurnViewMode,
-  renderTurnView, renderTurnCards,
+  renderTurnView, renderTurnCards, openLlmInputForTurn,
   loadSessionDetail, refreshDetailSession, initDetailSearch,
 } from './session-detail/index.js';

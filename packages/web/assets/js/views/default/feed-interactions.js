@@ -4,7 +4,7 @@
 // 영속 상태(E축)와 분리.  bootstrap.js 가 클로저(검색 박스 핸들 등)를 보유하고
 // 여기 팩토리에 콜백/getter 로 주입한다.
 
-import { renderRequests, appendRequests, togglePromptExpand } from '../../renderers.js';
+import { renderRequests, appendRequests, togglePromptExpand, resolveExpandTarget } from '../../renderers.js';
 import { fetchRequests, setReqFilter, getReqFilter } from '../../api.js';
 import { SUB_TYPES } from '../../request-types.js';
 import { createFilterBar } from '../../components/filter-bar.js';
@@ -18,6 +18,10 @@ import { STORAGE_KEY } from './constants.js';
  *
  * `getSearchValue()` 는 bootstrap 의 검색 박스 클로저를 읽는 getter — 박스가
  * 아직 만들어지기 전(필터 바 onChange 가 첫 호출되는 시점)에도 안전.
+ *
+ * 검색 SSoT: 행에 박힌 `data-search-haystack` 속성(rows.js의 buildSearchHaystack).
+ *   model / tool / Skill / Agent / MCP / role / payload 본문(8KB 상한)을 모두 포함하므로
+ *   추가 textContent 수집 없이 substring 매칭만으로 일관 검색이 가능.
  */
 export function applyFeedSearch(getSearchValue) {
   const q = (getSearchValue?.() ?? '').toLowerCase();
@@ -30,13 +34,8 @@ export function applyFeedSearch(getSearchValue) {
         : tr.dataset.type !== typeFilter
     );
     if (!q) { tr.style.display = typeFiltered ? 'none' : ''; return; }
-    const text = [
-      tr.querySelector('.model-name')?.textContent,
-      tr.querySelector('.action-name')?.textContent,
-      tr.querySelector('.prompt-preview')?.textContent,
-      tr.querySelector('.target-role-badge')?.textContent,
-    ].filter(Boolean).join(' ').toLowerCase();
-    tr.style.display = (!text.includes(q) || typeFiltered) ? 'none' : '';
+    const haystack = tr.dataset.searchHaystack || '';
+    tr.style.display = (!haystack.includes(q) || typeFiltered) ? 'none' : '';
   });
 }
 
@@ -95,7 +94,7 @@ export function wireDefaultViewClicks({ onSelectSession }) {
       onSelectSession(sessEl.dataset.gotoSession);
       return;
     }
-    const promptEl = e.target.closest('[data-expand-id]');
+    const promptEl = resolveExpandTarget(e.target);
     if (promptEl) {
       const tr = promptEl.closest('tr');
       if (tr) togglePromptExpand(promptEl.dataset.expandId, tr);

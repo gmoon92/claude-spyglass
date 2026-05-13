@@ -120,7 +120,7 @@ export function subTypeBadgeHtml(r) {
   if (!sub) return '';
   let label;
   let fullId;
-  // ADR-003 left-rail-meta-docs: agent/skill chip은 메타 문서 딥링크 트리거.
+  // ADR-003 left-rail-meta-docs: agent/skill chip은 Behavior Definitions 딥링크 트리거.
   // data-meta-doc-{type,id} 속성을 부여하면 main.js 글로벌 위임에서 enterMetaDocsMode 호출.
   let deepLinkAttrs = '';
   if (sub === 'mcp') {

@@ -3,42 +3,117 @@
 //  detail view 도구 매트릭스는 ts-mx 가 단일 진실 소스.)
 import { fmt, fmtToken, escHtml } from './formatters.js';
 import { makeSessionRow, skSessionRows } from './renderers.js';
-import { getSelectedProject, getSelectedSession } from './state.js';
+import { getSelectedProject, getSelectedSession, getAppMode } from './state.js';
 
 let _allProjects     = [];
 let _allSessions     = [];
+// meta-docs feedback ADR (2026-05-14): 메타 모드에서 프로젝트별 항목 수를 좌측 패널에
+// 표시하기 위한 카운트 스토어. meta-docs-view.js가 카탈로그 fetch 후 setMetaDocsCounts로 채운다.
+// 키 규칙: projects[project_name] = N, global/total은 별도 필드. 시작 시 빈 객체.
+let _metaCounts      = { projects: Object.create(null), global: 0, total: 0 };
+
+/** 가상 '전체 (user global)' 행을 가리키는 식별자. metadocs 모드 전용. */
+export const GLOBAL_PROJECT_KEY = '__global__';
 
 export function getAllSessions()  { return _allSessions; }
 export function setAllSessions(list) { _allSessions = list; }
 export function getAllProjects()  { return _allProjects; }
 
+/**
+ * meta-docs-view.js에서 카탈로그 fetch 직후 호출 — 프로젝트별/글로벌 항목 수를 주입.
+ * 호출 후 metadocs 모드일 때만 즉시 재렌더(browse 모드 영향 없음).
+ *
+ * @param {{ projects?: Record<string, number>, global?: number, total?: number }} counts
+ */
+export function setMetaDocsCounts(counts) {
+  const safe = counts && typeof counts === 'object' ? counts : {};
+  _metaCounts = {
+    projects: safe.projects && typeof safe.projects === 'object' ? safe.projects : Object.create(null),
+    global:   Number.isFinite(safe.global) ? safe.global : 0,
+    total:    Number.isFinite(safe.total)  ? safe.total  : 0,
+  };
+  if (getAppMode() === 'metadocs') renderBrowserProjects();
+}
+
 export function renderBrowserProjects() {
   const body = document.getElementById('browserProjectsBody');
-  if (!_allProjects.length) {
+  if (!body) return;
+  const isMetaMode = getAppMode() === 'metadocs';
+
+  if (!_allProjects.length && !isMetaMode) {
     body.innerHTML = '<tr><td colspan="3" class="table-empty">데이터가 없습니다</td></tr>';
     return;
   }
+
+  const rows = [];
+  // metadocs 모드: 최상단 가상 'user (global)' 행 (scopeMode='all' 진입점)
+  if (isMetaMode) rows.push(renderMetaGlobalRow());
+
   const maxT = Math.max(..._allProjects.map(p => p.total_tokens || 0), 1);
-  body.innerHTML = _allProjects.map(p => {
-    const isSelected = getSelectedProject() === p.project_name;
-    const pct        = Math.max(1, Math.round((p.total_tokens || 0) / maxT * 100));
-    // 세션 컬럼: 라이브 세션 수만 표시 (사용자 요청 — 누적은 사이드바 세션 리스트에서 직접 확인 가능).
-    // total_count 별도 노출은 의미 모호성·시각 노이즈 유발 → active 단일 SSoT 표시.
-    const active = p.active_count ?? 0;
-    const total  = p.session_count || 0;
-    const sessCls = active > 0 ? ' proj-active' : '';
-    const sessTitle = `라이브 ${active}개 (전체 ${total}개)`;
-    return `<tr class="clickable${isSelected ? ' row-selected' : ''}" data-project="${escHtml(p.project_name)}">
-      <td class="cell-proj-name" title="${escHtml(p.project_name || '')}">${escHtml(p.project_name || '—')}</td>
-      <td class="num cell-proj-sess${sessCls}" style="text-align:right" title="${sessTitle}">${fmt(active)}</td>
-      <td>
-        <div class="bar-cell" style="justify-content:flex-end;gap:4px">
-          <div class="bar-track" style="min-width:36px"><div class="bar-fill" style="width:${pct}%"></div></div>
-          <span class="bar-label num-hi" style="min-width:30px">${fmtToken(p.total_tokens)}</span>
-        </div>
-      </td>
-    </tr>`;
-  }).join('');
+  for (const p of _allProjects) {
+    rows.push(isMetaMode ? renderMetaProjectRow(p) : renderBrowseProjectRow(p, maxT));
+  }
+  body.innerHTML = rows.join('');
+}
+
+/**
+ * browse 모드 프로젝트 행 — 기존 [프로젝트 | 활성/전체 세션 | 토큰 바] 그대로 유지.
+ *  - 세션 컬럼은 session-column-clarity pass: `N / M` 동시 표시.
+ *  - active/total 둘 다 0이면 dash.
+ */
+function renderBrowseProjectRow(p, maxT) {
+  const isSelected = getSelectedProject() === p.project_name;
+  const pct        = Math.max(1, Math.round((p.total_tokens || 0) / maxT * 100));
+  const active = p.active_count ?? 0;
+  const total  = p.session_count || 0;
+  const sessCls = active > 0 ? ' proj-active' : '';
+  const sessTitle = `라이브 ${active}개 / 전체 ${total}개`;
+  const sessCellHtml = total === 0
+    ? '—'
+    : `<span class="proj-sess-active">${fmt(active)}</span><span class="proj-sess-sep">/</span><span class="proj-sess-total">${fmt(total)}</span>`;
+  return `<tr class="clickable${isSelected ? ' row-selected' : ''}" data-project="${escHtml(p.project_name)}">
+    <td class="cell-proj-name" title="${escHtml(p.project_name || '')}">${escHtml(p.project_name || '—')}</td>
+    <td class="num cell-proj-sess${sessCls}" style="text-align:right" title="${sessTitle}">${sessCellHtml}</td>
+    <td>
+      <div class="bar-cell" style="justify-content:flex-end;gap:4px">
+        <div class="bar-track" style="min-width:36px"><div class="bar-fill" style="width:${pct}%"></div></div>
+        <span class="bar-label num-hi" style="min-width:30px">${fmtToken(p.total_tokens)}</span>
+      </div>
+    </td>
+  </tr>`;
+}
+
+/**
+ * metadocs 모드 프로젝트 행 — [프로젝트 | 항목 수 | (빈 셀)].
+ *  - 항목 수는 setMetaDocsCounts로 주입된 _metaCounts.projects에서 조회. 미주입 시 0.
+ *  - 클릭 시 main.js selectProject가 scopeMode='selected'로 전환하여 해당 프로젝트만 표시.
+ *  - 동기화 버튼은 thead 셀에 단독 배치되므로 행 우측 셀은 비워둔다(컬럼 폭은 colgroup 공유).
+ */
+function renderMetaProjectRow(p) {
+  const isSelected = getSelectedProject() === p.project_name;
+  const count = _metaCounts.projects?.[p.project_name] ?? 0;
+  return `<tr class="clickable${isSelected ? ' row-selected' : ''}" data-project="${escHtml(p.project_name)}">
+    <td class="cell-proj-name" title="${escHtml(p.project_name || '')}">${escHtml(p.project_name || '—')}</td>
+    <td class="num cell-proj-meta-count" style="text-align:right">${fmt(count)}</td>
+    <td class="cell-proj-meta-spacer"></td>
+  </tr>`;
+}
+
+/**
+ * 가상 'user (global)' 행 — metadocs 모드 전용 최상단 행.
+ *  - data-project="__global__" (GLOBAL_PROJECT_KEY) — main.js selectProject가 분기.
+ *  - 클릭 시 meta-docs-view.js의 scopeMode를 'all'로 전환하고 전체 카탈로그를 표시.
+ *  - 선택 표시는 getSelectedProject()가 GLOBAL_PROJECT_KEY와 일치할 때 활성.
+ */
+function renderMetaGlobalRow() {
+  const isSelected = getSelectedProject() === GLOBAL_PROJECT_KEY;
+  const total = _metaCounts.total ?? 0;
+  return `<tr class="clickable cell-proj-global${isSelected ? ' row-selected' : ''}" data-project="${GLOBAL_PROJECT_KEY}"
+              title="user(global) — 모든 cwd + 글로벌 카탈로그 합산">
+    <td class="cell-proj-name">user <span class="cell-proj-global-tag">global</span></td>
+    <td class="num cell-proj-meta-count" style="text-align:right">${fmt(total)}</td>
+    <td class="cell-proj-meta-spacer"></td>
+  </tr>`;
 }
 
 export function renderBrowserSessions() {

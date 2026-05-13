@@ -1,11 +1,24 @@
-// Detail Tools View — 단일 매트릭스 뷰 (ADR-007)
-// 1행 1도구, 6컬럼 (Tool/Avg/Calls/Tokens/%/Err) + 정렬 토글
+// Project Tool Stats — 프로젝트 단위 도구별 성능 매트릭스 (ADR-007 + ADR-004)
 //
-// ADR-004 meta-docs-tool-stats:
-//   - 세션 단위 (loadToolStats / #detailToolsView) ↔ 프로젝트 단위 (loadProjectToolStats / #metaToolStatsBody)
-//     두 스코프가 같은 renderMatrix를 공유하여 시각 일관성 보장. 호출 측은 raw data만 전달.
-//   - 세션 도구 탭 우상단 outbound 링크(.ts-mx-outbound) — 클릭 시 메타 모드 + 도구 통계 탭으로 위임.
-//   - 정렬 상태(_sortKey)는 모듈 전역으로 보관 — 사용자 컨텍스트(선호 정렬)를 두 스코프에서 공유.
+// 책임:
+//   - 메타 모드의 [도구 통계] 서브 탭에 마운트되는 단일 매트릭스 뷰.
+//   - 1행 1도구, 6컬럼 (Tool/Avg/Calls/Tokens/%/Err).
+//   - 정렬은 헤더 컬럼 클릭으로 토글(Behavior Definitions·syslib 테이블과 동일 패턴).
+//   - 컨테이너: #metaToolStatsBody — meta-docs-view.js 가 가시성/aria/진입 시점을 관리.
+//
+// 호출 진입:
+//   - loadProjectToolStats(projectName)  — 메타 모드 [도구 통계] 탭 진입 / 좌측 프로젝트 변경 시.
+//   - clearProjectToolStats()            — 메타 모드 이탈 시 호출 가능. 현재 미사용.
+//
+// 정리 이력:
+//  - ADR-004 후속: 세션 detail [도구] 탭이 메타 모드 [도구 통계]와 중복이라 제거됨.
+//    이전에 공존하던 세션 스코프 진입(loadToolStats / clearToolStats / outbound 링크)도 모두 정리됨.
+//    renderMatrix는 더 이상 scope 분기를 받지 않는다 — 프로젝트 단위 매트릭스 SSoT.
+//  - sort-toolbar-cleanup: 상단 "도구별 통계" 라벨이 서브탭 헤더("도구 통계")와 중복이라 제거.
+//    상단 정렬 버튼 그룹도 함께 제거하고, 헤더 셀 클릭으로 정렬을 토글한다.
+//    SSoT는 SORTABLE_KEYS / DEFAULT_DIR / COMPARATORS 세 상수 — Behavior Definitions 패턴과 동형.
+//
+// 정렬 상태(_sortKey/_sortDir)는 모듈 전역으로 보관 — 탭 재진입 시 사용자 선호 유지.
 
 import { fmtToken, escHtml } from './formatters.js';
 import { toolIconHtml } from './renderers.js';
@@ -13,59 +26,35 @@ import { skToolMatrix } from './render/skeleton.js';
 
 export const API = '';
 
-// ── 세션 스코프(기존) ──
-let _container = null;             // 세션 detail 컨테이너 (#detailToolsView)
-let _stats     = [];               // 세션 detail 매트릭스 데이터
-let _currentSessionId = null;
-let _currentSessionProjectName = null; // 현재 세션의 project_name (outbound 링크용)
-
-// ── 프로젝트 스코프(ADR-004 신규) ──
+// ── 프로젝트 스코프 상태 ──
 let _projectContainer    = null;   // #metaToolStatsBody (lazy 조회)
-let _projectStats        = [];
-let _currentProjectName  = null;
+let _projectStats        = [];     // 마지막 fetch 결과 (정렬 변경 시 재렌더에 재사용)
+let _currentProjectName  = null;   // 마지막으로 fetch한 프로젝트명 (retry 버튼용)
 
-// ── 공통 정렬 상태 ──
-let _sortKey   = 'tokens';         // 'avg' | 'calls' | 'tokens' (기본: 토큰 기여도)
+// ── 정렬 상태 ──
+//   'tool'   : tool_name 문자열   (asc 기본)
+//   'avg'    : avg_duration_ms     (desc 기본)
+//   'calls'  : call_count          (desc 기본)
+//   'tokens' : total_tokens        (desc 기본)  — "토큰" 컬럼
+//   'pct'    : pct_of_total_tokens (desc 기본)  — "기여도" 컬럼 (시각만 다른 같은 데이터)
+//   'errors' : error_count         (desc 기본)
+const SORTABLE_KEYS = new Set(['tool', 'avg', 'calls', 'tokens', 'pct', 'errors']);
+const DEFAULT_DIR = {
+  tool:   'asc',
+  avg:    'desc',
+  calls:  'desc',
+  tokens: 'desc',
+  pct:    'desc',
+  errors: 'desc',
+};
 
-export function initToolStats() {
-  _container = document.getElementById('detailToolsView');
-}
-
-/**
- * 세션 범위 도구 통계 로드. 세션 detail의 [도구] 탭 진입 시 호출.
- *
- * @param {string} sessionId
- * @param {string|null} [projectName=null] outbound 링크에 사용. 현재 세션의 project_name.
- *   누락 시 outbound 링크 비노출(방어).
- */
-export async function loadToolStats(sessionId, projectName = null) {
-  if (!_container) return;
-  _currentSessionId = sessionId;
-  _currentSessionProjectName = projectName || null;
-  // skeleton-loading T-12: 매트릭스 헤더 + 6 row 흉내. renderMatrix 호출 시 innerHTML 교체.
-  _container.innerHTML = skToolMatrix(6);
-  try {
-    const res  = await fetch(`${API}/api/sessions/${encodeURIComponent(sessionId)}/tool-stats`);
-    const json = await res.json();
-    _stats = json.data || [];
-    renderMatrix(_container, _stats, 'session');
-  } catch {
-    _container.innerHTML = `
-      <div class="state-error">
-        <div class="state-error-message">데이터를 불러올 수 없습니다</div>
-        <button class="state-error-retry" data-retry-tools>다시 시도</button>
-      </div>`;
-    _container.querySelector('[data-retry-tools]')?.addEventListener('click', () => loadToolStats(_currentSessionId, _currentSessionProjectName));
-  }
-}
+let _sortKey = 'tokens';
+let _sortDir = 'desc';
 
 /**
- * ADR-004 meta-docs-tool-stats: 프로젝트 범위 도구 통계 로드.
- *
+ * 프로젝트 범위 도구 통계 로드.
  *  메타 모드의 [도구 통계] 서브 탭 진입 또는 좌측 프로젝트 변경 시 호출.
  *  `#metaToolStatsBody`에 skeleton → 매트릭스 → empty/error 상태 렌더.
- *  세션 detail의 loadToolStats와 동일 renderMatrix를 공유하여 시각 일관성을 보장한다.
- *
  *  프로젝트명이 null이면 "프로젝트를 선택하세요" 빈 상태를 표시한다.
  *
  * @param {string|null} projectName
@@ -90,7 +79,7 @@ export async function loadProjectToolStats(projectName) {
     const res  = await fetch(`${API}/api/projects/${encodeURIComponent(_currentProjectName)}/tool-stats`);
     const json = await res.json();
     _projectStats = json.data || [];
-    renderMatrix(_projectContainer, _projectStats, 'project');
+    renderMatrix(_projectContainer, _projectStats);
   } catch {
     _projectContainer.innerHTML = `
       <div class="state-error">
@@ -101,18 +90,14 @@ export async function loadProjectToolStats(projectName) {
   }
 }
 
-export function clearToolStats() {
-  if (_container) _container.innerHTML = '';
-  _stats = [];
-}
-
-/** ADR-004: 프로젝트 도구 통계 컨테이너 초기화 — 메타 모드 이탈 시 호출 가능. 현재 미사용. */
+/** 프로젝트 도구 통계 컨테이너 초기화 — 메타 모드 이탈 시 호출 가능. 현재 미사용. */
 export function clearProjectToolStats() {
   if (_projectContainer) _projectContainer.innerHTML = '';
   _projectStats = [];
   _currentProjectName = null;
 }
 
+/** 응답시간 포맷터 — 단일 책임. 0/누락은 '—' 처리해 max 산정 왜곡을 호출 측에서 막는다. */
 function fmtDur(ms) {
   if (!ms || ms === 0) return '—';
   if (ms < 1000)   return `${Math.round(ms)}ms`;
@@ -121,41 +106,90 @@ function fmtDur(ms) {
 }
 
 /**
- * 정렬 토글. scope에 따라 활성 데이터 셋을 재렌더한다.
- * 두 스코프가 _sortKey를 공유 — 한 곳에서 정렬을 바꾸면 다음 진입 시 같은 기준 유지.
+ * 정렬 토글 — 같은 키 재클릭이면 방향 토글, 다른 키 클릭이면 컬럼 기본 방향 진입.
+ * Behavior Definitions 테이블의 applyFilterChange 'sort' 분기와 동일 규칙.
  */
-function setSort(key, scope) {
-  _sortKey = key;
-  if (scope === 'project' && _projectContainer) {
-    renderMatrix(_projectContainer, _projectStats, 'project');
-  } else if (_container) {
-    renderMatrix(_container, _stats, 'session');
+function applySortChange(key) {
+  if (!SORTABLE_KEYS.has(key)) return;
+  if (_sortKey === key) {
+    _sortDir = _sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    _sortKey = key;
+    _sortDir = DEFAULT_DIR[key] ?? 'desc';
   }
+  if (_projectContainer) renderMatrix(_projectContainer, _projectStats);
+}
+
+// 한국어 collator — tool name은 영문이 주류이나 안전하게 통일.
+const koCollator = (typeof Intl !== 'undefined' && Intl.Collator)
+  ? new Intl.Collator('ko', { sensitivity: 'base', numeric: true })
+  : null;
+function cmpString(a, b) {
+  const sa = a == null ? '' : String(a);
+  const sb = b == null ? '' : String(b);
+  return koCollator ? koCollator.compare(sa, sb) : sa.localeCompare(sb);
+}
+function cmpNumber(a, b) {
+  return (a ?? 0) - (b ?? 0);
+}
+
+const COMPARATORS = {
+  tool:   (a, b) => cmpString(a.tool_name, b.tool_name),
+  avg:    (a, b) => cmpNumber(a.avg_duration_ms, b.avg_duration_ms),
+  calls:  (a, b) => cmpNumber(a.call_count, b.call_count),
+  tokens: (a, b) => cmpNumber(a.total_tokens, b.total_tokens),
+  pct:    (a, b) => cmpNumber(a.pct_of_total_tokens, b.pct_of_total_tokens),
+  errors: (a, b) => cmpNumber(a.error_count, b.error_count),
+};
+
+function applySort(rows, key, dir = 'desc') {
+  const cmp = COMPARATORS[key] ?? COMPARATORS.tokens;
+  const factor = dir === 'asc' ? 1 : -1;
+  return rows.slice().sort((a, b) => factor * cmp(a, b));
+}
+
+/** 헤더 active 클래스 */
+function sortHeaderCls(key) {
+  if (_sortKey !== key) return '';
+  return _sortDir === 'asc' ? 'sort-asc' : 'sort-desc';
+}
+/** 헤더 ↓/↑ 표기자 */
+function sortIndicator(key) {
+  if (_sortKey !== key) return '<span class="sort-arrow sort-arrow-idle">↕</span>';
+  return _sortDir === 'asc'
+    ? '<span class="sort-arrow">↑</span>'
+    : '<span class="sort-arrow">↓</span>';
+}
+/** 헤더 aria-sort 속성 값 — WAI-ARIA 표준 */
+function ariaSortValue(key) {
+  if (_sortKey !== key) return 'none';
+  return _sortDir === 'asc' ? 'ascending' : 'descending';
+}
+
+/** 헤더 셀 한 개 빌더 — 클래스/속성 공통화. */
+function headerCellHtml(key, label, extraCls = '') {
+  const cls = `ts-mx-cell ${extraCls} sortable ${sortHeaderCls(key)}`.trim();
+  return `<div data-ts-sort="${key}"
+               class="${cls}"
+               tabindex="0"
+               role="columnheader"
+               aria-sort="${ariaSortValue(key)}">${escHtml(label)}${sortIndicator(key)}</div>`;
 }
 
 /**
- * 도구별 성능 매트릭스 SSoT 렌더러.
+ * 도구별 성능 매트릭스 렌더러 (프로젝트 단위 SSoT).
  *
- * @param {HTMLElement} container — 마운트 대상 (#detailToolsView 또는 #metaToolStatsBody)
- * @param {Array} stats — `SessionToolStats[]` (세션) 또는 `getProjectToolStats` 결과(프로젝트)
- * @param {'session'|'project'} scope — outbound 링크 노출 여부 + 정렬 버튼 dispatch scope
- *
- *  scope='session' + _currentSessionProjectName 가 있으면 우상단 outbound 링크 노출.
- *  scope='project'면 outbound 링크 비노출(이미 프로젝트 view 안).
+ * @param {HTMLElement} container — 마운트 대상 (#metaToolStatsBody)
+ * @param {Array} stats — `getProjectToolStats` 결과
  */
-function renderMatrix(container, stats, scope) {
+function renderMatrix(container, stats) {
   if (!container) return;
   if (!stats || !stats.length) {
     container.innerHTML = '<div class="state-empty"><span class="state-empty-title">데이터가 없습니다</span></div>';
     return;
   }
 
-  const sortFns = {
-    avg:    (a, b) => (b.avg_duration_ms || 0) - (a.avg_duration_ms || 0),
-    calls:  (a, b) => (b.call_count || 0) - (a.call_count || 0),
-    tokens: (a, b) => (b.pct_of_total_tokens || 0) - (a.pct_of_total_tokens || 0),
-  };
-  const sorted = [...stats].sort(sortFns[_sortKey] || sortFns.tokens);
+  const sorted = applySort(stats, _sortKey, _sortDir);
 
   const maxCalls = Math.max(...stats.map(s => s.call_count || 0), 1);
   // data-honesty-ui (ADR-003): duration 0 행은 max 산정에서 제외 (왜곡 방지)
@@ -213,40 +247,41 @@ function renderMatrix(container, stats, scope) {
     </div>`;
   }).join('');
 
-  // ADR-004: 세션 스코프이고 현재 세션의 project_name이 있으면 우상단 outbound 링크 노출.
-  // 프로젝트 스코프면 자기 자신이라 비노출.
-  const outboundHtml = (scope === 'session' && _currentSessionProjectName)
-    ? `<a class="ts-mx-outbound"
-         data-outbound-project="${escHtml(_currentSessionProjectName)}"
-         role="button" tabindex="0"
-         title="이 프로젝트의 모든 세션을 합산한 도구 통계로 이동">↗ 프로젝트 전체로 보기</a>`
-    : '';
-
+  // sort-toolbar-cleanup: 상단 "도구별 통계" 라벨 + 정렬 버튼 그룹 제거.
+  // 정렬은 헤더 셀 클릭(또는 Enter/Space)으로 토글된다.
   container.innerHTML = `
     <div class="ts-mx">
-      <div class="ts-mx-toolbar">
-        <span class="ts-mx-title">도구별 통계</span>
-        <div class="ts-mx-sort">
-          <span class="ts-mx-sort-label">정렬</span>
-          <button class="ts-mx-sort-btn ${_sortKey === 'avg'    ? 'active' : ''}" data-sort="avg">응답시간</button>
-          <button class="ts-mx-sort-btn ${_sortKey === 'calls'  ? 'active' : ''}" data-sort="calls">호출 횟수</button>
-          <button class="ts-mx-sort-btn ${_sortKey === 'tokens' ? 'active' : ''}" data-sort="tokens">토큰 기여도</button>
-        </div>
-        ${outboundHtml}
-      </div>
       <div class="ts-mx-head">
-        <div class="ts-mx-cell ts-mx-tool">Tool</div>
-        <div class="ts-mx-cell ts-mx-num">평균 응답</div>
-        <div class="ts-mx-cell ts-mx-num">호출</div>
-        <div class="ts-mx-cell ts-mx-num">토큰</div>
-        <div class="ts-mx-cell ts-mx-num">기여도</div>
-        <div class="ts-mx-cell ts-mx-err">오류</div>
+        ${headerCellHtml('tool',   'Tool',     'ts-mx-tool')}
+        ${headerCellHtml('avg',    '평균 응답', 'ts-mx-num')}
+        ${headerCellHtml('calls',  '호출',     'ts-mx-num')}
+        ${headerCellHtml('tokens', '토큰',     'ts-mx-num')}
+        ${headerCellHtml('pct',    '기여도',   'ts-mx-num')}
+        ${headerCellHtml('errors', '오류',     'ts-mx-err')}
       </div>
       <div class="ts-mx-body">${rows}</div>
     </div>`;
 
-  // 정렬 버튼 이벤트 — scope를 클로저로 캡처하여 올바른 데이터 셋을 재렌더.
-  container.querySelectorAll('[data-sort]').forEach(btn => {
-    btn.addEventListener('click', () => setSort(btn.dataset.sort, scope));
+  bindHeaderEvents(container);
+}
+
+/**
+ * 헤더 셀 click / keydown(Enter, Space) → 정렬 토글.
+ * 컨테이너는 매 renderMatrix마다 innerHTML로 새로 그려지므로 datasetFlag로 중복 부착 방지.
+ */
+function bindHeaderEvents(container) {
+  if (container.dataset.tsBound === '1') return;
+  container.dataset.tsBound = '1';
+  container.addEventListener('click', (e) => {
+    const head = e.target.closest('[data-ts-sort]');
+    if (!head) return;
+    applySortChange(head.dataset.tsSort);
+  });
+  container.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+    const head = e.target.closest('[data-ts-sort]');
+    if (!head) return;
+    e.preventDefault();
+    applySortChange(head.dataset.tsSort);
   });
 }

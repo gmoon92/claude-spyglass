@@ -3,7 +3,7 @@
  *
  * 책임:
  *  - 사용자가 `/foo` 입력 시 Claude Code가 prompt에 `<command-name>foo</command-name>` 태그를 박아 보냄.
- *    이 태그에서 커맨드 이름을 뽑아 메타 문서 카탈로그(type='command') 매칭 키로 사용한다.
+ *    이 태그에서 커맨드 이름을 뽑아 Behavior Definitions 카탈로그(type='command') 매칭 키로 사용한다.
  *  - 마이그레이션 024가 추가한 `requests.slash_command` 컬럼에 저장된다.
  *
  * 외부 노출:

@@ -1,5 +1,5 @@
 /**
- * meta-docs 모듈 — cwd → 메타 문서 source chain 해석
+ * meta-docs 모듈 — cwd → Behavior Definitions source chain 해석
  *
  * 책임:
  *  - claude-code의 markdownConfigLoader.ts:getProjectDirsUpToHome 동작을 spyglass에 맞춰 단순 재현.

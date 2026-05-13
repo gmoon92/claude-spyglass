@@ -1,5 +1,5 @@
 /**
- * /api/meta-docs/* 라우트 — 메타 문서 카탈로그 + 히팅률 (v24)
+ * /api/meta-docs/* 라우트 — Behavior Definitions 카탈로그 + 히팅률 (v24)
  *
  * 책임:
  *  - 클라이언트(웹 UI)가 카탈로그+사용 집계를 한 표로 받아볼 수 있게 LEFT JOIN 결과를 노출.
@@ -114,7 +114,7 @@ async function refreshHandler(req: Request, db: Database): Promise<Response> {
     }
   }
 
-  // 모집단 확장: 알려진 모든 cwd를 일괄 동기화 (orphan 메타 문서 카탈로그 등록).
+  // 모집단 확장: 알려진 모든 cwd를 일괄 동기화 (orphan Behavior Definitions 카탈로그 등록).
   if (includeKnownCwds && (scope === 'project' || scope === 'all')) {
     const all = syncAllKnownCwds(db, { force });
     result.cwds = all.cwds;

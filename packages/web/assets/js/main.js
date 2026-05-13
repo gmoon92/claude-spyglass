@@ -3,6 +3,7 @@ import { initTypeColors, recordRequest, drawTimeline, advanceBuckets, initBucket
 import { clearError, updateScrollLockBanner, jumpToLatest, resetScrollLockCount } from './infra.js';
 import {
   getAllSessions, getAllProjects, renderBrowserProjects, renderBrowserSessions, showSkeletonSessions,
+  GLOBAL_PROJECT_KEY,
 } from './left-panel.js';
 import {
   getRightView, setRightView, setDetailTab, getDetailTab,
@@ -12,18 +13,18 @@ import {
   getPrevState, setPrevState, clearPrevState,
 } from './state.js';
 import { initAppRail, setRailActive } from './app-rail.js';
-import { enterMetaDocsMode, openMetaDocViaDeepLink, setMetaSubTab, refreshMetaActiveSubTab } from './meta-docs-view.js';
+import { enterMetaDocsMode, openMetaDocViaDeepLink, setMetaSubTab, refreshMetaActiveSubTab, initMetaDocsLeftNav, setMetaScopeMode } from './meta-docs-view.js';
 import {
   setDetailFilter, applyDetailFilter, setDetailView, toggleTurn,
   refreshDetailSession, initDetailSearch,
-  toggleCardExpand,
+  toggleCardExpand, openLlmInputForTurn,
 } from './session-detail.js';
 import {
   fetchDashboard, fetchRequests, fetchAllSessions, fetchSessionsByProject,
   fetchCacheStats, setActiveRange, setIsSSEConnected,
 } from './api.js';
 import { fmtToken } from './formatters.js';
-import { togglePromptExpand } from './renderers.js';
+import { togglePromptExpand, resolveExpandTarget } from './renderers.js';
 import { renderLlmInput } from './llm-input-view.js';
 import { initColResize } from './col-resize.js';
 import { initPanelResize } from './panel-resize.js';
@@ -31,7 +32,9 @@ import { initPanelVerticalResize, initPanelBottomResize } from './left-panel-ver
 import { initContextChart } from './context-chart.js';
 import { createFilterBar } from './components/filter-bar.js';
 import { initToolColors } from './tool-colors.js';
-import { initToolStats } from './tool-stats.js';
+// ADR-004 후속: 세션 [도구] 탭이 제거되어 tool-stats 세션 init 진입점 없음 (메타 모드 [도구 통계]는 lazy 로드).
+// v21 (system-reminder-badge): 칩 ↔ 팝오버 인터랙션 단일 부트스트랩.
+import { initSystemReminderPopover } from './session-detail/system-reminder-popover.js';
 import { initCacheTooltip } from './cache-tooltip.js';
 import { initStatTooltip } from './stat-tooltip.js';
 import { initCachePanelTooltip } from './cache-panel-tooltip.js';
@@ -60,13 +63,41 @@ const STORAGE_KEY = 'spyglass:lastProject';
  */
 function applyAppMode(mode) {
   if (mode !== 'browse' && mode !== 'metadocs') return;
+
+  // browse 복귀 — meta-docs feedback ADR (2026-05-14):
+  //   가상 'user (global)' 선택은 metadocs 전용이므로 mode 전환 BEFORE에 즉시 실제 프로젝트로 복원.
+  //   순서가 중요: selectedProject를 먼저 실제 프로젝트로 바꾼 다음 setAppMode/body.dataset를 갱신해야
+  //   renderBrowserProjects가 다시 호출되더라도 GLOBAL 잔존 행이 절대 그려지지 않는다.
+  //   세션 hint('__global__ · 0개') 정정도 selectProject 흐름이 한꺼번에 처리.
+  let pendingSelect = null;
+  if (mode === 'browse' && getSelectedProject() === GLOBAL_PROJECT_KEY) {
+    const projects = getAllProjects();
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved && saved !== GLOBAL_PROJECT_KEY && projects.some(p => p.project_name === saved)) {
+      pendingSelect = saved;
+    } else if (projects.length > 0) {
+      pendingSelect = projects[0].project_name;
+    } else {
+      // 데이터 없음 — GLOBAL 표식만 즉시 제거(이후 fetchDashboard가 채우면 자동 selectProject)
+      setSelectedProject(null);
+    }
+  }
+
   setAppMode(mode);
   document.body.dataset.appMode = mode;
   setRailActive(mode);
-  // 메타 모드 진입 시 카탈로그 lazy 로드 — 가시성은 body[data-app-mode] CSS 룰이 처리.
-  // browse 복귀 시는 별도 cleanup 불필요(컨테이너만 hidden, 데이터/상태 유지).
+
   if (mode === 'metadocs') {
     enterMetaDocsMode();
+    return;
+  }
+
+  // 항상 즉시 좌측 패널을 재렌더 — 메타 모드의 tbody 잔존(가상 행 / 항목수 컬럼)을 무조건 비움.
+  //   selectProject는 fetchSessionsByProject 등 부수 흐름이 있어 GLOBAL 복원 케이스에서만 사용.
+  if (pendingSelect) {
+    selectProject(pendingSelect);
+  } else {
+    renderBrowserProjects();
   }
 }
 
@@ -108,7 +139,7 @@ function restorePrevState() {
   clearPrevState();
 }
 
-// ── 메타 문서 Top N 헬퍼 ─────────────────────────────────────────────────────
+// ── Behavior Definitions Top N 헬퍼 ─────────────────────────────────────────────────────
 
 /**
  * 프로젝트 이름으로 /api/meta-docs 전체 목록에서 source_root를 매핑.
@@ -129,7 +160,7 @@ function resolveMetaDocsSourceRoot(rows, projectName) {
 }
 
 /**
- * 프로젝트 선택 시 메타 문서 호출 수 Top 5 fetch → renderToolCategoriesCard에 전달.
+ * 프로젝트 선택 시 Behavior Definitions 호출 수 Top 5 fetch → renderToolCategoriesCard에 전달.
  * 실패 시 카드 상태 변경 없음 (silent fallback).
  */
 async function renderMetaDocsTopForProject(projectName) {
@@ -174,17 +205,29 @@ function autoActivateProject() {
 }
 
 function selectProject(name) {
+  const isMetaDocsActive = getAppMode() === 'metadocs';
+
+  // meta-docs feedback ADR (2026-05-14): 메타 모드 좌측 패널의 가상 'user (global)' 행 처리.
+  //   - data-project="__global__" 클릭 → state.scopeMode='all' 로 전환 후 카탈로그 재로드.
+  //   - localStorage에는 가상 키를 저장하지 않는다(브라우저 모드로 돌아갔을 때 무효 키 회피).
+  //   - browse 모드에서는 이 분기가 절대 발생하지 않음(가상 행이 렌더되지 않으므로).
+  if (isMetaDocsActive && name === GLOBAL_PROJECT_KEY) {
+    setSelectedProject(GLOBAL_PROJECT_KEY);
+    setMetaScopeMode('all');         // 카탈로그 fetch + 좌측 카운트 동기 갱신은 setMetaScopeMode가 책임
+    renderBrowserProjects();          // 선택 표시(row-selected) 즉시 갱신
+    return;
+  }
+
   // 프로젝트 전환(또는 해제) 시 Tool Categories 카드 모드를 초기화.
   // renderMetaDocsTopForProject가 성공하면 'meta-docs'로 재진입하고,
-  // 새 프로젝트에 메타 문서 호출이 없으면 다음 fetchObservability 배열 payload가 정상 렌더링된다.
+  // 새 프로젝트에 Behavior Definitions 호출이 없으면 다음 fetchObservability 배열 payload가 정상 렌더링된다.
   resetToolCategoriesMode();
 
   localStorage.setItem(STORAGE_KEY, name);
   setSelectedProject(name);
 
-  // ADR-003 left-rail-meta-docs: 메타 문서 모드(appMode === 'metadocs')에서 좌측 프로젝트만 바꾼 경우는
+  // ADR-003 left-rail-meta-docs: Behavior Definitions 모드(appMode === 'metadocs')에서 좌측 프로젝트만 바꾼 경우는
   // 메타 카탈로그만 새 프로젝트 기준으로 다시 그린다. browse 모드면 기존처럼 detail을 닫고 default로 복귀.
-  const isMetaDocsActive = getAppMode() === 'metadocs';
 
   if (!isMetaDocsActive) {
     setSelectedSession(null);
@@ -200,6 +243,9 @@ function selectProject(name) {
   fetchSessionsByProject(name);
 
   if (isMetaDocsActive) {
+    // meta-docs feedback ADR: 실제 프로젝트 선택 시 scopeMode='selected' 보장.
+    //   user(global) → 프로젝트 전환 시에도 scope가 일관되게 'selected'로 정정된다.
+    setMetaScopeMode('selected');
     // ADR-004 meta-docs-tool-stats: 활성 서브 탭에 따라 분기 갱신.
     //   - 'docs' 활성 → loadMetaDocsLibrary (기존 동작)
     //   - 'tools' 활성 → loadProjectToolStats (새 프로젝트로 매트릭스 재 fetch)
@@ -207,7 +253,7 @@ function selectProject(name) {
   }
 
   // dashboard-ui-enhancements: 프로젝트 선택 시 하단 Tool Categories 카드를
-  // 해당 프로젝트 메타 문서 호출 Top 5로 교체 (비동기, 실패 시 silent)
+  // 해당 프로젝트 Behavior Definitions 호출 Top 5로 교체 (비동기, 실패 시 silent)
   renderMetaDocsTopForProject(name);
 }
 
@@ -338,7 +384,7 @@ function initEventDelegation() {
     if (sessRow)  { loadSession(sessRow.dataset.sessionId); }
   });
 
-  // ADR-003 left-rail-meta-docs: Agent/Skill 배지 단일 클릭 → 메타 문서 딥링크.
+  // ADR-003 left-rail-meta-docs: Agent/Skill 배지 단일 클릭 → Behavior Definitions 딥링크.
   // 글로벌 위임 — 턴 카드/세션 plain row 등 모든 chip에서 동작.
   document.body.addEventListener('click', e => {
     const chip = e.target.closest('[data-meta-doc-type][data-meta-doc-id]');
@@ -366,7 +412,7 @@ function initEventDelegation() {
     chip.click();
   });
 
-  // ADR-004 meta-docs-tool-stats: 메타 모드 서브 탭 [메타 문서] / [도구 통계] 클릭.
+  // ADR-004 meta-docs-tool-stats: 메타 모드 서브 탭 [Behavior Definitions] / [도구 통계] 클릭.
   // [data-meta-subtab] 단일 SSoT — meta-docs-view.js의 setMetaSubTab이 가시성/aria/데이터 로드 일원화.
   document.body.addEventListener('click', e => {
     const tab = e.target.closest('[data-meta-subtab]');
@@ -376,35 +422,8 @@ function initEventDelegation() {
     setMetaSubTab(which);
   });
 
-  // ADR-004 meta-docs-tool-stats: 세션 도구 탭 우상단 "↗ 프로젝트 전체로 보기" outbound 링크.
-  //   1. 현재 browse 모드면 스냅샷 후 metadocs 진입 (F1 ESC 복귀 패턴 재사용)
-  //   2. 메타 모드 + 도구 통계 탭으로 전환
-  //   3. 좌측 프로젝트 셀렉터 자동 선택 — selectProject(name)이 이미 메타/탐색 양쪽 처리
-  document.body.addEventListener('click', e => {
-    const link = e.target.closest('[data-outbound-project]');
-    if (!link) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const name = link.dataset.outboundProject;
-    if (!name) return;
-    if (getAppMode() === 'browse') {
-      snapshotBrowseState();
-      applyAppMode('metadocs');
-    }
-    setMetaSubTab('tools');
-    // selectProject는 이미 selectedProject 변경 + refreshMetaActiveSubTab 흐름을 트리거함.
-    // setMetaSubTab이 먼저 'tools'로 셋팅한 뒤 selectProject가 매트릭스 fetch.
-    selectProject(name);
-  });
-
-  // outbound 링크 키보드 활성화 (Enter/Space)
-  document.body.addEventListener('keydown', e => {
-    if (e.key !== 'Enter' && e.key !== ' ') return;
-    const link = e.target.closest('[data-outbound-project][role="button"]');
-    if (!link) return;
-    e.preventDefault();
-    link.click();
-  });
+  // ADR-004 후속: 세션 [도구] 탭이 제거되면서 outbound 링크("↗ 프로젝트 전체로 보기")도 함께 제거됨.
+  //   세션→프로젝트 도구 통계 전환 경로는 좌측 rail + 셀렉터 조합으로 일원화.
 
   // ADR-003: ESC → metadocs 모드일 때 browse 복귀 (input/textarea focus 시는 무시)
   // stopImmediatePropagation으로 keyboard.js의 기본 ESC 핸들러(detail 닫기)와 충돌 방지 —
@@ -462,6 +481,15 @@ function initEventDelegation() {
     ?.setAttribute('title', 'System 라이브러리 탭으로 이동');
 
   document.getElementById('detailView').addEventListener('click', e => {
+    // 턴 카드의 "API 페이로드" 액션 (deeplink pass) — toggle-card 가드보다 먼저 매칭해
+    // 카드 펼침이 함께 발생하지 않도록 분기 + stopPropagation 불필요(return).
+    const payloadBtn = e.target.closest('[data-payload-ts]');
+    if (payloadBtn) {
+      const ts = parseInt(payloadBtn.dataset.payloadTs, 10);
+      if (Number.isFinite(ts)) openLlmInputForTurn(ts);
+      return;
+    }
+
     const turnBtn  = e.target.closest('[data-toggle-turn]');
     if (turnBtn) { toggleTurn(turnBtn.dataset.toggleTurn); return; }
 
@@ -471,7 +499,7 @@ function initEventDelegation() {
         groupRow.classList.toggle('open');
         return;
       }
-      const promptEl = e.target.closest('[data-expand-id]');
+      const promptEl = resolveExpandTarget(e.target);
       if (promptEl) {
         const container = promptEl.closest('tr') || promptEl.closest('.turn-row');
         if (container) togglePromptExpand(promptEl.dataset.expandId, container);
@@ -482,7 +510,7 @@ function initEventDelegation() {
     const cardBtn = e.target.closest('[data-toggle-card]');
     if (cardBtn) { toggleCardExpand(cardBtn.dataset.toggleCard); return; }
 
-    const promptEl = e.target.closest('[data-expand-id]');
+    const promptEl = resolveExpandTarget(e.target);
     if (promptEl) {
       const container = promptEl.closest('tr') || promptEl.closest('.turn-row');
       if (container) togglePromptExpand(promptEl.dataset.expandId, container);
@@ -589,8 +617,9 @@ function init() {
   initObsTooltip();
   initContextChart();
   initToolColors();
-  initToolStats();
+  initSystemReminderPopover();
   initDetailSearch();
+  initMetaDocsLeftNav();
   setInterval(() => { advanceBuckets(); drawTimeline(); }, 60000);
   setInterval(() => fetchAllSessions(), 30000);
 }

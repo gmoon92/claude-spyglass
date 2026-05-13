@@ -13,6 +13,7 @@
 
 import {
   getProxyRequestById,
+  getProxyRequestsBySession,
   getProxyStats,
   getRecentProxyRequests,
 } from '@spyglass/storage';
@@ -20,9 +21,13 @@ import { jsonResponse, type RouteHandler } from './_shared';
 
 export const proxyRouter: RouteHandler = (_req, db, url, path, method) => {
   // GET /api/proxy-requests — HTTP 레벨 메트릭 (프록시 수집)
+  // ?session_id=... 지정 시 해당 세션의 proxy 요청만 시간 오름차순 반환 (LLM Input 선택기용).
   if (path === '/api/proxy-requests' && method === 'GET') {
     const limit = parseInt(url.searchParams.get('limit') || '50', 10);
-    const requests = getRecentProxyRequests(db, limit);
+    const sessionId = url.searchParams.get('session_id');
+    const requests = sessionId
+      ? getProxyRequestsBySession(db, sessionId, limit)
+      : getRecentProxyRequests(db, limit);
     return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit } });
   }
 

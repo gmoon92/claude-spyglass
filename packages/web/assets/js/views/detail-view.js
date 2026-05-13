@@ -46,10 +46,8 @@ export async function loadSession(id) {
   if (turnBody) turnBody.innerHTML = skTurnCardList(5);
   const llmViewEl    = document.getElementById('detailLlmInputView');
   const sysLibViewEl = document.getElementById('detailSysLibView');
-  const toolsViewEl  = document.getElementById('detailToolsView');
   if (llmViewEl)    llmViewEl.style.display    = 'none';
   if (sysLibViewEl) sysLibViewEl.style.display = 'none';
-  if (toolsViewEl)  toolsViewEl.style.display  = 'none';
 
   const session = getAllSessions().find(s => s.id === id);
   const detailIdEl = document.getElementById('detailSessionId');

@@ -43,7 +43,7 @@
   <div class="main-layout">
 
     <!-- ADR-003 left-rail-meta-docs: 56px 앱 모드 rail.
-         🚥 탐색(기본) / 📚 메타 문서 — 모드 전환 시 메인 영역 전체가 교체됨.
+         🚥 탐색(기본) / 📚 Behavior Definitions — 모드 전환 시 메인 영역 전체가 교체됨.
          초기 aria-current는 state.appMode(sessionStorage 복원)에 따라 app-rail.js가 동기화. -->
     <aside class="app-rail" aria-label="앱 모드">
       <button type="button" class="app-rail-btn" data-app-mode="browse"
@@ -56,7 +56,7 @@
         </svg>
       </button>
       <button type="button" class="app-rail-btn" data-app-mode="metadocs"
-              aria-label="메타 문서 카탈로그" title="메타 문서">
+              aria-label="Behavior Definitions 카탈로그" title="Behavior Definitions">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <!-- Lucide-style book: 펼친 책 — 정의/카탈로그 어휘 -->
           <path d="M3 4.5C3 3.7 3.7 3 4.5 3H11V20H4.5C3.7 20 3 19.3 3 18.5V4.5Z" stroke-linejoin="round"/>
@@ -83,11 +83,25 @@
               <col style="width:52px">
               <col style="width:92px">
             </colgroup>
+            <!-- meta-docs feedback ADR (2026-05-14): 좌측 프로젝트 thead 는 모드별로 두 벌.
+                 browse 모드 = [프로젝트 | 세션 | 토큰], metadocs 모드 = [프로젝트 | 항목 | 동기화].
+                 body[data-app-mode] CSS 셀렉터로 단일 행만 노출. tbody 구조(3컬럼)는 공유. -->
             <thead>
-              <tr>
+              <tr class="thead-browse">
                 <th>프로젝트</th>
                 <th style="text-align:right">세션</th>
                 <th style="text-align:right">토큰</th>
+              </tr>
+              <tr class="thead-metadocs">
+                <th>프로젝트</th>
+                <th style="text-align:right">항목</th>
+                <th class="thead-sync-cell">
+                  <button type="button" class="thead-sync-btn" data-meta-left-refresh="1"
+                          title="현재 cwd + 글로벌 + 알려진 모든 cwd 재스캔">
+                    <span class="thead-sync-icon" aria-hidden="true"></span>
+                    <span class="thead-sync-label">동기화</span>
+                  </button>
+                </th>
               </tr>
             </thead>
             <tbody id="browserProjectsBody">
@@ -136,6 +150,10 @@
           </table>
         </div>
       </div>
+
+      <!-- meta-docs feedback ADR (2026-05-14): #metaDocsScopeNav 제거.
+           - 동기화 버튼은 thead [동기화] 셀로 이관.
+           - [프로젝트][전체] 토글은 프로젝트 리스트 최상단의 가상 'user (global)' 행으로 통합. -->
 
       <!-- ADR-003 left-rail-meta-docs + brand-strip-cleanup ADR-002:
            메타 모드 좌측 요약 카드 컨테이너. body[data-app-mode="metadocs"]일 때만 노출.
@@ -474,10 +492,10 @@
             <div class="view-tab-group">
               <button class="view-tab active" id="tabTurn" data-tab="turn">턴 뷰</button>
               <button class="view-tab" id="tabRequests" data-tab="requests">요청</button>
-              <!-- ADR-003 left-rail-meta-docs: 메타 문서는 detail 탭에서 좌측 rail 1급 모드로 승격됨.
+              <!-- ADR-003 left-rail-meta-docs: Behavior Definitions는 detail 탭에서 좌측 rail 1급 모드로 승격됨.
                    기존 #detailMetaDocsView 컨테이너는 T-03에서 #metaDocsRoot로 호이스팅 예정. -->
-              <button class="view-tab" id="tabTools" data-tab="tools">도구</button>
-              <button class="view-tab" id="tabLlm" data-tab="llm">LLM Input</button>
+              <!-- ADR-004 후속: 세션 [도구] 탭은 메타 모드 [도구 통계] 서브 탭과 중복이라 제거. -->
+              <button class="view-tab" id="tabLlm" data-tab="llm" title="proxy가 Anthropic API에 전송한 원본 페이로드">API 페이로드</button>
               <button class="view-tab" id="tabSysLib" data-tab="syslib">System 라이브러리</button>
             </div>
             <div class="view-tab-bar-controls feed-controls">
@@ -620,7 +638,7 @@
 
           <!-- v22 LLM Input 탭 (system-prompt-exposure ADR-004 옵션 A) — system blocks + user messages 합본 -->
           <div id="detailLlmInputView" class="detail-content" style="display:none">
-            <div id="llmInputBody" class="llm-input-body" role="region" aria-label="LLM Input">
+            <div id="llmInputBody" class="llm-input-body" role="region" aria-label="API 페이로드">
               <!-- skeleton-loading T-10 — showLatestLlmInput / renderLlmInput 시점에 skLlmInputCards 로 교체 -->
               <section class="llm-input-system sk-card" data-skeleton="1">
                 <header class="llm-input-msg-header"><span class="sk sk-line" style="width:120px;height:10px"></span></header>
@@ -660,10 +678,9 @@
             </div>
           </div>
 
-          <!-- ADR-003 left-rail-meta-docs: 메타 문서 컨테이너는 detail이 아닌 main-layout 레벨로 호이스팅됨.
+          <!-- ADR-003 left-rail-meta-docs: Behavior Definitions 컨테이너는 detail이 아닌 main-layout 레벨로 호이스팅됨.
                이 위치에는 더 이상 detailMetaDocsView가 없음. -->
-
-          <div id="detailToolsView" class="detail-content" style="display:none"></div>
+          <!-- ADR-004 후속: #detailToolsView 도구 매트릭스는 메타 모드 [도구 통계] 서브 탭으로 일원화. -->
 
         </div>
 
@@ -671,24 +688,24 @@
 
     </main>
 
-    <!-- ADR-003 left-rail-meta-docs: 메타 문서 카탈로그 컨테이너 (rail 모드 'metadocs' 진입 시 노출).
+    <!-- ADR-003 left-rail-meta-docs: Behavior Definitions 카탈로그 컨테이너 (rail 모드 'metadocs' 진입 시 노출).
          main-layout grid의 마지막 자식이지만 데이터 attribute로 가시성 제어 — appMode='browse' 시 hidden.
          body[data-app-mode] 룰로 .right-panel과 #metaDocsRoot의 가시성 토글. -->
-    <section id="metaDocsRoot" class="meta-docs-root" aria-label="메타 문서 카탈로그">
+    <section id="metaDocsRoot" class="meta-docs-root" aria-label="Behavior Definitions 카탈로그">
       <!-- 좌측 축약 패널: 프로젝트 셀렉터(기존 좌측 #browserProjectsBody 재사용) + 요약 카드 3개.
            body[data-app-mode="metadocs"] 일 때 좌측 obs-panel은 hide되고 summary cards가 .left-panel 안에서 노출됨.
            summary cards 마크업 자체는 meta-docs-view.js가 동적으로 .meta-docs-summary-cards 컨테이너에 inject. -->
 
-      <!-- ADR-004 meta-docs-tool-stats: 서브 탭 — [메타 문서] / [도구 통계].
+      <!-- ADR-004 meta-docs-tool-stats: 서브 탭 — [Behavior Definitions] / [도구 통계].
            좌측 content-pane(프로젝트 선택기 + 요약 카드)는 양쪽 탭에서 공통 노출.
            탭 전환은 메인 영역(아래 두 컨테이너)만 토글한다.
            라우팅: meta-docs-view.js의 setMetaSubTab('docs' | 'tools') — sessionStorage 'spyglass.metaSubTab' 영속화. -->
-      <div class="meta-tabs" role="tablist" aria-label="메타 문서 서브 탭">
-        <button id="metaTabDocs"      class="meta-tab active" role="tab" aria-selected="true"  aria-controls="metaDocsBody"      data-meta-subtab="docs"  type="button">메타 문서</button>
-        <button id="metaTabToolStats" class="meta-tab"        role="tab" aria-selected="false" aria-controls="metaToolStatsBody" data-meta-subtab="tools" type="button">도구 통계</button>
+      <div class="meta-tabs" role="tablist" aria-label="Behavior Definitions 서브 탭">
+        <button id="metaTabDocs"      class="meta-tab active" role="tab" aria-selected="true"  aria-controls="metaDocsBody"      data-meta-subtab="docs"  type="button">Behavior Definitions</button>
+        <button id="metaTabToolStats" class="meta-tab"        role="tab" aria-selected="false" aria-controls="metaToolStatsBody" data-meta-subtab="tools" type="button">Tools</button>
       </div>
 
-      <div id="metaDocsBody" class="meta-docs-body" role="tabpanel" aria-labelledby="metaTabDocs" aria-label="메타 문서 본문">
+      <div id="metaDocsBody" class="meta-docs-body" role="tabpanel" aria-labelledby="metaTabDocs" aria-label="Behavior Definitions 본문">
         <!-- skeleton-loading T-09 — loadMetaDocsLibrary 호출 시 skMetaDocList 로 교체 -->
         <table class="meta-docs-table" data-skeleton="1"><tbody>
           <tr data-skeleton="1"><td><span class="sk sk-line" style="width:70%"></span></td><td><span class="sk sk-line" style="width:80%"></span></td><td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:28px"></span></td><td><span class="sk sk-line sk-line--inline" style="width:40px"></span></td></tr>

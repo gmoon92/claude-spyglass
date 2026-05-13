@@ -209,6 +209,19 @@
   color: var(--success);
   font-weight: 600;
 }
+/* session-column-clarity pass — active/total 양쪽 표시.
+ * active 부분은 row의 .proj-active 여부에 따라 색이 바뀌고(상속), separator/total은 dim 톤 고정. */
+.cell-proj-sess .proj-sess-sep,
+.cell-proj-sess .proj-sess-total {
+  color: var(--text-4);
+  font-weight: var(--weight-normal);
+  margin-left: 2px;
+}
+.cell-proj-sess .proj-sess-sep { margin-right: 2px; }
+.cell-proj-sess .proj-sess-active {
+  color: inherit;
+  font-weight: inherit;
+}
 .sess-row-preview {
   font-family: var(--font-ui);
   font-size: var(--text-meta);

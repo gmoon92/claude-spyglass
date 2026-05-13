@@ -33,7 +33,7 @@ import {
   setFlatFiltered, setFlatAnomalyMap, setTurnFiltered, setTurnAnomalyMap,
   getSystemHashCount,
 } from './state.js';
-import { renderTurnCards } from './turn-views.js';
+import { renderTurnCards, applyTurnCardSearch } from './turn-views.js';
 
 /**
  * 평면 요청 리스트(필터링된 결과)를 detailRequestsBody에 렌더한다.
@@ -188,16 +188,18 @@ document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
     renderCachePanel(sessionCache);
   }
 
-  // 검색어로 평면 행 토글
-  const query = getSearchQuery();
+  // 검색어로 평면 행 토글.
+  // 검색 SSoT는 행 `data-search-haystack` 속성 (rows.js의 buildSearchHaystack).
+  //   model / tool / Skill / Agent / MCP / role / payload 본문(8KB 상한)을 모두 포함하므로
+  //   상세 검색에서도 로그 페이지와 동일한 범위로 substring 매칭.
+  const query = (getSearchQuery() || '').toLowerCase();
   const detailRows = document.querySelectorAll('#detailRequestsBody tr[data-type]');
   detailRows.forEach(tr => {
     if (!query) { tr.style.display = ''; return; }
-    const text = [
-      tr.querySelector('.action-name')?.textContent,
-      tr.querySelector('.prompt-preview')?.textContent,
-      tr.querySelector('.target-role-badge')?.textContent,
-    ].filter(Boolean).join(' ').toLowerCase();
-    tr.style.display = text.includes(query) ? '' : 'none';
+    const haystack = tr.dataset.searchHaystack || '';
+    tr.style.display = haystack.includes(query) ? '' : 'none';
   });
+
+  // 턴 카드 뷰에도 동일 검색어 적용(검색 확장 — search-expand-payload).
+  applyTurnCardSearch(query);
 });

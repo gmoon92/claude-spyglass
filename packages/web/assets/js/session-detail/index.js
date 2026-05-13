@@ -10,15 +10,16 @@
  * 의존성:
  *  - state, flat-view, turn-views : 분리된 내부 모듈
  *  - components/search-box        : 검색 박스 생성
- *  - context-chart, tool-stats    : 세션 전환 시 초기화 호출
+ *  - context-chart                : 세션 전환 시 초기화 호출
  *
  * 부가 효과:
  *  - flat-view import 시 DETAIL_FILTER_CHANGED 리스너가 1회 등록된다 (모듈 부수효과).
+ *
+ * ADR-004 후속: 세션 [도구] 탭이 제거되어 tool-stats(세션 스코프) 의존도 정리.
  */
 
 import { createSearchBox } from '../components/search-box.js';
 import { clearContextChart } from '../context-chart.js';
-import { clearToolStats } from '../tool-stats.js';
 import {
   setCurrentSessionId, setDetailRequests, setDetailTurns, setDetailPrologue,
   setSearchQuery, clearExpandedTurnIds, getSearchBox, setSearchBox,
@@ -33,7 +34,7 @@ export {
 export { renderDetailRequests, applyDetailFilter } from './flat-view.js';
 export {
   setDetailView, toggleTurn, toggleCardExpand, setTurnViewMode,
-  renderTurnView, renderTurnCards,
+  renderTurnView, renderTurnCards, openLlmInputForTurn,
 } from './turn-views.js';
 
 /** API base URL — 동일 출처 사용. */
@@ -68,13 +69,12 @@ export async function refreshDetailSession(sessionId) {
 }
 
 /**
- * 세션 진입 시 호출. 차트/도구 통계/검색어/펼침 상태를 초기화하고 데이터를 fetch한다.
+ * 세션 진입 시 호출. 차트/검색어/펼침 상태를 초기화하고 데이터를 fetch한다.
  * @param {string} sessionId
  * @param {{ signal?: AbortSignal }} opts — 사용자가 빠르게 다른 세션으로 전환할 때 abort용
  */
 export async function loadSessionDetail(sessionId, opts = {}) {
   clearContextChart();
-  clearToolStats();
   setCurrentSessionId(sessionId);
   setSearchQuery('');
   clearExpandedTurnIds(); // 세션 전환 시 accordion 펼침 상태 초기화

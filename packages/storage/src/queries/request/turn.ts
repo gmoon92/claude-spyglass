@@ -86,6 +86,12 @@ export interface TurnItem {
     context_tokens: number;
     /** data-honesty-ui: prompt 메타 신뢰도 ('high'|'low'|'error') */
     tokens_confidence: string | null;
+    /**
+     * context-window-derivation: 이 턴 prompt 요청의 anthropic-beta 헤더 (proxy_requests join).
+     * 클라이언트는 model + anthropic_beta로 실제 context window 한도를 추론한다.
+     * (예: `context-1m-2025-08-07` 포함 → 1M; Opus 4.7은 GA 1M이므로 beta 무관).
+     */
+    anthropic_beta: string | null;
   } | null;
   /**
    * v22 (system-prompt-exposure) — 이 turn에 흐른 첫 proxy 요청의 system_hash.
@@ -94,6 +100,18 @@ export interface TurnItem {
    */
   system_hash: string | null;
   system_byte_size: number | null;
+  /**
+   * v21 (system-reminder-badge): turn 안에서 등장한 모든 user 메시지의
+   * `<system-reminder>` 블록 raw 누적 텍스트. proxy_requests.system_reminder를
+   * turn 단위로 PARTITION timestamp DESC rn=1 (가장 풍부하게 누적된 마지막 행) 채택.
+   *
+   * 클라이언트(turn-views)는 정규식으로 reminder 블록을 분해해 set으로 만들고,
+   * 직전 turn 대비 diff(=new_reminders)만 칩으로 노출한다.
+   * raw 문자열을 그대로 노출하는 이유:
+   *  - dedup/diff 정책을 UI 레이어 한 곳에서만 결정 (서버는 raw 전달자 책임만).
+   *  - 향후 popover 원문 표시에 동일 문자열을 재사용 가능.
+   */
+  system_reminder: string | null;
   tool_calls: TurnToolCall[];
   /**
    * 턴 내 모든 assistant 응답 (timestamp 오름차순).
@@ -247,6 +265,39 @@ export function getTurnsBySession(
   }>;
   const systemByTurn = new Map(systemRows.map(s => [s.turn_id, s]));
 
+  // v21 (system-reminder-badge): turn별 system_reminder raw 합류.
+  // 가장 풍부하게 누적된 행을 채택하기 위해 timestamp DESC rn=1 (마지막 proxy 요청)을 사용.
+  // user 메시지가 누적될수록 reminder가 추가되므로 마지막 행이 turn 전체 reminder의 상위집합.
+  // NULL/빈 reminder는 PARTITION 결과 단계에서는 그대로 두고, 응답 시 ?? null로 정리.
+  const reminderRows = db.query(`
+    SELECT turn_id, system_reminder FROM (
+      SELECT turn_id, system_reminder,
+             ROW_NUMBER() OVER (PARTITION BY turn_id ORDER BY timestamp DESC) AS rn
+      FROM proxy_requests
+      WHERE session_id = ? AND turn_id IS NOT NULL AND system_reminder IS NOT NULL
+    ) WHERE rn = 1
+  `).all(sessionId) as Array<{
+    turn_id: string;
+    system_reminder: string | null;
+  }>;
+  const reminderByTurn = new Map(reminderRows.map(r => [r.turn_id, r.system_reminder]));
+
+  // context-window-derivation: turn별 anthropic-beta 헤더 (첫 proxy 요청 대표).
+  // 클라이언트(context-window.js)가 model + anthropic_beta로 실제 한도를 추론한다.
+  // system_hash와 동일하게 PARTITION timestamp ASC rn=1 행만 선택.
+  const betaRows = db.query(`
+    SELECT turn_id, anthropic_beta FROM (
+      SELECT turn_id, anthropic_beta,
+             ROW_NUMBER() OVER (PARTITION BY turn_id ORDER BY timestamp ASC) AS rn
+      FROM proxy_requests
+      WHERE session_id = ? AND turn_id IS NOT NULL
+    ) WHERE rn = 1
+  `).all(sessionId) as Array<{
+    turn_id: string;
+    anthropic_beta: string | null;
+  }>;
+  const betaByTurn = new Map(betaRows.map(b => [b.turn_id, b.anthropic_beta]));
+
   const turns: TurnItem[] = turnSummaries.map((summary, idx) => {
     const prompt = promptMap.get(summary.turn_id);
     const toolCalls = toolCallsByTurn.get(summary.turn_id) || [];
@@ -289,6 +340,7 @@ export function getTurnsBySession(
         cache_creation_tokens: promptCacheCreate,
         context_tokens: contextTokens,
         tokens_confidence: prompt.tokens_confidence,
+        anthropic_beta: betaByTurn.get(summary.turn_id) ?? null,
       } : null,
       tool_calls: toolCalls.map(t => ({
         id: t.id,
@@ -319,6 +371,7 @@ export function getTurnsBySession(
       })),
       system_hash: sysRow?.system_hash ?? null,
       system_byte_size: sysRow?.system_byte_size ?? null,
+      system_reminder: reminderByTurn.get(summary.turn_id) ?? null,
       summary: {
         tool_call_count: summary.tool_call_count,
         tokens_input: summary.prompt_tokens_input,

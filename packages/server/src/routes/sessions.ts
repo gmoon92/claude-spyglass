@@ -309,9 +309,11 @@ function buildImplicitTurnFromOrphans(
       cache_creation_tokens: cacheCreate,
       context_tokens: contextTokens,
       tokens_confidence: 'low',
+      anthropic_beta: proxyCtx?.anthropic_beta ?? null,
     },
     system_hash: null,
     system_byte_size: null,
+    system_reminder: null,
     tool_calls: toolCalls,
     responses,
     summary: {

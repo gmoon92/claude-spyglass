@@ -164,7 +164,7 @@ export function skTurnCardList(count = 5) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// 6) Detail LLM Input / SysLib / 메타문서 / 도구 매트릭스
+// 6) Detail LLM Input / SysLib / Behavior Definitions / 도구 매트릭스
 // ──────────────────────────────────────────────────────────────────────────
 
 /**
@@ -215,7 +215,7 @@ export function skSysLibCards(count = 4) {
 }
 
 /**
- * 메타 문서 카탈로그 — 테이블 row 흉내. meta-docs-view 의 컬럼 구조와 일관.
+ * Behavior Definitions 카탈로그 — 테이블 row 흉내. meta-docs-view 의 컬럼 구조와 일관.
  * 컬럼: 이름 / 출처 / 호출수 / 행위
  */
 export function skMetaDocList(count = 8) {

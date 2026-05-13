@@ -231,6 +231,8 @@ export {
 export {
   createProxyRequest,
   getRecentProxyRequests,
+  getProxyRequestsBySession,
+  getProxyRequestsBySystemHash,
   getProxyRequestById,
   getProxyStats,
   getLatestProxyResponseBefore,

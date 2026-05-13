@@ -10,24 +10,31 @@
  * 의존성:
  *  - state         : 펼침 ID 집합 / 현재 세션 ID / 턴 목록
  *  - turn-rows     : buildTurnDetailRows, compressContinuousTools, fmtActionLabel
- *  - 외부 모듈     : tool-stats(loadToolStats), formatters, renderers, tool-colors
+ *  - 외부 모듈     : formatters, renderers, tool-colors
+ *
+ * ADR-004 후속:
+ *  - 세션 [도구] 탭은 메타 모드 [도구 통계] 서브 탭과 중복이라 제거됨.
+ *  - 세션 단위 tool-stats client 경로(loadToolStats / clearToolStats / outbound 링크)도 함께 정리.
  */
 
 import { escHtml, fmtToken, fmtTime, formatDuration } from '../formatters.js';
 import { toolIconHtml, _promptCache, togglePromptExpand } from '../renderers.js';
 import { subTypeOf } from '../request-types.js';
-import { loadToolStats } from '../tool-stats.js';
-import { showLatestLlmInput } from '../llm-input-view.js';
+import { showLatestLlmInput, setPendingProxyTargetTs } from '../llm-input-view.js';
+import { setDetailTab } from '../state.js';
 import { loadSystemPromptLibrary } from '../system-prompt-library.js';
-// ADR-003 left-rail-meta-docs: 메타 문서는 detail 탭에서 좌측 rail 1급 모드로 승격됨.
+import { extractPromptText, extractAssistantText } from '../render/extract.js';
+// ADR-003 left-rail-meta-docs: Behavior Definitions는 detail 탭에서 좌측 rail 1급 모드로 승격됨.
 // 진입은 main.js의 applyAppMode('metadocs') 또는 enterMetaDocsMode()로 일원화.
 import {
   buildTurnDetailRows, compressFlowWithResponses, fmtActionLabel,
 } from './turn-rows.js';
 import {
-  getCurrentSessionId, getDetailTurns, getDetailPrologue, getExpandedTurnIds,
+  getDetailTurns, getDetailPrologue, getExpandedTurnIds, getSearchQuery,
 } from './state.js';
 import { targetInnerHtml, contextPreview } from '../renderers.js';
+// v21 (system-reminder-badge): turn 별 신규 reminder 산출 SSoT
+import { computeNewRemindersByTurn } from './system-reminder.js';
 
 /**
  * 턴 카드 푸터 .turn-card-bar-pct에 hover 시 노출되는 의미 설명 (web-design-balance-pass ADR-003).
@@ -39,30 +46,136 @@ import { targetInnerHtml, contextPreview } from '../renderers.js';
 const BAR_PCT_TITLE = '이 턴이 세션 전체 토큰에서 차지하는 비중. 같은 세션의 모든 턴 합이 100% (Turn IN+OUT ÷ 세션 누적 토큰).';
 
 /**
- * 탭(요청/턴/LLM Input/도구) 표시 전환.
- *  - tools 탭 진입 시 도구 통계 lazy 로드.
+ * system-reminder 칩 + 팝오버 SVG 아이콘 (디자인 SSoT: design-spec.md §2).
+ * 메모 페이지 + dog-ear + 본문 라인 2줄. currentColor로 칩 색상 자동 추종.
+ */
+const SYSTEM_REMINDER_ICON_SVG = `<svg class="turn-system-reminder-icon" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M2.25 1.75 H7.5 L9.75 4 V10.25 H2.25 Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M7.5 1.75 V4 H9.75" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M4 6.25 H7.75 M4 8.25 H6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+</svg>`;
+
+/**
+ * 턴 카드 검색 haystack SSoT (search-expand-payload).
+ *
+ * 포함 범위 (사용자 요구 a/b/c):
+ *  - T번호 (T${turn_index})
+ *  - prompt 본문 (extractPromptText — payload 전체, preview fallback)
+ *  - 흐름 chip의 tool_name / Skill·Agent name(tool_detail) / 모델
+ *  - 응답 본문(extractAssistantText — payload 전체)
+ *  - system_reminder raw 텍스트 (해당 turn에서 새로 등장한 것)
+ *  - prompt.preview (turn-card-preview 라벨)
+ *
+ * 정책:
+ *  - 모두 소문자로 normalize.
+ *  - 16KB 상한 — 한 카드의 turn은 여러 응답/도구를 포함하므로 행보다 두 배 한도.
+ *  - prompt 본문은 prompt 객체에 preview만 있고 payload는 turn API에 포함됨 — fallback 양쪽 모두 활용.
+ *
+ * @param {object} turn  TurnItem
+ * @param {string[]} newReminders  computeNewRemindersByTurn으로 얻은 신규 reminder 본문 배열
+ */
+function buildTurnHaystack(turn, newReminders) {
+  const parts = [];
+  parts.push(`T${turn.turn_index}`);
+  if (turn.prompt?.preview) parts.push(turn.prompt.preview);
+  // turn.prompt는 슬림 객체 — payload 필드도 같이 들어옴(turn.ts SELECT). extract로 payload 본문 시도.
+  if (turn.prompt) {
+    const promptBody = extractPromptText({ payload: turn.prompt.payload, preview: turn.prompt.preview, type: 'prompt' });
+    if (promptBody && promptBody !== turn.prompt.preview) parts.push(promptBody);
+    if (turn.prompt.model) parts.push(turn.prompt.model);
+  }
+  // tool_calls — 이름 + Skill/Agent sub-name + 모델
+  for (const tc of (turn.tool_calls || [])) {
+    if (tc.tool_name)   parts.push(tc.tool_name);
+    if (tc.tool_detail) parts.push(tc.tool_detail);
+    if (tc.model)       parts.push(tc.model);
+  }
+  // responses — payload 본문(있으면) / preview(fallback)
+  for (const r of (turn.responses || [])) {
+    const body = extractAssistantText({ payload: r.payload, preview: r.preview, type: 'response' });
+    if (body) parts.push(body);
+    else if (r.preview) parts.push(r.preview);
+    if (r.model) parts.push(r.model);
+  }
+  // system_reminder raw — 검색에서 hook 알림 본문도 잡히도록.
+  if (Array.isArray(newReminders) && newReminders.length) {
+    parts.push(...newReminders);
+  } else if (turn.system_reminder) {
+    parts.push(turn.system_reminder);
+  }
+  return parts.join(' ').toLowerCase().slice(0, 16000);
+}
+
+/**
+ * 칩 + 팝오버 HTML 생성 (단일 책임).
+ *  - N=0이면 빈 문자열 반환 → 호출 측에서 자연 미렌더(디자인 명세 §1.3 / §5-5).
+ *  - aria id는 turn_index 기반 unique pattern으로 칩↔팝오버 연결(명세 §5-7).
+ *  - reminder 본문은 escHtml로 escape 후 <pre>에 삽입(명세 §5-4).
+ *  - 팝오버는 기본 hidden — JS 토글이 단일 가시성 SSoT(명세 §5-1/2).
+ *
+ * @param {string|number} turnIndex turn unique id (DOM 속성용)
+ * @param {string[]} reminders 신규 reminder 본문 배열 (computeNewRemindersByTurn 결과)
+ */
+function buildSystemReminderChip(turnIndex, reminders) {
+  if (!reminders || reminders.length === 0) return '';
+  const count = reminders.length;
+  const chipId    = `turn-sysrem-chip-${turnIndex}`;
+  const popoverId = `turn-sysrem-popover-${turnIndex}`;
+  const itemsHtml = reminders.map(body =>
+    `<pre class="turn-system-reminder-item">${escHtml(body)}</pre>`
+  ).join('');
+
+  return `<span class="turn-system-reminder-anchor" data-turn-id="${escHtml(String(turnIndex))}">
+    <button type="button"
+            class="turn-system-reminder-chip"
+            id="${chipId}"
+            aria-haspopup="dialog"
+            aria-expanded="false"
+            aria-controls="${popoverId}"
+            data-sysrem-toggle="${popoverId}"
+            title="이 턴에서 새로 등장한 시스템 리마인더 ${count}건. 클릭으로 원문 보기">
+      ${SYSTEM_REMINDER_ICON_SVG}
+      <span class="turn-system-reminder-count">${count}</span>
+    </button>
+    <div class="turn-system-reminder-popover"
+         id="${popoverId}"
+         role="dialog"
+         aria-labelledby="${chipId}"
+         tabindex="-1"
+         hidden>
+      <header class="turn-system-reminder-popover-header">
+        <span class="turn-system-reminder-popover-title">
+          <strong>시스템 리마인더</strong>
+          <span class="turn-system-reminder-popover-count">· ${count}건</span>
+        </span>
+        <button type="button" class="turn-system-reminder-popover-close" aria-label="닫기" data-sysrem-close="${popoverId}">×</button>
+      </header>
+      <div class="turn-system-reminder-popover-body">${itemsHtml}</div>
+    </div>
+  </span>`;
+}
+
+/**
+ * 탭(요청/턴/LLM Input/SysLib) 표시 전환.
  *  - llm 탭 진입 시 가장 최근 proxy 요청의 LLM Input 골격 렌더 (T-09 ADR-004 옵션 A).
+ *  - syslib 탭 진입 시 시스템 프롬프트 카탈로그 lazy 로드.
  */
 export function setDetailView(tab) {
-  // ADR-003 left-rail-meta-docs: 'metadocs' 탭은 제거됨. 5탭만 유효.
-  // 메타 문서 진입은 좌측 rail 또는 Agent/Skill 배지 딥링크로 일원화.
+  // ADR-003 left-rail-meta-docs: 'metadocs' 탭은 제거됨.
+  // Behavior Definitions 진입은 좌측 rail 또는 Agent/Skill 배지 딥링크로 일원화.
+  // ADR-004 후속: 세션 [도구] 탭은 메타 모드 [도구 통계] 서브 탭과 중복이라 제거됨.
   const reqView = document.getElementById('detailRequestsView');
   const turnView = document.getElementById('detailTurnView');
   const llmView = document.getElementById('detailLlmInputView');
   const sysLibView = document.getElementById('detailSysLibView');
-  const toolsView = document.getElementById('detailToolsView');
   if (reqView)      reqView.style.display      = tab === 'requests' ? '' : 'none';
   if (turnView)     turnView.style.display     = tab === 'turn'     ? '' : 'none';
   if (llmView)      llmView.style.display      = tab === 'llm'      ? '' : 'none';
   if (sysLibView)   sysLibView.style.display   = tab === 'syslib'   ? '' : 'none';
-  if (toolsView)    toolsView.style.display    = tab === 'tools'    ? '' : 'none';
   document.getElementById('tabRequests')?.classList.toggle('active', tab === 'requests');
   document.getElementById('tabTurn')?.classList.toggle('active',     tab === 'turn');
   document.getElementById('tabLlm')?.classList.toggle('active',      tab === 'llm');
   document.getElementById('tabSysLib')?.classList.toggle('active',   tab === 'syslib');
-  document.getElementById('tabTools')?.classList.toggle('active',    tab === 'tools');
-  const sessionId = getCurrentSessionId();
-  if (tab === 'tools' && sessionId) loadToolStats(sessionId);
   if (tab === 'llm') showLatestLlmInput();
   if (tab === 'syslib') loadSystemPromptLibrary();
 }
@@ -83,6 +196,21 @@ export function toggleTurn(turnId) {
 
 /** setTurnViewMode: 통합 뷰로 전환됨 — 더 이상 사용하지 않는 stub (외부 호출 호환용). */
 export function setTurnViewMode(_mode) { /* no-op */ }
+
+/**
+ * 턴 카드의 "API 페이로드" 액션 클릭 진입점 (deeplink pass).
+ *
+ * 흐름: setPendingProxyTargetTs(ts) → setDetailTab('llm') → setDetailView('llm')
+ *   - setPendingProxyTargetTs는 1회용 — setDetailView('llm') 안의 showLatestLlmInput()이 소비.
+ *   - 가장 가까운 proxy_request로 자동 선택, 드롭다운도 그 항목으로 활성화.
+ *
+ * @param {number} turnStartedAt  turn.started_at (ms timestamp)
+ */
+export function openLlmInputForTurn(turnStartedAt) {
+  setPendingProxyTargetTs(turnStartedAt);
+  setDetailTab('llm');
+  setDetailView('llm');
+}
 
 /**
  * 레거시 테이블형 turn 뷰. 통합 카드 뷰 전환 후 turnListBody가 DOM에서 제거되었으므로
@@ -251,6 +379,10 @@ export function renderTurnCards(turns, badgeTurns) {
   // hash 변경(또는 첫 등장)이면 ▲ 마커, 같으면 표시 안 함(시각 노이즈 회피).
   const sysHashByIdx = new Map(turns.map(t => [t.turn_index, t.system_hash]));
 
+  // v21 (system-reminder-badge): 세션 누적 dedup 기준 "이 turn에서 처음 등장한 reminder"만 칩에 노출.
+  // computeNewRemindersByTurn은 turn_index ASC 순회로 내부에서 정렬 — 호출 측의 정렬 순서 무관.
+  const newRemindersByTurn = computeNewRemindersByTurn(turns);
+
   container.innerHTML = prologueHtml + turns.slice().sort((a, b) => b.turn_index - a.turn_index).map(turn => {
     const toolCount = turn.summary.tool_call_count;
     const complexBadge = toolCount > 15
@@ -291,7 +423,7 @@ export function renderTurnCards(turns, badgeTurns) {
       if (isAgent && agentName) {
         const countSuffix = count > 1 ? `×${count}` : '';
         const fullLabel   = agentName + (countSuffix ? ` ${countSuffix}` : '');
-        // ADR-003 left-rail-meta-docs: agent/skill chip만 메타 문서 딥링크 (Task는 분류는 같지만 카탈로그 대상 아님)
+        // ADR-003 left-rail-meta-docs: agent/skill chip만 Behavior Definitions 딥링크 (Task는 분류는 같지만 카탈로그 대상 아님)
         // sub === 'agent' | 'skill' 인 경우만 data-meta-doc-* 부여 → 클릭 시 메타 모드 진입
         const deepLinkAttrs = (sub === 'agent' || sub === 'skill')
           ? ` data-meta-doc-type="${sub}" data-meta-doc-id="${escHtml(agentName)}" role="button" tabindex="0"`
@@ -312,13 +444,31 @@ export function renderTurnCards(turns, badgeTurns) {
     const expandedClass = isExpanded ? ' expanded' : '';
     const ariaExpanded  = isExpanded ? 'true' : 'false';
 
-    return `<div class="turn-card${expandedClass}" data-card-turn-id="${escHtml(turn.turn_id)}">
+    // 턴뷰 → API 페이로드 딥링크 (deeplink pass). data-payload-ts에 turn 시작 시각을 실어
+    // main.js 클릭 위임이 받아 openLlmInputForTurn(ts) 호출 → 가장 가까운 proxy_request로 LLM Input 진입.
+    const payloadActionBtn = `<button type="button" class="turn-card-action-payload" data-payload-ts="${turn.started_at}" title="이 턴 시각에 가장 가까운 API 페이로드 보기" aria-label="API 페이로드 보기">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <polyline points="6 5 2 8 6 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="10 5 14 8 10 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>API</span>
+    </button>`;
+
+    // v21 (system-reminder-badge): 신규 reminder가 있을 때만 칩+팝오버 출력.
+    const turnReminders = newRemindersByTurn.get(turn.turn_id);
+    const reminderChip = buildSystemReminderChip(turn.turn_index, turnReminders);
+
+    // search-expand-payload: 카드별 검색 haystack. flat-view 검색 흐름이 매칭 카드만 표시한다.
+    const haystack = buildTurnHaystack(turn, turnReminders);
+
+    return `<div class="turn-card${expandedClass}" data-card-turn-id="${escHtml(turn.turn_id)}" data-search-haystack="${escHtml(haystack)}">
       <div class="turn-card-summary" data-toggle-card="${escHtml(turn.turn_id)}" role="button" aria-expanded="${ariaExpanded}" tabindex="0">
         <div class="turn-card-header">
           <span class="turn-card-index">T${turn.turn_index}</span>
           ${promptText ? `<span class="turn-card-preview">${promptText}</span>` : ''}
           ${systemBadge}
-          ${complexBadge}
+          ${reminderChip}
+          ${payloadActionBtn}
           <span class="turn-card-expand-btn"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
         </div>
         ${chips ? `<div class="turn-card-flow">${chips}</div>` : ''}
@@ -326,6 +476,7 @@ export function renderTurnCards(turns, badgeTurns) {
           <span>IN ${tokIn}</span>
           <span>OUT ${tokOut}</span>
           ${turn.prompt?.duration_ms ? `<span>&#9201; ${dur}</span>` : ''}
+          ${complexBadge}
           ${sessionTotalTokens > 0 ? `<span class="turn-card-bar-pct" title="${BAR_PCT_TITLE}">${barPct}%</span>` : ''}
         </div>
       </div>
@@ -341,6 +492,29 @@ export function renderTurnCards(turns, badgeTurns) {
     if (rowContainer) togglePromptExpand(expandedFor, rowContainer);
   }
   if (scrollEl && savedScroll) scrollEl.scrollTop = savedScroll;
+
+  // search-expand-payload: renderTurnCards 호출 직후, 직전 검색어가 있으면 카드 가시성 동기.
+  // applyDetailFilter 흐름이 flat-view 갱신과 함께 호출하므로 첫 렌더에서도 정합 유지.
+  const query = (getSearchQuery?.() ?? '').toLowerCase();
+  if (query) applyTurnCardSearch(query);
+}
+
+/**
+ * 턴 카드 뷰 검색 적용 — 카드 단위 display 토글 (flat-view의 행 토글과 대칭).
+ *  - haystack은 카드 마운트 시 박힌 dataset.searchHaystack (buildTurnHaystack 결과).
+ *  - 빈 query는 모든 카드 노출 — 검색 해제 흐름과 일관.
+ *  - 매칭 안 되면 display:none. 스크롤 위치 유지 위해 visibility가 아닌 display 사용.
+ *
+ * 호출자: session-detail/flat-view.js applyDetailFilter (DETAIL_FILTER_CHANGED listener).
+ */
+export function applyTurnCardSearch(query) {
+  const q = (query || '').toLowerCase();
+  const cards = document.querySelectorAll('#turnUnifiedBody .turn-card[data-card-turn-id]');
+  cards.forEach(card => {
+    if (!q) { card.style.display = ''; return; }
+    const haystack = card.dataset.searchHaystack || '';
+    card.style.display = haystack.includes(q) ? '' : 'none';
+  });
 }
 
 /**

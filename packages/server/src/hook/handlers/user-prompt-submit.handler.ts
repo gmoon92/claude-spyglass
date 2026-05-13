@@ -45,7 +45,7 @@ export class UserPromptSubmitHandler implements HookEventHandler {
     );
 
     // v24: prompt에 <command-name>/foo</command-name>가 포함되면 슬래시 커맨드 호출.
-    //  메타 문서 카탈로그(type='command')와 직접 매칭하려고 별도 컬럼에 정규화 저장.
+    //  Behavior Definitions 카탈로그(type='command')와 직접 매칭하려고 별도 컬럼에 정규화 저장.
     const promptText = typeof (raw as { prompt?: unknown }).prompt === 'string'
       ? (raw as { prompt: string }).prompt
       : undefined;

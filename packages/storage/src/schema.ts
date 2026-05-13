@@ -77,6 +77,10 @@ PRAGMA synchronous = NORMAL;
 PRAGMA cache_size = -64000;  -- 64MB cache
 PRAGMA foreign_keys = ON;
 PRAGMA journal_size_limit = 104857600;  -- 100MB WAL size limit
+-- perf pass: 자동 checkpoint 임계치를 기본 1000페이지(약 4MB) → 200페이지(약 800KB)로 낮춰
+-- 대형 zstd 페이로드 BLOB의 INSERT 누적으로 WAL이 커지기 전에 자주 checkpoint 수행.
+-- reader 다수 환경에서 checkpoint 비용은 분산되고, STW 윈도우를 짧게 유지.
+PRAGMA wal_autocheckpoint = 200;
 `;
 
 // =============================================================================

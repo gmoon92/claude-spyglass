@@ -1,5 +1,5 @@
 /**
- * meta-docs-view.js — 메타 문서 카탈로그 + 히팅률 패널 (v25, meta-docs-enhance)
+ * meta-docs-view.js — Behavior Definitions 카탈로그 + 히팅률 패널 (v25, meta-docs-enhance)
  *
  * 책임:
  *  - GET /api/meta-docs 로 카탈로그 + 사용 집계 받아 표 형태로 노출.
@@ -23,18 +23,21 @@ import { escHtml, fmtTime } from './formatters.js';
 import { getSelectedProject, getMetaSubTab, setMetaSubTab as stateSetMetaSubTab } from './state.js';
 import { toolIconHtml } from './render/badges.js';
 import { skMetaDocList } from './render/skeleton.js';
-import { initColResize } from './col-resize.js';
+import { svgTrash, svgWarn, svgRefresh } from './render/icons.js';
+// meta-docs feedback ADR (2026-05-14): 좌측 패널에 프로젝트별 Behavior Definitions 항목 수를 주입.
+import { setMetaDocsCounts } from './left-panel.js';
 // ADR-004 meta-docs-tool-stats: 프로젝트 단위 도구 통계 진입점.
 import { loadProjectToolStats } from './tool-stats.js';
 
 const CONTAINER_ID = 'metaDocsBody';
 
-// 필터/정렬 상태 — 모듈 단위로 보관 (탭 재진입 시 유지)
+// 필터/정렬 상태 — 모듈 단위로 보관 (탭 재진입 시 유지).
+// meta-docs feedback ADR (2026-05-14): state.scope(legacy source 라벨 필터) 제거.
+//   좌측 패널의 user(global)/프로젝트 행 선택이 scopeMode SSoT를 가져감.
 const state = {
   type:    'all',          // 'all' | 'agent' | 'skill' | 'command'
   sort:    'invocations',  // 'invocations' | 'last_used_at' | 'name'
   sortDir: 'desc',         // 'asc' | 'desc'
-  scope:   'all',          // 'all' | 'project' | 'global' (legacy source 라벨 기준 필터)
   scopeMode: 'selected',   // 'selected' | 'all'
                            //   'selected' = 좌측 프로젝트 선택값을 따라 source_root로 필터
                            //   'all'      = 모든 프로젝트 카탈로그 합쳐서 표시
@@ -50,7 +53,49 @@ const state = {
 };
 
 /**
- * ADR-003 left-rail-meta-docs: 좌측 rail '📚 메타 문서' 클릭 시 진입점.
+ * 좌측 패널 thead 동기화 셀 초기화 — 앱 부트스트랩 시 1회 호출.
+ *
+ *  - meta-docs feedback ADR (2026-05-14): [프로젝트][전체] 토글은 좌측 프로젝트 리스트의
+ *    가상 'user (global)' 행으로 이관됨. 본 함수는 thead 우측 셀의 [동기화] 버튼만 담당.
+ *  - 클릭 이벤트는 body 위임으로 캡처(thead가 renderBrowserProjects로 재렌더되지 않더라도
+ *    [data-meta-left-refresh] 셀렉터가 동일하게 매칭되도록).
+ */
+export function initMetaDocsLeftNav() {
+  // body 위임 — thead가 한 번도 다시 렌더되지 않지만, 안전성/일관성을 위해 body 레벨로 둔다.
+  document.body.addEventListener('click', async (e) => {
+    const syncBtn = e.target.closest('[data-meta-left-refresh]');
+    if (!syncBtn) return;
+    // 메타 모드 전용 — browse 모드에서는 무시(thead가 hidden이지만 보호 분기).
+    if (document.body.dataset.appMode !== 'metadocs') return;
+    await runRefresh(syncBtn);
+  });
+  // thead 동기화 버튼에 SVG 아이콘 1회 주입(정적 thead).
+  const icon = document.querySelector('.thead-sync-icon');
+  if (icon && !icon.dataset.injected) {
+    icon.innerHTML = svgRefresh({ size: 12 });
+    icon.dataset.injected = '1';
+  }
+}
+
+/**
+ * 외부(main.js selectProject) 진입점 — scopeMode 변경 + 카탈로그 재로드.
+ *
+ *  - 'selected' = 좌측에서 선택된 프로젝트(getSelectedProject())의 source_root로 필터.
+ *  - 'all'      = 전체 카탈로그(글로벌 + 모든 cwd).
+ *  - 이미 동일 모드면 재호출하지 않음(중복 fetch 방지).
+ *
+ * @param {'selected' | 'all'} mode
+ */
+export function setMetaScopeMode(mode) {
+  if (mode !== 'selected' && mode !== 'all') return;
+  if (state.scopeMode === mode) return;
+  state.scopeMode = mode;
+  // 즉시 카탈로그 재로드 — 결과적으로 좌측 카운트(setMetaDocsCounts)도 재계산되어 동기화.
+  loadMetaDocsLibrary();
+}
+
+/**
+ * ADR-003 left-rail-meta-docs: 좌측 rail '📚 Behavior Definitions' 클릭 시 진입점.
  *
  *  - applyAppMode('metadocs')는 main.js에서 호출되어 body[data-app-mode] 토글.
  *  - 본 함수는 카탈로그 lazy 로드만 책임 — 가시성은 CSS 룰이 처리.
@@ -131,7 +176,7 @@ export function refreshMetaActiveSubTab() {
 }
 
 /**
- * ADR-003 left-rail-meta-docs: Agent/Skill 배지 단일 클릭 → 메타 문서 정의로 딥링크.
+ * ADR-003 left-rail-meta-docs: Agent/Skill 배지 단일 클릭 → Behavior Definitions 정의로 딥링크.
  *
  * 흐름:
  *  1. state.searchTerm 설정 (예: 'designer')
@@ -153,13 +198,13 @@ export async function openMetaDocViaDeepLink(link) {
 }
 
 /**
- * 현재 state.searchTerm과 일치하는 첫 메타 문서 행에 flash 트리거 + scrollIntoView.
+ * 현재 state.searchTerm과 일치하는 첫 Behavior Definitions 행에 flash 트리거 + scrollIntoView.
  * loadMetaDocsLibrary 직후 호출 — 행은 이미 DOM에 존재.
  */
 function highlightDeepLinkRow() {
   const term = (state.searchTerm || '').toLowerCase();
   if (!term) return;
-  const rows = document.querySelectorAll('.meta-docs-table tbody tr[data-name]');
+  const rows = document.querySelectorAll('.meta-doc-list .meta-doc-card[data-name]');
   let target = null;
   for (const r of rows) {
     const name = String(r.dataset.name || '').toLowerCase();
@@ -183,7 +228,7 @@ function renderLeftSummaryCards(counts) {
   const root = document.getElementById('metaDocsSummaryCards');
   if (!root) return;
   root.innerHTML = `
-    <div class="meta-docs-summary-card meta-docs-summary-card--used" title="호출이 1회 이상 발생한 메타 문서">
+    <div class="meta-docs-summary-card meta-docs-summary-card--used" title="호출이 1회 이상 발생한 Behavior Definitions">
       <span class="meta-docs-summary-card-value">${counts.used}</span>
       <span class="meta-docs-summary-card-label">사용</span>
     </div>
@@ -222,36 +267,48 @@ export async function loadMetaDocsLibrary() {
     // 1) 선택 프로젝트 결정 — scopeMode + 좌측 패널 selectedProject 결합
     const project = state.scopeMode === 'selected' ? (getSelectedProject() || null) : null;
 
-    // 2) 프로젝트 모드: 전체 카탈로그를 한번 받아 distinct source_root에서 basename 매칭
+    // 2) 전체 카탈로그 probe — 항상 1회 fetch.
+    //    meta-docs feedback ADR (2026-05-14): selected 모드 + 매칭 실패에서도 좌측 카운트가
+    //    0으로 떨어지지 않도록 type/includeDeleted 필터 무관한 raw 카탈로그를 받아 둔다.
+    //    좌측 카운트 + project source_root 매칭에 공통으로 사용.
+    const probeRes = await fetchJson('/api/meta-docs');
+    const probeList = Array.isArray(probeRes?.data) ? probeRes.data : [];
+
+    // 좌측 thead '항목' 컬럼 카운트 즉시 동기 — 본 fetch 결과를 기다리지 않고 먼저 채워서
+    // user(global)/프로젝트 행이 0으로 깜빡이는 문제를 방지.
+    pushLeftCounts(probeList);
+
     let resolvedSourceRoot = null;
     let matched = false;
-
     if (project) {
-      const probe = await fetchJson('/api/meta-docs');
-      const probeList = Array.isArray(probe?.data) ? probe.data : [];
       resolvedSourceRoot = findSourceRootByProject(probeList, project);
       matched = !!resolvedSourceRoot;
     }
     state.resolvedSource = project ? { project, sourceRoot: resolvedSourceRoot, matched } : null;
 
-    // 3) 본 fetch — 매칭된 source_root가 있으면 ?source_root= 부착, 아니면 전체
+    // 3) 본 fetch — 매칭된 source_root가 있으면 ?source_root= 부착. type/includeDeleted 필터 포함.
+    //    'all' 모드 + type='all' + includeDeleted=false 면 probe 결과를 그대로 재사용해 fetch 절감.
     const params = new URLSearchParams();
     if (state.type !== 'all') params.set('type', state.type);
     if (state.includeDeleted) params.set('includeDeleted', '1');
     if (resolvedSourceRoot) params.set('source_root', resolvedSourceRoot);
     const qs = params.toString();
-    const url = '/api/meta-docs' + (qs ? `?${qs}` : '');
 
     let list = [];
-    // 매칭 실패한 프로젝트 모드는 fetch 자체를 생략 — 빈 상태 분기로 진입
     if (!project || matched) {
-      const res = await fetchJson(url);
-      list = Array.isArray(res?.data) ? res.data : [];
+      if (!qs) {
+        // 필터 동일 — probe 재사용
+        list = probeList;
+      } else {
+        const res = await fetchJson('/api/meta-docs?' + qs);
+        list = Array.isArray(res?.data) ? res.data : [];
+      }
     }
 
     // 4) 프로젝트 모드에서는 orphan(id null) 자동 숨김 — source_root 정보가 없어 어떤
     //    프로젝트 호출인지 단정 불가하기 때문.
-    let scoped = applyScopeFilter(list, state.scope);
+    //    legacy applyScopeFilter는 제거됨 — scopeMode SSoT가 좌측 패널로 이관(스코프 라디오 그룹 삭제).
+    let scoped = list;
     if (project && matched) scoped = scoped.filter(r => r.id != null);
 
     const filtered = applyDisplayFilter(scoped, state.display);
@@ -260,13 +317,40 @@ export async function loadMetaDocsLibrary() {
     container.innerHTML = renderHtml(sorted, { project, matched, resolvedSourceRoot });
     bindEvents(container);
     ensureToastHost();
-    // ADR-001: 기존 initColResize 재사용 — 신규 코드 없이 동일 UX 적용
-    initColResize(container.querySelector('.meta-docs-table'));
-    // ADR-003: 좌측 요약 카드 동기 갱신 (사용/미사용/orphan)
+    // ADR-003: 좌측 요약 카드(사용/미사용/orphan) 동기 갱신
     renderLeftSummaryCards(computeRowCounts(sorted));
   } catch (err) {
     container.innerHTML = errorHtml(err);
   }
+}
+
+/**
+ * 좌측 프로젝트 카운트 주입 — 전체 카탈로그(probe rows)를 기반으로 즉시 계산.
+ *
+ *  - rows를 source_root basename별로 그룹핑하여 projects[name] = count 맵 구성.
+ *  - userSettings 소스(글로벌)는 global 키로 별도 집계.
+ *  - meta-docs feedback ADR (2026-05-14): 동기 함수로 단순화 — 호출자가 raw 카탈로그를 직접 전달.
+ *
+ * @param {Array} rows - 전체 카탈로그 (필터 적용 전)
+ */
+function pushLeftCounts(rows) {
+  if (!Array.isArray(rows)) rows = [];
+  const projects = Object.create(null);
+  let globalCount = 0;
+  for (const r of rows) {
+    if (r.source === 'userSettings' || r.source_root == null) {
+      globalCount += 1;
+      continue;
+    }
+    const base = String(r.source_root).split('/').filter(Boolean).pop();
+    if (!base) continue;
+    projects[base] = (projects[base] ?? 0) + 1;
+  }
+  setMetaDocsCounts({
+    projects,
+    global: globalCount,
+    total: rows.length,
+  });
 }
 
 /**
@@ -291,89 +375,31 @@ function findSourceRootByProject(rows, projectName) {
 // =============================================================================
 
 function renderHtml(rows, ctx = {}) {
-  const total = rows.length;
-  const used   = rows.filter(r => (r.invocations ?? 0) > 0).length;
-  const unused = rows.filter(r => r.id != null && (r.invocations ?? 0) === 0).length;
-  const orphan = rows.filter(r => r.id == null).length;
-
-  const refreshMeta = state.lastRefresh && state.lastRefresh.cwdsCount
-    ? `<span class="sep">·</span><span class="meta-docs-refresh-meta" title="${escHtml(state.lastRefresh.cwdsTitle ?? '')}">cwd <strong>${state.lastRefresh.cwdsCount}</strong>개 동기화</span>`
+  // meta-docs feedback ADR (2026-05-14): 우측 패널 'N 항목' summary 제거 —
+  //   좌측 프로젝트 thead의 '항목' 컬럼이 SSoT를 가져간다.
+  //   lastRefresh 힌트(cwd N개 동기화)는 필터 바 아래 단독 행으로 보존.
+  const refreshHint = state.lastRefresh && state.lastRefresh.cwdsCount
+    ? `<div class="meta-docs-refresh-hint" title="${escHtml(state.lastRefresh.cwdsTitle ?? '')}">cwd <strong>${state.lastRefresh.cwdsCount}</strong>개 동기화</div>`
     : '';
-
-  const scopeHeader = renderScopeHeader(ctx);
-
-  const summary = `
-    <div class="meta-docs-summary">
-      <span><strong>${total}</strong> 항목</span>
-      <span class="sep">·</span>
-      <span title="호출이 1회 이상 발생한 메타 문서">사용 <strong>${used}</strong></span>
-      <span class="sep">·</span>
-      <span title="카탈로그엔 있으나 호출 0건">미사용 <strong>${unused}</strong></span>
-      ${orphan ? `<span class="sep">·</span><span title="호출은 있는데 현재 카탈로그에 없음 (외부/삭제된 정의)">기타 <strong>${orphan}</strong></span>` : ''}
-      ${refreshMeta}
-      <span class="meta-docs-actions">
-        <button type="button" data-meta-refresh="1" title="현재 cwd + 글로벌 + 알려진 모든 cwd 재스캔">
-          <span class="meta-docs-refresh-icon" aria-hidden="true"></span>
-          <span class="meta-docs-refresh-label">동기화</span>
-        </button>
-      </span>
-    </div>
-  `;
 
   const filters = renderFilters();
 
-  // 빈 상태 — 프로젝트 모드에서 매칭 실패한 경우와 일반 빈 카탈로그를 구분 안내
+  // 빈 상태 — 프로젝트 미등록/미동기화 안내
   if (rows.length === 0) {
     const empty = (ctx.project && !ctx.matched)
       ? `<div class="state-empty">
-           <span class="state-empty-title">${escHtml(ctx.project)} 프로젝트에 등록된 메타 문서가 없습니다</span>
-           <span class="state-empty-hint">이 프로젝트가 SessionStart로 동기화된 적이 없을 수 있습니다. 위 <strong>동기화</strong> 버튼을 누르면 알려진 모든 cwd를 다시 스캔합니다.</span>
+           <span class="state-empty-title">${escHtml(ctx.project)} 프로젝트에 등록된 Behavior Definitions가 없습니다</span>
+           <span class="state-empty-hint">이 프로젝트가 SessionStart로 동기화된 적이 없을 수 있습니다. 좌측 thead의 <strong>동기화</strong> 버튼을 누르면 알려진 모든 cwd를 다시 스캔합니다.</span>
          </div>`
-      : `<div class="state-empty"><span class="state-empty-title">메타 문서가 없습니다 — SessionStart 이후 자동 동기화됩니다</span></div>`;
-    return `${scopeHeader}${summary}${filters}${empty}`;
+      : `<div class="state-empty"><span class="state-empty-title">Behavior Definitions가 없습니다 — SessionStart 이후 자동 동기화됩니다</span></div>`;
+    return `${filters}${refreshHint}${empty}`;
   }
 
-  const tbody = rows.map(rowHtml).join('');
-
-  // 모든 sortable 컬럼은 동일 패턴으로 — 정의는 SORTABLE_COLUMNS 한 곳에서.
-  const th = (key, label, extraCls = '') => {
-    const cls = `${extraCls} sortable ${sortHeaderCls(key)}`.trim();
-    return `<th data-meta-sort="${key}"
-                class="${cls}"
-                tabindex="0"
-                role="columnheader"
-                aria-sort="${ariaSortValue(key)}">${escHtml(label)}${sortIndicator(key)}</th>`;
-  };
-
-  return `
-    ${scopeHeader}
-    ${summary}
-    ${filters}
-    <div class="meta-docs-table-wrap">
-      <table class="meta-docs-table">
-        <colgroup>
-          <col style="width:80px">
-          <col style="width:220px">
-          <col style="width:240px">
-          <col style="width:80px"><col style="width:130px"><col style="width:90px">
-          <col style="width:36px">
-        </colgroup>
-        <thead><tr>
-          ${th('type',         '타입')}
-          ${th('name',         '이름')}
-          ${th('source',       '출처')}
-          ${th('invocations',  '호출수',     'num')}
-          ${th('last_used_at', '마지막 사용', 'num')}
-          ${th('total_tokens', '토큰합',     'num')}
-          <th aria-label="삭제 표시"></th>
-        </tr></thead>
-        <tbody>${tbody}</tbody>
-      </table>
-    </div>
-  `;
+  const cards = rows.map(cardHtml).join('');
+  return `${filters}${refreshHint}<div class="meta-doc-list">${cards}</div>`;
 }
 
-function rowHtml(r) {
+function cardHtml(r) {
   const orphan = r.id == null;
   const deleted = r.deleted_at != null;
   const unused = !orphan && (r.invocations ?? 0) === 0;
@@ -383,30 +409,40 @@ function rowHtml(r) {
     unused  ? 'meta-doc-unused'  : '',
   ].filter(Boolean).join(' ');
 
-  const sourceLabel = orphan
+  const sourcePart = orphan
     ? `<span class="meta-doc-source-orphan" title="${escHtml(ORPHAN_TOOLTIP)}" tabindex="0">호출만 존재</span>`
     : sourceCellHtml(r);
 
   const descClean = cleanDescription(r.description);
   const desc = descClean
-    ? `<div class="meta-doc-desc" title="${escHtml(r.description ?? '')}">${escHtml(descClean)}</div>`
+    ? `<div class="meta-doc-card-desc" title="${escHtml(r.description ?? '')}">${escHtml(descClean)}</div>`
     : '';
-  const lastUsed = r.last_used_at ? escHtml(fmtTime(r.last_used_at)) : '<span class="meta-doc-na">—</span>';
+  const inv = (r.invocations ?? 0);
+  const lastUsed = r.last_used_at ? escHtml(fmtTime(r.last_used_at)) : null;
   const tokens = formatTokens(r.total_tokens ?? 0);
 
+  // 우측 통계 칩 — 호출수 · 마지막 사용 · 토큰합.
+  // soft-deleted 표시는 emoji(⚠) 대신 stroke-only SVG warn 아이콘 사용 (디자인 톤 일치).
+  const deletedBadge = deleted
+    ? `<span class="meta-doc-deleted-badge" title="현재 디스크에서 사라진 정의 (soft-deleted)">${svgWarn({ size: 12 })}</span>`
+    : '';
+  const statChips = `
+    <span class="meta-doc-stat" title="총 호출 수">${inv.toLocaleString()} 회</span>
+    ${lastUsed ? `<span class="meta-doc-stat-sep">·</span><span class="meta-doc-stat" title="마지막 사용">${lastUsed}</span>` : ''}
+    <span class="meta-doc-stat-sep">·</span><span class="meta-doc-stat" title="누적 토큰">${tokens}</span>
+    ${deletedBadge}
+  `;
+
   return `
-    <tr class="meta-doc-row ${cls}" data-type="${escHtml(r.type)}" data-name="${escHtml(r.name)}">
-      <td>${metaDocTypeBadge(r.type)}</td>
-      <td>
-        <div class="meta-doc-name">${escHtml(r.name)}</div>
-        ${desc}
-      </td>
-      <td>${sourceLabel}</td>
-      <td class="num">${(r.invocations ?? 0).toLocaleString()}</td>
-      <td class="num">${lastUsed}</td>
-      <td class="num">${tokens}</td>
-      <td>${deleted ? '<span title="현재 디스크에서 사라진 정의 (soft-deleted)">⚠</span>' : ''}</td>
-    </tr>
+    <div class="meta-doc-card ${cls}" data-type="${escHtml(r.type)}" data-name="${escHtml(r.name)}">
+      <div class="meta-doc-card-header">
+        ${metaDocTypeBadge(r.type)}
+        <span class="meta-doc-card-name">${escHtml(r.name)}</span>
+        <span class="meta-doc-card-stats">${statChips}</span>
+      </div>
+      ${desc}
+      <div class="meta-doc-card-source">${sourcePart}</div>
+    </div>
   `;
 }
 
@@ -427,7 +463,7 @@ function cleanDescription(s) {
 }
 
 /**
- * 메타 문서 타입 뱃지 — 턴 뷰의 Agent/Skill 칩과 동일 시각 언어로 렌더.
+ * Behavior Definitions 타입 뱃지 — 턴 뷰의 Agent/Skill 칩과 동일 시각 언어로 렌더.
  *
  * SSoT 재사용:
  *  - 머리표시 ◎/◉ + 색상 그라디언트는 render/badges.js의 toolIconHtml(toolName)을 그대로 호출.
@@ -438,7 +474,7 @@ function cleanDescription(s) {
  */
 function metaDocTypeBadge(type) {
   const safe = String(type || '').toLowerCase();
-  // 모든 메타 문서 타입은 Agent/Skill 칩과 동일 톤. 정규식 매칭을 위해 'Agent'로 정규화.
+  // 모든 Behavior Definitions 타입은 Agent/Skill 칩과 동일 톤. 정규식 매칭을 위해 'Agent'로 정규화.
   const icon = toolIconHtml('Agent');
   const label = safe.toUpperCase();
   return `<span class="tool-chip agent-chip meta-doc-type meta-doc-type-${escHtml(safe)}">
@@ -458,43 +494,6 @@ function sourceCellHtml(r) {
   return `<div class="meta-doc-source-label">${label}</div>${pathHtml}`;
 }
 
-/**
- * 스코프 헤더 — 현재 보기 범위(전체/특정 프로젝트) + 토글 버튼.
- * 단일 책임 캡슐화. 호출 측은 ctx({project, matched, resolvedSourceRoot})만 전달.
- */
-function renderScopeHeader(ctx = {}) {
-  const isProjectMode = state.scopeMode === 'selected' && !!ctx.project;
-  const otherMode     = isProjectMode ? 'all' : 'selected';
-  const otherLabel    = isProjectMode ? '전체 프로젝트 보기' : '선택 프로젝트만 보기';
-
-  let scopeText;
-  if (isProjectMode) {
-    if (ctx.matched && ctx.resolvedSourceRoot) {
-      scopeText = `<span class="meta-docs-scope-label">프로젝트</span>
-                   <strong class="meta-docs-scope-name">${escHtml(ctx.project)}</strong>
-                   <span class="meta-docs-scope-path" title="${escHtml(ctx.resolvedSourceRoot)}">${escHtml(shortenPath(ctx.resolvedSourceRoot))}</span>`;
-    } else {
-      scopeText = `<span class="meta-docs-scope-label">프로젝트</span>
-                   <strong class="meta-docs-scope-name">${escHtml(ctx.project)}</strong>
-                   <span class="meta-docs-scope-warn">카탈로그 미등록</span>`;
-    }
-  } else {
-    scopeText = `<span class="meta-docs-scope-label">범위</span>
-                 <strong class="meta-docs-scope-name">전체 프로젝트</strong>`;
-  }
-
-  return `
-    <div class="meta-docs-scope">
-      <div class="meta-docs-scope-text">${scopeText}</div>
-      <button type="button" class="meta-docs-scope-toggle"
-              data-meta-scope-toggle="${otherMode}"
-              title="${escHtml(otherLabel)}">
-        ${escHtml(otherLabel)}
-      </button>
-    </div>
-  `;
-}
-
 function renderFilters() {
   const types = [
     { v: 'all',     label: '전체'    },
@@ -502,13 +501,10 @@ function renderFilters() {
     { v: 'skill',   label: 'Skill'   },
     { v: 'command', label: 'Command' },
   ];
-  const scopes = [
-    { v: 'all',     label: '전체'    },
-    { v: 'project', label: '프로젝트'},
-    { v: 'global',  label: '글로벌'  },
-  ];
-  // ADR-001 meta-docs-filter: with_deleted를 별도 boolean(state.includeDeleted)로
-  // 승격. 라디오 그룹은 "행 부분집합 선택" 단일 책임만 담당.
+  // meta-docs feedback ADR (2026-05-14): 스코프 라디오 그룹 제거.
+  //   좌측 패널의 [user(global) | 프로젝트] 행 선택이 scope SSoT를 가져감.
+  //   기존 state.scope는 source 라벨(userSettings/projectSettings) 기준 추가 필터였으나
+  //   좌측 진입점과 의미 축이 겹쳐 사용자 혼동 유발 → 제거.
   const displays = [
     { v: 'all',    label: '전체' },
     { v: 'unused', label: '미사용만' },
@@ -521,14 +517,16 @@ function renderFilters() {
   ).join('');
 
   // 직교 토글 — display와 의미 축이 다르므로 라디오 그룹 외부에 체크박스로 분리.
-  // 라벨 능동형 + 🗑 아이콘 + title 툴팁의 3중 시각 단서로 학습 비용 ↓.
+  // 라벨 능동형 + 휴지통 SVG(stroke-only) + title 툴팁의 3중 시각 단서로 학습 비용 ↓.
+  //  - 사용자 피드백(2026-05-14): emoji 🗑 → SVG trash 로 디자인 톤 일치.
   const includeDeletedHtml = `
     <label class="meta-docs-include-deleted"
            title="과거 호출 이력은 있으나 디스크에서 사라진 항목까지 포함합니다">
       <input type="checkbox"
              data-meta-include-deleted
              ${state.includeDeleted ? 'checked' : ''} />
-      <span class="meta-docs-include-deleted-label">🗑 삭제된 정의도 표시</span>
+      <span class="meta-docs-include-deleted-icon" aria-hidden="true">${svgTrash({ size: 12 })}</span>
+      <span class="meta-docs-include-deleted-label">삭제된 정의도 표시</span>
     </label>
   `;
 
@@ -536,24 +534,10 @@ function renderFilters() {
   return `
     <div class="meta-docs-filters">
       <div class="meta-docs-filter-group"><span class="meta-docs-filter-label">타입</span>${btn('type', types, state.type)}</div>
-      <div class="meta-docs-filter-group"><span class="meta-docs-filter-label">스코프</span>${btn('scope', scopes, state.scope)}</div>
       <div class="meta-docs-filter-group"><span class="meta-docs-filter-label">표시</span>${btn('display', displays, state.display)}</div>
       ${includeDeletedHtml}
     </div>
   `;
-}
-
-/** 헤더 active 클래스 — 단일 책임 */
-function sortHeaderCls(key) {
-  if (state.sort !== key) return '';
-  return state.sortDir === 'asc' ? 'sort-asc' : 'sort-desc';
-}
-/** 헤더 ↓/↑ 표기자 — 단일 책임 */
-function sortIndicator(key) {
-  if (state.sort !== key) return '<span class="sort-arrow sort-arrow-idle">↕</span>';
-  return state.sortDir === 'asc'
-    ? '<span class="sort-arrow">↑</span>'
-    : '<span class="sort-arrow">↓</span>';
 }
 
 const ORPHAN_TOOLTIP =
@@ -609,21 +593,8 @@ async function onMetaContainerClick(e) {
     return;
   }
 
-  // 3) 스코프 토글 (selected ↔ all)
-  const scopeToggle = e.target.closest('[data-meta-scope-toggle]');
-  if (scopeToggle) {
-    const next = scopeToggle.dataset.metaScopeToggle;
-    state.scopeMode = (next === 'selected' || next === 'all') ? next : 'selected';
-    await loadMetaDocsLibrary();
-    return;
-  }
-
-  // 4) 동기화 버튼
-  const refresh = e.target.closest('[data-meta-refresh]');
-  if (refresh) {
-    await runRefresh(refresh);
-    return;
-  }
+  // 동기화 버튼은 좌측 thead 셀(.thead-sync-btn)로 이관되어 본 핸들러에서 직접 처리하지 않음.
+  // (initMetaDocsLeftNav가 body 위임으로 [data-meta-left-refresh] 셀렉터를 캐치 — single source.)
 }
 
 /**
@@ -650,7 +621,8 @@ function setIncludeDeleted(value) {
 /** 필터 변경 단일 진입점 — sort 그룹은 dir 토글 규칙 처리 */
 function applyFilterChange(group, value) {
   if (group === 'type')    { state.type    = value; return; }
-  if (group === 'scope')   { state.scope   = value; return; }
+  // 'scope' 분기는 우측 스코프 라디오 그룹 제거(2026-05-14)와 함께 삭제됨.
+  // scope SSoT는 좌측 패널(user(global)/프로젝트 행 클릭)이 가짐 → setMetaScopeMode 진입점.
   if (group === 'sort') {
     if (!SORTABLE_KEYS.has(value)) return;
     if (state.sort === value) {
@@ -714,7 +686,13 @@ async function runRefresh(buttonEl) {
   } finally {
     // 결과 토스트는 별도 영역. 패널은 즉시 재조회.
     await loadMetaDocsLibrary();
-    // loadMetaDocsLibrary가 컨테이너를 다시 그리므로 buttonEl은 detach됨 — 별도 정리 불필요
+    // 좌측 패널 동기화 버튼은 loadMetaDocsLibrary가 detach하지 않으므로 직접 복원
+    if (buttonEl.isConnected) {
+      buttonEl.disabled = false;
+      buttonEl.classList.remove('is-loading');
+      const labelEl = buttonEl.querySelector('.meta-docs-refresh-label');
+      if (labelEl) labelEl.textContent = '동기화';
+    }
   }
 }
 
@@ -801,18 +779,9 @@ function closeToast(el) {
 
 // =============================================================================
 // 필터 / 정렬 / 포맷
+//   (applyScopeFilter는 2026-05-14 스코프 라디오 제거와 함께 삭제됨.
+//    scopeMode SSoT는 좌측 패널 user(global)/프로젝트 행 클릭이 가져감.)
 // =============================================================================
-
-function applyScopeFilter(rows, scope) {
-  if (scope === 'all') return rows;
-  if (scope === 'global') {
-    return rows.filter(r => r.source === 'userSettings' || r.source_root == null);
-  }
-  if (scope === 'project') {
-    return rows.filter(r => r.source === 'projectSettings');
-  }
-  return rows;
-}
 
 /**
  * 표시 필터 — 행 부분집합 선택만 담당 (단일 책임).
@@ -937,12 +906,6 @@ function applySort(rows, sort, dir = 'desc') {
   // dir에 영향 받지 않는 부호(±1)를 반환한다 — dispatcher에서 factor를 곱해도
   // null 행은 그대로 끝으로 유지된다 (정책: 항상 끝).
   return rows.slice().sort((a, b) => factor * cmp(a, b, dir));
-}
-
-/** 헤더 aria-sort 속성 값 — WAI-ARIA 표준 */
-function ariaSortValue(key) {
-  if (state.sort !== key) return 'none';
-  return state.sortDir === 'asc' ? 'ascending' : 'descending';
 }
 
 function shortenPath(p) {

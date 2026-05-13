@@ -31,13 +31,43 @@ import { jsonResponse, type RouteHandler } from './_shared';
 // =============================================================================
 
 const DASHBOARD_CACHE_TTL = 30_000;
+/** 캐시 무효화 debounce 윈도우 (perf pass) — 활성 세션의 hook 폭풍 중 TTL이 무력화되는 회귀 차단. */
+const INVALIDATE_DEBOUNCE_MS = 5_000;
+
 let _dashboardCache: { key: string; data: unknown; ts: number } | null = null;
+let _invalidateTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
- * 대시보드 응답 캐시 무효화.
- * SSE/proxy 흐름이 새 데이터를 INSERT한 직후 호출하여 다음 요청이 fresh 응답을 받도록 보장.
+ * 대시보드 응답 캐시 무효화 — debounce 적용 (perf pass).
+ *
+ * 배경: 활성 세션 중 매 hook 이벤트마다 무효화되면 TTL 30s 캐시가 사실상 0% hit율로 작동.
+ *   결과적으로 매 /api/dashboard 요청이 9개 직렬 storage 쿼리를 재실행 → Bun 이벤트 루프
+ *   포화 → 다른 HTTP 요청 stalled.
+ *
+ * 정책: 첫 무효화 신호 도착 시 5s 타이머 시작. 그 안에 추가 신호가 와도 타이머는 그대로 유지
+ *   (extend 안 함 — 'leading-trailing' 패턴이 아니라 'trailing only' 시간 윈도우). 타이머 만료 시
+ *   _dashboardCache = null. 결과: 가장 활발한 세션에서도 캐시는 최소 5s마다 한 번만 비워짐.
+ *
+ * 호출자: dispatch.ts(/collect), events.ts(Stop 훅), proxy/handler/broadcast.ts(proxy INSERT).
  */
 export function invalidateDashboardCache(): void {
+  // 이미 타이머가 돌고 있으면 추가 신호는 흡수 — 무효화는 한 윈도우에 1회만 발생.
+  if (_invalidateTimer !== null) return;
+  _invalidateTimer = setTimeout(() => {
+    _dashboardCache = null;
+    _invalidateTimer = null;
+  }, INVALIDATE_DEBOUNCE_MS);
+}
+
+/**
+ * 테스트/긴급 무효화용 — debounce 우회 + 즉시 캐시 null.
+ * 운영 흐름에서는 invalidateDashboardCache()를 우선 사용.
+ */
+export function invalidateDashboardCacheNow(): void {
+  if (_invalidateTimer !== null) {
+    clearTimeout(_invalidateTimer);
+    _invalidateTimer = null;
+  }
   _dashboardCache = null;
 }
 

@@ -228,6 +228,8 @@ td.cell-msg {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 td.cell-msg .prompt-preview { max-width: none; display: inline; cursor: pointer; }
+/* 메시지 셀 전체를 클릭 영역으로 — 텍스트 외 여백/아이콘 클릭도 펼침 트리거 (main.js resolveExpandTarget). */
+td.cell-msg:has(.prompt-preview) { cursor: pointer; }
 .cell-msg-empty { color: var(--text-4); cursor: default; }
 tr[data-type="tool_call"] td.cell-msg .prompt-preview {
   font-family: var(--font-data);
@@ -340,7 +342,7 @@ tr[data-type="tool_call"] td.cell-msg .prompt-preview {
   cursor: help;
   transition: filter var(--dur-fast) var(--ease);
 }
-/* ADR-003 left-rail-meta-docs: agent/skill chip은 메타 문서 딥링크 트리거 — pointer + hover 강조 */
+/* ADR-003 left-rail-meta-docs: agent/skill chip은 Behavior Definitions 딥링크 트리거 — pointer + hover 강조 */
 .sub-type-chip[data-meta-doc-type] {
   cursor: pointer;
 }

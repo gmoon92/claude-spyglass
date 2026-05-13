@@ -52,7 +52,7 @@ export interface CreateRequestParams {
   agent_type?: string | null;
   tool_interrupted?: number | null;
   tool_user_modified?: number | null;
-  // v24: UserPromptSubmit prompt에서 추출한 슬래시 커맨드 이름 (메타 문서 카탈로그 매칭 키)
+  // v24: UserPromptSubmit prompt에서 추출한 슬래시 커맨드 이름 (Behavior Definitions 카탈로그 매칭 키)
   slash_command?: string | null;
 }
 

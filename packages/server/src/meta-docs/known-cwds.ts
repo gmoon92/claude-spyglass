@@ -3,7 +3,7 @@
  *
  * 책임:
  *  - 카탈로그 모집단 확장을 위해 "이 사용자가 사용 중인 워크스페이스 cwd 목록"을 모은다.
- *  - 다른 워크스페이스(rv-iso, squadliterv 등)에 정의된 메타 문서가 호출되었지만
+ *  - 다른 워크스페이스(rv-iso, squadliterv 등)에 정의된 Behavior Definitions가 호출되었지만
  *    카탈로그에 들어오지 않는 orphan 문제를 해결.
  *
  * cwd 후보 소스:
@@ -18,7 +18,7 @@
  *
  * 안전 가드 (모든 후보에 공통):
  *  - realpathSync 정규화 — 심볼릭 링크 중복 차단.
- *  - `.claude/` 디렉토리 실존 — 메타 문서가 있는 워크스페이스만 채택.
+ *  - `.claude/` 디렉토리 실존 — Behavior Definitions가 있는 워크스페이스만 채택.
  *  - home 위로 절대 안 올라감 — `/Users/moongyeom/.claude` 같은 home root 자체는 별도로 글로벌 처리.
  *
  * 외부 노출:
@@ -162,7 +162,7 @@ function generateMergeVariants(decoded: string): string[] {
  *  - 절대경로 형태 (resolve 후 `/`로 시작)
  *  - realpath 성공 (디스크에 실제 존재)
  *  - home 자체 또는 home 외부가 아님 (보안)
- *  - `<cwd>/.claude/` 디렉토리 존재 (메타 문서가 있는 워크스페이스만)
+ *  - `<cwd>/.claude/` 디렉토리 존재 (Behavior Definitions가 있는 워크스페이스만)
  */
 function addIfValid(acc: Set<string>, candidate: string, home: string): void {
   if (!candidate || !candidate.startsWith('/')) return;

@@ -1,5 +1,5 @@
 /**
- * meta-docs 모듈 — 메타 문서 디스크 스캐너
+ * meta-docs 모듈 — Behavior Definitions 디스크 스캐너
  *
  * 책임:
  *  - 주어진 디렉토리(`<root>/.claude/{agents,skills,commands}`)를 훑어

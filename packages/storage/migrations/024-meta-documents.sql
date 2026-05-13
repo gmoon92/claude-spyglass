@@ -1,7 +1,7 @@
--- Migration 024: 메타 문서 카탈로그 + 슬래시 커맨드 추출
+-- Migration 024: Behavior Definitions 카탈로그 + 슬래시 커맨드 추출
 --
 -- 책임
---  - Claude Code 메타 문서(에이전트/스킬/슬래시 커맨드) 카탈로그를 DB에 보존
+--  - Claude Code Behavior Definitions(에이전트/스킬/슬래시 커맨드) 카탈로그를 DB에 보존
 --  - 동일 이름이 여러 source(user/project/...)에 있을 수 있으므로 multi-source row 모델
 --  - cwd → 호출 매핑(meta_doc_resolutions)을 별도 테이블로 분리하여 source precedence 해소
 --  - requests.slash_command 컬럼으로 사용자 슬래시 커맨드 호출을 직접 매칭 가능하게 함
@@ -71,7 +71,7 @@ CREATE INDEX IF NOT EXISTS idx_requests_slash
     ON requests(slash_command)
     WHERE slash_command IS NOT NULL;
 
--- 메타 문서 매칭용 부분 인덱스: 집계 전략가 권고
+-- Behavior Definitions 매칭용 부분 인덱스: 집계 전략가 권고
 CREATE INDEX IF NOT EXISTS idx_requests_meta_doc
     ON requests(tool_name, tool_detail)
     WHERE tool_name IN ('Agent', 'Skill');

@@ -19,106 +19,81 @@
  * 호출 마크업: packages/web/assets/js/system-prompt-library.js renderHtml() 참조
  */
 
-/* === 컨테이너 ============================================================= */
+/* === 컨테이너 =============================================================
+ *
+ * 패딩 일관화: 요청 탭(#detailRequestsView)은 .detail-content가 직접 <table>을
+ * 감싸고 별도 좌우 패딩이 없다. 따라서 시스템 라이브러리 탭도 .syslib-body가
+ * 자체 padding을 두지 않는다 — 표가 detail-content 가장자리에서 시작해 탭 헤더와
+ * 시각적 시작점이 정확히 일치한다. 행 간 시각적 호흡은 셀 padding(글로벌 10px 12px)이
+ * 담당하므로 컨테이너 padding은 0으로 충분. */
 .syslib-body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-4);
   font-size: var(--text-body);
   color: var(--text-2);
 }
 
-/* === Sort 토글 바 ========================================================= */
-.syslib-sort-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  background: var(--surface-alt);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-}
-.syslib-sort-label {
-  margin-right: var(--space-2);
-  font-size: var(--text-meta);
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: var(--weight-medium);
-}
-.syslib-sort-btn {
-  display: inline-flex;
-  align-items: center;
-  padding: var(--space-1) var(--space-3);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-ui);
-  font-size: var(--text-meta);
-  font-weight: var(--weight-medium);
-  color: var(--text-3);
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease),
-              color var(--dur-fast) var(--ease),
-              border-color var(--dur-fast) var(--ease);
-}
-.syslib-sort-btn:hover {
-  background: var(--raised);
-  color: var(--text-2);
-}
-.syslib-sort-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.syslib-sort-btn.active {
-  background: var(--accent-bg-medium);
-  color: var(--brand-primary);
-  border-color: var(--accent-border);
-}
-.syslib-sort-btn.active:hover {
-  background: var(--accent-bg-medium);
-}
-
-/* === 카탈로그 표 ========================================================== */
+/* === 카탈로그 표 ==========================================================
+ *
+ * 정렬은 헤더 클릭으로 토글한다 (Behavior Definitions 테이블과 동일 패턴 — SSoT는
+ * system-prompt-library.js의 SORTABLE_KEYS / DEFAULT_DIR / COMPARATORS).
+ * 별도 상단 정렬 토글 바(.syslib-sort-bar)는 ADR-008 후속 정리로 제거됨.
+ *
+ * 패딩 일관화: 셀 padding은 글로벌(table.css의 th/td: 10px 12px)을 그대로 따른다.
+ * 요청 탭과 동일한 시각 리듬을 위해 외곽 border / border-radius / overflow는 두지 않는다.
+ * thead의 position:sticky 도 table.css 글로벌 룰을 그대로 활용. */
 .syslib-table {
   width: 100%;
   border-collapse: collapse;
-  background: var(--surface-alt);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
   font-size: var(--text-body);
 }
 .syslib-table thead th {
-  padding: var(--space-2) var(--space-3);
-  background: var(--surface);
-  border-bottom: 1px solid var(--border-strong);
-  font-size: var(--text-small);
-  font-weight: var(--weight-medium);
-  color: var(--text-3);
-  text-align: left;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  position: relative;   /* .col-resize-handle (position:absolute) 기준 — 글로벌 sticky가 implicit position이지만 명시해 일관성 확보. */
 }
 .syslib-table thead th.num,
 .syslib-table tbody td.num {
   text-align: right;
   font-family: var(--font-data);
 }
+
+/* 헤더 정렬 — Behavior Definitions 테이블과 동일 시각 어휘. 모든 컬럼 공통.
+ * 화살표(↕/↑/↓) + active accent 톤 + 키보드 포커스 표식. */
+.syslib-table thead th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
+  outline: none;
+}
+.syslib-table thead th.sortable:hover {
+  color: var(--text-1);
+  background: var(--raised);
+}
+.syslib-table thead th.sortable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+.syslib-table thead th.sort-asc,
+.syslib-table thead th.sort-desc {
+  color: var(--accent);
+}
+.syslib-table thead th .sort-arrow {
+  display: inline-block;
+  margin-left: var(--space-1);
+  font-weight: var(--weight-strong);
+  opacity: 0.95;
+}
+.syslib-table thead th .sort-arrow-idle {
+  opacity: 0.5;
+}
+/* 행 자체 attribute: 클릭→모달이라 cursor + 키보드 활성화 표식만 보유.
+ * padding / border / hover bg는 글로벌(table.css)의 td · tr:hover 룰이 담당.
+ */
 .syslib-row {
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease);
 }
-.syslib-row + .syslib-row td { border-top: 1px solid var(--border); }
-.syslib-row td {
-  padding: var(--space-2) var(--space-3);
-  color: var(--text-2);
-  font-size: var(--text-body);
-  vertical-align: middle;
-}
-.syslib-row:hover { background: var(--raised); }
 .syslib-row:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;

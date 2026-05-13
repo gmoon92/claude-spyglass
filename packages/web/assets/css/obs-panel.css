@@ -180,7 +180,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ── 메타 문서 Top N 모드 (dashboard-ui-enhancements ADR-004) ─────────────
+/* ── Behavior Definitions Top N 모드 (dashboard-ui-enhancements ADR-004) ─────────────
    .obs-meta-row: obs-cat-row와 동일 grid 구조를 재사용.
    이름 컬럼이 길 수 있으므로 overflow: hidden + text-overflow: ellipsis 적용.
    ─────────────────────────────────────────────────────────────────────── */

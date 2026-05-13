@@ -1,4 +1,4 @@
-/* meta-docs.css — 메타 문서 카탈로그 패널 (v25, meta-docs-enhance)
+/* meta-docs.css — Behavior Definitions 카탈로그 패널 (v25, meta-docs-enhance)
  *
  * 패턴: syslib.css와 동일한 detail-tab 안쪽 컨테이너 스타일.
  * 사용처: index.html #detailMetaDocsView > #metaDocsBody
@@ -81,32 +81,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.meta-docs-scope-warn {
-  color: var(--warn, #F0B72F);
-  font-size: 11px;
-  font-weight: 500;
-  padding: 1px 6px;
-  border: 1px solid var(--warn, #F0B72F);
-  border-radius: 3px;
-  background: rgba(240, 183, 47, 0.08);
-}
-.meta-docs-scope-toggle {
-  flex: 0 0 auto;
-  background: transparent;
-  border: 1px solid var(--border-strong, #3a3a40);
-  color: var(--text-2, #C9D1D9);
-  border-radius: 4px;
-  padding: 3px 10px;
-  font-size: 11.5px;
-  cursor: pointer;
-  transition: background var(--dur-fast, 120ms), color var(--dur-fast, 120ms), border-color var(--dur-fast, 120ms);
-}
-.meta-docs-scope-toggle:hover {
-  background: var(--raised, #1e1e22);
-  color: var(--text-1, #F0F6FC);
-  border-color: var(--accent, #FF7A45);
-}
-
 /* 빈 상태 — 프로젝트 미등록 안내 */
 .state-empty .state-empty-hint {
   display: block;
@@ -116,70 +90,7 @@
   line-height: 1.5;
 }
 
-/* ── 상단 요약 ───────────────────────────────────────────────────────── */
-.meta-docs-summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 6px 0 12px;
-  font-size: 12px;
-  color: var(--text-3, #a0a0a0);
-  border-bottom: 1px solid var(--border, #2a2a2a);
-}
-.meta-docs-summary strong {
-  color: var(--text-1, #e5e5e5);
-  font-weight: 600;
-}
-.meta-docs-summary .sep { opacity: 0.4; }
-.meta-docs-summary .meta-docs-actions { margin-left: auto; }
-
-.meta-docs-refresh-meta {
-  color: var(--text-3, #8B949E);
-  cursor: help;
-  border-bottom: 1px dotted var(--border-strong, #3a3a40);
-}
-
-/* 동기화 버튼 — 아이콘 + 라벨 inline */
-.meta-docs-summary button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--raised, #2a2a2a);
-  border: 1px solid var(--border-strong, #3a3a3a);
-  color: var(--text-1, #e5e5e5);
-  border-radius: 4px;
-  padding: 3px 10px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background var(--dur-fast, 120ms), border-color var(--dur-fast, 120ms);
-}
-.meta-docs-summary button:hover {
-  background: var(--surface-alt, #333);
-  border-color: var(--accent, #FF7A45);
-}
-.meta-docs-summary button:disabled {
-  opacity: 0.65;
-  cursor: progress;
-}
-
-/* 동기화 아이콘 (회전 화살표) — 정상 시 정지, is-loading 시 회전 */
-.meta-docs-refresh-icon {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 1.5px solid var(--text-3, #8B949E);
-  border-top-color: var(--accent, #FF7A45);
-  position: relative;
-}
-.meta-docs-summary button:hover .meta-docs-refresh-icon {
-  border-color: var(--accent, #FF7A45);
-  border-top-color: var(--text-1, #fff);
-}
-.meta-docs-summary button.is-loading .meta-docs-refresh-icon {
-  animation: meta-docs-spin 0.9s linear infinite;
-}
+/* meta-docs feedback ADR (2026-05-14): 회전 애니메이션 — thead-sync-icon 등에서 공유 사용. */
 @keyframes meta-docs-spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
@@ -193,7 +104,7 @@
   padding: 10px 0;
   border-bottom: 1px solid var(--border, #2a2a2a);
   margin-bottom: 8px;
-  /* meta-table-scroll ADR-002: 필터바 sticky — 메타 문서 body 스크롤 시 항상 노출.
+  /* meta-table-scroll ADR-002: 필터바 sticky — Behavior Definitions body 스크롤 시 항상 노출.
      배경은 root(--surface-alt)와 동일하여 시각 노이즈 0. z-index 6: thead(5)보다 상위. */
   position: sticky;
   top: 0;
@@ -254,12 +165,21 @@
   color: var(--text-1);
   border-color: var(--border);
 }
+/* meta-docs feedback ADR (2026-05-14): checkbox 시각 요소 제거.
+ *   - input은 의미/키보드 접근성 유지를 위해 DOM에 남김(:has(input:checked) 셀렉터 의존).
+ *   - visual만 숨김 — clip-path + 1px 위치 트릭으로 fully out-of-flow 처리.
+ *   - 활성 상태 전달은 라벨 자체의 배경/테두리/색상 변화로 충분(분기 처리됨). */
 .meta-docs-include-deleted input[type="checkbox"] {
-  margin: 0;
-  width: 13px;
-  height: 13px;
-  accent-color: var(--accent);  /* 체크 시 강조색 — UA 기본 파랑 회피 */
-  cursor: pointer;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
 }
 .meta-docs-include-deleted:has(input:checked) {
   background: var(--accent-bg-medium);
@@ -273,6 +193,33 @@
 .meta-docs-include-deleted-label {
   white-space: nowrap;
 }
+/* meta-docs feedback ADR (2026-05-14): emoji 🗑 → SVG trash 교체. 인라인 정렬을 위한 wrapper.
+ *   - svg는 currentColor 적용 — checkbox + 라벨 + 아이콘 톤이 한 덩어리로 움직임.
+ *   - checked 시 라벨/체크박스가 accent 톤으로 전환되면 아이콘도 자동으로 따라간다. */
+.meta-docs-include-deleted-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  color: var(--text-3);
+  transition: color var(--dur-fast, 120ms);
+}
+.meta-docs-include-deleted:has(input:checked) .meta-docs-include-deleted-icon {
+  color: var(--accent);
+}
+
+/* 우측 패널 동기화 힌트(cwd N개 동기화) — 'N 항목' summary 삭제로 단독 행이 됨.
+ *   필터 바 아래 좌측 정렬, 톤은 보조 라벨과 동일 회색. */
+.meta-docs-refresh-hint {
+  font-size: 11px;
+  color: var(--text-3);
+  padding: 4px 0 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+  cursor: help;
+}
+.meta-docs-refresh-hint strong { color: var(--text-1); font-weight: 600; }
 
 /* ── 표 ──────────────────────────────────────────────────────────────── */
 .meta-docs-table-wrap {
@@ -386,7 +333,7 @@
 /* ── 타입 뱃지 ───────────────────────────────────────────────────────── *
  * 턴 뷰 Agent/Skill 칩과 동일 시각 언어 (badges.css `.tool-icon-agent` SSoT +
  * turn-view.css `.tool-chip` / `.agent-chip` 재사용). agent/skill/command 모두 동일 주황 톤.
- * 여기서는 메타 문서 표 컨텍스트에 맞춘 미세 조정만 수행 (폰트 굵기·자간) — 색상은
+ * 여기서는 Behavior Definitions 표 컨텍스트에 맞춘 미세 조정만 수행 (폰트 굵기·자간) — 색상은
  * 절대 덮어쓰지 않는다 (SSoT 보존).
  */
 .meta-doc-type {
@@ -445,6 +392,117 @@
   outline: 2px solid var(--accent, #FF7A45);
   outline-offset: 2px;
   border-radius: 2px;
+}
+
+/* ── Behavior Definitions 카드 리스트 (테이블 대체) ─────────────────────────────── */
+.meta-doc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+}
+
+.meta-doc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  transition: border-color var(--dur-fast, 120ms), background var(--dur-fast, 120ms);
+  cursor: default;
+}
+.meta-doc-card:hover {
+  background: var(--raised);
+  border-color: var(--border-strong);
+}
+
+/* 헤더 행: [타입 뱃지] [이름] [통계 칩들] */
+.meta-doc-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.meta-doc-card-name {
+  flex: 1 1 auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.meta-doc-card-stats {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.meta-doc-stat { white-space: nowrap; }
+.meta-doc-stat-sep { opacity: 0.4; }
+/* meta-docs feedback ADR (2026-05-14): emoji ⚠ → SVG warn 교체.
+ *   - inline-flex로 텍스트 baseline에 정렬 (svg는 vertical-align: middle 효과).
+ *   - 톤은 --warn 유지. font-size는 svg 자체 크기(12)로 결정되므로 wrapper에서 강제 없음. */
+.meta-doc-deleted-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--warn);
+  cursor: help;
+  margin-left: 2px;
+}
+
+/* 설명 + 출처 */
+.meta-doc-card-desc {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 2px;
+}
+
+.meta-doc-card-source {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-4, #707070);
+  padding-left: 2px;
+  min-width: 0;
+}
+
+/* 상태별 카드 스타일 */
+.meta-doc-card.meta-doc-unused {
+  border-left: 2px solid var(--warn);
+  padding-left: 10px;
+}
+.meta-doc-card.meta-doc-unused .meta-doc-card-name::after {
+  content: ' — 미사용';
+  color: var(--warn);
+  font-size: 10.5px;
+  font-weight: 400;
+  margin-left: 4px;
+}
+.meta-doc-card.meta-doc-deleted {
+  opacity: 0.55;
+}
+.meta-doc-card.meta-doc-deleted .meta-doc-card-name {
+  text-decoration: line-through;
+  color: var(--text-3);
+}
+.meta-doc-card.meta-doc-orphan {
+  border-left: 2px solid var(--error, #F47174);
+  padding-left: 10px;
+  opacity: 0.75;
 }
 
 /* ── 토스트 호스트 ───────────────────────────────────────────────────── */
@@ -515,7 +573,7 @@
 }
 
 /* =============================================================================
- * ADR-003 left-rail-meta-docs: 메타 문서 모드 컨테이너 + 좌측 요약 카드
+ * ADR-003 left-rail-meta-docs: Behavior Definitions 모드 컨테이너 + 좌측 요약 카드
  *
  * 가시성 룰:
  *   body[data-app-mode="browse"]   → #metaDocsRoot { display: none }, .right-panel { display: ... }
@@ -561,6 +619,101 @@ body[data-app-mode="metadocs"] #browserProjectsSection {
   flex: 1 1 auto;
 }
 
+/* === 좌측 thead 모드별 분기 + [동기화] 셀 (meta-docs feedback ADR 2026-05-14) ===
+ *
+ * 좌측 프로젝트 테이블은 thead 두 벌(browse/metadocs)을 두고 body[data-app-mode]로 단일 행만 노출.
+ *   - browse  thead = [프로젝트 | 세션 | 토큰]   (.thead-browse)
+ *   - metadocs thead = [프로젝트 | 항목 | 동기화] (.thead-metadocs)
+ *
+ * 동기화 셀(.thead-sync-cell)에는 inline 버튼(.thead-sync-btn)이 위치하며,
+ * 클릭 시 meta-docs-view.js initMetaDocsLeftNav() body 위임이 runRefresh()를 호출.
+ * 회전 애니메이션은 기존 @keyframes meta-docs-spin 재사용.
+ */
+/* 기본값: metadocs thead 숨김 — 초기 paint(body[data-app-mode] 미세팅) 시 두 행이 동시
+ *   노출되는 깜빡임 방지. JS가 data-app-mode 설정 후 metadocs면 다시 노출. */
+.thead-metadocs { display: none; }
+body[data-app-mode="metadocs"] .thead-metadocs { display: table-row; }
+body[data-app-mode="metadocs"] .thead-browse   { display: none; }
+
+/* metadocs thead — 표준 thead th 토큰 풀(font-size/color/padding) 유지하되 동기화 셀만 특수 처리 */
+.thead-sync-cell {
+  text-align: right;
+  padding: 4px 6px !important;
+}
+.thead-sync-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--raised);
+  border: 1px solid var(--border-strong);
+  color: var(--text-2);
+  border-radius: var(--radius-sm, 4px);
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+  transition: background var(--dur-fast, 120ms), border-color var(--dur-fast, 120ms), color var(--dur-fast, 120ms);
+}
+.thead-sync-btn:hover {
+  background: var(--surface-alt);
+  border-color: var(--accent);
+  color: var(--text-1);
+}
+.thead-sync-btn:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
+.thead-sync-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  color: var(--text-3);
+  transition: color var(--dur-fast, 120ms);
+}
+.thead-sync-btn:hover .thead-sync-icon { color: var(--accent); }
+.thead-sync-btn.is-loading .thead-sync-icon {
+  color: var(--accent);
+  animation: meta-docs-spin 0.9s linear infinite;
+  transform-origin: 50% 50%;
+}
+.thead-sync-label { white-space: nowrap; }
+
+/* metadocs 모드 — 항목 수 셀(우측 정렬, tabular nums) + 가상 'user(global)' 행 ====== */
+.cell-proj-meta-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+.cell-proj-meta-spacer { /* thead 동기화 셀 폭에 대응하는 빈 셀 */ }
+
+/* 가상 'user (global)' 행 — 일반 프로젝트와 시각 차별화:
+ *  - 'global' 태그는 작은 칩(text-3 + accent border)으로 보조 정체성 표시
+ *  - row-selected 일 때만 accent 강조(다른 프로젝트 동작과 동일) */
+.cell-proj-global td:first-child {
+  font-weight: 500;
+}
+.cell-proj-global-tag {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-3);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  line-height: 1.5;
+}
+.cell-proj-global.row-selected .cell-proj-global-tag {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* 요약 카드 컨테이너 — metadocs 모드에서만 노출. DOM 순서상 #browserProjectsSection
    직후에 위치 (brand-strip-cleanup ADR-002). grid auto-flow에 의해 2행 자동 배치. */
 body[data-app-mode="metadocs"] #metaDocsSummaryCards {
@@ -570,20 +723,29 @@ body[data-app-mode="browse"] #metaDocsSummaryCards {
   display: none !important;
 }
 
-/* === 좌측 요약 카드 3개 (사용/미사용/orphan) ============================ */
+/* === 좌측 요약 카드 3개 (사용/미사용/orphan) ============================
+ *
+ * meta-docs feedback ADR (2026-05-14): 카드 높이가 비정상적으로 컸던 원인을 두 축에서 축소.
+ *   - 값 폰트: --text-h2 (≈ 24~28px) → 16px — 좌측 패널 폭에 비해 과한 시각 weight 제거.
+ *   - 카드 패딩: var(--space-2) var(--space-3) → 4px 6px — 행 높이를 thead+row 톤에 맞춤.
+ *   - 컨테이너 padding: 상하 짧게 — 프로젝트 리스트 ↔ obs panel 사이 잔여 공백 회수.
+ *   - 가로 1줄(value)+세로 1줄(label) 대신, 한 줄 안에서 [값 · 라벨]을 좌우로 배치.
+ */
 .meta-docs-summary-cards {
   flex-direction: row;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-3) 0;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
   flex: 0 0 auto;
 }
 
 .meta-docs-summary-card {
   flex: 1 1 0;
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-2) var(--space-3);
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 6px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -593,7 +755,7 @@ body[data-app-mode="browse"] #metaDocsSummaryCards {
 
 .meta-docs-summary-card-value {
   font-family: var(--font-data);
-  font-size: var(--text-h2);
+  font-size: 16px;
   font-weight: var(--weight-strong);
   color: var(--text-1);
   line-height: 1.1;
@@ -601,7 +763,7 @@ body[data-app-mode="browse"] #metaDocsSummaryCards {
 
 .meta-docs-summary-card-label {
   font-family: var(--font-ui);
-  font-size: var(--text-small);
+  font-size: 10.5px;
   color: var(--text-3);
   text-transform: lowercase;
   letter-spacing: 0.03em;
@@ -636,12 +798,12 @@ body[data-app-mode="browse"] #metaDocsSummaryCards {
   60%  { background: var(--accent-bg-medium); }
   100% { background: transparent; }
 }
-.meta-docs-table tr[data-flash="1"] {
+.meta-doc-card[data-flash="1"] {
   animation: meta-docs-flash 1.5s var(--ease) 1;
 }
 
 /* =============================================================================
- * ADR-004 meta-docs-tool-stats — 메타 모드 서브 탭 [메타 문서 / 도구 통계]
+ * ADR-004 meta-docs-tool-stats — 메타 모드 서브 탭 [Behavior Definitions / 도구 통계]
  *
  *  의도:
  *   - 서브 탭은 메타 모드 메인 영역 상단 폭 전체를 차지하는 가벼운 horizontal bar.
@@ -711,7 +873,7 @@ body[data-app-mode="browse"] #metaDocsSummaryCards {
 }
 
 /* 도구 통계 본문 — 매트릭스(.ts-mx)는 자기 자식 스타일로 충분.
-   바깥 패딩만 통일하여 [메타 문서] 탭의 카탈로그와 시각 균형.
+   바깥 패딩만 통일하여 [Behavior Definitions] 탭의 카탈로그와 시각 균형.
    meta-table-scroll ADR-001/004: 메타 모드 메인 영역 안에서만 스크롤되도록 flex item화.
    바깥 padding은 0 — 안쪽 .ts-mx가 자체 padding을 가지므로 중첩 padding을 제거하여
    sticky 표면이 .meta-tool-stats-body 상단(top:0)과 정확히 일치하도록 함. */
@@ -720,7 +882,7 @@ body[data-app-mode="browse"] #metaDocsSummaryCards {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  /* 스크롤바 토큰 — 메타 문서 body와 동일 (ADR-003) */
+  /* 스크롤바 토큰 — Behavior Definitions body와 동일 (ADR-003) */
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
 }
@@ -734,32 +896,5 @@ body[data-app-mode="browse"] #metaDocsSummaryCards {
 }
 .meta-tool-stats-body::-webkit-scrollbar-track { background: transparent; }
 
-/* =============================================================================
- * ADR-004 — 세션 도구 탭 우상단 outbound 링크 "↗ 프로젝트 전체로 보기"
- *
- *   .ts-mx-toolbar 안에 절대 정렬이 아닌 margin-left:auto 로 우측 push.
- *   링크 자체는 가벼운 dim 색조 → hover 시 accent. 시각 노이즈 최소화.
- * ========================================================================== */
-.ts-mx-outbound {
-  margin-left: auto;
-  padding: var(--space-1) var(--space-2);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-3);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  transition: color var(--dur-fast) var(--ease),
-              background var(--dur-fast) var(--ease);
-  text-decoration: none;
-  user-select: none;
-}
-
-.ts-mx-outbound:hover {
-  color: var(--accent);
-  background: var(--accent-bg-medium);
-}
-
-.ts-mx-outbound:focus-visible {
-  outline: 2px solid var(--accent-border);
-  outline-offset: 1px;
-}
+/* ADR-004 후속: 세션 도구 탭이 메타 모드 [도구 통계]와 중복이라 제거되면서,
+ *   우상단 outbound 링크 ".ts-mx-outbound"도 함께 사라짐. 관련 룰 전부 삭제. */

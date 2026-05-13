@@ -7,8 +7,37 @@ import { subTypeOf } from '../request-types.js';
 import { anomalyBadgesHtml } from './badges.js';
 import { trustOf, rowTrustClass, makeModelCell } from './model.js';
 import { makeActionCell, makeTargetCell, makeCacheCell } from './cells.js';
-import { contextPreview, extractFirstPrompt } from './extract.js';
+import { contextPreview, extractFirstPrompt, extractPromptText, extractAssistantText } from './extract.js';
 import { RECENT_REQ_COLS } from './expand.js';
+
+/**
+ * 검색 haystack SSoT — 행에 박을 `data-search-haystack` 속성용 문자열을 만든다.
+ *
+ * 포함 범위 (사용자 요구):
+ *  - r.tool_name / r.tool_detail  — tool / Skill(...) / Agent(...) / MCP `mcp__server__tool`
+ *  - r.model                       — Sonnet 4.6 등
+ *  - r.type                        — prompt/tool_call/response/system (역할 검색)
+ *  - body                          — extractPromptText / extractAssistantText 결과(payload 본문 전체)
+ *  - r.preview                     — payload 파싱 실패 시 DB preview fallback
+ *
+ * 정책:
+ *  - 모두 소문자로 normalize — 검색 측에서 소문자 substring 매칭만 하면 됨.
+ *  - 길이 8KB 상한 — 매우 긴 payload는 검색 비용 보호 차원. 본문 앞부분(prompt 입력)이 검색의 99%.
+ *
+ * 외부에서 별도 검색용 인덱스를 두지 않는 이유: 행 자체가 SSoT이므로 SSE in-place 업데이트나
+ * append 같은 비동기 렌더에도 row dataset이 자연스럽게 따라간다.
+ */
+function buildSearchHaystack(r) {
+  const parts = [];
+  if (r.tool_name)   parts.push(r.tool_name);
+  if (r.tool_detail) parts.push(r.tool_detail);
+  if (r.model)       parts.push(r.model);
+  if (r.type)        parts.push(r.type);
+  const body = r.type === 'response' ? extractAssistantText(r) : extractPromptText(r);
+  if (body)          parts.push(body);
+  if (r.preview && body !== r.preview) parts.push(r.preview);
+  return parts.join(' ').toLowerCase().slice(0, 8000);
+}
 
 /**
  * 단일 행 진입점 (table 변형) — 전체 피드 + 세션 flat 뷰 공용 (ADR-005).
@@ -35,7 +64,8 @@ export function makeRequestRow(r, opts = {}) {
   const slowBadge       = flags && flags.has('slow') ? `<span class="mini-badge badge-slow" data-mini-badge-tooltip="slow">slow</span>` : '';
 
   const trustCls = rowTrustClass(r);
-  return `<tr class="${trustCls.trim()}" data-type="${escHtml(r.type||'')}" data-sub-type="${subTypeOf(r)}" data-trust="${trustOf(r)}" data-request-id="${escHtml(r.id||'')}">
+  const haystack = buildSearchHaystack(r);
+  return `<tr class="${trustCls.trim()}" data-type="${escHtml(r.type||'')}" data-sub-type="${subTypeOf(r)}" data-trust="${trustOf(r)}" data-request-id="${escHtml(r.id||'')}" data-search-haystack="${escHtml(haystack)}">
     <td class="cell-time num" data-cell="time">${fmtTs(r.timestamp)}</td>
     <td class="cell-action" data-cell="action">${makeActionCell(r)}</td>
     ${makeTargetCellWithBadges(r, spikeLoopBadges)}

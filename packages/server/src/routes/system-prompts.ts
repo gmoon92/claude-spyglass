@@ -13,6 +13,7 @@
 import {
   getSystemPromptByHash,
   listSystemPrompts,
+  getProxyRequestsBySystemHash,
   type SystemPromptOrderBy,
 } from '@spyglass/storage';
 import { jsonResponse, type RouteHandler } from './_shared';
@@ -28,6 +29,19 @@ export const systemPromptsRouter: RouteHandler = (_req, db, url, path, method) =
     const orderBy = (requested && allowedOrder.includes(requested)) ? requested : 'last_seen_at';
     const data = listSystemPrompts(db, { limit, orderBy });
     return jsonResponse({ success: true, data, meta: { total: data.length, limit } });
+  }
+
+  // GET /api/system-prompts/:hash/refs — 이 시스템 프롬프트(hash)를 참조한 proxy_requests 목록.
+  // ref-drilldown pass: System 섹션의 ref_count 칩 클릭 시 호출.
+  // 슬림 컬럼만 반환 (payload BLOB 제외) — 100건 한도. 최신순.
+  if (path.match(/^\/api\/system-prompts\/[^\/]+\/refs$/) && method === 'GET') {
+    const hash = path.split('/')[3];
+    if (!/^[0-9a-f]{64}$/.test(hash)) {
+      return jsonResponse({ success: false, error: 'Invalid hash format (expected 64-char hex)' }, 400);
+    }
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '100', 10), 500);
+    const refs = getProxyRequestsBySystemHash(db, hash, limit);
+    return jsonResponse({ success: true, data: refs, meta: { total: refs.length, limit } });
   }
 
   // GET /api/system-prompts/:hash — 본문 lazy-fetch (LLM Input 탭에서 클릭 시)

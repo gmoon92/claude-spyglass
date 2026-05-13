@@ -2,7 +2,7 @@
 const CTX_TOOLTIP_CONTENT = {
   'context-growth': {
     title: 'Accumulated Tokens',
-    desc:  '세션 동안 누적된 input_tokens 흐름을 보여줍니다.\n• 200K는 참고 스케일로, Claude 모델별 실제 Context Window 한도와는 다를 수 있습니다.\n• 이 차트는 Claude 런타임의 실제 Context Window 사용률이 아닙니다.\n• 실제 한도 관리는 Claude가 자동으로 수행합니다.',
+    desc:  '세션 동안 누적된 input_tokens 흐름을 보여줍니다.\n• 스케일은 요청 model + anthropic-beta 헤더로 실제 Context Window 한도를 추론합니다 (Opus 4.7 등 GA 1M 모델은 1M, 그 외 기본 200K).\n• 이 차트는 proxy 관측 기반이며 Claude 런타임의 자동 compact 후 사용률과는 다를 수 있습니다.\n• 실제 한도 관리(compact 발동 등)는 Claude가 자동으로 수행합니다.',
   },
 };
 
@@ -153,12 +153,19 @@ export function initStatTooltip() {
     const detail = e.detail;
     if (detail && detail.turnIndex !== undefined) {
       _pointHoverActive = true;
+      // 누적 라인 — 모델 한도가 있으면 "X / Y tokens (Z%)" 풀 표기
+      const accumulatedLine = detail.windowLabel
+        ? `누적 ${detail.formattedValue} / ${detail.windowLabel} tokens (${detail.usagePercent ?? '0.0'}%)`
+        : `누적 ${detail.formattedValue} tokens`;
       const deltaLine = detail.formattedDelta
         ? `<br><span style="opacity:0.6">전 턴 대비 ${detail.formattedDelta} tokens</span>`
         : '';
+      const modelLine = detail.windowModel
+        ? `<br><span style="opacity:0.45">모델 ${detail.windowModel}</span>`
+        : '';
       tooltip.innerHTML = `
         <div class="stat-tooltip-title">Turn ${detail.turnIndex}</div>
-        <div class="stat-tooltip-desc">누적 ${detail.formattedValue} tokens${deltaLine}</div>
+        <div class="stat-tooltip-desc">${accumulatedLine}${deltaLine}${modelLine}</div>
       `;
       tooltip.style.display = 'block';
       positionAt(detail.clientX, detail.clientY);
