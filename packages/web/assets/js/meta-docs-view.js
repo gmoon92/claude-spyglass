@@ -20,10 +20,12 @@
  */
 
 import { escHtml, fmtTime } from './formatters.js';
-import { getSelectedProject } from './state.js';
+import { getSelectedProject, getMetaSubTab, setMetaSubTab as stateSetMetaSubTab } from './state.js';
 import { toolIconHtml } from './render/badges.js';
 import { skMetaDocList } from './render/skeleton.js';
 import { initColResize } from './col-resize.js';
+// ADR-004 meta-docs-tool-stats: 프로젝트 단위 도구 통계 진입점.
+import { loadProjectToolStats } from './tool-stats.js';
 
 const CONTAINER_ID = 'metaDocsBody';
 
@@ -56,7 +58,76 @@ const state = {
  * @returns {Promise<void>}
  */
 export async function enterMetaDocsMode() {
+  // ADR-004 meta-docs-tool-stats: 마지막 서브 탭 복원 (기본 'docs').
+  //   - 카탈로그 로드는 두 탭 모두에서 좌측 요약 카드를 위해 항상 수행.
+  //   - 'tools' 탭이라면 추가로 프로젝트 도구 통계도 로드.
   await loadMetaDocsLibrary();
+  applyMetaSubTab(getMetaSubTab());
+}
+
+/**
+ * ADR-004 meta-docs-tool-stats: 메타 모드 서브 탭 전환 SSoT.
+ *
+ *  - DOM: #metaDocsBody / #metaToolStatsBody 가시성 토글, .meta-tab[aria-selected/active] 동기화.
+ *  - state: setMetaSubTab(tab) — sessionStorage 영속화.
+ *  - 데이터: 'tools' 진입 시 loadProjectToolStats(getSelectedProject()) 호출.
+ *  - 'docs'로 돌아갈 때는 카탈로그 이미 로드되어 있으므로 재 fetch 불필요.
+ *
+ *  호출자: main.js 서브 탭 버튼 click 위임, enterMetaDocsMode 끝부분.
+ *
+ * @param {'docs'|'tools'} tab
+ */
+export function setMetaSubTab(tab) {
+  if (tab !== 'docs' && tab !== 'tools') return;
+  stateSetMetaSubTab(tab);
+  applyMetaSubTab(tab);
+}
+
+/**
+ * 서브 탭 가시성·aria·active 클래스 적용 + 'tools' 데이터 로드.
+ * setMetaSubTab과 enterMetaDocsMode 둘 다 호출하는 내부 헬퍼.
+ */
+function applyMetaSubTab(tab) {
+  const docsBody  = document.getElementById('metaDocsBody');
+  const toolsBody = document.getElementById('metaToolStatsBody');
+  const tabDocs   = document.getElementById('metaTabDocs');
+  const tabTools  = document.getElementById('metaTabToolStats');
+  const isTools = tab === 'tools';
+
+  if (docsBody)  docsBody.hidden  = isTools;
+  if (toolsBody) toolsBody.hidden = !isTools;
+  if (tabDocs) {
+    tabDocs.classList.toggle('active', !isTools);
+    tabDocs.setAttribute('aria-selected', isTools ? 'false' : 'true');
+  }
+  if (tabTools) {
+    tabTools.classList.toggle('active', isTools);
+    tabTools.setAttribute('aria-selected', isTools ? 'true' : 'false');
+  }
+  if (isTools) {
+    // 프로젝트명은 좌측 셀렉터의 selectedProject — 두 탭 공통 컨텍스트.
+    loadProjectToolStats(getSelectedProject());
+  }
+}
+
+/**
+ * ADR-004: 좌측 프로젝트 변경 시 호출 — 활성 서브 탭의 데이터 동기 재 fetch.
+ *
+ *  - 'docs' 활성: 기존 loadMetaDocsLibrary가 알아서 scope 필터(selectedProject) 반영.
+ *    main.js에서 별도 호출 흐름이 이미 있으면 본 함수는 'tools'일 때만 의미 있음.
+ *  - 'tools' 활성: loadProjectToolStats(newProjectName) 즉시 호출.
+ *
+ *  본 함수는 main.js에서 selectedProject 변경 콜백으로 호출되어
+ *  "프로젝트 변경 시 활성 탭만 갱신" 단일 책임을 충족한다.
+ */
+export function refreshMetaActiveSubTab() {
+  const tab = getMetaSubTab();
+  if (tab === 'tools') {
+    loadProjectToolStats(getSelectedProject());
+  } else {
+    // 'docs'는 loadMetaDocsLibrary가 selectedProject 변경에 반응함 (기존 흐름 유지)
+    loadMetaDocsLibrary();
+  }
 }
 
 /**

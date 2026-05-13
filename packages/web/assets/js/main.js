@@ -12,7 +12,7 @@ import {
   getPrevState, setPrevState, clearPrevState,
 } from './state.js';
 import { initAppRail, setRailActive } from './app-rail.js';
-import { loadMetaDocsLibrary, enterMetaDocsMode, openMetaDocViaDeepLink } from './meta-docs-view.js';
+import { enterMetaDocsMode, openMetaDocViaDeepLink, setMetaSubTab, refreshMetaActiveSubTab } from './meta-docs-view.js';
 import {
   setDetailFilter, applyDetailFilter, setDetailView, toggleTurn,
   refreshDetailSession, initDetailSearch,
@@ -200,8 +200,10 @@ function selectProject(name) {
   fetchSessionsByProject(name);
 
   if (isMetaDocsActive) {
-    // 좌측 프로젝트 라벨이 갱신된 직후 카탈로그 재조회 — 새 source_root로 자동 매핑
-    loadMetaDocsLibrary();
+    // ADR-004 meta-docs-tool-stats: 활성 서브 탭에 따라 분기 갱신.
+    //   - 'docs' 활성 → loadMetaDocsLibrary (기존 동작)
+    //   - 'tools' 활성 → loadProjectToolStats (새 프로젝트로 매트릭스 재 fetch)
+    refreshMetaActiveSubTab();
   }
 
   // dashboard-ui-enhancements: 프로젝트 선택 시 하단 Tool Categories 카드를
@@ -362,6 +364,46 @@ function initEventDelegation() {
     if (!chip) return;
     e.preventDefault();
     chip.click();
+  });
+
+  // ADR-004 meta-docs-tool-stats: 메타 모드 서브 탭 [메타 문서] / [도구 통계] 클릭.
+  // [data-meta-subtab] 단일 SSoT — meta-docs-view.js의 setMetaSubTab이 가시성/aria/데이터 로드 일원화.
+  document.body.addEventListener('click', e => {
+    const tab = e.target.closest('[data-meta-subtab]');
+    if (!tab) return;
+    const which = tab.dataset.metaSubtab;
+    if (which !== 'docs' && which !== 'tools') return;
+    setMetaSubTab(which);
+  });
+
+  // ADR-004 meta-docs-tool-stats: 세션 도구 탭 우상단 "↗ 프로젝트 전체로 보기" outbound 링크.
+  //   1. 현재 browse 모드면 스냅샷 후 metadocs 진입 (F1 ESC 복귀 패턴 재사용)
+  //   2. 메타 모드 + 도구 통계 탭으로 전환
+  //   3. 좌측 프로젝트 셀렉터 자동 선택 — selectProject(name)이 이미 메타/탐색 양쪽 처리
+  document.body.addEventListener('click', e => {
+    const link = e.target.closest('[data-outbound-project]');
+    if (!link) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const name = link.dataset.outboundProject;
+    if (!name) return;
+    if (getAppMode() === 'browse') {
+      snapshotBrowseState();
+      applyAppMode('metadocs');
+    }
+    setMetaSubTab('tools');
+    // selectProject는 이미 selectedProject 변경 + refreshMetaActiveSubTab 흐름을 트리거함.
+    // setMetaSubTab이 먼저 'tools'로 셋팅한 뒤 selectProject가 매트릭스 fetch.
+    selectProject(name);
+  });
+
+  // outbound 링크 키보드 활성화 (Enter/Space)
+  document.body.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const link = e.target.closest('[data-outbound-project][role="button"]');
+    if (!link) return;
+    e.preventDefault();
+    link.click();
   });
 
   // ADR-003: ESC → metadocs 모드일 때 browse 복귀 (input/textarea focus 시는 무시)

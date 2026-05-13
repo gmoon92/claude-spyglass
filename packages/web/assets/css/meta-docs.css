@@ -504,7 +504,9 @@
 body[data-app-mode="browse"] .meta-docs-root { display: none; }
 body[data-app-mode="metadocs"] .right-panel { display: none; }
 
-/* 좌측 패널 축약 — metadocs 모드에서 obs-panel + 세션 + 핸들 숨김 */
+/* 좌측 패널 축약 — metadocs 모드에서 obs-panel + 세션 + 핸들 숨김.
+   brand-strip-cleanup ADR-002: DOM 순서를 [projects → summaryCards]로 뒤집어
+   메타 모드 좌측 첫 위계가 탐색 모드와 동일하게 '프로젝트 셀렉터'가 되도록 함. */
 body[data-app-mode="metadocs"] #panelTools,
 body[data-app-mode="metadocs"] #browserSessionsSection,
 body[data-app-mode="metadocs"] #panelVerticalHandle,
@@ -512,12 +514,14 @@ body[data-app-mode="metadocs"] #panelVerticalHandleBottom {
   display: none;
 }
 
-/* metadocs 모드: 프로젝트 섹션이 좌측 패널 최상단으로 확장 */
+/* metadocs 모드: 프로젝트 섹션은 좌측 패널 grid 1행에 위치하며 콘텐츠 높이만큼 차지.
+   요약 카드 컨테이너가 바로 아래(grid 2행 자동 배치)로 push되어 함께 노출. */
 body[data-app-mode="metadocs"] #browserProjectsSection {
   flex: 1 1 auto;
 }
 
-/* 요약 카드 컨테이너 — metadocs 모드에서만 노출 */
+/* 요약 카드 컨테이너 — metadocs 모드에서만 노출. DOM 순서상 #browserProjectsSection
+   직후에 위치 (brand-strip-cleanup ADR-002). grid auto-flow에 의해 2행 자동 배치. */
 body[data-app-mode="metadocs"] #metaDocsSummaryCards {
   display: flex !important; /* hidden attribute override */
 }
@@ -593,4 +597,105 @@ body[data-app-mode="browse"] #metaDocsSummaryCards {
 }
 .meta-docs-table tr[data-flash="1"] {
   animation: meta-docs-flash 1.5s var(--ease) 1;
+}
+
+/* =============================================================================
+ * ADR-004 meta-docs-tool-stats — 메타 모드 서브 탭 [메타 문서 / 도구 통계]
+ *
+ *  의도:
+ *   - 서브 탭은 메타 모드 메인 영역 상단 폭 전체를 차지하는 가벼운 horizontal bar.
+ *   - 4상태(default/hover/active/focus-visible)를 디자인 토큰만으로 표현.
+ *   - active는 하단 2px accent 라인 + accent 텍스트 + 약한 weight 강조.
+ *   - 패딩과 line-height를 통제하여 서브 탭 영역이 데이터 위에서 위계상
+ *     "더 큰 위계의 도구 탭"이 되지 않도록 절제(Signal over Noise).
+ *
+ *  토큰 풀:
+ *   --text-1/2/3, --accent, --accent-border, --border, --raised, --space-2/3,
+ *   --radius-sm, --dur-fast, --ease (모두 design-tokens.css).
+ *  하드코딩 색상 0건.
+ * ========================================================================== */
+.meta-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-1);
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.meta-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
+  /* 클릭 시 outline 잔존 방지 — focus-visible로만 ring 노출 */
+  outline: none;
+}
+
+.meta-tab:hover {
+  color: var(--text-1);
+  background: var(--raised);
+}
+
+.meta-tab.active,
+.meta-tab[aria-selected="true"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.meta-tab:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+
+/* 도구 통계 본문 — 매트릭스(.ts-mx)는 자기 자식 스타일로 충분.
+   바깥 패딩만 통일하여 [메타 문서] 탭의 카탈로그와 시각 균형. */
+.meta-tool-stats-body {
+  padding: var(--space-3);
+  overflow: auto;
+}
+
+/* =============================================================================
+ * ADR-004 — 세션 도구 탭 우상단 outbound 링크 "↗ 프로젝트 전체로 보기"
+ *
+ *   .ts-mx-toolbar 안에 절대 정렬이 아닌 margin-left:auto 로 우측 push.
+ *   링크 자체는 가벼운 dim 색조 → hover 시 accent. 시각 노이즈 최소화.
+ * ========================================================================== */
+.ts-mx-outbound {
+  margin-left: auto;
+  padding: var(--space-1) var(--space-2);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
+  text-decoration: none;
+  user-select: none;
+}
+
+.ts-mx-outbound:hover {
+  color: var(--accent);
+  background: var(--accent-bg-medium);
+}
+
+.ts-mx-outbound:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 1px;
 }
