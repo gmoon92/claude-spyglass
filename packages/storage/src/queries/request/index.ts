@@ -61,6 +61,7 @@ export {
   type SessionToolStats,
   getToolStats,
   getSessionToolStats,
+  getProjectToolStats,
 } from './aggregate-tool';
 
 // 시계열 — 히트맵/선그래프

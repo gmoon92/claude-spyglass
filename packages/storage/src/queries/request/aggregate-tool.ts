@@ -98,3 +98,63 @@ export function getSessionToolStats(
     ORDER BY avg_duration_ms DESC
   `).all(sessionId, sessionId) as SessionToolStats[];
 }
+
+/**
+ * 프로젝트 범위 도구별 성능 통계 (Feature meta-docs-tool-stats ADR-004).
+ *
+ * @description
+ *   세션 단위 통계(`getSessionToolStats`)와 동일 컬럼 구조이나, WHERE 절을
+ *   `sessions.project_name = ?` 로 변경하여 동일 프로젝트의 모든 세션 도구 호출을 합산한다.
+ *   `pct_of_total_tokens`는 프로젝트 누적 토큰 대비 비중.
+ *
+ *   - `fromTs` / `toTs`는 `requests.timestamp` 범위 옵션 필터.
+ *   - JOIN이 아닌 IN 서브쿼리 — `idx_sessions_project` 인덱스로 효율적 매칭.
+ *   - 신뢰도/event_type/type 필터는 `getSessionToolStats`와 동일 유지(SSoT).
+ */
+export function getProjectToolStats(
+  db: Database,
+  projectName: string,
+  fromTs?: number,
+  toTs?: number
+): SessionToolStats[] {
+  const tsConds: string[] = [];
+  const params: (number | string)[] = [projectName];
+  if (fromTs) { tsConds.push('timestamp >= ?'); params.push(fromTs); }
+  if (toTs)   { tsConds.push('timestamp <= ?'); params.push(toTs); }
+  const tsWhereExtra = tsConds.length ? ' AND ' + tsConds.join(' AND ') : '';
+
+  // CTE는 같은 timestamp 범위를 다시 적용 — 세션 단위 함수와 동일 패턴(전체 분모 = 동일 필터 합).
+  // params 순서: project(CTE), [from(CTE)], [to(CTE)], project(main), [from(main)], [to(main)]
+  const cteParams: (number | string)[] = [projectName];
+  if (fromTs) cteParams.push(fromTs);
+  if (toTs)   cteParams.push(toTs);
+
+  return db.query(`
+    WITH project_total AS (
+      SELECT COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE 0 END), 1) AS total
+      FROM requests
+      WHERE session_id IN (SELECT id FROM sessions WHERE project_name = ?)
+        AND (event_type IS NULL OR event_type = 'tool')
+        ${tsWhereExtra}
+    )
+    SELECT
+      tool_name,
+      COUNT(*) AS call_count,
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE 0 END), 0) AS total_tokens,
+      COALESCE(AVG(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE NULL END), 0) AS avg_tokens,
+      COALESCE(AVG(CASE WHEN duration_ms > 0 THEN duration_ms ELSE NULL END), 0)  AS avg_duration_ms,
+      COALESCE(MAX(duration_ms), 0)  AS max_duration_ms,
+      SUM(CASE WHEN tool_detail LIKE '%Error%' OR tool_detail LIKE '%error%' OR tokens_confidence='error' THEN 1 ELSE 0 END) AS error_count,
+      SUM(CASE WHEN tokens_confidence='low'   THEN 1 ELSE 0 END) AS confidence_low_count,
+      SUM(CASE WHEN tokens_confidence='error' THEN 1 ELSE 0 END) AS confidence_error_count,
+      ROUND(COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE 0 END), 0) * 100.0 / (SELECT total FROM project_total), 1) AS pct_of_total_tokens
+    FROM requests
+    WHERE session_id IN (SELECT id FROM sessions WHERE project_name = ?)
+      AND type = 'tool_call'
+      AND tool_name IS NOT NULL
+      AND (event_type IS NULL OR event_type = 'tool')
+      ${tsWhereExtra}
+    GROUP BY tool_name
+    ORDER BY total_tokens DESC, call_count DESC
+  `).all(...cteParams, ...params) as SessionToolStats[];
+}

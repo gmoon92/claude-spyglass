@@ -141,6 +141,8 @@ export {
   getOrphanRowsBySession,
   // 세션 범위 도구 성능 통계
   getSessionToolStats,
+  // 프로젝트 범위 도구 성능 통계 (ADR-004 meta-docs-tool-stats)
+  getProjectToolStats,
   // 타입
   type CreateRequestParams,
   type UpdateRequestParams,
