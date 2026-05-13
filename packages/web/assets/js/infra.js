@@ -25,15 +25,15 @@ export function jumpToLatest() {
 }
 
 /**
- * LIVE 배지 연결 상태 토글.
+ * LIVE 배지 연결 상태 토글 — brand-strip-cleanup ADR-001 이후 no-op.
  *
- * 마크업: `<span.badge-live>` 안에 펄스 도트 + 라이브 카운트(#statActive).
- * 연결 시 녹색·도트 펄스, 끊김 시 빨강·정적. "LIVE/OFFLINE" 글자는 펄스 도트가 이미
- * 시각화하므로 제거(시각 노이즈) — 상세 정의는 `data-stat-tooltip="active"` hover에서.
+ * brand-strip 제거로 #liveBadge DOM 노드가 더 이상 존재하지 않으므로 early return.
+ * 함수 시그너처는 외부 호출자(showError / clearError) 호환을 위해 보존.
+ * SSE 연결 상태는 #errorBanner 및 obs-panel.LivePulse 카드로 일원화됨.
  */
 export function setLiveStatus(connected) {
   const b = document.getElementById('liveBadge');
-  if (!b) return;
+  if (!b) return; // brand-strip-cleanup ADR-001: liveBadge 노드가 제거되어 사실상 no-op.
   b.className = connected ? 'badge-live' : 'badge-live disconnected';
 }
 

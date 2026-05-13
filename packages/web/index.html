@@ -71,21 +71,9 @@
       <div class="panel-resize-handle" title="드래그: 너비 조절 · 더블클릭: 콘텐츠 너비에 맞춤"></div>
       <!-- left-panel-observability-revamp ADR-006: Anomaly 발생 시에만 표시 (floating, 우상단) -->
       <button class="anomaly-badge" id="anomalyBadge" hidden type="button" aria-label="이상 감지 알림"></button>
-      <!-- header-removal: 브랜드 + LIVE 배지.
-           panel-toggle-unification(이번): 사이드바 안 토글 제거. 차트 헤더 좌측 끝의
-           단일 토글이 펼침/접힘 양 상태에서 같은 위치에 노출되어 발견성·SSoT 보장. -->
-      <div class="brand-strip">
-        <div class="logo">Claude<span>Spyglass</span></div>
-        <!-- 도트(SSE 펄스 + 연결 상태 색)와 라이브 카운트만 노출. 정의는 stat-tooltip 'active' hover. -->
-        <span class="badge-live" id="liveBadge" data-stat-tooltip="active">
-          <span class="dot"></span>
-          <span class="header-stat-value" id="statActive">--</span>
-        </span>
-      </div>
-
-      <!-- ADR-003 left-rail-meta-docs: 메타 모드 좌측 요약 카드 컨테이너.
-           body[data-app-mode="metadocs"] 일 때만 display 노출. meta-docs-view.js가 동적으로 내용 채움. -->
-      <div class="meta-docs-summary-cards" id="metaDocsSummaryCards" hidden></div>
+      <!-- brand-strip-cleanup ADR-001: 좌측 상단 brand-strip(.logo + .badge-live LIVE 카운트) 제거.
+           LIVE 시각 신호는 obs-panel.LivePulse 카드가 활성 세션을 표시하므로 정보 손실 0.
+           SSE 연결 상태는 #errorBanner 표출로 일원화. -->
 
       <div class="panel-section flex-section" id="browserProjectsSection">
         <div class="panel-body">
@@ -148,6 +136,13 @@
           </table>
         </div>
       </div>
+
+      <!-- ADR-003 left-rail-meta-docs + brand-strip-cleanup ADR-002:
+           메타 모드 좌측 요약 카드 컨테이너. body[data-app-mode="metadocs"]일 때만 노출.
+           DOM 순서를 #browserProjectsSection 직후로 배치 — 메타 모드 좌측은
+           [프로젝트 → 요약 카드] 순서로 탐색 모드의 "프로젝트 우선" 패턴과 일치.
+           meta-docs-view.js가 동적으로 내용 채움. -->
+      <div class="meta-docs-summary-cards" id="metaDocsSummaryCards" hidden></div>
 
       <!-- dashboard-ui-enhancements ADR-002: 프로젝트/세션 섹션 상하 분할 핸들.
            left-panel-vertical-resize.js의 initPanelVerticalResize가 드래그 로직을 담당. -->
@@ -683,7 +678,17 @@
       <!-- 좌측 축약 패널: 프로젝트 셀렉터(기존 좌측 #browserProjectsBody 재사용) + 요약 카드 3개.
            body[data-app-mode="metadocs"] 일 때 좌측 obs-panel은 hide되고 summary cards가 .left-panel 안에서 노출됨.
            summary cards 마크업 자체는 meta-docs-view.js가 동적으로 .meta-docs-summary-cards 컨테이너에 inject. -->
-      <div id="metaDocsBody" class="meta-docs-body" role="region" aria-label="메타 문서 본문">
+
+      <!-- ADR-004 meta-docs-tool-stats: 서브 탭 — [메타 문서] / [도구 통계].
+           좌측 content-pane(프로젝트 선택기 + 요약 카드)는 양쪽 탭에서 공통 노출.
+           탭 전환은 메인 영역(아래 두 컨테이너)만 토글한다.
+           라우팅: meta-docs-view.js의 setMetaSubTab('docs' | 'tools') — sessionStorage 'spyglass.metaSubTab' 영속화. -->
+      <div class="meta-tabs" role="tablist" aria-label="메타 문서 서브 탭">
+        <button id="metaTabDocs"      class="meta-tab active" role="tab" aria-selected="true"  aria-controls="metaDocsBody"      data-meta-subtab="docs"  type="button">메타 문서</button>
+        <button id="metaTabToolStats" class="meta-tab"        role="tab" aria-selected="false" aria-controls="metaToolStatsBody" data-meta-subtab="tools" type="button">도구 통계</button>
+      </div>
+
+      <div id="metaDocsBody" class="meta-docs-body" role="tabpanel" aria-labelledby="metaTabDocs" aria-label="메타 문서 본문">
         <!-- skeleton-loading T-09 — loadMetaDocsLibrary 호출 시 skMetaDocList 로 교체 -->
         <table class="meta-docs-table" data-skeleton="1"><tbody>
           <tr data-skeleton="1"><td><span class="sk sk-line" style="width:70%"></span></td><td><span class="sk sk-line" style="width:80%"></span></td><td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:28px"></span></td><td><span class="sk sk-line sk-line--inline" style="width:40px"></span></td></tr>
@@ -692,6 +697,10 @@
           <tr data-skeleton="1"><td><span class="sk sk-line" style="width:55%"></span></td><td><span class="sk sk-line" style="width:82%"></span></td><td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:26px"></span></td><td><span class="sk sk-line sk-line--inline" style="width:40px"></span></td></tr>
         </tbody></table>
       </div>
+
+      <!-- ADR-004 meta-docs-tool-stats: 프로젝트 단위 도구 통계 매트릭스 — 기본 hidden.
+           tool-stats.js의 loadProjectToolStats(projectName)이 매트릭스(.ts-mx)를 inject. -->
+      <div id="metaToolStatsBody" class="meta-tool-stats-body" role="tabpanel" aria-labelledby="metaTabToolStats" aria-label="프로젝트 도구 통계" hidden></div>
     </section>
   </div>
 

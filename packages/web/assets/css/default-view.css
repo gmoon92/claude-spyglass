@@ -56,7 +56,7 @@ canvas { display: block; }
    view-section-header는 단일 flex row(가벼움 회복):
      [.chart-default-meta(라벨+부제)] + [.chart-detail-meta(세션 메타, hidden)] + [.chart-actions]
    stats는 자기 의미와 가까운 거처로 분산:
-     · 활성 세션  → header.css의 .badge-live
+     · 활성 세션  → obs-panel LivePulse 카드 (brand-strip-cleanup ADR-001로 .badge-live 폐기)
      · 오류율/평균/P95 → 본 파일 .timeline-meta (chart-wrap 내 canvas 위)
      · 세션/요청/토큰 → 본 파일 .timeline-meta-group (오늘) — ADR-008로 cps-volume에서 이동
    ADR-006의 .vsh-row*, .view-section-header--vsh, .header-stat--hero 모두 폐기.
@@ -104,7 +104,7 @@ canvas { display: block; }
    거처별 컨텍스트 정의는 각자 CSS 파일에서:
      · timeline-meta : 본 파일
      · timeline-meta : 본 파일 (6 stat 통합 — ADR-008)
-     · badge-live    : header.css
+   brand-strip-cleanup ADR-001: .badge-live 거처는 폐기됨 (활성 세션은 obs-panel LivePulse로).
    ────────────────────────────────────────────────────────────────────── */
 .header-stat {
   display: inline-flex;
@@ -147,7 +147,8 @@ canvas { display: block; }
 
 /* ── 상태 클래스 SSoT (기존 의미 그대로 적용) ──────────────────────────── */
 
-/* 활성 세션 > 0 — 값 green (dot은 .badge-live 컨텍스트에서 live-dot이 담당하므로 ::before 무력화 필요 — header.css 참조) */
+/* 활성 세션 > 0 — 값 green. brand-strip-cleanup ADR-001 이후 .badge-live 컨텍스트는 폐기되었으며,
+   이 룰은 향후 다른 .header-stat 거처에서 활성 표시가 필요할 경우 재활용 가능. 현재는 active 표시처 없음. */
 .header-stat.is-active-indicator .header-stat-value { color: var(--green); }
 
 /* 오류율 > 0% — 값 빨간색 */
@@ -327,16 +328,23 @@ canvas { display: block; }
   margin-left: var(--space-1);
 }
 
-/* ── TYPE FILTER GROUP (ADR-006 — 의미론적 분류) ──────────────────────── */
+/* ── TYPE FILTER GROUP (ADR-006 — 의미론적 분류) ────────────────────────
+ * ADR-007 R4 (2026-05-12): 좁은 viewport에서 wrap 안전 보장 — 버튼이 추가되어도 잘림 없이
+ * 다음 줄로 자연스럽게 떨어지도록 컨테이너·그룹 모두에 flex-wrap. row-gap으로 줄 간격 안정.
+ */
 .type-filter-btns {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-3);
+  row-gap: var(--space-2);
 }
 .filter-group {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-1);
+  row-gap: var(--space-1);
 }
 /* 그룹 사이 시각 구분선 — 첫 그룹이 아닌 경우에 좌측 border */
 .filter-group + .filter-group {

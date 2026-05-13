@@ -49,6 +49,8 @@ export function initDefaultView({ onSelectSession, onCloseDetail, onGoHome }) {
   wireKeyboard({ getFeedSearchBox, onCloseDetail });
 
   // 로고 → 홈 (단일 hookup; D축 키보드와 별개라 여기 둔다)
+  // brand-strip-cleanup ADR-001: .logo 노드는 제거되었으므로 사실상 no-op.
+  // 시그너처/가드는 보존 — 추후 로고 거처가 재도입될 때 핸들러 복원 비용 0.
   const logo = document.querySelector('.logo');
   if (logo) {
     logo.setAttribute('role', 'button');

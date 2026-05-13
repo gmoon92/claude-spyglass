@@ -1,73 +1,12 @@
-/* ── BRAND STRIP (사이드바 상단) ───────────────────────────────────────────
-   header-removal: 가로 헤더 영역 제거 후 핵심만 사이드바 상단으로 흡수.
-   브랜드 + LIVE 배지(SSE 연결 상태 + 라이브 카운트) 한 줄.
+/* ── HEADER (사이드바 상단 + 글로벌 배너) ───────────────────────────────────
+   header-removal: 가로 헤더 영역을 제거하고 핵심만 사이드바로 흡수.
+   brand-strip-cleanup ADR-001: 좌측 상단 brand-strip(.logo + .badge-live)을 제거.
+   LIVE 시각 신호는 obs-panel.LivePulse 카드가 활성 세션을 표시하여 정보 손실 0.
    날짜 필터는 차트 섹션 view-section-header로 이동(콘텐츠 컨텍스트 옆).
+
+   이 파일은 현재 글로벌 배너(.error-banner)와 날짜 필터(.date-filter / .filter-btn)만
+   유지합니다. brand-strip 마크업·CSS 룰은 더 이상 존재하지 않습니다.
    ────────────────────────────────────────────────────────────────────────── */
-/* 로고 + LIVE 배지 좌측 묶음 (panel-toggle-edge-redesign 이후 토글은 main-layout 외부 element). */
-.brand-strip {
-  display: flex; align-items: center;
-  padding: var(--space-3) var(--space-4);
-  gap: var(--space-2);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-  font-family: var(--font-ui);
-  min-width: 0;
-}
-
-/* ── LOGO ──────────────────────────────────────────────────────────────── */
-.logo {
-  font-family: var(--font-ui);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-1);
-  letter-spacing: -0.01em;
-  cursor: pointer;
-  user-select: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-.logo span { color: var(--accent); }
-
-/* ── LIVE BADGE — 도트 + 라이브 카운트 (미니멀)
-   "LIVE" 라벨·구분선 제거: 펄스 도트가 이미 라이브 상태를 시각화하므로 글자 중복.
-   상세 정의는 hover 시 stat-tooltip(`data-stat-tooltip="active"`)으로 노출.
-   ────────────────────────────────────────────────────────────────────── */
-.badge-live {
-  display: inline-flex; align-items: center; gap: var(--space-2);
-  background: var(--badge-grad-success);
-  border: 1px solid rgba(63,185,80,0.30);
-  padding: 3px 9px;
-  border-radius: 999px;
-  font-family: var(--font-ui);
-  flex-shrink: 0;
-  cursor: default;
-}
-.badge-live .dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--success);
-  box-shadow: 0 0 6px rgba(63,185,80,0.6);
-  animation: pulse 1.8s ease-in-out infinite;
-  flex-shrink: 0;
-}
-.badge-live .header-stat-value {
-  font-family: var(--font-data);
-  font-size: var(--text-small);
-  color: var(--success);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-@keyframes pulse {
-  0%,100% { opacity: 1; transform: scale(1); }
-  50%      { opacity: 0.4; transform: scale(0.8); }
-}
-.badge-live.disconnected {
-  background: var(--red-dim); border-color: var(--red-border);
-}
-.badge-live.disconnected .dot { background: var(--red); animation: none; }
-.badge-live.disconnected .header-stat-value { color: var(--red); }
 
 /* ── ERROR BANNER ───────────────────────────────────────────────────────── */
 .error-banner {
@@ -114,6 +53,4 @@
 }
 
 /* ── 반응형 ───────────────────────────────────────────────────────────── */
-@media (max-width: 480px) {
-  .badge-live { padding: 2px var(--space-2); }
-}
+/* brand-strip-cleanup ADR-001: .badge-live 480px 미디어 룰 제거 (badge 자체 삭제). */

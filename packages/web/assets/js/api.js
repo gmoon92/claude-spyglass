@@ -63,9 +63,11 @@ export async function fetchDashboard() {
     document.getElementById('statSessions').textContent    = fmt(d.summary?.totalSessions ?? 0);
     document.getElementById('statRequests').textContent    = fmt(d.summary?.totalRequests ?? 0);
     document.getElementById('statTokens').textContent      = fmtToken(d.summary?.totalTokens ?? 0);
-    // 라이브 카운트는 사이드바 brand-strip의 `.badge-live` 안 #statActive에 노출.
-    // 색상 강조는 도트(녹/적)와 펄스 애니메이션이 SSoT — chip 클래스 토글은 제거.
-    document.getElementById('statActive').textContent = fmt(d.summary?.activeSessions ?? 0);
+    // brand-strip-cleanup ADR-001: #statActive 노드가 제거되어 옵셔널 체이닝으로 안전 처리.
+    // 활성 세션 시각화는 obs-panel.LivePulse 카드(#obsLivePulse)가 SSoT로 담당.
+    // ADR-004: 백엔드 summary.activeSessions 필드는 향후 재활용 가능성 위해 보존됨.
+    const statActiveEl = document.getElementById('statActive');
+    if (statActiveEl) statActiveEl.textContent = fmt(d.summary?.activeSessions ?? 0);
     document.getElementById('statAvgDuration').textContent =
       formatDuration(d.summary?.avgDurationMs ?? d.requests?.avg_duration_ms ?? null);
 

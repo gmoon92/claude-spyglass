@@ -1,13 +1,21 @@
 /* ── LEFT PANEL ─────────────────────────────────────────────────────────── */
-/* 6 row grid:
-     1) brand-strip            : auto (브랜드 + LIVE 배지)
-     2) 프로젝트 표            : minmax(0, var(--projects-panel-height, 180px))
+/* brand-strip-cleanup ADR-003: brand-strip 트랙 제거 → 6 row → 5 row.
+   브랜드 영역 ~46px가 회수되어 프로젝트/세션/obs-panel 트랙으로 자연 분배됨.
+   panel-vertical-resize.js는 grid row 인덱스가 아닌 CSS 변수만 조작하므로 영향 0.
+
+   5 row grid (탐색 모드):
+     1) 프로젝트 표            : minmax(0, var(--projects-panel-height, 180px))
                                   — 3~4행만 노출, 데이터 늘면 panel-body가 자체 스크롤.
                                   남는 픽셀을 panelTools(1fr)에 양보하기 위해 상한 고정.
-     3) vertical-handle        : auto (8px, 프로젝트/세션 상하 분할 드래그 핸들)
-     4) 세션 리스트            : minmax(80px, var(--sessions-panel-height, 1fr))
-     5) vertical-handle-bottom : auto (8px, 세션/옵저빌리티 상하 분할 드래그 핸들)
-     6) panelTools             : minmax(80px, 1fr) — 남는 공간 흡수.
+     2) vertical-handle        : auto (8px, 프로젝트/세션 상하 분할 드래그 핸들)
+     3) 세션 리스트            : minmax(80px, var(--sessions-panel-height, 1fr))
+     4) vertical-handle-bottom : auto (8px, 세션/옵저빌리티 상하 분할 드래그 핸들)
+     5) panelTools             : minmax(80px, 1fr) — 남는 공간 흡수.
+
+   메타 모드 (body[data-app-mode="metadocs"]):
+     #panelTools / #browserSessionsSection / #panelVerticalHandle{,Bottom}이
+     display:none이 되어 실제 grid 흐름은 #browserProjectsSection → #metaDocsSummaryCards
+     2 row만 활성. metaDocsSummaryCards 트랙은 auto로 자연 할당됨.
 
    panel-resize-handle / anomaly-badge는 absolute라 grid 자동 배치
    대상이 아니므로 트랙 카운트에 영향 없음. */
@@ -15,7 +23,6 @@
   position: relative;
   display: grid;
   grid-template-rows:
-    auto
     minmax(0, var(--projects-panel-height, 180px))
     auto
     minmax(80px, var(--sessions-panel-height, 1fr))
@@ -130,8 +137,8 @@
 .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 /* panel-toggle-edge-redesign: 사이드바 토글은 main-layout 자식 .sidebar-edge-toggle
-   (layout.css 정의)로 통합. brand-strip / 차트 헤더 안 토글 폐기로 .btn-panel-toggle
-   클래스도 함께 제거. */
+   (layout.css 정의)로 통합. 차트 헤더 안 토글 폐기로 .btn-panel-toggle 클래스도 함께 제거.
+   brand-strip-cleanup ADR-001: 사이드바 상단 brand-strip 자체도 함께 제거됨. */
 
 /* ── PROJECT NAME CELL ──────────────────────────────────────────────────── */
 .cell-proj-name {
