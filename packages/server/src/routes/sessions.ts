@@ -5,7 +5,7 @@
  *   srp-redesign Phase 2: api.ts(406줄) 분해 결과.
  *   변경 이유: "세션 조회·세션별 자식 데이터 제공 정책 변경".
  *
- *   포함 라우트 (9개):
+ *   포함 라우트 (10개):
  *   - GET /api/sessions
  *   - GET /api/sessions/active
  *   - GET /api/sessions/:id/requests
@@ -15,6 +15,7 @@
  *   - GET /api/sessions/:id/events
  *   - GET /api/sessions/:id  (catch-all — 마지막에 배치)
  *   - GET /api/projects/:name/sessions
+ *   - GET /api/projects/:name/tool-stats  (ADR-004 meta-docs-tool-stats)
  *
  *   세션 도메인이 같은 파일에 응집된 이유: 라우트 매칭 우선순위 보존.
  *   예: /api/sessions/:id가 catch-all이라 /api/sessions/active·:id/requests 등
@@ -26,6 +27,7 @@ import {
   getAllSessions,
   getEventsBySession,
   getMaxContextProxyForSession,
+  getProjectToolStats,
   getRequestsBySession,
   getRequestStatsBySession,
   getSessionById,
@@ -334,6 +336,22 @@ const helperFallthrough: RouteHandler = (_req, db, url, path, method) => {
     const toTs = url.searchParams.get('to') ? parseInt(url.searchParams.get('to')!, 10) : undefined;
     const sessions = getSessionsByProject(db, projectName, limit, fromTs, toTs);
     return jsonResponse({ success: true, data: sessions, meta: { total: sessions.length, limit } });
+  }
+
+  // GET /api/projects/:name/tool-stats (ADR-004 meta-docs-tool-stats)
+  // 프로젝트 단위 도구별 성능 매트릭스. getSessionToolStats와 동일 컬럼 + has_low_confidence 파생.
+  const projectToolStatsMatch = path.match(/^\/api\/projects\/([^/]+)\/tool-stats$/);
+  if (projectToolStatsMatch && method === 'GET') {
+    const projectName = decodeURIComponent(projectToolStatsMatch[1]);
+    const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
+    const toTs   = url.searchParams.get('to')   ? parseInt(url.searchParams.get('to')!,   10) : undefined;
+    const rows = getProjectToolStats(db, projectName, fromTs, toTs);
+    // data-honesty-ui: getSessionToolStats 라우트와 동일 파생(SSoT) — has_low_confidence boolean
+    const data = rows.map((r) => ({
+      ...r,
+      has_low_confidence: (r.confidence_low_count ?? 0) + (r.confidence_error_count ?? 0) > 0,
+    }));
+    return jsonResponse({ success: true, data });
   }
 
   return null;
