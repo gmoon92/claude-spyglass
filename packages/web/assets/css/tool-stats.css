@@ -179,3 +179,51 @@
   color: var(--text-3);
   font-weight: var(--weight-normal);
 }
+
+/* ── meta-table-scroll ADR-001/002 — 메타 모드 컨텍스트 한정 sticky ──────────
+ *
+ * 의도:
+ *   메타 모드(`#metaToolStatsBody`) 안에서 매트릭스 toolbar/head가 항상 상단에 보이도록 고정.
+ *   세션 도구 탭(`#detailToolsView`)은 자체 detail 스크롤이 별도로 동작하므로 영향 최소화.
+ *   후손 셀렉터 `.meta-tool-stats-body .ts-mx-...`로 컨텍스트를 좁힘.
+ *
+ * 토큰 풀:
+ *   --surface-alt (root 배경과 동일하여 sticky 면이 노이즈 없이 녹아듦),
+ *   --space-3 (12px) — toolbar margin-bottom과 일치.
+ * 하드코딩 색상 0건.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* .ts-mx는 자체 padding을 가지므로, sticky 표면이 스크롤 컨테이너 상단(top:0)에
+   정확히 닿도록 메타 컨텍스트에서만 padding-top을 제거. 좌·우·하 padding은 보존. */
+.meta-tool-stats-body .ts-mx {
+  padding-top: 0;
+}
+
+/* toolbar — top:0 sticky. 행이 toolbar 아래로 비치지 않도록 margin-bottom 대신 padding-bottom 사용:
+   sticky 박스 안에 spacing을 포함시키면 sticky 표면이 곧 toolbar.bottom과 일치하여
+   그 직후 head가 자연 흐름으로 이어진다 (gap 없음). */
+.meta-tool-stats-body .ts-mx-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--surface-alt);
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-3);
+  margin-bottom: 0;
+}
+
+/* head — toolbar 바로 아래 적층.
+   실측: toolbar.height = padding(top+bottom) var(--space-3)*2=20 + content ~24 = 44px.
+   head.top = toolbar.height = 44px (gap 0).
+   z-index 5: toolbar(6)보다 하위, 행(.ts-mx-row)보다 상위. */
+.meta-tool-stats-body .ts-mx-head {
+  position: sticky;
+  top: 44px;
+  z-index: 5;
+  background: var(--surface-alt);
+}
+
+/* Safari sticky 셀 배경 누락 회피 — head 안의 cell에도 배경 명시 */
+.meta-tool-stats-body .ts-mx-head .ts-mx-cell {
+  background: var(--surface-alt);
+}

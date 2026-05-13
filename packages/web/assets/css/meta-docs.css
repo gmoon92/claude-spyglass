@@ -10,10 +10,33 @@
  */
 
 .meta-docs-body {
-  padding: 12px 16px 24px;
+  /* meta-table-scroll ADR-002: padding-top을 0으로 — sticky 요소(filters/thead)가
+     스크롤 컨테이너 상단(top:0)에 정확히 멈추도록. 상단 호흡은 첫 자식 .meta-docs-scope
+     의 자체 margin-bottom으로 자연 분배. 좌·우·하 padding은 보존. */
+  padding: 0 16px 24px;
   font-size: 13px;
   color: var(--text, #e5e5e5);
+  /* meta-table-scroll ADR-001/004: .meta-docs-root(flex column, overflow:hidden)
+     안에서 body만 내부 스크롤. min-height:0으로 flex 자식이 부모를 늘리지 않게 막고,
+     overscroll-behavior:contain으로 휠 스크롤이 페이지로 전파되는 것을 차단. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* meta-table-scroll ADR-003: 스크롤바 토큰 (syslib 컨벤션과 일치).
+     Firefox는 thin + scrollbar-color, WebKit은 ::-webkit-scrollbar로 8px. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
+.meta-docs-body::-webkit-scrollbar { width: 8px; height: 8px; }
+.meta-docs-body::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+.meta-docs-body::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3);
+}
+.meta-docs-body::-webkit-scrollbar-track { background: transparent; }
 
 /* ── 스코프 헤더 (선택 프로젝트 ↔ 전체 프로젝트) ─────────────────────── */
 .meta-docs-scope {
@@ -170,6 +193,12 @@
   padding: 10px 0;
   border-bottom: 1px solid var(--border, #2a2a2a);
   margin-bottom: 8px;
+  /* meta-table-scroll ADR-002: 필터바 sticky — 메타 문서 body 스크롤 시 항상 노출.
+     배경은 root(--surface-alt)와 동일하여 시각 노이즈 0. z-index 6: thead(5)보다 상위. */
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--surface-alt);
 }
 .meta-docs-filter-group {
   display: inline-flex;
@@ -247,7 +276,11 @@
 
 /* ── 표 ──────────────────────────────────────────────────────────────── */
 .meta-docs-table-wrap {
-  overflow-x: auto;
+  /* meta-table-scroll ADR-002: thead의 position:sticky가 .meta-docs-body 스크롤 컨테이너 기준으로
+     동작하려면, 사이에 overflow != visible 인 조상이 끼면 안 됨.
+     overflow-x:auto → visible로 변경 — 가로 스크롤은 .meta-docs-body가 담당.
+     표 자체가 colgroup으로 width 고정이라 wrap 단위 가로 스크롤은 필요 없음. */
+  overflow-x: visible;
 }
 .meta-docs-table {
   width: 100%;
@@ -264,6 +297,14 @@
   padding: 6px 8px;
   border-bottom: 1px solid var(--border-strong, #3a3a3a);
   user-select: none;
+  /* meta-table-scroll ADR-002: thead sticky — 필터바(높이 ~48px) 바로 아래 적층.
+     <th>에 배경을 명시해야 Safari sticky 셀 배경 누락 회피. z-index 5: filters(6) 하위, 행 위.
+     top:48px는 filters 박스 높이(padding 10+10 + content ~22 + border-bottom 1 = 43px)에
+     약간의 안전 마진(5px)을 더한 값. margin-bottom(8px)은 sticky 박스 바깥이라 제외. */
+  position: sticky;
+  top: 48px;
+  z-index: 5;
+  background: var(--surface-alt);
 }
 .meta-docs-table thead th.num { text-align: right; }
 
@@ -620,8 +661,14 @@ body[data-app-mode="browse"] #metaDocsSummaryCards {
   gap: var(--space-1);
   padding: 0 var(--space-3);
   border-bottom: 1px solid var(--border);
-  background: transparent;
+  /* meta-table-scroll: .meta-tool-stats-body / .meta-docs-body 내부 sticky 콘텐츠와
+     paint 적층이 안정되도록 명시적 배경(root와 동일). transparent였을 때 일부 환경에서
+     스크롤 직후 paint 잔상이 보이는 현상 회피. */
+  background: var(--surface-alt);
   flex-shrink: 0;
+  /* 그리고 z-index 안전망 — sticky 자식보다 위 위계 */
+  position: relative;
+  z-index: 7;
 }
 
 .meta-tab {
@@ -664,11 +711,28 @@ body[data-app-mode="browse"] #metaDocsSummaryCards {
 }
 
 /* 도구 통계 본문 — 매트릭스(.ts-mx)는 자기 자식 스타일로 충분.
-   바깥 패딩만 통일하여 [메타 문서] 탭의 카탈로그와 시각 균형. */
+   바깥 패딩만 통일하여 [메타 문서] 탭의 카탈로그와 시각 균형.
+   meta-table-scroll ADR-001/004: 메타 모드 메인 영역 안에서만 스크롤되도록 flex item화.
+   바깥 padding은 0 — 안쪽 .ts-mx가 자체 padding을 가지므로 중첩 padding을 제거하여
+   sticky 표면이 .meta-tool-stats-body 상단(top:0)과 정확히 일치하도록 함. */
 .meta-tool-stats-body {
-  padding: var(--space-3);
-  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* 스크롤바 토큰 — 메타 문서 body와 동일 (ADR-003) */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
+.meta-tool-stats-body::-webkit-scrollbar { width: 8px; height: 8px; }
+.meta-tool-stats-body::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+.meta-tool-stats-body::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3);
+}
+.meta-tool-stats-body::-webkit-scrollbar-track { background: transparent; }
 
 /* =============================================================================
  * ADR-004 — 세션 도구 탭 우상단 outbound 링크 "↗ 프로젝트 전체로 보기"
