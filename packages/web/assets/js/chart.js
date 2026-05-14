@@ -59,7 +59,15 @@ function donutItemKey(d, _idx) {
   return donutMode === 'model' ? (d.model || '?') : (d.type || '?');
 }
 function cacheItemColor(d) {
-  const map = { 'Cached': '#34D399', 'Cache Write': '#58A6FF', 'Uncached': '#6E7681' };
+  // cache-label-ux pass: 도넛 라벨 한국어 매핑. 영어 라벨은 외부 호출자 호환용으로 유지.
+  //   - 히트율 / Cached     → success green (#34D399)
+  //   - 전체   / Uncached   → neutral dim (#6E7681) — '미히트 + 첫 write 비용' 분모 부분
+  //   - Cache Write         → info blue (#58A6FF) — 별도 슬라이스로 보낼 경우 폴백
+  const map = {
+    '히트율': '#34D399', '전체': '#6E7681',
+    'Cached': '#34D399', 'Uncached': '#6E7681',
+    'Cache Write': '#58A6FF',
+  };
   return map[d.label] || COLORS.textDim;
 }
 function donutItemColor(d, idx) {
@@ -239,19 +247,23 @@ export function drawDonut() {
   });
 
   if (donutMode === 'cache') {
-    // hit rate SSoT — Cache Write(cache_creation)는 "캐시 등록"이라 히트도 미스도
-    // 아니므로 분모에서 제외. 서버 aggregate-cache.ts#getCacheStats 및
-    // cache-panel.js#computeSessionCacheStats와 동일 공식:
-    //   hitRate = cache_read / (cache_read + tokens_input)
-    // 호출처(flat-view.js)가 Cache Write 슬라이스를 넘기지 않는 게 1차 SSoT지만,
-    // 누가 다시 추가하더라도 도넛 가운데 %가 어긋나지 않도록 여기서도 명시 분리.
-    const cached   = typeData.find(d => d.label === 'Cached')?.tokens   || 0;
-    const uncached = typeData.find(d => d.label === 'Uncached')?.tokens || 0;
-    const denom    = (cached + uncached) || 1;
+    // hit rate SSoT — 도넛 슬라이스 2개의 합이 곧 분모. 서버 aggregate-cache.ts#getCacheStats /
+    // cache-panel.js#computeSessionCacheStats / flat-view.js 도넛 데이터가 한 산식:
+    //   hitRate = cache_read / (cache_read + tokens_input + cache_creation)
+    //   - 분자(히트율): cache_read
+    //   - 분모(히트율 + 전체): cache_read + (tokens_input + cache_creation)
+    //   cache_creation은 첫 캐시 write 비용이라 분모에 포함 — 옵저빌리티 의미
+    //   ("전체 토큰 비용 중 캐시 처리 비율") 정확성 확보 (observability-true pass).
+    //
+    // 라벨 매칭: '히트율' / '전체' (flat-view.js에서 부여). 누가 슬라이스를 추가해도
+    // 첫 슬라이스를 분자로 잡고 합을 분모로 사용 → 도넛 % 자동 일치.
+    const hit   = typeData.find(d => d.label === '히트율')?.tokens || 0;
+    const rest  = typeData.find(d => d.label === '전체')?.tokens   || 0;
+    const denom = (hit + rest) || 1;
     // hit-rate-precision pass: cache-panel.js와 동일 어휘 — 99 초과 100 미만 구간은
     // ">99%" boundary 라벨로 반올림 정보 손실 명시. Math.round가 99.5를 100으로 만들어
     // "비현실적 100%"로 보이는 인지 부담 해소.
-    const hitRateExact = (cached / denom) * 100;
+    const hitRateExact = (hit / denom) * 100;
     const hitRateInt   = Math.round(hitRateExact);
     const hitRateLabel = (hitRateExact > 99 && hitRateExact < 100) ? '>99%'
                        : (hitRateExact > 0  && hitRateExact < 1)    ? '<1%'

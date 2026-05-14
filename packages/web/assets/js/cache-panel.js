@@ -67,19 +67,41 @@ export function renderCachePanel(data) {
 }
 
 /**
- * ADR-017: 세션 단위 cache stats 계산 (요청 배열 → renderCachePanel 데이터 형태).
- * @param {Array} requests — 세션 내 prompt 요청 (_detailAllRequests)
+ * 세션 단위 cache stats 계산 — 모든 LLM API 호출 합산 (cache-stats-scope pass).
+ *
+ * 이전엔 `type='prompt'` 한정이라 도구 사이클의 수십~수백 API 호출이 빠지고
+ * 사용자 발화 단위의 첫 호출만 보여 cache_read의 약 95%가 분모에서 누락됐다.
+ * Anthropic API는 매 호출마다 input/cache_read/cache_create 토큰을 보고하므로
+ * "비용 절감 가시화"라는 spyglass 목적에 맞추려면 모든 호출을 합산해야 한다.
+ *
+ * 포함 범위: prompt + tool_call(event_type='tool') + response.
+ * 제외: tool_call(event_type='pre_tool') — 미완성 레코드, 토큰 0.
+ *
+ * 산식 (observability-true pass):
+ *   - 분자: cache_read
+ *   - 분모: input + cache_read + cache_creation
+ *     이전엔 cache_creation을 분모에서 빼서 "캐시 등록도 비용"이라는 사실이 누락됐다.
+ *     새 세션 초반 hit rate가 인위적으로 부풀어 보이는 회귀가 있었으며, 옵저빌리티 의미
+ *     ("전체 토큰 비용 중 캐시 처리 비율")가 흐려졌다. cache_creation은 첫 write 비용이
+ *     발생하는 토큰이라 분모에 포함해야 정확.
+ *
+ * 서버 aggregate-cache.ts#getCacheStats와 동일 SSoT.
+ *
+ * @param {Array} requests — 세션 내 모든 요청 (_detailAllRequests)
  * @returns {Object} renderCachePanel가 받는 형태
  */
 export function computeSessionCacheStats(requests) {
   let cacheRead = 0, cacheCreate = 0, input = 0;
   for (const r of requests || []) {
-    if (r.type !== 'prompt') continue;
+    // pre_tool 행 제외 — PreToolUse는 토큰=0 미완성 레코드.
+    if (r.event_type === 'pre_tool') continue;
+    // LLM API 호출에 해당하는 행만: prompt / tool_call / response.
+    if (r.type !== 'prompt' && r.type !== 'tool_call' && r.type !== 'response') continue;
     cacheRead   += r.cache_read_tokens     || 0;
     cacheCreate += r.cache_creation_tokens || 0;
     input       += r.tokens_input          || 0;
   }
-  const denom   = input + cacheRead;
+  const denom   = input + cacheRead + cacheCreate;
   const hitRate = denom > 0 ? cacheRead / denom : 0;
   return {
     hitRate,
