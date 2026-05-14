@@ -13,7 +13,19 @@ export function renderCachePanel(data) {
   } = data;
 
   // Hit Rate 바
-  const pct    = Math.round((hitRate ?? 0) * 100);
+  // hit-rate-precision pass: Math.round 단독 사용은 99.5%를 100%로 반올림하여
+  // "비현실적으로 보이는 100%" 인지 부담을 만든다 (Claude Code 패턴 상 99%+가 정상).
+  //   - bar fill width는 round 그대로 유지 (시각적 미세 차이는 의미 없음)
+  //   - 라벨은 99 < pct < 100 구간은 ">99%" boundary 어휘로 표시해 반올림 정보 손실 명시
+  //   - 그 외는 정수 % (3자리 라벨 폭 유지)
+  const rateRaw = hitRate ?? 0;
+  const pctExact = rateRaw * 100;
+  const pct      = Math.round(pctExact);
+  const isNearCeiling = pctExact > 99 && pctExact < 100;
+  const isNearFloor   = pctExact > 0  && pctExact < 1;
+  const labelText = isNearCeiling ? '>99%'
+                   : isNearFloor   ? '<1%'
+                   : `${pct}%`;
   const fill   = document.getElementById('cacheHitFill');
   const pctEl  = document.getElementById('cacheHitPct');
   if (fill) {
@@ -24,8 +36,13 @@ export function renderCachePanel(data) {
     const dsTone        = pct >= 70 ? 'success'  : pct >= 30 ? 'warn'   : 'error';
     fill.className      = `cache-bar-fill ${legacyToneCls} ds-bar-fill`;
     fill.dataset.tone   = dsTone;
+    // 정밀 값을 tooltip으로 노출해 호버 시 정확한 수치 확인 가능.
+    fill.title          = `${pctExact.toFixed(2)}% (정밀)`;
   }
-  if (pctEl) pctEl.textContent = `${pct}%`;
+  if (pctEl) {
+    pctEl.textContent = labelText;
+    pctEl.title       = `${pctExact.toFixed(2)}% (정밀)`;
+  }
 
   // Creation vs Read 비율 바
   const total      = cacheCreationTokens + cacheReadTokens;

@@ -90,6 +90,22 @@ canvas { display: block; }
 /* detail 모드 — timeline 부속 meta 자동 숨김 (chart 영역이 contextGrowthChart로 swap) */
 #chartSection.chart-mode-detail .timeline-meta { display: none; }
 
+/* detail-filter-dim pass: detail 모드에선 도넛/캐시 데이터가 '세션 단위'라 전역 기간 필터가
+ * 무의미. 클릭은 막고 시각적으로 dim 처리해 사용자 혼란을 제거. timeline 차트는 default 모드에서만
+ * 다시 작동하므로 사용자가 default로 돌아갈 때 자동 회복. */
+#chartSection.chart-mode-detail .date-filter {
+  opacity: 0.4;
+  pointer-events: none;
+  filter: grayscale(0.6);
+}
+#chartSection.chart-mode-detail .date-filter::after {
+  content: '세션 단위';
+  margin-left: var(--space-2);
+  font-size: var(--text-small);
+  color: var(--text-4);
+  font-style: italic;
+}
+
 #chartSection .chart-actions {
   display: flex;
   align-items: center;

@@ -170,21 +170,28 @@ document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
   renderTurnCards(turnFiltered, allTurns);
 
   // chartSection이 detail 모드일 때 donut/cache panel 갱신 (ADR-017, ADR-WDO-010)
+  //
+  // 캐시 도넛 SSoT 정책 — 도넛/패널/서버 hit rate가 어긋나지 않도록 한 곳에서 집계.
+  //   - 집계 함수: cache-panel.js#computeSessionCacheStats (type='prompt' 한정)
+  //   - 도넛 분모: Cached + Uncached (= cache_read + tokens_input). cache_creation은
+  //     "캐시 등록"이라 히트도 미스도 아니므로 분모에서 제외 — 서버
+  //     storage/queries/request/aggregate-cache.ts#getCacheStats와 동일 공식.
+  //   - Cache Write(=cache_creation)는 cache-panel.js의 Creation/Read 비율 바에서
+  //     별도 노출되므로 도넛 슬라이스에서는 생략한다(중복·의미 혼선 방지).
+  //
+  // 이전 구현은 reduce를 다시 돌려 모든 type을 합산했고 cache_creation까지 hitRate
+  // 분모에 넣어 도구 호출 cache_read까지 부풀어진 비율을 보여줬다 — flat-view와
+  // cache-panel/서버의 % 가 동시에 어긋나는 원인이었다.
   const chartSection = document.getElementById('chartSection');
   if (chartSection?.classList.contains('chart-mode-detail')) {
-    const cachedRead  = allRequests.reduce((s, r) => s + (r.cache_read_tokens     || 0), 0);
-    const cacheWrite  = allRequests.reduce((s, r) => s + (r.cache_creation_tokens || 0), 0);
-    const uncached    = allRequests.reduce((s, r) => s + (r.tokens_input          || 0), 0);
-    const cacheData   = [
-      { label: 'Cached',      tokens: cachedRead },
-      { label: 'Cache Write', tokens: cacheWrite },
-      { label: 'Uncached',    tokens: uncached },
+    const sessionCache = computeSessionCacheStats(allRequests);
+    const cacheData = [
+      { label: 'Cached',   tokens: sessionCache.cacheReadTokens  },
+      { label: 'Uncached', tokens: sessionCache.totalInputTokens },
     ].filter(d => d.tokens > 0);
     setSourceData('cache', cacheData);
     drawDonut();
     renderTypeLegend();
-
-    const sessionCache = computeSessionCacheStats(allRequests);
     renderCachePanel(sessionCache);
   }
 

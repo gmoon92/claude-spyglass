@@ -239,14 +239,28 @@ export function drawDonut() {
   });
 
   if (donutMode === 'cache') {
-    const cached   = typeData.find(d => d.label === 'Cached')?.tokens || 0;
-    const cTotal   = typeData.reduce((s, d) => s + (d.tokens || 0), 0) || 1;
-    const hitRate  = Math.round((cached / cTotal) * 100);
+    // hit rate SSoT — Cache Write(cache_creation)는 "캐시 등록"이라 히트도 미스도
+    // 아니므로 분모에서 제외. 서버 aggregate-cache.ts#getCacheStats 및
+    // cache-panel.js#computeSessionCacheStats와 동일 공식:
+    //   hitRate = cache_read / (cache_read + tokens_input)
+    // 호출처(flat-view.js)가 Cache Write 슬라이스를 넘기지 않는 게 1차 SSoT지만,
+    // 누가 다시 추가하더라도 도넛 가운데 %가 어긋나지 않도록 여기서도 명시 분리.
+    const cached   = typeData.find(d => d.label === 'Cached')?.tokens   || 0;
+    const uncached = typeData.find(d => d.label === 'Uncached')?.tokens || 0;
+    const denom    = (cached + uncached) || 1;
+    // hit-rate-precision pass: cache-panel.js와 동일 어휘 — 99 초과 100 미만 구간은
+    // ">99%" boundary 라벨로 반올림 정보 손실 명시. Math.round가 99.5를 100으로 만들어
+    // "비현실적 100%"로 보이는 인지 부담 해소.
+    const hitRateExact = (cached / denom) * 100;
+    const hitRateInt   = Math.round(hitRateExact);
+    const hitRateLabel = (hitRateExact > 99 && hitRateExact < 100) ? '>99%'
+                       : (hitRateExact > 0  && hitRateExact < 1)    ? '<1%'
+                       : `${hitRateInt}%`;
     ctx.fillStyle    = '#34D399';
     ctx.font         = 'bold 18px ' + (getComputedStyle(document.documentElement).getPropertyValue('--font-data').trim() || 'monospace');
     ctx.textAlign    = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(hitRate + '%', cx, cy - 4);
+    ctx.fillText(hitRateLabel, cx, cy - 4);
     ctx.fillStyle = COLORS.textDim;
     ctx.font      = '9px ' + (getComputedStyle(document.documentElement).getPropertyValue('--font-ui').trim() || 'sans-serif');
     ctx.fillText('hit rate', cx, cy + 10);
