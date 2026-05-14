@@ -4,7 +4,7 @@
 // 차트 컨테이너 ResizeObserver 정책. DOM/캔버스 렌더 자체는 chart.js가
 // 책임지고, 여기서는 "언제 어떤 모드를 적용/재그릴지"만 결정한다.
 
-import { getActiveRange } from '../../api.js';
+import { getActiveRange, getMetricRangeParams } from '../../api.js';
 import {
   drawTimeline, drawDonut, setSourceData, setDonutMode, hasSourceData, renderTypeLegend,
 } from '../../chart.js';
@@ -42,7 +42,8 @@ export async function setChartMode(mode) {
     setDonutMode('model');
     if (!hasSourceData('model')) {
       try {
-        const data = await fetchModelUsage({ range: '24h' });
+        // date-filter-propagation pass: 활성 range 반영 (24h 하드코딩 제거)
+        const data = await fetchModelUsage(getMetricRangeParams());
         setSourceData('model', data || []);
       } catch { /* silent */ }
     }

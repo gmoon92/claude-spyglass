@@ -45,6 +45,19 @@ export function getDateRange() {
   return {};
 }
 
+/**
+ * /api/metrics/* 호출용 활성 range 파라미터 (date-filter-propagation pass).
+ *
+ * 서버 metrics 라우터는 `?from=&to=`(우선) 또는 `?range=24h|7d|30d|all` (기본 24h)을 받는다.
+ * getDateRange()가 빈 객체를 반환하는 '전체' 상태에선 서버 기본 24h로 떨어지므로,
+ * 명시적으로 `range:'all'`을 보내 사용자 의도(전체 기간)를 정확히 전달.
+ */
+export function getMetricRangeParams() {
+  const dr = getDateRange();
+  if (dr.from != null && dr.to != null) return dr;
+  return { range: 'all' };
+}
+
 export function buildQuery(base, extra = {}) {
   const range  = getDateRange();
   const params = new URLSearchParams({ ...range, ...extra });
@@ -97,7 +110,9 @@ export async function fetchDashboard() {
     //   stale 채로 남는 버그가 있었음. donutMode가 'model'이면 매 fetchDashboard마다 같이 갱신.
     if (getDonutMode() === 'model') {
       try {
-        const modelData = await fetchModelUsage({ range: '24h' });
+        // date-filter-propagation pass: 활성 range 반영 (이전엔 '24h' 하드코딩이라
+        // 사용자가 '전체'/'오늘'/'이번주'를 눌러도 도넛이 24h 그대로였음)
+        const modelData = await fetchModelUsage(getMetricRangeParams());
         setSourceData('model', modelData || []);
       } catch { /* silent — 도넛 stale 유지 */ }
     }
@@ -188,10 +203,17 @@ async function safeJson(url) {
 }
 
 export async function fetchObservability() {
+  // date-filter-propagation pass: 활성 range가 from/to로 자동 적용되도록 buildQuery만 사용.
+  // 이전엔 extra에 `range:'24h'`를 박아넣어 '전체'/'오늘'/'이번주' 클릭 시에도 obs 카드가 24h 그대로였음.
+  // '전체' 상태는 buildQuery에서 from/to가 빠지면 서버 기본값(24h)으로 떨어지므로 range='all' 명시.
+  const rangeExtra = (() => {
+    const dr = getDateRange();
+    return (dr.from != null && dr.to != null) ? {} : { range: 'all' };
+  })();
   const [burn, cache, tools, active] = await Promise.all([
-    safeJson(buildQuery(`${API}/api/metrics/burn-rate`,      { range: '24h' })),
-    safeJson(buildQuery(`${API}/api/metrics/cache-trend`,    { range: '24h' })),
-    safeJson(buildQuery(`${API}/api/metrics/tool-categories`, { range: '24h' })),
+    safeJson(buildQuery(`${API}/api/metrics/burn-rate`,      rangeExtra)),
+    safeJson(buildQuery(`${API}/api/metrics/cache-trend`,    rangeExtra)),
+    safeJson(buildQuery(`${API}/api/metrics/tool-categories`, rangeExtra)),
     safeJson(`${API}/api/sessions/active`),
   ]);
 
