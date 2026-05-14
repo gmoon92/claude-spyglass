@@ -250,21 +250,21 @@ export function drawDonut() {
   });
 
   if (donutMode === 'cache') {
-    // hit rate SSoT — 도넛 모든 슬라이스의 합이 곧 분모(전체 토큰 비용).
-    //   hitRate = cache_read / (cache_read + tokens_input + cache_creation)
-    //   - 분자: '히트' 슬라이스 (cache_read)
+    // 도넛 가운데 지표 = '캐시 적용 비율' (cache-coverage pass).
+    //   = cache_creation / (cache_read + tokens_input + cache_creation)
+    //   - 분자: '등록비용' 슬라이스 (cache_creation) — 새로 캐시에 등록된 토큰
     //   - 분모: 모든 슬라이스 합 (= 히트 + 입력 + 등록비용)
-    //   cache_creation은 첫 캐시 write 비용이라 분모에 포함 — 옵저빌리티 의미
-    //   ("전체 토큰 비용 중 캐시 처리 비율") 정확성 확보 (observability-true pass).
     //
-    // 라벨 매칭: '히트' / '입력' / '등록비용' (flat-view.js, cache-donut-3slice pass).
-    // 과거 라벨 '히트율' / 'Cached'는 호환 폴백.
-    const hit   = typeData.find(d => d.label === '히트' || d.label === '히트율' || d.label === 'Cached')?.tokens || 0;
+    // 정책 변경 사유: Hit Rate(cache_read / 전체)는 시간이 지날수록 100%에 수렴해
+    // 옵저빌리티 가치가 떨어진다. Hit Rate는 하단 cache-panel의 Hit Rate 바에서
+    // 별도 표시. 도넛 가운데에는 "이 세션이 캐시에 얼마나 새로 등록했는지"를
+    // 보여 캐시 활용 동학을 다른 각도로 노출.
+    //
+    // 라벨 매칭: '등록비용' / 'Cache Write' (flat-view.js, cache-donut-3slice pass).
+    const creation = typeData.find(d => d.label === '등록비용' || d.label === 'Cache Write')?.tokens || 0;
     const denom = typeData.reduce((s, d) => s + (d.tokens || 0), 0) || 1;
-    // hit-rate-precision pass: cache-panel.js와 동일 어휘 — 99 초과 100 미만 구간은
-    // ">99%" boundary 라벨로 반올림 정보 손실 명시. Math.round가 99.5를 100으로 만들어
-    // "비현실적 100%"로 보이는 인지 부담 해소.
-    const hitRateExact = (hit / denom) * 100;
+    // hit-rate-precision pass: 99 초과 100 미만 구간은 ">99%", 0 초과 1 미만은 "<1%" boundary 라벨.
+    const hitRateExact = (creation / denom) * 100;
     const hitRateInt   = Math.round(hitRateExact);
     const hitRateLabel = (hitRateExact > 99 && hitRateExact < 100) ? '>99%'
                        : (hitRateExact > 0  && hitRateExact < 1)    ? '<1%'
@@ -276,7 +276,7 @@ export function drawDonut() {
     ctx.fillText(hitRateLabel, cx, cy - 4);
     ctx.fillStyle = COLORS.textDim;
     ctx.font      = '9px ' + (getComputedStyle(document.documentElement).getPropertyValue('--font-ui').trim() || 'sans-serif');
-    ctx.fillText('hit rate', cx, cy + 10);
+    ctx.fillText('캐시 적용 비율', cx, cy + 10);
   } else {
     ctx.fillStyle    = COLORS.text;
     ctx.font         = `bold ${total >= 1000 ? 12 : 15}px monospace`;
