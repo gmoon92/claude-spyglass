@@ -47,8 +47,6 @@ const state = {
   display: 'all',          // 'all' | 'unused' | 'orphan' — 행 부분집합 선택 (단일 책임)
   includeDeleted: false,   // boolean — soft-deleted(디스크 사라진) 정의 포함 여부.
                            //   display와 직교(orthogonal). ADR-001 meta-docs-filter.
-  // 마지막 동기화 결과 메타 (다음 렌더에서 합계 라벨에 노출)
-  lastRefresh: null,       // { cwdsCount, summaryText } | null
   // 마지막으로 결정된 source_root 매칭 결과 (헤더 표시 + 빈 상태 처리)
   resolvedSource: null,    // { project, sourceRoot, matched } | null
   // ADR-003 left-rail-meta-docs: 딥링크 검색어. 행 가시성 필터(이름 부분일치, 대소문자 무시).
@@ -385,13 +383,6 @@ function findSourceRootByProject(rows, projectName) {
 // =============================================================================
 
 function renderHtml(rows, ctx = {}) {
-  // meta-docs feedback ADR (2026-05-14): 우측 패널 'N 항목' summary 제거 —
-  //   좌측 프로젝트 thead의 '항목' 컬럼이 SSoT를 가져간다.
-  //   lastRefresh 힌트(cwd N개 동기화)는 필터 바 아래 단독 행으로 보존.
-  const refreshHint = state.lastRefresh && state.lastRefresh.cwdsCount
-    ? `<div class="meta-docs-refresh-hint" title="${escHtml(state.lastRefresh.cwdsTitle ?? '')}">cwd <strong>${state.lastRefresh.cwdsCount}</strong>개 동기화</div>`
-    : '';
-
   const filters = renderFilters();
 
   // 빈 상태 — 프로젝트 미등록/미동기화 안내
@@ -399,10 +390,10 @@ function renderHtml(rows, ctx = {}) {
     const empty = (ctx.project && !ctx.matched)
       ? `<div class="state-empty">
            <span class="state-empty-title">${escHtml(ctx.project)} 프로젝트에 등록된 Behavior Definitions가 없습니다</span>
-           <span class="state-empty-hint">이 프로젝트가 SessionStart로 동기화된 적이 없을 수 있습니다. 좌측 thead의 <strong>동기화</strong> 버튼을 누르면 알려진 모든 cwd를 다시 스캔합니다.</span>
+           <span class="state-empty-hint">이 프로젝트가 SessionStart로 동기화된 적이 없을 수 있습니다. 좌측 thead의 <strong>동기화</strong> 버튼을 누르면 알려진 모든 작업 공간을 다시 스캔합니다.</span>
          </div>`
       : `<div class="state-empty"><span class="state-empty-title">Behavior Definitions가 없습니다 — SessionStart 이후 자동 동기화됩니다</span></div>`;
-    return `${filters}${refreshHint}${empty}`;
+    return `${filters}${empty}`;
   }
 
   // meta-docs-table-view ADR-001/004 (2026-05-14): 카드 리스트 → 정렬·리사이즈 테이블.
@@ -596,7 +587,7 @@ function renderFilters() {
 }
 
 const ORPHAN_TOOLTIP =
-  '이 호출은 다른 워크스페이스(.claude/) 또는 빌트인/플러그인 정의에서 발생했을 수 있습니다. 동기화 시 다중 cwd를 함께 스캔하면 이 행이 카탈로그 행으로 합쳐집니다.';
+  '이 호출은 다른 워크스페이스(.claude/) 또는 빌트인/플러그인 정의에서 발생했을 수 있습니다. 동기화 시 다중 작업 공간을 함께 스캔하면 이 행이 카탈로그 행으로 합쳐집니다.';
 
 // =============================================================================
 // 이벤트 바인딩
@@ -729,7 +720,6 @@ async function runRefresh(buttonEl) {
     });
 
     const norm = normalizeRefreshResult(res);
-    state.lastRefresh = norm.meta;
 
     // 시작 토스트 정리 후 완료 토스트
     closeToast(startToast);
@@ -771,7 +761,11 @@ function normalizeRefreshResult(res) {
     if (!s || typeof s !== 'object') return null;
     const up  = s.upserted ?? s.added ?? 0;
     const del = s.softDeleted ?? s.deleted ?? 0;
-    return `+${up} / -${del}`;
+    if (up === 0 && del === 0) return '변동 없음';
+    const out = [];
+    if (up) out.push(`${up}개 추가`);
+    if (del) out.push(`${del}개 삭제`);
+    return out.join(', ');
   };
 
   const g = fmt(data.global);
@@ -780,16 +774,13 @@ function normalizeRefreshResult(res) {
   if (p) parts.push('프로젝트 ' + p);
 
   const cwds = Array.isArray(data.cwds) ? data.cwds : [];
-  let cwdsCount = cwds.length;
-  let cwdsTitle = '';
+  const cwdsCount = cwds.length;
   if (cwdsCount) {
-    parts.push(`cwd ${cwdsCount}개`);
-    cwdsTitle = cwds.map(c => c?.cwd ?? '').filter(Boolean).join('\n');
+    parts.push(`작업 공간 ${cwdsCount}개`);
   }
 
   return {
     summaryText: parts.length ? parts.join(', ') : '결과 없음',
-    meta: cwdsCount ? { cwdsCount, cwdsTitle } : null,
   };
 }
 
