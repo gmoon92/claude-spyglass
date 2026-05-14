@@ -185,18 +185,21 @@ document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
   const chartSection = document.getElementById('chartSection');
   if (chartSection?.classList.contains('chart-mode-detail')) {
     const sessionCache = computeSessionCacheStats(allRequests);
-    // cache-label-ux pass: 도넛 슬라이스 라벨을 한국어로 + UX 우선순위 명확화.
-    //   - '히트율': cache_read 합 (분자) — 큰 슬라이스, success 톤
-    //   - '전체':   input + cache_creation 합 (미히트 + 첫 write 비용) — 작은 슬라이스
-    //   사용자 의도: "얼마나 캐시 적용됐는지"가 관심이지 "얼마나 미캐시인지"가 아님 → '전체'라는 표현으로
-    //   분모 전체 비용 의미 직관 노출. chart.js drawDonut이 같은 라벨로 hit rate 계산.
+    // cache-donut-3slice pass: 도넛을 3 슬라이스로 분해해 분모(전체 토큰 비용)와
+    // 각 구성 요소를 한 시각화에서 직관 파악.
+    //   - 히트     (cache_read):       캐시로 처리된 토큰 (절감)
+    //   - 입력     (tokens_input):     새로 계산된 입력 (캐시 미히트)
+    //   - 등록비용 (cache_creation):   첫 캐시 write 비용
+    //   3 슬라이스 합 = 분모 = '전체 토큰 비용'. 가운데 % = 히트 / 합.
     //
-    // observability-true pass: '전체' 슬라이스는 input + cache_creation 합 — cache_creation도
-    // 비용 발생이라 분모에 포함. 도넛 두 슬라이스 합 = computeSessionCacheStats 분모와 일치.
-    const billableNonHit = sessionCache.totalInputTokens + sessionCache.cacheCreationTokens;
+    // 이전엔 '히트율 / 전체' 2 슬라이스로 표현했더니 '전체' 슬라이스 값이
+    // 분자(히트)보다 작아 보이는 모순(분모가 분자보다 작아 보임)이 발생했다.
+    // 3 슬라이스로 분리하면 사용자가 합이 곧 분모임을 자연 인지하고,
+    // cache_creation의 비용도 별도로 가시화된다.
     const cacheData = [
-      { label: '히트율', tokens: sessionCache.cacheReadTokens },
-      { label: '전체',   tokens: billableNonHit               },
+      { label: '히트',     tokens: sessionCache.cacheReadTokens     },
+      { label: '입력',     tokens: sessionCache.totalInputTokens    },
+      { label: '등록비용', tokens: sessionCache.cacheCreationTokens },
     ].filter(d => d.tokens > 0);
     setSourceData('cache', cacheData);
     drawDonut();

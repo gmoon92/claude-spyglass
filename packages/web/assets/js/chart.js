@@ -59,11 +59,14 @@ function donutItemKey(d, _idx) {
   return donutMode === 'model' ? (d.model || '?') : (d.type || '?');
 }
 function cacheItemColor(d) {
-  // cache-label-ux pass: 도넛 라벨 한국어 매핑. 영어 라벨은 외부 호출자 호환용으로 유지.
-  //   - 히트율 / Cached     → success green (#34D399)
-  //   - 전체   / Uncached   → neutral dim (#6E7681) — '미히트 + 첫 write 비용' 분모 부분
-  //   - Cache Write         → info blue (#58A6FF) — 별도 슬라이스로 보낼 경우 폴백
+  // cache-donut-3slice pass: 도넛 라벨 한국어 매핑.
+  //   - 히트       (cache_read):     success green (#34D399) — 캐시 절감
+  //   - 입력       (tokens_input):   neutral dim (#6E7681)    — 신규 계산 비용
+  //   - 등록비용   (cache_creation): info blue (#58A6FF)      — 첫 write 비용
+  // 영어 라벨(Cached/Uncached/Cache Write)은 과거 호출자 호환용 폴백.
   const map = {
+    '히트': '#34D399', '입력': '#6E7681', '등록비용': '#58A6FF',
+    // 과거 라벨 폴백
     '히트율': '#34D399', '전체': '#6E7681',
     'Cached': '#34D399', 'Uncached': '#6E7681',
     'Cache Write': '#58A6FF',
@@ -247,19 +250,17 @@ export function drawDonut() {
   });
 
   if (donutMode === 'cache') {
-    // hit rate SSoT — 도넛 슬라이스 2개의 합이 곧 분모. 서버 aggregate-cache.ts#getCacheStats /
-    // cache-panel.js#computeSessionCacheStats / flat-view.js 도넛 데이터가 한 산식:
+    // hit rate SSoT — 도넛 모든 슬라이스의 합이 곧 분모(전체 토큰 비용).
     //   hitRate = cache_read / (cache_read + tokens_input + cache_creation)
-    //   - 분자(히트율): cache_read
-    //   - 분모(히트율 + 전체): cache_read + (tokens_input + cache_creation)
+    //   - 분자: '히트' 슬라이스 (cache_read)
+    //   - 분모: 모든 슬라이스 합 (= 히트 + 입력 + 등록비용)
     //   cache_creation은 첫 캐시 write 비용이라 분모에 포함 — 옵저빌리티 의미
     //   ("전체 토큰 비용 중 캐시 처리 비율") 정확성 확보 (observability-true pass).
     //
-    // 라벨 매칭: '히트율' / '전체' (flat-view.js에서 부여). 누가 슬라이스를 추가해도
-    // 첫 슬라이스를 분자로 잡고 합을 분모로 사용 → 도넛 % 자동 일치.
-    const hit   = typeData.find(d => d.label === '히트율')?.tokens || 0;
-    const rest  = typeData.find(d => d.label === '전체')?.tokens   || 0;
-    const denom = (hit + rest) || 1;
+    // 라벨 매칭: '히트' / '입력' / '등록비용' (flat-view.js, cache-donut-3slice pass).
+    // 과거 라벨 '히트율' / 'Cached'는 호환 폴백.
+    const hit   = typeData.find(d => d.label === '히트' || d.label === '히트율' || d.label === 'Cached')?.tokens || 0;
+    const denom = typeData.reduce((s, d) => s + (d.tokens || 0), 0) || 1;
     // hit-rate-precision pass: cache-panel.js와 동일 어휘 — 99 초과 100 미만 구간은
     // ">99%" boundary 라벨로 반올림 정보 손실 명시. Math.round가 99.5를 100으로 만들어
     // "비현실적 100%"로 보이는 인지 부담 해소.
