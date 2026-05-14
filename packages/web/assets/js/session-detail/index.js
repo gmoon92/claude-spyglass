@@ -35,6 +35,7 @@ export { renderDetailRequests, applyDetailFilter } from './flat-view.js';
 export {
   setDetailView, toggleTurn, toggleCardExpand, setTurnViewMode,
   renderTurnView, renderTurnCards, openLlmInputForTurn,
+  initDetailTabBar,
 } from './turn-views.js';
 
 /** API base URL — 동일 출처 사용. */

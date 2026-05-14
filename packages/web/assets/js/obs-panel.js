@@ -11,6 +11,7 @@
 
 import { fmtToken, fmt, fmtRelative, escHtml } from './formatters.js';
 import { sparklineBars, sparklineLine } from './sparkline.js';
+import { svgChevron } from './render/icons.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 공통 헬퍼
@@ -25,10 +26,10 @@ function deltaIconHtml(deltaPct) {
   }
   const isUp = deltaPct > 0;
   const cls = isUp ? 'is-up' : 'is-down';
-  const arrow = isUp ? '▲' : '▼';
+  const dir = isUp ? 'up' : 'down';
   const txt = `${isUp ? '+' : ''}${deltaPct.toFixed(1)}%`;
   return `<span class="obs-card-trend ${cls}">
-    <span class="obs-card-trend-icon">${arrow}</span>${txt}
+    <span class="obs-card-trend-icon" aria-hidden="true">${svgChevron({ dir, size: 10 })}</span>${txt}
   </span>`;
 }
 
@@ -187,9 +188,11 @@ export function renderToolCategoriesCard(payload) {
     const max = Math.max(1, ...items.map(i => i.invocations || 0));
     const rows = items.map(i => {
       const pct = Math.round((i.invocations || 0) / max * 100);
+      // 이중 클래스: 기존 obs-cat-bar-fill obs-cat-bar-fill--agent 보존
+      // + ds-bar-fill + data-tone="warn" (agent/skill → warn)
       return `<div class="obs-meta-row">
         <span class="obs-meta-name" title="${escHtml(i.name)}">${escHtml(i.name)}</span>
-        <div class="obs-cat-bar"><span class="obs-cat-bar-fill obs-cat-bar-fill--agent" style="width:${pct}%"></span></div>
+        <div class="obs-cat-bar"><span class="obs-cat-bar-fill obs-cat-bar-fill--agent ds-bar-fill" data-tone="warn" style="width:${pct}%"></span></div>
         <span class="obs-cat-pct">${escHtml(String(i.invocations ?? 0))}</span>
       </div>`;
     }).join('');
@@ -213,9 +216,13 @@ export function renderToolCategoriesCard(payload) {
     const cls = CATEGORY_CLASS[c.category] || 'native';
     const label = c.percentage != null ? `${(c.percentage).toFixed(1)}%` : `${c.request_count}`;
     // 카테고리별 행에도 obs-tooltip 부여 → 카테고리 의미 hover 노출
+    // 이중 클래스: 기존 obs-cat-bar-fill obs-cat-bar-fill--${cls} 보존
+    // + ds-bar-fill + data-tone (agent/skill→warn, mcp→info, native→neutral)
+    const DS_TONE = { agent: 'warn', skill: 'warn', mcp: 'info', native: 'neutral' };
+    const dsTone = DS_TONE[cls] ?? 'neutral';
     return `<div class="obs-cat-row" data-obs-tooltip="cat-${escHtml(c.category || '')}">
       <span class="obs-cat-name">${escHtml(c.category || '—')}</span>
-      <div class="obs-cat-bar"><span class="obs-cat-bar-fill obs-cat-bar-fill--${cls}" style="width:${pct}%"></span></div>
+      <div class="obs-cat-bar"><span class="obs-cat-bar-fill obs-cat-bar-fill--${cls} ds-bar-fill" data-tone="${dsTone}" style="width:${pct}%"></span></div>
       <span class="obs-cat-pct">${escHtml(label)}</span>
     </div>`;
   }).join('');
@@ -244,8 +251,9 @@ export function renderAnomalyBadge(payload) {
   }
   el.dataset.obsTooltip = 'anomaly';
   el.hidden = false;
+  // 이중 클래스: 기존 anomaly-badge-dot 보존 + ds-dot + data-tone="pulse" + data-size="sm"
   el.innerHTML = `
-    <span class="anomaly-badge-dot" aria-hidden="true"></span>
+    <span class="anomaly-badge-dot ds-dot" data-tone="pulse" data-size="sm" aria-hidden="true"></span>
     <span class="anomaly-badge-count">${fmt(total)}</span>
   `;
 }

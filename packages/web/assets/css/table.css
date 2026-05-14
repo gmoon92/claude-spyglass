@@ -33,7 +33,7 @@ tr.clickable:hover td { background: var(--raised); }
 tr.row-selected td { background: var(--raised) !important; }
 tr.row-selected td:first-child {
   border-left: 2px solid var(--accent);
-  padding-left: 10px;
+  padding-left: var(--space-3);
   box-shadow: inset 1px 0 0 var(--accent);
 }
 
@@ -84,7 +84,7 @@ td.cell-model  {
   padding-top: 2px;
   padding-bottom: 2px;
 }
-.target-cell-inner { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; overflow: hidden; }
+.target-cell-inner { display: inline-flex; align-items: center; gap: var(--space-2); max-width: 100%; overflow: hidden; }
 .model-name    {
   font-family: var(--font-data);
   font-size: var(--text-small);
@@ -96,23 +96,23 @@ td.cell-token.cell-empty { text-align: right; }
 td.cache-cell  { cursor: default; }
 
 /* ── ROW TYPE BORDER (ADR-006) ──────────────────────────────────────────── */
-tr[data-type="prompt"]    td:first-child { padding-left: 6px; }
-tr[data-type="tool_call"] td:first-child { padding-left: 6px; }
-tr[data-type="system"]    td:first-child { padding-left: 6px; }
-tr.row-selected td:first-child { border-left: 2px solid !important; padding-left: 6px !important; }
+tr[data-type="prompt"]    td:first-child { padding-left: var(--space-2); }
+tr[data-type="tool_call"] td:first-child { padding-left: var(--space-2); }
+tr[data-type="system"]    td:first-child { padding-left: var(--space-2); }
+tr.row-selected td:first-child { border-left: 2px solid !important; padding-left: var(--space-2) !important; }
 
 /* ── PROMPT EXPAND ──────────────────────────────────────────────────────── */
 .prompt-expand-row td { padding: 0 !important; border-bottom: 1px solid var(--border); }
 .prompt-expand-box {
   background: var(--accent-bg-light); border-left: 2px solid var(--accent);
   padding: 8px 16px; max-height: 400px; overflow-y: auto;
-  font-size: 11px; line-height: 1.7; color: var(--text-dim);
+  font-size: var(--text-meta); line-height: 1.7; color: var(--text-dim);
   white-space: pre-wrap; word-break: break-all; position: relative;
 }
 .expand-copy-btn {
   float: right; background: none; border: 1px solid var(--border);
   color: var(--text-dim); padding: 2px 8px; border-radius: var(--radius-sm);
-  cursor: pointer; font-size: 10px; font-family: inherit; margin-bottom: 4px;
+  cursor: pointer; font-size: 10px; font-family: inherit; margin-bottom: var(--space-1);
 }
 .expand-copy-btn:hover { color: var(--text); border-color: var(--text-dim); }
 

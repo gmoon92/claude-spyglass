@@ -91,13 +91,13 @@ export function applyAnomalyBadgesToRow(rowEl, flags) {
       if (durationCell && !has('slow')) {
         durationCell.insertAdjacentHTML(
           'beforeend',
-          ` <span class="mini-badge badge-slow" data-mini-badge-tooltip="slow">slow</span>`
+          ` <span class="mini-badge badge-slow ds-badge" data-tone="warn" data-mini-badge-tooltip="slow">slow</span>`
         );
       }
     } else if ((f === 'spike' || f === 'loop') && targetCell && !has(f)) {
       targetCell.insertAdjacentHTML(
         'beforeend',
-        `<span class="mini-badge badge-${f}" data-mini-badge-tooltip="${f}">${f}</span>`
+        `<span class="mini-badge badge-${f} ds-badge" data-tone="${f === 'spike' ? 'warn' : 'info'}" data-mini-badge-tooltip="${f}">${f}</span>`
       );
     }
   }

@@ -1,6 +1,7 @@
 // 모델 분류·칩 렌더링 — ADR-data-trust-visual-001 / ADR-token-trust-cleanup-001.
 //
 // 변경 이유: 모델 family/버전 매핑 정책, trust 시각 표지 정책 변경 시 묶여서 손이 가는 묶음.
+// Wave 2: 이중 클래스 패턴 — 기존 CSS 클래스 유지 + ds-chip + data-tone 추가.
 
 import { escHtml } from '../formatters.js';
 
@@ -120,7 +121,7 @@ export function modelChipHtml(r, opts = {}) {
   const label   = modelChipLabel(r?.model, cls);
   const title   = r?.model || '모델 정보 없음';
   const sizeCls = opts.mini ? ' model-chip-mini' : '';
-  return `<span class="model-chip model-chip-${cls}${sizeCls}" title="${escHtml(title)}">${escHtml(label)}</span>`;
+  return `<span class="model-chip model-chip-${cls}${sizeCls} ds-chip" data-tone="${cls}" title="${escHtml(title)}">${escHtml(label)}</span>`;
 }
 
 export function makeModelCell(r) {

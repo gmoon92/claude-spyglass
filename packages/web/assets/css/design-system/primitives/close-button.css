@@ -1,0 +1,44 @@
+/* 책임: 닫기(×) 버튼 단일 원시 컴포넌트 / 흡수: feed-search-clear, syslib-detail-close, llm-input-refs-popover-close, kbd-help-close, kbd-modal-close / 의존: design-tokens.css */
+
+.ds-close-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  line-height: 1;
+  transition: background var(--dur-fast) var(--ease),
+              color     var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+
+.ds-close-btn:hover {
+  background: var(--surface-alt);
+  color: var(--text-1);
+  border-color: var(--border-strong);
+}
+
+/* sm: 20×20, font 14px */
+.ds-close-btn[data-size="sm"] {
+  width: 20px;
+  height: 20px;
+  font-size: 14px;
+}
+
+/* md: 24×24, font 15px */
+.ds-close-btn[data-size="md"] {
+  width: 24px;
+  height: 24px;
+  font-size: 15px;
+}
+
+/* lg: 30×30, font 17px */
+.ds-close-btn[data-size="lg"] {
+  width: 30px;
+  height: 30px;
+  font-size: 17px;
+}

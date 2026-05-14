@@ -32,6 +32,8 @@
 import { escHtml, fmtTime, fmtToken, shortModelName } from './formatters.js';
 import { skLlmInputCards } from './render/skeleton.js';
 import { getSelectedSession } from './state.js';
+import { svgSearch, svgChevron, svgInfo } from './render/icons.js';
+import { renderCloseBtn } from './design-system/primitives/close-button.js';
 
 const CONTAINER_ID = 'llmInputBody';
 
@@ -271,7 +273,7 @@ function renderHtml(p) {
   // 배너 — proxy 데이터의 본질(hook 관측과 다름)을 사용자가 즉시 인지 (banner pass).
   const bannerHtml = `
     <div class="llm-input-banner" role="note">
-      <span class="llm-input-banner-icon" aria-hidden="true">i</span>
+      <span class="llm-input-banner-icon" aria-hidden="true">${svgInfo({ size: 12, className: 'ds-icon' })}</span>
       <span class="llm-input-banner-text">
         이 탭은 proxy가 Anthropic API에 전송한 <strong>원본 페이로드</strong>입니다 —
         훅 관측 데이터(턴 뷰)와 다를 수 있습니다.
@@ -420,7 +422,7 @@ function renderMessagesControls() {
   return `
     <div class="llm-input-messages-controls">
       <label class="llm-input-search">
-        <span class="llm-input-search-icon" aria-hidden="true">🔎</span>
+        <span class="llm-input-search-icon" aria-hidden="true">${svgSearch({ size: 14 })}</span>
         <input
           type="search"
           class="llm-input-search-input"
@@ -431,10 +433,10 @@ function renderMessagesControls() {
       </label>
       <div class="llm-input-messages-bulk">
         <button type="button" class="llm-input-expand-all" data-action="expand-all" title="모든 메시지 펼치기">
-          <span aria-hidden="true">▾</span> 전체 펼침
+          ${svgChevron({ dir: 'down', size: 10 })} 전체 펼침
         </button>
         <button type="button" class="llm-input-collapse-all" data-action="collapse-all" title="모든 메시지 접기">
-          <span aria-hidden="true">▸</span> 전체 접기
+          ${svgChevron({ dir: 'right', size: 10 })} 전체 접기
         </button>
       </div>
     </div>
@@ -616,7 +618,7 @@ async function openRefsPopover(chipEl, hash) {
   popover.innerHTML = `
     <header class="llm-input-refs-popover-header">
       <span><strong>참조 목록</strong> <span class="llm-input-refs-popover-sub">불러오는 중…</span></span>
-      <button type="button" class="llm-input-refs-popover-close" data-refs-close aria-label="닫기">×</button>
+      ${renderCloseBtn({ size: 'sm', label: '닫기', dataAttrs: { 'refs-close': '' } }).replace('class="ds-close-btn"', 'class="ds-close-btn llm-input-refs-popover-close"')}
     </header>
     <div class="llm-input-refs-popover-body">
       <p class="llm-input-dim" style="padding:var(--space-3);">잠시만요…</p>

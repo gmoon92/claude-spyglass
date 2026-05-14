@@ -25,6 +25,9 @@ import { getSelectedProject, getMetaSubTab, setMetaSubTab as stateSetMetaSubTab 
 import { toolIconHtml } from './render/badges.js';
 import { skMetaDocList } from './render/skeleton.js';
 import { svgTrash, svgWarn, svgRefresh } from './render/icons.js';
+import { renderSortHead } from './design-system/markers/sort-head.js';
+import { renderFilterBtn } from './design-system/primitives/filter-button.js';
+import { renderTab } from './design-system/primitives/tab.js';
 // meta-docs-table-view ADR-004 (2026-05-14): 로그/syslib 테이블과 동일한 col-resize 핸들을 부착.
 import { initColResize } from './col-resize.js';
 // meta-docs feedback ADR (2026-05-14): 좌측 패널에 프로젝트별 Behavior Definitions 항목 수를 주입.
@@ -52,6 +55,38 @@ const state = {
   // ADR-003 left-rail-meta-docs: 딥링크 검색어. 행 가시성 필터(이름 부분일치, 대소문자 무시).
   searchTerm: '',
 };
+
+/**
+ * Wave 5 — meta-tab 2종 동적 생성.
+ *
+ * 책임:
+ *  - #metaTabBar 컨테이너에 meta-tab 버튼 2개를 renderTab()으로 주입한다.
+ *  - renderTab 기본 출력(ds-tab)에 기존 클래스(meta-tab / active), id,
+ *    data-meta-subtab, aria-controls 를 .replace로 삽입하여 이중 클래스 패턴을 유지한다.
+ *  - 이벤트 위임은 main.js의 body [data-meta-subtab] 셀렉터가 그대로 처리한다 — 변경 없음.
+ *  - applyMetaSubTab의 aria-selected 동기화는 그대로 유지(id 기반 getElementById).
+ *
+ * 호출자: main.js init() — DOMContentLoaded 시 1회.
+ */
+export function initMetaSubTabs() {
+  const container = document.getElementById('metaTabBar');
+  if (!container) return;
+
+  /** @type {{ value: string, label: string, id: string, controls: string, selected: boolean }[]} */
+  const TABS = [
+    { value: 'docs',  label: 'Behavior Definitions', id: 'metaTabDocs',      controls: 'metaDocsBody',      selected: true  },
+    { value: 'tools', label: 'Tools',                 id: 'metaTabToolStats', controls: 'metaToolStatsBody', selected: false },
+  ];
+
+  container.innerHTML = TABS.map(({ value, label, id, controls, selected }) => {
+    // renderTab 출력: <button class="ds-tab" type="button" role="tab" aria-selected="..." data-tab-value="...">label</button>
+    // → class="ds-tab meta-tab [active]" id="..." aria-controls="..." data-meta-subtab="..." 로 확장.
+    const activeCls = selected ? ' active' : '';
+    return renderTab({ label, selected, value })
+      .replace('class="ds-tab"', `class="ds-tab meta-tab${activeCls}"`)
+      .replace(`data-tab-value="${value}"`, `id="${id}" aria-controls="${controls}" data-meta-subtab="${value}" data-tab-value="${value}"`);
+  }).join('');
+}
 
 /**
  * 좌측 패널 thead 동기화 셀 초기화 — 앱 부트스트랩 시 1회 호출.
@@ -431,14 +466,30 @@ function renderHtml(rows, ctx = {}) {
  * meta-docs-table-view ADR-001 (2026-05-14): sortable thead 셀 1개 생성.
  * system-prompt-library의 th() 헬퍼와 동일 구조 — SORTABLE_KEYS 키 + ↕/↑/↓ 화살표 + aria-sort.
  * data-meta-sort 속성은 onMetaContainerClick / onMetaContainerKeydown이 동일 분기로 처리한다.
+ *
+ * ds-sort-head 통합 (Wave 1): <th> 내부 콘텐츠를 renderSortHead() 로 위임.
+ *  - <th> 자체의 이벤트 속성(data-meta-sort / tabindex / role / aria-sort)은 그대로 유지.
+ *  - 내부 텍스트 + 화살표 span 은 ds-sort-head 마크업으로 교체. 시각 변화 없음.
  */
 function thHtml(key, label, extraCls = '') {
-  const cls = `${extraCls} sortable ${sortHeaderCls(key)}`.trim();
+  const sortState = sortThState(key);
+  const cls = `${extraCls} sortable ds-sort-head ${sortHeaderCls(key)}`.trim();
   return `<th data-meta-sort="${key}"
               class="${cls}"
               tabindex="0"
               role="columnheader"
-              aria-sort="${ariaSortValue(key)}">${escHtml(label)}${sortIndicator(key)}</th>`;
+              aria-sort="${ariaSortValue(key)}">${renderSortHead({ label, sort: sortState, key })}</th>`;
+}
+
+/**
+ * 현재 state 기준 컬럼의 정렬 상태를 renderSortHead SortState('idle'|'asc'|'desc')로 변환.
+ * 단일 책임 — sortHeaderCls / ariaSortValue 와 동일 판단 로직.
+ * @param {string} key
+ * @returns {'idle'|'asc'|'desc'}
+ */
+function sortThState(key) {
+  if (state.sort !== key) return 'idle';
+  return state.sortDir === 'asc' ? 'asc' : 'desc';
 }
 
 /** 헤더 active 클래스 — 단일 책임 (state.sort/sortDir 기준) */
@@ -557,10 +608,26 @@ function renderFilters() {
     { v: 'orphan', label: '호출만존재' },
   ];
 
-  const btn = (group, opts, active) => opts.map(o =>
-    `<button type="button" data-meta-filter="${group}" data-value="${o.v}"
-       class="meta-doc-filter-btn ${o.v === active ? 'active' : ''}">${escHtml(o.label)}</button>`
-  ).join('');
+  // ds-filter-btn 통합 (Wave 1): renderFilterBtn() 으로 내부 마크업 위임.
+  //  - 이벤트 바인딩용 data-meta-filter / data-value 를 <button> 에 직접 추가한다.
+  //  - 기존 .meta-doc-filter-btn + .active 클래스도 이중 클래스 패턴으로 함께 부여 (시각 변화 0).
+  //  - strength: 'strong' — meta-docs 필터 버튼은 강한 강조 계열.
+  const btn = (group, opts, active) => opts.map(o => {
+    const isActive = o.v === active;
+    // renderFilterBtn 기본 출력: <button class="ds-filter-btn" type="button" aria-pressed="..." data-strength="strong" data-value="...">label</button>
+    const base = renderFilterBtn({ label: o.label, active: isActive, strength: 'strong', value: o.v });
+    // data-meta-filter 와 기존 클래스(meta-doc-filter-btn / active)를 삽입.
+    // <button class="ds-filter-btn" 을 <button class="ds-filter-btn meta-doc-filter-btn [active]" data-meta-filter="..." 으로 확장.
+    return base
+      .replace(
+        'class="ds-filter-btn"',
+        `class="ds-filter-btn meta-doc-filter-btn${isActive ? ' active' : ''}"`,
+      )
+      .replace(
+        'type="button"',
+        `type="button" data-meta-filter="${escHtml(group)}"`,
+      );
+  }).join('');
 
   // 직교 토글 — display와 의미 축이 다르므로 라디오 그룹 외부에 체크박스로 분리.
   // 라벨 능동형 + 휴지통 SVG(stroke-only) + title 툴팁의 3중 시각 단서로 학습 비용 ↓.
@@ -808,8 +875,13 @@ function pushToast({ kind = 'info', message = '', ttl = 4000 } = {}) {
   el.addEventListener('click', () => closeToast(el));
   host.appendChild(el);
 
-  // entry 애니메이션 다음 프레임
-  requestAnimationFrame(() => el.classList.add('is-shown'));
+  // entry 애니메이션:
+  // 더블 rAF로 "append → 첫 paint(초기 상태) → 다음 프레임에 is-shown"을 보장한다.
+  // 단발 rAF만 쓰면 첫 paint 전에 클래스가 붙어 브라우저가 초기/최종 상태를 한 프레임에 합쳐버리고
+  // transition이 통째로 스킵되어 토스트가 "뿅" 나타나는 끊김이 발생할 수 있음.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => el.classList.add('is-shown'));
+  });
 
   if (ttl > 0) {
     setTimeout(() => closeToast(el), ttl);
@@ -820,7 +892,8 @@ function pushToast({ kind = 'info', message = '', ttl = 4000 } = {}) {
 function closeToast(el) {
   if (!el || !el.parentNode) return;
   el.classList.add('is-leaving');
-  setTimeout(() => { try { el.remove(); } catch { /* noop */ } }, 220);
+  // CSS leave transition(transform 200ms / opacity 180ms)이 끝난 뒤 DOM에서 제거
+  setTimeout(() => { try { el.remove(); } catch { /* noop */ } }, 240);
 }
 
 // =============================================================================

@@ -29,12 +29,13 @@
   <link rel="stylesheet" href="/assets/css/tool-stats.css">
   <link rel="stylesheet" href="/assets/css/obs-panel.css">
   <link rel="stylesheet" href="/assets/css/app-rail.css">
+  <link rel="stylesheet" href="assets/css/design-system/_index.css">
 </head>
 <body>
 
   <div class="error-banner" id="errorBanner">
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-      <circle cx="8" cy="8" r="6.5"/><line x1="8" y1="5" x2="8" y2="9"/><circle cx="8" cy="11.5" r="0.6" fill="currentColor"/>
+    <svg class="ds-icon" data-icon="info" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="8" cy="8" r="6.5"/><line x1="8" y1="5" x2="8" y2="9"/><circle cx="8" cy="11.5" r="0.6" fill="currentColor" stroke="none"/>
     </svg>
     <span id="errorMsg">서버에 연결할 수 없습니다.</span>
     <button class="retry-btn" id="retryBtn">다시 시도</button>
@@ -249,7 +250,7 @@
          사각 형태(이전 둥근 폐기) + 평소 dim, hover 시 강조 + chevron 회전. -->
     <button class="sidebar-edge-toggle" id="btnPanelCollapse" type="button"
             title="왼쪽 패널 토글 (⌘B)" aria-label="왼쪽 패널 토글">
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <svg class="ds-chevron" data-dir="left" aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M7.5 2L3.5 6L7.5 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </button>
@@ -274,13 +275,11 @@
           <div class="chart-actions">
             <!-- header-removal: 날짜 필터를 데이터 컨텍스트(차트) 옆으로 이동.
                  ID `dateFilter` 보존 → main.js 이벤트 핸들러 수정 불필요. -->
+            <!-- Wave 5: date-filter 버튼은 main.js initDateFilter()로 동적 생성 -->
             <div class="date-filter" id="dateFilter">
-              <button class="filter-btn active" data-range="all" title="수집된 전체 기간 데이터 표시">전체</button>
-              <button class="filter-btn" data-range="today" title="오늘 00:00(로컬 시간) 이후 데이터만 표시">오늘</button>
-              <button class="filter-btn" data-range="week" title="이번 주 월요일 00:00(로컬 시간) 이후 데이터만 표시">이번주</button>
             </div>
             <button class="btn-toggle" id="btnToggleChart" title="접기 / 펼치기" aria-label="접기">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <svg class="ds-chevron" data-dir="down" aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
@@ -413,7 +412,7 @@
                   <col style="width:48px"><col style="width:48px"><col style="width:52px"><col style="width:68px"><col style="width:88px">
                 </colgroup>
                 <thead>
-                  <tr><th>Time</th><th>Action</th><th>Target</th><th>Model</th><th>Message</th><th style="text-align:right">in</th><th style="text-align:right">out</th><th style="text-align:right"><span style="text-transform:none">⚡</span>Cache</th><th style="text-align:right">Duration</th><th>Session</th></tr>
+                  <tr><th>Time</th><th>Action</th><th>Target</th><th>Model</th><th>Message</th><th style="text-align:right">in</th><th style="text-align:right">out</th><th style="text-align:right"><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 1.5L3 9h4.5L6.5 14.5L13 7H8.5L9.5 1.5z"/></svg>Cache</th><th style="text-align:right">Duration</th><th>Session</th></tr>
                 </thead>
                 <tbody id="requestsBody">
                   <!-- skeleton-loading T-05 — 실제 컬럼 폭/높이 흉내. SSE 첫 도착 시 prependRequest 가 일괄 제거 (ADR-004). -->
@@ -490,14 +489,11 @@
         <div id="detailView" class="right-view card">
 
           <div class="view-tab-bar" id="detailTabBar">
-            <div class="view-tab-group">
-              <button class="view-tab active" id="tabTurn" data-tab="turn">턴 뷰</button>
-              <button class="view-tab" id="tabRequests" data-tab="requests">요청</button>
+            <!-- Wave 5: view-tab 버튼은 turn-views.js initDetailTabBar()로 동적 생성 -->
+            <div class="view-tab-group" id="viewTabGroup">
               <!-- ADR-003 left-rail-meta-docs: Behavior Definitions는 detail 탭에서 좌측 rail 1급 모드로 승격됨.
                    기존 #detailMetaDocsView 컨테이너는 T-03에서 #metaDocsRoot로 호이스팅 예정. -->
               <!-- ADR-004 후속: 세션 [도구] 탭은 메타 모드 [도구 통계] 서브 탭과 중복이라 제거. -->
-              <button class="view-tab" id="tabLlm" data-tab="llm" title="proxy가 Anthropic API에 전송한 원본 페이로드">API 페이로드</button>
-              <button class="view-tab" id="tabSysLib" data-tab="syslib">System 라이브러리</button>
             </div>
             <div class="view-tab-bar-controls feed-controls">
               <div id="detailSearchContainer" class="feed-search"></div>
@@ -519,7 +515,7 @@
                 <col>
                 <col style="width:48px"><col style="width:48px"><col style="width:52px"><col style="width:68px">
               </colgroup>
-              <thead><tr><th>Time</th><th>Action</th><th>Target</th><th>Model</th><th>Message</th><th style="text-align:right">in</th><th style="text-align:right">out</th><th style="text-align:right"><span style="text-transform:none">⚡</span>Cache</th><th style="text-align:right">Duration</th></tr></thead>
+              <thead><tr><th>Time</th><th>Action</th><th>Target</th><th>Model</th><th>Message</th><th style="text-align:right">in</th><th style="text-align:right">out</th><th style="text-align:right"><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 1.5L3 9h4.5L6.5 14.5L13 7H8.5L9.5 1.5z"/></svg>Cache</th><th style="text-align:right">Duration</th></tr></thead>
               <tbody id="detailRequestsBody">
                 <!-- skeleton-loading T-08 — 9컬럼 폭 흉내. loadSessionDetail 응답 후 정상 row 로 교체. -->
                 <tr data-skeleton="1">
@@ -701,9 +697,8 @@
            좌측 content-pane(프로젝트 선택기 + 요약 카드)는 양쪽 탭에서 공통 노출.
            탭 전환은 메인 영역(아래 두 컨테이너)만 토글한다.
            라우팅: meta-docs-view.js의 setMetaSubTab('docs' | 'tools') — sessionStorage 'spyglass.metaSubTab' 영속화. -->
-      <div class="meta-tabs" role="tablist" aria-label="Behavior Definitions 서브 탭">
-        <button id="metaTabDocs"      class="meta-tab active" role="tab" aria-selected="true"  aria-controls="metaDocsBody"      data-meta-subtab="docs"  type="button">Behavior Definitions</button>
-        <button id="metaTabToolStats" class="meta-tab"        role="tab" aria-selected="false" aria-controls="metaToolStatsBody" data-meta-subtab="tools" type="button">Tools</button>
+      <!-- Wave 5: meta-tab 버튼은 meta-docs-view.js initMetaSubTabs()로 동적 생성 -->
+      <div class="meta-tabs" role="tablist" aria-label="Behavior Definitions 서브 탭" id="metaTabBar">
       </div>
 
       <div id="metaDocsBody" class="meta-docs-body" role="tabpanel" aria-labelledby="metaTabDocs" aria-label="Behavior Definitions 본문">

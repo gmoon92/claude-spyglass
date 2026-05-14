@@ -23,6 +23,7 @@
  */
 
 import { escHtml, fmtToken, fmtDate, formatDuration } from '../formatters.js';
+import { svgDiamond } from '../design-system/icons/diamond.js';
 import {
   contextPreview, toolIconHtml,
   targetInnerHtml, modelChipHtml, trustOf,
@@ -132,7 +133,7 @@ function compressLegacyFlow(toolCalls, responses) {
  * 시각 어휘는 toolIconHtml의 ◉/◎와 형제 — 한 글리프, info 톤(--type-response-color)으로 구분.
  */
 function responseMarkerHtml() {
-  return `<span class="tool-icon tool-icon-response" aria-hidden="true">◆</span>`;
+  return `<span class="tool-icon tool-icon-response" aria-hidden="true">${svgDiamond({ size: 10 })}</span>`;
 }
 function emptyResponseMarkerHtml() {
   return `<span class="tool-icon text-dim" aria-hidden="true">—</span>`;

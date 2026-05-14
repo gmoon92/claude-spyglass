@@ -1,0 +1,36 @@
+/* 책임: 정렬 헤더 단일 표지 / 흡수: meta-docs-view.js sortIndicator, system-prompt-library.js sortIndicator, tool-stats.js sortIndicator / 의존: design-tokens.css */
+
+.ds-sort-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-3);
+  font-size: var(--text-small);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: none;
+  border: none;
+  font-family: var(--font-ui);
+}
+
+.ds-sort-head:hover {
+  color: var(--text-1);
+}
+
+.ds-sort-head[data-sort="asc"],
+.ds-sort-head[data-sort="desc"] {
+  color: var(--accent);
+}
+
+.ds-sort-head .arrow {
+  font-weight: 700;
+  opacity: 0.95;
+}
+
+.ds-sort-head[data-sort="idle"] .arrow {
+  opacity: 0.3;
+  font-weight: 400;
+}

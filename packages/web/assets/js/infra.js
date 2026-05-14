@@ -1,4 +1,6 @@
 // 인프라 모듈 — 에러 표시, 상태 배지, 스크롤 락 (외부 의존 없음)
+// Wave 8-B: ↓ 글리프를 svgChevron SVG로 교체 (innerHTML 사용).
+import { svgChevron } from './design-system/icons/chevron.js';
 
 let _scrollLockNewCount = 0;
 
@@ -10,7 +12,7 @@ export function updateScrollLockBanner() {
   const banner = document.getElementById('scrollLockBanner');
   if (!banner) return;
   if (_scrollLockNewCount > 0) {
-    banner.textContent = `↓ 새 요청 ${_scrollLockNewCount}개 — 클릭하여 최신으로 이동`;
+    banner.innerHTML = `${svgChevron({ dir: 'down', size: 10 })} 새 요청 ${_scrollLockNewCount}개 — 클릭하여 최신으로 이동`;
     banner.classList.add('visible');
   } else {
     banner.classList.remove('visible');

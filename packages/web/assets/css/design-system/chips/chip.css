@@ -1,0 +1,56 @@
+/* ── DS Chip — 식별·분류 라벨 ────────────────────────────────────────────────
+ *
+ * 책임:
+ *   renderChip() 함수가 출력하는 .ds-chip 요소의 시각 스타일을 정의한다.
+ *   chip은 "이것이 무엇인가(분류·소속)"를 표시하며,
+ *   badge("상태·이상 신호")와 의미론적으로 구분된다.
+ *   dot(.ds-dot) 옵션으로 모델 칩처럼 currentColor 원 prefix를 붙일 수 있다.
+ *
+ * 흡수 대상 (향후 wave에서 기존 클래스를 .ds-chip으로 치환):
+ *   - badges.css :: .sub-type-chip .sub-type-chip-{mcp,agent,skill,task}
+ *   - badges.css :: .model-chip .model-chip-{haiku,sonnet,opus,external,unknown}
+ *   - badges.css :: .tool-chip, .target-role-badge, .agent-chip (향후 통합 예정)
+ *
+ * 의존:
+ *   - design-tokens.css — --sub-type-{kind}-{color,bg,border},
+ *                          --model-{kind}-color, --text-3, --border-strong,
+ *                          --radius-sm, --text-small, --font-ui
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+.ds-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font: 600 var(--text-small)/1 var(--font-ui);
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: default;
+}
+
+/* ── Sub-type 톤 (MCP / Agent / Skill / Task) ── */
+.ds-chip[data-tone="mcp"]   { color: var(--sub-type-mcp-color);   background: var(--sub-type-mcp-bg);   border-color: var(--sub-type-mcp-border); }
+.ds-chip[data-tone="agent"] { color: var(--sub-type-agent-color); background: var(--sub-type-agent-bg); border-color: var(--sub-type-agent-border); }
+.ds-chip[data-tone="skill"] { color: var(--sub-type-skill-color); background: var(--sub-type-skill-bg); border-color: var(--sub-type-skill-border); }
+.ds-chip[data-tone="task"]  { color: var(--sub-type-task-color);  background: var(--sub-type-task-bg);  border-color: var(--sub-type-task-border); }
+
+/* ── 모델 톤 (Haiku / Sonnet / Opus / External / Unknown) ── */
+.ds-chip[data-tone="haiku"]    { color: var(--model-haiku-color);    background: rgba(125, 211, 252, 0.10); border-color: rgba(125, 211, 252, 0.30); }
+.ds-chip[data-tone="sonnet"]   { color: var(--model-sonnet-color);   background: rgba(255, 122, 69,  0.10); border-color: rgba(255, 122, 69,  0.30); }
+.ds-chip[data-tone="opus"]     { color: var(--model-opus-color);     background: rgba(167, 139, 250, 0.10); border-color: rgba(167, 139, 250, 0.30); }
+.ds-chip[data-tone="external"] { color: var(--model-external-color); background: rgba(244, 114, 182, 0.10); border-color: rgba(244, 114, 182, 0.30); }
+.ds-chip[data-tone="unknown"]  { color: var(--text-3); border-color: var(--border-strong); border-style: dashed; }
+.ds-chip[data-tone="neutral"]  { color: var(--text-3); background: var(--badge-grad-neutral); border-color: var(--border-strong); }
+
+/* ── Dot prefix (dot=true 옵션, 모델 칩 스타일) ── */
+.ds-chip .ds-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: currentColor;
+  box-shadow: none;
+  opacity: 0.85;
+}

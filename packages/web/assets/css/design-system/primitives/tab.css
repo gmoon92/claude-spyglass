@@ -1,0 +1,29 @@
+/* 책임: 탭 버튼 단일 원시 컴포넌트 / 흡수: view-tab(detail-view.css), meta-tab(meta-docs.css) / 의존: design-tokens.css */
+
+.ds-tab {
+  display: inline-block;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-3);
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: var(--weight-normal);
+  transition: color        var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+
+.ds-tab:hover {
+  color: var(--text-1);
+}
+
+/* 선택 상태: accent 색상 + 하단 보더 강조 + 굵기 강화 */
+.ds-tab[aria-selected="true"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}

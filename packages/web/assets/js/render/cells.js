@@ -1,10 +1,12 @@
 // 테이블 셀 빌더 — Action / Target / Cache / Skeleton.
 //
 // 변경 이유: 셀 구조(td 클래스·data-cell·placeholder) 변경 시 묶여서 손이 가는 묶음.
+// Wave 2: target-role-badge (targetInnerHtml) 는 Wave 3에서 ds-* 위임 예정 — 형식이 달라 별도 처리 필요.
 
 import { escHtml, fmtToken, shortModelName } from '../formatters.js';
 import { typeBadge, toolIconHtml, toolStatusBadge } from './badges.js';
 import { skTableRows } from './skeleton.js';
+import { svgToolDot } from '../design-system/icons/_index.js';
 
 /**
  * 호환 wrapper — skeleton-loading T-03 (ADR-003).
@@ -24,13 +26,13 @@ export function makeActionCell(r) {
 // 반환값: { html, empty } — empty=true면 호출자가 "—" 같은 빈 placeholder를 자유롭게 감쌈.
 export function targetInnerHtml(r) {
   if (r.type === 'prompt') {
-    return { html: `<span class="target-role-badge role-badge-user"><span class="role-icon">◉</span>user</span>`, empty: false };
+    return { html: `<span class="target-role-badge role-badge-user ds-chip" data-tone="brand"><span class="role-icon">${svgToolDot({ size: 12 })}</span>user</span>`, empty: false };
   }
   if (r.type === 'response') {
-    return { html: `<span class="target-role-badge role-badge-assistant"><span class="role-icon">◉</span>assistant</span>`, empty: false };
+    return { html: `<span class="target-role-badge role-badge-assistant ds-chip" data-tone="info"><span class="role-icon">${svgToolDot({ size: 12 })}</span>assistant</span>`, empty: false };
   }
   if (r.type === 'system') {
-    return { html: `<span class="target-role-badge role-badge-system"><span class="role-icon">◉</span>system</span>`, empty: false };
+    return { html: `<span class="target-role-badge role-badge-system ds-chip" data-tone="warn"><span class="role-icon">${svgToolDot({ size: 12 })}</span>system</span>`, empty: false };
   }
   if (r.type !== 'tool_call' || !r.tool_name) {
     return { html: '—', empty: true };

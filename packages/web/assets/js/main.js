@@ -13,17 +13,19 @@ import {
   getPrevState, setPrevState, clearPrevState,
 } from './state.js';
 import { initAppRail, setRailActive } from './app-rail.js';
-import { enterMetaDocsMode, openMetaDocViaDeepLink, setMetaSubTab, refreshMetaActiveSubTab, initMetaDocsLeftNav, setMetaScopeMode } from './meta-docs-view.js';
+import { enterMetaDocsMode, openMetaDocViaDeepLink, setMetaSubTab, refreshMetaActiveSubTab, initMetaDocsLeftNav, setMetaScopeMode, initMetaSubTabs } from './meta-docs-view.js';
 import {
   setDetailFilter, applyDetailFilter, setDetailView, toggleTurn,
   refreshDetailSession, initDetailSearch,
   toggleCardExpand, openLlmInputForTurn,
+  initDetailTabBar,
 } from './session-detail.js';
 import {
   fetchDashboard, fetchRequests, fetchAllSessions, fetchSessionsByProject,
   fetchCacheStats, setActiveRange, setIsSSEConnected,
 } from './api.js';
-import { fmtToken } from './formatters.js';
+import { fmtToken, escHtml } from './formatters.js';
+import { renderFilterBtn } from './design-system/primitives/filter-button.js';
 import { togglePromptExpand, resolveExpandTarget } from './renderers.js';
 import { renderLlmInput } from './llm-input-view.js';
 import { initColResize } from './col-resize.js';
@@ -376,6 +378,40 @@ function startSSE() {
   });
 }
 
+/**
+ * Wave 5 — date-filter 버튼 3종 동적 생성.
+ *
+ * 책임:
+ *  - #dateFilter 컨테이너에 filter-btn 버튼 3개를 renderFilterBtn()으로 주입한다.
+ *  - renderFilterBtn 기본 출력(ds-filter-btn)에 기존 클래스(filter-btn / active),
+ *    data-range, title(선택) 을 .replace로 삽입하여 이중 클래스 패턴을 유지한다.
+ *  - 이벤트 위임은 #dateFilter [data-range] 셀렉터와 .filter-btn.active 토글이
+ *    그대로 처리한다 — 변경 없음.
+ *
+ * 호출자: init() — DOMContentLoaded 시 1회.
+ */
+function initDateFilter() {
+  const container = document.getElementById('dateFilter');
+  if (!container) return;
+
+  /** @type {{ value: string, label: string, active: boolean, title: string }[]} */
+  const FILTERS = [
+    { value: 'all',   label: '전체',   active: true,  title: '수집된 전체 기간 데이터 표시' },
+    { value: 'today', label: '오늘',   active: false, title: '오늘 00:00(로컬 시간) 이후 데이터만 표시' },
+    { value: 'week',  label: '이번주', active: false, title: '이번 주 월요일 00:00(로컬 시간) 이후 데이터만 표시' },
+  ];
+
+  container.innerHTML = FILTERS.map(({ value, label, active, title }) => {
+    // renderFilterBtn 출력: <button class="ds-filter-btn" type="button" aria-pressed="..." data-strength="soft" data-value="...">label</button>
+    // → class="ds-filter-btn filter-btn [active]" data-range="..." title="..." 로 확장.
+    const activeCls = active ? ' active' : '';
+    const titleAttr = ` title="${escHtml(title)}"`;
+    return renderFilterBtn({ label, active, strength: 'soft', value })
+      .replace('class="ds-filter-btn"', `class="ds-filter-btn filter-btn${activeCls}"`)
+      .replace(`data-value="${value}"`, `data-value="${value}" data-range="${value}"${titleAttr}`);
+  }).join('');
+}
+
 function initEventDelegation() {
   document.querySelector('.left-panel').addEventListener('click', e => {
     const projRow = e.target.closest('[data-project]');
@@ -451,8 +487,13 @@ function initEventDelegation() {
   document.getElementById('dateFilter').addEventListener('click', e => {
     const btn = e.target.closest('[data-range]');
     if (!btn) return;
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    // .filter-btn .active + ds-filter-btn aria-pressed 동기화 — ds-filter-btn CSS는 [aria-pressed="true"]로 활성 시각을 결정한다.
+    document.querySelectorAll('#dateFilter .filter-btn').forEach(b => {
+      b.classList.remove('active');
+      b.setAttribute('aria-pressed', 'false');
+    });
     btn.classList.add('active');
+    btn.setAttribute('aria-pressed', 'true');
     setActiveRange(btn.dataset.range);
     // chart-section-filter-sync ADR-001 — timeline-meta 라벨은 SSoT 함수로 갱신.
     // chartSubtitle은 ADR-002에 따라 timelineChart 본질 고정 — 여기서 갱신하지 않는다.
@@ -623,6 +664,12 @@ function init() {
   initToolColors();
   initSystemReminderPopover();
   initDetailSearch();
+  initDetailTabBar();   // Wave 5: view-tab 4종 동적 생성
+  setDetailView('turn'); // Wave 8-A: 초기 aria-selected 동기화 — initDetailTabBar 직후 강제 싱크.
+                         // renderTab이 HTML 문자열로 aria-selected="true"를 생성하지만,
+                         // 명시적 호출로 .active 클래스와 aria-selected 양쪽 SSoT를 보장.
+  initMetaSubTabs();    // Wave 5: meta-tab 2종 동적 생성
+  initDateFilter();     // Wave 5: date-filter 3종 동적 생성
   initMetaDocsLeftNav();
   setInterval(() => { advanceBuckets(); drawTimeline(); }, 60000);
   setInterval(() => fetchAllSessions(), 30000);
@@ -634,7 +681,7 @@ document.body.insertAdjacentHTML('beforeend', `
     <div class="kbd-help-modal" role="document">
       <div class="kbd-help-header">
         <span class="kbd-help-title" id="kbdHelpTitle">키보드 단축키</span>
-        <button class="kbd-help-close" id="kbdHelpClose" aria-label="닫기">×</button>
+        <button class="kbd-help-close ds-close-btn" id="kbdHelpClose" aria-label="닫기" data-size="lg">×</button>
       </div>
       <div class="kbd-help-body">
         <div class="kbd-help-section">

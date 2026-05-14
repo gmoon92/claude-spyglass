@@ -25,6 +25,8 @@
 import { escHtml } from './formatters.js';
 import { skSysLibCards, skBlock } from './render/skeleton.js';
 import { initColResize } from './col-resize.js';
+import { renderSortHead } from './design-system/markers/sort-head.js';
+import { renderCloseBtn } from './design-system/primitives/close-button.js';
 
 const CONTAINER_ID = 'sysLibBody';
 const DEFAULT_LIMIT = 100;
@@ -130,13 +132,15 @@ function renderHtml(rows) {
   }).join('');
 
   // 모든 sortable 컬럼은 동일 패턴으로 — SORTABLE_KEYS 기준 단일 정의.
+  // renderSortHead: ds-sort-head 이중 클래스 패턴 — 기존 data-syslib-sort/aria-sort/<th> 속성 보존.
   const th = (key, label, extraCls = '') => {
     const cls = `${extraCls} sortable ${sortHeaderCls(key)}`.trim();
+    const sortState = _sortKey !== key ? 'idle' : (_sortDir === 'asc' ? 'asc' : 'desc');
     return `<th data-syslib-sort="${key}"
                 class="${cls}"
                 tabindex="0"
                 role="columnheader"
-                aria-sort="${ariaSortValue(key)}">${escHtml(label)}${sortIndicator(key)}</th>`;
+                aria-sort="${ariaSortValue(key)}">${renderSortHead({ label, sort: sortState, key })}</th>`;
   };
 
   // colgroup — initColResize가 cols[i].style.width 직접 조정. 초기 폭은
@@ -171,13 +175,6 @@ function renderHtml(rows) {
 function sortHeaderCls(key) {
   if (_sortKey !== key) return '';
   return _sortDir === 'asc' ? 'sort-asc' : 'sort-desc';
-}
-/** 헤더 ↓/↑ 표기자 — 단일 책임 */
-function sortIndicator(key) {
-  if (_sortKey !== key) return '<span class="sort-arrow sort-arrow-idle">↕</span>';
-  return _sortDir === 'asc'
-    ? '<span class="sort-arrow">↑</span>'
-    : '<span class="sort-arrow">↓</span>';
 }
 /** 헤더 aria-sort 속성 값 — WAI-ARIA 표준 */
 function ariaSortValue(key) {
@@ -289,8 +286,11 @@ async function showDetailModal(hash) {
 }
 
 function renderModalShell(inner) {
+  // renderCloseBtn: ds-close-btn 이중 클래스 패턴 — 기존 syslib-detail-close / data-syslib-close / aria-label 보존.
+  const closeBtn = renderCloseBtn({ size: 'lg', label: '닫기', dataAttrs: { 'syslib-close': '' } })
+    .replace('class="ds-close-btn"', 'class="syslib-detail-close ds-close-btn"');
   return `<div class="syslib-detail-inner">
-    <button class="syslib-detail-close" data-syslib-close type="button" aria-label="닫기">×</button>
+    ${closeBtn}
     ${inner}
   </div>`;
 }

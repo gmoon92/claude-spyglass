@@ -18,8 +18,10 @@
  */
 
 import { escHtml, fmtToken, fmtTime, formatDuration } from '../formatters.js';
+import { svgDiamond } from '../design-system/icons/diamond.js';
 import { toolIconHtml, _promptCache, togglePromptExpand } from '../renderers.js';
 import { subTypeOf } from '../request-types.js';
+import { renderTab } from '../design-system/primitives/tab.js';
 import { showLatestLlmInput, setPendingProxyTargetTs } from '../llm-input-view.js';
 import { setDetailTab } from '../state.js';
 import { loadSystemPromptLibrary } from '../system-prompt-library.js';
@@ -35,6 +37,10 @@ import {
 import { targetInnerHtml, contextPreview } from '../renderers.js';
 // v21 (system-reminder-badge): turn 별 신규 reminder 산출 SSoT
 import { computeNewRemindersByTurn } from './system-reminder.js';
+// Wave 5: system-reminder 칩 아이콘을 design-system/icons/note.js 로 이전.
+import { svgNote } from '../design-system/icons/note.js';
+// Wave 8-B: 레거시 turn-toggle ▸ 글리프를 SVG chevron으로 교체.
+import { svgChevron } from '../design-system/icons/chevron.js';
 
 /**
  * 턴 카드 푸터 .turn-card-bar-pct에 hover 시 노출되는 의미 설명 (web-design-balance-pass ADR-003).
@@ -44,16 +50,6 @@ import { computeNewRemindersByTurn } from './system-reminder.js';
  *  - 따옴표 이스케이프 불필요(escHtml 미사용 — 사용자 입력이 아닌 상수 문자열).
  */
 const BAR_PCT_TITLE = '이 턴이 세션 전체 토큰에서 차지하는 비중. 같은 세션의 모든 턴 합이 100% (Turn IN+OUT ÷ 세션 누적 토큰).';
-
-/**
- * system-reminder 칩 + 팝오버 SVG 아이콘 (디자인 SSoT: design-spec.md §2).
- * 메모 페이지 + dog-ear + 본문 라인 2줄. currentColor로 칩 색상 자동 추종.
- */
-const SYSTEM_REMINDER_ICON_SVG = `<svg class="turn-system-reminder-icon" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <path d="M2.25 1.75 H7.5 L9.75 4 V10.25 H2.25 Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M7.5 1.75 V4 H9.75" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M4 6.25 H7.75 M4 8.25 H6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-</svg>`;
 
 /**
  * 턴 카드 검색 haystack SSoT (search-expand-payload).
@@ -134,7 +130,7 @@ function buildSystemReminderChip(turnIndex, reminders) {
             aria-controls="${popoverId}"
             data-sysrem-toggle="${popoverId}"
             title="이 턴에서 새로 등장한 시스템 리마인더 ${count}건. 클릭으로 원문 보기">
-      ${SYSTEM_REMINDER_ICON_SVG}
+      ${svgNote({ size: 12 })}
       <span class="turn-system-reminder-count">${count}</span>
     </button>
     <div class="turn-system-reminder-popover"
@@ -156,6 +152,40 @@ function buildSystemReminderChip(turnIndex, reminders) {
 }
 
 /**
+ * Wave 5 — detail-view 탭 4종 동적 생성.
+ *
+ * 책임:
+ *  - #viewTabGroup 컨테이너에 view-tab 버튼 4개를 renderTab()으로 주입한다.
+ *  - renderTab 기본 출력(ds-tab)에 기존 클래스(view-tab / active), id, data-tab,
+ *    title(선택) 을 .replace로 삽입하여 이중 클래스 패턴을 유지한다.
+ *  - 이벤트 위임은 main.js의 #detailTabBar [data-tab] 셀렉터가 그대로 처리한다 — 변경 없음.
+ *
+ * 호출자: main.js init() — DOMContentLoaded 시 1회.
+ */
+export function initDetailTabBar() {
+  const container = document.getElementById('viewTabGroup');
+  if (!container) return;
+
+  /** @type {{ value: string, label: string, id: string, selected: boolean, title?: string }[]} */
+  const TABS = [
+    { value: 'turn',     label: '턴 뷰',        id: 'tabTurn',     selected: true  },
+    { value: 'requests', label: '요청',          id: 'tabRequests', selected: false },
+    { value: 'llm',      label: 'API 페이로드', id: 'tabLlm',     selected: false, title: 'proxy가 Anthropic API에 전송한 원본 페이로드' },
+    { value: 'syslib',   label: 'System 라이브러리', id: 'tabSysLib', selected: false },
+  ];
+
+  container.innerHTML = TABS.map(({ value, label, id, selected, title }) => {
+    // renderTab 출력: <button class="ds-tab" type="button" role="tab" aria-selected="..." data-tab-value="...">label</button>
+    // → class="ds-tab view-tab [active]" id="..." data-tab="..." [title="..."] 로 확장.
+    const activeCls = selected ? ' active' : '';
+    const titleAttr = title ? ` title="${escHtml(title)}"` : '';
+    return renderTab({ label, selected, value })
+      .replace('class="ds-tab"', `class="ds-tab view-tab${activeCls}"`)
+      .replace(`data-tab-value="${value}"`, `id="${id}" data-tab="${value}" data-tab-value="${value}"${titleAttr}`);
+  }).join('');
+}
+
+/**
  * 탭(요청/턴/LLM Input/SysLib) 표시 전환.
  *  - llm 탭 진입 시 가장 최근 proxy 요청의 LLM Input 골격 렌더 (T-09 ADR-004 옵션 A).
  *  - syslib 탭 진입 시 시스템 프롬프트 카탈로그 lazy 로드.
@@ -172,10 +202,17 @@ export function setDetailView(tab) {
   if (turnView)     turnView.style.display     = tab === 'turn'     ? '' : 'none';
   if (llmView)      llmView.style.display      = tab === 'llm'      ? '' : 'none';
   if (sysLibView)   sysLibView.style.display   = tab === 'syslib'   ? '' : 'none';
-  document.getElementById('tabRequests')?.classList.toggle('active', tab === 'requests');
-  document.getElementById('tabTurn')?.classList.toggle('active',     tab === 'turn');
-  document.getElementById('tabLlm')?.classList.toggle('active',      tab === 'llm');
-  document.getElementById('tabSysLib')?.classList.toggle('active',   tab === 'syslib');
+  // ds-tab 활성 시각은 [aria-selected="true"]로 결정되므로 .active 클래스와 함께 동기화.
+  const _syncTab = (id, isActive) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('active', isActive);
+    el.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  };
+  _syncTab('tabRequests', tab === 'requests');
+  _syncTab('tabTurn',     tab === 'turn');
+  _syncTab('tabLlm',      tab === 'llm');
+  _syncTab('tabSysLib',   tab === 'syslib');
   if (tab === 'llm') showLatestLlmInput();
   if (tab === 'syslib') loadSystemPromptLibrary();
 }
@@ -238,8 +275,8 @@ export function renderTurnView(turns, badgeTurns) {
       if (tc.tool_name) toolCountMap[tc.tool_name] = (toolCountMap[tc.tool_name] || 0) + 1;
     }));
     const topTool = Object.entries(toolCountMap).sort((a, b) => b[1] - a[1])[0];
-    let badgesHtml = `<span class="detail-agg-badge" title="이 세션에서 토큰을 가장 많이 소비한 턴">최고 비용 Turn: <strong>T${maxCostTurn.turn_index}</strong> (${fmtToken(maxCostTurn.summary.total_tokens)})</span>`;
-    if (topTool) badgesHtml += `<span class="detail-agg-badge" title="이 세션에서 가장 많이 호출된 도구">최다 호출 Tool: <strong>${escHtml(topTool[0])}</strong> (${topTool[1]}회)</span>`;
+    let badgesHtml = `<span class="detail-agg-badge ds-badge" data-tone="neutral" title="이 세션에서 토큰을 가장 많이 소비한 턴">최고 비용 Turn: <strong>T${maxCostTurn.turn_index}</strong> (${fmtToken(maxCostTurn.summary.total_tokens)})</span>`;
+    if (topTool) badgesHtml += `<span class="detail-agg-badge ds-badge" data-tone="neutral" title="이 세션에서 가장 많이 호출된 도구">최다 호출 Tool: <strong>${escHtml(topTool[0])}</strong> (${topTool[1]}회)</span>`;
     badgesEl.innerHTML = badgesHtml;
     badgesEl.classList.remove('detail-agg-badges--hidden');
   } else if (badgesEl) {
@@ -272,7 +309,7 @@ export function renderTurnView(turns, badgeTurns) {
         <span class="turn-time">${fmtTime(turn.started_at)}</span>
         <span class="turn-meta" title="${escHtml(metaTitle)}">${meta}</span>
         ${barHtml}
-        <span class="turn-toggle">▸</span>
+        <span class="turn-toggle">${svgChevron({ dir: 'right', size: 10 })}</span>
       </div>
       <div class="turn-children">
         ${buildTurnDetailRows(turn)}
@@ -352,8 +389,8 @@ export function renderTurnCards(turns, badgeTurns) {
       if (tc.tool_name) toolCountMap[tc.tool_name] = (toolCountMap[tc.tool_name] || 0) + 1;
     }));
     const topTool = Object.entries(toolCountMap).sort((a, b) => b[1] - a[1])[0];
-    let badgesHtml = `<span class="detail-agg-badge" title="이 세션에서 토큰을 가장 많이 소비한 턴">최고 비용 Turn: <strong>T${maxCostTurn.turn_index}</strong> (${fmtToken(maxCostTurn.summary.total_tokens)})</span>`;
-    if (topTool) badgesHtml += `<span class="detail-agg-badge" title="이 세션에서 가장 많이 호출된 도구">최다 호출 Tool: <strong>${escHtml(topTool[0])}</strong> (${topTool[1]}회)</span>`;
+    let badgesHtml = `<span class="detail-agg-badge ds-badge" data-tone="neutral" title="이 세션에서 토큰을 가장 많이 소비한 턴">최고 비용 Turn: <strong>T${maxCostTurn.turn_index}</strong> (${fmtToken(maxCostTurn.summary.total_tokens)})</span>`;
+    if (topTool) badgesHtml += `<span class="detail-agg-badge ds-badge" data-tone="neutral" title="이 세션에서 가장 많이 호출된 도구">최다 호출 Tool: <strong>${escHtml(topTool[0])}</strong> (${topTool[1]}회)</span>`;
     badgesEl.innerHTML = badgesHtml;
     badgesEl.classList.remove('detail-agg-badges--hidden');
   } else if (badgesEl) {
@@ -386,16 +423,16 @@ export function renderTurnCards(turns, badgeTurns) {
   container.innerHTML = prologueHtml + turns.slice().sort((a, b) => b.turn_index - a.turn_index).map(turn => {
     const toolCount = turn.summary.tool_call_count;
     const complexBadge = toolCount > 15
-      ? '<span class="turn-complexity high">복잡</span>'
+      ? '<span class="turn-complexity high ds-badge" data-tone="warn">복잡</span>'
       : toolCount > 5
-      ? '<span class="turn-complexity mid">중간</span>'
+      ? '<span class="turn-complexity mid ds-badge" data-tone="info">중간</span>'
       : '';
 
     // system 변경 표지 — turn.system_hash가 직전 turn의 hash와 다르면 ▲ + 8자 hex
     const prevHash = sysHashByIdx.get(turn.turn_index - 1);
     const sysChanged = turn.system_hash && turn.system_hash !== prevHash;
     const systemBadge = sysChanged
-      ? `<span class="turn-system-changed" title="이 turn에서 system prompt가 ${prevHash ? '변경되었습니다' : '시작되었습니다'} (hash 8자 prefix)">▲ <code>${escHtml(turn.system_hash.slice(0, 8))}</code></span>`
+      ? `<span class="turn-system-changed ds-badge" data-tone="warn" title="이 turn에서 system prompt가 ${prevHash ? '변경되었습니다' : '시작되었습니다'} (hash 8자 prefix)">▲ <code>${escHtml(turn.system_hash.slice(0, 8))}</code></span>`
       : '';
 
     const promptText = turn.prompt?.preview
@@ -413,7 +450,7 @@ export function renderTurnCards(turns, badgeTurns) {
     //   분류 판정은 request-types.js의 subTypeOf — 분류 뱃지·필터·flow chip이 한 SSoT를 공유.
     const chips = compressFlowWithResponses(turn).map(item => {
       if (item.kind === 'response') {
-        return `<span class="tool-chip response-chip" title="어시스턴트 응답" aria-label="어시스턴트 응답">◆</span>`;
+        return `<span class="tool-chip response-chip ds-chip" data-tone="info" title="어시스턴트 응답" aria-label="어시스턴트 응답">${svgDiamond({ size: 10 })}</span>`;
       }
       const { name, count, isAgent, agentName, items } = item;
       const base = name.split('__').pop();
@@ -428,9 +465,9 @@ export function renderTurnCards(turns, badgeTurns) {
         const deepLinkAttrs = (sub === 'agent' || sub === 'skill')
           ? ` data-meta-doc-type="${sub}" data-meta-doc-id="${escHtml(agentName)}" role="button" tabindex="0"`
           : '';
-        return `<span class="tool-chip agent-chip${subCls}" title="${escHtml(fullLabel)}"${deepLinkAttrs}>${toolIconHtml(base)}<span class="agent-chip-name">${escHtml(agentName)}</span>${countSuffix ? `<span class="turn-group-count"> ${escHtml(countSuffix)}</span>` : ''}</span>`;
+        return `<span class="tool-chip agent-chip${subCls} ds-chip" data-tone="${sub || 'agent'}" title="${escHtml(fullLabel)}"${deepLinkAttrs}>${toolIconHtml(base)}<span class="agent-chip-name">${escHtml(agentName)}</span>${countSuffix ? `<span class="turn-group-count"> ${escHtml(countSuffix)}</span>` : ''}</span>`;
       }
-      return `<span class="tool-chip${subCls}">${fmtActionLabel(base, count)}</span>`;
+      return `<span class="tool-chip${subCls} ds-chip" data-tone="${sub || 'tool'}">${fmtActionLabel(base, count)}</span>`;
     }).join('<svg class="chip-arrow" width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2 5 L7 5 M5 2.5 L7.5 5 L5 7.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
 
     const barPct = sessionTotalTokens > 0
@@ -464,12 +501,12 @@ export function renderTurnCards(turns, badgeTurns) {
     return `<div class="turn-card${expandedClass}" data-card-turn-id="${escHtml(turn.turn_id)}" data-search-haystack="${escHtml(haystack)}">
       <div class="turn-card-summary" data-toggle-card="${escHtml(turn.turn_id)}" role="button" aria-expanded="${ariaExpanded}" tabindex="0">
         <div class="turn-card-header">
-          <span class="turn-card-index">T${turn.turn_index}</span>
+          <span class="turn-card-index ds-badge" data-tone="neutral">T${turn.turn_index}</span>
           ${promptText ? `<span class="turn-card-preview">${promptText}</span>` : ''}
           ${systemBadge}
           ${reminderChip}
           ${payloadActionBtn}
-          <span class="turn-card-expand-btn"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="turn-card-expand-btn"><svg class="ds-chevron" data-dir="down" aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
         </div>
         ${chips ? `<div class="turn-card-flow">${chips}</div>` : ''}
         <div class="turn-card-footer">
@@ -477,7 +514,7 @@ export function renderTurnCards(turns, badgeTurns) {
           <span>OUT ${tokOut}</span>
           ${turn.prompt?.duration_ms ? `<span>&#9201; ${dur}</span>` : ''}
           ${complexBadge}
-          ${sessionTotalTokens > 0 ? `<span class="turn-card-bar-pct" title="${BAR_PCT_TITLE}">${barPct}%</span>` : ''}
+          ${sessionTotalTokens > 0 ? `<span class="turn-card-bar-pct ds-badge" data-tone="neutral" title="${BAR_PCT_TITLE}">${barPct}%</span>` : ''}
         </div>
       </div>
       <div class="turn-card-expanded">

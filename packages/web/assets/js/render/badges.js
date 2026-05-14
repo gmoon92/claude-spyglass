@@ -1,18 +1,22 @@
 // Badge·아이콘 렌더링 — type / tool / status / hint / anomaly / sub-type 표지.
 //
 // 변경 이유: 배지 라벨·아이콘·아이콘 색·오류 판정 기준 변경 시 묶여서 손이 가는 묶음.
+// Wave 2: 이중 클래스 패턴 — 기존 CSS 클래스 유지 + ds-badge/ds-chip + data-tone 추가.
 //
 // 외부 호출: tool-stats.js (toolIconHtml), turn-views.js (toolIconHtml),
 //            turn-rows.js / cells.js (subTypeBadgeHtml).
 
 import { escHtml } from '../formatters.js';
 import { subTypeOf } from '../request-types.js';
+import { svgToolDot, svgAgentDot } from '../design-system/icons/_index.js';
 
 export function typeBadge(type) {
   const known = ['prompt', 'tool_call', 'system', 'response'];
   const cls   = known.includes(type) ? type : 'unknown';
   const label = known.includes(type) ? type : (type || '?');
-  return `<span class="type-badge type-${cls}" title="${escHtml(type)}" aria-label="${escHtml(type)}">${escHtml(label)}</span>`;
+  const toneMap = { prompt: 'brand', tool_call: 'success', system: 'warn', response: 'info' };
+  const tone = toneMap[type] ?? 'neutral';
+  return `<span class="type-badge type-${cls} ds-badge" data-tone="${tone}" title="${escHtml(type)}" aria-label="${escHtml(type)}">${escHtml(label)}</span>`;
 }
 
 // eventType: r.event_type 그대로 전달 — 'pre_tool'이면 pulse 애니메이션 자동 적용
@@ -20,8 +24,8 @@ export function toolIconHtml(toolName, eventType = null) {
   const isAgent  = toolName && /^(Agent|Skill|Task)/.test(toolName);
   const runCls   = eventType === 'pre_tool' ? ' tool-icon-running' : '';
   return isAgent
-    ? `<span class="tool-icon tool-icon-agent${runCls}">◎</span>`
-    : `<span class="tool-icon tool-icon-tool${runCls}">◉</span>`;
+    ? `<span class="tool-icon tool-icon-agent${runCls} ds-icon">${svgAgentDot({ size: 12 })}</span>`
+    : `<span class="tool-icon tool-icon-tool${runCls} ds-icon">${svgToolDot({ size: 12 })}</span>`;
 }
 
 // payload에서 tool_response 추출
@@ -50,7 +54,7 @@ export function toolStatusBadge(r) {
   } else {
     hasError = !!tr.is_error;
   }
-  return hasError ? `<span class="mini-badge badge-error">오류</span>` : '';
+  return hasError ? `<span class="mini-badge badge-error ds-badge" data-tone="error">오류</span>` : '';
 }
 
 // 도구별 결과 힌트: "[202줄]" 등
@@ -86,7 +90,11 @@ export function toolResponseHint(r) {
 
 export function anomalyBadgesHtml(flags) {
   if (!flags || flags.size === 0) return '';
-  return [...flags].map(f => `<span class="mini-badge badge-${f}" data-mini-badge-tooltip="${f}">${f}</span>`).join('');
+  const toneMap = { spike: 'warn', loop: 'info', slow: 'warn' };
+  return [...flags].map(f => {
+    const tone = toneMap[f] ?? 'neutral';
+    return `<span class="mini-badge badge-${f} ds-badge" data-tone="${tone}" data-mini-badge-tooltip="${f}">${f}</span>`;
+  }).join('');
 }
 
 /**
@@ -144,5 +152,7 @@ export function subTypeBadgeHtml(r) {
   } else {
     return '';
   }
-  return `<span class="sub-type-chip sub-type-chip-${sub}" title="${escHtml(fullId)}" aria-label="${escHtml(fullId)}"${deepLinkAttrs}>${label}</span>`;
+  const toneMap = { mcp: 'mcp', agent: 'agent', skill: 'skill', task: 'task' };
+  const tone = toneMap[sub] ?? 'neutral';
+  return `<span class="sub-type-chip sub-type-chip-${sub} ds-chip" data-tone="${tone}" title="${escHtml(fullId)}" aria-label="${escHtml(fullId)}"${deepLinkAttrs}>${label}</span>`;
 }

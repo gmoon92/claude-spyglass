@@ -9,6 +9,7 @@ import { trustOf, rowTrustClass, makeModelCell } from './model.js';
 import { makeActionCell, makeTargetCell, makeCacheCell } from './cells.js';
 import { contextPreview, extractFirstPrompt, extractPromptText, extractAssistantText } from './extract.js';
 import { RECENT_REQ_COLS } from './expand.js';
+import { svgStatusActive, svgStatusStale, svgStatusEnded } from '../design-system/icons/_index.js';
 
 /**
  * 검색 haystack SSoT — 행에 박을 `data-search-haystack` 속성용 문자열을 만든다.
@@ -94,13 +95,13 @@ export function makeSessionRow(s, isSelected) {
   // 클라가 자체 시각으로 stale 판정하면 서버 권위와 어긋나므로 금지.
   // 구버전 응답(live_state 없음) 호환: ended_at만 보고 ●/○로 폴백.
   const liveState = s.live_state || (s.ended_at ? 'ended' : 'live');
-  let statusGlyph, statusCls, statusTitle;
+  let statusGlyph, statusCls, statusTitle, statusTone;
   if (liveState === 'ended') {
-    statusGlyph = '○'; statusCls = ''; statusTitle = '종료된 세션';
+    statusGlyph = svgStatusEnded({ size: 12 }); statusCls = ''; statusTitle = '종료된 세션'; statusTone = 'ended';
   } else if (liveState === 'stale') {
-    statusGlyph = '◐'; statusCls = ' stale'; statusTitle = 'stale — SessionEnd 누락 의심';
+    statusGlyph = svgStatusStale({ size: 12 }); statusCls = ' stale'; statusTitle = 'stale — SessionEnd 누락 의심'; statusTone = 'stale';
   } else {
-    statusGlyph = '●'; statusCls = ' active'; statusTitle = '라이브 세션';
+    statusGlyph = svgStatusActive({ size: 12 }); statusCls = ' active'; statusTitle = '라이브 세션'; statusTone = 'active';
   }
   const shortId  = s.id.slice(0, 8);
   const preview  = extractFirstPrompt(s.first_prompt_payload);
@@ -111,7 +112,7 @@ export function makeSessionRow(s, isSelected) {
         <span class="sess-id" title="${escHtml(s.id)}">${escHtml(shortId)}</span>
         <span class="sess-row-time">${rel}</span>
         <span class="sess-row-tokens">${fmtToken(s.total_tokens)}</span>
-        <span class="sess-row-status${statusCls}" title="${statusTitle}">${statusGlyph}</span>
+        <span class="sess-row-status${statusCls} ds-dot" data-tone="${statusTone}" data-size="md" title="${statusTitle}">${statusGlyph}</span>
       </div>
       ${preview ? `<div class="sess-row-preview" title="${escHtml(preview)}">${escHtml(preview)}</div>` : ''}
     </td>

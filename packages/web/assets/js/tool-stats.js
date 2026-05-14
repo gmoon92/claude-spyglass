@@ -23,6 +23,8 @@
 import { fmtToken, escHtml } from './formatters.js';
 import { toolIconHtml } from './renderers.js';
 import { skToolMatrix } from './render/skeleton.js';
+import { renderSortHead } from './design-system/markers/sort-head.js';
+import { renderBadge } from './design-system/badges/badge.js';
 
 export const API = '';
 
@@ -148,32 +150,47 @@ function applySort(rows, key, dir = 'desc') {
   return rows.slice().sort((a, b) => factor * cmp(a, b));
 }
 
-/** 헤더 active 클래스 */
+/**
+ * 헤더 active 클래스
+ * @deprecated Wave 2 이후 renderSortHead 통합으로 대체 예정. 다른 wave 호출처가 있을 수 있으므로 유지.
+ */
 function sortHeaderCls(key) {
   if (_sortKey !== key) return '';
   return _sortDir === 'asc' ? 'sort-asc' : 'sort-desc';
 }
-/** 헤더 ↓/↑ 표기자 */
+/**
+ * 헤더 ↓/↑ 표기자
+ * @deprecated Wave 2 이후 renderSortHead 통합으로 대체 예정. 다른 wave 호출처가 있을 수 있으므로 유지.
+ */
 function sortIndicator(key) {
   if (_sortKey !== key) return '<span class="sort-arrow sort-arrow-idle">↕</span>';
   return _sortDir === 'asc'
     ? '<span class="sort-arrow">↑</span>'
     : '<span class="sort-arrow">↓</span>';
 }
-/** 헤더 aria-sort 속성 값 — WAI-ARIA 표준 */
+/**
+ * 헤더 aria-sort 속성 값 — WAI-ARIA 표준
+ * @deprecated Wave 2 이후 renderSortHead 통합으로 대체 예정. 다른 wave 호출처가 있을 수 있으므로 유지.
+ */
 function ariaSortValue(key) {
   if (_sortKey !== key) return 'none';
   return _sortDir === 'asc' ? 'ascending' : 'descending';
 }
 
-/** 헤더 셀 한 개 빌더 — 클래스/속성 공통화. */
+/**
+ * 헤더 셀 한 개 빌더 — 클래스/속성 공통화.
+ * Wave 2 치환: 내부에서 renderSortHead를 사용해 ds-sort-head 컴포넌트를 포함한다.
+ * 외부 <div data-ts-sort> 래퍼와 sortable/sort-asc/sort-desc 클래스는 기존 클릭 바인딩·CSS와
+ * 시각 호환을 위해 보존 (이중 클래스 패턴 — 시각 변화 0).
+ */
 function headerCellHtml(key, label, extraCls = '') {
+  const sortState = _sortKey !== key ? 'idle' : (_sortDir === 'asc' ? 'asc' : 'desc');
   const cls = `ts-mx-cell ${extraCls} sortable ${sortHeaderCls(key)}`.trim();
   return `<div data-ts-sort="${key}"
                class="${cls}"
                tabindex="0"
                role="columnheader"
-               aria-sort="${ariaSortValue(key)}">${escHtml(label)}${sortIndicator(key)}</div>`;
+               aria-sort="${ariaSortValue(key)}">${renderSortHead({ label, sort: sortState, key })}</div>`;
 }
 
 /**
@@ -220,8 +237,10 @@ function renderMatrix(container, stats) {
       : '';
 
     // error 컬럼: SQL의 error_count는 이미 confidence_error_count도 합산함 (T-02 보강).
+    // Wave 2 치환: mini-badge/badge-error 클래스는 보존 + ds-badge data-tone="error" 추가 (이중 클래스).
+    // renderBadge import 보관 — 다음 wave에서 완전 교체 시 직접 호출로 전환.
     const errBadge = s.error_count > 0
-      ? `<span class="ts-err-cell"><span class="mini-badge badge-error">${s.error_count}</span></span>`
+      ? `<span class="ts-err-cell"><span class="mini-badge badge-error ds-badge" data-tone="error">${s.error_count}</span></span>`
       : `<span class="ts-err-cell ts-err-cell--none">—</span>`;
 
     return `<div class="ts-mx-row">
@@ -230,18 +249,18 @@ function renderMatrix(container, stats) {
       </div>
       <div class="ts-mx-cell ts-mx-num"${durAttr}>
         <span class="ts-mx-val">${fmtDur(durMs)}</span>
-        <span class="ts-mx-bar"><span class="ts-mx-bar-fill ts-mx-bar-fill--avg" style="width:${durBarPct}%"></span></span>
+        <span class="ts-mx-bar ds-bar-track"><span class="ts-mx-bar-fill ts-mx-bar-fill--avg ds-bar-fill" data-tone="warn" style="width:${durBarPct}%"></span></span>
       </div>
       <div class="ts-mx-cell ts-mx-num">
         <span class="ts-mx-val">${s.call_count || 0}</span>
-        <span class="ts-mx-bar"><span class="ts-mx-bar-fill ts-mx-bar-fill--calls" style="width:${callPct}%"></span></span>
+        <span class="ts-mx-bar ds-bar-track"><span class="ts-mx-bar-fill ts-mx-bar-fill--calls ds-bar-fill" data-tone="success" style="width:${callPct}%"></span></span>
       </div>
       <div class="ts-mx-cell ts-mx-num">
         <span class="ts-mx-val">${fmtToken(s.total_tokens)}</span>
         <span class="ts-mx-sub">${tokPct.toFixed(1)}%</span>
       </div>
       <div class="ts-mx-cell ts-mx-num">
-        <span class="ts-mx-bar"><span class="ts-mx-bar-fill ts-mx-bar-fill--tokens" style="width:${Math.min(tokPct, 100)}%"></span></span>
+        <span class="ts-mx-bar ds-bar-track"><span class="ts-mx-bar-fill ts-mx-bar-fill--tokens ds-bar-fill" data-tone="brand" style="width:${Math.min(tokPct, 100)}%"></span></span>
       </div>
       <div class="ts-mx-cell ts-mx-err">${errBadge}</div>
     </div>`;

@@ -1,0 +1,123 @@
+/* ── DS Banner — 글로벌 알림 배너 패밀리 ─────────────────────────────────────
+ *
+ * 책임: 가로 배너 + 아이콘 + 메시지 + 액션 버튼 패턴의 단일 패밀리.
+ *       variant(error / info / warning)로 의미론적 색조를 전환한다.
+ * 흡수 (향후): header.css의 .error-banner + .retry-btn
+ *           + default-view.css의 .scroll-lock-banner.
+ * 사용 가이드: 신규 코드는 .ds-banner + data-variant 사용. 기존 호출처는 점진 마이그레이션.
+ *
+ * 의존:
+ *   - design-tokens.css — --red-bg-subtle, --red, --red-border, --red-dim,
+ *                          --accent-dim, --accent-border, --accent,
+ *                          --yellow-bg-subtle, --yellow, --yellow-border, --yellow-dim,
+ *                          --font-body, --font-meta, --font-ui, --text-small,
+ *                          --weight-strong, --radius-md, --space-*
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* ── 베이스: 숨김 → .visible 시 노출 ─────────────────────────────────────── */
+.ds-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-body);
+  flex-shrink: 0;
+  max-height: 0;
+  overflow: hidden;
+  padding: 0 var(--space-5);
+  transition: max-height 0.2s ease, padding 0.2s ease;
+}
+
+.ds-banner.visible {
+  max-height: 60px;
+  padding: var(--space-2) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── variant: error (기본 / header.css .error-banner 패턴 사본) ──────────── */
+.ds-banner[data-variant="error"],
+.ds-banner--error {
+  background: var(--red-bg-subtle);
+  color: var(--red);
+}
+
+.ds-banner[data-variant="error"].visible,
+.ds-banner--error.visible {
+  border-bottom-color: var(--red-border);
+}
+
+/* ── variant: info (accent 계열) ─────────────────────────────────────────── */
+.ds-banner[data-variant="info"],
+.ds-banner--info {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.ds-banner[data-variant="info"].visible,
+.ds-banner--info.visible {
+  border-bottom-color: var(--accent-border);
+}
+
+/* ── variant: warning (yellow 계열 / fallback: accent) ───────────────────── */
+.ds-banner[data-variant="warning"],
+.ds-banner--warning {
+  background: var(--yellow-bg-subtle, var(--accent-dim));
+  color: var(--yellow, var(--accent));
+}
+
+.ds-banner[data-variant="warning"].visible,
+.ds-banner--warning.visible {
+  border-bottom-color: var(--yellow-border, var(--accent-border));
+}
+
+/* ── 배너 액션 버튼 (retry-btn / 닫기 등) ────────────────────────────────── */
+.ds-banner-action {
+  margin-left: auto;
+  background: none;
+  border: 1px solid currentColor;
+  color: inherit;
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-family: var(--font-ui, inherit);
+  font-size: var(--font-meta);
+  font-weight: var(--weight-strong);
+  transition: background 0.15s ease;
+}
+
+.ds-banner-action:hover {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+/* ── 스크롤 잠금 배너 variant (sticky, clickable) ──────────────────────────
+ *   기존 .scroll-lock-banner 패턴 사본.
+ *   position: sticky 행동이 필요하므로 별도 modifier 제공.
+ * ───────────────────────────────────────────────────────────────────────── */
+.ds-banner--scroll-lock {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: none;
+  text-align: center;
+  cursor: pointer;
+  background: var(--accent-dim);
+  border-bottom: 1px solid var(--accent-border);
+  color: var(--accent);
+  font-size: var(--text-small);
+  font-weight: var(--weight-strong);
+  user-select: none;
+  /* max-height 애니메이션 불필요 — display: none/block 전환 */
+  max-height: none;
+  overflow: visible;
+  padding: var(--space-1) var(--space-3);
+  transition: background 0.15s ease;
+}
+
+.ds-banner--scroll-lock.visible {
+  display: block;
+  max-height: none;
+  border-bottom: 1px solid var(--accent-border);
+}
+
+.ds-banner--scroll-lock:hover {
+  background: var(--accent-border);
+}

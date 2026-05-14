@@ -6,6 +6,8 @@
 
 import { escHtml } from '../formatters.js';
 import { toolResponseHint } from './badges.js';
+import { svgRadio } from '../design-system/icons/radio.js';
+import { svgCheck } from '../design-system/icons/check.js';
 
 const PROMPT_CACHE_MAX = 500;
 export const _promptCache = new Map(); // export: togglePromptExpand 공유
@@ -179,22 +181,23 @@ function buildAskUserQuestionHtml(toolInput) {
       const label    = typeof opt?.label       === 'string' ? opt.label       : '';
       const desc     = typeof opt?.description === 'string' ? opt.description : '';
       const selected = selectedSet.has(label);
-      // marker: 선택됨 ✓ / multiSelect는 □ / 단일은 ○
-      let marker = multi ? '☐' : '○';
-      if (selected) marker = multi ? '☑' : '●';
+      // marker: multiSelect=false → svgRadio, multiSelect=true → svgCheck
+      const markerSvg = multi
+        ? svgCheck({ selected, size: 12 })
+        : svgRadio({ selected, size: 12 });
       const cls = ['askq-option'];
       if (selected) cls.push('askq-option-selected');
       if (multi)    cls.push('askq-option-multi');
       const titleAttr = desc ? ` title="${escHtml(desc)}"` : '';
       const descHtml  = desc ? `<span class="askq-option-desc">${escHtml(desc)}</span>` : '';
       return `<li class="${cls.join(' ')}"${titleAttr}>` +
-        `<span class="askq-option-marker" aria-hidden="true">${marker}</span>` +
+        `<span class="askq-option-marker">${markerSvg}</span>` +
         `<span class="askq-option-label">${escHtml(label)}</span>` +
         descHtml +
       `</li>`;
     }).join('');
 
-    const headerHtml = header ? `<span class="askq-header">${escHtml(header)}</span>` : '';
+    const headerHtml = header ? `<span class="askq-header ds-badge" data-tone="brand">${escHtml(header)}</span>` : '';
     const multiHint  = multi  ? ' <span class="askq-multi-hint">(multi-select)</span>' : '';
 
     return `<div class="askq-q">

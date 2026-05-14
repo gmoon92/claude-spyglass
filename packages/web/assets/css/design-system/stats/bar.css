@@ -1,0 +1,54 @@
+/*
+ * @module stats/bar
+ *
+ * 책임: 진행 바 단일 컴포넌트 스타일.
+ *       .ds-bar-track 트랙과 .ds-bar-fill[data-tone] 채움 영역으로 구성된다.
+ *       tone 별 그라데이션(--grad-*/--badge-grad-*)과 글로우(--glow-*)를
+ *       CSS 변수만으로 표현한다. hex 값은 사용하지 않는다.
+ *
+ * 흡수 대상:
+ *   - cache-panel.css: .cache-bar-fill (is-high/is-mid/is-low)
+ *   - cache-panel.css: .cache-ratio-creation, .cache-ratio-read
+ *   - obs-panel.css:   .obs-cat-bar-fill--agent/--skill/--mcp/--native
+ *   - tool-stats.css:  .ts-mx-bar-fill--avg/--calls/--tokens
+ *   (호출처 치환은 다음 wave에서 진행)
+ *
+ * 의존:
+ *   - packages/web/assets/css/design-tokens.css
+ *     --grad-success, --grad-info, --grad-warn, --grad-error, --grad-brand,
+ *     --badge-grad-neutral, --glow-success, --glow-info, --glow-warn, --glow-error,
+ *     --border, --glow-brand
+ */
+
+/* ── 트랙 ─────────────────────────────────────────────────────────────────── */
+.ds-bar-track {
+  height: 6px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  width: 100%;
+  display: block;
+}
+
+/* ── 채움 공통 ────────────────────────────────────────────────────────────── */
+.ds-bar-fill {
+  height: 100%;
+  display: block;
+  border-radius: 999px;
+  transition: width var(--dur-base) var(--ease);
+}
+
+/* ── tone 별 그라데이션 + 글로우 ──────────────────────────────────────────── */
+/* success / info / warn / error: 기본 글로우 포함 */
+.ds-bar-fill[data-tone="success"] { background: var(--grad-success); box-shadow: var(--glow-success); }
+.ds-bar-fill[data-tone="info"]    { background: var(--grad-info);    box-shadow: var(--glow-info); }
+.ds-bar-fill[data-tone="warn"]    { background: var(--grad-warn);    box-shadow: var(--glow-warn); }
+.ds-bar-fill[data-tone="error"]   { background: var(--grad-error);   box-shadow: var(--glow-error); }
+
+/* brand / neutral: 글로우 없음 (data-glow="on" 으로 명시적 활성 가능) */
+.ds-bar-fill[data-tone="brand"]   { background: var(--grad-brand); }
+.ds-bar-fill[data-tone="neutral"] { background: var(--badge-grad-neutral); }
+
+/* ── 글로우 강제 활성 (brand/neutral 전용 override) ──────────────────────── */
+.ds-bar-fill[data-tone="brand"][data-glow="on"]   { box-shadow: var(--glow-brand); }
+.ds-bar-fill[data-tone="neutral"][data-glow="on"] { box-shadow: var(--glow-info); }

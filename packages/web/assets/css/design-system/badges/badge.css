@@ -1,0 +1,34 @@
+/* ── DS Badge — 조건부 상태·이상·타입 신호 ──────────────────────────────────
+ *
+ * 책임:
+ *   renderBadge() 함수가 출력하는 .ds-badge 요소의 시각 스타일을 정의한다.
+ *   상태의 의미(tone)는 data-tone 속성으로 전달되며,
+ *   모든 색은 design-tokens.css의 CSS 변수만 사용한다.
+ *
+ * 흡수 대상 (향후 wave에서 기존 클래스를 .ds-badge로 치환):
+ *   - badges.css :: .mini-badge .badge-{spike,loop,slow,error,cache}
+ *   - badges.css :: .type-badge .type-{prompt,tool_call,system,response,unknown}
+ *
+ * 의존:
+ *   - design-tokens.css — --badge-grad-*, --error, --warn, --info, --success,
+ *                          --accent, --text-3, --radius-sm, --text-small, --font-ui
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+.ds-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  font: 600 var(--text-small)/1 var(--font-ui);
+  white-space: nowrap;
+  cursor: default;
+  vertical-align: middle;
+}
+
+.ds-badge[data-tone="error"]   { background: var(--badge-grad-error);   color: var(--error); }
+.ds-badge[data-tone="warn"]    { background: var(--badge-grad-warn);    color: var(--warn); }
+.ds-badge[data-tone="info"]    { background: var(--badge-grad-info);    color: var(--info); }
+.ds-badge[data-tone="success"] { background: var(--badge-grad-success); color: var(--success); }
+.ds-badge[data-tone="brand"]   { background: var(--badge-grad-brand);   color: var(--accent); }
+.ds-badge[data-tone="neutral"] { background: var(--badge-grad-neutral); color: var(--text-3); }

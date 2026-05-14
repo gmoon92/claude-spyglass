@@ -1,0 +1,30 @@
+/*
+ * 디자인 시스템 CSS 진입점. 신규 컴포넌트 CSS는 여기에 @import 추가.
+ */
+
+@import "./markers/sort-head.css";
+@import "./markers/dot.css";
+@import "./primitives/close-button.css";
+@import "./primitives/filter-button.css";
+@import "./primitives/tab.css";
+@import "./stats/bar.css";
+@import "./badges/badge.css";
+@import "./chips/chip.css";
+@import "./feedback/state.css";
+@import "./feedback/banner.css";
+
+/*
+ * 디자인 시스템 진입 — 흡수 매핑 (Wave 1 시점)
+ *   - markers/sort-head   ← meta-docs-view, system-prompt-library, tool-stats의 sortIndicator
+ *   - markers/dot         ← sess-row-status, obs-card-trend-icon, anomaly-badge-dot, legend-dot, meta-docs-toast-icon
+ *   - primitives/close-button ← syslib-detail-close, llm-input-refs-popover-close, feed-search-clear, kbd-help-close
+ *   - primitives/filter-button ← type-filter-btn, meta-doc-filter-btn, filter-btn(date)
+ *   - primitives/tab          ← view-tab, meta-tab
+ *   - stats/bar               ← cache-bar-fill, cache-ratio-*, obs-cat-bar-fill, ts-mx-bar-fill
+ *   - badges/badge            ← mini-badge .badge-*, type-badge .type-*
+ *   - chips/chip              ← sub-type-chip, model-chip, tool-chip, target-role-badge, agent-chip
+ *   - feedback/state  (Wave 8-D) ← state.css .state-empty/.state-loading/.state-error, detail-view.css .detail-loading
+ *   - feedback/banner (Wave 8-D) ← header.css .error-banner/.retry-btn, default-view.css .scroll-lock-banner
+ *
+ * 새 컴포넌트 추가 시 (1) 자기 CSS @import 추가 (2) 이 매핑 표 갱신.
+ */

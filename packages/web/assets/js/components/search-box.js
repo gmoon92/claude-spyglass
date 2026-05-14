@@ -1,5 +1,8 @@
 // search-box.js — 검색 박스 컴포넌트
 
+import { svgSearch } from '../render/icons.js';
+import { renderCloseBtn } from '../design-system/primitives/close-button.js';
+
 /**
  * @param {string} containerId
  * @param {{ placeholder?: string, onSearch: (query: string) => void }} opts
@@ -9,9 +12,9 @@ export function createSearchBox(containerId, { placeholder = '', onSearch }) {
   const container = document.getElementById(containerId);
 
   container.innerHTML = `
-    <span class="feed-search-icon">⌕</span>
+    <span class="feed-search-icon">${svgSearch({ size: 14, className: 'feed-search-icon-svg' })}</span>
     <input class="feed-search-input" type="text" placeholder="${placeholder}" autocomplete="off" />
-    <button class="feed-search-clear" aria-label="검색어 지우기">×</button>
+    ${renderCloseBtn({ size: 'sm', label: '검색어 지우기', dataAttrs: { action: 'clear' } }).replace('class="ds-close-btn"', 'class="feed-search-clear ds-close-btn"')}
   `.trim();
 
   const input = container.querySelector('.feed-search-input');

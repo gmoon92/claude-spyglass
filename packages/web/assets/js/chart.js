@@ -281,7 +281,7 @@ export function renderTypeLegend() {
     const safeKey = key.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     // 모델 이름은 길 수 있어 ellipsis로 자름
     return `<div class="legend-item">
-      <div class="legend-dot" style="background:${color}"></div>
+      <div class="legend-dot ds-dot" data-size="md" style="background:${color}"></div>
       <span class="legend-name" title="${safeKey.replace(/"/g, '&quot;')}">${safeKey}</span>
       <span class="legend-val">${count.toLocaleString('ko-KR')}</span>
       <span class="legend-pct">${pct}%</span>

@@ -182,7 +182,7 @@
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   color: var(--text-3);
-  font-size: 20px;
+  font-size: var(--text-h1);
   line-height: 1;
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease),

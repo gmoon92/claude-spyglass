@@ -1,0 +1,105 @@
+/* ── DS State — 빈 상태 / 로딩 / 에러 컨테이너 패밀리 ────────────────────────
+ *
+ * 책임: 빈 상태 / 로딩 / 에러 컨테이너 단일 패밀리.
+ * 흡수 (향후): state.css의 .state-empty / .state-loading / .state-error
+ *           + detail-view.css의 .detail-loading.
+ * 사용 가이드: 신규 코드는 .ds-state-* 사용. 기존 호출처는 점진 마이그레이션.
+ *
+ * 의존:
+ *   - design-tokens.css — --space-*, --font-*, --weight-*, --text-dim, --text-muted,
+ *                          --red, --red-text, --red-border, --red-dim, --accent,
+ *                          --border, --radius-sm, --font-major, --font-body, --font-meta
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* 공통 베이스 */
+.ds-state-empty,
+.ds-state-loading,
+.ds-state-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4);
+  font-size: var(--font-body);
+  font-weight: var(--weight-normal);
+  text-align: center;
+}
+
+/* ── 빈 상태 — 회색 톤, 디스크립션 1줄 ────────────────────────────────────── */
+.ds-state-empty {
+  color: var(--text-dim);
+  font-size: var(--font-meta);
+}
+
+.ds-state-empty-title {
+  font-size: var(--font-body);
+  color: var(--text-muted);
+  font-weight: var(--weight-strong);
+}
+
+.ds-state-empty-hint {
+  font-size: var(--font-meta);
+  color: var(--text-dim);
+}
+
+/* 테이블 안 빈 셀용 */
+td.ds-state-empty-cell,
+.ds-state-empty-cell {
+  color: var(--text-dim);
+  text-align: center;
+  padding: var(--space-4);
+  font-size: var(--font-meta);
+}
+
+/* ── 로딩 상태 — minimal spinner ──────────────────────────────────────────── */
+.ds-state-loading {
+  color: var(--text-dim);
+  font-size: var(--font-meta);
+}
+
+.ds-state-loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: ds-state-spin 0.8s linear infinite;
+}
+
+@keyframes ds-state-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── 에러 상태 — 빨간 톤 + 재시도 버튼 ───────────────────────────────────── */
+.ds-state-error {
+  color: var(--red-text);
+}
+
+.ds-state-error-icon {
+  font-size: var(--font-major);
+  color: var(--red);
+}
+
+.ds-state-error-message {
+  color: var(--red-text);
+  font-size: var(--font-body);
+}
+
+.ds-state-error-retry {
+  margin-top: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
+  border: 1px solid var(--red-border);
+  border-radius: var(--radius-sm);
+  color: var(--red-text);
+  font-family: inherit;
+  font-size: var(--font-meta);
+  font-weight: var(--weight-strong);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.ds-state-error-retry:hover {
+  background: var(--red-dim);
+}

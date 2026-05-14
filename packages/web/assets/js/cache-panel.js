@@ -18,7 +18,12 @@ export function renderCachePanel(data) {
   const pctEl  = document.getElementById('cacheHitPct');
   if (fill) {
     fill.style.width = `${pct}%`;
-    fill.className   = 'cache-bar-fill ' + (pct >= 70 ? 'is-high' : pct >= 30 ? 'is-mid' : 'is-low');
+    // 이중 클래스: 기존 cache-bar-fill + is-high/is-mid/is-low 보존,
+    // ds-bar-fill + data-tone 추가 (is-high→success, is-mid→warn, is-low→error)
+    const legacyToneCls = pct >= 70 ? 'is-high' : pct >= 30 ? 'is-mid' : 'is-low';
+    const dsTone        = pct >= 70 ? 'success'  : pct >= 30 ? 'warn'   : 'error';
+    fill.className      = `cache-bar-fill ${legacyToneCls} ds-bar-fill`;
+    fill.dataset.tone   = dsTone;
   }
   if (pctEl) pctEl.textContent = `${pct}%`;
 
@@ -29,8 +34,18 @@ export function renderCachePanel(data) {
   const createEl   = document.getElementById('cacheRatioCreate');
   const readEl     = document.getElementById('cacheRatioRead');
   const labelEl    = document.getElementById('cacheRatioLabel');
-  if (createEl) createEl.style.width = `${createPct}%`;
-  if (readEl)   readEl.style.width   = `${readPct}%`;
+  if (createEl) {
+    createEl.style.width = `${createPct}%`;
+    // 이중 클래스: 기존 cache-ratio-creation 보존 + ds-bar-fill + data-tone="info"
+    createEl.classList.add('ds-bar-fill');
+    createEl.dataset.tone = 'info';
+  }
+  if (readEl) {
+    readEl.style.width = `${readPct}%`;
+    // 이중 클래스: 기존 cache-ratio-read 보존 + ds-bar-fill + data-tone="success"
+    readEl.classList.add('ds-bar-fill');
+    readEl.dataset.tone = 'success';
+  }
   if (labelEl)  labelEl.textContent  = readPct >= 70 ? 'stable' : 'building';
 }
 
