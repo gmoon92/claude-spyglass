@@ -349,11 +349,16 @@
 }
 
 /* ── POPOVER (floating, not modal) ──────────────────────────────────────
- * 칩 직하 anchored. backdrop 없음. hidden 속성 토글이 단일 가시성 SSoT(JS 책임).
+ * 위치 결정 SSoT: system-reminder-popover.js (positionPopover).
+ *   - `position: fixed`로 viewport 좌표계에 띄워 상위 .turn-card의 overflow:hidden
+ *     클리핑을 회피한다 (회귀: 카드 경계 안에서 잘려 보이던 버그).
+ *   - top/left 값은 JS가 칩의 getBoundingClientRect() 기준으로 매 open / scroll /
+ *     resize 시 갱신한다. CSS는 초기 좌표만 0으로 두고 시각 룰만 담당.
+ *   - backdrop 없음. hidden 속성 토글이 단일 가시성 SSoT (JS 책임).
  * ───────────────────────────────────────────────────────────────────── */
 .turn-system-reminder-popover {
-  position: absolute;
-  top: calc(100% + var(--space-1));
+  position: fixed;
+  top: 0;
   left: 0;
   z-index: 40;
   width: 360px;
@@ -372,12 +377,6 @@
 }
 
 .turn-system-reminder-popover[hidden] { display: none; }
-
-/* 칩이 카드 우측 가까이일 때 — anchor 우정렬 modifier (JS가 viewport rect 보고 토글) */
-.turn-system-reminder-popover.is-right-anchored {
-  left: auto;
-  right: 0;
-}
 
 @keyframes turn-system-reminder-popover-in {
   from { opacity: 0; transform: translateY(8px); }
