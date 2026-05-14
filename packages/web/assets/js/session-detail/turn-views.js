@@ -497,6 +497,18 @@ export function renderTurnCards(turns, badgeTurns) {
   // applyDetailFilter 흐름이 flat-view 갱신과 함께 호출하므로 첫 렌더에서도 정합 유지.
   const query = (getSearchQuery?.() ?? '').toLowerCase();
   if (query) applyTurnCardSearch(query);
+
+  // 턴 뷰 진입 시 첫 번째(최신) 턴 자동 펼침.
+  // expandedTurnIds.size === 0 대신 current turns 기준으로 체크 — 세션 전환 직전
+  // searchBox.clear() 등으로 인한 중간 renderTurnCards 호출이 이전 세션 turn_id를
+  // Set에 채워버려도, 새 세션 데이터로 들어올 때 hasExpandedHere가 false가 되어
+  // 정상적으로 자동 펼침이 실행된다.
+  const currentTurnIds = new Set(turns.map(t => t.turn_id));
+  const hasExpandedHere = [...expandedTurnIds].some(id => currentTurnIds.has(id));
+  if (turns.length > 0 && !hasExpandedHere) {
+    const firstTurn = turns.slice().sort((a, b) => b.turn_index - a.turn_index)[0];
+    if (firstTurn) toggleCardExpand(firstTurn.turn_id);
+  }
 }
 
 /**
