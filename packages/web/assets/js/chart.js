@@ -59,14 +59,14 @@ function donutItemKey(d, _idx) {
   return donutMode === 'model' ? (d.model || '?') : (d.type || '?');
 }
 function cacheItemColor(d) {
-  // cache-donut-3slice pass: 도넛 라벨 한국어 매핑.
-  //   - 히트       (cache_read):     success green (#34D399) — 캐시 절감
-  //   - 입력       (tokens_input):   neutral dim (#6E7681)    — 신규 계산 비용
-  //   - 등록비용   (cache_creation): info blue (#58A6FF)      — 첫 write 비용
-  // 영어 라벨(Cached/Uncached/Cache Write)은 과거 호출자 호환용 폴백.
+  // cache-donut-2slice pass: 도넛 라벨 한국어 매핑.
+  //   - 캐시  (cache_read + cache_creation): success green (#34D399)
+  //   - 입력  (tokens_input):                neutral dim (#6E7681)
+  // 과거 라벨(히트/등록비용/히트율/Cached/Cache Write/Uncached)은 호출자 호환 폴백.
   const map = {
-    '히트': '#34D399', '입력': '#6E7681', '등록비용': '#58A6FF',
+    '캐시': '#34D399', '입력': '#6E7681',
     // 과거 라벨 폴백
+    '히트': '#34D399', '등록비용': '#58A6FF',
     '히트율': '#34D399', '전체': '#6E7681',
     'Cached': '#34D399', 'Uncached': '#6E7681',
     'Cache Write': '#58A6FF',
@@ -252,16 +252,14 @@ export function drawDonut() {
   if (donutMode === 'cache') {
     // 도넛 가운데 지표 = '캐시 적용 비율' (cache-coverage pass).
     //   = cache_creation / (cache_read + tokens_input + cache_creation)
-    //   - 분자: '등록비용' 슬라이스 (cache_creation) — 새로 캐시에 등록된 토큰
-    //   - 분모: 모든 슬라이스 합 (= 히트 + 입력 + 등록비용)
     //
-    // 정책 변경 사유: Hit Rate(cache_read / 전체)는 시간이 지날수록 100%에 수렴해
-    // 옵저빌리티 가치가 떨어진다. Hit Rate는 하단 cache-panel의 Hit Rate 바에서
-    // 별도 표시. 도넛 가운데에는 "이 세션이 캐시에 얼마나 새로 등록했는지"를
-    // 보여 캐시 활용 동학을 다른 각도로 노출.
-    //
-    // 라벨 매칭: '등록비용' / 'Cache Write' (flat-view.js, cache-donut-3slice pass).
-    const creation = typeData.find(d => d.label === '등록비용' || d.label === 'Cache Write')?.tokens || 0;
+    // cache-donut-2slice pass: 슬라이스가 2개('캐시'/'입력')로 단순화되어
+    // cache_creation 단독 값을 슬라이스에서 직접 얻을 수 없으므로,
+    // flat-view.js가 '캐시' 슬라이스에 `_cacheCreation` 메타로 분자를 전달.
+    // 과거 3-슬라이스/'등록비용' 라벨도 폴백 매칭으로 호환.
+    const creation = typeData.find(d => d._cacheCreation != null)?._cacheCreation
+                  ?? typeData.find(d => d.label === '등록비용' || d.label === 'Cache Write')?.tokens
+                  ?? 0;
     const denom = typeData.reduce((s, d) => s + (d.tokens || 0), 0) || 1;
     // hit-rate-precision pass: 99 초과 100 미만 구간은 ">99%", 0 초과 1 미만은 "<1%" boundary 라벨.
     const hitRateExact = (creation / denom) * 100;

@@ -185,21 +185,17 @@ document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
   const chartSection = document.getElementById('chartSection');
   if (chartSection?.classList.contains('chart-mode-detail')) {
     const sessionCache = computeSessionCacheStats(allRequests);
-    // cache-donut-3slice pass: 도넛을 3 슬라이스로 분해해 분모(전체 토큰 비용)와
-    // 각 구성 요소를 한 시각화에서 직관 파악.
-    //   - 히트     (cache_read):       캐시로 처리된 토큰 (절감)
-    //   - 입력     (tokens_input):     새로 계산된 입력 (캐시 미히트)
-    //   - 등록비용 (cache_creation):   첫 캐시 write 비용
-    //   3 슬라이스 합 = 분모 = '전체 토큰 비용'. 가운데 % = 히트 / 합.
-    //
-    // 이전엔 '히트율 / 전체' 2 슬라이스로 표현했더니 '전체' 슬라이스 값이
-    // 분자(히트)보다 작아 보이는 모순(분모가 분자보다 작아 보임)이 발생했다.
-    // 3 슬라이스로 분리하면 사용자가 합이 곧 분모임을 자연 인지하고,
-    // cache_creation의 비용도 별도로 가시화된다.
+    // cache-donut-2slice pass: 슬라이스를 2개로 단순화 — '캐시'(cache_read + cache_creation)
+    // vs '입력'(tokens_input). 도넛 가운데 '캐시 적용 비율' = cache_creation / 전체는 유지하되,
+    // cache_creation 값은 캐시 슬라이스의 _cacheCreation 메타로 chart.js drawDonut에 전달.
+    // 합 = 분모 = '전체 토큰 비용'.
     const cacheData = [
-      { label: '히트',     tokens: sessionCache.cacheReadTokens     },
-      { label: '입력',     tokens: sessionCache.totalInputTokens    },
-      { label: '등록비용', tokens: sessionCache.cacheCreationTokens },
+      {
+        label: '캐시',
+        tokens: sessionCache.cacheReadTokens + sessionCache.cacheCreationTokens,
+        _cacheCreation: sessionCache.cacheCreationTokens, // 도넛 가운데 % 계산용 분자
+      },
+      { label: '입력', tokens: sessionCache.totalInputTokens },
     ].filter(d => d.tokens > 0);
     setSourceData('cache', cacheData);
     drawDonut();
