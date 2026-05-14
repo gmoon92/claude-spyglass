@@ -57,20 +57,19 @@ export function renderBrowserProjects() {
 }
 
 /**
- * browse 모드 프로젝트 행 — 기존 [프로젝트 | 활성/전체 세션 | 토큰 바] 그대로 유지.
- *  - 세션 컬럼은 session-column-clarity pass: `N / M` 동시 표시.
- *  - active/total 둘 다 0이면 dash.
+ * browse 모드 프로젝트 행 — [프로젝트 | 활성 세션 | 토큰 바].
+ *  - 세션 컬럼은 활성 세션 수만 노출.
+ *  - active가 0이면 dash.
  */
 function renderBrowseProjectRow(p, maxT) {
   const isSelected = getSelectedProject() === p.project_name;
   const pct        = Math.max(1, Math.round((p.total_tokens || 0) / maxT * 100));
   const active = p.active_count ?? 0;
-  const total  = p.session_count || 0;
   const sessCls = active > 0 ? ' proj-active' : '';
-  const sessTitle = `라이브 ${active}개 / 전체 ${total}개`;
-  const sessCellHtml = total === 0
+  const sessTitle = `라이브 ${active}개`;
+  const sessCellHtml = active === 0
     ? '—'
-    : `<span class="proj-sess-active">${fmt(active)}</span><span class="proj-sess-sep">/</span><span class="proj-sess-total">${fmt(total)}</span>`;
+    : `<span class="proj-sess-active">${fmt(active)}</span>`;
   return `<tr class="clickable${isSelected ? ' row-selected' : ''}" data-project="${escHtml(p.project_name)}">
     <td class="cell-proj-name" title="${escHtml(p.project_name || '')}">${escHtml(p.project_name || '—')}</td>
     <td class="num cell-proj-sess${sessCls}" style="text-align:right" title="${sessTitle}">${sessCellHtml}</td>
