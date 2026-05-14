@@ -1,108 +1,160 @@
-# 🔭 spyglass
+# 🔭 Spyglass
 
-**The observability layer Claude Code never gave you.**
+`claude-spyglass` helps you inspect what actually happens inside Claude Code sessions:
 
-[![Version](https://img.shields.io/badge/version-0.1.0--mvp-blue)](./CHANGELOG.md)
-[![License](https://img.shields.io/badge/license-MIT-green)]()
+* hidden system prompt growth
+* rule, skill, and agent injection propagation
+* context inflation
+* runtime anomalies (spike · loop · slow)
+* session structure and tool activity
+* API token usage, cost, and latency
 
----
-
-You just ran a Claude Code session. It cost $3.47. You have no idea why.
-
-Was it the subagent that went deep? The loop that read 40 files? The context that silently ballooned while you weren't looking? Claude Code doesn't tell you. It just charges you.
-
-**Spyglass tells you.** Every token spent, every tool called, every millisecond waited — captured in real time and surfaced in a live web dashboard.
+Unlike most Claude tooling focused on productivity, `claude-spyglass` focuses on visibility.
 
 ---
 
-## What you'll see
+## Why this exists
 
-| | |
-|---|---|
-| **Token burn, live** | Watch the counter tick up as Claude works. Catch the moment a session starts spending too fast. |
-| **Tool call timeline** | Every `Read`, `Bash`, `Agent` — sequenced, timed, with duration. Find the slow ones instantly. |
-| **Actual cost** | USD per session, not vague token counts. Prompt-cache savings broken out separately. |
-| **P95 latency · error rate** | Aggregated across sessions. Know your tool call health at a glance. |
+One day, a non-engineer on our team suddenly started hitting 80% context usage with a single prompt.
+
+The prompt itself was small.
+No large attachments were used.
+The session was nearly empty.
+
+Something inside the runtime had changed.
+
+Using `claude-spyglass`, we traced the issue to:
+
+* ~30 rule documents
+* accidentally committed without proper scoping metadata
+* globally injected into Claude Code system prompts
+
+The system prompt had silently exploded.
+
+Without runtime visibility, finding the root cause would have been extremely difficult.
 
 ---
 
-## Quick Start
+## What spyglass helps you see
 
-**Requires:** [Bun](https://bun.sh) 1.2+, [Claude Code](https://claude.ai/code)
+### Hidden system prompt growth
 
-```bash
-# 1. Claude Code 설치 (미설치 시)
-curl -fsSL https://claude.ai/install.sh | bash
+See how rules, CLAUDE.md files, hooks, and runtime injections affect the actual prompt size.
 
-# 2. Bun 설치 (미설치 시)
-curl -fsSL https://bun.sh/install | bash
+### Context inflation sources
 
-# 3. Clone & start
-git clone <repository-url> ~/.spyglass-src
-cd ~/.spyglass-src && bun install && bun run dev
+Identify which files or runtime components consume context budget.
 
-# 4. Verify
-curl -sf http://127.0.0.1:9999/health && echo OK
+### Runtime tracing
 
-# 5. Open dashboard
-open http://localhost:9999
+Hook path — inspect:
+
+* tool call flow and timing (PreToolUse / PostToolUse)
+* session structure and event sequence
+* turn-level token accumulation
+
+Proxy path (opt-in) — inspect:
+
+* full API request and response metadata
+* input / output / cache tokens and estimated cost
+* tokens per second (TPS) and time to first token (TTFT)
+* system prompt content and hash
+
+### Behavior definition catalog
+
+Understand which agents, skills, and commands are active in a session.
+Spyglass scans `.claude/agents`, `.claude/skills`, and `.claude/commands` across the project
+chain and global `~/.claude`, resolves priority, and shows the effective catalog per workspace.
+
+### Rule propagation
+
+Understand how CLAUDE.md files and rules are injected and propagated across sessions.
+See which rules are active in each project and where they originate.
+
+### Runtime anomaly detection
+
+Detect three categories of runtime anomaly:
+
+* **spike** — prompt token input exceeds 200% of the session average
+* **loop** — the same tool is called 3 or more times consecutively within a turn
+* **slow** — tool call duration exceeds the P95 threshold across all calls
+
+---
+
+## Local-first by design
+
+`claude-spyglass` runs entirely on your machine.
+
+No hosted backend.
+No remote telemetry.
+No prompt uploads.
+
+Your:
+
+* prompts
+* source code
+* internal rules
+* session artifacts
+* runtime metadata
+
+never leave your local environment.
+
+---
+
+## How it works
+
+`claude-spyglass` collects runtime data from Claude Code through two independent paths.
+
+**Hook path** (always active): Claude Code fires events at each turn via registered hooks.
+The hook script pushes raw payloads to the local server, which normalizes and stores them.
+
+**Proxy path** (opt-in): When `ANTHROPIC_BASE_URL` is pointed at the local server,
+all API traffic is intercepted. This unlocks full request/response capture, TPS, and TTFT.
+
+Both paths write to the same local SQLite database and stream updates to clients via SSE.
+
+```text
+── Hook Path ─────────────────────────────────────────
+Claude Code CLI  →  spyglass-collect.sh  →  /collect
+                                         →  /events
+── Proxy Path ────────────────────────────────────────
+Claude Code CLI  →  Spyglass Server :9999/v1/*  →  Anthropic API
 ```
 
-### 채널 A — 훅 (툴 타임라인·세션)
+This enables:
 
-`~/.claude/settings.json`(글로벌)에 `env`와 `hooks` 키를 병합합니다:
-
-| Profile | Hooks | Coverage |
-|---------|-------|----------|
-| Minimal | 6 | Tokens · sessions · tool usage |
-| **Full ★** | **27** | **+ Subagent · Task · Permission · Compact · Worktree** |
-
-Examples: [`settings.hooks.minimal.json`](./docs/examples/settings.hooks.minimal.json) · [`settings.hooks.full.json`](./docs/examples/settings.hooks.full.json)
-
-### 채널 B — 프록시 (토큰·비용·시스템 프롬프트)
-
-spyglass가 실행 중일 때만 경유하도록 `.zshrc` / `.bashrc`에 추가:
-
-```bash
-claude() {
-  if curl -sf http://localhost:9999/health > /dev/null 2>&1; then
-    ANTHROPIC_BASE_URL=http://localhost:9999 command claude "$@"
-  else
-    command claude "$@"
-  fi
-}
-```
-
-또는 `~/.claude/settings.json`에서 항상 경유:
-
-```jsonc
-{
-  "env": {
-    "SPYGLASS_DIR": "/Users/<your-name>/.spyglass-src",
-    "ANTHROPIC_BASE_URL": "http://localhost:9999"
-  }
-}
-```
-
-Full guide → [docs/install-guide.md](./docs/install-guide.md)
+* runtime tracing
+* prompt inspection
+* context analysis
+* token and latency telemetry
+* meta-document catalog (rules, skills, CLAUDE.md)
+* runtime diffing
 
 ---
 
-## Commands
+## Architecture
 
-```bash
-bun run dev      # Start (or restart) the server
-bun run stop     # Stop the server
-bun run status   # Show server status
-bun run doctor   # Diagnose hook + config issues
-```
+![Claude Spyglass Architecture — Hook Path + Proxy Path with Storage, Meta-docs Catalog, Metrics & Analysis, SSE/REST channels, and Web/TUI clients](docs/images/architecture.png)
 
 ---
 
-## Stack
+## Use cases
 
-Bun · TypeScript · SQLite WAL · HTTP + SSE
+* Investigating sudden context inflation
+* Understanding hidden prompt and rule injections
+* Debugging Claude Code runtime behavior
+* Auditing active agents, skills, and commands per workspace
+* Analyzing session structure and tool call patterns
+* Measuring real API cost and token burn rate
+* Detecting prompt spikes, tool loops, and slow calls
+* Team-level Claude Code governance
 
 ---
 
-MIT — made with obsession for Claude Code developers who hate flying blind.
+## Philosophy
+
+AI coding assistants are becoming increasingly complex runtime systems.
+
+But most of their behavior remains invisible.
+
+`claude-spyglass` exists to make Claude Code observable.
