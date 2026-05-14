@@ -7,8 +7,6 @@ Raw 훅 이벤트 페이로드를 그대로 저장하는 테이블입니다.
 | 항목 | 내용 |
 |------|------|
 | 목적 | Claude Code 훅의 원본 페이로드 보관 |
-| 레코드 수 | 157개 (현재 기준) |
-| 추가 버전 | v6 |
 
 ## 컬럼 정의
 
@@ -22,9 +20,17 @@ Raw 훅 이벤트 페이로드를 그대로 저장하는 테이블입니다.
 | `cwd` | TEXT | NULL | 작업 디렉토리 |
 | `agent_id` | TEXT | NULL | 에이전트 ID |
 | `agent_type` | TEXT | NULL | 에이전트 타입 |
-| `timestamp` | INTEGER | NOT NULL | 이벤트 발생 시간 (Unix timestamp) |
+| `timestamp` | INTEGER | NOT NULL | 이벤트 발생 시간 (Unix ms) |
 | `payload` | TEXT | NOT NULL, DEFAULT '{}' | 전체 훅 페이로드 (JSON) |
 | `schema_version` | INTEGER | DEFAULT 1 | 페이로드 스키마 버전 |
+| `permission_mode` | TEXT | NULL | Claude 권한 모드 (SessionStart 등) |
+| `source` | TEXT | NULL | 이벤트 발생 출처 |
+| `end_reason` | TEXT | NULL | 종료 원인 (`reason` 필드를 매핑; SQL 예약어 회피) |
+| `model` | TEXT | NULL | 사용 모델명 |
+| `stop_hook_active` | INTEGER | NULL | stop_hook 활성 여부 (0/1) |
+| `task_id` | TEXT | NULL | 태스크/tool_use ID |
+| `task_subject` | TEXT | NULL | 태스크 제목·설명 |
+| `notification_type` | TEXT | NULL | 알림 이벤트 타입 |
 
 ## 인덱스
 
@@ -33,33 +39,28 @@ Raw 훅 이벤트 페이로드를 그대로 저장하는 테이블입니다.
 | `idx_events_session_time` | `session_id, timestamp` | 세션별 시간순 조회 |
 | `idx_events_type_time` | `event_type, timestamp` | 타입별 시간순 조회 |
 
-## 이벤트 타입 분포
-
-| 이벤트 타입 | 개수 | 설명 |
-|------------|------|------|
-| Stop | 108 | 세션 중단 |
-| SessionStart | 26 | 세션 시작 |
-| SessionEnd | 22 | 세션 종료 |
-| PreToolUse | 1 | 도구 사용 시작 (참고용) |
-
 ## 수집되는 이벤트
 
-### UserPromptSubmit
-- `/collect` 엔드포인트로 직접 처리
-- `requests` 테이블에 저장됨
+와일드카드 훅에서 `/events` 엔드포인트로 전달된 모든 페이로드가 이 테이블에 저장됩니다.
 
-### PreToolUse
-- 타이밍 파일에만 기록 (`~/.spyglass/timing/{session_id}`)
-- DB에는 저장되지 않음 (의도적)
-- 예외: 1개의 PreToolUse가 `claude_events`에 기록됨
+### claude_events 테이블에 저장되는 이벤트
 
-### PostToolUse
-- `/collect` 엔드포인트로 처리
-- `requests` 테이블에 저장됨
+| 이벤트 타입 | 설명 |
+|------------|------|
+| `SessionStart` | 세션 시작. 저장 후 `sessions` 테이블 reactivate 및 SSE 브로드캐스트 |
+| `SessionEnd` | 세션 종료. 저장 후 `sessions` 테이블 ended_at 갱신 및 SSE 브로드캐스트 |
+| `Stop` | 응답 완료. 저장 후 `last_assistant_message`를 `requests` 테이블에 `response` 타입으로 추가 저장 |
+| `SubagentStop` | 서브에이전트 응답 완료 |
+| `Notification` | 알림 이벤트 (`notification_type` 컬럼에 세부 타입 저장) |
+| `PreToolUse` | 도구 사용 시작 (와일드카드 훅 경유 시 저장됨) |
+| `PostToolUse` | 도구 사용 완료 (와일드카드 훅 경유 시 저장됨) |
 
-### SessionStart / SessionEnd / Stop
-- `/events` 엔드포인트로 처리
-- `claude_events` 테이블에 저장됨
+### 다른 테이블에 저장되는 이벤트 (claude_events 미포함)
+
+| 이벤트 타입 | 저장 위치 | 설명 |
+|------------|-----------|------|
+| `UserPromptSubmit` | `requests` | `/collect` 엔드포인트 처리 |
+| `PostToolUse` | `requests` | `/collect` 엔드포인트 처리 (타이밍 포함) |
 
 ## 데이터 샘플 쿼리
 
