@@ -251,18 +251,16 @@ export function drawDonut() {
 
   if (donutMode === 'cache') {
     // 도넛 가운데 지표 = '캐시 적용 비율' (cache-coverage pass).
-    //   = cache_creation / (cache_read + tokens_input + cache_creation)
+    //   = (cache_read + cache_creation) / (cache_read + tokens_input + cache_creation)
+    //   "전체 토큰 중 캐시 시스템과 관여한(read 또는 creation) 토큰 비율"
     //
-    // cache-donut-2slice pass: 슬라이스가 2개('캐시'/'입력')로 단순화되어
-    // cache_creation 단독 값을 슬라이스에서 직접 얻을 수 없으므로,
-    // flat-view.js가 '캐시' 슬라이스에 `_cacheCreation` 메타로 분자를 전달.
-    // 과거 3-슬라이스/'등록비용' 라벨도 폴백 매칭으로 호환.
-    const creation = typeData.find(d => d._cacheCreation != null)?._cacheCreation
-                  ?? typeData.find(d => d.label === '등록비용' || d.label === 'Cache Write')?.tokens
-                  ?? 0;
+    // 도넛 2슬라이스 ('캐시' / '입력')에서 자연스럽게 = 캐시 슬라이스 / 합.
+    // 시간이 지나도 100%에 수렴할 수 있지만, 그게 진짜 "캐시 적용 비율"의 의미
+    // (시스템 프롬프트 + 누적 대화가 거의 모두 캐시 시스템을 거침).
+    const cache = typeData.find(d => d.label === '캐시' || d.label === '히트')?.tokens || 0;
     const denom = typeData.reduce((s, d) => s + (d.tokens || 0), 0) || 1;
     // hit-rate-precision pass: 99 초과 100 미만 구간은 ">99%", 0 초과 1 미만은 "<1%" boundary 라벨.
-    const hitRateExact = (creation / denom) * 100;
+    const hitRateExact = (cache / denom) * 100;
     const hitRateInt   = Math.round(hitRateExact);
     const hitRateLabel = (hitRateExact > 99 && hitRateExact < 100) ? '>99%'
                        : (hitRateExact > 0  && hitRateExact < 1)    ? '<1%'
