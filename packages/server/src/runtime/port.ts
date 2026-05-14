@@ -24,12 +24,18 @@ export async function isPortAvailable(port: number): Promise<boolean> {
 }
 
 /**
- * 포트를 점유한 프로세스 ID 목록 찾기
+ * 포트를 LISTEN 중인 프로세스 ID 목록 찾기.
+ *
+ * `-sTCP:LISTEN` 필터가 없으면 lsof는 해당 포트로 ESTABLISHED 연결을 가진
+ * 클라이언트 PID까지 함께 돌려준다. spyglass 프록시 특성상 Claude Code·TUI 등
+ * 클라이언트가 항상 붙어 있기 때문에, 필터 없이 결과를 kill 대상으로 쓰면
+ * 서버뿐 아니라 작업 중인 Claude Code 세션까지 SIGTERM/SIGKILL 당하는 사고가 발생한다.
+ * LISTEN 상태 프로세스만 골라 서버 한 명만 종료시킨다.
  */
 export function findProcessesByPort(port: number): number[] {
   try {
     const { execSync } = require('child_process');
-    const out = execSync(`lsof -ti :${port}`, { encoding: 'utf-8' }).trim();
+    const out = execSync(`lsof -ti tcp:${port} -sTCP:LISTEN`, { encoding: 'utf-8' }).trim();
     return out ? out.split('\n').map(Number).filter((n: number) => !isNaN(n) && n > 0) : [];
   } catch {
     return [];

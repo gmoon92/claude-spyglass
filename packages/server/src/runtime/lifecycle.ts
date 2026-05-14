@@ -9,6 +9,7 @@ import { clearDiagLogs, getDiagLogDir, logDiagStatus } from '../diag-log';
 import { PORT, HOST, DB_PATH } from './config';
 import { startMaintenanceSchedule, stopMaintenanceSchedule } from './maintenance';
 import { handleRequest } from './dispatch';
+import { installServerStdioMirror } from './stdio-mirror';
 import {
   bootstrapSync as bootstrapMetaDocsSync,
   syncAllKnownCwds,
@@ -30,6 +31,11 @@ export function startServer(options: {
   const port = options.port || PORT;
   const host = options.host || HOST;
   const dbPath = options.dbPath || DB_PATH;
+
+  // server-logging pass: stdout/stderr를 ~/.spyglass/logs/server.log에도 미러링.
+  //   - 백그라운드 실행 시 crash 사후 추적용. uncaughtException/unhandledRejection도 함께 기록.
+  //   - 가장 먼저 install — 이후의 console.log/error가 빠짐없이 파일에 남도록 보장.
+  installServerStdioMirror();
 
   // 이미 실행 중인지 확인
   if (server) {
