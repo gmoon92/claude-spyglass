@@ -1,22 +1,23 @@
 /**
- * meta-docs-view.js — Behavior Definitions 카탈로그 + 히팅률 패널 (v25, meta-docs-enhance)
+ * meta-docs-view.js — Behavior Definitions 카탈로그 + 히팅률 패널 (v26, meta-docs-table-view)
  *
  * 책임:
- *  - GET /api/meta-docs 로 카탈로그 + 사용 집계 받아 표 형태로 노출.
+ *  - GET /api/meta-docs 로 카탈로그 + 사용 집계 받아 정렬·리사이즈 가능한 <table>로 노출.
  *  - 타입 필터(agent/skill/command/all), 스코프, 표시(전체/미사용/orphan), 정렬.
  *  - 직교 토글: includeDeleted — 디스크에서 사라진 soft-deleted 정의 포함 여부.
  *    의미 축이 다르므로 display 라디오와 분리한다 (ADR-001 meta-docs-filter).
- *  - 헤더 클릭 정렬 ↔ 상단 정렬 버튼 양방향 동기화 (단일 분기).
- *  - "호출 0건" 행은 정리 후보로 시각 구분, "카탈로그에 없는 호출"(orphan)은 호버 안내.
+ *  - thead 클릭 정렬 (↕/↑/↓ + aria-sort + accent active) + 우측 5px 드래그 핸들로 너비 조절
+ *    (col-resize.js initColResize 재사용 — syslib 테이블과 동일 패턴).
+ *  - 행 상태 시각 어휘(unused/deleted/orphan)는 meta-docs.css `.meta-doc-row.meta-doc-*` 룰에 위임.
  *  - "동기화" 버튼: POST /api/meta-docs/refresh — 비차단 토스트로 시작/완료/실패 단계 노출.
  *
  * 호출자: session-detail/turn-views.js setDetailView('metadocs')
  *
- * 의존성: formatters.js (escHtml, fmtTime), 기본 fetch.
+ * 의존성: formatters.js (escHtml, fmtTime), col-resize.js (initColResize), 기본 fetch.
  *
  * 캡슐화 원칙(CLAUDE.md):
  *  - 정렬/필터 판단 로직은 각자의 함수 한 곳에서만 처리. 호출 측은 raw 인자만 전달.
- *  - 렌더 함수는 escHtml/fmtTime/shortenPath/formatTokens 기존 헬퍼를 우선 재사용.
+ *  - 렌더 함수는 escHtml/fmtTime/shortenPath/formatTokens/metaDocTypeBadge 기존 헬퍼를 우선 재사용.
  */
 
 import { escHtml, fmtTime } from './formatters.js';
@@ -24,6 +25,8 @@ import { getSelectedProject, getMetaSubTab, setMetaSubTab as stateSetMetaSubTab 
 import { toolIconHtml } from './render/badges.js';
 import { skMetaDocList } from './render/skeleton.js';
 import { svgTrash, svgWarn, svgRefresh } from './render/icons.js';
+// meta-docs-table-view ADR-004 (2026-05-14): 로그/syslib 테이블과 동일한 col-resize 핸들을 부착.
+import { initColResize } from './col-resize.js';
 // meta-docs feedback ADR (2026-05-14): 좌측 패널에 프로젝트별 Behavior Definitions 항목 수를 주입.
 import { setMetaDocsCounts } from './left-panel.js';
 // ADR-004 meta-docs-tool-stats: 프로젝트 단위 도구 통계 진입점.
@@ -200,11 +203,14 @@ export async function openMetaDocViaDeepLink(link) {
 /**
  * 현재 state.searchTerm과 일치하는 첫 Behavior Definitions 행에 flash 트리거 + scrollIntoView.
  * loadMetaDocsLibrary 직후 호출 — 행은 이미 DOM에 존재.
+ *
+ * meta-docs-table-view (2026-05-14): 셀렉터를 카드(.meta-doc-card) → 테이블 행(tr.meta-doc-row)으로 이전.
+ * CSS의 .meta-doc-row[data-flash="1"] 룰이 1.5s 동안 accent 배경 깜빡임을 적용.
  */
 function highlightDeepLinkRow() {
   const term = (state.searchTerm || '').toLowerCase();
   if (!term) return;
-  const rows = document.querySelectorAll('.meta-doc-list .meta-doc-card[data-name]');
+  const rows = document.querySelectorAll('.meta-docs-table tbody tr.meta-doc-row[data-name]');
   let target = null;
   for (const r of rows) {
     const name = String(r.dataset.name || '').toLowerCase();
@@ -317,6 +323,10 @@ export async function loadMetaDocsLibrary() {
     container.innerHTML = renderHtml(sorted, { project, matched, resolvedSourceRoot });
     bindEvents(container);
     ensureToastHost();
+    // meta-docs-table-view ADR-004 (2026-05-14): syslib와 동일 패턴 — 매 렌더마다 호출.
+    //   table DOM이 매번 새로 만들어지므로 5px 드래그 핸들도 재부착해야 한다.
+    //   table이 없는 빈 상태 분기에서는 querySelector가 null → initColResize가 no-op.
+    initColResize(container.querySelector('.meta-docs-table'));
     // ADR-003: 좌측 요약 카드(사용/미사용/orphan) 동기 갱신
     renderLeftSummaryCards(computeRowCounts(sorted));
   } catch (err) {
@@ -395,71 +405,115 @@ function renderHtml(rows, ctx = {}) {
     return `${filters}${refreshHint}${empty}`;
   }
 
-  const cards = rows.map(cardHtml).join('');
-  return `${filters}${refreshHint}<div class="meta-doc-list">${cards}</div>`;
+  // meta-docs-table-view ADR-001/004 (2026-05-14): 카드 리스트 → 정렬·리사이즈 테이블.
+  //  - colgroup 초기 폭: 타입 96 / 이름 180 / 경로 280 / 횟수 70 / 최근 적용 150 / 누적 토큰 100
+  //    합계 876px — 메타 모드 메인 영역(좌측 패널 분량 제외) 폭에 가로 스크롤 없이 들어감.
+  //  - thead th는 system-prompt-library와 동일하게 sortable + sort-asc/desc + aria-sort + ↕↑↓ 화살표.
+  //  - col-resize 핸들은 bindEvents 마지막에 initColResize(table)로 자동 부착.
+  const head = `
+    <table class="meta-docs-table">
+      <colgroup>
+        <col style="width:96px">
+        <col style="width:180px">
+        <col style="width:280px">
+        <col style="width:70px">
+        <col style="width:150px">
+        <col style="width:100px">
+      </colgroup>
+      <thead>
+        <tr>
+          ${thHtml('type',         '타입')}
+          ${thHtml('name',         '이름')}
+          ${thHtml('source',       '경로')}
+          ${thHtml('invocations',  '횟수',       'num')}
+          ${thHtml('last_used_at', '최근 적용')}
+          ${thHtml('total_tokens', '누적 토큰',  'num')}
+        </tr>
+      </thead>
+      <tbody>${rows.map(rowHtml).join('')}</tbody>
+    </table>
+  `;
+  return `${filters}${refreshHint}${head}`;
 }
 
-function cardHtml(r) {
-  const orphan = r.id == null;
+/**
+ * meta-docs-table-view ADR-001 (2026-05-14): sortable thead 셀 1개 생성.
+ * system-prompt-library의 th() 헬퍼와 동일 구조 — SORTABLE_KEYS 키 + ↕/↑/↓ 화살표 + aria-sort.
+ * data-meta-sort 속성은 onMetaContainerClick / onMetaContainerKeydown이 동일 분기로 처리한다.
+ */
+function thHtml(key, label, extraCls = '') {
+  const cls = `${extraCls} sortable ${sortHeaderCls(key)}`.trim();
+  return `<th data-meta-sort="${key}"
+              class="${cls}"
+              tabindex="0"
+              role="columnheader"
+              aria-sort="${ariaSortValue(key)}">${escHtml(label)}${sortIndicator(key)}</th>`;
+}
+
+/** 헤더 active 클래스 — 단일 책임 (state.sort/sortDir 기준) */
+function sortHeaderCls(key) {
+  if (state.sort !== key) return '';
+  return state.sortDir === 'asc' ? 'sort-asc' : 'sort-desc';
+}
+/** 헤더 ↕/↑/↓ 화살표 — 단일 책임 */
+function sortIndicator(key) {
+  if (state.sort !== key) return '<span class="sort-arrow sort-arrow-idle">↕</span>';
+  return state.sortDir === 'asc'
+    ? '<span class="sort-arrow">↑</span>'
+    : '<span class="sort-arrow">↓</span>';
+}
+/** WAI-ARIA aria-sort 속성 값 */
+function ariaSortValue(key) {
+  if (state.sort !== key) return 'none';
+  return state.sortDir === 'asc' ? 'ascending' : 'descending';
+}
+
+/**
+ * meta-docs-table-view ADR-001/002/003 (2026-05-14): 카탈로그 행 1개 — <tr> 마크업.
+ *
+ *  - 상태 클래스(meta-doc-unused/deleted/orphan)는 .meta-doc-row.meta-doc-* CSS 룰이
+ *    행 배경/좌측 보더/이름 line-through 처리를 담당 (캡슐화).
+ *  - 카드 시절 description 1줄 미리보기는 행 자체의 title 속성으로 hover 노출 (ADR-001 옵션 B).
+ *  - 경로 셀은 ADR-003 — file_path 우선, orphan 행은 "호출만 존재" 라벨.
+ *  - deleted 행은 마지막 셀(누적 토큰) 끝에 svgWarn 배지(soft-deleted 안내).
+ */
+function rowHtml(r) {
+  const orphan  = r.id == null;
   const deleted = r.deleted_at != null;
-  const unused = !orphan && (r.invocations ?? 0) === 0;
-  const cls = [
+  const unused  = !orphan && (r.invocations ?? 0) === 0;
+  const cls = ['meta-doc-row',
     orphan  ? 'meta-doc-orphan'  : '',
     deleted ? 'meta-doc-deleted' : '',
     unused  ? 'meta-doc-unused'  : '',
   ].filter(Boolean).join(' ');
 
-  const sourcePart = orphan
+  const inv      = (r.invocations ?? 0);
+  const lastUsed = r.last_used_at ? escHtml(fmtTime(r.last_used_at)) : '<span class="meta-doc-na">—</span>';
+  const tokens   = formatTokens(r.total_tokens ?? 0);
+
+  const pathCell = orphan
     ? `<span class="meta-doc-source-orphan" title="${escHtml(ORPHAN_TOOLTIP)}" tabindex="0">호출만 존재</span>`
-    : sourceCellHtml(r);
+    : pathCellHtml(r);
 
-  const descClean = cleanDescription(r.description);
-  const desc = descClean
-    ? `<div class="meta-doc-card-desc" title="${escHtml(r.description ?? '')}">${escHtml(descClean)}</div>`
+  // description은 행 title 속성으로 hover 노출 — 별도 컬럼화하지 않음 (ADR-001).
+  const titleAttr = r.description
+    ? ` title="${escHtml(r.description)}"`
     : '';
-  const inv = (r.invocations ?? 0);
-  const lastUsed = r.last_used_at ? escHtml(fmtTime(r.last_used_at)) : null;
-  const tokens = formatTokens(r.total_tokens ?? 0);
 
-  // 우측 통계 칩 — 호출수 · 마지막 사용 · 토큰합.
-  // soft-deleted 표시는 emoji(⚠) 대신 stroke-only SVG warn 아이콘 사용 (디자인 톤 일치).
   const deletedBadge = deleted
-    ? `<span class="meta-doc-deleted-badge" title="현재 디스크에서 사라진 정의 (soft-deleted)">${svgWarn({ size: 12 })}</span>`
+    ? ` <span class="meta-doc-deleted-badge" title="현재 디스크에서 사라진 정의 (soft-deleted)">${svgWarn({ size: 12 })}</span>`
     : '';
-  const statChips = `
-    <span class="meta-doc-stat" title="총 호출 수">${inv.toLocaleString()} 회</span>
-    ${lastUsed ? `<span class="meta-doc-stat-sep">·</span><span class="meta-doc-stat" title="마지막 사용">${lastUsed}</span>` : ''}
-    <span class="meta-doc-stat-sep">·</span><span class="meta-doc-stat" title="누적 토큰">${tokens}</span>
-    ${deletedBadge}
-  `;
 
   return `
-    <div class="meta-doc-card ${cls}" data-type="${escHtml(r.type)}" data-name="${escHtml(r.name)}">
-      <div class="meta-doc-card-header">
-        ${metaDocTypeBadge(r.type)}
-        <span class="meta-doc-card-name">${escHtml(r.name)}</span>
-        <span class="meta-doc-card-stats">${statChips}</span>
-      </div>
-      ${desc}
-      <div class="meta-doc-card-source">${sourcePart}</div>
-    </div>
+    <tr class="${cls}" data-type="${escHtml(r.type)}" data-name="${escHtml(r.name)}"${titleAttr}>
+      <td>${metaDocTypeBadge(r.type)}</td>
+      <td><span class="meta-doc-name">${escHtml(r.name)}</span></td>
+      <td>${pathCell}</td>
+      <td class="num">${inv.toLocaleString()}</td>
+      <td>${lastUsed}</td>
+      <td class="num">${tokens}${deletedBadge}</td>
+    </tr>
   `;
-}
-
-/**
- * description 미리보기 정제 — `>` blockquote, `|` 표 셀, 연속 공백/줄바꿈 등
- * markdown 마커를 단일 공백으로 정리해 한 줄 미리보기로 만든다.
- * 원본 description 전체는 tooltip(title 속성)에 그대로 보존.
- */
-function cleanDescription(s) {
-  if (!s) return '';
-  return String(s)
-    .split(/\r?\n/)
-    .map(line => line.replace(/^\s*[>|#]+\s*/, '').trim())
-    .filter(line => line.length > 0)
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 /**
@@ -482,16 +536,17 @@ function metaDocTypeBadge(type) {
   </span>`;
 }
 
-/** 출처 셀 — 라벨(우선) + 실제 파일 경로(file_path, 없으면 source_root). 단일 책임 캡슐화.
- *  이름 컬럼에 file_path를 별도 노출하지 않고 출처 셀로 통합 — 시각 위계 단순화.
+/**
+ * meta-docs-table-view ADR-003 (2026-05-14): 경로 셀 — file_path 우선, 없으면 source_root.
+ *  - shortenPath로 단축 표시, 풀 경로는 title 속성에 보존.
+ *  - source 라벨(userSettings/projectSettings)은 좌측 패널 user(global)/프로젝트 행이 SSoT를
+ *    가지므로 본 셀에서 별도 노출하지 않음 — 시각 위계 단순화.
+ *  - 둘 다 없으면 '—' (meta-doc-na 톤).
  */
-function sourceCellHtml(r) {
-  const label = r.source ? escHtml(r.source) : '-';
+function pathCellHtml(r) {
   const path = r.file_path || r.source_root || null;
-  const pathHtml = path
-    ? `<div class="meta-doc-source-root" title="${escHtml(path)}">${escHtml(shortenPath(path))}</div>`
-    : '';
-  return `<div class="meta-doc-source-label">${label}</div>${pathHtml}`;
+  if (!path) return `<span class="meta-doc-na">—</span>`;
+  return `<span class="meta-doc-source-root" title="${escHtml(path)}">${escHtml(shortenPath(path))}</span>`;
 }
 
 function renderFilters() {
