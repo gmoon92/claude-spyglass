@@ -195,7 +195,7 @@ document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
         tokens: sessionCache.cacheReadTokens + sessionCache.cacheCreationTokens,
         _cacheCreation: sessionCache.cacheCreationTokens, // 도넛 가운데 % 계산용 분자
       },
-      { label: '입력', tokens: sessionCache.totalInputTokens },
+      { label: '전체', tokens: sessionCache.totalInputTokens },
     ].filter(d => d.tokens > 0);
     setSourceData('cache', cacheData);
     drawDonut();
