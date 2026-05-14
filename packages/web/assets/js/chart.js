@@ -298,10 +298,17 @@ export function renderTypeLegend() {
   }
   el.innerHTML = typeData.map((d, idx) => {
     const color = donutItemColor(d, idx);
-    const count = donutItemCount(d);
+    // cache 모드: 범례 표시값은 도넛 슬라이스 토큰이 아니라 사용자 멘탈 모델용
+    //   _legendTokens(캐시=creation, 전체=분모) + _legendDenom(분모) 메타로 분리.
+    //   '캐시'  = creation / 분모 (작은 %)
+    //   '전체'  = 분모    / 분모 (= 100%)
+    const isCacheLegend = donutMode === 'cache' && d._legendTokens != null && d._legendDenom != null;
+    const count = isCacheLegend ? d._legendTokens : donutItemCount(d);
+    const pct   = isCacheLegend
+      ? Math.round((d._legendTokens / (d._legendDenom || 1)) * 100)
+      : Math.round(donutItemCount(d) / total * 100);
     const label = donutMode === 'cache' ? d.label : (donutMode === 'model' ? d.model : d.type);
     const key   = label || donutItemKey(d, idx);
-    const pct   = Math.round(count / total * 100);
     const safeKey = key.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     // 모델 이름은 길 수 있어 ellipsis로 자름
     return `<div class="legend-item">

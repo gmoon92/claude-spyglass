@@ -189,14 +189,31 @@ document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
     // vs '입력'(tokens_input). 도넛 가운데 '캐시 적용 비율' = cache_creation / 전체는 유지하되,
     // cache_creation 값은 캐시 슬라이스의 _cacheCreation 메타로 chart.js drawDonut에 전달.
     // 합 = 분모 = '전체 토큰 비용'.
+    // 사용자 멘탈 모델 = '캐시 / 전체 = creation / 분모'.
+    //   - 도넛 시각: 분자(creation) 만큼만 녹색, 나머지(미적용) 회색 → 가운데 % 와 일치.
+    //   - 범례 표시: 슬라이스 토큰이 아니라 사용자 의도값(_legendTokens)을 따로 노출.
+    //     캐시 행: 분자(creation) + 비율(creation/분모)
+    //     전체 행: 분모 + 100%
+    //   - 분모 = read + creation + input (전체 토큰 비용).
+    const cacheDenom = sessionCache.cacheReadTokens
+                     + sessionCache.cacheCreationTokens
+                     + sessionCache.totalInputTokens;
+    const cacheCreation = sessionCache.cacheCreationTokens;
     const cacheData = [
       {
         label: '캐시',
-        tokens: sessionCache.cacheReadTokens + sessionCache.cacheCreationTokens,
-        _cacheCreation: sessionCache.cacheCreationTokens, // 도넛 가운데 % 계산용 분자
+        tokens: cacheCreation,                  // 도넛 슬라이스 = 분자
+        _cacheCreation: cacheCreation,          // 가운데 % 계산용
+        _legendTokens: cacheCreation,           // 범례 표시값 = 분자
+        _legendDenom:  cacheDenom,              // 범례 % 계산 분모
       },
-      { label: '전체', tokens: sessionCache.totalInputTokens },
-    ].filter(d => d.tokens > 0);
+      {
+        label: '전체',
+        tokens: Math.max(0, cacheDenom - cacheCreation), // 도넛 슬라이스 = 미적용 (분모-분자)
+        _legendTokens: cacheDenom,              // 범례 표시값 = 분모 전체
+        _legendDenom:  cacheDenom,              // 범례 100%
+      },
+    ].filter(d => d.tokens > 0 || d._legendTokens > 0);
     setSourceData('cache', cacheData);
     drawDonut();
     renderTypeLegend();
