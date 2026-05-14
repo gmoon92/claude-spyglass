@@ -60,13 +60,14 @@ function donutItemKey(d, _idx) {
 }
 function cacheItemColor(d) {
   // cache-donut-2slice pass: 도넛 라벨 한국어 매핑.
-  //   - 캐시  (cache_read + cache_creation): success green (#34D399)
-  //   - 전체  (tokens_input):                neutral dim (#6E7681) — 캐시 외 신규 입력
-  // 과거 라벨(히트/등록비용/히트율/Cached/Cache Write/Uncached/입력)은 호출자 호환 폴백.
+  //   - 캐시 (cache_creation):           success green (#34D399) — 신규 캐시 등록
+  //   - 그 외 (cache_read + tokens_input): neutral dim (#6E7681) — 캐시 적용 외 토큰
+  // 슬라이스/범례 % 모두 보색 관계(합 = 100%)로 통일.
+  // 과거 라벨(전체/입력/히트/등록비용/히트율/Cached/Cache Write/Uncached)은 호출자 호환 폴백.
   const map = {
-    '캐시': '#34D399', '전체': '#6E7681',
+    '캐시': '#34D399', '그 외': '#6E7681',
     // 과거 라벨 폴백
-    '입력': '#6E7681',
+    '전체': '#6E7681', '입력': '#6E7681',
     '히트': '#34D399', '등록비용': '#58A6FF', '히트율': '#34D399',
     'Cached': '#34D399', 'Uncached': '#6E7681', 'Cache Write': '#58A6FF',
   };
@@ -253,9 +254,9 @@ export function drawDonut() {
     //   = cache_creation / (cache_read + tokens_input + cache_creation)
     //   "전체 토큰 중 새로 캐시에 등록(creation)된 비율" — 신규 컨텍스트 유입 동학.
     //
-    // 도넛 슬라이스(캐시/전체)는 자체 합 = 전체 토큰. 하지만 가운데 % 분자는
-    // cache_creation 단독이므로 '캐시' 슬라이스에 _cacheCreation 메타로 분자값을 전달받는다.
-    // 좌측 cache-panel의 Hit Rate(cache_read/전체)와 다른 각도를 보여 중복 없음.
+    // 슬라이스 합(캐시 + 그 외) = 분모 = 전체 토큰. 분자(creation)는 '캐시' 슬라이스에
+    // _cacheCreation 메타로 전달받아 가운데 % 산식과 슬라이스 비율이 정확히 일치.
+    // 좌측 cache-panel의 Hit Rate(cache_read/분모)와 다른 각도를 보여 중복 없음.
     const creation = typeData.find(d => d._cacheCreation != null)?._cacheCreation
                   ?? typeData.find(d => d.label === '등록비용' || d.label === 'Cache Write')?.tokens
                   ?? 0;
@@ -273,7 +274,6 @@ export function drawDonut() {
     ctx.fillText(hitRateLabel, cx, cy - 4);
     ctx.fillStyle = COLORS.textDim;
     ctx.font      = '9px ' + (getComputedStyle(document.documentElement).getPropertyValue('--font-ui').trim() || 'sans-serif');
-    ctx.fillText('캐시 적용 비율', cx, cy + 10);
   } else {
     ctx.fillStyle    = COLORS.text;
     ctx.font         = `bold ${total >= 1000 ? 12 : 15}px monospace`;
@@ -298,15 +298,10 @@ export function renderTypeLegend() {
   }
   el.innerHTML = typeData.map((d, idx) => {
     const color = donutItemColor(d, idx);
-    // cache 모드: 범례 표시값은 도넛 슬라이스 토큰이 아니라 사용자 멘탈 모델용
-    //   _legendTokens(캐시=creation, 전체=분모) + _legendDenom(분모) 메타로 분리.
-    //   '캐시'  = creation / 분모 (작은 %)
-    //   '전체'  = 분모    / 분모 (= 100%)
-    const isCacheLegend = donutMode === 'cache' && d._legendTokens != null && d._legendDenom != null;
-    const count = isCacheLegend ? d._legendTokens : donutItemCount(d);
-    const pct   = isCacheLegend
-      ? Math.round((d._legendTokens / (d._legendDenom || 1)) * 100)
-      : Math.round(donutItemCount(d) / total * 100);
+    // 범례 카운트·%는 슬라이스와 동일 값(보색 관계). cache 모드도 슬라이스 토큰
+    // 그대로 사용 — 도넛 가운데 '캐시 적용 비율'은 별도 산식이며 drawDonut가 직접 그림.
+    const count = donutItemCount(d);
+    const pct   = Math.round(count / total * 100);
     const label = donutMode === 'cache' ? d.label : (donutMode === 'model' ? d.model : d.type);
     const key   = label || donutItemKey(d, idx);
     const safeKey = key.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
