@@ -603,20 +603,36 @@
 body[data-app-mode="browse"] .meta-docs-root { display: none; }
 body[data-app-mode="metadocs"] .right-panel { display: none; }
 
-/* 좌측 패널 축약 — metadocs 모드에서 obs-panel + 세션 + 핸들 숨김.
-   brand-strip-cleanup ADR-002: DOM 순서를 [projects → summaryCards]로 뒤집어
-   메타 모드 좌측 첫 위계가 탐색 모드와 동일하게 '프로젝트 셀렉터'가 되도록 함. */
+/* 좌측 패널 축약 — metadocs 모드에서 obs-panel + 세션 + 하단 핸들만 숨김.
+   상단 핸들(#panelVerticalHandle)은 메타 모드에서도 [프로젝트 ↔ 요약 카드] 분할에 재활용. */
 body[data-app-mode="metadocs"] #panelTools,
 body[data-app-mode="metadocs"] #browserSessionsSection,
-body[data-app-mode="metadocs"] #panelVerticalHandle,
 body[data-app-mode="metadocs"] #panelVerticalHandleBottom {
   display: none;
 }
 
-/* metadocs 모드: 프로젝트 섹션은 좌측 패널 grid 1행에 위치하며 콘텐츠 높이만큼 차지.
-   요약 카드 컨테이너가 바로 아래(grid 2행 자동 배치)로 push되어 함께 노출. */
+/* metadocs 모드 — left-panel grid를 4-row로 재정의:
+     1) #browserProjectsSection : var(--projects-panel-height, 220px)  — 트랙 고정 → 자식 콘텐츠가 작아도 트랙이 작아지지 않음 (최소 3행 노출 보장)
+     2) #panelVerticalHandle    : auto (8px)
+     3) #metaDocsSummaryCards   : auto — 요약 카드는 콘텐츠 높이만 차지 (가로 1줄)
+     4) (빈 trailing track)      : 1fr — 남는 세로 공간 흡수 → row3가 stretch되어 카드가 길어지는 현상 방지
+
+   fallback 220px = 헤더 36 + thead 36 + 약 3 row(40px*3) = 약 192px 이상.
+   사용자가 핸들을 드래그하면 --projects-panel-height inline px가 우선 적용. */
+body[data-app-mode="metadocs"] .left-panel {
+  grid-template-rows:
+    var(--projects-panel-height, 220px)
+    auto
+    auto
+    1fr;
+}
 body[data-app-mode="metadocs"] #browserProjectsSection {
-  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* 안전장치: 트랙이 어떤 이유로든 1fr가 되어도 요약 카드는 stretch되지 않게 자기 콘텐츠 크기 유지. */
+body[data-app-mode="metadocs"] #metaDocsSummaryCards {
+  align-self: start;
 }
 
 /* === 좌측 thead 모드별 분기 + [동기화] 셀 (meta-docs feedback ADR 2026-05-14) ===
@@ -635,10 +651,12 @@ body[data-app-mode="metadocs"] #browserProjectsSection {
 body[data-app-mode="metadocs"] .thead-metadocs { display: table-row; }
 body[data-app-mode="metadocs"] .thead-browse   { display: none; }
 
-/* metadocs thead — 표준 thead th 토큰 풀(font-size/color/padding) 유지하되 동기화 셀만 특수 처리 */
+/* metadocs thead — 표준 thead th padding(10px 12px)을 그대로 유지해
+   browse thead와 row 높이를 동일하게 맞춤. 동기화 셀은 horizontal만 살짝 좁힘. */
 .thead-sync-cell {
   text-align: right;
-  padding: 4px 6px !important;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
 }
 .thead-sync-btn {
   display: inline-flex;
@@ -755,7 +773,7 @@ body[data-app-mode="browse"] #metaDocsSummaryCards {
 
 .meta-docs-summary-card-value {
   font-family: var(--font-data);
-  font-size: 16px;
+  font-size: 13px;
   font-weight: var(--weight-strong);
   color: var(--text-1);
   line-height: 1.1;
@@ -763,7 +781,7 @@ body[data-app-mode="browse"] #metaDocsSummaryCards {
 
 .meta-docs-summary-card-label {
   font-family: var(--font-ui);
-  font-size: 10.5px;
+  font-size: 9.5px;
   color: var(--text-3);
   text-transform: lowercase;
   letter-spacing: 0.03em;

@@ -604,7 +604,11 @@ function init() {
   initPanelVerticalResize(
     document.getElementById('panelVerticalHandle'),
     document.getElementById('browserProjectsSection'),
-    document.getElementById('browserSessionsSection'),
+    // 메타 모드에서는 동일 핸들이 [프로젝트 ↔ 요약 카드] 분할을 담당.
+    // 드래그 시점에 visible한 bottom 섹션을 동적으로 resolve.
+    () => (document.body.dataset.appMode === 'metadocs'
+      ? document.getElementById('metaDocsSummaryCards')
+      : document.getElementById('browserSessionsSection')),
   );
   initPanelBottomResize(
     document.getElementById('panelVerticalHandleBottom'),

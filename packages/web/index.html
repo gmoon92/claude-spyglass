@@ -155,16 +155,17 @@
            - 동기화 버튼은 thead [동기화] 셀로 이관.
            - [프로젝트][전체] 토글은 프로젝트 리스트 최상단의 가상 'user (global)' 행으로 통합. -->
 
+      <!-- dashboard-ui-enhancements ADR-002: 프로젝트/세션 섹션 상하 분할 핸들.
+           left-panel-vertical-resize.js의 initPanelVerticalResize가 드래그 로직을 담당.
+           메타 모드(metadocs)에서는 동일 핸들이 [프로젝트 ↔ 요약 카드] 분할을 담당
+           (bottomEl이 동적으로 #metaDocsSummaryCards로 resolve됨). -->
+      <div class="panel-vertical-handle" id="panelVerticalHandle" title="드래그: 높이 조절"></div>
+
       <!-- ADR-003 left-rail-meta-docs + brand-strip-cleanup ADR-002:
            메타 모드 좌측 요약 카드 컨테이너. body[data-app-mode="metadocs"]일 때만 노출.
-           DOM 순서를 #browserProjectsSection 직후로 배치 — 메타 모드 좌측은
-           [프로젝트 → 요약 카드] 순서로 탐색 모드의 "프로젝트 우선" 패턴과 일치.
+           DOM 순서: [프로젝트 → 핸들 → 요약 카드] — 메타 모드에서 핸들이 둘 사이를 분할.
            meta-docs-view.js가 동적으로 내용 채움. -->
       <div class="meta-docs-summary-cards" id="metaDocsSummaryCards" hidden></div>
-
-      <!-- dashboard-ui-enhancements ADR-002: 프로젝트/세션 섹션 상하 분할 핸들.
-           left-panel-vertical-resize.js의 initPanelVerticalResize가 드래그 로직을 담당. -->
-      <div class="panel-vertical-handle" id="panelVerticalHandle" title="드래그: 높이 조절"></div>
 
       <div class="panel-section flex-section" id="browserSessionsSection">
         <div class="panel-header">
