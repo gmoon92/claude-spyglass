@@ -1,3 +1,52 @@
+/* ── REFRESH FLICKER PREVENTION ──────────────────────────────────────────
+   새로고침 시 "줄어졌다가 펼쳐지는" 현상의 원인:
+     1) --left-panel-width 가 CSS 기본값(224px)으로 1프레임 paint → JS가 localStorage에서 저장값 복원 → grid columns 시프트
+     2) .main-layout 의 transition: grid-template-columns 200ms가 시프트를 가시화
+     3) .chart-collapsed / .left-panel-hidden 상태도 main.js init 후에야 클래스 부여
+   해결:
+     - index.html <head> 인라인 스크립트가 첫 paint 전에 CSS 변수 + preinit-* 클래스 부여
+     - 아래 :not(.app-ready) 룰이 init 완료 전까지 시프트 transition 차단 (모든 자식이 아니라 시프트 발생 요소만 명시)
+     - .app-ready 는 DOMContentLoaded + rAF×2 이후 자동 부여 (main.js init과 분리된 안전망)
+   ※ 시프트 발생 요소만 좁게 선택 — SSE 도착 시 row insertion 등 다른 효과는 건드리지 않는다. */
+html:not(.app-ready) .main-layout,
+html:not(.app-ready) .main-layout .left-panel,
+html:not(.app-ready) .main-layout #chartSection,
+html:not(.app-ready) .main-layout .sidebar-edge-toggle,
+html:not(.app-ready) .main-layout .sidebar-edge-toggle svg {
+  transition: none !important;
+}
+
+/* preinit 클래스는 .left-panel-hidden / .chart-collapsed 와 동일 결과를 first paint에만 적용.
+   :not(.app-ready) 한정 — app-ready 부여 순간 preinit 효과는 자동 소멸하고,
+   이후 main.js가 부여한 정상 클래스(.left-panel-hidden / .chart-collapsed)만 남아 사용자 토글 transition이 정상 동작.
+   main.js의 restorePanelHiddenState() / restoreChartCollapsedState() 가 정상 클래스를 부여해 두므로
+   app-ready 전후 시각 차이는 0. */
+html:not(.app-ready).preinit-left-panel-hidden .main-layout {
+  grid-template-columns: var(--app-rail-width) 0 1fr;
+  gap: 0 var(--space-4);
+}
+html:not(.app-ready).preinit-left-panel-hidden .main-layout .left-panel {
+  opacity: 0;
+  pointer-events: none;
+  border-right: none;
+}
+html:not(.app-ready).preinit-left-panel-hidden .main-layout .sidebar-edge-toggle {
+  left: calc(var(--space-4) + var(--app-rail-width));
+  opacity: 0.7;
+}
+html:not(.app-ready).preinit-left-panel-hidden .main-layout .sidebar-edge-toggle svg {
+  transform: rotate(180deg);
+}
+html:not(.app-ready).preinit-chart-collapsed #chartSection {
+  grid-template-rows: auto 0fr;
+}
+html:not(.app-ready).preinit-chart-collapsed #chartSection .view-section-header {
+  border-bottom: none;
+}
+html:not(.app-ready).preinit-chart-collapsed #chartSection #btnToggleChart svg {
+  transform: rotate(180deg);
+}
+
 /* ── BODY ───────────────────────────────────────────────────────────────── */
 /* header-removal: 글로벌 헤더 제거 후 body 자식 = error-banner / main-layout / footer.
    3 row grid로 재정렬. 1fr이 main-layout에 가야 콘텐츠가 viewport 채움. */

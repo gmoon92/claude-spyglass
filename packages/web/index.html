@@ -2,6 +2,15 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
+  <!-- partial-paint(FOUC) 가림 — CSS link 17개가 일부만 cascade된 상태에서의 첫 paint가
+       grid 변수 unresolved → 콘텐츠 block stack 형태로 노출되는 현상을 막는다.
+       opacity 0으로 시작 → 모든 CSS + main.js init 완료(.app-ready)되면 120ms fade-in.
+       visibility 대신 opacity를 쓰는 이유: 접근성(스크린리더) 영향 0.
+       backup으로 window.load 도달 시 무조건 .app-ready 부여 (인라인 스크립트 내) — main.js 실패에도 영구 hidden 방지. -->
+  <style>
+    html:not(.app-ready) body { opacity: 0; }
+    html.app-ready body { opacity: 1; transition: opacity 120ms ease-out; }
+  </style>
   <script>
     // FOUC 방지 — i18n.js 비동기 로딩 전에 URL ?lang= / localStorage / navigator
     // 우선순위로 lang을 결정해 <html lang>을 즉시 설정. 이게 없으면 첫 페인트가
@@ -27,6 +36,49 @@
         return 'ko';
       }
       document.documentElement.lang = pick();
+    })();
+  </script>
+  <script>
+    // 레이아웃 시프트 방지 — main.js(module) 로드 전에 영속 상태를 첫 paint에 미리 반영.
+    // 시프트가 발생하던 4 항목 모두 처리:
+    //   1) --left-panel-width  (raw number, panel-resize.js)
+    //   2) left-panel-hidden   (JSON "true"/"false", layout-persist.js + 옛 키 fallback)
+    //   3) chart-collapsed     (JSON "true"/"false", layout-persist.js)
+    //   4) .app-ready          (DOMContentLoaded + rAF×2 — main.js init과 분리한 안전망)
+    // clamp 범위는 design-tokens.css의 --panel-resize-min/max(144/384)와 일치.
+    (function () {
+      function readNum(key) {
+        try { var v = parseInt(localStorage.getItem(key), 10); return Number.isFinite(v) ? v : NaN; }
+        catch (_) { return NaN; }
+      }
+      function readBool(key) {
+        try { return localStorage.getItem(key) === 'true'; }
+        catch (_) { return false; }
+      }
+      var html = document.documentElement;
+
+      // (1) 좌측 패널 너비
+      var w = readNum('spyglass:panel-width');
+      if (Number.isFinite(w) && w >= 144 && w <= 384) {
+        html.style.setProperty('--left-panel-width', w + 'px');
+      }
+
+      // (2) 좌측 패널 접힘 — 신규 키 우선, 옛 키(migrate 전) fallback
+      if (readBool('spyglass:left-panel-hidden') || readBool('left-panel-hidden')) {
+        html.classList.add('preinit-left-panel-hidden');
+      }
+
+      // (3) 차트 접힘
+      if (readBool('spyglass:chart-collapsed')) {
+        html.classList.add('preinit-chart-collapsed');
+      }
+
+      // (4) .app-ready 부여 안전망 — main.js init이 통상 더 빠르게 부여하지만(idempotent),
+      //     init이 실패하거나 늦으면 body가 영구 hidden 되므로 fallback 필수.
+      //     window.load 는 CSS + 이미지 + module 스크립트까지 모두 로드 후 fire → partial paint 노출 없음 보장.
+      window.addEventListener('load', function () {
+        html.classList.add('app-ready');
+      });
     })();
   </script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3" />

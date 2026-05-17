@@ -581,11 +581,17 @@ function initEventDelegation() {
 }
 
 async function init() {
+  // 레이아웃 시프트 방지 — 인라인 스크립트(index.html)가 부여한 preinit-* 클래스를 정상 클래스로 즉시 인계.
+  // 세 호출 모두 i18n에 의존하지 않으므로 fetch 대기 전에 처리해 .app-ready를 빠르게 부여.
+  // app-ready 직후 :not(.app-ready) 룰이 비활성화되며 preinit 효과는 동등 효과의 정상 클래스(.left-panel-hidden / .chart-collapsed)가 이미 부여돼 있어 시각 변화 0.
+  migrateLocalStorage();
+  restorePanelHiddenState();
+  restoreChartCollapsedState();
+  document.documentElement.classList.add('app-ready');
+
   // i18n 리소스 fetch 완료 보장 — main 모듈 내 모든 t() 호출이 키가 아닌 번역값을 받도록.
   // I18n.init()은 idempotent하며 동일 lang+ns에 대해 메모리 캐시 재사용.
   try { await window.I18n.init(); } catch { /* i18n 실패해도 UI는 계속 — 키가 노출되지만 동작 차단 안 함 */ }
-
-  migrateLocalStorage();
 
   // ADR-003 left-rail-meta-docs: 앱 모드 rail 초기화 + sessionStorage 복원 적용.
   // applyAppMode를 콜백으로 주입 — rail 모듈은 모드 값만 전달, view 조작은 main 책임.
@@ -611,8 +617,8 @@ async function init() {
   // autoActivateProject를 호출해야 빈 DB → 데이터 도착 시 race로 자동 선택이 누락되지 않음.
   Promise.all([fetchDashboard(), fetchAllSessions()]).then(() => autoActivateProject());
   startSSE();
-  restorePanelHiddenState();
-  restoreChartCollapsedState();
+  // restorePanelHiddenState() / restoreChartCollapsedState() 호출은 i18n 대기 전(init 최상단)으로 이동.
+  // 인라인 스크립트(index.html)가 preinit-* 클래스로 첫 paint를 보호하고, 본 init 진입 즉시 정상 클래스로 인계해야 시프트가 없다.
   initVersionCheck();
   document.getElementById('btnPanelCollapse').addEventListener('click', toggleLeftPanel);
   document.getElementById('btnToggleChart').addEventListener('click', toggleChartCollapse);
