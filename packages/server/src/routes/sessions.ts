@@ -39,6 +39,7 @@ import {
   type TurnItem,
 } from '@spyglass/storage';
 import { normalizeRequests, normalizeTurns } from '../domain/request-normalizer';
+import { enrichWithAnomalies, summarizeSessionAnomalies } from '../domain/anomaly-enricher';
 import { jsonResponse, type RouteHandler } from './_shared';
 
 export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
@@ -58,11 +59,12 @@ export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
   }
 
   // GET /api/sessions/:id/requests — ADR-001 (log-view-unification): 응답 직전 정규화
+  // anomaly-bloated-sys ADR-003: bloated_sys / agent_spike 필드 부여 (서버 단일 SSoT)
   if (path.match(/^\/api\/sessions\/[^\/]+\/requests$/) && method === 'GET') {
     const sessionId = path.split('/')[3];
     const limit = parseInt(url.searchParams.get('limit') || '100', 10);
     const rawRequests = getRequestsBySession(db, sessionId, limit);
-    const requests = normalizeRequests(rawRequests);
+    const requests = enrichWithAnomalies(db, normalizeRequests(rawRequests));
     return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit } });
   }
 
@@ -127,13 +129,16 @@ export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
   }
 
   // GET /api/sessions/:id  (반드시 하위 경로 라우트 뒤에 위치)
+  // anomaly-bloated-sys ADR-005: 세션 헤더/사이드바 dot 노출용 anomaly 요약을 같이 실어보낸다.
+  // 트랙 B가 `data.anomalies.bloated_sys`를 헤더 full 뱃지 + 사이드바 dot 입력으로 사용.
   if (path.startsWith('/api/sessions/') && method === 'GET') {
     const id = path.replace('/api/sessions/', '');
     const session = getSessionById(db, id);
     if (!session) {
       return jsonResponse({ success: false, error: 'Session not found' }, 404);
     }
-    return jsonResponse({ success: true, data: session });
+    const anomalies = summarizeSessionAnomalies(db, id);
+    return jsonResponse({ success: true, data: { ...session, anomalies } });
   }
 
   return helperFallthrough(_req, db, url, path, method);

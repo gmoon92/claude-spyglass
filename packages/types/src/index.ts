@@ -20,6 +20,8 @@ export type {
   TrustLevel,
   EventPhase,
   NormalizedRequest,
+  BloatedSysField,
+  AgentSpikeField,
 } from './request';
 
 export type { NormalizedTurnItem } from './turn';

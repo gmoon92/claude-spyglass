@@ -39,6 +39,8 @@ import type { Request, TurnItem } from '@spyglass/storage';
 
 // 공유 contract import (런타임 코드 0줄, 타입 선언만)
 import type {
+  AgentSpikeField as SharedAgentSpikeField,
+  BloatedSysField as SharedBloatedSysField,
   EventPhase as SharedEventPhase,
   NormalizedRequest as SharedNormalizedRequest,
   NormalizedTurnItem as SharedNormalizedTurnItem,
@@ -77,6 +79,18 @@ export type NormalizedRequest = SharedNormalizedRequest;
  * Turn 응답 안의 단위 항목 (ADR-006). @see @spyglass/types/NormalizedTurnItem
  */
 export type NormalizedTurnItem = SharedNormalizedTurnItem;
+
+/**
+ * bloated-sys anomaly 필드 (anomaly-bloated-sys ADR-001/003).
+ * @see @spyglass/types/BloatedSysField
+ */
+export type BloatedSysField = SharedBloatedSysField;
+
+/**
+ * agent-spike anomaly 필드 (anomaly-bloated-sys ADR-002/003).
+ * @see @spyglass/types/AgentSpikeField
+ */
+export type AgentSpikeField = SharedAgentSpikeField;
 
 /**
  * 정규화 컨텍스트.

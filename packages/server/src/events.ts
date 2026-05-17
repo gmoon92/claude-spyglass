@@ -22,6 +22,7 @@ import { extractAssistantTextEntries } from './hook/transcript';
 import { persistAssistantTextResponses } from './hook/persist';
 import { broadcastNewRequest, broadcastSessionUpdate } from './sse';
 import { normalizeRequest } from './domain/request-normalizer';
+import { enrichRowWithAnomalies } from './domain/anomaly-enricher';
 import { invalidateDashboardCache } from './api';
 import { diagJson } from './diag-log';
 import { syncCwd as syncMetaDocsCwd } from './meta-docs';
@@ -287,9 +288,10 @@ function saveAssistantResponse(
 
     const session = getSessionById(db, sessionId);
     // ADR-001/002: 저장된 raw 행을 다시 SELECT → 정규화 → 송출 (페이로드 SSoT 단일화)
+    // anomaly-bloated-sys ADR-003: bloated_sys / agent_spike 필드 부여
     const rawRow = getRequestById(db, id);
     if (rawRow) {
-      const normalized = normalizeRequest(rawRow);
+      const normalized = enrichRowWithAnomalies(db, normalizeRequest(rawRow));
       broadcastNewRequest(normalized, {
         session_total_tokens: session?.total_tokens ?? (tokensInput + tokensOutput),
         event_phase: 'created',

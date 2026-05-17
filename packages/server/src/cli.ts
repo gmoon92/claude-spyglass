@@ -11,6 +11,7 @@
  */
 
 import { doctor } from './cli/doctor';
+import { analyze } from './cli/analyze';
 import { t } from './i18n';
 
 async function main() {
@@ -20,6 +21,10 @@ async function main() {
 
   if (command === 'doctor') {
     await doctor(hasFixFlag);
+  } else if (command === 'analyze') {
+    // anomaly-bloated-sys T-08: 운영자 수동 트리거 백필.
+    //   bun run packages/server/src/cli.ts analyze --backfill 2026-05-01:2026-05-18 [--dry-run]
+    await analyze(args.slice(1));
   } else {
     console.error(t('cli.usage'));
     process.exit(1);

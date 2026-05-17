@@ -104,6 +104,41 @@ export type TrustLevel = 'trusted' | 'unknown' | 'synthetic' | 'estimated';
 export type EventPhase = 'created' | 'updated';
 
 /**
+ * bloated-sys anomaly 결과 (anomaly-bloated-sys ADR-001, ADR-003).
+ *
+ * 서버 단일 SSoT — 클라이언트는 본 객체를 그대로 받아 뱃지·dot 매핑만 수행한다.
+ * `stage`가 `null`이면 anomaly 없음(정상 행). UI는 stage로 1차 분기, pct/system_tokens는 부가 표시.
+ *
+ * @see packages/server/src/metrics/calculators/anomaly.ts (`detectBloatedSys`)
+ */
+export interface BloatedSysField {
+  stage: 'warn' | 'critical' | null;
+  system_tokens: number;
+  pct: number;
+  threshold_warn: number;
+  threshold_critical: number;
+}
+
+/**
+ * agent-spike anomaly 결과 (anomaly-bloated-sys ADR-002, ADR-003).
+ *
+ * Agent/Skill/Task 부모 행에만 부여. `stage`가 `null`이면 anomaly 없음.
+ * UI는 `multiplier`(=N)가 ≥3일 때 `↑×N` 표지를 부모 Target 셀에 노출 (트랙 B 담당).
+ *
+ * @see packages/server/src/metrics/calculators/anomaly.ts (`detectAgentSpike`)
+ */
+export interface AgentSpikeField {
+  stage: 'spike' | null;
+  multiplier: number;
+  child_token_sum: number;
+  child_count: number;
+  parent_token: number;
+  pct_of_window: number;
+  threshold_warn: number;
+  threshold_multiplier: number;
+}
+
+/**
  * 정규화된 Request — 클라이언트 공통 입력 모델.
  *
  * raw `RequestRow`의 모든 필드를 보존하면서, 도메인 규칙으로 파생된 필드를 추가한다.
@@ -130,4 +165,28 @@ export interface NormalizedRequest extends Omit<RequestRow, 'model'> {
 
   /** 폴백으로 model이 채워졌는지 여부 (관측·테스트용). */
   model_fallback_applied: boolean;
+
+  /**
+   * bloated-sys anomaly 결과 — proxy_requests.system_byte_size 와 model 윈도우 비교 (ADR-001).
+   *
+   * 부여 정책:
+   *  - prompt 행에만 의미가 있다(첫 prompt + heavy system).
+   *  - tool_call/response/system 행에서는 `null` 또는 필드 자체 생략.
+   *  - 서버가 proxy_requests에서 system_byte_size를 조회하여 채움 (T-05 라우트 직전).
+   *
+   * 클라이언트는 본 필드를 그대로 소비 (ADR-003 — 거울 계산 금지).
+   */
+  bloated_sys?: BloatedSysField | null;
+
+  /**
+   * agent-spike anomaly 결과 — Agent/Skill/Task 부모 행의 자식 토큰 폭증 (ADR-002).
+   *
+   * 부여 정책:
+   *  - tool_name 이 Agent/Skill/Task 로 시작하는 tool_call 행에만.
+   *  - 자식 행/일반 tool_call은 `null` 또는 필드 자체 생략.
+   *  - 서버가 WITH RECURSIVE 로 자식 합산해 채움 (T-05 라우트 직전).
+   *
+   * 클라이언트는 본 필드를 그대로 소비 (ADR-003 — 거울 계산 금지).
+   */
+  agent_spike?: AgentSpikeField | null;
 }

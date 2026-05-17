@@ -181,6 +181,14 @@ export function extractSubagentToolCalls(
   const result: SubagentChildToolCall[] = [];
   const lines = content.split('\n').filter((l: string) => l.trim());
 
+  // anomaly-bloated-sys T-07: rolling Skill/Task parent.
+  //  - 자식 transcript를 시간 순으로 훑으면서 Skill/Task tool_use 를 만나면
+  //    이후 형제 tool_use들의 parent_tool_use_id 를 그 Skill/Task 의 id로 승격.
+  //  - 또 다른 Skill/Task 가 등장하면 가장 가까운 Skill/Task 를 부모로 교체.
+  //  - Skill/Task 외 일반 tool_use 는 부모를 변경하지 않음 (그 형제로 취급).
+  //  결과: WITH RECURSIVE(깊이 3, Agent → Skill → Tool) 가 정확히 펼쳐짐.
+  let rollingParentToolUseId: string | null = null;
+
   for (const line of lines) {
     let entry: Record<string, unknown>;
     try {
@@ -228,12 +236,32 @@ export function extractSubagentToolCalls(
         tokensOutput,
         cacheCreationTokens,
         cacheReadTokens,
+        // T-07: 직속 부모. null이면 호출자가 Agent tool_use_id 로 폴백.
+        parentToolUseId: rollingParentToolUseId,
       });
       firstToolUseInResponse = false;
+
+      // 다음 형제부터 본 Skill/Task 를 부모로 사용 (자기 자신은 형제 — 부모 변경 후 적용).
+      if (isSubagentParentTool(name)) {
+        rollingParentToolUseId = id;
+      }
     }
   }
 
   return result;
+}
+
+/**
+ * Skill/Task 계열인지 판별 — subagent transcript 안에서 자식 트리의 부모가 될 수 있는 도구.
+ * Agent 는 subagent transcript 안에 다시 등장하지 않으므로 제외 (메인 transcript에만 존재).
+ */
+function isSubagentParentTool(toolName: string): boolean {
+  return (
+    toolName === 'Skill' ||
+    toolName === 'Task' ||
+    toolName.startsWith('Skill') ||
+    toolName.startsWith('Task')
+  );
 }
 
 /**

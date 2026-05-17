@@ -20,16 +20,28 @@ import {
   getTopTokenRequests,
 } from '@spyglass/storage';
 import { normalizeRequests } from '../domain/request-normalizer';
+import { enrichWithAnomalies } from '../domain/anomaly-enricher';
 import { jsonResponse, type RouteHandler } from './_shared';
 
+/**
+ * 응답 직전 anomaly 필드 부여 (anomaly-bloated-sys ADR-003).
+ *
+ * 클라이언트는 본 함수가 채운 `bloated_sys` / `agent_spike` 필드를 그대로 표시한다.
+ * (거울 계산 금지 — `packages/web/assets/js/anomaly.js`)
+ *
+ * SSoT 쌍:
+ *  - packages/server/src/metrics/calculators/anomaly.ts (검출 알고리즘 SSoT)
+ *  - packages/server/src/domain/anomaly-enricher.ts (행 부여 정책)
+ *  - packages/web/assets/js/anomaly.js (표시만 — 계산 폐기)
+ */
 export const requestsRouter: RouteHandler = (_req, db, url, path, method) => {
-  // GET /api/requests — ADR-001: 응답 직전 정규화
+  // GET /api/requests — ADR-001: 응답 직전 정규화 + anomaly 부여 (ADR-003)
   if (path === '/api/requests' && method === 'GET') {
     const limit = parseInt(url.searchParams.get('limit') || '100', 10);
     const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
     const toTs = url.searchParams.get('to') ? parseInt(url.searchParams.get('to')!, 10) : undefined;
     const rawRequests = getAllRequests(db, limit, fromTs, toTs);
-    const requests = normalizeRequests(rawRequests);
+    const requests = enrichWithAnomalies(db, normalizeRequests(rawRequests));
     const p95DurationMs = getP95DurationMs(db, fromTs, toTs);
     return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit, p95DurationMs } });
   }
@@ -42,7 +54,7 @@ export const requestsRouter: RouteHandler = (_req, db, url, path, method) => {
     return jsonResponse({ success: true, data: requests });
   }
 
-  // GET /api/requests/by-type/:type — ADR-001: 응답 직전 정규화
+  // GET /api/requests/by-type/:type — ADR-001: 응답 직전 정규화 + anomaly 부여 (ADR-003)
   if (path.match(/^\/api\/requests\/by-type\/[^\/]+$/) && method === 'GET') {
     const type = path.split('/')[4] as 'prompt' | 'tool_call' | 'system';
     const limit = parseInt(url.searchParams.get('limit') || '100', 10);
@@ -50,7 +62,7 @@ export const requestsRouter: RouteHandler = (_req, db, url, path, method) => {
     const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
     const toTs   = url.searchParams.get('to')   ? parseInt(url.searchParams.get('to')!,   10) : undefined;
     const rawRequests = getRequestsByType(db, type, limit, offset, fromTs, toTs);
-    const requests = normalizeRequests(rawRequests);
+    const requests = enrichWithAnomalies(db, normalizeRequests(rawRequests));
     return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit, offset } });
   }
 

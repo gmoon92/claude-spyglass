@@ -32,6 +32,7 @@ import type { Database } from 'bun:sqlite';
 import { getSessionById, getRequestById } from '@spyglass/storage';
 import { broadcastNewRequest } from '../sse';
 import { normalizeRequest } from '../domain/request-normalizer';
+import { enrichRowWithAnomalies } from '../domain/anomaly-enricher';
 import type { NormalizedHookPayload, HookProcessResult } from './types';
 import { ensureSession, updateSessionTotalTokens } from './session';
 import { saveRequest } from './persist';
@@ -86,12 +87,14 @@ export function processHookEvent(
 
     // SSE 브로드캐스트 — pre_tool은 제외 (미완성 레코드라 UI 중복 노출 방지)
     // ADR-001/002: 저장된 raw 행을 다시 SELECT → 정규화 → 송출 (페이로드 SSoT 단일화)
+    // anomaly-bloated-sys ADR-003: SSE에도 bloated_sys / agent_spike 필드 부여
+    //   (클라이언트는 본 필드를 그대로 표시 — 거울 계산 금지).
     if (payload.event_type !== 'pre_tool') {
       const updatedSession = getSessionById(db, payload.session_id);
       const broadcastId = savedId ?? payload.id;
       const rawRow = getRequestById(db, broadcastId);
       if (rawRow) {
-        const normalized = normalizeRequest(rawRow);
+        const normalized = enrichRowWithAnomalies(db, normalizeRequest(rawRow));
         broadcastNewRequest(normalized, {
           session_total_tokens: updatedSession?.total_tokens ?? payload.tokens_total,
           // Upsert(pre_tool → tool 병합)는 사실상 'updated'지만, 클라가 첫 visible 노출이라

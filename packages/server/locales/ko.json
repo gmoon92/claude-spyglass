@@ -135,7 +135,33 @@
   },
   "cli": {
     "usage": "사용법: bun run packages/server/src/cli.ts doctor [--fix]",
-    "error-prefix": "오류:"
+    "error-prefix": "오류:",
+    "analyze": {
+      "help-header": "spyglass analyze — anomaly 백필 진단·실행 (운영자 수동 트리거)",
+      "help-usage": "사용법: bun run packages/server/src/cli.ts analyze --backfill <date-range> [--dry-run]",
+      "help-options-backfill": "--backfill <date-range>   백필 범위 (예: 2026-05-01:2026-05-18). 양 끝 포함.",
+      "help-options-dry-run": "--dry-run                 실제 UPDATE 미수행. 누락 행 수만 보고.",
+      "help-options-help": "--help, -h                도움말 출력.",
+      "help-targets-header": "대상 (anomaly-bloated-sys ADR-001/002):",
+      "help-targets-1": "1) proxy_requests.system_byte_size — payload 디코드 후 system 정규화로 byte_size 채움",
+      "help-targets-2": "2) requests.parent_tool_use_id     — subagent transcript 재파싱 진단 (실행은 후속 패치)",
+      "error-range-required": "--backfill <date-range> 가 필요합니다.",
+      "header": "spyglass analyze --backfill{dryRun}",
+      "range-label": "  range: {from} ~ {to}",
+      "sys-eligible": "[analyze] system_byte_size 백필 대상: {count} rows",
+      "sys-progress": "[analyze] system_byte_size progress: {done}/{total}",
+      "summary-header": "=== analyze summary{dryRun} ===",
+      "summary-sys-title": "system_byte_size:",
+      "summary-sys-eligible": "  eligible:       {n}",
+      "summary-sys-processed": "  processed:      {n}",
+      "summary-sys-updated": "  updated:        {n}",
+      "summary-sys-decode-err": "  decode_errors:  {n}",
+      "summary-sys-null-system": "  null_system:    {n}",
+      "summary-parent-title": "parent_tool_use_id:",
+      "summary-parent-candidate": "  candidate(NULL): {n}",
+      "summary-parent-applied": "  applied:        {n}  (TODO: transcript 재파싱은 후속 패치 — 신규 수집은 T-07로 자동 정상화)",
+      "summary-dry-run-tail": "actual changes were NOT written. Re-run without --dry-run to apply."
+    }
   },
   "doctor": {
     "title": "🔍 spyglass 환경 검증",

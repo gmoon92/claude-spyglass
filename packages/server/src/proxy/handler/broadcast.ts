@@ -25,6 +25,7 @@ import {
 } from '../../sse';
 import { invalidateDashboardCache } from '../../api';
 import { normalizeRequest } from '../../domain/request-normalizer';
+import { enrichRowWithAnomalies } from '../../domain/anomaly-enricher';
 import type { StreamState } from '../types';
 import type { HandlerContext } from './_shared';
 
@@ -51,7 +52,8 @@ export function broadcastBackfilledRequests(
     for (const id of affectedIds) {
       const rawRow = getRequestById(db, id);
       if (!rawRow) continue;
-      const normalized = normalizeRequest(rawRow);
+      // anomaly-bloated-sys ADR-003: backfill 재송출 페이로드에도 anomaly 필드 부여 일관성 보장.
+      const normalized = enrichRowWithAnomalies(db, normalizeRequest(rawRow));
       broadcastNewRequest(normalized, {
         session_total_tokens: sessionTotalTokens,
         event_phase: 'updated',

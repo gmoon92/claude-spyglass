@@ -198,11 +198,15 @@ export function saveRequest(
  * 서브에이전트 자식 도구 호출들을 requests에 일괄 INSERT (Migration 017).
  *
  * - turn_id는 부모 Agent와 동일 (메인 세션의 같은 turn에 묶임)
- * - parent_tool_use_id는 부모 Agent의 tool_use_id (UI에서 트리 표시 가능)
+ * - parent_tool_use_id 정책 (anomaly-bloated-sys T-07):
+ *   - child.parentToolUseId 가 있으면 그 값(직속 Skill/Task 부모)
+ *   - 없으면 context.parentToolUseId (Agent 자체) 로 폴백
+ *   ⇒ Agent → Skill → Tool 깊이 2~3 트리가 정확히 구성되어
+ *     metrics/calculators/anomaly.ts 의 WITH RECURSIVE(깊이 3) 가 작동.
  * - source='subagent-transcript', event_type='tool'
  * - 중복 방지: 동일 tool_use_id가 이미 존재하면 skip (재실행 안전성)
  *
- * 호출 시점: raw-handler.ts의 PostToolUse + tool_name='Agent' 처리 끝 직후.
+ * 호출 시점: handlers/post-tool-use.handler.ts의 PostToolUse + tool_name='Agent' 처리 끝 직후.
  *
  * @returns 실제로 INSERT된 행 수
  */
@@ -226,6 +230,11 @@ export function persistSubagentChildren(
     // 가지므로, proxy_tool_uses에서 정확한 api_request_id 조회 가능. 미스 시 NULL 유지.
     const childApiRequestId = resolveApiRequestId(db, child.toolUseId);
 
+    // anomaly-bloated-sys T-07: child.parentToolUseId 가 있으면 Skill/Task 직속 부모로 사용,
+    // 없으면 (Skill 이전 형제거나 일반 도구가 transcript 최상위에 등장한 경우) 부모 Agent로 폴백.
+    // 이 폴백 정책이 적용되어 WITH RECURSIVE 깊이 3 (Agent → Skill → Tool) 트리가 일관됨.
+    const resolvedParentToolUseId = child.parentToolUseId ?? context.parentToolUseId;
+
     try {
       createRequest(db, {
         id,
@@ -248,7 +257,7 @@ export function persistSubagentChildren(
         event_type: 'tool',
         tokens_confidence: 'high',
         tokens_source: 'transcript',
-        parent_tool_use_id: context.parentToolUseId,
+        parent_tool_use_id: resolvedParentToolUseId,
         api_request_id: childApiRequestId,
       });
       inserted++;

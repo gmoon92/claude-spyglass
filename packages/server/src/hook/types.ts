@@ -133,6 +133,12 @@ export interface TranscriptUsage {
  * 메인 세션 hook은 PostToolUse 1건만 받지만, Agent tool 내부에서는 N개의 tool_use가 일어남.
  * Migration 017: parent_tool_use_id로 부모 Agent에 매핑하여 같은 turn에 묶는다.
  *
+ * `parentToolUseId` 필드 (anomaly-bloated-sys T-07):
+ *  - 기본값: 부모 Agent의 tool_use_id (호출자가 context로 주입)
+ *  - 자식 tool_use 가 Skill/Task 계열이면 **자기 자신의 tool_use_id**를 후속 형제의 parent로
+ *    승격하여 깊이 ≥ 2 트리를 구성한다. WITH RECURSIVE 깊이 3 검출(T-04)이 정확히 동작하도록.
+ *  - 평범한 tool은 직전 Skill/Task 부모를 그대로 따른다.
+ *
  * @see extractSubagentToolCalls (transcript.ts)
  * @see persistSubagentChildren  (persist.ts)
  */
@@ -146,4 +152,10 @@ export interface SubagentChildToolCall {
   tokensOutput: number;
   cacheCreationTokens: number;
   cacheReadTokens: number;
+  /**
+   * 직속 부모 tool_use_id 추정 — Skill/Task 가 등장하면 그 이후 형제 tool_use가
+   * 본 Skill을 부모로 갖는다(rolling parent). null이면 호출자가 Agent tool_use_id로 폴백.
+   * @since anomaly-bloated-sys (T-07)
+   */
+  parentToolUseId: string | null;
 }

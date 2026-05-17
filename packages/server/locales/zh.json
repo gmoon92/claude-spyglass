@@ -135,7 +135,33 @@
   },
   "cli": {
     "usage": "用法: bun run packages/server/src/cli.ts doctor [--fix]",
-    "error-prefix": "错误:"
+    "error-prefix": "错误:",
+    "analyze": {
+      "help-header": "spyglass analyze — anomaly 回填诊断/执行 (运维者手动触发)",
+      "help-usage": "用法: bun run packages/server/src/cli.ts analyze --backfill <date-range> [--dry-run]",
+      "help-options-backfill": "--backfill <date-range>   回填范围 (例: 2026-05-01:2026-05-18). 两端包含.",
+      "help-options-dry-run": "--dry-run                 不执行实际 UPDATE, 仅报告候选行数.",
+      "help-options-help": "--help, -h                显示帮助.",
+      "help-targets-header": "对象 (anomaly-bloated-sys ADR-001/002):",
+      "help-targets-1": "1) proxy_requests.system_byte_size — payload 解码 + system 规范化, 填充 byte_size",
+      "help-targets-2": "2) requests.parent_tool_use_id     — subagent transcript 重新解析诊断 (执行将在后续 patch)",
+      "error-range-required": "需要 --backfill <date-range>.",
+      "header": "spyglass analyze --backfill{dryRun}",
+      "range-label": "  range: {from} ~ {to}",
+      "sys-eligible": "[analyze] system_byte_size 回填候选: {count} rows",
+      "sys-progress": "[analyze] system_byte_size 进度: {done}/{total}",
+      "summary-header": "=== analyze summary{dryRun} ===",
+      "summary-sys-title": "system_byte_size:",
+      "summary-sys-eligible": "  eligible:       {n}",
+      "summary-sys-processed": "  processed:      {n}",
+      "summary-sys-updated": "  updated:        {n}",
+      "summary-sys-decode-err": "  decode_errors:  {n}",
+      "summary-sys-null-system": "  null_system:    {n}",
+      "summary-parent-title": "parent_tool_use_id:",
+      "summary-parent-candidate": "  candidate(NULL): {n}",
+      "summary-parent-applied": "  applied:        {n}  (TODO: transcript 重新解析将在后续 patch — 新数据通过 T-07 自动规范化)",
+      "summary-dry-run-tail": "actual changes were NOT written. Re-run without --dry-run to apply."
+    }
   },
   "doctor": {
     "title": "🔍 spyglass 环境检查",

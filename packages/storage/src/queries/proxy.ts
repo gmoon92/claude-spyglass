@@ -603,3 +603,49 @@ export function backfillRequestApiRequestIdByToolUse(
   );
   return (result?.changes as number) ?? 0;
 }
+
+// =============================================================================
+// anomaly-bloated-sys (Migration 033/034) — system context 메타 조회
+// =============================================================================
+
+/**
+ * 세션의 최대 system_byte_size + 모델 + beta + project_name 조회 (anomaly-bloated-sys).
+ *
+ * 사용처:
+ *   - T-05 routes/requests.ts: 첫 prompt 행에 bloated_sys 필드를 채우기 전,
+ *     해당 세션의 system 본문 크기(최댓값)를 추정한다. 같은 세션 내 다수 proxy 행 중
+ *     `system_byte_size`가 가장 큰 행을 채택 — 보통 system 본문은 세션 내 동일이지만
+ *     중간에 늘어났다면 critical을 더 정확히 잡기 위해 max 사용.
+ *
+ *   - T-08 CLI 백필 진단: 누락 행 식별.
+ *
+ * @returns 후보 없으면 null
+ */
+export function getSessionSystemContextMeta(
+  db: Database,
+  sessionId: string,
+): {
+  system_byte_size: number;
+  model: string | null;
+  anthropic_beta: string | null;
+  project_name: string | null;
+} | null {
+  const row = db.query<{
+    system_byte_size: number;
+    model: string | null;
+    anthropic_beta: string | null;
+    project_name: string | null;
+  }, [string]>(
+    `SELECT p.system_byte_size  AS system_byte_size,
+            p.model             AS model,
+            p.anthropic_beta    AS anthropic_beta,
+            s.project_name      AS project_name
+       FROM proxy_requests p
+       LEFT JOIN sessions s ON s.id = p.session_id
+      WHERE p.session_id = ?
+        AND p.system_byte_size IS NOT NULL
+      ORDER BY p.system_byte_size DESC, p.timestamp DESC
+      LIMIT 1`,
+  ).get(sessionId);
+  return row ?? null;
+}
