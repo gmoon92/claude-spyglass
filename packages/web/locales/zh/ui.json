@@ -312,6 +312,9 @@
     "local-changes-error": "存在本地更改，请先 commit 或 stash 后再试。",
     "update-failed": "更新失败。",
     "success": "更新完成。请在终端执行 bun run dev 以重启。",
+    "restarting": "更新完成，正在重启服务器…",
+    "restart-complete": "重启完成，正在重新加载页面…",
+    "restart-timeout": "服务器未恢复，请手动刷新页面。",
     "network-error": "网络错误：{message}",
     "update-request-failed": "更新请求失败"
   },

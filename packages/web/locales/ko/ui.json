@@ -312,6 +312,9 @@
     "local-changes-error": "로컬 변경이 있습니다. commit 또는 stash 후 다시 시도하세요.",
     "update-failed": "업데이트에 실패했습니다.",
     "success": "업데이트 완료. 터미널에서 bun run dev로 재시작하세요.",
+    "restarting": "업데이트 완료. 서버를 재시작합니다…",
+    "restart-complete": "재시작 완료. 페이지를 새로고침합니다…",
+    "restart-timeout": "서버가 돌아오지 않습니다. 페이지를 수동으로 새로고침해 주세요.",
     "network-error": "네트워크 오류: {message}",
     "update-request-failed": "업데이트 요청 실패"
   },

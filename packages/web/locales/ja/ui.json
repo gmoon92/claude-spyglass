@@ -312,6 +312,9 @@
     "local-changes-error": "ローカルに変更があります。commit または stash してから再試行してください。",
     "update-failed": "アップデートに失敗しました。",
     "success": "アップデート完了。ターミナルで bun run dev を実行して再起動してください。",
+    "restarting": "アップデート完了。サーバーを再起動しています…",
+    "restart-complete": "再起動完了。ページを再読み込みします…",
+    "restart-timeout": "サーバーが復帰しませんでした。手動でページを再読み込みしてください。",
     "network-error": "ネットワークエラー: {message}",
     "update-request-failed": "アップデートリクエスト失敗"
   },

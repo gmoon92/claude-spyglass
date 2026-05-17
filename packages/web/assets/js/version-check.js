@@ -209,15 +209,56 @@ async function doUpdate() {
     cache = json.data;
     els.currentVersion.textContent = cache.currentVersion ?? '—';
     els.latestVersion.textContent = cache.latestTag ?? '—';
-    showSuccess(window.I18n.t('ui.version-check.success'));
     els.actions.hidden = true;
+    setLoading(false);
     // update-badge-dual-state: 업데이트 성공 후엔 배지를 숨기지 않고 latest 상태로 전환 —
     // 사용자는 "이제 내 빌드가 최신"이라는 즉시 피드백을 받는다.
     applyBadgeState('latest', cache);
+
+    // 서버가 자동 재시작을 예고했으면 polling으로 부활 감지 후 자동 새로고침.
+    if (cache?.restarting) {
+      showSuccess(tSafe('ui.version-check.restarting', null, 'Update complete. Restarting server…'));
+      waitForServerAndReload();
+    } else {
+      showSuccess(window.I18n.t('ui.version-check.success'));
+    }
   } catch (err) {
     showError(window.I18n.t('ui.version-check.network-error', { message: err.message || window.I18n.t('ui.version-check.update-request-failed') }));
     setLoading(false);
   }
+}
+
+/**
+ * 서버 자동 재시작 흐름:
+ *  1) /api/update 응답에 restarting:true 가 오면 호출.
+ *  2) 1초 후부터 /api/version 을 1초 간격으로 폴링.
+ *  3) 응답이 정상으로 돌아오면 "재시작 완료" 메시지 후 1초 뒤 location.reload().
+ *  4) 최대 30회(약 30초) 시도 — 그래도 안 깨어나면 수동 안내.
+ */
+function waitForServerAndReload() {
+  let attempts = 0;
+  const maxAttempts = 30;
+
+  const tick = async () => {
+    attempts += 1;
+    try {
+      const res = await fetch(`${API}/api/version`, { signal: AbortSignal.timeout(2000) });
+      if (res.ok) {
+        showSuccess(tSafe('ui.version-check.restart-complete', null, 'Restart complete. Reloading…'));
+        setTimeout(() => window.location.reload(), 800);
+        return;
+      }
+    } catch {
+      // 재시작 중이라 연결 거부 — 정상. 다시 시도.
+    }
+    if (attempts >= maxAttempts) {
+      showError(tSafe('ui.version-check.restart-timeout', null, 'Server did not come back. Please reload manually.'));
+      return;
+    }
+    setTimeout(tick, 1000);
+  };
+
+  setTimeout(tick, 1000);
 }
 
 export function initVersionCheck() {

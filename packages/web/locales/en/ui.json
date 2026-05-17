@@ -312,6 +312,9 @@
     "local-changes-error": "You have local changes. Commit or stash them and try again.",
     "update-failed": "Update failed.",
     "success": "Update complete. Restart with bun run dev in your terminal.",
+    "restarting": "Update complete. Restarting server…",
+    "restart-complete": "Restart complete. Reloading page…",
+    "restart-timeout": "Server did not come back. Please reload the page manually.",
     "network-error": "Network error: {message}",
     "update-request-failed": "Update request failed"
   },
