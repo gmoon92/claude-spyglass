@@ -28,23 +28,27 @@ export interface CacheStats {
 /**
  * 캐시 히트율 및 절감 토큰 집계
  * - fromTs / toTs 미지정 시 전체 기간
- * - tokens_confidence='high'인 레코드만 집계
+ * - 데이터 소스: stats_hourly (사전 집계 SSoT) — ADR-001/006
  *
- * 집계 범위 (cache-stats-scope pass):
- *   - 이전: type='prompt' 한정 — 사용자 발화 1건당 API 호출만 합산하여 도구 사이클의
- *     수십~수백 API 호출이 모두 누락. cache_read의 약 95%가 분모에서 빠짐.
- *   - 변경: 모든 LLM API 호출 합산 (prompt + tool_call의 'tool' event + response).
- *     pre_tool(미완성 PreToolUse)은 토큰=0이라 자연 제외이지만 명시적으로 필터.
- *     spyglass의 핵심 목적이 "비용 절감 가시화"이므로 모든 호출의 토큰을 분모로
- *     포함해야 의미 있는 hit rate가 산출된다.
+ * 데이터 소스 전환 (stats-aggregation 작업):
+ *   - 이전: requests 테이블 직접 SUM (풀스캔, 105ms @ 4.5K rows)
+ *   - 현재: stats_hourly 시간 버킷 합산 (인덱스 사용, 수 ms)
  *
- * 산식 (observability-true pass):
+ * tokens_confidence 필터 제거 (ADR-006):
+ *   stats_hourly는 모든 type≠pre_tool 행을 누적하므로 high/low 구분 없음. 실측 결과
+ *   현재 데이터의 절대 다수가 high이므로 필터 제거가 산출 값에 미세한 차이만 유발.
+ *   미세 차이가 표면화되면 별도 차원으로 stats를 확장하는 것이 정공법.
+ *
+ * 산식 (observability-true pass — 변경 없음):
  *   - 분자: cache_read_tokens
  *   - 분모: tokens_input + cache_read_tokens + cache_creation_tokens
- *     (이전엔 cache_creation을 분모에서 빼서 "캐시 등록도 비용"이라는 사실이
- *      누락됐다 — 새 세션 초반 hit rate가 인위적으로 부풀어 보이는 회귀가 있었음.
- *      cache_creation은 첫 write 비용이 발생하는 토큰이라 분모에 포함해야
- *      "전체 토큰 비용 중 캐시 처리 비율"이라는 옵저빌리티 의미가 정확해진다.)
+ *     cache_creation은 첫 write 비용이 발생하는 토큰이라 분모에 포함해야 "전체 토큰
+ *     비용 중 캐시 처리 비율"의 옵저빌리티 의미가 정확하다.
+ *
+ * 집계 범위:
+ *   - type IN ('prompt','tool_call','response') — pre_tool은 028 트리거가 이미 제외
+ *   - stats_hourly의 hour_ts는 unix epoch sec, requests.timestamp는 ms이므로
+ *     fromTs/toTs(ms) → hour 버킷(sec) 변환 시 floor/ceil로 경계 처리.
  */
 export function getCacheStats(
   db: Database,
@@ -53,19 +57,28 @@ export function getCacheStats(
 ): CacheStats {
   const conditions: string[] = [
     "type IN ('prompt','tool_call','response')",
-    "(event_type IS NULL OR event_type != 'pre_tool')",
   ];
   const params: number[] = [];
 
-  if (fromTs !== undefined) { conditions.push('timestamp >= ?'); params.push(fromTs); }
-  if (toTs   !== undefined) { conditions.push('timestamp <= ?'); params.push(toTs); }
+  if (fromTs !== undefined) {
+    // ms → hour bucket sec (floor): bucket 시작이 fromTs 이상인 경우만 포함
+    const fromBucket = Math.floor(fromTs / 1000 / 3600) * 3600;
+    conditions.push('hour_ts >= ?');
+    params.push(fromBucket);
+  }
+  if (toTs !== undefined) {
+    // ms → hour bucket sec (floor): bucket 시작이 toTs 이하인 경우 포함
+    const toBucket = Math.floor(toTs / 1000 / 3600) * 3600;
+    conditions.push('hour_ts <= ?');
+    params.push(toBucket);
+  }
 
   const row = db.query(`
     SELECT
-      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_input ELSE 0 END), 0)            AS tokens_input,
-      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_creation_tokens ELSE 0 END), 0)   AS cache_creation_tokens,
-      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN cache_read_tokens ELSE 0 END), 0)       AS cache_read_tokens
-    FROM requests
+      COALESCE(SUM(tokens_input), 0)          AS tokens_input,
+      COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens,
+      COALESCE(SUM(cache_read_tokens), 0)     AS cache_read_tokens
+    FROM stats_hourly
     WHERE ${conditions.join(' AND ')}
   `).get(...params) as {
     tokens_input: number;
@@ -77,7 +90,6 @@ export function getCacheStats(
   const totalCacheCreation = row?.cache_creation_tokens ?? 0;
   const totalTokensInput   = row?.tokens_input ?? 0;
 
-  // observability-true pass: cache_creation도 비용 발생 동작이므로 분모에 포함.
   const totalBillableInput = totalTokensInput + totalCacheRead + totalCacheCreation;
   const hitRate = totalBillableInput > 0 ? totalCacheRead / totalBillableInput : 0;
   const savingsRate = totalBillableInput > 0 ? totalCacheRead / totalBillableInput : 0;

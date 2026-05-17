@@ -48,9 +48,15 @@ export function getBurnRateBuckets(
 /**
  * Cache Trend — 1시간 버킷 hit_rate + 절감 토큰
  *
- * - prompt 레코드 기준, tokens_confidence='high'만
- * - hit_rate = cache_read / (tokens_input + cache_read), denom=0이면 null
- * - 빈 버킷은 응답 단계에서 0으로 채운다
+ * 데이터 소스: stats_hourly (사전 집계 SSoT) — ADR-001/006.
+ * 변경 (stats-aggregation 작업):
+ *   - 이전: requests 직접 GROUP BY (풀스캔)
+ *   - 현재: stats_hourly에서 type='prompt' 행을 hour_ts 기준으로 합산 (인덱스 사용)
+ *   - tokens_confidence='high' 필터 제거 (ADR-006). 실측상 대다수가 high라 미세 차이.
+ *
+ * API 응답 shape 보존:
+ *   - hour_ts는 ms 단위로 유지 (stats_hourly는 sec → ×1000)
+ *   - hit_rate 산식 변경 없음: cache_read / (tokens_input + cache_read)
  */
 export function getCacheTrendBuckets(
   db: Database,
@@ -58,22 +64,29 @@ export function getCacheTrendBuckets(
   toTs?: number
 ): CacheTrendBucketRow[] {
   const params: number[] = [];
-  const conds = ["type = 'prompt'", "tokens_confidence = 'high'"];
-  conds.push(...buildTimeWindow('timestamp', fromTs, toTs, params));
+  const conds = ["type = 'prompt'"];
+  // stats_hourly의 hour_ts는 unix epoch sec, 입력 fromTs/toTs는 ms이므로 변환
+  if (fromTs !== undefined) {
+    conds.push('hour_ts >= ?');
+    params.push(Math.floor(fromTs / 1000 / 3600) * 3600);
+  }
+  if (toTs !== undefined) {
+    conds.push('hour_ts <= ?');
+    params.push(Math.floor(toTs / 1000 / 3600) * 3600);
+  }
 
-  // .all()은 unknown[]을 반환하므로 raw row 타입을 명시적으로 cast 후 map
   const rawRows = db.query(`
     SELECT
-      (CAST(timestamp / 3600000 AS INTEGER) * 3600000)  AS hour_ts,
-      COALESCE(SUM(tokens_input), 0)                    AS total_input,
-      COALESCE(SUM(cache_read_tokens), 0)               AS cache_read,
-      COALESCE(SUM(cache_creation_tokens), 0)           AS cache_create
-    FROM requests
+      hour_ts                                   AS hour_ts_sec,
+      COALESCE(SUM(tokens_input), 0)            AS total_input,
+      COALESCE(SUM(cache_read_tokens), 0)       AS cache_read,
+      COALESCE(SUM(cache_creation_tokens), 0)   AS cache_create
+    FROM stats_hourly
     WHERE ${conds.join(' AND ')}
     GROUP BY hour_ts
     ORDER BY hour_ts ASC
   `).all(...params) as Array<{
-    hour_ts: number;
+    hour_ts_sec: number;
     total_input: number;
     cache_read: number;
     cache_create: number;
@@ -83,7 +96,7 @@ export function getCacheTrendBuckets(
     const denom = r.total_input + r.cache_read;
     const hit_rate = denom > 0 ? r.cache_read / denom : null;
     return {
-      hour_ts: r.hour_ts,
+      hour_ts: r.hour_ts_sec * 1000, // sec → ms 변환 (응답 shape 보존)
       hit_rate: hit_rate !== null ? Math.round(hit_rate * 10_000) / 10_000 : null,
       savings_tokens: r.cache_read,
     };

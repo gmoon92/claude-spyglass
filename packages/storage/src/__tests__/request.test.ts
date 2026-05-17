@@ -226,7 +226,8 @@ describe('Request CRUD', () => {
       expect(stats.total_tokens_output).toBe(160);
       expect(stats.total_tokens).toBe(480);
       expect(stats.avg_tokens_per_request).toBe(160);
-      expect(stats.avg_duration_ms).toBe(1166.67);
+      // (1000+500+2000)/3 = 1166.666... — 부동소수점 정밀도 허용
+      expect(stats.avg_duration_ms).toBeCloseTo(1166.67, 2);
     });
 
     it('should get session request statistics', () => {

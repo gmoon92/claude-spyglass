@@ -50,9 +50,18 @@ const DEFAULT_OPTIONS: Required<ConnectionOptions> = {
 /**
  * spyglass 전용 Database 인스턴스
  */
+/**
+ * 생성된 모든 인스턴스를 추적해 `closeDatabase()` 호출 시 일괄 정리한다.
+ * 테스트 fixture가 `new SpyglassDatabase(...)`로 직접 인스턴스를 만들고 closeDatabase()를
+ * 호출하는 패턴에서, globalInstance 외 인스턴스가 미닫힘 상태로 남아 -wal/-shm 잔존
+ * → 다음 같은 경로 재오픈 시 disk I/O error를 일으키는 문제를 차단.
+ */
+const trackedInstances = new Set<SpyglassDatabase>();
+
 export class SpyglassDatabase {
   private db: Database;
   private options: Required<ConnectionOptions>;
+  private closed: boolean = false;
 
   constructor(options: ConnectionOptions = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
@@ -76,6 +85,8 @@ export class SpyglassDatabase {
 
     // 파일 권한 강화 (스키마 초기화 후)
     this.applyFilePermissions();
+
+    trackedInstances.add(this);
 
     if (this.options.debug) {
       console.log(`[SpyglassDB] Connected: ${this.options.dbPath}`);
@@ -194,9 +205,19 @@ export class SpyglassDatabase {
     return this.db;
   }
 
-  /** 연결 종료 */
+  /** 연결 종료 (멱등) */
   close(): void {
+    if (this.closed) return;
+    // close 전에 WAL을 main DB로 강제 체크포인트하여 -wal/-shm 잔존이 다음 같은 경로
+    // 재오픈을 깨뜨리는 disk I/O error를 차단한다 (특히 테스트 fixture가 unlink만 하는 경우).
+    try {
+      this.db.prepare('PRAGMA wal_checkpoint(TRUNCATE);').run();
+    } catch {
+      // 이미 닫혔거나 WAL 모드 아니면 무시
+    }
     this.db.close();
+    this.closed = true;
+    trackedInstances.delete(this);
     if (this.options.debug) {
       console.log(`[SpyglassDB] Closed: ${this.options.dbPath}`);
     }
@@ -207,8 +228,16 @@ export class SpyglassDatabase {
     this.db.prepare('PRAGMA wal_checkpoint(TRUNCATE);').run();
   }
 
-  /** 데이터베이스 상태 정보 */
+  /** 데이터베이스 상태 정보 — close 후 호출해도 안전 (isOpen:false 반환) */
   getStatus(): DatabaseStatus {
+    if (this.closed) {
+      return {
+        path: this.options.dbPath,
+        journalMode: 'closed',
+        walSize: 0,
+        isOpen: false,
+      };
+    }
     const journalMode = this.db.query("PRAGMA journal_mode;").get() as { journal_mode: string };
     const walSize = this.db.query("PRAGMA wal_checkpoint;").get() as
       | { busy: number; log: number; checkpointed: number }
@@ -251,12 +280,15 @@ export function getDatabase(options?: ConnectionOptions): SpyglassDatabase {
 }
 
 /**
- * 데이터베이스 연결 종료
+ * 데이터베이스 연결 종료. globalInstance뿐 아니라 직접 `new`로 만든 모든 인스턴스도 정리.
  */
 export function closeDatabase(): void {
   if (globalInstance) {
     globalInstance.close();
     globalInstance = null;
+  }
+  for (const instance of [...trackedInstances]) {
+    instance.close();
   }
 }
 

@@ -6,6 +6,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
+import { rebuildStatsHourly } from '../stats/build-aggregate';
 
 /**
  * 보관 기간이 지난 데이터 전체 삭제 (일일 유지보수용)
@@ -18,6 +19,9 @@ import type { Database } from 'bun:sqlite';
  *  4. sessions       — started_at 기준, 단 오늘 이후 자식이 남아있는 세션은 보존
  *                      (requests/claude_events/proxy_requests 모두 소진된 세션만 삭제)
  *  5. system_prompts — last_seen_at 기준, 살아있는 proxy_requests가 참조하지 않는 행만
+ *  6. stats_hourly  — requests 대량 DELETE로 인한 stats 오염을 보정 (ADR-004).
+ *                      AFTER DELETE 트리거를 두지 않는 대신, retention 직후 영향 받은
+ *                      hour 버킷 범위만 재집계한다.
  *
  * @returns 삭제된 sessions 행 수
  */
@@ -59,6 +63,13 @@ export function deleteOldData(db: Database, beforeTimestamp: number): number {
        )`,
     beforeTimestamp
   );
+
+  // 6. stats_hourly: cutoff 이전의 hour 버킷을 모두 삭제. 트리거가 없으므로 retention
+  //    이후 stats가 실제 requests와 어긋날 수 있고, 이를 즉시 보정한다 (ADR-004).
+  const cutoffHourTs = Math.floor(beforeTimestamp / 1000 / 3600) * 3600;
+  run('DELETE FROM stats_hourly WHERE hour_ts < ?', cutoffHourTs);
+  // 경계 hour 버킷(요청 일부 삭제·일부 잔존)은 잔여 행을 다시 집계해 정확도를 맞춘다.
+  rebuildStatsHourly(db, { sinceTs: cutoffHourTs, truncate: true });
 
   return changes;
 }

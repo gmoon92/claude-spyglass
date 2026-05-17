@@ -11,9 +11,7 @@ import {
   createSession,
   createSessions,
   getSessionById,
-  getAllSessions,
   getSessionsWithFilter,
-  getSessionsByProject,
   getActiveSessions,
   updateSession,
   endSession,
@@ -66,7 +64,10 @@ describe('Session CRUD', () => {
       const ids = createSessions(db.instance, sessions);
       expect(ids).toHaveLength(3);
 
-      const allSessions = getAllSessions(db.instance);
+      // getAllSessions는 visible 필터를 적용(`HAVING last_activity_at IS NOT NULL`)하므로
+      // requests가 없는 세션은 invisible이다. 본 테스트는 sessions 테이블 INSERT 검증이
+      // 목적이므로 getSessionsWithFilter(원시 SELECT)를 사용한다.
+      const allSessions = getSessionsWithFilter(db.instance, {});
       expect(allSessions).toHaveLength(3);
     });
   });
@@ -94,7 +95,9 @@ describe('Session CRUD', () => {
     });
 
     it('should get all sessions ordered by started_at DESC', () => {
-      const sessions = getAllSessions(db.instance);
+      // getAllSessions/getSessionsByProject는 visible 필터 적용. 본 테스트는 sessions
+      // 테이블 정렬 검증이 목적이므로 원시 SELECT를 쓰는 getSessionsWithFilter 사용.
+      const sessions = getSessionsWithFilter(db.instance, {});
       expect(sessions).toHaveLength(3);
       expect(sessions[0].id).toBe('session-3');
       expect(sessions[1].id).toBe('session-2');
@@ -102,7 +105,7 @@ describe('Session CRUD', () => {
     });
 
     it('should filter sessions by project', () => {
-      const sessions = getSessionsByProject(db.instance, 'project-a');
+      const sessions = getSessionsWithFilter(db.instance, { project_name: 'project-a' });
       expect(sessions).toHaveLength(2);
       expect(sessions.every(s => s.project_name === 'project-a')).toBe(true);
     });
@@ -197,7 +200,8 @@ describe('Session CRUD', () => {
       const count = deleteSessions(db.instance, ['delete-1', 'delete-2']);
       expect(count).toBe(2);
 
-      const allSessions = getAllSessions(db.instance);
+      // getAllSessions는 visible 필터 적용. 테이블 잔여 행 검증이므로 원시 SELECT 사용.
+      const allSessions = getSessionsWithFilter(db.instance, {});
       expect(allSessions).toHaveLength(1);
     });
 
@@ -205,7 +209,7 @@ describe('Session CRUD', () => {
       const count = deleteOldSessions(db.instance, Date.now() + 1000);
       expect(count).toBe(3);
 
-      const allSessions = getAllSessions(db.instance);
+      const allSessions = getSessionsWithFilter(db.instance, {});
       expect(allSessions).toHaveLength(0);
     });
   });

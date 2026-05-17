@@ -66,7 +66,10 @@ export function getStripStats(
     SELECT
       COUNT(*) AS total,
       SUM(CASE
-        WHEN tool_detail LIKE '%[오류]%' OR tool_detail LIKE '%error%'
+        WHEN LOWER(tool_detail) LIKE '%error%'
+           OR tool_detail LIKE '%[오류]%'
+           OR tool_detail LIKE '%エラー%'
+           OR tool_detail LIKE '%错误%'
         THEN 1 ELSE 0
       END) AS errors
     FROM requests

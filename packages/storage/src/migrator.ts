@@ -29,6 +29,43 @@ import type { Database } from 'bun:sqlite';
 const MIGRATIONS_DIR = join(import.meta.dir, '..', 'migrations');
 
 /**
+ * SQL 문을 statement 단위로 분리.
+ *
+ * 단순 `split(';')`은 `CREATE TRIGGER ... BEGIN ... END;` 같은 복합문
+ * 내부 세미콜론까지 분리해 SQL을 깨뜨린다. 본 함수는 `BEGIN ... END;`
+ * 블록을 placeholder로 치환해 보존한 뒤 split하고 다시 복원한다.
+ *
+ *   1) 라인 주석(`--...`) 제거
+ *   2) `BEGIN ... END;` 블록을 정규식으로 추출 → placeholder 치환
+ *   3) 나머지 텍스트를 `split(';')`로 분리
+ *   4) 각 statement에서 placeholder를 원본 블록으로 복원
+ */
+function splitSqlStatements(sql: string): string[] {
+  const cleaned = sql.replace(/--[^\n]*/g, '');
+  const triggerBlocks: string[] = [];
+  const placeholderPrefix = '___SPYGLASS_TRG_';
+  const placeholderSuffix = '___';
+
+  // `;`는 placeholder 밖에 남겨야 split이 정상 분리한다. lookahead로 종료 세미콜론을
+  // 매칭만 하고 캡처에는 포함하지 않는다 — placeholder는 `BEGIN…END`까지만 보존.
+  const transformed = cleaned.replace(/BEGIN\s+[\s\S]*?\s+END(?=\s*;)/gi, (match) => {
+    const idx = triggerBlocks.length;
+    triggerBlocks.push(match);
+    return `${placeholderPrefix}${idx}${placeholderSuffix}`;
+  });
+
+  const stmts = transformed
+    .split(';')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  const placeholderRe = new RegExp(`${placeholderPrefix}(\\d+)${placeholderSuffix}`, 'g');
+  return stmts.map((stmt) =>
+    stmt.replace(placeholderRe, (_full, idx) => triggerBlocks[parseInt(idx, 10)])
+  );
+}
+
+/**
  * 파일 기반 마이그레이션 실행
  *
  * @param db Bun SQLite Database 인스턴스
@@ -94,12 +131,8 @@ export function runMigrations(db: Database, debug: boolean = false): void {
           console.log(`[migrator] Applying ${file}...`);
         }
 
-        // 파일 내용 실행 (주석 제거 후 세미콜론 분리)
-        const stmts = sql
-          .replace(/--[^\n]*/g, '')
-          .split(';')
-          .map(s => s.trim())
-          .filter(s => s.length > 0);
+        // 파일 내용 실행 (트리거 BEGIN…END; 블록을 보존하며 분리)
+        const stmts = splitSqlStatements(sql);
 
         // PRAGMA가 아닌 DDL/DML은 트랜잭션으로 감싸기
         const nonPragmaStmts = stmts.filter(s => !s.toUpperCase().startsWith('PRAGMA'));

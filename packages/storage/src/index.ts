@@ -166,6 +166,17 @@ export {
 export { getMetadata, setMetadata } from './queries/metadata';
 
 // =============================================================================
+// Proxy 통계 (proxy-hourly — stats_proxy_hourly 사전 집계 기반)
+// =============================================================================
+
+export {
+  getProxyHourlyStats,
+  getProxyHourlyStatsByModel,
+  type ProxyHourlyStats,
+  type ProxyHourlyStatsByModel,
+} from './queries/proxy-stats';
+
+// =============================================================================
 // ClaudeEvent CRUD
 // =============================================================================
 
