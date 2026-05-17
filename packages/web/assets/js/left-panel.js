@@ -112,7 +112,7 @@ function renderMetaGlobalRow() {
   const t = window.I18n?.t ?? ((k) => k);
   return `<tr class="clickable cell-proj-global${isSelected ? ' row-selected' : ''}" data-project="${GLOBAL_PROJECT_KEY}"
               title="${t('ui.left-panel.global-row-title')}">
-    <td class="cell-proj-name">user <span class="cell-proj-global-tag">global</span></td>
+    <td class="cell-proj-name"><span class="cell-proj-global-tag">global</span></td>
     <td class="num cell-proj-meta-count" style="text-align:right">${fmt(total)}</td>
     <td class="cell-proj-meta-spacer"></td>
   </tr>`;

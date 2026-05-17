@@ -252,6 +252,41 @@
            meta-docs-view.js가 동적으로 내용 채움. -->
       <div class="meta-docs-summary-cards" id="metaDocsSummaryCards" hidden></div>
 
+      <!-- metadocs 모드 전용: 툴 사용 랭킹(cardToolCategories) 영역.
+           기존엔 obsPanel 4번째 카드였으나, metadocs(Behavior Definitions) 모드의
+           "도구 통계" 맥락으로 이전. browse 모드에서는 숨김.
+           - 별도 컨테이너인 이유: #metaDocsSummaryCards 는 renderLeftSummaryCards()가
+             innerHTML로 매번 덮어쓰므로 그 안에 정적 카드를 두면 사라짐.
+           - obs-panel.js renderToolCategoriesCard()는 id로 찾으므로 위치만 바뀜. -->
+      <div class="meta-docs-tool-stats" id="metaDocsToolStats" hidden>
+        <div class="obs-panel">
+          <article class="obs-card obs-card--tools" id="cardToolCategories" data-obs-tooltip="tool-categories" data-skeleton="1">
+            <div class="obs-card-tools">
+              <div class="obs-cat-row">
+                <span class="obs-cat-name"><span class="sk sk-line sk-line--sm" style="width:60%"></span></span>
+                <div class="obs-cat-bar"><span class="sk sk-bar" style="width:75%"></span></div>
+                <span class="obs-cat-pct"><span class="sk sk-line sk-line--inline" style="width:30px"></span></span>
+              </div>
+              <div class="obs-cat-row">
+                <span class="obs-cat-name"><span class="sk sk-line sk-line--sm" style="width:50%"></span></span>
+                <div class="obs-cat-bar"><span class="sk sk-bar" style="width:55%"></span></div>
+                <span class="obs-cat-pct"><span class="sk sk-line sk-line--inline" style="width:28px"></span></span>
+              </div>
+              <div class="obs-cat-row">
+                <span class="obs-cat-name"><span class="sk sk-line sk-line--sm" style="width:55%"></span></span>
+                <div class="obs-cat-bar"><span class="sk sk-bar" style="width:42%"></span></div>
+                <span class="obs-cat-pct"><span class="sk sk-line sk-line--inline" style="width:26px"></span></span>
+              </div>
+              <div class="obs-cat-row">
+                <span class="obs-cat-name"><span class="sk sk-line sk-line--sm" style="width:48%"></span></span>
+                <div class="obs-cat-bar"><span class="sk sk-bar" style="width:30%"></span></div>
+                <span class="obs-cat-pct"><span class="sk sk-line sk-line--inline" style="width:24px"></span></span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+
       <div class="panel-section flex-section" id="browserSessionsSection">
         <div class="panel-header">
           <span class="panel-label" data-i18n="ui.html.session-panel.label">Sessions</span>
@@ -296,30 +331,6 @@
               <span class="obs-card-trend"><span class="sk sk-line sk-line--inline" style="width:30px"></span></span>
               <span class="obs-card-sub"><span class="sk sk-line" style="width:68%;height:9px"></span></span>
               <span class="obs-card-spark"><span class="sk sk-block" style="width:76px;height:24px"></span></span>
-            </article>
-            <article class="obs-card obs-card--tools" id="cardToolCategories" data-obs-tooltip="tool-categories" data-skeleton="1">
-              <div class="obs-card-tools">
-                <div class="obs-cat-row">
-                  <span class="obs-cat-name"><span class="sk sk-line sk-line--sm" style="width:60%"></span></span>
-                  <div class="obs-cat-bar"><span class="sk sk-bar" style="width:75%"></span></div>
-                  <span class="obs-cat-pct"><span class="sk sk-line sk-line--inline" style="width:30px"></span></span>
-                </div>
-                <div class="obs-cat-row">
-                  <span class="obs-cat-name"><span class="sk sk-line sk-line--sm" style="width:50%"></span></span>
-                  <div class="obs-cat-bar"><span class="sk sk-bar" style="width:55%"></span></div>
-                  <span class="obs-cat-pct"><span class="sk sk-line sk-line--inline" style="width:28px"></span></span>
-                </div>
-                <div class="obs-cat-row">
-                  <span class="obs-cat-name"><span class="sk sk-line sk-line--sm" style="width:55%"></span></span>
-                  <div class="obs-cat-bar"><span class="sk sk-bar" style="width:42%"></span></div>
-                  <span class="obs-cat-pct"><span class="sk sk-line sk-line--inline" style="width:26px"></span></span>
-                </div>
-                <div class="obs-cat-row">
-                  <span class="obs-cat-name"><span class="sk sk-line sk-line--sm" style="width:48%"></span></span>
-                  <div class="obs-cat-bar"><span class="sk sk-bar" style="width:30%"></span></div>
-                  <span class="obs-cat-pct"><span class="sk sk-line sk-line--inline" style="width:24px"></span></span>
-                </div>
-              </div>
             </article>
           </div>
         </div>

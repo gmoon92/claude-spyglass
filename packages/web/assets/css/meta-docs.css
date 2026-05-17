@@ -636,13 +636,13 @@ body[data-app-mode="metadocs"] #panelVerticalHandleBottom {
   display: none;
 }
 
-/* metadocs 모드 — left-panel grid를 5-row로 재정의 (update-badge-fix ADR-002):
+/* metadocs 모드 — left-panel grid를 6-row로 재정의 (update-badge-fix ADR-002 + tool-stats-relocate):
      1) #browserProjectsSection : var(--projects-panel-height, 220px)  — 트랙 고정 → 자식 콘텐츠가 작아도 트랙이 작아지지 않음 (최소 3행 노출 보장)
      2) #panelVerticalHandle    : auto (8px)
      3) #metaDocsSummaryCards   : auto — 요약 카드는 콘텐츠 높이만 차지 (가로 1줄)
-     4) (빈 filler 트랙)         : 1fr — 남는 세로 공간 흡수 → row3가 stretch되어 카드가 길어지는 현상 방지
-     5) .left-panel-footer       : auto — update-badge가 한 줄로 컴팩트 노출.
-                                    이전엔 row4(1fr)에 footer가 자동 배치되어 좌측 패널 하단을 통째로 점유했음.
+     4) #metaDocsToolStats      : auto — 툴 사용 랭킹(cardToolCategories) 카드 높이만 차지
+     5) (빈 filler 트랙)         : 1fr — 남는 세로 공간 흡수 → 위 트랙들이 stretch되어 카드가 길어지는 현상 방지
+     6) .left-panel-footer       : auto — update-badge가 한 줄로 컴팩트 노출.
                                     `.left-panel-footer { grid-row-end: -1 }`(left-panel.css)와 함께 자식 개수 변동에도 안정.
 
    fallback 220px = 헤더 36 + thead 36 + 약 3 row(40px*3) = 약 192px 이상.
@@ -652,6 +652,7 @@ body[data-app-mode="metadocs"] .left-panel {
     var(--projects-panel-height, 220px)
     auto
     auto
+    auto
     1fr
     auto;
 }
@@ -659,10 +660,23 @@ body[data-app-mode="metadocs"] #browserProjectsSection {
   min-height: 0;
 }
 
-/* 안전장치: 트랙이 어떤 이유로든 1fr가 되어도 요약 카드는 stretch되지 않게 자기 콘텐츠 크기 유지. */
-body[data-app-mode="metadocs"] #metaDocsSummaryCards {
+/* 안전장치: 트랙이 어떤 이유로든 1fr가 되어도 요약 카드 / 툴 통계는 stretch되지 않게 자기 콘텐츠 크기 유지. */
+body[data-app-mode="metadocs"] #metaDocsSummaryCards,
+body[data-app-mode="metadocs"] #metaDocsToolStats {
   align-self: start;
 }
+
+/* tool-stats-relocate: cardToolCategories를 metadocs 좌측으로 이동.
+   - browse 모드: [hidden] 기본값 → display:none 유지.
+   - metadocs 모드: 표시 (block). hidden 속성 override를 위해 display:block 명시.
+   내부 .obs-panel은 padding을 제공하므로 외곽 컨테이너는 별도 패딩 없이 통과. */
+body[data-app-mode="metadocs"] #metaDocsToolStats {
+  display: block;
+}
+.meta-docs-tool-stats .obs-panel {
+  padding: var(--space-2);
+}
+/* cardToolCategories 단일 카드 컨테이너이므로 obs-panel gap은 의미 없음 — 그대로 유지 OK. */
 
 /* === 좌측 thead 모드별 분기 + [동기화] 셀 (meta-docs feedback ADR 2026-05-14) ===
  *
