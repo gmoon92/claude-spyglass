@@ -13,6 +13,7 @@
 
 import { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
+import { useTranslation } from 'react-i18next';
 import { Card } from '../components/display/Card';
 import { BarChart } from '../components/charts/BarChart';
 import { Gauge } from '../components/charts/Gauge';
@@ -63,6 +64,7 @@ function OverviewView({ tools }: { tools: ToolStat[] }): JSX.Element {
 }
 
 function TokensView({ tools }: { tools: ToolStat[] }): JSX.Element {
+  const { t } = useTranslation('common');
   if (tools.length === 0) {
     return <Text color={tokens.color.muted.fg}>No data</Text>;
   }
@@ -105,7 +107,7 @@ function TokensView({ tools }: { tools: ToolStat[] }): JSX.Element {
       {hasAnyLowConf && (
         <Box marginTop={1}>
           <Text color={tokens.color.muted.fg} dimColor>
-            * 토큰 신뢰도 낮음 (transcript 파싱 실패 또는 proxy fallback)
+            {t('token-confidence-low')}
           </Text>
         </Box>
       )}
@@ -209,6 +211,7 @@ function TypesView({ byType }: { byType: ByTypeRow[] }): JSX.Element {
 }
 
 function PerfView({ tools }: { tools: ToolStat[] }): JSX.Element {
+  const { t } = useTranslation('common');
   if (tools.length === 0) {
     return <Text color={tokens.color.muted.fg}>No data</Text>;
   }
@@ -265,7 +268,7 @@ function PerfView({ tools }: { tools: ToolStat[] }): JSX.Element {
       {hasAnyLowConf && (
         <Box marginTop={1}>
           <Text color={tokens.color.muted.fg} dimColor>
-            * 토큰 신뢰도 낮음 (transcript 파싱 실패 또는 proxy fallback)
+            {t('token-confidence-low')}
           </Text>
         </Box>
       )}

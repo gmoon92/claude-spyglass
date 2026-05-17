@@ -15,6 +15,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
+import { useTranslation } from 'react-i18next';
 import { useFeed } from '../hooks/useFeed';
 import { useFollowMode } from '../hooks/useFollowMode';
 import { useProxyRequests } from '../hooks/useProxyRequests';
@@ -40,6 +41,7 @@ export type LiveFeedProps = {
 };
 
 export function LiveFeed({ width, rows, sseStatus, frozen, apiUrl }: LiveFeedProps): JSX.Element {
+  const { t } = useTranslation('common');
   const feed = useFeed();
   const { latestEndTurn } = useProxyRequests(apiUrl, 30_000);
   const {
@@ -189,7 +191,7 @@ export function LiveFeed({ width, rows, sseStatus, frozen, apiUrl }: LiveFeedPro
             <Text color={tokens.color.fg.fg}>{searchQuery}</Text>
             {searchActive && <Text color={tokens.color.warning.fg}>█</Text>}
             <Text color={tokens.color.muted.fg}>
-              {searchActive ? ' (Enter: 확정  Esc: 취소)' : '  [Esc] 클리어'}
+              {searchActive ? t('search.confirm-hint') : t('search.clear-hint')}
             </Text>
           </Box>
         )}

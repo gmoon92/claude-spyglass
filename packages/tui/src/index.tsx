@@ -5,7 +5,11 @@
  */
 
 import { render } from 'ink';
-import { App } from './App';
+import { initI18n } from './i18n';
+import { detectLang } from './lib/detect-lang';
+import { App } from './app';
+
+await initI18n(detectLang());
 
 const { waitUntilExit } = render(<App />);
 

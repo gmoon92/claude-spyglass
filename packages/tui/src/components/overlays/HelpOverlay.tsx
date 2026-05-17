@@ -6,65 +6,66 @@
  */
 
 import { Box, Text, useInput } from 'ink';
+import { useTranslation } from 'react-i18next';
 import { tokens } from '../../design-tokens';
 
 type KeymapItem = [string, string];
-type KeymapCategory = { category: string; items: KeymapItem[] };
+type KeymapCategory = { categoryKey: string; items: KeymapItem[] };
 
 const KEYMAP: KeymapCategory[] = [
   {
-    category: 'Navigation',
+    categoryKey: 'help-overlay.categories.navigation',
     items: [
-      ['j ↓', 'down'],
-      ['k ↑', 'up'],
-      ['g', 'top'],
-      ['G', 'bottom'],
-      ['Enter', 'open/expand'],
-      ['Esc h', 'back'],
+      ['j ↓', 'help-overlay.keys.down'],
+      ['k ↑', 'help-overlay.keys.up'],
+      ['g', 'help-overlay.keys.top'],
+      ['G', 'help-overlay.keys.bottom'],
+      ['Enter', 'help-overlay.keys.open-expand'],
+      ['Esc h', 'help-overlay.keys.back'],
     ],
   },
   {
-    category: 'View',
+    categoryKey: 'help-overlay.categories.view',
     items: [
-      ['1', 'Live Feed'],
-      ['2', 'Sessions'],
-      ['3', 'Tools'],
-      ['4', 'Anomalies'],
-      ['m', 'Ambient mode'],
-      ['z', 'Zoom panel'],
+      ['1', 'help-overlay.keys.live-feed'],
+      ['2', 'help-overlay.keys.sessions'],
+      ['3', 'help-overlay.keys.tools'],
+      ['4', 'help-overlay.keys.anomalies'],
+      ['m', 'help-overlay.keys.ambient-mode'],
+      ['z', 'help-overlay.keys.zoom-panel'],
     ],
   },
   {
-    category: 'Live Feed',
+    categoryKey: 'help-overlay.categories.live-feed',
     items: [
-      ['Space', 'freeze'],
-      ['f', 'follow'],
-      ['o', 'session'],
-      ['/', 'search'],
+      ['Space', 'help-overlay.keys.freeze'],
+      ['f', 'help-overlay.keys.follow'],
+      ['o', 'help-overlay.keys.session'],
+      ['/', 'help-overlay.keys.search'],
     ],
   },
   {
-    category: 'Tools / Anomalies',
+    categoryKey: 'help-overlay.categories.tools-anomalies',
     items: [
-      ['Tab', 'next sub-tab'],
-      ['Shift+Tab', 'prev sub-tab'],
-      ['t', 'time range'],
+      ['Tab', 'help-overlay.keys.next-sub-tab'],
+      ['Shift+Tab', 'help-overlay.keys.prev-sub-tab'],
+      ['t', 'help-overlay.keys.time-range'],
     ],
   },
   {
-    category: 'Modal',
+    categoryKey: 'help-overlay.categories.modal',
     items: [
-      ['/', 'search'],
-      [':', 'command'],
-      ['?', 'this help'],
+      ['/', 'help-overlay.keys.search'],
+      [':', 'help-overlay.keys.command'],
+      ['?', 'help-overlay.keys.this-help'],
     ],
   },
   {
-    category: 'Meta',
+    categoryKey: 'help-overlay.categories.meta',
     items: [
-      ['q', 'quit'],
-      ['r', 'reconnect'],
-      ['Ctrl+L', 'redraw'],
+      ['q', 'help-overlay.keys.quit'],
+      ['r', 'help-overlay.keys.reconnect'],
+      ['Ctrl+L', 'help-overlay.keys.redraw'],
     ],
   },
 ];
@@ -74,6 +75,8 @@ export type HelpOverlayProps = {
 };
 
 export function HelpOverlay({ onClose }: HelpOverlayProps): JSX.Element {
+  const { t } = useTranslation('ui');
+
   useInput((input, key) => {
     if (input === '?' || input === 'q' || key.escape) {
       onClose();
@@ -104,7 +107,7 @@ export function HelpOverlay({ onClose }: HelpOverlayProps): JSX.Element {
         {/* Title */}
         <Box justifyContent="center" marginBottom={1}>
           <Text color={tokens.color.primary.fg} bold>
-            Help · spyglass
+            {t('help-overlay.title')}
           </Text>
         </Box>
 
@@ -113,15 +116,15 @@ export function HelpOverlay({ onClose }: HelpOverlayProps): JSX.Element {
           {/* Left column */}
           <Box flexDirection="column" width={27}>
             {leftCols.map((cat) => (
-              <Box key={cat.category} flexDirection="column" marginBottom={1}>
+              <Box key={cat.categoryKey} flexDirection="column" marginBottom={1}>
                 <Text color={tokens.color.accent.fg} bold>
-                  {cat.category}
+                  {t(cat.categoryKey)}
                 </Text>
                 <Text color={tokens.color.muted.fg}>{'─'.repeat(14)}</Text>
-                {cat.items.map(([key, desc]) => (
+                {cat.items.map(([key, descKey]) => (
                   <Box key={key} flexDirection="row">
                     <Text color={tokens.color.info.fg}>{key.padEnd(12)}</Text>
-                    <Text color={tokens.color.fg.fg}>{desc}</Text>
+                    <Text color={tokens.color.fg.fg}>{t(descKey)}</Text>
                   </Box>
                 ))}
               </Box>
@@ -131,15 +134,15 @@ export function HelpOverlay({ onClose }: HelpOverlayProps): JSX.Element {
           {/* Right column */}
           <Box flexDirection="column" width={27}>
             {rightCols.map((cat) => (
-              <Box key={cat.category} flexDirection="column" marginBottom={1}>
+              <Box key={cat.categoryKey} flexDirection="column" marginBottom={1}>
                 <Text color={tokens.color.accent.fg} bold>
-                  {cat.category}
+                  {t(cat.categoryKey)}
                 </Text>
                 <Text color={tokens.color.muted.fg}>{'─'.repeat(14)}</Text>
-                {cat.items.map(([key, desc]) => (
+                {cat.items.map(([key, descKey]) => (
                   <Box key={key} flexDirection="row">
                     <Text color={tokens.color.info.fg}>{key.padEnd(12)}</Text>
-                    <Text color={tokens.color.fg.fg}>{desc}</Text>
+                    <Text color={tokens.color.fg.fg}>{t(descKey)}</Text>
                   </Box>
                 ))}
               </Box>
@@ -150,7 +153,7 @@ export function HelpOverlay({ onClose }: HelpOverlayProps): JSX.Element {
         {/* Footer */}
         <Box justifyContent="center" marginTop={1}>
           <Text color={tokens.color.muted.fg}>
-            [?] / [Esc] / [q] to close
+            {t('help-overlay.footer')}
           </Text>
         </Box>
       </Box>
