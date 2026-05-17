@@ -24,4 +24,10 @@ export type {
 
 export type { NormalizedTurnItem } from './turn';
 
-export type { Session } from './session';
+export type { Session, SessionLiveState } from './session';
+
+// i18n contract — server/tui/web가 공통으로 사용하는 언어 타입 + 상수.
+// 런타임 함수(resolveLang/isLang)와 상수(LANG_META/SUPPORTED_LANGS/DEFAULT_LANG)를 포함하므로
+// 'export type'이 아닌 일반 'export'를 사용한다.
+export type { Lang, LangMeta } from './i18n';
+export { SUPPORTED_LANGS, DEFAULT_LANG, LANG_META, isLang, resolveLang } from './i18n';
