@@ -42,6 +42,9 @@ coverage/
 tmp/
 .tmp/
 
+# i18n 추출 리포트 (로컬 분석용)
+scripts/.i18n-report.json
+
 # Local DB / 임시 캡처
 *.db
 *.db-journal

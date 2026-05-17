@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@spyglass/storage": "workspace:*",
-    "@spyglass/types": "workspace:*"
+    "@spyglass/types": "workspace:*",
+    "i18next": "^26.2.0"
   },
   "devDependencies": {
     "@types/bun": "latest"

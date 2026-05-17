@@ -1,0 +1,697 @@
+# claude-spyglass 데이터베이스 가이드
+
+claude-spyglass의 영속 저장소(SQLite) 아키텍처, 마이그레이션, 테이블 스키마, 쿼리 패턴, 운영 절차를 모은 통합 가이드입니다.
+
+> **약어 풀이**
+> - **SSoT** = Single Source of Truth(단일 진실 원천)
+> - **WAL** = Write-Ahead Logging(SQLite의 동시성 모드)
+> - **ADR** = Architecture Decision Record(아키텍처 결정 기록)
+> - **PRAGMA** = SQLite 전용 설정·메타 조회 명령
+> - **dedup** = deduplication(중복 제거)
+> - **FK CASCADE** = Foreign Key ON DELETE CASCADE(부모 삭제 시 자식 행도 함께 삭제)
+
+### 이 문서의 범위
+
+- 다룸: 연결 구성, PRAGMA, 마이그레이션 시스템, 테이블 개요, 인덱스 정책, 쿼리 패턴, 보존·유지보수
+- 다루지 않음: 테이블별 **전체 컬럼 명세**
+
+### `docs/schema/*.md`와의 관계
+
+- [`docs/schema/`](./schema/) 하위 문서가 **테이블별 컬럼 명세의 1차 소스**입니다.
+- 본 문서는 그 위에서 작동하는 **연결·마이그레이션·집계 레이어**를 설명합니다.
+- 컬럼 추가 시: schema/*.md 우선 갱신 → 본 문서 § 3.4 마이그레이션 이력에 한 줄.
+
+### 핵심 레퍼런스
+
+- 코드 SSoT: [`packages/storage`](../packages/storage)
+- 스키마 정의: [`packages/storage/src/schema.ts`](../packages/storage/src/schema.ts)
+- 마이그레이션 디렉토리: [`packages/storage/migrations/`](../packages/storage/migrations)
+- 현재 스키마 버전: **23** (`SCHEMA_VERSION` 상수). 실제 적용 마이그레이션 파일은 `032`까지 존재합니다 — 파일명 NNN과 `PRAGMA user_version`이 1:1 매핑되며, `SCHEMA_VERSION`은 정적 문서화 상수입니다.
+
+---
+
+## 1. 개요
+
+이 절은 엔진·파일·테이블 수 같은 **상수 정보**와 SQLite 선택 이유, 데이터 파이프라인을 한눈에 보여줍니다.
+
+| 항목 | 값 | 비고 |
+|------|-----|------|
+| DB 파일 경로 | `~/.spyglass/spyglass.db` | `connection.ts`의 `DEFAULT_DB_PATH` |
+| 엔진 | SQLite (bun:sqlite) | `Database` 클래스 직접 import |
+| Journal 모드 | WAL (Write-Ahead Logging) | `PRAGMA journal_mode = WAL` |
+| 파일 권한 | DB 파일 `0600`, 디렉토리 `0700` | `applyFilePermissions()` |
+| WAL autocheckpoint | 200 페이지 (~800KB) | `PRAGMA wal_autocheckpoint = 200` |
+| 활성 테이블 수 | 11개 — `sessions`, `requests`, `claude_events`, `proxy_requests`, `proxy_tool_uses`, `system_prompts`, `meta_documents`, `meta_doc_resolutions`, `model_limits`, `metadata`, `stats_hourly`, `stats_proxy_hourly` | + 뷰 `correlated_requests`, `v_meta_doc_usage` |
+
+### 왜 SQLite인가
+
+claude-spyglass는 **단일 사용자의 로컬 옵저버빌리티 도구**입니다. 다음 특성 때문에 SQLite가 적합합니다.
+
+- 별도 DB 프로세스가 필요 없는 임베디드 엔진 — 사용자가 spyglass를 켜기만 하면 동작합니다.
+- WAL 모드에서 reader 다수 + writer 1개(hook 서버) 패턴이 안전합니다.
+- `bun:sqlite`로 zero-dep, 네이티브 바인딩 없이 동작합니다.
+- 분석용 페이로드(JSON, zstd BLOB)를 단일 파일로 보관하므로 백업·이동이 `cp` 한 줄로 끝납니다.
+
+### 데이터 흐름
+
+```
+Claude Code hooks  ────►  /collect, /events  ─────►  requests, claude_events
+HTTP proxy layer   ────►  proxy/persist.ts   ─────►  proxy_requests, proxy_tool_uses
+SessionStart hook  ────►  meta-docs scanner  ─────►  meta_documents, meta_doc_resolutions
+proxy body.system  ────►  system-hash.ts     ─────►  system_prompts (dedup)
+hook INSERT/UPDATE ────►  AFTER 트리거       ─────►  stats_hourly (사전 집계)
+proxy INSERT       ────►  AFTER 트리거       ─────►  stats_proxy_hourly (사전 집계)
+```
+
+**raw 수집 → 정규화·dedup → 사전 집계 → API 응답**의 4단 파이프라인입니다. `stats_hourly`와 `stats_proxy_hourly`가 대시보드 모든 위젯의 SSoT 집계 테이블입니다.
+
+---
+
+## 2. 연결과 구성
+
+DB 핸들의 생성·구성·종료 절차를 다룹니다. 한 프로세스에서는 `getDatabase()`가 반환하는 싱글톤 하나만 사용합니다.
+
+### 2.1 `SpyglassDatabase` 클래스
+
+[`packages/storage/src/connection.ts`](../packages/storage/src/connection.ts)가 모든 DB 핸들을 캡슐화합니다.
+
+```ts
+import { getDatabase } from '@spyglass/storage';
+const db = getDatabase();        // 싱글톤
+const handle = db.instance;       // bun:sqlite Database
+```
+
+`ConnectionOptions`: `dbPath` (기본 `~/.spyglass/spyglass.db`), `walMode` (기본 true), `autoInit` (기본 true — 마이그레이션 자동 실행), `debug` (기본 false).
+
+생성자 순서: 부모 디렉토리 생성 → `Database` 열기 → WAL PRAGMA 적용 → 마이그레이션 실행 → 파일 권한 강화 (`chmod 600 / 700`) → `trackedInstances` 등록 (`closeDatabase()`로 일괄 정리).
+
+### 2.2 적용되는 PRAGMA
+
+PRAGMA는 SQLite 전용 설정·메타 조회 명령입니다. 아래 PRAGMA들은 [`schema.ts`의 `WAL_MODE_PRAGMAS`](../packages/storage/src/schema.ts)에서 한 번에 적용됩니다.
+
+```sql
+PRAGMA journal_mode = WAL;              -- writer 1 + reader N
+PRAGMA busy_timeout = 5000;             -- 5초 재시도
+PRAGMA synchronous = NORMAL;            -- WAL 결합 시 안전 최적값
+PRAGMA cache_size = -64000;             -- 64MB 페이지 캐시 (음수 = KB 단위)
+PRAGMA foreign_keys = ON;               -- requests → sessions FK 강제 (SQLite 디폴트 OFF)
+PRAGMA journal_size_limit = 104857600;  -- WAL 100MB 상한
+PRAGMA wal_autocheckpoint = 200;        -- ~800KB마다 자동 checkpoint (기본 1000에서 낮춤)
+```
+
+`wal_autocheckpoint`를 200으로 낮춘 이유: 대형 zstd 페이로드 BLOB이 누적되기 전에 자주 checkpoint하여 STW(stop-the-world) 윈도우를 짧게 유지하기 위함입니다.
+
+### 2.3 종료·체크포인트
+
+`close()`는 멱등이며 **반드시 `PRAGMA wal_checkpoint(TRUNCATE)`를 먼저 수행**합니다. 이는 `-wal`, `-shm` 잔존 파일이 다음번 동일 경로 재오픈 시 `disk I/O error`를 일으키는 문제를 차단하기 위함입니다 (특히 테스트 fixture가 `db.close()` 없이 `unlink`만 하는 패턴에서 발생).
+
+`db.getStatus()` → `{ path, journalMode, walSize, isOpen }`.
+
+---
+
+## 3. 마이그레이션 시스템
+
+`migrations/NNN-*.sql` 파일을 lexicographic 순서로 적용하는 단방향(forward-only) 시스템입니다. 트랜잭션 안에서 DDL과 `PRAGMA user_version` 갱신을 원자적으로 묶어, 중간 실패 시에도 상태가 어긋나지 않도록 설계되어 있습니다.
+
+### 3.1 동작 원리
+
+[`packages/storage/src/migrator.ts`](../packages/storage/src/migrator.ts)의 `runMigrations(db, debug)`:
+
+1. `PRAGMA user_version` 조회 → `currentVersion`
+2. `migrations/` 디렉토리의 `.sql` 파일을 lexicographic 정렬, 파일명 prefix `NNN`을 버전 번호로 사용
+3. `version > currentVersion`인 파일만 순차 적용
+4. **PRAGMA가 아닌 모든 statement**를 `db.transaction()`으로 감싸 적용 후 `PRAGMA user_version = N` 갱신
+5. 파일에 명시된 PRAGMA는 트랜잭션 밖에서 별도 실행
+
+### 3.2 핵심 설계 결정
+
+- **트랜잭션 내부 `user_version` 갱신**: DDL과 버전 갱신을 원자적으로 묶어 비정상 종료 시 버전 불일치 방지
+- **`duplicate column name` / `already exists` 자동 스킵**: 비정상 종료 후 재실행 시 이미 적용된 DDL을 무시
+- **`BEGIN ... END;` 트리거 보존**: 단순 `split(';')`이 트리거 본문 안 세미콜론까지 자르는 문제를 placeholder 치환으로 회피 (`splitSqlStatements`)
+- **빈 DB**: `currentVersion = 0`에서 시작해 `001-init.sql`부터 모두 적용 → `CREATE TABLE IF NOT EXISTS`로 멱등 보장
+
+### 3.3 신규 마이그레이션 추가 절차
+
+1. `migrations/NNN-<설명>.sql` 작성 (NNN = `currentMax + 1`, 3자리 0-padded, `IF NOT EXISTS` 멱등성)
+2. `stats_hourly` 등 사전 집계 테이블 변경 시 백필 SQL 포함 또는 `rebuild-stats` 안내
+3. `schema.ts`의 `SCHEMA_VERSION` 갱신 + 버전 이력 주석 추가
+4. `bun test packages/storage/src/__tests__/` — 빈 DB와 기존 DB 양쪽 검증
+5. 운영 적용 전 hook 서버 중단 (트리거·백필 race 회피)
+
+### 3.4 마이그레이션 이력 요약
+
+총 32개 마이그레이션을 다음 3단계로 묶어 정리합니다.
+
+<details>
+<summary><b>초기 (v001 ~ v010) — 기본 스키마 + 토큰·이벤트 도입</b></summary>
+
+| 버전 | 핵심 변경 |
+|------|-----------|
+| 001 | `sessions`, `requests` 테이블 + 기본 인덱스 4개 |
+| 002 | `requests.tool_detail` |
+| 003 | `requests.turn_id` + 기존 prompt에 turn 번호 backfill |
+| 004 | `requests.source` (예: `subagent-transcript`) |
+| 005 | `cache_creation_tokens`, `cache_read_tokens` |
+| 006 | `claude_events` 테이블 + 인덱스 2개 |
+| 007 | `requests.preview` (100자 제한) |
+| 008 | `tool_use_id`, `event_type` (`pre_tool`/`tool`) |
+| 009 | Skill/Agent `tool_detail` 재계산 (멱등) |
+| 010 | preview 2000자로 재추출 |
+
+</details>
+
+<details>
+<summary><b>중기 (v011 ~ v020) — 메타데이터·proxy·감사 컬럼</b></summary>
+
+| 버전 | 핵심 변경 |
+|------|-----------|
+| 011 | `tokens_confidence`, `tokens_source` + `claude_events`에 8개 컬럼 |
+| 012 | `idx_requests_timestamp`, `visible_requests` VIEW |
+| 013 | `metadata` key-value 테이블 |
+| 014 | `proxy_requests` 테이블 신설 |
+| 015 | proxy 메트릭 10개 컬럼 + `correlated_requests` VIEW |
+| 016 | `requests.type` CHECK에 `response` 추가 (테이블 재생성) |
+| 017 | `requests.parent_tool_use_id` + 부분 인덱스 |
+| 018 | sentinel 세션 삭제, `visible_requests` 폐기, `correlated_requests` 재정의 |
+| 019 | `proxy_requests.session_id/turn_id`, `requests.api_request_id` |
+| 020 | 감사용 메타 16개 컬럼 (`client_user_agent`, `permission_mode` 등) |
+
+</details>
+
+<details open>
+<summary><b>최근 (v021 ~ v032) — 압축·dedup·meta-docs·사전 집계</b></summary>
+
+| 버전 | 핵심 변경 |
+|------|-----------|
+| 021 | zstd 압축 payload BLOB 컬럼 + `system_reminder` |
+| 022 | `system_prompts` dedup 테이블 + `proxy_requests.system_hash` |
+| 023 | `proxy_tool_uses` 테이블 |
+| 024 | `meta_documents`, `meta_doc_resolutions`, `requests.slash_command`, `v_meta_doc_usage` |
+| 025 | 집계 최적화용 복합/부분 인덱스 3개 |
+| 026 | `model_limits` 테이블 + 시드 데이터 |
+| 027 | `stats_hourly` 사전 집계 테이블 |
+| 028 | AFTER INSERT/UPDATE 트리거 (pre_tool → tool 머지 보정) |
+| 029 | 기존 requests를 stats_hourly로 1회 백필 |
+| 030 | `stats_hourly`에 `event_type` 차원 + `tokens_high` 4개 컬럼 (테이블 재생성) |
+| 031 | `duration_ms_sum/count` 의미 변경 (NULL 제외 모든 행) |
+| 032 | `stats_proxy_hourly` 테이블 + 트리거 + 백필 |
+
+</details>
+
+---
+
+## 4. 스키마 개요
+
+테이블 간 관계와 분류를 한눈에 보여줍니다. 컬럼 단위 명세는 § 5와 `docs/schema/`를 참조하세요.
+
+### 4.1 ERD
+
+```
+sessions (id PK)
+  │
+  │ 1:N  (FK CASCADE)
+  ▼
+  ├─ requests (id PK, session_id FK)
+  │    ├─ tool_use_id ──────────────► proxy_tool_uses.tool_use_id
+  │    ├─ api_request_id ───────────► proxy_requests.api_request_id
+  │    └─ parent_tool_use_id ──self─► requests.tool_use_id
+  │
+  ├─ claude_events    (event_id UQ, session_id)
+  │
+  └─ proxy_requests   (id PK, session_id, system_hash ─► system_prompts.hash)
+        └─ api_request_id  ◄───  proxy_tool_uses.api_request_id
+
+meta_documents (id PK)
+  │
+  │ 1:N  (FK CASCADE)
+  ▼
+  └─ meta_doc_resolutions (cwd, type, name) PK
+
+stats_hourly        (hour_ts, model, type, event_type) UQ   ◄── 트리거(requests INSERT/UPDATE)
+stats_proxy_hourly  (hour_ts, model) UQ                     ◄── 트리거(proxy_requests INSERT)
+
+model_limits (pattern PK)        metadata (key PK)
+```
+
+> 트리거: 특정 테이블에 INSERT/UPDATE/DELETE가 발생할 때 SQLite가 자동으로 실행하는 SQL 핸들러. 본 프로젝트에서는 raw 테이블의 변경을 사전 집계 테이블에 즉시 반영하는 데 사용합니다.
+
+### 4.2 테이블 분류
+
+- **Raw 수집**: `sessions`, `requests`, `claude_events`, `proxy_requests`, `proxy_tool_uses`
+- **카탈로그·정규화**: `system_prompts`, `meta_documents`, `meta_doc_resolutions`, `model_limits`
+- **사전 집계**: `stats_hourly`, `stats_proxy_hourly`
+- **운영 메타**: `metadata`
+- **뷰**: `correlated_requests`, `v_meta_doc_usage`
+
+---
+
+## 5. 테이블별 상세
+
+본 절은 **핵심 컬럼·인덱스 요약**입니다. 전체 컬럼 명세는 [`docs/schema/*.md`](./schema/)를 참조하세요. 컬럼 표는 `이름 · 타입 · 제약(NULL/기본값) · 비고` 4열 포맷으로 통일합니다.
+
+### 5.1 `sessions`
+
+세션(= Claude Code 한 번의 실행 단위) 메타.
+
+| 컬럼 | 타입 | 제약·기본값 | 비고 |
+|------|------|-------------|------|
+| `id` | TEXT | PK | Claude Code 발급 UUID |
+| `project_name` | TEXT | NOT NULL | cwd(current working directory) basename |
+| `started_at` | INTEGER | NOT NULL | Unix ms |
+| `ended_at` | INTEGER | NULL 허용 | NULL = 활성 또는 stale |
+| `total_tokens` | INTEGER | DEFAULT 0 | 누적 토큰 |
+| `created_at` | INTEGER | DEFAULT (strftime sec) | 레코드 생성 시각 |
+
+**런타임 derive 필드**: `first_prompt_payload`, `last_activity_at`, `live_state ∈ {live, stale, ended}`는 DB 컬럼이 아니라 read 쿼리의 CASE/서브쿼리로 산출됩니다. `live` 판정은 `LIVE_STALE_THRESHOLD_MS = 30 * 60 * 1000` (30분)을 기준으로 합니다 (`packages/storage/src/queries/session/_shared.ts`).
+
+| 인덱스 | 컬럼·조건 | 용도 |
+|--------|-----------|------|
+| `idx_sessions_started_at` | `started_at DESC` | 최근 세션 목록 |
+| `idx_sessions_project` | `project_name` | 프로젝트별 필터 |
+
+상세: [`docs/schema/sessions.md`](./schema/sessions.md)
+
+### 5.2 `requests`
+
+훅 기반 모든 요청(prompt / tool_call / system / response)의 1차 저장소. 핵심 그룹:
+
+- **식별**: `id`, `session_id` (FK CASCADE), `timestamp`, `created_at`
+- **분류**: `type` CHECK `('prompt','tool_call','system','response')`, `event_type`(`pre_tool`/`tool`), `tool_name`, `tool_detail`, `turn_id`
+- **모델·토큰**: `model`, `tokens_input/output/total`, `cache_creation_tokens`, `cache_read_tokens`
+- **신뢰도**: `tokens_confidence` (`high`/`error`), `tokens_source` (`transcript`/`unavailable`)
+- **페어링·계층**: `tool_use_id`, `parent_tool_use_id`, `api_request_id`
+- **페이로드**: `payload` (BLOB zstd or TEXT JSON), `payload_raw_size`, `payload_algo`
+- **감사 메타**: `permission_mode`, `agent_id`, `agent_type`, `tool_interrupted`, `tool_user_modified`
+- **기타**: `preview`, `source`, `slash_command`
+
+**`type` 의미** (`schema.ts: RequestType`):
+- `prompt` — UserPromptSubmit 훅
+- `tool_call` — Pre/PostToolUse 훅 (한 도구 호출당 row 1개. event_type으로 구분)
+- `system` — SessionStart, Notification 등
+- `response` — Stop 훅의 `last_assistant_message`
+
+**Pre/Post tool 쌍 처리** (CLAUDE.md 규칙):
+- `event_type='pre_tool'`: 도구 실행 시작 — DB INSERT, SSE 미브로드캐스트
+- `event_type='tool'`: 도구 실행 완료 — 동일 `tool_use_id`의 pre_tool row를 UPDATE (`mergePostToolIntoPreTool`)
+- 조회 기본 필터(`ACTIVE_REQUEST_FILTER_SQL`): `event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent'`
+- 통계 필터: `event_type IS NULL OR event_type = 'tool'`
+
+**주요 인덱스** (전체는 [`docs/schema/requests.md`](./schema/requests.md)):
+
+| 인덱스 | 컬럼·조건 | 핵심 쿼리 |
+|--------|-----------|-----------|
+| `idx_requests_session` | `(session_id, timestamp DESC)` | 세션 타임라인 |
+| `idx_requests_type` | `(type, timestamp DESC)` | type별 필터 |
+| `idx_requests_timestamp` | `timestamp DESC` | 전역 최근 N건 |
+| `idx_requests_session_type_ts_asc` | `(session_id, type, timestamp ASC)` | listVisibleSessions 첫 prompt 시각 |
+| `idx_requests_type_event_ts` | `(type, event_type, timestamp DESC)` | 집계 함수 군집 |
+| `idx_requests_tool_duration_partial` | `duration_ms ASC` partial | P95 지연 |
+| `idx_requests_tool_use_id` | NOT NULL | Pre/Post 매칭 |
+| `idx_requests_parent_tool_use_id` | NOT NULL | 서브에이전트 자식 |
+| `idx_requests_api_request_id` | NOT NULL | proxy 역참조 |
+| `idx_requests_meta_doc` | `(tool_name, tool_detail)` partial | Behavior Definitions 사용량 |
+| `idx_requests_slash` | NOT NULL | 슬래시 커맨드 집계 |
+
+### 5.3 `claude_events`
+
+훅에서 들어온 raw 페이로드 보관 — `sessions`/`requests`로 정규화되지 않는 이벤트(SessionStart, Stop, Notification 등)와 분석·디버깅용 전체 페이로드.
+
+주요 컬럼: `id` PK AUTOINCREMENT, `event_id` UNIQUE (idempotency), `event_type`, `session_id`, `timestamp`, `payload` (JSON TEXT), `schema_version`, `transcript_path`, `cwd`, `agent_id`, `agent_type`. v11에서 정규화 컬럼 추가: `permission_mode`, `source`, `end_reason`, `model`, `stop_hook_active`, `task_id`, `task_subject`, `notification_type`.
+
+인덱스: `idx_events_session_time` `(session_id, timestamp)`, `idx_events_type_time` `(event_type, timestamp)`.
+
+상세: [`docs/schema/claude-events.md`](./schema/claude-events.md)
+
+### 5.4 `proxy_requests` + `proxy_tool_uses`
+
+HTTP 프록시 레이어가 캡처한 Anthropic API 호출 메트릭. hook 데이터와 별도로 운용되며 v19부터 `session_id`/`turn_id` 헤더 직접 매칭, v23부터 `proxy_tool_uses`로 tool_use 정확 cross-link.
+
+**`proxy_requests` 컬럼 그룹**:
+
+- 식별·HTTP: `id`, `timestamp`, `method`, `path`, `status_code`, `response_time_ms`
+- 모델·토큰: `model`, `tokens_input/output`, `cache_creation_tokens`, `cache_read_tokens`, `tokens_per_second`, `cost_usd`(항상 NULL), `is_stream`, `first_token_ms`
+- 요청 본문 메타: `messages_count`, `max_tokens`, `tools_count`, `request_preview`, `tool_names`, `temperature`, `thinking_type`, `system_preview`, `system_reminder`, `metadata_user_id`
+- 응답 메타: `stop_reason`, `response_preview`, `error_type`, `error_message`, `api_request_id`
+- Cross-link: `session_id`, `turn_id` (v19), `system_hash`, `system_byte_size` (v22)
+- 클라이언트 감사: `client_user_agent`, `client_app`, `anthropic_beta`, `anthropic_org_id`, `anthropic_request_id`, `client_meta_json`
+- 페이로드 압축: `payload` BLOB, `payload_raw_size`, `payload_algo` (v21)
+
+**주요 인덱스**: `idx_proxy_requests_timestamp` (DESC), `idx_proxy_requests_model` (NOT NULL), `idx_proxy_requests_session_id` (NOT NULL), `idx_proxy_requests_system_hash`, `idx_proxy_requests_anthropic_req_id` (NOT NULL).
+
+**`proxy_tool_uses`** (v23): `tool_use_id` PK + `api_request_id` (NOT NULL, indexed) + `tool_name`, `block_index`, `created_at`. proxy SSE 응답의 `content_block_start.tool_use`를 PostToolUse 훅과 1:1 매핑. `INSERT OR IGNORE`로 멱등.
+
+proxy commit 트랜잭션 마지막에 `backfillRequestApiRequestIdByToolUse()`가 호출되어, hook PostToolUse와의 race로 발생한 `requests.api_request_id` NULL을 즉시 보정합니다.
+
+상세: [`docs/schema/proxy-requests.md`](./schema/proxy-requests.md)
+
+### 5.5 `system_prompts`
+
+v22에서 신설. 매 LLM 요청에 함께 전송되는 `body.system`을 hash 기반 dedup 저장.
+
+- `hash` PK (SHA-256 hex 64자, content-addressable), `content` (정규화 본문, billing-header `idx[0]` 제외), `byte_size`, `segment_count`, `first_seen_at`, `last_seen_at`, `ref_count`
+- UPSERT 정책: 동일 hash 재등장 시 `last_seen_at` 갱신 + `ref_count + 1`, `content`/`first_seen_at` 불변
+- 정규화 로직: [`packages/server/src/proxy/system-hash.ts: normalizeSystem()`](../packages/server/src/proxy/system-hash.ts)
+- 인덱스: `idx_system_prompts_last_seen` (DESC), `idx_system_prompts_ref_count` (DESC)
+
+**v21 `system_reminder` ⊥ v22 `system_hash` (ADR-007)**: 전자는 user 메시지 내 `<system-reminder>` 블록, 후자는 `body.system` 본문 참조. 두 채널은 데이터를 공유하지 않으며 절대 섞지 말 것.
+
+상세: [`docs/schema/system-prompts.md`](./schema/system-prompts.md)
+
+### 5.6 `meta_documents` + `meta_doc_resolutions`
+
+v24에서 신설. Claude Code Behavior Definitions(에이전트·스킬·슬래시 커맨드) 카탈로그.
+
+**`meta_documents`** — multi-source row 모델, `(type, name, source, source_root)` UNIQUE.
+- `id` PK AUTOINCREMENT
+- `type` CHECK `('agent','skill','command')`, `name`
+- `source` CHECK `('built-in','plugin','userSettings','projectSettings','policySettings','bundled','unknown')`
+- `source_root` (project=git root realpath, user=~/.claude, built-in/bundled=NULL)
+- `file_path`, `description`, `user_invocable`, `frontmatter_json`
+- `first_seen_at`, `last_seen_at`, `deleted_at` (soft-delete)
+
+**`meta_doc_resolutions`** — cwd별 우선순위 해소 결과, `(cwd, type, name)` 복합 PK + `meta_document_id` FK (ON DELETE CASCADE).
+
+**우선순위 chain**: `projectSettings` (deepest) → 상위 project → `userSettings` → built-in/bundled/plugin (현재 resolution 대상 외).
+
+**`v_meta_doc_usage` VIEW**: `requests` 테이블을 agent/skill/command 세 축으로 GROUP BY 한 통합 집계. `listMetaDocsWithUsage`가 카탈로그와 LEFT JOIN하여 사용 횟수·토큰·최근 사용 시각을 반환.
+
+상세: [`docs/schema/meta-documents.md`](./schema/meta-documents.md)
+
+### 5.7 `model_limits`
+
+v26에서 신설. 모델별 context window 한도 SSoT. `pattern` TEXT PK (substring match), `max_tokens` INTEGER NOT NULL, `notes` TEXT.
+
+**추론 우선순위** ([`server/src/model-limits.ts: getModelMaxTokens()`](../packages/server/src/model-limits.ts)):
+
+1. 모델명 `[1m]` suffix → 1,000,000
+2. `anthropic-beta` 헤더에 `context-1m-2025-08-07` 포함 → 1,000,000
+3. 본 테이블 pattern 최장 매칭 → 해당 row의 `max_tokens`
+4. 미매칭 → 200,000 폴백
+
+시드 데이터(GA 1M, Opus/Sonnet/Haiku 4.x 표준 200K, Kimi K2 등)는 `INSERT OR IGNORE`로 멱등 보장. 모듈 로드 시 전체 시드를 메모리에 캐시.
+
+상세: [`docs/schema/model-limits.md`](./schema/model-limits.md)
+
+### 5.8 `metadata`
+
+v13에서 신설. 서버 운영용 key-value (예: `last_cleanup_at`). `CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)`. CRUD: `queries/metadata.ts`의 `getMetadata(key)` / `setMetadata(key, value)`.
+
+### 5.9 `stats_hourly` (사전 집계 SSoT)
+
+v27에서 신설, v30에서 차원 확장, v31에서 산식 보정.
+
+**차원**: `(hour_ts, model, type, event_type)` UNIQUE — `hour_ts`는 Unix epoch **seconds** (`(timestamp_ms / 1000 / 3600) * 3600`).
+
+**필터**: `event_type IS NULL OR event_type != 'pre_tool'` — pre_tool은 미완성 레코드라 통계 제외.
+
+**측정 컬럼** (raw 누적):
+
+- `request_count`
+- `tokens_input/output/total` (전체)
+- `cache_creation_tokens`, `cache_read_tokens`
+- `duration_ms_sum`, `duration_ms_count` — NULL 제외 모든 행 (v31 의미 변경)
+- `tokens_input/output/total_high_sum`, `tokens_high_count` — `tokens_confidence='high'` 필터 재현용 (v30)
+
+**트리거** (v31 최종 정의):
+
+- `trg_stats_after_insert` — `COALESCE(NEW.event_type,'')` 정규화 후 UPSERT
+- `trg_stats_after_update` — `OLD.event_type='pre_tool' AND NEW.event_type='tool'` 일 때만 발동 (pre_tool은 INSERT 트리거에서 skip됐으므로 여기서 첫 카운트)
+
+인덱스: `idx_stats_hourly_ts` (DESC), `idx_stats_hourly_model_ts` `(model, hour_ts DESC)`, `idx_stats_hourly_event_type` `(event_type, hour_ts DESC)`.
+
+### 5.10 `stats_proxy_hourly`
+
+v32에서 신설. proxy_requests 사전 집계 SSoT. 차원 `(hour_ts, model)` UNIQUE.
+
+측정 컬럼:
+- 카운터: `request_count`, `error_count` (status >= 400 OR error_type), `stream_count`
+- 토큰: `tokens_input/output`, `cache_creation_tokens`, `cache_read_tokens`
+- 지연: `response_time_ms_sum/count`, `first_token_ms_sum/count` (NULL 제외 모든 행)
+- 비용: `cost_usd_sum` REAL (쿼리 단에서 ROUND)
+
+트리거: `trg_proxy_stats_after_insert` 하나만 (proxy_requests UPDATE 경로 거의 없음 — ADR-002).
+
+---
+
+## 6. 인덱스 정책 정리
+
+인덱스 추가 시 따르는 4가지 원칙입니다. 모든 신규 인덱스는 이 기준에 부합해야 합니다.
+
+1. **WHERE prefix 컬럼부터 시작** — 카디널리티가 높은 컬럼을 앞에 둡니다.
+2. **정렬 비용 흡수** — `ORDER BY x DESC` 패턴이 반복되면 인덱스 정렬 방향을 일치시켜 sort 비용을 0으로 만듭니다.
+3. **Partial index로 크기 최소화** — NULL 비율이 높은 컬럼은 `WHERE col IS NOT NULL` 부분 인덱스로 만듭니다.
+4. **`ANALYZE` 필수** — 새 인덱스 추가 후 마이그레이션 끝에 `ANALYZE`를 호출해 옵티마이저 통계를 갱신합니다.
+
+v25에서 추가된 핵심 복합 인덱스:
+
+- `idx_requests_type_event_ts` `(type, event_type, timestamp DESC)` — 집계 군집 필터+정렬 흡수
+- `idx_requests_tool_duration_partial` `(duration_ms ASC)` WHERE `type='tool_call' AND event_type='tool' AND duration_ms>0` — P95 계산
+- `idx_requests_session_type_ts_asc` `(session_id, type, timestamp ASC)` — listVisibleSessions 첫 prompt 시각
+
+효과: `SCAN requests` → `SEARCH requests USING INDEX`.
+
+---
+
+## 7. 주요 쿼리 패턴
+
+대시보드 위젯이 의존하는 핵심 쿼리들을 모듈 구조 → 공통 필터 → 위젯별 산식 순서로 정리합니다.
+
+### 7.1 디렉토리 구조
+
+| 모듈 | 책임 |
+|------|------|
+| `request/read.ts` | SELECT 전용 + `ACTIVE_REQUEST_FILTER_SQL` (SSoT) |
+| `request/write.ts` | INSERT/UPDATE/DELETE |
+| `request/turn.ts` | 턴 그룹핑 및 자식 호출 조회 |
+| `request/aggregate-general.ts` | 헤더/요약 카드 통계 (stats_hourly 기반) |
+| `request/aggregate-cache.ts` | 캐시 히트율 (stats_hourly 기반) |
+| `request/aggregate-strip.ts` | Command Center Strip (P95, error rate) |
+| `request/aggregate-{latency,tool,time}.ts` | P95 헬퍼·도구별·시간 버킷 집계 |
+| `session/{read,write,aggregate,retention,_shared}.ts` | CRUD + 일일 유지보수 + LIVE 정책 |
+| `metrics/{timeseries,activity,usage}.ts` | Burn rate, cache trend, heatmap, 모델 사용량 |
+| `stats/build-aggregate.ts` | `stats_hourly` 재집계 SQL SSoT |
+| `stats/build-proxy-aggregate.ts` | `stats_proxy_hourly` 재집계 SQL SSoT |
+| `event.ts` | claude_events CRUD + 통계 |
+| `meta-document.ts` | 카탈로그 upsert + 사용량 조회 |
+| `system-prompt.ts` | system_prompts UPSERT (dedup) |
+| `proxy.ts` | proxy_requests + proxy_tool_uses CRUD |
+| `proxy-stats.ts` | stats_proxy_hourly 조회 |
+| `model-limits.ts`, `metadata.ts` | 모델 한도·키밸류 메타 |
+
+### 7.2 활성 요청 필터 (SSoT)
+
+[`request/read.ts`](../packages/storage/src/queries/request/read.ts) (ADR-003):
+
+```ts
+export const ACTIVE_REQUEST_FILTER_SQL =
+  "(event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')";
+```
+
+모든 read 함수에서 이 상수를 import해 동일 정책을 적용합니다. "조회 가시성 정책" 변경 = 이 파일만 수정.
+
+### 7.3 캐시 히트율 (`aggregate-cache.ts`)
+
+```sql
+SELECT SUM(tokens_input), SUM(cache_creation_tokens), SUM(cache_read_tokens)
+FROM stats_hourly
+WHERE type IN ('prompt','tool_call','response') AND hour_ts BETWEEN ? AND ?
+```
+
+산식: `hit_rate = cache_read / (tokens_input + cache_read + cache_creation)`. ms → bucket(sec) 변환은 `Math.floor(ts / 1000 / 3600) * 3600`. pre_tool은 `stats_hourly` 트리거가 이미 제외.
+
+### 7.4 헤더/요약 카드 통계 (`aggregate-general.ts`)
+
+`stats_hourly` 기반. `event_type IN ('tool','')` 필터로 기존 `'tool' OR NULL` 의미 재현 (stats_hourly의 NULL→`''` 정규화 컨벤션). `tokens_confidence='high'` 필터는 `tokens_*_high_sum` / `tokens_high_count` 컬럼으로 재현.
+
+### 7.5 Command Center Strip (`aggregate-strip.ts`)
+
+P95 duration은 **requests 테이블 직접** 조회 (precision 보장 + 부분 인덱스 활용):
+
+```sql
+SELECT duration_ms FROM requests
+WHERE type='tool_call' AND event_type='tool' AND duration_ms > 0
+  AND timestamp BETWEEN ? AND ?
+ORDER BY duration_ms ASC
+```
+
+→ `idx_requests_tool_duration_partial`이 정렬·필터 모두 흡수. JS의 `computeP95(rows)`가 95% 분위수 계산.
+
+오류율은 `tool_detail`의 다국어 에러 패턴(`error`, `[오류]`, `エラー`, `错误`) `LIKE` 매칭 비율.
+
+### 7.6 시계열 버킷 (`metrics/timeseries.ts`)
+
+- **Burn Rate**: `requests` 직접 GROUP BY hour (prompt + tokens_confidence='high') — 정밀도 필요해 stats_hourly 미사용
+- **Cache Trend**: `stats_hourly`에서 `type='prompt'` 행을 hour 단위 합산
+- **Anomaly 입력**: `requests`에서 raw rows (spike/loop/slow 판정은 서버 라우트에서 알고리즘 적용)
+
+### 7.7 세션 retention (`session/retention.ts`)
+
+`deleteOldData(db, beforeTimestamp)`의 삭제 순서:
+
+1. `requests` — `timestamp < cutoff` 직접 삭제 (FK CASCADE 의존 없이 활성 세션의 과거 요청도 정리)
+2. `proxy_requests` — `timestamp < cutoff`
+3. `claude_events` — `timestamp < cutoff`
+4. `sessions` — `started_at < cutoff` AND 살아있는 자식 없는 세션만 (`id NOT IN (SELECT DISTINCT session_id FROM ...)`)
+5. `system_prompts` — `last_seen_at < cutoff` AND 살아있는 proxy_requests가 미참조
+6. `stats_hourly` — `hour_ts < cutoffHourTs` DELETE + 경계 hour 버킷은 `rebuildStatsHourly({ sinceTs, truncate: true })`로 재집계 (대량 DELETE로 오염된 사전 집계 보정 — ADR-004)
+
+`stats_hourly`에 AFTER DELETE 트리거를 두지 않은 이유: retention 같은 대량 삭제 시 트리거가 row 단위로 발동하면 비용이 급격히 늘어나기 때문입니다. 대신 retention 직후 영향 받은 버킷만 재집계합니다.
+
+`stats_proxy_hourly`는 retention 직후 `rebuild-stats-proxy --since=<cutoffHourTs>`를 수동으로 실행하는 것을 권장합니다 (현재 자동 보정 없음).
+
+---
+
+## 8. 데이터 보존 정책
+
+raw 수집 테이블은 cutoff 기준으로 정리하고, 카탈로그·dedup 테이블은 참조 무결성을 지키며 보존합니다.
+
+### 8.1 세션 retention
+
+- 기본 보존 기간은 서버 설정으로 관리. `deleteOldData(db, beforeTimestamp)`가 주기적으로 호출됨.
+- `metadata` 테이블의 `last_cleanup_at` 키로 마지막 cleanup 시각 추적.
+- 활성 세션은 자식 행이 cutoff 이후에 있으면 sessions row 자체는 보존 (과거 requests만 정리).
+
+### 8.2 dedup 카탈로그 보존
+
+- `system_prompts`: `proxy_requests`가 참조하지 않는 row만 cutoff 시 삭제. 정책상 `system_prompts` 행은 절대 임의 삭제하지 않음.
+- `meta_documents`: soft-delete (`deleted_at`). 디스크에서 파일이 사라진 정의는 row 유지하되 `deleted_at` 기록. 파일 복원 시 자동으로 활성화됨 (`deleted_at = NULL`).
+- `model_limits`: 영구. 신규 모델은 마이그레이션이나 직접 INSERT로 추가.
+
+### 8.3 라이브 세션 판정
+
+[`queries/session/_shared.ts`](../packages/storage/src/queries/session/_shared.ts):
+
+```ts
+export const LIVE_STALE_THRESHOLD_MS = 30 * 60 * 1000; // 30분
+```
+
+`live_state` CASE:
+- `ended_at IS NOT NULL` → `'ended'`
+- `last_activity_at >= now - 30min` → `'live'`
+- 그 외 → `'stale'`
+
+---
+
+## 9. 유지보수
+
+운영 중 자주 쓰이는 재집계·VACUUM·무결성 검증 명령을 모았습니다. 사전 집계와 raw 테이블 사이에 드리프트가 의심되면 § 9.3의 drift 쿼리부터 확인하세요.
+
+### 9.1 사전 집계 재구성
+
+```bash
+# stats_hourly 전체 재집계 (산식 변경 후, 대량 정정 후)
+bun run rebuild-stats
+
+# 특정 시점 이후만 재집계
+bun run rebuild-stats --since=1735603200   # unix epoch sec
+
+# proxy 사전 집계 재구성
+bun run rebuild-stats-proxy
+bun run rebuild-stats-proxy --since=1735603200
+```
+
+[`packages/storage/src/scripts/rebuild-stats.ts`](../packages/storage/src/scripts/rebuild-stats.ts) — `DELETE + INSERT`를 단일 트랜잭션으로 묶어 hook insert와의 race를 차단합니다. 두 번 실행해도 결과 동일.
+
+내부적으로 [`queries/stats/build-aggregate.ts`](../packages/storage/src/queries/stats/build-aggregate.ts)의 `STATS_HOURLY_AGGREGATE_SELECT`를 사용. 백필 SQL과 트리거가 동일 산식을 공유하도록 SSoT 통합.
+
+### 9.2 VACUUM / 최적화 / 백업
+
+```bash
+sqlite3 ~/.spyglass/spyglass.db "PRAGMA wal_checkpoint(TRUNCATE);"   # WAL → main 머지
+sqlite3 ~/.spyglass/spyglass.db "VACUUM;"                            # 디스크 공간 회수 (락 발생, 서버 중단 필요)
+sqlite3 ~/.spyglass/spyglass.db "ANALYZE;"                           # 옵티마이저 통계 갱신
+
+# 안전한 백업 (SQLite가 직렬화 보장)
+sqlite3 ~/.spyglass/spyglass.db ".backup /backup/spyglass-$(date +%Y%m%d).db"
+```
+
+WAL 모드에서 단순 `cp`는 위험합니다 — `-wal`/`-shm` 파일을 함께 복사하거나 위처럼 `.backup` API를 사용해야 합니다.
+
+### 9.3 검증·디버깅 쿼리
+
+```sql
+PRAGMA user_version;            -- 마이그레이션 버전
+PRAGMA integrity_check;         -- DB 무결성
+PRAGMA foreign_key_check;       -- FK 위반 row
+
+-- 인덱스 사용 여부
+EXPLAIN QUERY PLAN
+SELECT * FROM requests WHERE session_id=? AND type='tool_call' ORDER BY timestamp DESC LIMIT 50;
+
+-- stats_hourly ↔ requests 동기화 검증
+SELECT
+  (SELECT SUM(tokens_total) FROM stats_hourly) -
+  (SELECT SUM(tokens_total) FROM requests WHERE event_type IS NULL OR event_type != 'pre_tool') AS drift;
+```
+
+drift ≠ 0이면 `rebuild-stats` 실행.
+
+---
+
+## 10. 가격 관리 (`pricing.ts`)
+
+토큰 단가는 DB 컬럼이 아니라 외부 설정 파일과 런타임 캐시로 관리합니다. 비용은 저장하지 않고 위젯에서 계산합니다.
+
+[`packages/storage/src/pricing.ts`](../packages/storage/src/pricing.ts) — 토큰 단가 정보를 코드 밖으로 분리한 가격 관리자.
+
+- 외부 설정: `~/.spyglass/pricing.json` (없으면 기본값으로 자동 생성)
+- 매칭: `model.startsWith(entry.model)` (prefix match)
+- 폴백: Sonnet 4 단가
+- 캐시: 모듈 로드 시 1회 메모리 캐시
+
+기본 단가표 (USD per 1M tokens): `claude-opus-4-` (15/75/18.75/1.50), `claude-haiku-4-` (0.80/4/1.00/0.08), `claude-sonnet-4-` (3/15/3.75/0.30). 컬럼 순서: input, output, cache_create, cache_read.
+
+DB의 `proxy_requests.cost_usd`는 신뢰도 문제로 NULL 유지. 비용이 필요한 위젯은 `getPricingForModel(model)` × `tokens` 컬럼으로 런타임 계산합니다.
+
+---
+
+## 11. 외부 API와의 매핑
+
+훅(hook) 이벤트와 프록시 캡처가 어떤 엔드포인트를 거쳐 어느 테이블에 기록되는지 1:1로 보여줍니다.
+
+**hook → DB 흐름**:
+
+| Hook 이벤트 | 엔드포인트 | 저장 위치 |
+|-------------|------------|-----------|
+| `UserPromptSubmit` | `/collect` | `requests` (`type='prompt'`) |
+| `PreToolUse` | `/collect` | `requests` (`type='tool_call'`, `event_type='pre_tool'`) |
+| `PostToolUse` | `/collect` | `requests` UPDATE (`event_type='tool'` 머지) |
+| `SessionStart` | `/events` | `claude_events` + `sessions` reactivate + meta-docs sync |
+| `SessionEnd` | `/events` | `claude_events` + `sessions.ended_at` |
+| `Stop` | `/events` | `claude_events` + `requests` (`type='response'` 추가) |
+| `Notification`, 와일드카드 | `/events` | `claude_events`만 |
+
+**proxy → DB 흐름** ([`server/src/proxy/handler/persist.ts`](../packages/server/src/proxy/handler/persist.ts)):
+
+1. 요청 인입: 헤더(`x-claude-code-session-id`, `anthropic-beta`)·body(`messages_count`, `tools_count`, `system`) 파싱
+2. body.system 정규화 → `system_prompts` UPSERT → `system_hash` 획득
+3. 응답 완료: SSE 파싱으로 `api_request_id`, tool_use 블록, tokens 누적
+4. `proxy_requests` INSERT (압축 payload 포함)
+5. tool_use 블록 → `proxy_tool_uses` INSERT OR IGNORE
+6. `backfillRequestApiRequestIdByToolUse()` — hook race로 NULL인 `requests.api_request_id` 즉시 채움
+
+---
+
+## 12. schema/ 참조
+
+테이블별 전체 컬럼·인덱스·예시 쿼리는 다음 문서에 있습니다.
+
+- [README — 스키마 개요·ERD](./schema/README.md)
+- [sessions](./schema/sessions.md) — 세션 메타
+- [requests](./schema/requests.md) — 훅 기반 요청/도구 호출 (핵심 테이블)
+- [claude-events](./schema/claude-events.md) — raw 훅 페이로드
+- [proxy-requests](./schema/proxy-requests.md) — HTTP 프록시 메트릭 + `proxy_tool_uses`
+- [system-prompts](./schema/system-prompts.md) — system 본문 dedup
+- [meta-documents](./schema/meta-documents.md) — Behavior Definitions 카탈로그 + cwd resolution
+- [model-limits](./schema/model-limits.md) — 모델 한도 SSoT
+
+---
+
+## 13. 변경 추적
+
+스키마·집계 변경 시 갱신해야 하는 문서·파일 위치를 한곳에 모아둡니다.
+
+- 신규 마이그레이션 추가 시 본 문서의 § 3.4 표에 한 줄 추가
+- 테이블 컬럼 추가/변경 시 해당 `docs/schema/<table>.md` 갱신
+- 산식 변경(특히 `stats_hourly` / `stats_proxy_hourly`) 시 `aggregate-*.ts`와 `build-aggregate.ts`, 마이그레이션, 본 문서 § 5.9 / § 5.10 / § 7을 동시 갱신
+- 모든 메타 문서 작성은 [`CLAUDE.md`](../CLAUDE.md)의 doc-spec 스킬 규칙을 따름

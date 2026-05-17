@@ -6,6 +6,7 @@
     "packages/*"
   ],
   "scripts": {
+    "start": "bun run packages/server/src/index.ts start",
     "dev": "bun run packages/server/src/index.ts restart",
     "stop": "bun run packages/server/src/index.ts stop",
     "status": "bun run packages/server/src/index.ts status",
@@ -14,7 +15,9 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "prepare": "git config core.hooksPath .githooks",
-    "backfill:system-prompts": "bun run packages/server/scripts/backfill-system-prompts.ts"
+    "backfill:system-prompts": "bun run packages/server/scripts/backfill-system-prompts.ts",
+    "rebuild-stats": "bun run packages/storage/src/scripts/rebuild-stats.ts",
+    "rebuild-stats-proxy": "bun run packages/storage/src/scripts/rebuild-stats-proxy.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -26,6 +29,7 @@
   },
   "dependencies": {
     "2": "^3.0.0",
+    "@anthropic-ai/sdk": "^0.96.0",
     "dev": "^0.1.3",
     "eventsource": "^4.1.0",
     "react-devtools-core": "^7.0.1"
