@@ -124,7 +124,7 @@ export async function fetchDashboard() {
     // (left-panel-observability-revamp ADR-003 — 별도 Promise.all 병렬)
     fetchObservability();
   } catch (err) {
-    showError(`대시보드 로드 실패: ${err.message}`);
+    showError(window.I18n.t('common.api-error.dashboard-load-failed', { message: err.message }));
   }
 }
 
@@ -155,7 +155,7 @@ export async function fetchRequests(append = false) {
   } catch {
     if (!append) {
       document.getElementById('requestsBody').innerHTML =
-        `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty" style="color:var(--red)">요청 목록 로드 실패</td></tr>`;
+        `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty" style="color:var(--red)">${window.I18n.t('common.api-error.request-list-load-failed')}</td></tr>`;
     }
   }
 }

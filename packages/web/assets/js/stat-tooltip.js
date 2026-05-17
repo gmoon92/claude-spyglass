@@ -1,47 +1,47 @@
 // Command Center Strip 지표 hover 툴팁 — cache-tooltip.js 패턴 동일
 const CTX_TOOLTIP_CONTENT = {
   'context-growth': {
-    title: 'Accumulated Tokens',
-    desc:  '세션 동안 누적된 input_tokens 흐름을 보여줍니다.\n• 라인 아래(진한 영역) = 사용량, 라인 위(옅은 영역) = 남은 한도.\n• 한도는 DB의 model_limits 시드(Migration 026)를 기준으로 결정합니다 — 운영자는 SQL로 모델 매핑을 직접 갱신할 수 있습니다.\n• 추가 신호: 모델명 [1m] suffix 또는 anthropic-beta 헤더의 context-1m-2025-08-07 토큰이 있으면 1M로 승격.\n• 이 차트는 proxy 관측 기반이며 Claude 런타임의 자동 compact 후 사용률과는 다를 수 있습니다.',
+    get title() { return window.I18n.t('ui.stat-tooltip.context-growth.title'); },
+    get desc()  { return window.I18n.t('ui.stat-tooltip.context-growth.desc'); },
   },
 };
 
 const MINI_BADGE_TOOLTIP = {
-  spike: '토큰이 세션 평균의 2배 초과',
-  loop:  '동일 도구 연속 3회 이상 호출',
-  slow:  '실행 시간 상위 5% 초과',
-  error: '도구 실행 실패',
-  cache: '프롬프트 캐시 히트',
+  get spike() { return window.I18n.t('ui.stat-tooltip.badge.spike'); },
+  get loop()  { return window.I18n.t('ui.stat-tooltip.badge.loop'); },
+  get slow()  { return window.I18n.t('ui.stat-tooltip.badge.slow'); },
+  get error() { return window.I18n.t('ui.stat-tooltip.badge.error'); },
+  get cache() { return window.I18n.t('ui.stat-tooltip.badge.cache'); },
 };
 
 const STAT_TOOLTIP_CONTENT = {
   sessions: {
-    title: 'Total Sessions',
-    desc:  '현재 필터 기간 내 생성된 Claude Code 세션 수.\n세션은 claude 명령 실행 시 시작됩니다.',
+    get title() { return window.I18n.t('ui.stat-tooltip.sessions.title'); },
+    get desc()  { return window.I18n.t('ui.stat-tooltip.sessions.desc'); },
   },
   requests: {
-    title: 'Total Requests',
-    desc:  'prompt · tool_call · system 타입 요청의 총합.\n훅 이벤트 수신 기준.',
+    get title() { return window.I18n.t('ui.stat-tooltip.requests.title'); },
+    get desc()  { return window.I18n.t('ui.stat-tooltip.requests.desc'); },
   },
   tokens: {
-    title: 'Total Tokens',
-    desc:  '입력 + 출력 토큰의 합산.\ncache_creation · cache_read 토큰 포함.',
+    get title() { return window.I18n.t('ui.stat-tooltip.tokens.title'); },
+    get desc()  { return window.I18n.t('ui.stat-tooltip.tokens.desc'); },
   },
   active: {
-    title: 'LIVE Sessions',
-    desc:  '지금 실시간으로 실행 중인 세션 수.\nended_at NULL + 직전 30분 이내 활동 기준 (storage/_shared.LIVE_STALE_THRESHOLD_MS).\n도트 색: 녹색=SSE 연결됨, 빨강=끊김.',
+    get title() { return window.I18n.t('ui.stat-tooltip.active.title'); },
+    get desc()  { return window.I18n.t('ui.stat-tooltip.active.desc'); },
   },
   'avg-duration': {
-    title: 'Avg Response Time',
-    desc:  'prompt 타입 요청의 평균 응답시간.\nLLM 추론 + 네트워크 지연 포함.',
+    get title() { return window.I18n.t('ui.stat-tooltip.avg-duration.title'); },
+    get desc()  { return window.I18n.t('ui.stat-tooltip.avg-duration.desc'); },
   },
   p95: {
-    title: 'P95 Response Time',
-    desc:  'tool_call 응답시간의 95번째 백분위.\n상위 5% 느린 요청을 제외한 기준값.',
+    get title() { return window.I18n.t('ui.stat-tooltip.p95.title'); },
+    get desc()  { return window.I18n.t('ui.stat-tooltip.p95.desc'); },
   },
   err: {
-    title: 'Tool Error Rate',
-    desc:  'tool_call 중 오류 응답 비율.\n5% 초과 시 빨간색 경고로 표시.',
+    get title() { return window.I18n.t('ui.stat-tooltip.err.title'); },
+    get desc()  { return window.I18n.t('ui.stat-tooltip.err.desc'); },
   },
 };
 
@@ -155,13 +155,17 @@ export function initStatTooltip() {
       _pointHoverActive = true;
       // 누적 라인 — 모델 한도가 있으면 "X / Y tokens (Z%)" 풀 표기
       const accumulatedLine = detail.windowLabel
-        ? `누적 ${detail.formattedValue} / ${detail.windowLabel} tokens (${detail.usagePercent ?? '0.0'}%)`
-        : `누적 ${detail.formattedValue} tokens`;
+        ? window.I18n.t('ui.stat-tooltip.point-hover.accumulated-with-limit', {
+            value:   detail.formattedValue,
+            limit:   detail.windowLabel,
+            percent: detail.usagePercent ?? '0.0',
+          })
+        : window.I18n.t('ui.stat-tooltip.point-hover.accumulated', { value: detail.formattedValue });
       const deltaLine = detail.formattedDelta
-        ? `<br><span style="opacity:0.6">전 턴 대비 ${detail.formattedDelta} tokens</span>`
+        ? `<br><span style="opacity:0.6">${window.I18n.t('ui.stat-tooltip.point-hover.delta', { delta: detail.formattedDelta })}</span>`
         : '';
       const modelLine = detail.windowModel
-        ? `<br><span style="opacity:0.45">모델 ${detail.windowModel}</span>`
+        ? `<br><span style="opacity:0.45">${window.I18n.t('ui.stat-tooltip.point-hover.model', { model: detail.windowModel })}</span>`
         : '';
       tooltip.innerHTML = `
         <div class="stat-tooltip-title">Turn ${detail.turnIndex}</div>

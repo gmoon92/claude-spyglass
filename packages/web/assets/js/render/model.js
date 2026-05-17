@@ -63,8 +63,8 @@ export function trustOf(r) {
  *     "<synthetic>" / "synthetic"   → "SDK 합성"
  */
 export function modelChipLabel(model, cls) {
-  if (cls === 'unknown')   return '모델불명';
-  if (cls === 'synthetic') return 'SDK 합성';
+  if (cls === 'unknown')   return window.I18n.t('badges.renderers.model.unknown');
+  if (cls === 'synthetic') return window.I18n.t('badges.renderers.model.synthetic');
   if (cls === 'external') {
     const m = String(model);
     const head = m.split('-').slice(0, 2).join(' ');
@@ -119,7 +119,7 @@ export function modelChipLabel(model, cls) {
 export function modelChipHtml(r, opts = {}) {
   const cls     = modelClassOf(r?.model);
   const label   = modelChipLabel(r?.model, cls);
-  const title   = r?.model || '모델 정보 없음';
+  const title   = r?.model || window.I18n.t('badges.renderers.model.no-info');
   const sizeCls = opts.mini ? ' model-chip-mini' : '';
   return `<span class="model-chip model-chip-${cls}${sizeCls} ds-chip" data-tone="${cls}" title="${escHtml(title)}">${escHtml(label)}</span>`;
 }

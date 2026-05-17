@@ -2,30 +2,34 @@
 
 import { renderFilterBtn } from '../design-system/primitives/filter-button.js';
 
-const FILTER_GROUPS = [
-  {
-    group: 'all',
-    items: [{ key: 'all', label: 'All', defaultActive: true }],
-  },
-  {
-    group: 'request',
-    ariaLabel: '요청 종류',
-    items: [
-      { key: 'prompt',    label: 'prompt',    title: '사용자 입력(LLM 추론 요청)만 표시' },
-      { key: 'system',    label: 'system',    title: '시스템 메시지(컨텍스트 주입 등)만 표시' },
-    ],
-  },
-  {
-    group: 'tool',
-    ariaLabel: '도구 분류',
-    items: [
-      { key: 'tool_call', label: 'tool_call', title: '도구 실행 요청(Read/Write/Bash 등)만 표시' },
-      { key: 'agent',     label: 'Agent',     title: 'Agent 도구 실행만 표시' },
-      { key: 'skill',     label: 'Skill',     title: 'Skill 도구 실행만 표시' },
-      { key: 'mcp',       label: 'MCP',       title: 'MCP 도구 실행만 표시' },
-    ],
-  },
-];
+/** i18n 준비 후 호출 시점에 평가되도록 함수로 정의 */
+function getFilterGroups() {
+  const t = (key) => window.I18n.t(key);
+  return [
+    {
+      group: 'all',
+      items: [{ key: 'all', label: t('ui.filter-bar.all'), defaultActive: true }],
+    },
+    {
+      group: 'request',
+      ariaLabel: t('ui.filter-bar.request-type'),
+      items: [
+        { key: 'prompt',    label: t('ui.filter-bar.prompt'),    title: t('ui.filter-bar.prompt-title') },
+        { key: 'system',    label: t('ui.filter-bar.system'),    title: t('ui.filter-bar.system-title') },
+      ],
+    },
+    {
+      group: 'tool',
+      ariaLabel: t('ui.filter-bar.tool-category'),
+      items: [
+        { key: 'tool_call', label: t('ui.filter-bar.tool-call'), title: t('ui.filter-bar.tool-call-title') },
+        { key: 'agent',     label: t('ui.filter-bar.agent'),     title: t('ui.filter-bar.agent-title') },
+        { key: 'skill',     label: t('ui.filter-bar.skill'),     title: t('ui.filter-bar.skill-title') },
+        { key: 'mcp',       label: t('ui.filter-bar.mcp'),       title: t('ui.filter-bar.mcp-title') },
+      ],
+    },
+  ];
+}
 
 /**
  * @param {string} containerId
@@ -35,7 +39,7 @@ const FILTER_GROUPS = [
 export function createFilterBar(containerId, { dataAttr, onChange }) {
   const container = document.getElementById(containerId);
 
-  container.innerHTML = FILTER_GROUPS.map(g => {
+  container.innerHTML = getFilterGroups().map(g => {
     const ariaAttr = g.ariaLabel ? ` aria-label="${g.ariaLabel}"` : '';
     const btns = g.items.map(item => {
       const isActive = !!item.defaultActive;

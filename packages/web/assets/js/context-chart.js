@@ -168,7 +168,7 @@ export function renderContextChart(turns) {
 
   // 누적 토큰 인디케이터 — 실제 사용률(%) 함께 노출
   if (_indicator) {
-    _indicator.textContent = `누적 ${fmtK(latest)} / ${cw.label} tokens (${pctOfWindow.toFixed(1)}%)`;
+    _indicator.textContent = window.I18n.t('ui.context-chart.indicator', { value: fmtK(latest), limit: cw.label, percent: pctOfWindow.toFixed(1) });
     _indicator.className = '';
   }
 
@@ -176,7 +176,7 @@ export function renderContextChart(turns) {
   if (_footer) {
     const last = sorted[sorted.length - 1];
     const modelSuffix = cw.model ? ` (${cw.model})` : '';
-    _footer.textContent = `Turn ${last.turn_index} · 최대 ${fmtK(Math.max(...values))} tokens · 모델 한도: ${cw.label}${modelSuffix}`;
+    _footer.textContent = window.I18n.t('ui.context-chart.footer', { turn: last.turn_index, max: fmtK(Math.max(...values)), limit: cw.label, model: modelSuffix });
   }
 
   // DPR 처리

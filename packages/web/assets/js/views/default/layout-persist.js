@@ -14,7 +14,7 @@ export function toggleChartCollapse() {
   chartSection.classList.toggle('chart-collapsed');
   const collapsed = chartSection.classList.contains('chart-collapsed');
   localStorage.setItem(CHART_COLLAPSED_KEY, JSON.stringify(collapsed));
-  if (btn) btn.setAttribute('aria-label', collapsed ? '펼치기' : '접기');
+  if (btn) btn.setAttribute('aria-label', collapsed ? window.I18n.t('ui.default-view.layout.expand') : window.I18n.t('ui.default-view.layout.collapse'));
 }
 
 export function restoreChartCollapsedState() {
@@ -23,7 +23,7 @@ export function restoreChartCollapsedState() {
     const chartSection = document.getElementById('chartSection');
     const btn = document.getElementById('btnToggleChart');
     chartSection.classList.add('chart-collapsed');
-    if (btn) btn.setAttribute('aria-label', '펼치기');
+    if (btn) btn.setAttribute('aria-label', window.I18n.t('ui.default-view.layout.expand'));
   }
 }
 

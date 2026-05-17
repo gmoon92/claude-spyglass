@@ -59,7 +59,7 @@ export function makeRequestRow(r, opts = {}) {
   const msgPreview = contextPreview(r);
   const msgHtml    = msgPreview
     ? msgPreview
-    : `<span class="cell-msg-empty" aria-label="메시지 없음"></span>`;
+    : `<span class="cell-msg-empty" aria-label="${window.I18n.t('session.rows.empty-message')}"></span>`;
 
   const spikeLoopBadges = flags ? anomalyBadgesHtml(new Set([...flags].filter(f => f !== 'slow'))) : '';
   const slowBadge       = flags && flags.has('slow') ? `<span class="mini-badge badge-slow" data-mini-badge-tooltip="slow">slow</span>` : '';
@@ -97,11 +97,11 @@ export function makeSessionRow(s, isSelected) {
   const liveState = s.live_state || (s.ended_at ? 'ended' : 'live');
   let statusGlyph, statusCls, statusTitle, statusTone;
   if (liveState === 'ended') {
-    statusGlyph = svgStatusEnded({ size: 12 }); statusCls = ''; statusTitle = '종료된 세션'; statusTone = 'ended';
+    statusGlyph = svgStatusEnded({ size: 12 }); statusCls = ''; statusTitle = window.I18n.t('session.rows.status.ended'); statusTone = 'ended';
   } else if (liveState === 'stale') {
-    statusGlyph = svgStatusStale({ size: 12 }); statusCls = ' stale'; statusTitle = 'stale — SessionEnd 누락 의심'; statusTone = 'stale';
+    statusGlyph = svgStatusStale({ size: 12 }); statusCls = ' stale'; statusTitle = window.I18n.t('session.rows.status.stale'); statusTone = 'stale';
   } else {
-    statusGlyph = svgStatusActive({ size: 12 }); statusCls = ' active'; statusTitle = '라이브 세션'; statusTone = 'active';
+    statusGlyph = svgStatusActive({ size: 12 }); statusCls = ' active'; statusTitle = window.I18n.t('session.rows.status.live'); statusTone = 'active';
   }
   const shortId  = s.id.slice(0, 8);
   const preview  = extractFirstPrompt(s.first_prompt_payload);
@@ -121,7 +121,7 @@ export function makeSessionRow(s, isSelected) {
 
 export function renderRequests(container, list, anomalyMap = new Map()) {
   if (!list.length) {
-    container.innerHTML = `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty">데이터가 없습니다</td></tr>`;
+    container.innerHTML = `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty">${window.I18n.t('session.rows.no-data')}</td></tr>`;
     return;
   }
   container.innerHTML = list.map(r => makeRequestRow(r, { showSession: true, anomalyFlags: anomalyMap.get(r.id) || null })).join('');

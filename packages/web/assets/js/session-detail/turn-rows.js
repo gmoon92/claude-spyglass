@@ -304,8 +304,8 @@ function renderItemsHtml(items) {
 function confidenceMarkHtml(confidence) {
   if (!confidence || confidence === 'high') return '';
   const tip = confidence === 'error'
-    ? '응답 메타 신뢰도 오류 (수집 실패)'
-    : '응답 메타 신뢰도 낮음 (proxy fallback)';
+    ? window.I18n.t('session.session-detail.turn-rows.confidence-error')
+    : window.I18n.t('session.session-detail.turn-rows.confidence-low');
   return `<sup class="confidence-low-mark" title="${escHtml(tip)}">*</sup>`;
 }
 
@@ -349,5 +349,5 @@ export function buildTurnDetailRows(turn) {
     : interleaveToolsAndResponses(turn.tool_calls || [], responses, turn.prompt?.model);
   const responseRow = (responses.length === 0) ? renderEmptyResponseRow() : '';
 
-  return promptRow + (mergedRows || '<div class="turn-row-empty">도구 호출 없음</div>') + responseRow;
+  return promptRow + (mergedRows || `<div class="turn-row-empty">${window.I18n.t('session.session-detail.turn-rows.tool-empty')}</div>`) + responseRow;
 }

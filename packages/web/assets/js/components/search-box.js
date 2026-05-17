@@ -14,7 +14,7 @@ export function createSearchBox(containerId, { placeholder = '', onSearch }) {
   container.innerHTML = `
     <span class="feed-search-icon">${svgSearch({ size: 14, className: 'feed-search-icon-svg' })}</span>
     <input class="feed-search-input" type="text" placeholder="${placeholder}" autocomplete="off" />
-    ${renderCloseBtn({ size: 'sm', label: '검색어 지우기', dataAttrs: { action: 'clear' } }).replace('class="ds-close-btn"', 'class="feed-search-clear ds-close-btn"')}
+    ${renderCloseBtn({ size: 'sm', label: window.I18n.t('ui.search-box.clear-label'), dataAttrs: { action: 'clear' } }).replace('class="ds-close-btn"', 'class="feed-search-clear ds-close-btn"')}
   `.trim();
 
   const input = container.querySelector('.feed-search-input');

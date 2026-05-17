@@ -24,7 +24,7 @@ import { fmtToken, escHtml } from './formatters.js';
 import { toolIconHtml } from './renderers.js';
 import { skToolMatrix } from './render/skeleton.js';
 import { renderSortHead } from './design-system/markers/sort-head.js';
-import { renderBadge } from './design-system/badges/badge.js';
+import { getCollator } from './i18n-utils.js';
 
 export const API = '';
 
@@ -67,10 +67,11 @@ export async function loadProjectToolStats(projectName) {
   _currentProjectName = projectName || null;
 
   if (!_currentProjectName) {
+    const t = window.I18n?.t ?? ((k) => k);
     _projectContainer.innerHTML = `
       <div class="state-empty">
-        <span class="state-empty-title">프로젝트를 선택하세요</span>
-        <span class="state-empty-hint">좌측 패널에서 프로젝트를 선택하면 도구별 성능 매트릭스가 표시됩니다.</span>
+        <span class="state-empty-title">${t('ui.tool-stats.select-project')}</span>
+        <span class="state-empty-hint">${t('ui.tool-stats.select-project-hint')}</span>
       </div>`;
     _projectStats = [];
     return;
@@ -83,10 +84,11 @@ export async function loadProjectToolStats(projectName) {
     _projectStats = json.data || [];
     renderMatrix(_projectContainer, _projectStats);
   } catch {
+    const t = window.I18n?.t ?? ((k) => k);
     _projectContainer.innerHTML = `
       <div class="state-error">
-        <div class="state-error-message">데이터를 불러올 수 없습니다</div>
-        <button class="state-error-retry" data-retry-project-tools>다시 시도</button>
+        <div class="state-error-message">${t('ui.tool-stats.load-failed')}</div>
+        <button class="state-error-retry" data-retry-project-tools>${t('ui.tool-stats.retry')}</button>
       </div>`;
     _projectContainer.querySelector('[data-retry-project-tools]')?.addEventListener('click', () => loadProjectToolStats(_currentProjectName));
   }
@@ -122,14 +124,13 @@ function applySortChange(key) {
   if (_projectContainer) renderMatrix(_projectContainer, _projectStats);
 }
 
-// 한국어 collator — tool name은 영문이 주류이나 안전하게 통일.
-const koCollator = (typeof Intl !== 'undefined' && Intl.Collator)
-  ? new Intl.Collator('ko', { sensitivity: 'base', numeric: true })
-  : null;
+// 활성 언어 기반 collator는 i18n-utils.js의 SSoT를 재사용 (chart.js / 다른 정렬 모듈과 통일).
+// tool name은 영문이 주류이나 locale 정렬 일관성을 위해 동일 정책을 적용한다.
 function cmpString(a, b) {
   const sa = a == null ? '' : String(a);
   const sb = b == null ? '' : String(b);
-  return koCollator ? koCollator.compare(sa, sb) : sa.localeCompare(sb);
+  const collator = getCollator();
+  return collator ? collator.compare(sa, sb) : sa.localeCompare(sb);
 }
 function cmpNumber(a, b) {
   return (a ?? 0) - (b ?? 0);
@@ -150,28 +151,12 @@ function applySort(rows, key, dir = 'desc') {
   return rows.slice().sort((a, b) => factor * cmp(a, b));
 }
 
-/**
- * 헤더 active 클래스
- * @deprecated Wave 2 이후 renderSortHead 통합으로 대체 예정. 다른 wave 호출처가 있을 수 있으므로 유지.
- */
+/** 헤더 active 클래스 (sortable + 방향 마커). */
 function sortHeaderCls(key) {
   if (_sortKey !== key) return '';
   return _sortDir === 'asc' ? 'sort-asc' : 'sort-desc';
 }
-/**
- * 헤더 ↓/↑ 표기자
- * @deprecated Wave 2 이후 renderSortHead 통합으로 대체 예정. 다른 wave 호출처가 있을 수 있으므로 유지.
- */
-function sortIndicator(key) {
-  if (_sortKey !== key) return '<span class="sort-arrow sort-arrow-idle">↕</span>';
-  return _sortDir === 'asc'
-    ? '<span class="sort-arrow">↑</span>'
-    : '<span class="sort-arrow">↓</span>';
-}
-/**
- * 헤더 aria-sort 속성 값 — WAI-ARIA 표준
- * @deprecated Wave 2 이후 renderSortHead 통합으로 대체 예정. 다른 wave 호출처가 있을 수 있으므로 유지.
- */
+/** 헤더 aria-sort 속성 값 — WAI-ARIA 표준. */
 function ariaSortValue(key) {
   if (_sortKey !== key) return 'none';
   return _sortDir === 'asc' ? 'ascending' : 'descending';
@@ -201,8 +186,9 @@ function headerCellHtml(key, label, extraCls = '') {
  */
 function renderMatrix(container, stats) {
   if (!container) return;
+  const t = window.I18n?.t ?? ((k) => k);
   if (!stats || !stats.length) {
-    container.innerHTML = '<div class="state-empty"><span class="state-empty-title">데이터가 없습니다</span></div>';
+    container.innerHTML = `<div class="state-empty"><span class="state-empty-title">${t('ui.tool-stats.no-data')}</span></div>`;
     return;
   }
 
@@ -230,15 +216,14 @@ function renderMatrix(container, stats) {
     const lowCount = s.confidence_low_count || 0;
     const hasLowConf = !!s.has_low_confidence || (errCount + lowCount) > 0;
     const confTip = errCount > 0
-      ? '토큰 신뢰도 오류 (수집 실패)'
-      : '토큰 신뢰도 낮음 (transcript 파싱 실패 또는 proxy fallback)';
+      ? t('common.token-confidence-error')
+      : t('common.token-confidence-low');
     const confMark = hasLowConf
       ? `<sup class="confidence-low-mark" title="${escHtml(confTip)}">*</sup>`
       : '';
 
     // error 컬럼: SQL의 error_count는 이미 confidence_error_count도 합산함 (T-02 보강).
     // Wave 2 치환: mini-badge/badge-error 클래스는 보존 + ds-badge data-tone="error" 추가 (이중 클래스).
-    // renderBadge import 보관 — 다음 wave에서 완전 교체 시 직접 호출로 전환.
     const errBadge = s.error_count > 0
       ? `<span class="ts-err-cell"><span class="mini-badge badge-error ds-badge" data-tone="error">${s.error_count}</span></span>`
       : `<span class="ts-err-cell ts-err-cell--none">—</span>`;
@@ -271,12 +256,12 @@ function renderMatrix(container, stats) {
   container.innerHTML = `
     <div class="ts-mx">
       <div class="ts-mx-head">
-        ${headerCellHtml('tool',   'Tool',     'ts-mx-tool')}
-        ${headerCellHtml('avg',    '평균 응답', 'ts-mx-num')}
-        ${headerCellHtml('calls',  '호출',     'ts-mx-num')}
-        ${headerCellHtml('tokens', '토큰',     'ts-mx-num')}
-        ${headerCellHtml('pct',    '기여도',   'ts-mx-num')}
-        ${headerCellHtml('errors', '오류',     'ts-mx-err')}
+        ${headerCellHtml('tool',   'Tool',                    'ts-mx-tool')}
+        ${headerCellHtml('avg',    t('ui.tool-stats.col-avg'),    'ts-mx-num')}
+        ${headerCellHtml('calls',  t('ui.tool-stats.col-calls'),  'ts-mx-num')}
+        ${headerCellHtml('tokens', t('ui.tool-stats.col-tokens'), 'ts-mx-num')}
+        ${headerCellHtml('pct',    t('ui.tool-stats.col-pct'),    'ts-mx-num')}
+        ${headerCellHtml('errors', t('ui.tool-stats.col-errors'), 'ts-mx-err')}
       </div>
       <div class="ts-mx-body">${rows}</div>
     </div>`;

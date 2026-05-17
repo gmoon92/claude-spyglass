@@ -54,7 +54,7 @@ export function toolStatusBadge(r) {
   } else {
     hasError = !!tr.is_error;
   }
-  return hasError ? `<span class="mini-badge badge-error ds-badge" data-tone="error">오류</span>` : '';
+  return hasError ? `<span class="mini-badge badge-error ds-badge" data-tone="error">${window.I18n.t('badges.renderers.tool-status.error')}</span>` : '';
 }
 
 // 도구별 결과 힌트: "[202줄]" 등
@@ -65,24 +65,24 @@ export function toolResponseHint(r) {
   try {
     if (tn === 'Read') {
       const lines = tr.totalLines ?? tr.total_lines;
-      if (lines != null) return `[${lines}줄]`;
+      if (lines != null) return window.I18n.t('badges.renderers.tool-hint.lines', { n: lines });
     }
     if (tn === 'Bash') {
-      return (tr.stderr && tr.stderr.trim()) ? '[오류]' : '';
+      return (tr.stderr && tr.stderr.trim()) ? window.I18n.t('badges.renderers.tool-hint.error') : '';
     }
     if (tn === 'Edit' || tn === 'Write' || tn === 'MultiEdit') {
-      return '[저장됨]';
+      return window.I18n.t('badges.renderers.tool-hint.saved');
     }
     if (tn === 'Grep') {
       const num = tr.numFiles ?? tr.num_files;
-      if (num != null) return `[${num}개 파일]`;
+      if (num != null) return window.I18n.t('badges.renderers.tool-hint.files', { n: num });
     }
     if (tn === 'Glob') {
       const arr = Array.isArray(tr.filenames ?? tr.results ?? tr.paths ?? tr) ? (tr.filenames ?? tr.results ?? tr.paths) : null;
-      if (arr != null) return `[${arr.length}개 매칭]`;
+      if (arr != null) return window.I18n.t('badges.renderers.tool-hint.matches', { n: arr.length });
     }
     if (tn === 'Agent' || tn === 'Skill') {
-      return tr.is_error ? '[실패]' : '';
+      return tr.is_error ? window.I18n.t('badges.renderers.tool-hint.failed') : '';
     }
   } catch { /* 파싱 실패는 무시 */ }
   return '';

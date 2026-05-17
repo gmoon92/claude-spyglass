@@ -27,6 +27,7 @@ import { skSysLibCards, skBlock } from './render/skeleton.js';
 import { initColResize } from './col-resize.js';
 import { renderSortHead } from './design-system/markers/sort-head.js';
 import { renderCloseBtn } from './design-system/primitives/close-button.js';
+import { getCollator } from './i18n-utils.js';
 
 const CONTAINER_ID = 'sysLibBody';
 const DEFAULT_LIMIT = 100;
@@ -83,7 +84,8 @@ export async function loadSystemPromptLibrary() {
     _rows = Array.isArray(res?.data) ? res.data : [];
     renderContainer(container);
   } catch (err) {
-    container.innerHTML = `<div class="state-empty"><span class="state-empty-title">불러오기 실패: ${escHtml(String(err?.message ?? err))}</span></div>`;
+    const t = window.I18n?.t ?? ((k) => k);
+    container.innerHTML = `<div class="state-empty"><span class="state-empty-title">${t('ui.syslib.load-failed', { message: escHtml(String(err?.message ?? err)) })}</span></div>`;
   }
 }
 
@@ -106,8 +108,9 @@ function renderContainer(container) {
 }
 
 function renderHtml(rows) {
+  const t = window.I18n?.t ?? ((k) => k);
   if (rows.length === 0) {
-    return `<div class="state-empty"><span class="state-empty-title">시스템 프롬프트가 없습니다 (아직 dedup 카탈로그 비어있음)</span></div>`;
+    return `<div class="state-empty"><span class="state-empty-title">${t('ui.syslib.no-prompts')}</span></div>`;
   }
 
   // ref_count Top N% 산출 — sort key가 ref_count일 때만 의미 있음 (rows는 이미 현재 정렬 적용 완료).
@@ -120,7 +123,7 @@ function renderHtml(rows) {
     const refClass  = (_sortKey === 'ref_count' && idx < refHotCutoff) ? ' syslib-ref-hot' : '';
     const sizeClass = sizeClassFor(r.byte_size);
     return `
-    <tr class="syslib-row" data-syslib-hash="${escHtml(r.hash)}" tabindex="0" role="button" aria-label="시스템 프롬프트 본문 보기">
+    <tr class="syslib-row" data-syslib-hash="${escHtml(r.hash)}" tabindex="0" role="button" aria-label="${t('ui.syslib.view-prompt-aria')}">
       <td class="syslib-hash"><code>${escHtml(r.hash.slice(0, 12))}…</code></td>
       <td class="num${sizeClass ? ' ' + sizeClass : ''}">${formatBytes(r.byte_size)}</td>
       <td class="num">${escHtml(String(r.segment_count ?? '-'))}</td>
@@ -253,8 +256,9 @@ async function showDetailModal(hash) {
   try {
     const res = await fetchJson(`/api/system-prompts/${encodeURIComponent(hash)}`);
     const row = res?.data;
+    const t = window.I18n?.t ?? ((k) => k);
     if (!row) {
-      modal.innerHTML = renderModalShell(`<p class="syslib-dim">본문을 찾을 수 없습니다.</p>`);
+      modal.innerHTML = renderModalShell(`<p class="syslib-dim">${t('ui.syslib.not-found')}</p>`);
     } else {
       modal.innerHTML = renderModalShell(`
         <header class="syslib-detail-head">
@@ -267,7 +271,7 @@ async function showDetailModal(hash) {
       `);
     }
   } catch (err) {
-    modal.innerHTML = renderModalShell(`<p class="syslib-dim">불러오기 실패: ${escHtml(String(err?.message ?? err))}</p>`);
+    modal.innerHTML = renderModalShell(`<p class="syslib-dim">${t('ui.syslib.modal-load-failed', { message: escHtml(String(err?.message ?? err)) })}</p>`);
   }
 
   // ── 닫기 동작: × 버튼 / 외부 클릭(backdrop) / ESC ── (web-design-balance-pass ADR-007)
@@ -287,7 +291,8 @@ async function showDetailModal(hash) {
 
 function renderModalShell(inner) {
   // renderCloseBtn: ds-close-btn 이중 클래스 패턴 — 기존 syslib-detail-close / data-syslib-close / aria-label 보존.
-  const closeBtn = renderCloseBtn({ size: 'lg', label: '닫기', dataAttrs: { 'syslib-close': '' } })
+  const t = window.I18n?.t ?? ((k) => k);
+  const closeBtn = renderCloseBtn({ size: 'lg', label: t('ui.syslib.close-label'), dataAttrs: { 'syslib-close': '' } })
     .replace('class="ds-close-btn"', 'class="syslib-detail-close ds-close-btn"');
   return `<div class="syslib-detail-inner">
     ${closeBtn}
@@ -339,14 +344,13 @@ function formatTime(ms) {
 //  - null/누락값 정책은 비교 함수 내부에서만 결정 (호출 측이 분기를 떠안지 않음).
 // =============================================================================
 
-const koCollator = (typeof Intl !== 'undefined' && Intl.Collator)
-  ? new Intl.Collator('ko', { sensitivity: 'base', numeric: true })
-  : null;
-
+// 활성 언어 기반 collator는 i18n-utils.js의 SSoT를 재사용 (chart.js / 다른 정렬 모듈과 통일).
+// 'ko' 하드코딩 시 영/일/중 사용자에게도 한국어 정렬 규칙이 적용되어 의도와 어긋남.
 function cmpString(a, b) {
   const sa = a == null ? '' : String(a);
   const sb = b == null ? '' : String(b);
-  return koCollator ? koCollator.compare(sa, sb) : sa.localeCompare(sb);
+  const collator = getCollator();
+  return collator ? collator.compare(sa, sb) : sa.localeCompare(sb);
 }
 function cmpNumber(a, b) {
   return (a ?? 0) - (b ?? 0);

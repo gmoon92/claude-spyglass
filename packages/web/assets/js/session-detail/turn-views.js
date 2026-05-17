@@ -47,9 +47,8 @@ import { svgChevron } from '../design-system/icons/chevron.js';
  *  - 계산식: Math.round(turn.summary.total_tokens / sessionTotalTokens * 100)
  *  - 같은 세션의 모든 턴 합 = 100%
  *  - native title 속성으로 노출 (커스텀 툴팁 도입은 ROI 낮아 거부 — ADR-003).
- *  - 따옴표 이스케이프 불필요(escHtml 미사용 — 사용자 입력이 아닌 상수 문자열).
+ *  - i18n: session-detail.turn-views.bar-pct-title (언어 전환 시 자동 적용)
  */
-const BAR_PCT_TITLE = '이 턴이 세션 전체 토큰에서 차지하는 비중. 같은 세션의 모든 턴 합이 100% (Turn IN+OUT ÷ 세션 누적 토큰).';
 
 /**
  * 턴 카드 검색 haystack SSoT (search-expand-payload).
@@ -129,7 +128,7 @@ function buildSystemReminderChip(turnIndex, reminders) {
             aria-expanded="false"
             aria-controls="${popoverId}"
             data-sysrem-toggle="${popoverId}"
-            title="이 턴에서 새로 등장한 시스템 리마인더 ${count}건. 클릭으로 원문 보기">
+            title="${window.I18n.t('session.session-detail.turn-views.sysrem-chip-title', { count })}">
       ${svgNote({ size: 12 })}
       <span class="turn-system-reminder-count">${count}</span>
     </button>
@@ -141,10 +140,10 @@ function buildSystemReminderChip(turnIndex, reminders) {
          hidden>
       <header class="turn-system-reminder-popover-header">
         <span class="turn-system-reminder-popover-title">
-          <strong>시스템 리마인더</strong>
-          <span class="turn-system-reminder-popover-count">· ${count}건</span>
+          <strong>${window.I18n.t('session.session-detail.turn-views.sysrem-title')}</strong>
+          <span class="turn-system-reminder-popover-count">${window.I18n.t('session.session-detail.turn-views.sysrem-count', { count })}</span>
         </span>
-        <button type="button" class="turn-system-reminder-popover-close" aria-label="닫기" data-sysrem-close="${popoverId}">×</button>
+        <button type="button" class="turn-system-reminder-popover-close" aria-label="${window.I18n.t('session.session-detail.turn-views.sysrem-close')}" data-sysrem-close="${popoverId}">×</button>
       </header>
       <div class="turn-system-reminder-popover-body">${itemsHtml}</div>
     </div>
@@ -168,10 +167,10 @@ export function initDetailTabBar() {
 
   /** @type {{ value: string, label: string, id: string, selected: boolean, title?: string }[]} */
   const TABS = [
-    { value: 'turn',     label: '턴 뷰',        id: 'tabTurn',     selected: true  },
-    { value: 'requests', label: '요청',          id: 'tabRequests', selected: false },
-    { value: 'llm',      label: 'API 페이로드', id: 'tabLlm',     selected: false, title: 'proxy가 Anthropic API에 전송한 원본 페이로드' },
-    { value: 'syslib',   label: 'System 라이브러리', id: 'tabSysLib', selected: false },
+    { value: 'turn',     label: window.I18n.t('session.session-detail.turn-views.tab-turn'),     id: 'tabTurn',     selected: true  },
+    { value: 'requests', label: window.I18n.t('session.session-detail.turn-views.tab-requests'), id: 'tabRequests', selected: false },
+    { value: 'llm',      label: window.I18n.t('session.session-detail.turn-views.tab-llm'),      id: 'tabLlm',      selected: false, title: window.I18n.t('session.session-detail.turn-views.tab-llm-title') },
+    { value: 'syslib',   label: window.I18n.t('session.session-detail.turn-views.tab-syslib'),   id: 'tabSysLib',   selected: false },
   ];
 
   container.innerHTML = TABS.map(({ value, label, id, selected, title }) => {
@@ -275,8 +274,8 @@ export function renderTurnView(turns, badgeTurns) {
       if (tc.tool_name) toolCountMap[tc.tool_name] = (toolCountMap[tc.tool_name] || 0) + 1;
     }));
     const topTool = Object.entries(toolCountMap).sort((a, b) => b[1] - a[1])[0];
-    let badgesHtml = `<span class="detail-agg-badge ds-badge" data-tone="neutral" title="이 세션에서 토큰을 가장 많이 소비한 턴">최고 비용 Turn: <strong>T${maxCostTurn.turn_index}</strong> (${fmtToken(maxCostTurn.summary.total_tokens)})</span>`;
-    if (topTool) badgesHtml += `<span class="detail-agg-badge ds-badge" data-tone="neutral" title="이 세션에서 가장 많이 호출된 도구">최다 호출 Tool: <strong>${escHtml(topTool[0])}</strong> (${topTool[1]}회)</span>`;
+    let badgesHtml = `<span class="detail-agg-badge ds-badge" data-tone="neutral" title="${window.I18n.t('session.session-detail.turn-views.max-cost-badge-title')}">${window.I18n.t('session.session-detail.turn-views.max-cost-badge', { n: maxCostTurn.turn_index, tokens: fmtToken(maxCostTurn.summary.total_tokens) })}</span>`;
+    if (topTool) badgesHtml += `<span class="detail-agg-badge ds-badge" data-tone="neutral" title="${window.I18n.t('session.session-detail.turn-views.top-tool-badge-title')}">${window.I18n.t('session.session-detail.turn-views.top-tool-badge', { name: escHtml(topTool[0]), count: topTool[1] })}</span>`;
     badgesEl.innerHTML = badgesHtml;
     badgesEl.classList.remove('detail-agg-badges--hidden');
   } else if (badgesEl) {
@@ -284,7 +283,7 @@ export function renderTurnView(turns, badgeTurns) {
   }
 
   if (!turns.length) {
-    container.innerHTML = '<div class="state-empty"><span class="state-empty-title">데이터가 없습니다</span></div>';
+    container.innerHTML = `<div class="state-empty"><span class="state-empty-title">${window.I18n.t('common.no-data')}</span></div>`;
     return;
   }
 
@@ -294,8 +293,13 @@ export function renderTurnView(turns, badgeTurns) {
     const tokOut    = turn.summary.tokens_output ?? 0;
     const durMs     = turn.prompt?.duration_ms ?? 0;
     const outPart   = tokOut > 0 ? ` / OUT ${fmtToken(tokOut)}` : '';
-    const meta      = `도구 ${toolCount}개 · IN ${fmtToken(tokIn)}${outPart}${durMs > 0 ? ` · ⏱ ${formatDuration(durMs)}` : ''}`;
-    const metaTitle = `도구: 이 턴에서 실행된 tool_call 수\nIN: 이 턴의 입력 토큰 합계${tokOut > 0 ? `\nOUT: 이 턴의 출력 토큰 합계` : ''}${durMs > 0 ? `\n⏱: 사용자 프롬프트의 LLM 응답 시간` : ''}`;
+    const meta      = `${window.I18n.t('session.session-detail.turn-views.meta-tool-count', { count: toolCount })} · IN ${fmtToken(tokIn)}${outPart}${durMs > 0 ? ` · ⏱ ${formatDuration(durMs)}` : ''}`;
+    const metaTitle = [
+      window.I18n.t('session.session-detail.turn-views.meta-title-tool'),
+      window.I18n.t('session.session-detail.turn-views.meta-title-in'),
+      ...(tokOut > 0 ? [window.I18n.t('session.session-detail.turn-views.meta-title-out')] : []),
+      ...(durMs > 0  ? [window.I18n.t('session.session-detail.turn-views.meta-title-dur')] : []),
+    ].join('\n');
     const barPct    = sessionTotalTokens > 0
       ? Math.round((turn.summary.total_tokens || 0) / sessionTotalTokens * 100)
       : 0;
@@ -346,7 +350,7 @@ function renderPrologueCardHtml(prologue) {
     const previewHtml = contextPreview(r, 60);
     const ts = fmtTime(r.timestamp);
     const sourceTag = r.source === 'transcript-assistant-text'
-      ? '<span class="prologue-source-tag" title="transcript에서 보충된 어시스턴트 응답">transcript</span>'
+      ? `<span class="prologue-source-tag" title="${window.I18n.t('session.session-detail.turn-views.prologue-transcript-tag')}">transcript</span>`
       : (r.source ? `<span class="prologue-source-tag">${escHtml(r.source)}</span>` : '');
     return `<div class="prologue-row" data-type="${escHtml(r.type)}">
         <span class="prologue-row-target">${targetHtml}</span>
@@ -355,11 +359,11 @@ function renderPrologueCardHtml(prologue) {
         <span class="prologue-row-time">${escHtml(ts)}</span>
       </div>`;
   }).join('');
-  return `<div class="turn-prologue-card" role="region" aria-label="세션 프롤로그">
+  return `<div class="turn-prologue-card" role="region" aria-label="${window.I18n.t('session.session-detail.turn-views.prologue-aria')}">
       <div class="turn-prologue-header">
-        <span class="turn-prologue-title">세션 프롤로그</span>
-        <span class="turn-prologue-count">${prologue.length}건</span>
-        <span class="turn-prologue-hint" title="첫 사용자 프롬프트가 등록되기 전에 도착한 도구·응답입니다. 세션 resume 또는 hook 누락으로 발생할 수 있습니다.">prompt 등록 이전 활동</span>
+        <span class="turn-prologue-title">${window.I18n.t('session.session-detail.turn-views.prologue-title')}</span>
+        <span class="turn-prologue-count">${window.I18n.t('ui.chart.count-unit', { count: prologue.length })}</span>
+        <span class="turn-prologue-hint" title="${window.I18n.t('session.session-detail.turn-views.prologue-hint-title')}">${window.I18n.t('session.session-detail.turn-views.prologue-hint')}</span>
       </div>
       <div class="turn-prologue-body">${rows}</div>
     </div>`;
@@ -389,8 +393,8 @@ export function renderTurnCards(turns, badgeTurns) {
       if (tc.tool_name) toolCountMap[tc.tool_name] = (toolCountMap[tc.tool_name] || 0) + 1;
     }));
     const topTool = Object.entries(toolCountMap).sort((a, b) => b[1] - a[1])[0];
-    let badgesHtml = `<span class="detail-agg-badge ds-badge" data-tone="neutral" title="이 세션에서 토큰을 가장 많이 소비한 턴">최고 비용 Turn: <strong>T${maxCostTurn.turn_index}</strong> (${fmtToken(maxCostTurn.summary.total_tokens)})</span>`;
-    if (topTool) badgesHtml += `<span class="detail-agg-badge ds-badge" data-tone="neutral" title="이 세션에서 가장 많이 호출된 도구">최다 호출 Tool: <strong>${escHtml(topTool[0])}</strong> (${topTool[1]}회)</span>`;
+    let badgesHtml = `<span class="detail-agg-badge ds-badge" data-tone="neutral" title="${window.I18n.t('session.session-detail.turn-views.max-cost-badge-title')}">${window.I18n.t('session.session-detail.turn-views.max-cost-badge', { n: maxCostTurn.turn_index, tokens: fmtToken(maxCostTurn.summary.total_tokens) })}</span>`;
+    if (topTool) badgesHtml += `<span class="detail-agg-badge ds-badge" data-tone="neutral" title="${window.I18n.t('session.session-detail.turn-views.top-tool-badge-title')}">${window.I18n.t('session.session-detail.turn-views.top-tool-badge', { name: escHtml(topTool[0]), count: topTool[1] })}</span>`;
     badgesEl.innerHTML = badgesHtml;
     badgesEl.classList.remove('detail-agg-badges--hidden');
   } else if (badgesEl) {
@@ -402,7 +406,7 @@ export function renderTurnCards(turns, badgeTurns) {
 
   if (!turns.length) {
     container.innerHTML = prologueHtml
-      || '<div class="state-empty"><span class="state-empty-title">데이터가 없습니다</span></div>';
+      || `<div class="state-empty"><span class="state-empty-title">${window.I18n.t('common.no-data')}</span></div>`;
     return;
   }
 
@@ -423,16 +427,16 @@ export function renderTurnCards(turns, badgeTurns) {
   container.innerHTML = prologueHtml + turns.slice().sort((a, b) => b.turn_index - a.turn_index).map(turn => {
     const toolCount = turn.summary.tool_call_count;
     const complexBadge = toolCount > 15
-      ? '<span class="turn-complexity high ds-badge" data-tone="warn">복잡</span>'
+      ? `<span class="turn-complexity high ds-badge" data-tone="warn">${window.I18n.t('session.session-detail.turn-views.complexity-high')}</span>`
       : toolCount > 5
-      ? '<span class="turn-complexity mid ds-badge" data-tone="info">중간</span>'
+      ? `<span class="turn-complexity mid ds-badge" data-tone="info">${window.I18n.t('session.session-detail.turn-views.complexity-mid')}</span>`
       : '';
 
     // system 변경 표지 — turn.system_hash가 직전 turn의 hash와 다르면 ▲ + 8자 hex
     const prevHash = sysHashByIdx.get(turn.turn_index - 1);
     const sysChanged = turn.system_hash && turn.system_hash !== prevHash;
     const systemBadge = sysChanged
-      ? `<span class="turn-system-changed ds-badge" data-tone="warn" title="이 turn에서 system prompt가 ${prevHash ? '변경되었습니다' : '시작되었습니다'} (hash 8자 prefix)">▲ <code>${escHtml(turn.system_hash.slice(0, 8))}</code></span>`
+      ? `<span class="turn-system-changed ds-badge" data-tone="warn" title="${window.I18n.t(prevHash ? 'session.session-detail.turn-views.system-changed' : 'session.session-detail.turn-views.system-started')}">▲ <code>${escHtml(turn.system_hash.slice(0, 8))}</code></span>`
       : '';
 
     const promptText = turn.prompt?.preview
@@ -450,7 +454,7 @@ export function renderTurnCards(turns, badgeTurns) {
     //   분류 판정은 request-types.js의 subTypeOf — 분류 뱃지·필터·flow chip이 한 SSoT를 공유.
     const chips = compressFlowWithResponses(turn).map(item => {
       if (item.kind === 'response') {
-        return `<span class="tool-chip response-chip ds-chip" data-tone="info" title="어시스턴트 응답" aria-label="어시스턴트 응답">${svgDiamond({ size: 10 })}</span>`;
+        return `<span class="tool-chip response-chip ds-chip" data-tone="info" title="${window.I18n.t('session.session-detail.turn-views.response-chip-label')}" aria-label="${window.I18n.t('session.session-detail.turn-views.response-chip-label')}">${svgDiamond({ size: 10 })}</span>`;
       }
       const { name, count, isAgent, agentName, items } = item;
       const base = name.split('__').pop();
@@ -483,7 +487,7 @@ export function renderTurnCards(turns, badgeTurns) {
 
     // 턴뷰 → API 페이로드 딥링크 (deeplink pass). data-payload-ts에 turn 시작 시각을 실어
     // main.js 클릭 위임이 받아 openLlmInputForTurn(ts) 호출 → 가장 가까운 proxy_request로 LLM Input 진입.
-    const payloadActionBtn = `<button type="button" class="turn-card-action-payload" data-payload-ts="${turn.started_at}" title="이 턴 시각에 가장 가까운 API 페이로드 보기" aria-label="API 페이로드 보기">
+    const payloadActionBtn = `<button type="button" class="turn-card-action-payload" data-payload-ts="${turn.started_at}" title="${window.I18n.t('session.session-detail.turn-views.payload-btn-title')}" aria-label="${window.I18n.t('session.session-detail.turn-views.payload-btn-aria')}">
       <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <polyline points="6 5 2 8 6 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
         <polyline points="10 5 14 8 10 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -514,7 +518,7 @@ export function renderTurnCards(turns, badgeTurns) {
           <span>OUT ${tokOut}</span>
           ${turn.prompt?.duration_ms ? `<span>&#9201; ${dur}</span>` : ''}
           ${complexBadge}
-          ${sessionTotalTokens > 0 ? `<span class="turn-card-bar-pct ds-badge" data-tone="neutral" title="${BAR_PCT_TITLE}">${barPct}%</span>` : ''}
+          ${sessionTotalTokens > 0 ? `<span class="turn-card-bar-pct ds-badge" data-tone="neutral" title="${window.I18n.t('session.session-detail.turn-views.bar-pct-title')}">${barPct}%</span>` : ''}
         </div>
       </div>
       <div class="turn-card-expanded">

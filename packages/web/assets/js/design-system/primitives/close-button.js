@@ -39,18 +39,19 @@
  *
  * @example
  * renderCloseBtn({ size: 'md' })
- * // => '<button class="ds-close-btn" type="button" data-size="md" aria-label="닫기">×</button>'
+ * // => '<button class="ds-close-btn" type="button" data-size="md" aria-label="Close">×</button>'
  *
  * @example
- * renderCloseBtn({ size: 'sm', label: '검색어 지우기', dataAttrs: { action: 'clear' } })
- * // => '<button class="ds-close-btn" type="button" data-size="sm" aria-label="검색어 지우기" data-action="clear">×</button>'
+ * renderCloseBtn({ size: 'sm', label: 'Clear search', dataAttrs: { action: 'clear' } })
+ * // => '<button class="ds-close-btn" type="button" data-size="sm" aria-label="Clear search" data-action="clear">×</button>'
  */
-export function renderCloseBtn({ size = 'md', label = '닫기', dataAttrs = {} } = {}) {
-  const safeSize  = ['sm', 'md', 'lg'].includes(size) ? size : 'md';
+export function renderCloseBtn({ size = 'md', label = null, dataAttrs = {} } = {}) {
+  const safeSize    = ['sm', 'md', 'lg'].includes(size) ? size : 'md';
+  const resolvedLabel = label ?? window.I18n.t('common.close');
 
   const extraAttrs = Object.entries(dataAttrs)
     .map(([k, v]) => ` data-${k}="${String(v).replace(/"/g, '&quot;')}"`)
     .join('');
 
-  return `<button class="ds-close-btn" type="button" data-size="${safeSize}" aria-label="${label.replace(/"/g, '&quot;')}"${extraAttrs}>×</button>`;
+  return `<button class="ds-close-btn" type="button" data-size="${safeSize}" aria-label="${resolvedLabel.replace(/"/g, '&quot;')}"${extraAttrs}>×</button>`;
 }

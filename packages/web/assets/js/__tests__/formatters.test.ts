@@ -1,5 +1,21 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect, beforeAll } from 'bun:test';
 import { fmt, formatDuration, fmtToken, fmtRelative, fmtTime, fmtDate, fmtTimestamp, escHtml, shortModelName } from '../formatters.js';
+
+// window.I18n mock — fmtRelative 가 window.I18n.t 를 사용하므로 테스트 환경에서 ko fallback을 주입한다.
+beforeAll(() => {
+  (globalThis as any).window = (globalThis as any).window ?? {};
+  (globalThis as any).window.I18n = {
+    t: (key: string, vars?: Record<string, unknown>) => {
+      const map: Record<string, string> = {
+        'common.formatters.just-now': '방금',
+        'common.formatters.minutes-ago': `${vars?.n}분 전`,
+        'common.formatters.hours-ago': `${vars?.n}시간 전`,
+        'common.formatters.days-ago': `${vars?.n}일 전`,
+      };
+      return map[key] ?? key;
+    },
+  };
+});
 
 // ── fmt 테스트 (숫자 로케일 포맷) ─────────────────────────────────────────────
 

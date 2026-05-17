@@ -154,6 +154,7 @@ function findClosestProxyToTs(ts) {
 export async function showLatestLlmInput() {
   const container = document.getElementById(CONTAINER_ID);
   if (!container) return;
+  const t = window.I18n?.t ?? ((k) => k);
 
   // skeleton-loading T-10: system 카드(큰 본문) + user 카드 2개로 구조 유지.
   container.innerHTML = skLlmInputCards(2);
@@ -178,19 +179,20 @@ export async function showLatestLlmInput() {
     const recent = await fetchJson('/api/proxy-requests?limit=1');
     const list = Array.isArray(recent?.data) ? recent.data : [];
     if (list.length === 0) {
-      container.innerHTML = `<div class="state-empty"><span class="state-empty-title">최근 프록시 요청이 없습니다</span></div>`;
+      container.innerHTML = `<div class="state-empty"><span class="state-empty-title">${t('ui.llm-input.no-recent-proxy')}</span></div>`;
       return;
     }
     await renderLlmInput(list[0].id);
   } catch (err) {
-    container.innerHTML = `<div class="state-empty"><span class="state-empty-title">불러오기 실패: ${escHtml(String(err?.message ?? err))}</span></div>`;
+    container.innerHTML = `<div class="state-empty"><span class="state-empty-title">${t('ui.llm-input.load-failed', { message: escHtml(String(err?.message ?? err)) })}</span></div>`;
   }
 }
 
 function renderEmptySessionHtml(sessionId) {
+  const t = window.I18n?.t ?? ((k) => k);
   return `<div class="state-empty">
-    <span class="state-empty-title">이 세션에는 proxy 요청이 없습니다</span>
-    <span class="state-empty-sub">세션 ID: <code>${escHtml(sessionId.slice(0, 12))}…</code></span>
+    <span class="state-empty-title">${t('ui.llm-input.no-session-proxy')}</span>
+    <span class="state-empty-sub">${t('ui.llm-input.session-id-label')} <code>${escHtml(sessionId.slice(0, 12))}…</code></span>
   </div>`;
 }
 
@@ -206,6 +208,7 @@ function renderEmptySessionHtml(sessionId) {
 export async function renderLlmInput(requestId) {
   const container = document.getElementById(CONTAINER_ID);
   if (!container) return;
+  const t = window.I18n?.t ?? ((k) => k);
 
   // 신규 요청 로드 시 아코디언 상태 리셋 — 다른 요청 잔여 ID 혼입 방지.
   resetAccordionState();
@@ -217,7 +220,7 @@ export async function renderLlmInput(requestId) {
     const msgRes = await fetchJson(`/api/proxy-requests/${encodeURIComponent(requestId)}/messages`);
     const data = msgRes?.data;
     if (!data) {
-      container.innerHTML = `<div class="state-empty"><span class="state-empty-title">요청을 찾을 수 없습니다 (${escHtml(requestId)})</span></div>`;
+      container.innerHTML = `<div class="state-empty"><span class="state-empty-title">${t('ui.llm-input.request-not-found', { id: escHtml(requestId) })}</span></div>`;
       return;
     }
 
@@ -251,7 +254,7 @@ export async function renderLlmInput(requestId) {
 
     bindAccordionEvents(container);
   } catch (err) {
-    container.innerHTML = `<div class="state-empty"><span class="state-empty-title">불러오기 실패: ${escHtml(String(err?.message ?? err))}</span></div>`;
+    container.innerHTML = `<div class="state-empty"><span class="state-empty-title">${t('ui.llm-input.load-failed', { message: escHtml(String(err?.message ?? err)) })}</span></div>`;
   }
 }
 
@@ -270,13 +273,13 @@ export async function renderLlmInput(requestId) {
  *     └─ <details data-message-id="m-N">...</details> 시퀀스
  */
 function renderHtml(p) {
+  const t = window.I18n?.t ?? ((k) => k);
   // 배너 — proxy 데이터의 본질(hook 관측과 다름)을 사용자가 즉시 인지 (banner pass).
   const bannerHtml = `
     <div class="llm-input-banner" role="note">
       <span class="llm-input-banner-icon" aria-hidden="true">${svgInfo({ size: 12, className: 'ds-icon' })}</span>
       <span class="llm-input-banner-text">
-        이 탭은 proxy가 Anthropic API에 전송한 <strong>원본 페이로드</strong>입니다 —
-        훅 관측 데이터(턴 뷰)와 다를 수 있습니다.
+        ${t('ui.llm-input.banner-text')}
       </span>
     </div>`;
 
@@ -291,14 +294,14 @@ function renderHtml(p) {
       <span class="llm-input-rid">request: <code>${escHtml(p.requestId)}</code></span>
       ${p.systemHash
         ? `<span class="llm-input-hash">system: <code>${escHtml(p.systemHash.slice(0, 12))}…</code></span>`
-        : `<span class="llm-input-hash llm-input-hash--empty">system 없음</span>`}
+        : `<span class="llm-input-hash llm-input-hash--empty">${t('ui.llm-input.system-none')}</span>`}
       ${p.systemSize ? `<span class="llm-input-size">${formatBytes(p.systemSize)}</span>` : ''}
-      ${p.decodeError ? `<span class="llm-input-error" title="${escHtml(p.decodeError)}">payload decode 실패</span>` : ''}
+      ${p.decodeError ? `<span class="llm-input-error" title="${escHtml(p.decodeError)}">${t('ui.llm-input.payload-decode-failed')}</span>` : ''}
     </header>`;
 
   const systemHtml = p.systemHash
     ? renderSystemSection(p.systemContent, p.systemMeta, p.systemHash)
-    : '<section class="llm-input-system llm-input-system--empty"><p>이 요청에 system 필드가 없습니다.</p></section>';
+    : `<section class="llm-input-system llm-input-system--empty"><p>${t('ui.llm-input.no-system-field')}</p></section>`;
 
   const messagesHtml = renderMessagesSection(p.messages);
 
@@ -312,6 +315,7 @@ function renderHtml(p) {
  * 컨테이너 id `llm-input-proxy-select`는 bindAccordionEvents에서 change 핸들러 매칭에 사용.
  */
 function renderProxySelector(activeId) {
+  const t = window.I18n?.t ?? ((k) => k);
   const total = _sessionProxyList.length;
   const options = _sessionProxyList.map((r, i) => {
     const idx = i + 1;
@@ -330,7 +334,7 @@ function renderProxySelector(activeId) {
   return `
     <div class="llm-input-proxy-selector">
       <label class="llm-input-proxy-selector-label" for="llm-input-proxy-select">
-        Proxy 요청 (${total}건)
+        ${t('ui.llm-input.proxy-selector-label', { count: total })}
       </label>
       <select id="llm-input-proxy-select" class="llm-input-proxy-select" data-proxy-select>
         ${options}
@@ -349,10 +353,11 @@ function renderProxySelector(activeId) {
  * 부담을 사용자가 직접 조절 가능. 빈/로딩 변형은 접을 내용이 없으므로 <section> 유지.
  */
 function renderSystemSection(content, meta, systemHash) {
+  const t = window.I18n?.t ?? ((k) => k);
   if (!content) {
     return `<section class="llm-input-system llm-input-system--loading">
       <h3>System Prompt</h3>
-      <p class="llm-input-dim">본문 로딩 실패 또는 미존재 — system_hash만 알려진 상태.</p>
+      <p class="llm-input-dim">${t('ui.llm-input.system-load-failed')}</p>
     </section>`;
   }
 
@@ -363,13 +368,13 @@ function renderSystemSection(content, meta, systemHash) {
     ? `<button type="button" class="llm-input-meta-chip llm-input-refs-toggle"
         data-refs-hash="${escHtml(systemHash)}"
         aria-haspopup="dialog" aria-expanded="false"
-        title="클릭으로 이 시스템 프롬프트를 참조한 API 요청 ${refCount}건의 목록 보기.&#10;같은 페르소나·지침이 얼마나 자주 재사용됐는지 = prompt 캐시 재사용 빈도 추적용.">ref_count: ${refCount}</button>`
-    : `<span title="이 시스템 프롬프트(hash 기준)를 참조한 API 요청 수.">ref_count: ${refCount}</span>`;
+        title="${t('ui.llm-input.ref-count-btn-title', { count: refCount })}">ref_count: ${refCount}</button>`
+    : `<span title="${t('ui.llm-input.ref-count-span-title')}">ref_count: ${refCount}</span>`;
 
   const metaLine = meta
     ? `<div class="llm-input-system-meta">
-        <span title="원본 system 배열에서 본문으로 사용된 텍스트 세그먼트 수.&#10;(보통 idx[0]은 결제용 헤더, idx[1] 이후가 본문)">segment_count: ${meta.segment_count ?? '?'}</span>
-        <span title="시스템 프롬프트 본문의 바이트 크기.">byte_size: ${formatBytes(meta.byte_size ?? content.length)}</span>
+        <span title="${t('ui.llm-input.segment-count-title')}">segment_count: ${meta.segment_count ?? '?'}</span>
+        <span title="${t('ui.llm-input.byte-size-title')}">byte_size: ${formatBytes(meta.byte_size ?? content.length)}</span>
         ${refsBtn}
       </div>`
     : '';
@@ -377,7 +382,7 @@ function renderSystemSection(content, meta, systemHash) {
   // 제목 "System" — 아래 "Messages" 섹션과 대문자 형식 일치.
   // 기술 세부(billing-header 제외 정규화)는 summary의 title 툴팁에 보존.
   return `<details class="llm-input-system" open>
-    <summary class="llm-input-system-summary" title="LLM이 받은 시스템 프롬프트 본문.&#10;원본 system 배열 idx[0]의 결제용(billing) 헤더는 hash 정규화 단계에서 제거됐습니다.">System</summary>
+    <summary class="llm-input-system-summary" title="${t('ui.llm-input.system-summary-title')}">System</summary>
     ${metaLine}
     <pre class="llm-input-system-content">${escHtml(content)}</pre>
   </details>`;
@@ -397,8 +402,9 @@ function renderSystemSection(content, meta, systemHash) {
  *  - "전체 펼침" / "전체 접기" 버튼
  */
 function renderMessagesSection(messages) {
+  const t = window.I18n?.t ?? ((k) => k);
   if (!messages.length) {
-    return '<section class="llm-input-messages"><h3>Messages (0)</h3><p class="llm-input-dim">메시지 없음</p></section>';
+    return `<section class="llm-input-messages"><h3>Messages (0)</h3><p class="llm-input-dim">${t('ui.llm-input.no-messages')}</p></section>`;
   }
 
   const items = messages.map((m, i) => renderMessageDetails(m, i)).join('');
@@ -419,6 +425,7 @@ function renderMessagesSection(messages) {
  * "전체 접기"는 시스템 메시지도 함께 접는다 (사용자가 의도적으로 닫고 싶을 때 보장).
  */
 function renderMessagesControls() {
+  const t = window.I18n?.t ?? ((k) => k);
   return `
     <div class="llm-input-messages-controls">
       <label class="llm-input-search">
@@ -427,16 +434,16 @@ function renderMessagesControls() {
           type="search"
           class="llm-input-search-input"
           data-messages-search
-          placeholder="메시지 검색 (2자 이상)"
-          aria-label="메시지 검색"
+          placeholder="${t('ui.llm-input.search-placeholder')}"
+          aria-label="${t('ui.llm-input.search-aria-label')}"
         />
       </label>
       <div class="llm-input-messages-bulk">
-        <button type="button" class="llm-input-expand-all" data-action="expand-all" title="모든 메시지 펼치기">
-          ${svgChevron({ dir: 'down', size: 10 })} 전체 펼침
+        <button type="button" class="llm-input-expand-all" data-action="expand-all" title="${t('ui.llm-input.expand-all-title')}">
+          ${svgChevron({ dir: 'down', size: 10 })} ${t('ui.llm-input.expand-all')}
         </button>
-        <button type="button" class="llm-input-collapse-all" data-action="collapse-all" title="모든 메시지 접기">
-          ${svgChevron({ dir: 'right', size: 10 })} 전체 접기
+        <button type="button" class="llm-input-collapse-all" data-action="collapse-all" title="${t('ui.llm-input.collapse-all-title')}">
+          ${svgChevron({ dir: 'right', size: 10 })} ${t('ui.llm-input.collapse-all')}
         </button>
       </div>
     </div>
@@ -614,14 +621,15 @@ async function openRefsPopover(chipEl, hash) {
   const popover = document.createElement('div');
   popover.className = 'llm-input-refs-popover';
   popover.setAttribute('role', 'dialog');
-  popover.setAttribute('aria-label', 'System 프롬프트 참조 목록');
+  const t = window.I18n?.t ?? ((k) => k);
+  popover.setAttribute('aria-label', t('ui.llm-input.refs-popover-aria-label'));
   popover.innerHTML = `
     <header class="llm-input-refs-popover-header">
-      <span><strong>참조 목록</strong> <span class="llm-input-refs-popover-sub">불러오는 중…</span></span>
-      ${renderCloseBtn({ size: 'sm', label: '닫기', dataAttrs: { 'refs-close': '' } }).replace('class="ds-close-btn"', 'class="ds-close-btn llm-input-refs-popover-close"')}
+      <span><strong>${t('ui.llm-input.refs-popover-title')}</strong> <span class="llm-input-refs-popover-sub">${t('ui.llm-input.refs-popover-loading')}</span></span>
+      ${renderCloseBtn({ size: 'sm', label: t('ui.llm-input.refs-close-label'), dataAttrs: { 'refs-close': '' } }).replace('class="ds-close-btn"', 'class="ds-close-btn llm-input-refs-popover-close"')}
     </header>
     <div class="llm-input-refs-popover-body">
-      <p class="llm-input-dim" style="padding:var(--space-3);">잠시만요…</p>
+      <p class="llm-input-dim" style="padding:var(--space-3);">${t('ui.llm-input.refs-popover-wait')}</p>
     </div>`;
   document.body.appendChild(popover);
   _refsPopoverEl = popover;
@@ -641,19 +649,20 @@ async function openRefsPopover(chipEl, hash) {
   } catch (err) {
     if (_refsPopoverEl !== popover) return;
     const body = popover.querySelector('.llm-input-refs-popover-body');
-    if (body) body.innerHTML = `<p class="llm-input-dim" style="padding:var(--space-3);color:var(--error)">불러오기 실패: ${escHtml(String(err?.message ?? err))}</p>`;
+    if (body) body.innerHTML = `<p class="llm-input-dim" style="padding:var(--space-3);color:var(--error)">${t('ui.llm-input.refs-popover-load-failed', { message: escHtml(String(err?.message ?? err)) })}</p>`;
   }
 }
 
 function renderRefsPopoverBody(popover, refs, hash) {
+  const t = window.I18n?.t ?? ((k) => k);
   const currentSession = getSelectedSession();
   const total = refs.length;
   const headerSub = popover.querySelector('.llm-input-refs-popover-sub');
-  if (headerSub) headerSub.textContent = `${total}건 · 최근순 · hash ${hash.slice(0, 12)}…`;
+  if (headerSub) headerSub.textContent = t('ui.llm-input.refs-popover-count', { count: total, hash: hash.slice(0, 12) });
 
   if (total === 0) {
     const body = popover.querySelector('.llm-input-refs-popover-body');
-    if (body) body.innerHTML = `<p class="llm-input-dim" style="padding:var(--space-3);">참조 요청이 없습니다.</p>`;
+    if (body) body.innerHTML = `<p class="llm-input-dim" style="padding:var(--space-3);">${t('ui.llm-input.refs-popover-empty')}</p>`;
     return;
   }
 
@@ -666,13 +675,13 @@ function renderRefsPopoverBody(popover, refs, hash) {
     const tok = (tokIn || tokOut) ? `${fmtToken(tokIn)}+${fmtToken(tokOut)}` : '—';
     const isSameSession = r.session_id && r.session_id === currentSession;
     const sessionLabel = !r.session_id
-      ? '<span class="ref-cell ref-session ref-other" title="세션 미지정">—</span>'
+      ? `<span class="ref-cell ref-session ref-other" title="${t('ui.llm-input.ref-session-unspecified')}">—</span>`
       : isSameSession
-        ? '<span class="ref-cell ref-session ref-same">현재 세션</span>'
+        ? `<span class="ref-cell ref-session ref-same">${t('ui.llm-input.ref-session-current')}</span>`
         : `<span class="ref-cell ref-session ref-other" title="${escHtml(r.session_id)}">${escHtml(r.session_id.slice(0, 8))}…</span>`;
     const jumpAttrs = isSameSession
-      ? ` data-refs-jump-id="${escHtml(r.id)}" role="button" tabindex="0" title="이 proxy 요청으로 점프"`
-      : ' title="다른 세션의 참조 — 점프는 현재 세션 내에서만 지원"';
+      ? ` data-refs-jump-id="${escHtml(r.id)}" role="button" tabindex="0" title="${t('ui.llm-input.ref-jump-title')}"`
+      : ` title="${t('ui.llm-input.ref-other-session-title')}"`;
     const itemCls = `llm-input-ref-item${isSameSession ? ' llm-input-ref-item--same' : ''}`;
     return `<li class="${itemCls}"${jumpAttrs}>
       <span class="ref-cell ref-idx">#${idx}</span>

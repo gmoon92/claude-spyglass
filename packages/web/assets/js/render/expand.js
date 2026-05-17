@@ -53,7 +53,7 @@ export function togglePromptExpand(rid, container, cols) {
   const contentHtml = isHtmlMode
     ? `<div class="prompt-expand-content">${cached.html}</div>`
     : `<pre class="prompt-expand-content" style="margin:0;white-space:pre-wrap;word-break:break-all">${escHtml(typeof cached === 'string' ? cached : '')}</pre>`;
-  const boxHtml = `<div class="prompt-expand-box"><button class="expand-copy-btn" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent).then(()=>{this.textContent='✓복사됨';setTimeout(()=>{this.textContent='복사'},1500)})">복사</button>${contentHtml}</div>`;
+  const boxHtml = `<div class="prompt-expand-box"><button class="expand-copy-btn" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent).then(()=>{this.textContent=window.I18n.t('ui.main.expand.copied');setTimeout(()=>{this.textContent=window.I18n.t('ui.main.expand.copy')},1500)})">${window.I18n.t('ui.main.expand.copy')}</button>${contentHtml}</div>`;
 
   if (container.closest('table')) {
     const colCount  = cols ?? container.closest('table')?.querySelector('thead tr')?.children?.length ?? FLAT_VIEW_COLS;

@@ -53,7 +53,7 @@ export function renderDetailRequests(list, anomalyMap = new Map()) {
   const bodyExpanded = captureInteraction(body);
 
   if (!list.length) {
-    body.innerHTML = `<tr><td colspan="${FLAT_VIEW_COLS}" class="state-empty-cell">데이터가 없습니다</td></tr>`;
+    body.innerHTML = `<tr><td colspan="${FLAT_VIEW_COLS}" class="state-empty-cell">${window.I18n.t('common.no-data')}</td></tr>`;
     restoreInteraction(scrollEl, preserved);
     return;
   }
@@ -66,7 +66,7 @@ export function renderDetailRequests(list, anomalyMap = new Map()) {
   list.forEach(r => { typeCounts[r.type] = (typeCounts[r.type] || 0) + 1; });
   const subtotalParts = Object.entries(typeCounts)
     .sort((a, b) => b[1] - a[1])
-    .map(([type, count]) => `${typeBadge(type)}&nbsp;${count}건`)
+    .map(([type, count]) => `${typeBadge(type)}&nbsp;${window.I18n.t('ui.chart.count-unit', { count })}`)
     .join('&ensp;');
   const subtotalRow = `<tr class="flat-subtotal"><td colspan="${FLAT_VIEW_COLS}" style="text-align:right">${subtotalParts}</td></tr>`;
   body.innerHTML = rows + subtotalRow;
@@ -198,12 +198,14 @@ document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
     const cacheCreation = sessionCache.cacheCreationTokens;
     const cacheData = [
       {
-        label: '캐시',
+        id: 'cache',                             // 안정 id — chart.js 색상·라벨 lookup 키
+        label: window.I18n.t('ui.chart.label.cache'),
         tokens: cacheCreation,                  // 도넛 슬라이스 = 분자
         _cacheCreation: cacheCreation,          // 가운데 % 계산용 (denom = 슬라이스 합)
       },
       {
-        label: '그 외',
+        id: 'others',
+        label: window.I18n.t('ui.chart.label.others'),
         tokens: Math.max(0, cacheDenom - cacheCreation), // 도넛 슬라이스 = 분모 - 분자
       },
     ].filter(d => d.tokens > 0);

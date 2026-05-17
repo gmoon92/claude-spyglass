@@ -12,66 +12,44 @@
 const OBS_TOOLTIP_CONTENT = {
   // ── 카드 4종 ──────────────────────────────────────────────────────────
   'burn-rate': {
-    title: 'Burn Rate · 24시간',
-    desc:
-      '최근 24시간 동안 prompt 요청의 누적 토큰 합계.\n' +
-      '· 큰 숫자: 24시간 누적 input+output 토큰\n' +
-      '· ▲/▼ %  : 어제 동시각(24h 이전 같은 윈도우) 대비 변화율\n' +
-      '· sparkline: 1시간 단위 토큰 사용량 24개 막대',
+    get title() { return window.I18n.t('ui.obs-tooltip.burn-rate.title'); },
+    get desc()  { return window.I18n.t('ui.obs-tooltip.burn-rate.desc'); },
   },
   'cache-health': {
-    title: 'Cache Health · 프롬프트 캐시',
-    desc:
-      '프롬프트 캐시의 현재 hit ratio와 24시간 추세.\n' +
-      '· 큰 숫자: cache_read / (input + cache_read)\n' +
-      '· 등급(●): ≥70% green / 30~69% blue / <30% amber\n' +
-      '· 절감: 캐시 히트로 재사용된 input 토큰 누적',
+    get title() { return window.I18n.t('ui.obs-tooltip.cache-health.title'); },
+    get desc()  { return window.I18n.t('ui.obs-tooltip.cache-health.desc'); },
   },
   'live-pulse': {
-    title: 'Live Pulse · 실시간 활동',
-    desc:
-      '현재 세션 활동 상태.\n' +
-      '· 큰 텍스트: 가장 최근 이벤트 발생 시각 (relative)\n' +
-      '· ● n  : 활성 세션 수 (최근 60초 내 활동)\n' +
-      '· sparkline: 5분창 도구 호출 수 (Phase 2)',
+    get title() { return window.I18n.t('ui.obs-tooltip.live-pulse.title'); },
+    get desc()  { return window.I18n.t('ui.obs-tooltip.live-pulse.desc'); },
   },
   'tool-categories': {
-    title: 'Tool Categories · 도구 분류',
-    desc:
-      '최근 24시간 도구 호출의 카테고리별 분포.\n' +
-      '· Agent : 서브에이전트 호출 (Task)\n' +
-      '· Skill : 스킬 실행\n' +
-      '· MCP   : MCP 서버 도구 호출\n' +
-      '· Native: 내장 도구 (Read/Write/Bash/Edit 등)',
+    get title() { return window.I18n.t('ui.obs-tooltip.tool-categories.title'); },
+    get desc()  { return window.I18n.t('ui.obs-tooltip.tool-categories.desc'); },
   },
 
   // ── 카테고리 행별 ───────────────────────────────────────────────────
   'cat-Agent': {
-    title: 'Agent',
-    desc: 'Task 도구를 통한 서브에이전트 호출 비중.\n자식 도구 호출이 많을수록 깊이가 깊어집니다.',
+    get title() { return window.I18n.t('ui.obs-tooltip.cat-Agent.title'); },
+    get desc()  { return window.I18n.t('ui.obs-tooltip.cat-Agent.desc'); },
   },
   'cat-Skill': {
-    title: 'Skill',
-    desc: '스킬(SKILL.md) 호출 비중.\n도메인 지식·워크플로우 캡슐화에 활용됩니다.',
+    get title() { return window.I18n.t('ui.obs-tooltip.cat-Skill.title'); },
+    get desc()  { return window.I18n.t('ui.obs-tooltip.cat-Skill.desc'); },
   },
   'cat-MCP': {
-    title: 'MCP',
-    desc: 'MCP 서버를 통한 외부 도구 호출 비중.\n예: playwright, context7, sequential-thinking.',
+    get title() { return window.I18n.t('ui.obs-tooltip.cat-MCP.title'); },
+    get desc()  { return window.I18n.t('ui.obs-tooltip.cat-MCP.desc'); },
   },
   'cat-Native': {
-    title: 'Native',
-    desc: 'Claude Code 내장 도구 비중.\nRead / Write / Edit / Bash / Grep / Glob 등.',
+    get title() { return window.I18n.t('ui.obs-tooltip.cat-Native.title'); },
+    get desc()  { return window.I18n.t('ui.obs-tooltip.cat-Native.desc'); },
   },
 
   // ── Anomaly Badge ───────────────────────────────────────────────────
   anomaly: {
-    title: 'Anomaly · 이상 감지',
-    desc:
-      '최근 24시간 내 비정상 패턴 발생 건수.\n' +
-      '· 도구 실패율 ≥5% (30분 윈도우)\n' +
-      '· 동일 도구 ≥3회 연속 실패\n' +
-      '· 서브에이전트 깊이 ≥3 또는 팬아웃 ≥5\n' +
-      '· turn 토큰 ≥ p95×2',
+    get title() { return window.I18n.t('ui.obs-tooltip.anomaly.title'); },
+    get desc()  { return window.I18n.t('ui.obs-tooltip.anomaly.desc'); },
   },
 };
 

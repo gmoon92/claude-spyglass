@@ -15,13 +15,19 @@ export const KBD_HELP_BACKDROP_ID = 'kbdHelpBackdrop';
 // date-filter ↔ timeline-meta 라벨 매핑은 RANGE_LABELS 한 곳에서만 관리하고,
 // 호출처는 applyRangeLabels(range) 한 함수만 호출한다. 인자 생략 시 현재 활성 범위를 사용.
 export const RANGE_LABELS = {
-  all:   '전체 기간',
-  today: '오늘',
-  week:  '이번 주',
+  get all()   { return window.I18n.t('ui.default-view.date-filter.all'); },
+  get today() { return window.I18n.t('ui.default-view.date-filter.today'); },
+  get week()  { return window.I18n.t('ui.default-view.date-filter.week'); },
 };
 
 // 그룹 본질(고정 정체성) — DOM 순서 기반 매핑.
 // idx 0: 품질 그룹 (평균 · P95 · 오류율)
 // idx 1: 누적 볼륨 그룹 (세션 · 요청 · 토큰)
-export const TIMELINE_META_PREFIXES = ['품질', '누적'];
-export const TIMELINE_META_ARIA_PREFIXES = ['요청 품질', '누적 볼륨'];
+export const TIMELINE_META_PREFIXES = {
+  get 0() { return window.I18n.t('ui.default-view.timeline-meta.prefix-quality'); },
+  get 1() { return window.I18n.t('ui.default-view.timeline-meta.prefix-volume'); },
+};
+export const TIMELINE_META_ARIA_PREFIXES = {
+  get 0() { return window.I18n.t('ui.default-view.timeline-meta.aria-quality'); },
+  get 1() { return window.I18n.t('ui.default-view.timeline-meta.aria-volume'); },
+};

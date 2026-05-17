@@ -1,12 +1,12 @@
 // Cache Intelligence Panel 섹션 hover 툴팁 — stat-tooltip.js 패턴 동일
 const CACHE_PANEL_TOOLTIP_CONTENT = {
   'hit-rate': {
-    title: 'Cache Hit Rate',
-    desc:  '전체 입력 토큰 중 프롬프트 캐시에서 읽힌 비율.\n70% 이상: green · 30~69%: orange · 30% 미만: red.',
+    get title() { return window.I18n.t('ui.cache-panel.hit-rate.title'); },
+    get desc()  { return window.I18n.t('ui.cache-panel.hit-rate.desc'); },
   },
   ratio: {
-    title: 'Creation / Read Ratio',
-    desc:  '캐시 토큰의 Write(초기 생성) vs Read(재사용) 비율.\nstable: Read ≥ 70% — 캐시가 잘 재사용되고 있음.\nbuilding: Read < 70% — 캐시를 채우는 중.',
+    get title() { return window.I18n.t('ui.cache-panel.ratio.title'); },
+    get desc()  { return window.I18n.t('ui.cache-panel.ratio.desc'); },
   },
 };
 

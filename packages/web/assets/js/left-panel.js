@@ -39,9 +39,10 @@ export function renderBrowserProjects() {
   const body = document.getElementById('browserProjectsBody');
   if (!body) return;
   const isMetaMode = getAppMode() === 'metadocs';
+  const t = window.I18n?.t ?? ((k) => k);
 
   if (!_allProjects.length && !isMetaMode) {
-    body.innerHTML = '<tr><td colspan="3" class="table-empty">데이터가 없습니다</td></tr>';
+    body.innerHTML = `<tr><td colspan="3" class="table-empty">${t('ui.left-panel.no-data')}</td></tr>`;
     return;
   }
 
@@ -66,7 +67,8 @@ function renderBrowseProjectRow(p, maxT) {
   const pct        = Math.max(1, Math.round((p.total_tokens || 0) / maxT * 100));
   const active = p.active_count ?? 0;
   const sessCls = active > 0 ? ' proj-active' : '';
-  const sessTitle = `라이브 ${active}개`;
+  const t = window.I18n?.t ?? ((k) => k);
+  const sessTitle = t('ui.left-panel.live-count', { count: active });
   const sessCellHtml = active === 0
     ? '—'
     : `<span class="proj-sess-active">${fmt(active)}</span>`;
@@ -107,8 +109,9 @@ function renderMetaProjectRow(p) {
 function renderMetaGlobalRow() {
   const isSelected = getSelectedProject() === GLOBAL_PROJECT_KEY;
   const total = _metaCounts.total ?? 0;
+  const t = window.I18n?.t ?? ((k) => k);
   return `<tr class="clickable cell-proj-global${isSelected ? ' row-selected' : ''}" data-project="${GLOBAL_PROJECT_KEY}"
-              title="user(global) — 모든 cwd + 글로벌 카탈로그 합산">
+              title="${t('ui.left-panel.global-row-title')}">
     <td class="cell-proj-name">user <span class="cell-proj-global-tag">global</span></td>
     <td class="num cell-proj-meta-count" style="text-align:right">${fmt(total)}</td>
     <td class="cell-proj-meta-spacer"></td>
@@ -118,9 +121,10 @@ function renderMetaGlobalRow() {
 export function renderBrowserSessions() {
   const body = document.getElementById('browserSessionsBody');
   const hint = document.getElementById('sessionPaneHint');
+  const t = window.I18n?.t ?? ((k) => k);
   if (!getSelectedProject()) {
     body.innerHTML = '<tr><td colspan="4" class="table-empty">—</td></tr>';
-    hint.textContent = '프로젝트를 선택하세요';
+    hint.textContent = t('ui.left-panel.select-project');
     return;
   }
   const list = _allSessions
@@ -134,9 +138,9 @@ export function renderBrowserSessions() {
       if (bLast !== aLast) return bLast - aLast;
       return (b.started_at || 0) - (a.started_at || 0);
     });
-  hint.textContent = `${getSelectedProject()} · ${list.length}개`;
+  hint.textContent = t('ui.left-panel.session-count', { project: getSelectedProject(), count: list.length });
   if (!list.length) {
-    body.innerHTML = '<tr><td colspan="4" class="table-empty">데이터가 없습니다</td></tr>';
+    body.innerHTML = `<tr><td colspan="4" class="table-empty">${t('ui.left-panel.no-data')}</td></tr>`;
     return;
   }
   body.innerHTML = list.map(s => makeSessionRow(s, getSelectedSession() === s.id)).join('');

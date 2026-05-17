@@ -53,13 +53,13 @@ export function renderBurnRate(payload) {
   const el = document.getElementById('cardBurnRate');
   if (!el) return;
   if (!payload || !Array.isArray(payload.buckets) || payload.buckets.length === 0 || payload.current_total === 0) {
-    el.innerHTML = emptyCard('데이터 없음');
+    el.innerHTML = emptyCard(window.I18n.t('ui.obs-panel.no-data'));
     return;
   }
   const values = payload.buckets.map(b => b.tokens || 0);
   const total  = payload.current_total || 0;
   const sub    = payload.yesterday_same_window > 0
-    ? `어제 ${fmtToken(payload.yesterday_same_window)}`
+    ? window.I18n.t('ui.obs-panel.yesterday', { val: fmtToken(payload.yesterday_same_window) })
     : '';
   el.innerHTML = `
     <span class="obs-card-value">${fmtToken(total)}</span>
@@ -83,12 +83,12 @@ export function renderCacheHealth(payload) {
   const el = document.getElementById('cardCacheHealth');
   if (!el) return;
   if (!payload || !Array.isArray(payload.buckets) || payload.hit_rate_now == null) {
-    el.innerHTML = emptyCard('캐시 미발생');
+    el.innerHTML = emptyCard(window.I18n.t('ui.obs-panel.no-cache'));
     return;
   }
   const hitPct = (payload.hit_rate_now * 100).toFixed(1);
   const series = payload.buckets.map(b => b.hit_rate);
-  const sub    = `절감 ${fmtToken(payload.savings_tokens_total || 0)}`;
+  const sub    = window.I18n.t('ui.obs-panel.savings', { val: fmtToken(payload.savings_tokens_total || 0) });
 
   // hit_rate 임계 (cache-panel-tooltip와 동일 정책): ≥0.7 success / ≥0.3 mid / <0.3 warn
   let trendCls = 'is-warn';
@@ -117,7 +117,7 @@ export function renderLivePulse(payload) {
   const el = document.getElementById('cardLivePulse');
   if (!el) return;
   if (!payload || (payload.active_count === 0 && !payload.last_event_ts)) {
-    el.innerHTML = emptyCard('활동 없음');
+    el.innerHTML = emptyCard(window.I18n.t('ui.obs-panel.no-activity'));
     return;
   }
   const lastTxt = payload.last_event_ts
@@ -131,7 +131,7 @@ export function renderLivePulse(payload) {
     <span class="obs-card-trend ${payload.active_count > 0 ? 'is-up' : ''}">
       <span class="obs-card-trend-icon">●</span>${fmt(payload.active_count || 0)}
     </span>
-    <span class="obs-card-sub">최근 활동</span>
+    <span class="obs-card-sub">${window.I18n.t('ui.obs-panel.recent-activity')}</span>
     <span class="obs-card-spark">${sparkHtml}</span>
   `;
 }
@@ -182,7 +182,7 @@ export function renderToolCategoriesCard(payload) {
     _toolCategoriesMode = 'meta-docs';
     const items = Array.isArray(payload.items) ? payload.items : [];
     if (items.length === 0) {
-      el.innerHTML = emptyCard('Behavior Definitions 호출 없음');
+      el.innerHTML = emptyCard(window.I18n.t('ui.obs-panel.no-behavior-defs'));
       return;
     }
     const max = Math.max(1, ...items.map(i => i.invocations || 0));
@@ -207,7 +207,7 @@ export function renderToolCategoriesCard(payload) {
 
   const categories = Array.isArray(payload) ? payload : [];
   if (categories.length === 0 || categories.every(c => !c.request_count)) {
-    el.innerHTML = emptyCard('도구 호출 없음');
+    el.innerHTML = emptyCard(window.I18n.t('ui.obs-panel.no-tool-calls'));
     return;
   }
   const max = Math.max(1, ...categories.map(c => c.request_count || 0));

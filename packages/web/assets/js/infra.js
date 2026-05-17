@@ -12,7 +12,8 @@ export function updateScrollLockBanner() {
   const banner = document.getElementById('scrollLockBanner');
   if (!banner) return;
   if (_scrollLockNewCount > 0) {
-    banner.innerHTML = `${svgChevron({ dir: 'down', size: 10 })} 새 요청 ${_scrollLockNewCount}개 — 클릭하여 최신으로 이동`;
+    const t = window.I18n?.t ?? ((k) => k);
+    banner.innerHTML = `${svgChevron({ dir: 'down', size: 10 })} ${t('ui.infra.new-requests-banner', { count: _scrollLockNewCount })}`;
     banner.classList.add('visible');
   } else {
     banner.classList.remove('visible');
@@ -40,7 +41,8 @@ export function setLiveStatus(connected) {
 }
 
 export function showError(msg) {
-  document.getElementById('errorMsg').textContent = msg || '서버에 연결할 수 없습니다.';
+  const t = window.I18n?.t ?? ((k) => k);
+  document.getElementById('errorMsg').textContent = msg || t('common.server-unavailable');
   document.getElementById('errorBanner').classList.add('visible');
   setLiveStatus(false);
 }

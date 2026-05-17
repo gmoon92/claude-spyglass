@@ -55,7 +55,7 @@ export function initDefaultView({ onSelectSession, onCloseDetail, onGoHome }) {
   if (logo) {
     logo.setAttribute('role', 'button');
     logo.setAttribute('tabindex', '0');
-    logo.setAttribute('aria-label', '홈으로 이동');
+    logo.setAttribute('aria-label', window.I18n.t('ui.default-view.layout.go-home'));
     logo.style.cursor = 'pointer';
     logo.addEventListener('click', onGoHome);
     logo.addEventListener('keydown', (e) => {

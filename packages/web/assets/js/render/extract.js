@@ -268,7 +268,7 @@ export function contextPreview(r, maxLen = 60) {
   const flat    = displayText.replace(/\n/g, ' ');
   const display = flat.slice(0, maxLen);
   const tooltip = rawText.length > 200
-    ? rawText.slice(0, 200) + `… (총 ${rawText.length.toLocaleString('ko-KR')}자)`
+    ? rawText.slice(0, 200) + `… (${window.I18n.t('badges.renderers.extract.chars', { n: rawText.length.toLocaleString() })})`
     : rawText;
   // tool_call 타입에만 힌트 서픽스 추가 (maxLen 초과해도 힌트는 잘리지 않음)
   const hint = r.type === 'tool_call' ? toolResponseHint(r) : '';

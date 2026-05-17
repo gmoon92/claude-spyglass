@@ -50,6 +50,7 @@ import {
 } from './views/default-view.js';
 import { loadSession, abortCurrentSession } from './views/detail-view.js';
 import { renderToolCategoriesCard, resetToolCategoriesMode } from './obs-panel.js';
+import { initVersionCheck } from './version-check.js';
 
 const STORAGE_KEY = 'spyglass:lastProject';
 
@@ -396,9 +397,9 @@ function initDateFilter() {
 
   /** @type {{ value: string, label: string, active: boolean, title: string }[]} */
   const FILTERS = [
-    { value: 'all',   label: '전체',   active: true,  title: '수집된 전체 기간 데이터 표시' },
-    { value: 'today', label: '오늘',   active: false, title: '오늘 00:00(로컬 시간) 이후 데이터만 표시' },
-    { value: 'week',  label: '이번주', active: false, title: '이번 주 월요일 00:00(로컬 시간) 이후 데이터만 표시' },
+    { value: 'all',   get label() { return window.I18n.t('ui.main.date-filter.all.label'); },   active: true,  get title() { return window.I18n.t('ui.main.date-filter.all.title'); } },
+    { value: 'today', get label() { return window.I18n.t('ui.main.date-filter.today.label'); }, active: false, get title() { return window.I18n.t('ui.main.date-filter.today.title'); } },
+    { value: 'week',  get label() { return window.I18n.t('ui.main.date-filter.week.label'); },  active: false, get title() { return window.I18n.t('ui.main.date-filter.week.title'); } },
   ];
 
   container.innerHTML = FILTERS.map(({ value, label, active, title }) => {
@@ -519,7 +520,7 @@ function initEventDelegation() {
   setDetailFilterBar(detailFilterBar);
   // ADR-008 시각 hint — 외부 이동 어휘를 다른 필터와 분리 (↗ glyph는 syslib.css의 ::after).
   document.querySelector('[data-detail-filter="system"]')
-    ?.setAttribute('title', 'System 라이브러리 탭으로 이동');
+    ?.setAttribute('title', window.I18n.t('ui.main.system-filter.title'));
 
   document.getElementById('detailView').addEventListener('click', e => {
     // 턴 카드의 "API 페이로드" 액션 (deeplink pass) — toggle-card 가드보다 먼저 매칭해
@@ -579,7 +580,11 @@ function initEventDelegation() {
   });
 }
 
-function init() {
+async function init() {
+  // i18n 리소스 fetch 완료 보장 — main 모듈 내 모든 t() 호출이 키가 아닌 번역값을 받도록.
+  // I18n.init()은 idempotent하며 동일 lang+ns에 대해 메모리 캐시 재사용.
+  try { await window.I18n.init(); } catch { /* i18n 실패해도 UI는 계속 — 키가 노출되지만 동작 차단 안 함 */ }
+
   migrateLocalStorage();
 
   // ADR-003 left-rail-meta-docs: 앱 모드 rail 초기화 + sessionStorage 복원 적용.
@@ -608,6 +613,7 @@ function init() {
   startSSE();
   restorePanelHiddenState();
   restoreChartCollapsedState();
+  initVersionCheck();
   document.getElementById('btnPanelCollapse').addEventListener('click', toggleLeftPanel);
   document.getElementById('btnToggleChart').addEventListener('click', toggleChartCollapse);
 
@@ -676,22 +682,25 @@ function init() {
 }
 
 // 키보드 단축키 모달 — index.html 다이어트로 JS 주입
-document.body.insertAdjacentHTML('beforeend', `
+function renderKbdHelpModal() {
+  const t = k => window.I18n.t(k);
+  const existing = document.getElementById('kbdHelpBackdrop');
+  const html = `
   <div class="kbd-help-backdrop" id="kbdHelpBackdrop" role="dialog" aria-modal="true" aria-labelledby="kbdHelpTitle">
     <div class="kbd-help-modal" role="document">
       <div class="kbd-help-header">
-        <span class="kbd-help-title" id="kbdHelpTitle">키보드 단축키</span>
-        <button class="kbd-help-close ds-close-btn" id="kbdHelpClose" aria-label="닫기" data-size="lg">×</button>
+        <span class="kbd-help-title" id="kbdHelpTitle">${t('ui.main.kbd-help.title')}</span>
+        <button class="kbd-help-close ds-close-btn" id="kbdHelpClose" aria-label="${t('ui.main.kbd-help.close')}" data-size="lg">×</button>
       </div>
       <div class="kbd-help-body">
         <div class="kbd-help-section">
-          <div class="kbd-help-section-title">탐색</div>
-          <div class="kbd-help-row"><span class="kbd-key">/</span><span class="kbd-help-desc">검색창에 포커스</span></div>
-          <div class="kbd-help-row"><span class="kbd-key">Esc</span><span class="kbd-help-desc">모달 / 확장 패널 / 검색 / 상세 뷰 닫기</span></div>
-          <div class="kbd-help-row"><span class="kbd-key">⌘F</span><span class="kbd-help-desc">검색창 포커스 (Ctrl+F)</span></div>
+          <div class="kbd-help-section-title">${t('ui.main.kbd-help.section.nav')}</div>
+          <div class="kbd-help-row"><span class="kbd-key">/</span><span class="kbd-help-desc">${t('ui.main.kbd-help.focus-search')}</span></div>
+          <div class="kbd-help-row"><span class="kbd-key">Esc</span><span class="kbd-help-desc">${t('ui.main.kbd-help.close-modal')}</span></div>
+          <div class="kbd-help-row"><span class="kbd-key">⌘F</span><span class="kbd-help-desc">${t('ui.main.kbd-help.focus-search-cmd')}</span></div>
         </div>
         <div class="kbd-help-section">
-          <div class="kbd-help-section-title">필터</div>
+          <div class="kbd-help-section-title">${t('ui.main.kbd-help.section.filter')}</div>
           <div class="kbd-help-row"><span class="kbd-key">1</span><span class="kbd-help-desc">All</span></div>
           <div class="kbd-help-row"><span class="kbd-key">2</span><span class="kbd-help-desc">prompt</span></div>
           <div class="kbd-help-row"><span class="kbd-key">3</span><span class="kbd-help-desc">system</span></div>
@@ -701,12 +710,24 @@ document.body.insertAdjacentHTML('beforeend', `
           <div class="kbd-help-row"><span class="kbd-key">7</span><span class="kbd-help-desc">MCP</span></div>
         </div>
         <div class="kbd-help-section">
-          <div class="kbd-help-section-title">도움말</div>
-          <div class="kbd-help-row"><span class="kbd-key">?</span><span class="kbd-help-desc">이 도움말 토글</span></div>
+          <div class="kbd-help-section-title">${t('ui.main.kbd-help.section.help')}</div>
+          <div class="kbd-help-row"><span class="kbd-key">?</span><span class="kbd-help-desc">${t('ui.main.kbd-help.help-toggle')}</span></div>
         </div>
       </div>
     </div>
   </div>
-`);
+`;
+  if (existing) {
+    existing.outerHTML = html;
+  } else {
+    document.body.insertAdjacentHTML('beforeend', html);
+  }
+}
+// renderKbdHelpModal은 i18n 준비 후 init() 안에서 첫 호출. onChange는 언어 전환 시 재렌더.
+window.I18n.onChange(renderKbdHelpModal);
 
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', () => {
+  // 키보드 모달은 i18n 로딩 완료 후에 첫 렌더.
+  window.I18n.init().then(renderKbdHelpModal).catch(() => renderKbdHelpModal());
+  init();
+});

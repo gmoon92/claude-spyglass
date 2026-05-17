@@ -1,5 +1,45 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { makeRequestRow, makeTargetCell, makeSessionRow } from '../renderers.js';
+
+// ── 환경 mock ─────────────────────────────────────────────────────────────────
+// renderers는 window.I18n.t / Date.now 에 의존하므로 결정론적 출력 확보를 위해
+// 두 가지를 고정한다. fixture timestamp(2026-04-28T10:00:00Z) 기준 정확히 6일 후로
+// 시각을 고정 → fmtRelative 의 "6일 전" snapshot 안정화.
+const NOW_FIXED_MS = new Date('2026-05-04T10:00:00Z').getTime();
+const originalDateNow = Date.now;
+
+beforeAll(() => {
+  (globalThis as any).window = (globalThis as any).window ?? {};
+  (globalThis as any).window.I18n = {
+    t: (key: string, vars?: Record<string, unknown>) => {
+      const map: Record<string, string> = {
+        // formatters
+        'common.formatters.just-now': '방금',
+        'common.formatters.minutes-ago': `${vars?.n}분 전`,
+        'common.formatters.hours-ago': `${vars?.n}시간 전`,
+        'common.formatters.days-ago': `${vars?.n}일 전`,
+        // session rows
+        'session.rows.empty-message': '메시지 없음',
+        'session.rows.no-data': '데이터가 없습니다',
+        'session.rows.status.ended': '종료된 세션',
+        'session.rows.status.live': '라이브 세션',
+        'session.rows.status.stale': 'stale — SessionEnd 누락 의심',
+        // badges
+        'badges.renderers.tool-status.error': '오류',
+        'badges.renderers.model.unknown': '모델불명',
+        'badges.renderers.model.synthetic': 'SDK 합성',
+        'badges.renderers.model.no-info': '모델 정보 없음',
+      };
+      return map[key] ?? key;
+    },
+  };
+  // 상대 시간 결정론화 — fixture timestamp 기준 정확히 6일 후로 고정
+  Date.now = () => NOW_FIXED_MS;
+});
+
+afterAll(() => {
+  Date.now = originalDateNow;
+});
 
 // ── 목 데이터 ─────────────────────────────────────────────────────────────────
 

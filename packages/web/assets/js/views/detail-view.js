@@ -54,8 +54,8 @@ export async function loadSession(id) {
   detailIdEl.textContent = id.slice(0, 8) + '…';
   detailIdEl.title = id;
   document.getElementById('detailProject').textContent = session ? session.project_name : '';
-  document.getElementById('detailTokens').textContent = session ? `총 ${fmtToken(session.total_tokens)} 토큰` : '';
-  document.getElementById('detailEndedAt').textContent = session?.ended_at ? `종료: ${fmtDate(session.ended_at)}` : '';
+  document.getElementById('detailTokens').textContent = session ? window.I18n.t('ui.detail-view.total-tokens', { tokens: fmtToken(session.total_tokens) }) : '';
+  document.getElementById('detailEndedAt').textContent = session?.ended_at ? window.I18n.t('ui.detail-view.ended-at', { time: fmtDate(session.ended_at) }) : '';
 
   setDetailFilter('all');
   getDetailFilterBar()?.setActive('all');
