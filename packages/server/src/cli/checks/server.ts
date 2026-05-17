@@ -5,6 +5,7 @@
  */
 
 import type { CheckResult } from '../output';
+import { t } from '../../i18n';
 
 /**
  * 7. 서버 포트 (3000) 가용성 확인
@@ -22,13 +23,13 @@ export function checkServerPort(): CheckResult {
 
     return {
       status: 'ok',
-      message: `포트 ${port} 가용`,
+      message: t('checks.server.port.ok', { port }),
     };
   } catch {
     return {
       status: 'warn',
-      message: `포트 ${port} 사용 중`,
-      hint: `다른 프로세스가 포트를 사용 중입니다. lsof -i :${port}로 확인하세요`,
+      message: t('checks.server.port.warn', { port }),
+      hint: t('checks.server.port.hint', { port }),
     };
   }
 }

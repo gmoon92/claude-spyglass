@@ -21,6 +21,7 @@
 import { existsSync } from 'fs';
 import { getDatabase, getDefaultDbPath, closeDatabase } from '@spyglass/storage';
 import type { CheckResult } from '../output';
+import { t } from '../../i18n';
 
 interface IntegrityCounts {
   orphan_rows: number;
@@ -52,15 +53,15 @@ export function checkOrphanRows(): CheckResult {
   }, -1);
 
   if (count < 0) {
-    return { status: 'warn', message: 'orphan 행 확인 불가 (DB 없음 또는 오류)' };
+    return { status: 'warn', message: t('checks.integrity.orphan.unavailable') };
   }
   if (count === 0) {
-    return { status: 'ok', message: 'orphan 행 (turn_id NULL) 0건' };
+    return { status: 'ok', message: t('checks.integrity.orphan.ok') };
   }
   return {
     status: 'warn',
-    message: `orphan 행 ${count}건 — turn에 묶이지 않는 tool_call/response`,
-    hint: 'session resume 또는 hook 누락. UI는 "세션 프롤로그" 섹션으로 노출 (ADR-001 P1)',
+    message: t('checks.integrity.orphan.warn', { count }),
+    hint: t('checks.integrity.orphan.hint'),
   };
 }
 
@@ -79,12 +80,12 @@ export function checkZeroResponseTurns(): CheckResult {
     return row?.c ?? 0;
   }, -1);
 
-  if (count < 0) return { status: 'warn', message: 'response 0개 turn 확인 불가' };
-  if (count === 0) return { status: 'ok', message: 'response 0개 turn 0건' };
+  if (count < 0) return { status: 'warn', message: t('checks.integrity.zeroResponseTurns.unavailable') };
+  if (count === 0) return { status: 'ok', message: t('checks.integrity.zeroResponseTurns.ok') };
   return {
     status: 'warn',
-    message: `response 0개 turn ${count}건`,
-    hint: 'tool-only turn(정상) 또는 Stop/proxy fallback 모두 누락(이상). 개별 확인 필요',
+    message: t('checks.integrity.zeroResponseTurns.warn', { count }),
+    hint: t('checks.integrity.zeroResponseTurns.hint'),
   };
 }
 
@@ -96,12 +97,12 @@ export function checkLongProxyResponses(): CheckResult {
     return row?.c ?? 0;
   }, -1);
 
-  if (count < 0) return { status: 'warn', message: '120s 초과 proxy 응답 확인 불가' };
-  if (count === 0) return { status: 'ok', message: '120s 초과 proxy 응답 0건' };
+  if (count < 0) return { status: 'warn', message: t('checks.integrity.longProxyResponses.unavailable') };
+  if (count === 0) return { status: 'ok', message: t('checks.integrity.longProxyResponses.ok') };
   return {
     status: 'warn',
-    message: `120s 초과 proxy 응답 ${count}건`,
-    hint: 'v23(P1-E) 정확 매칭 경로는 영향 없음. fallback 시간 기반 cross-link 경로에서만 잔여 위험 — 정보성',
+    message: t('checks.integrity.longProxyResponses.warn', { count }),
+    hint: t('checks.integrity.longProxyResponses.hint'),
   };
 }
 
@@ -125,12 +126,12 @@ export function checkDuplicateResponses(): CheckResult {
     return row?.c ?? 0;
   }, -1);
 
-  if (count < 0) return { status: 'warn', message: '중복 response 확인 불가' };
-  if (count === 0) return { status: 'ok', message: '중복 response 0건' };
+  if (count < 0) return { status: 'warn', message: t('checks.integrity.duplicateResponses.unavailable') };
+  if (count === 0) return { status: 'ok', message: t('checks.integrity.duplicateResponses.ok') };
   return {
     status: 'fail',
-    message: `중복 response ${count}쌍 — 같은 메시지가 두 행으로 저장됨`,
-    hint: 'ADR-001 P1-A 수정 후엔 0이어야 한다. 코드 회귀 가능성 — 변경 이력 확인',
+    message: t('checks.integrity.duplicateResponses.fail', { count }),
+    hint: t('checks.integrity.duplicateResponses.hint'),
   };
 }
 
@@ -159,12 +160,12 @@ export function checkMismatchedTurnIds(): CheckResult {
     return row?.c ?? 0;
   }, -1);
 
-  if (count < 0) return { status: 'warn', message: 'mismatched turn_id 확인 불가' };
-  if (count === 0) return { status: 'ok', message: 'mismatched turn_id 0건' };
+  if (count < 0) return { status: 'warn', message: t('checks.integrity.mismatchedTurnIds.unavailable') };
+  if (count === 0) return { status: 'ok', message: t('checks.integrity.mismatchedTurnIds.ok') };
   return {
     status: 'fail',
-    message: `mismatched turn_id ${count}건 — timestamp 기준 잘못 태깅된 행`,
-    hint: 'ADR-001 P1-A의 getTurnIdAt 적용 후 0이어야 한다. 회귀 가능성',
+    message: t('checks.integrity.mismatchedTurnIds.fail', { count }),
+    hint: t('checks.integrity.mismatchedTurnIds.hint'),
   };
 }
 
@@ -189,29 +190,29 @@ export function checkUnlinkedToolCalls(): CheckResult {
     return row ? { total: row.total ?? 0, unlinked: row.unlinked ?? 0 } : null;
   }, null);
 
-  if (!stats) return { status: 'warn', message: 'tool_call api_request_id 매칭 확인 불가' };
-  if (stats.total === 0) return { status: 'ok', message: '최근 1시간 내 tool_call 없음 (체크 skip)' };
+  if (!stats) return { status: 'warn', message: t('checks.integrity.unlinkedToolCalls.unavailable') };
+  if (stats.total === 0) return { status: 'ok', message: t('checks.integrity.unlinkedToolCalls.noRecent') };
   // 표본 < 5건이면 통계적으로 무의미 — 단일 미매칭이 100%로 보고되는 false alarm 방지.
   if (stats.total < 5) {
     return {
       status: 'ok',
-      message: `tool_call ${stats.total}건 (표본 부족, 매칭률 평가 skip)`,
+      message: t('checks.integrity.unlinkedToolCalls.okSample', { total: stats.total }),
     };
   }
   const pct = Math.round(100 * stats.unlinked / stats.total);
   if (stats.unlinked === 0) {
-    return { status: 'ok', message: `tool_call api_request_id 매칭 100% (${stats.total}건)` };
+    return { status: 'ok', message: t('checks.integrity.unlinkedToolCalls.ok', { total: stats.total }) };
   }
   if (pct < 10) {
     return {
       status: 'ok',
-      message: `tool_call api_request_id 미매칭 ${stats.unlinked}/${stats.total} (${pct}%)`,
+      message: t('checks.integrity.unlinkedToolCalls.okPartial', { unlinked: stats.unlinked, total: stats.total, pct }),
     };
   }
   return {
     status: 'warn',
-    message: `tool_call api_request_id 미매칭 ${stats.unlinked}/${stats.total} (${pct}%)`,
-    hint: 'proxy SSE의 tool_use 캡처 누락 또는 hook 도착 순서 역전 의심 (ADR-001 P1-E)',
+    message: t('checks.integrity.unlinkedToolCalls.warn', { unlinked: stats.unlinked, total: stats.total, pct }),
+    hint: t('checks.integrity.unlinkedToolCalls.hint'),
   };
 }
 
@@ -229,11 +230,11 @@ export function checkOrphanProxyToolUses(): CheckResult {
     `).get() as { c: number } | undefined;
     return row?.c ?? 0;
   }, -1);
-  if (count < 0) return { status: 'warn', message: 'proxy_tool_uses orphan 확인 불가' };
-  if (count === 0) return { status: 'ok', message: 'proxy_tool_uses orphan 0건' };
+  if (count < 0) return { status: 'warn', message: t('checks.integrity.orphanProxyToolUses.unavailable') };
+  if (count === 0) return { status: 'ok', message: t('checks.integrity.orphanProxyToolUses.ok') };
   return {
     status: 'ok',
-    message: `proxy_tool_uses orphan ${count}건 (보통 사용자 취소된 tool_use)`,
+    message: t('checks.integrity.orphanProxyToolUses.okWithCount', { count }),
   };
 }
 

@@ -4,6 +4,8 @@
  * 변경 이유: 출력 포맷(색상·심볼·다국어) 변경 시 한 곳만 수정.
  */
 
+import { t } from '../i18n';
+
 const COLOR_GREEN = '\x1b[32m';
 const COLOR_RED = '\x1b[31m';
 const COLOR_YELLOW = '\x1b[33m';
@@ -38,8 +40,11 @@ export function log(status: CheckResult['status'], message: string, hint?: strin
       break;
   }
 
-  console.log(`${color}${symbol}${COLOR_RESET} ${message}`);
-  if (hint) {
-    console.log(`  → ${hint}`);
+  const translatedMessage = t(message);
+  const translatedHint = hint ? t(hint) : undefined;
+
+  console.log(`${color}${symbol}${COLOR_RESET} ${translatedMessage}`);
+  if (translatedHint) {
+    console.log(`  → ${translatedHint}`);
   }
 }

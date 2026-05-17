@@ -69,15 +69,18 @@ describe('Server', () => {
   });
 
   describe('Root Endpoint', () => {
-    it('should return API info', async () => {
+    it('should return API info with Accept: application/json', async () => {
       startServer({ port: TEST_PORT });
 
-      const res = await fetch(`http://127.0.0.1:${TEST_PORT}/`);
+      const res = await fetch(`http://127.0.0.1:${TEST_PORT}/`, {
+        headers: { 'Accept': 'application/json' },
+      });
       expect(res.status).toBe(200);
 
       const body = await res.json();
       expect(body.name).toBe('spyglass');
       expect(body.endpoints).toBeDefined();
+      expect(Array.isArray(body.endpoints)).toBe(true);
     });
   });
 
@@ -247,9 +250,9 @@ describe('API Endpoints', () => {
       expect(s.p95DurationMs).toBe(100);
       // recent-tool은 'ok'라 오류 0건
       expect(s.errorRate).toBe(0);
-      // 토큰 비용은 범위 내 prompt 없으므로 0
-      expect(s.costUsd).toBe(0);
-      expect(s.cacheSavingsUsd).toBe(0);
+      // proxy 비용은 범위 내 proxy_requests가 없으므로 0 (proxy-hourly 도입 후 추가된 키)
+      expect(s.proxyTotalCostUsd).toBe(0);
+      expect(s.proxyTotalRequests).toBe(0);
     });
 
     it('should aggregate over full history when fromTs/toTs are not provided', async () => {

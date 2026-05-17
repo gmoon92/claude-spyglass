@@ -75,8 +75,30 @@ export async function handleRequest(req: Request, db: SpyglassDatabase): Promise
       );
     }
 
-    // 루트 경로 - 웹 대시보드
+    // 루트 경로 — Accept: application/json 시 API info, 그 외 웹 대시보드 HTML.
     if (path === '/') {
+      const accept = req.headers.get('accept') ?? '';
+      if (accept.includes('application/json')) {
+        return new Response(
+          JSON.stringify({
+            name: 'spyglass',
+            version: '0.1.0',
+            endpoints: [
+              '/health',
+              '/api/dashboard',
+              '/api/stats/sessions',
+              '/api/stats/requests',
+              '/api/stats/cache',
+              '/api/stats/proxy',
+              '/api/stats/proxy/by-model',
+              '/api/metrics/cache-trend',
+              '/events',
+              '/collect',
+            ],
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        );
+      }
       const webDir = new URL('../../../web/index.html', import.meta.url);
       const file = Bun.file(webDir);
       if (await file.exists()) {
@@ -85,7 +107,7 @@ export async function handleRequest(req: Request, db: SpyglassDatabase): Promise
         });
       }
       return new Response(
-        JSON.stringify({ name: 'spyglass', version: '0.1.0' }),
+        JSON.stringify({ name: 'spyglass', version: '0.1.0', endpoints: [] }),
         { headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -105,6 +127,21 @@ export async function handleRequest(req: Request, db: SpyglassDatabase): Promise
         };
         return new Response(file, {
           headers: { 'Content-Type': mimeMap[ext] ?? 'application/octet-stream' },
+        });
+      }
+    }
+
+    // i18n 로케일 서빙 (/locales/ prefix → packages/web/locales/)
+    if (path.startsWith('/locales/')) {
+      const safePath = path.split('?')[0].replace(/\.\./g, '');
+      const staticFile = new URL(`../../../web${safePath}`, import.meta.url);
+      const file = Bun.file(staticFile);
+      if (await file.exists()) {
+        return new Response(file, {
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'public, max-age=300',
+          },
         });
       }
     }

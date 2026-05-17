@@ -8,6 +8,7 @@ import { execSync } from 'child_process';
 import { existsSync, readFileSync, statSync } from 'fs';
 import { getDatabase, getDefaultDbPath, closeDatabase } from '@spyglass/storage';
 import { log } from './output';
+import { t } from '../i18n';
 
 /**
  * --fix 플래그로 chmod 등 자동 수정
@@ -22,11 +23,11 @@ export function applyFixes(): boolean {
       const stat = statSync(dbPath);
       if (stat.mode & 0o077) {
         execSync(`chmod 600 ${dbPath}`);
-        log('ok', `DB 권한 수정: chmod 600 ${dbPath}`);
+        log('ok', t('fix.dbPermissionOk', { path: dbPath }));
         fixed = true;
       }
     } catch {
-      log('fail', `DB 권한 수정 실패: ${dbPath}`);
+      log('fail', t('fix.dbPermissionFail', { path: dbPath }));
     }
   }
 
@@ -43,13 +44,13 @@ export function applyFixes(): boolean {
           const stat = statSync(hookScript);
           if ((stat.mode & parseInt('0111', 8)) === 0) {
             execSync(`chmod +x ${hookScript}`);
-            log('ok', `훅 스크립트 권한 수정: chmod +x ${hookScript}`);
+            log('ok', t('fix.hookPermissionOk', { path: hookScript }));
             fixed = true;
           }
         }
       }
     } catch {
-      log('fail', '훅 스크립트 권한 수정 실패');
+      log('fail', t('fix.hookPermissionFail'));
     }
   }
 
@@ -76,7 +77,7 @@ export function applyFixes(): boolean {
         )
       `).run();
       if (dupResult.changes > 0) {
-        log('ok', `중복 response ${dupResult.changes}건 제거 (ADR-001 P1-A)`);
+        log('ok', t('fix.dupRemoved', { count: dupResult.changes }));
         fixed = true;
       }
 
@@ -104,7 +105,7 @@ export function applyFixes(): boolean {
           ), turn_id)
       `).run();
       if (mismatchResult.changes > 0) {
-        log('ok', `mismatched turn_id ${mismatchResult.changes}건 교정 (ADR-001 P1-A)`);
+        log('ok', t('fix.mismatchFixed', { count: mismatchResult.changes }));
         fixed = true;
       }
 
@@ -130,14 +131,14 @@ export function applyFixes(): boolean {
           )
       `).run();
       if (orphanResult.changes > 0) {
-        log('ok', `orphan turn_id ${orphanResult.changes}건 retroactive 매핑 (ADR-001 P1-B)`);
+        log('ok', t('fix.orphanMapped', { count: orphanResult.changes }));
         fixed = true;
       }
 
       closeDatabase();
     } catch (e) {
       try { closeDatabase(); } catch { /* ignore */ }
-      log('fail', `데이터 정합성 보정 실패: ${e instanceof Error ? e.message : String(e)}`);
+      log('fail', t('fix.dataFixFail', { error: e instanceof Error ? e.message : String(e) }));
     }
   }
 

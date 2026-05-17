@@ -15,6 +15,10 @@ import {
   syncAllKnownCwds,
   discoverKnownCwds,
 } from '../meta-docs';
+import {
+  startVersionCheckSchedule,
+  stopVersionCheckSchedule,
+} from '../version-checker';
 
 /** 서버 인스턴스 */
 let server: ReturnType<typeof Bun.serve> | null = null;
@@ -55,6 +59,9 @@ export function startServer(options: {
 
   // 일별 유지보수 스케줄 시작 (시작 시 즉시 + 1시간 인터벌로 날짜 변경 감지)
   startMaintenanceSchedule(db);
+
+  // 버전 체크 스케줄 시작 (시작 시 즉시 + 1시간 인터벌, updateAvailable === false일 때만 호출)
+  startVersionCheckSchedule();
 
   // v24: Behavior Definitions 카탈로그 부팅 동기화 — 글로벌(`~/.claude`) 1회 스캔.
   //  실패해도 부팅은 성공해야 하므로 try/catch로 격리. project chain은 SessionStart에서 lazy 동기화.
@@ -105,6 +112,7 @@ export function startServer(options: {
  */
 export async function stopServer(): Promise<void> {
   stopMaintenanceSchedule();
+  stopVersionCheckSchedule();
 
   if (server) {
     server.stop();

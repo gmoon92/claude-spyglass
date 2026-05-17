@@ -7,6 +7,7 @@
 import { execSync } from 'child_process';
 import { existsSync, readFileSync, statSync } from 'fs';
 import type { CheckResult } from '../output';
+import { t } from '../../i18n';
 
 /**
  * 1. Bun 버전 확인 (≥ 1.0)
@@ -20,20 +21,20 @@ export function checkBunVersion(): CheckResult {
     if (parseInt(major, 10) >= 1) {
       return {
         status: 'ok',
-        message: `Bun ${version}`,
+        message: t('checks.environment.bun.ok', { version }),
       };
     }
 
     return {
       status: 'fail',
-      message: `Bun ${version} (require ≥ 1.0)`,
-      hint: 'bun upgrade를 실행하세요',
+      message: t('checks.environment.bun.fail', { version }),
+      hint: t('checks.environment.bun.hintUpgrade'),
     };
   } catch {
     return {
       status: 'fail',
-      message: 'Bun이 설치되지 않았습니다',
-      hint: 'https://bun.sh/install에서 설치하세요',
+      message: t('checks.environment.bun.failNotInstalled'),
+      hint: t('checks.environment.bun.hintInstall'),
     };
   }
 }
@@ -47,8 +48,8 @@ export function checkSettingsJson(): CheckResult {
   if (!existsSync(settingsPath)) {
     return {
       status: 'fail',
-      message: 'settings.json이 없습니다',
-      hint: `다음을 실행하세요: curl -fsSL https://raw.githubusercontent.com/gmoon92/claude-spyglass/main/scripts/install.sh | bash`,
+      message: t('checks.environment.settingsJson.failMissing'),
+      hint: t('checks.environment.settingsJson.hintInstall'),
     };
   }
 
@@ -56,13 +57,13 @@ export function checkSettingsJson(): CheckResult {
     JSON.parse(readFileSync(settingsPath, 'utf-8'));
     return {
       status: 'ok',
-      message: 'settings.json 정상',
+      message: t('checks.environment.settingsJson.ok'),
     };
   } catch {
     return {
       status: 'fail',
-      message: 'settings.json JSON 파싱 실패',
-      hint: '올바른 JSON 형식으로 수정하세요',
+      message: t('checks.environment.settingsJson.failParse'),
+      hint: t('checks.environment.settingsJson.hintFixJson'),
     };
   }
 }
@@ -76,8 +77,8 @@ export function checkHooksRegistered(): CheckResult {
   if (!existsSync(settingsPath)) {
     return {
       status: 'fail',
-      message: '훅 설정 확인 불가 (settings.json 없음)',
-      hint: 'settings.json이 필요합니다',
+      message: t('checks.environment.hooksRegistered.failUnavailable'),
+      hint: t('checks.environment.hooksRegistered.hintNeedSettings'),
     };
   }
 
@@ -101,27 +102,27 @@ export function checkHooksRegistered(): CheckResult {
       if (!spyglassDir) {
         return {
           status: 'warn',
-          message: '훅 설정 있음, 하지만 SPYGLASS_DIR 미설정',
-          hint: `env.SPYGLASS_DIR을 설정하세요 (예: ~/.spyglass-src 또는 /path/to/claude-spyglass)`,
+          message: t('checks.environment.hooksRegistered.warnNoDir'),
+          hint: t('checks.environment.hooksRegistered.hintSetDir'),
         };
       }
 
       return {
         status: 'ok',
-        message: `훅 등록됨 (SPYGLASS_DIR: ${spyglassDir})`,
+        message: t('checks.environment.hooksRegistered.ok', { dir: spyglassDir }),
       };
     }
 
     return {
       status: 'fail',
-      message: '훅이 등록되지 않았습니다',
-      hint: 'settings.json에 spyglass-collect.sh 훅을 추가하세요',
+      message: t('checks.environment.hooksRegistered.failNotRegistered'),
+      hint: t('checks.environment.hooksRegistered.hintAddHooks'),
     };
   } catch {
     return {
       status: 'fail',
-      message: 'settings.json 파싱 실패',
-      hint: '올바른 JSON 형식으로 수정하세요',
+      message: t('checks.environment.settingsJson.failParse'),
+      hint: t('checks.environment.settingsJson.hintFixJson'),
     };
   }
 }
@@ -135,8 +136,8 @@ export function checkHookExecutable(): CheckResult {
   if (!existsSync(settingsPath)) {
     return {
       status: 'fail',
-      message: '훅 스크립트 위치 확인 불가',
-      hint: 'settings.json이 필요합니다',
+      message: t('checks.environment.hookExecutable.failUnavailable'),
+      hint: t('checks.environment.hookExecutable.hintNeedSettings'),
     };
   }
 
@@ -147,8 +148,8 @@ export function checkHookExecutable(): CheckResult {
     if (!spyglassDir) {
       return {
         status: 'warn',
-        message: 'SPYGLASS_DIR이 미설정되어 훅 스크립트 확인 불가',
-        hint: 'settings.json에서 env.SPYGLASS_DIR을 설정하세요',
+        message: t('checks.environment.hookExecutable.warnNoDir'),
+        hint: t('checks.environment.hookExecutable.hintSetDir'),
       };
     }
 
@@ -157,8 +158,8 @@ export function checkHookExecutable(): CheckResult {
     if (!existsSync(hookScript)) {
       return {
         status: 'fail',
-        message: `훅 스크립트가 없습니다: ${hookScript}`,
-        hint: 'SPYGLASS_DIR 경로를 확인하세요',
+        message: t('checks.environment.hookExecutable.failMissing', { path: hookScript }),
+        hint: t('checks.environment.hookExecutable.hintCheckPath'),
       };
     }
 
@@ -168,20 +169,20 @@ export function checkHookExecutable(): CheckResult {
     if (!isExecutable) {
       return {
         status: 'fail',
-        message: `훅 스크립트 실행 권한 없음: ${hookScript}`,
-        hint: `chmod +x ${hookScript}`,
+        message: t('checks.environment.hookExecutable.failNoPermission', { path: hookScript }),
+        hint: t('checks.environment.hookExecutable.hintChmod', { path: hookScript }),
       };
     }
 
     return {
       status: 'ok',
-      message: '훅 스크립트 실행 권한 OK',
+      message: t('checks.environment.hookExecutable.ok'),
     };
   } catch {
     return {
       status: 'fail',
-      message: '훅 스크립트 확인 실패',
-      hint: 'settings.json 형식을 확인하세요',
+      message: t('checks.environment.hookExecutable.failCheckFailed'),
+      hint: t('checks.environment.hookExecutable.hintCheckFormat'),
     };
   }
 }

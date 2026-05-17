@@ -11,6 +11,7 @@
  */
 
 import { doctor } from './cli/doctor';
+import { t } from './i18n';
 
 async function main() {
   const args = process.argv.slice(2);
@@ -20,12 +21,12 @@ async function main() {
   if (command === 'doctor') {
     await doctor(hasFixFlag);
   } else {
-    console.error('사용법: bun run packages/server/src/cli.ts doctor [--fix]');
+    console.error(t('cli.usage'));
     process.exit(1);
   }
 }
 
 main().catch((err) => {
-  console.error('오류:', err.message);
+  console.error(t('cli.error-prefix'), err.message);
   process.exit(1);
 });
