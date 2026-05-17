@@ -4,7 +4,7 @@
 // Wave 2: target-role-badge (targetInnerHtml) 는 Wave 3에서 ds-* 위임 예정 — 형식이 달라 별도 처리 필요.
 
 import { escHtml, fmtToken, shortModelName } from '../formatters.js';
-import { typeBadge, toolIconHtml, toolStatusBadge } from './badges.js';
+import { typeBadge, toolIconHtml, toolStatusBadge, agentSpikeBadgeHtml } from './badges.js';
 import { skTableRows } from './skeleton.js';
 import { svgToolDot } from '../design-system/icons/_index.js';
 
@@ -48,7 +48,11 @@ export function targetInnerHtml(r) {
     nameHtml = `<span class="action-name">${icon}${escHtml(r.tool_name)}</span>`;
   }
   const statusBadge = inProgress ? '' : toolStatusBadge(r);
-  return { html: `<span class="target-cell-inner">${nameHtml}${statusBadge}</span>`, empty: false };
+  // anomaly-bloated-sys T-15: Agent/Skill 부모 Target 셀 `↑×N` (N≥3) 표지.
+  //   N<3은 기존 spike(↑) 유지 — 헬퍼가 '' 반환 시 자연 미적용.
+  //   agent_spike 응답 필드가 없으면(트랙 A 진행 중) 빈 문자열 — 회귀 0.
+  const agentSpike = agentSpikeBadgeHtml(r.agent_spike);
+  return { html: `<span class="target-cell-inner">${nameHtml}${statusBadge}${agentSpike}</span>`, empty: false };
 }
 
 export function makeTargetCell(r) {

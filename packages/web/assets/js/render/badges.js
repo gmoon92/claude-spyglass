@@ -97,6 +97,141 @@ export function anomalyBadgesHtml(flags) {
   }).join('');
 }
 
+/* ── BLOATED-SYS / AGENT-SPIKE 표지 헬퍼 SSoT (anomaly-bloated-sys ADR-005) ──
+ *
+ * 책임:
+ *   서버 응답 필드 `bloated_sys` / `agent_spike` 객체를 받아 HTML 문자열을 생성한다.
+ *   호출 측은 raw 객체만 전달하고 단계 판정·라벨 포맷·tooltip은 모두 함수 내부 SSoT.
+ *
+ * 단계 판정 정책 (호출 측에서 boolean 재계산 금지):
+ *   - bloated_sys.status === 'warn'      → mini/full/dot 모두 노출 (단 dot은 warn 제외, ADR-005)
+ *   - bloated_sys.status === 'critical'  → mini/full/dot 모두 노출, 점멸 자동 적용
+ *   - bloated_sys.status === 'normal'    → 빈 문자열
+ *
+ * 데이터 안전 (트랙 A 진행 중 방어 코드):
+ *   - null/undefined / 빈 객체 → 빈 문자열
+ *   - status가 'warn'/'critical' 아니면 빈 문자열
+ *   - pct 누락 시 '?'로 대체 (시각 깨짐 방지)
+ *
+ * 호출자:
+ *   - mini: render/rows.js (첫 prompt 행 Target 셀)
+ *   - full: views/detail-view.js (세션 헤더 detailBadges)
+ *   - dot:  left-panel.js (사이드바 세션 리스트)
+ */
+export function bloatedSysBadgeMiniHtml(bloatedSys) {
+  return _bloatedBadge(bloatedSys, 'mini');
+}
+export function bloatedSysBadgeFullHtml(bloatedSys) {
+  return _bloatedBadge(bloatedSys, 'full');
+}
+export function bloatedSysBadgeDotHtml(bloatedSys) {
+  // 사이드바 dot은 critical만 노출 (ADR-005)
+  if (!bloatedSys || bloatedSys.status !== 'critical') return '';
+  return _bloatedBadge(bloatedSys, 'dot');
+}
+
+function _bloatedBadge(bs, variant) {
+  if (!bs || (bs.status !== 'warn' && bs.status !== 'critical')) return '';
+  const status = bs.status;
+  const pct    = (bs.pct != null && Number.isFinite(bs.pct)) ? Math.round(bs.pct) : '?';
+  const tone   = status === 'critical' ? 'error' : 'warn';
+  const stageCls = status === 'critical' ? ' is-critical' : ' is-warn';
+  const i18nBase = `ui.anomaly.bloated-sys.${status}`;
+  const label   = window.I18n.t(`${i18nBase}.label`,   { pct });
+  const tooltip = window.I18n.t(`${i18nBase}.tooltip`, { pct });
+  const action  = window.I18n.t(`${i18nBase}.modal`,   { pct });
+  // 모달 카피는 fullTooltip의 두 번째 줄로 결합해 사용자가 hover만으로 액션을 알 수 있게.
+  const fullTip = `${tooltip} · ${action}`;
+  if (variant === 'dot') {
+    return `<span class="badge-bloated-sys badge-bloated-sys--dot${stageCls} ds-dot"
+      data-tone="${tone}" data-bloated-sys-stage="${status}"
+      title="${escHtml(fullTip)}" aria-label="${escHtml(fullTip)}"></span>`;
+  }
+  const cls = variant === 'full' ? 'badge-bloated-sys--full' : 'badge-bloated-sys--mini';
+  return `<span class="badge-bloated-sys ${cls}${stageCls} ds-badge"
+    data-tone="${tone}" data-bloated-sys-stage="${status}"
+    data-mini-badge-tooltip="bloated-sys"
+    title="${escHtml(fullTip)}" aria-label="${escHtml(fullTip)}">${escHtml(label)}</span>`;
+}
+
+/**
+ * Agent/Skill 부모 Target 셀 `↑×N` 표지.
+ *  - agent_spike.status === 'critical' AND multiplier(ratio) ≥ 3 → '↑×N'
+ *  - multiplier < 3 → 기존 '↑' (회귀 차단 — 기존 badge-spike 유지)
+ *  - agent_spike === null/normal → '' (호출 측에서 기존 badge-spike 로직 그대로)
+ *
+ * 반환: HTML 또는 ''.  '' 반환 시 호출 측이 기본 spike 표지를 그대로 유지하면 됨.
+ */
+export function agentSpikeBadgeHtml(agentSpike) {
+  if (!agentSpike || agentSpike.status !== 'critical') return '';
+  const ratio = Number(agentSpike.ratio);
+  if (!Number.isFinite(ratio) || ratio < 3) return '';
+  const n = Math.round(ratio);
+  // 라벨 SSoT는 i18n 키이나, 시각 출력은 `↑` glyph + 수식 자식(.agent-spike-count)으로 분리해
+  // CSS에서 count만 강조(tabular-nums + 굵게)할 수 있게 했다 (badges.css 참조).
+  // i18n label 자체는 sr-only / 후속 노출 경로에서 사용 가능 — 현재는 tooltip 결합으로 충분.
+  const tooltip = window.I18n.t('ui.anomaly.agent-spike.tooltip', { n });
+  const action  = window.I18n.t('ui.anomaly.agent-spike.modal',   { n });
+  const fullTip = `${tooltip} · ${action}`;
+  return `<span class="mini-badge badge-spike ds-badge"
+    data-tone="warn" data-spike-variant="agent"
+    data-mini-badge-tooltip="agent-spike"
+    title="${escHtml(fullTip)}" aria-label="${escHtml(fullTip)}">↑<span class="agent-spike-count">×${n}</span></span>`;
+}
+
+/**
+ * 턴뷰 헤더 `.turn-spike-summary` + sparkline (SVG 60×16, 최대 20 샘플).
+ *  - agent_spike가 null/normal이면 빈 문자열.
+ *  - samples (자식 토큰 시계열) 없거나 빈 배열이면 라벨만 노출.
+ *  - peak 표시는 sparkline 내부에서 처리 — 본 함수는 .turn-spike-summary 컨테이너만 빌드.
+ *
+ * @param {object} agentSpike
+ * @param {number[]} samples — 최대 20개 자식 토큰 시계열 (옵션)
+ */
+export function turnSpikeSummaryHtml(agentSpike, samples) {
+  if (!agentSpike || agentSpike.status !== 'critical') return '';
+  const ratio = Number(agentSpike.ratio);
+  if (!Number.isFinite(ratio) || ratio < 3) return '';
+  const n = Math.round(ratio);
+  const label = window.I18n.t('ui.anomaly.agent-spike.summary', { n });
+  const sparkSvg = _spikeSparklineSvg(samples);
+  return `<span class="turn-spike-summary" title="${escHtml(label)}" aria-label="${escHtml(label)}">
+    <span class="turn-spike-summary-label">${escHtml(label)}</span>
+    <span class="turn-spike-summary-spark">${sparkSvg}</span>
+  </span>`;
+}
+
+function _spikeSparklineSvg(samples) {
+  const W = 60, H = 16;
+  if (!Array.isArray(samples) || samples.length === 0) {
+    // 빈 baseline만 — sparkline 모듈 emptySvg 패턴 재사용
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">` +
+      `<line x1="0" y1="${H-1}" x2="${W}" y2="${H-1}" stroke="currentColor" stroke-opacity="0.18" stroke-width="1"/></svg>`;
+  }
+  const vals = samples.slice(-20).map(v => Number.isFinite(v) && v > 0 ? v : 0);
+  const n = vals.length;
+  const max = Math.max(...vals, 1);
+  const stepX = n > 1 ? W / (n - 1) : 0;
+  const padY = 1;
+  const innerH = H - padY * 2;
+  const points = vals.map((v, i) => {
+    const x = i * stepX;
+    const y = padY + innerH - (v / max) * innerH;
+    return [x, y];
+  });
+  const linePath = 'M ' + points.map(([x, y]) => `${x.toFixed(2)} ${y.toFixed(2)}`).join(' L ');
+  const areaPath = `${linePath} L ${W} ${H} L 0 ${H} Z`;
+  // peak marker
+  let peakIdx = 0;
+  for (let i = 1; i < vals.length; i++) if (vals[i] > vals[peakIdx]) peakIdx = i;
+  const [px, py] = points[peakIdx];
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">` +
+    `<path d="${areaPath}" fill="var(--color-accent-soft)" />` +
+    `<path d="${linePath}" stroke="var(--color-accent)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="2" fill="var(--color-accent)"/>` +
+    `</svg>`;
+}
+
 /**
  * Sub-type chip HTML SSoT (turn-view-badges ADR-001 + R2).
  *

@@ -35,6 +35,7 @@ import {
   getDetailTurns, getDetailPrologue, getExpandedTurnIds, getSearchQuery,
 } from './state.js';
 import { targetInnerHtml, contextPreview } from '../renderers.js';
+import { turnSpikeSummaryHtml } from '../render/badges.js';
 // v21 (system-reminder-badge): turn 별 신규 reminder 산출 SSoT
 import { computeNewRemindersByTurn } from './system-reminder.js';
 // Wave 5: system-reminder 칩 아이콘을 design-system/icons/note.js 로 이전.
@@ -499,6 +500,14 @@ export function renderTurnCards(turns, badgeTurns) {
     const turnReminders = newRemindersByTurn.get(turn.turn_id);
     const reminderChip = buildSystemReminderChip(turn.turn_index, turnReminders);
 
+    // anomaly-bloated-sys T-16: 턴뷰 헤더 .turn-spike-summary + sparkline.
+    //   turn.agent_spike 응답이 critical이고 ratio ≥ 3일 때만 노출 (헬퍼 내부 판정).
+    //   샘플 시계열은 turn.tool_calls에서 자식 토큰을 시간순 추출 — 데이터 없으면 빈 baseline.
+    const spikeSamples = (turn.agent_spike?.samples) || (turn.tool_calls || [])
+      .map(tc => (tc.tokens_input || 0) + (tc.tokens_output || 0))
+      .filter(v => v > 0);
+    const spikeSummary = turnSpikeSummaryHtml(turn.agent_spike, spikeSamples);
+
     // search-expand-payload: 카드별 검색 haystack. flat-view 검색 흐름이 매칭 카드만 표시한다.
     const haystack = buildTurnHaystack(turn, turnReminders);
 
@@ -509,6 +518,7 @@ export function renderTurnCards(turns, badgeTurns) {
           ${promptText ? `<span class="turn-card-preview">${promptText}</span>` : ''}
           ${systemBadge}
           ${reminderChip}
+          ${spikeSummary}
           ${payloadActionBtn}
           <span class="turn-card-expand-btn"><svg class="ds-chevron" data-dir="down" aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
         </div>

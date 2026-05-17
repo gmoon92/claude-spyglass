@@ -30,6 +30,15 @@ let _pointData = []; // [{cx, cy, turnIndex, value, delta}] — 마우스 hit-te
 let _hoveredIdx = -1;
 let _lastTurns  = null;
 /**
+ * anomaly-bloated-sys T-17: 세션 헤더 bloated-sys 라벨 hover 시 baseline 강조.
+ *  - 기본 baseline opacity .55 → hover 시 1.0
+ *  - stroke-width 1px → 1.5px
+ *  - 200ms 부드러운 트랜지션은 Canvas에서 단계적 재렌더로 표현 (간단 토글).
+ */
+let _baselineGlow = false;
+/** session 헤더에서 dispatch한 bloated_sys 정보를 차트가 들고 풋터 split을 표현. */
+let _bloatedSysCache = null;
+/**
  * 현재 렌더된 세션의 context window 정보. _onCanvasMouseMove가 hover 툴팁에
  * "사용률 %"·"한도 label"을 함께 전달하기 위해 renderContextChart에서 갱신한다.
  */
@@ -72,11 +81,54 @@ export function initContextChart() {
     _canvas.addEventListener('mouseleave', _onCanvasMouseLeave);
   }
 
-  // DETAIL_FILTER_CHANGED 구독 — 컨텍스트 차트 갱신
+  // DETAIL_FILTER_CHANGED 구독 — 컨텍스트 차트 갱신.
+  // turns 응답에 bloated_sys 정보가 같이 오면 풋터 split 표시에 사용.
   document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
-    const { allTurns } = e.detail;
+    const { allTurns, bloatedSys } = e.detail || {};
+    _bloatedSysCache = bloatedSys || _extractBloatedSysFromTurns(allTurns);
     renderContextChart(allTurns);
   });
+
+  // anomaly-bloated-sys T-17: 세션 헤더 hover → baseline 강조 동기화.
+  //   detail-view.js의 applyBloatedSysHeader에서 dispatch.
+  document.addEventListener('ctx-baseline-glow', (e) => {
+    const active = !!(e.detail && e.detail.active);
+    if (_baselineGlow === active) return;
+    _baselineGlow = active;
+    renderContextChart(_lastTurns);
+  });
+
+  // anomaly-bloated-sys T-17: 풋터 클릭 → 첫 prompt 행으로 scrollIntoView + .row-flash 1.5s.
+  if (_footer) {
+    _footer.addEventListener('click', () => {
+      // 'prompt' 타입의 첫 행을 우선 찾고, 없으면 turn-card-summary 첫 카드.
+      const target = document.querySelector('tr[data-type="prompt"]')
+        || document.querySelector('.turn-row-prompt')
+        || document.querySelector('.turn-card');
+      if (!target) return;
+      target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      target.classList.add('row-flash');
+      setTimeout(() => target.classList.remove('row-flash'), 1500);
+    });
+    // 시각 어포던스 — 풋터에 hover 시 cursor: pointer
+    _footer.style.cursor = 'pointer';
+    _footer.setAttribute('role', 'button');
+    _footer.setAttribute('tabindex', '0');
+  }
+}
+
+/**
+ * 응답 구조에 따라 turns 배열에서 bloated_sys 정보를 추출.
+ *  - 일부 응답은 session 레벨, 일부는 첫 prompt 레벨에 부착될 수 있음.
+ *  - 어느 쪽도 없으면 null 반환 — 풋터 split 미노출 자연 폴백.
+ */
+function _extractBloatedSysFromTurns(turns) {
+  if (!Array.isArray(turns) || turns.length === 0) return null;
+  for (const t of turns) {
+    if (t?.prompt?.bloated_sys && t.prompt.bloated_sys.status !== 'normal') return t.prompt.bloated_sys;
+    if (t?.bloated_sys && t.bloated_sys.status !== 'normal') return t.bloated_sys;
+  }
+  return null;
 }
 
 function _onCanvasMouseMove(e) {
@@ -172,11 +224,22 @@ export function renderContextChart(turns) {
     _indicator.className = '';
   }
 
-  // 푸터 힌트 — "참고 스케일" 대신 추론된 모델 한도를 명시
+  // 푸터 힌트 — "참고 스케일" 대신 추론된 모델 한도를 명시.
+  // anomaly-bloated-sys T-17: bloated_sys.pct가 있으면 split 카피를 우측에 덧붙인다.
+  //   `system {sys}% / user {user}%` — 사용자가 system 점유율을 한눈에 인지.
+  //   클릭 → 첫 prompt 행으로 scrollIntoView (init에서 위임).
   if (_footer) {
     const last = sorted[sorted.length - 1];
     const modelSuffix = cw.model ? ` (${cw.model})` : '';
-    _footer.textContent = window.I18n.t('ui.context-chart.footer', { turn: last.turn_index, max: fmtK(Math.max(...values)), limit: cw.label, model: modelSuffix });
+    const baseText = window.I18n.t('ui.context-chart.footer', { turn: last.turn_index, max: fmtK(Math.max(...values)), limit: cw.label, model: modelSuffix });
+    const bs = _bloatedSysCache;
+    let splitText = '';
+    if (bs && (bs.status === 'warn' || bs.status === 'critical') && Number.isFinite(bs.pct)) {
+      const sys  = Math.round(bs.pct);
+      const user = Math.max(0, 100 - sys);
+      splitText = ' · ' + window.I18n.t('ui.chart.footer.split', { sys, user });
+    }
+    _footer.textContent = baseText + splitText;
   }
 
   // DPR 처리
@@ -220,6 +283,29 @@ export function renderContextChart(turns) {
   for (let g = 1; g < 4; g++) {
     const y = PAD.top + (cH / 4) * g;
     ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cW, y); ctx.stroke();
+  }
+
+  // anomaly-bloated-sys T-17: 점선 baseline — bloated_sys.pct 비율 위치에 표시.
+  //   stroke: var(--text-muted); stroke-dasharray: 4 3; stroke-width: 1px; opacity: .55
+  //   세션 헤더 bloated-sys 라벨 hover → opacity .55→1, stroke-width 1→1.5px (200ms 트랜지션).
+  //   Canvas는 시간 기반 트랜지션이 어렵지만 _baselineGlow 토글로 즉시 강조 표시 가능.
+  const bs = _bloatedSysCache;
+  if (bs && (bs.status === 'warn' || bs.status === 'critical') && Number.isFinite(bs.pct) && cw.size > 0) {
+    // bloated_sys.system_tokens (실측 값) 우선, 없으면 pct로 환산
+    const sysTokens = Number.isFinite(bs.system_tokens) ? bs.system_tokens : (bs.pct / 100) * cw.size;
+    const yBase = scaleY(sysTokens);
+    ctx.save();
+    const muted = getCssVar('--text-muted') || '#8B949E';
+    ctx.strokeStyle = muted;
+    ctx.globalAlpha = _baselineGlow ? 1.0 : 0.55;
+    ctx.lineWidth   = _baselineGlow ? 1.5 : 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(PAD.left, yBase);
+    ctx.lineTo(PAD.left + cW, yBase);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
   }
 
   // 영역 fill — 라인 위쪽(남은 한도)을 먼저, 그 다음 라인 아래(사용량)를 그려

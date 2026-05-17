@@ -153,6 +153,7 @@ exports[`makeSessionRow 활성 세션 (ended_at: null) with preview 1`] = `
         <span class="sess-row-time">6일 전</span>
         <span class="sess-row-tokens">10.0k</span>
         <span class="sess-row-status active ds-dot" data-tone="active" data-size="md" title="라이브 세션"><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5" fill="currentColor"/></svg></span>
+        
       </div>
       <div class="sess-row-preview" title="첫 프롬프트 미리보기">첫 프롬프트 미리보기</div>
     </td>
@@ -167,6 +168,7 @@ exports[`makeSessionRow 활성 세션 (ended_at: null) isSelected: true 1`] = `
         <span class="sess-row-time">6일 전</span>
         <span class="sess-row-tokens">5.0k</span>
         <span class="sess-row-status active ds-dot" data-tone="active" data-size="md" title="라이브 세션"><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5" fill="currentColor"/></svg></span>
+        
       </div>
       <div class="sess-row-preview" title="첫 프롬프트 미리보기">첫 프롬프트 미리보기</div>
     </td>
@@ -181,6 +183,7 @@ exports[`makeSessionRow 종료된 세션 (ended_at 설정) 1`] = `
         <span class="sess-row-time">6일 전</span>
         <span class="sess-row-tokens">3.0k</span>
         <span class="sess-row-status ds-dot" data-tone="ended" data-size="md" title="종료된 세션"><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></span>
+        
       </div>
       <div class="sess-row-preview" title="첫 프롬프트 미리보기">첫 프롬프트 미리보기</div>
     </td>
@@ -195,6 +198,7 @@ exports[`makeSessionRow 미리보기 없는 세션 1`] = `
         <span class="sess-row-time">6일 전</span>
         <span class="sess-row-tokens">5.0k</span>
         <span class="sess-row-status active ds-dot" data-tone="active" data-size="md" title="라이브 세션"><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5" fill="currentColor"/></svg></span>
+        
       </div>
       
     </td>
@@ -209,6 +213,7 @@ exports[`makeSessionRow 토큰이 많은 세션 1`] = `
         <span class="sess-row-time">6일 전</span>
         <span class="sess-row-tokens">1.0M</span>
         <span class="sess-row-status active ds-dot" data-tone="active" data-size="md" title="라이브 세션"><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5" fill="currentColor"/></svg></span>
+        
       </div>
       <div class="sess-row-preview" title="첫 프롬프트 미리보기">첫 프롬프트 미리보기</div>
     </td>
@@ -223,6 +228,7 @@ exports[`makeSessionRow 긴 미리보기 텍스트 1`] = `
         <span class="sess-row-time">6일 전</span>
         <span class="sess-row-tokens">5.0k</span>
         <span class="sess-row-status active ds-dot" data-tone="active" data-size="md" title="라이브 세션"><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5" fill="currentColor"/></svg></span>
+        
       </div>
       <div class="sess-row-preview" title="이것은 매우 긴 프롬프트 텍스트입니다. 여러 줄에 걸쳐 있을 수 있으며 특수 문자도 포함됩니다: &lt;&gt;&amp;&quot;'">이것은 매우 긴 프롬프트 텍스트입니다. 여러 줄에 걸쳐 있을 수 있으며 특수 문자도 포함됩니다: &lt;&gt;&amp;&quot;'</div>
     </td>

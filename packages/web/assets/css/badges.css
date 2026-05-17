@@ -65,6 +65,183 @@
 .badge-slow::before  { content: '◷'; margin-right: 1px; }
 .badge-slow    { background: var(--badge-grad-warn); color: var(--warn); }
 
+/* ── BLOATED-SYS / AGENT-SPIKE BADGES (anomaly-bloated-sys ADR-005) ──────
+ *
+ * glyph SSoT — `▤` (mini · full 공통, 동결).
+ *   ADR-005 결정: warn / critical 단계 차이는 색·점멸·border·box-shadow 다중 시그널로
+ *   표현하고 glyph는 변경하지 않는다 — 사용자가 다지점에서 동일 anomaly를 즉시 인지.
+ *
+ * 비-색상 신호 (ADR-WDO-007 + ADR-005):
+ *   - glyph `▤`            : 색맹 시각 보존 — 모든 단계 공통
+ *   - row 좌측 border-left  : warn 단계에서 행 위치를 공간적으로 식별
+ *   - dot 점멸 1.2s ease    : critical 단계에서 시간 차원 신호 추가
+ *   - inset box-shadow      : critical 단계 mini 뱃지의 깊이 차이
+ *
+ * 노출 지점 (5곳):
+ *   1. 사이드바 세션 dot   — critical만 (warn 미노출, ADR-005)
+ *   2. 세션 헤더 full      — `▤ sys 82%`
+ *   3. 첫 prompt 행 mini   — `▤ sys 65%` + warn 행 border-left
+ *   4. Agent 부모 Target   — `↑×N` (N ≥ 3) — 기존 `.badge-spike` 확장
+ *   5. 턴뷰 헤더            — `.turn-spike-summary` + sparkline (60×16)
+ */
+
+/* 베이스 — mini-badge 형제, ds-badge SSoT 패턴 (data-tone 활용) */
+.badge-bloated-sys {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  white-space: nowrap;
+  cursor: help;
+  border: 1px solid transparent;
+}
+/* glyph `▤` — ::before로 부착해 호출 측이 라벨 텍스트만 주입 (SSoT 보존).
+   span 안에 dot 자식이 있으면 점멸 대상은 .badge-bloated-sys-dot로 분리. */
+.badge-bloated-sys::before {
+  content: '▤';
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* mini 변형 — 첫 prompt 행 / Target 셀에 부착되는 ≤8자 라벨 */
+.badge-bloated-sys--mini {
+  padding: 1px 5px;
+  margin-left: 4px;
+  font-size: 10px;
+  border-radius: 3px;
+}
+
+/* full 변형 — 세션 헤더 우측에 부착, 라벨 형식 `sys {pct}%` */
+.badge-bloated-sys--full {
+  padding: 3px 8px;
+  margin-left: 6px;
+  font-size: var(--text-small);
+}
+
+/* dot 변형 — 사이드바 세션 리스트 우측, 6px 원형 (critical 전용) */
+.badge-bloated-sys--dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border-radius: 50%;
+  margin-left: 6px;
+  vertical-align: middle;
+  cursor: help;
+}
+.badge-bloated-sys--dot::before { content: none; }   /* dot에는 glyph 없음 */
+
+/* ── 단계 차등: warn ─────────────────────────────────────────────────── */
+.badge-bloated-sys.is-warn,
+.badge-bloated-sys[data-tone="warn"] {
+  color:        var(--color-warn);
+  background:   var(--color-warn-soft);
+  border-color: rgba(240,183,47,0.35);
+}
+/* row 좌측 2px 표지 — 첫 prompt 행이 .row-bloated-warn 클래스를 가질 때 적용
+   (호출 측에서 행 클래스 부여, 뱃지가 행 외 컨테이너에 있을 때도 일관성 보장). */
+tr.row-bloated-warn > td:first-child,
+.turn-row.row-bloated-warn {
+  box-shadow: inset 2px 0 0 var(--color-warn);
+}
+
+/* ── 단계 차등: critical ─────────────────────────────────────────────── */
+.badge-bloated-sys.is-critical,
+.badge-bloated-sys[data-tone="error"],
+.badge-bloated-sys[data-tone="critical"] {
+  color:        var(--color-danger);
+  background:   var(--color-danger-soft);
+  border-color: rgba(244,113,116,0.45);
+  box-shadow:   inset 0 0 0 1px var(--color-danger-soft);
+}
+/* critical row 표지 — bloated-warn보다 진한 inset shadow */
+tr.row-bloated-critical > td:first-child,
+.turn-row.row-bloated-critical {
+  box-shadow: inset 2px 0 0 var(--color-danger), inset 0 0 0 1px var(--color-danger-soft);
+}
+
+/* dot 점멸 — critical 전용 (ADR-005 §1.2s ease) */
+.badge-bloated-sys--dot.is-critical,
+.badge-bloated-sys--dot[data-tone="error"],
+.badge-bloated-sys--dot[data-tone="critical"] {
+  background:   var(--color-danger);
+  border-color: rgba(244,113,116,0.55);
+  animation:    bloated-critical-blink 1.2s ease infinite;
+}
+@keyframes bloated-critical-blink {
+  0%, 100% { opacity: 1;   transform: scale(1);    }
+  50%       { opacity: 0.35; transform: scale(0.85); }
+}
+
+/* ── AGENT SPIKE (↑×N) — 기존 .badge-spike 변형 ─────────────────────────
+ *  N ≥ 3일 때만 `↑×N` 형식, N < 3은 기존 `↑` (회귀 차단).
+ *  data-spike-variant="agent" 속성으로 부모 Agent/Skill 행의 Spike와 분리. */
+.badge-spike[data-spike-variant="agent"] {
+  /* 베이스는 .badge-spike 그대로 — count 자식 강조만 추가 */
+  letter-spacing: 0.02em;
+}
+.badge-spike[data-spike-variant="agent"] .agent-spike-count {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  margin-left: 1px;
+}
+
+/* ── TURN SPIKE SUMMARY (턴뷰 헤더 우측) ──────────────────────────────────
+ *  Layout: 라벨 + sparkline 우측 정렬, max-width 280px (시각 노이즈 제한).
+ *  사용자가 즉시 turn 내 토큰 분포 추세를 인지 → 세션 분리 결정 보조. */
+.turn-spike-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: rgba(255,122,69,0.10);
+  color: var(--color-accent);
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  font-weight: 600;
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: help;
+}
+.turn-spike-summary-label {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.turn-spike-summary-spark {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  /* SVG 자체는 60×16 — sparkline 모듈이 viewBox에 맞춰 출력 */
+}
+.turn-spike-summary-spark svg {
+  width: 60px;
+  height: 16px;
+  display: block;
+}
+
+/* ── ROW FLASH (context-chart 풋터 → 첫 prompt 행 anchor scroll 강조) ───
+ *  1.5s ease — scrollIntoView 후 시선을 잡는 fade-in / fade-out 펄스.
+ *  기존 row-flash-update(피드 SSE 갱신용)와 클래스 분리. */
+@keyframes row-flash {
+  0%   { background-color: rgba(255,122,69,0.20); }
+  50%  { background-color: rgba(255,122,69,0.12); }
+  100% { background-color: transparent;            }
+}
+.row-flash {
+  animation: row-flash 1.5s ease;
+}
+
 /* ── RUNNING ICON ANIMATION ─────────────────────────────────────────────── */
 @keyframes tool-running-pulse {
   0%, 100% { opacity: 1;   transform: scale(1);    }
@@ -649,4 +826,429 @@ tr.row-trust-unknown:hover { opacity: 0.95; }
 }
 @keyframes update-modal-spin {
   to { transform: rotate(360deg); }
+}
+
+/* ── UPDATE MODAL · MIGRATION RESULT (T-08, ADR-004) ──────────────────────
+   3분기 시각화 영역:
+   - data-state="empty"   → 중립 톤, 작은 dot 글리프, 'No schema changes'
+   - data-state="success" → success 톤(green), check 글리프, 'N migrations applied' + 파일 토글
+   - data-state="failed"  → danger 톤(red), alert 글리프, 실패 파일명 + 가이드
+   ds-badge SSoT 정신을 따라 색은 토큰만, 비-색상 신호(글리프·border)를 동시 적용. */
+.update-modal-migration {
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--font-meta);
+  /* 좌측 인서트 stripe — 색상에 의존하지 않는 비-색상 신호 (ADR-007 정신) */
+  box-shadow: inset 2px 0 0 var(--border);
+  transition: box-shadow var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.update-modal-migration[hidden] { display: none; }
+
+.update-modal-migration-head {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.update-modal-migration-glyph {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  line-height: 1;
+  font-weight: var(--weight-strong);
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  color: var(--text-dim);
+}
+.update-modal-migration-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text);
+  font-weight: var(--weight-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.update-modal-migration-duration {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  font-size: var(--text-small);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.update-modal-migration-detail {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+
+/* 분기 1 · empty (변경 없음) — 중립, 작은 dot.
+   본 분기는 base `.update-modal-migration` 톤을 그대로 사용 →
+   `[data-state="empty"]` 컨테이너 룰셋 없음(emptyRules 경고 방지). 글리프만 분기. */
+.update-modal-migration[data-state="empty"] .update-modal-migration-glyph {
+  color: var(--text-dim);
+  border-color: transparent;
+  background: radial-gradient(circle at center, currentColor 0 2px, transparent 2.5px);
+}
+
+/* 분기 2 · success (N건 적용) — green 톤 + check */
+.update-modal-migration[data-state="success"] {
+  border-color: rgba(46, 160, 67, 0.32);
+  background: rgba(46, 160, 67, 0.06);
+  box-shadow: inset 2px 0 0 var(--green);
+}
+.update-modal-migration[data-state="success"] .update-modal-migration-glyph {
+  color: var(--green);
+  border-color: var(--green);
+  background: transparent;
+}
+.update-modal-migration[data-state="success"] .update-modal-migration-glyph::before {
+  content: "✓";
+  font-size: 10px;
+  line-height: 1;
+}
+
+/* 분기 3 · failed — danger 톤 + ! 글리프 + 미세 점멸 */
+.update-modal-migration[data-state="failed"] {
+  border-color: var(--color-danger-soft);
+  background: rgba(244, 113, 116, 0.06);
+  box-shadow: inset 2px 0 0 var(--color-danger);
+}
+.update-modal-migration[data-state="failed"] .update-modal-migration-glyph {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+  background: transparent;
+  animation: update-modal-migration-alert 1.6s ease-in-out infinite;
+}
+.update-modal-migration[data-state="failed"] .update-modal-migration-glyph::before {
+  content: "!";
+  font-size: 10px;
+  line-height: 1;
+}
+.update-modal-migration[data-state="failed"] .update-modal-migration-label {
+  color: var(--color-danger);
+}
+@keyframes update-modal-migration-alert {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.72; transform: scale(0.92); }
+}
+
+/* 파일 리스트 토글 (success 분기 전용) */
+.update-modal-migration-files {
+  margin-top: var(--space-1);
+  font-size: var(--text-small);
+}
+.update-modal-migration-files[hidden] { display: none; }
+.update-modal-migration-files-summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px 0;
+  border-radius: var(--radius-sm);
+  transition: color var(--dur-fast) var(--ease);
+}
+.update-modal-migration-files-summary::-webkit-details-marker { display: none; }
+.update-modal-migration-files-summary::before {
+  content: "▸";
+  display: inline-block;
+  font-size: 9px;
+  transition: transform var(--dur-fast) var(--ease);
+  color: var(--text-dim);
+}
+.update-modal-migration-files[open] .update-modal-migration-files-summary::before {
+  transform: rotate(90deg);
+}
+.update-modal-migration-files-summary:hover { color: var(--text); }
+.update-modal-migration-files-summary:focus-visible {
+  outline: 1px solid var(--border-strong);
+  outline-offset: 2px;
+}
+.update-modal-migration-files-list {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+  color: var(--text);
+  max-height: 140px;
+  overflow-y: auto;
+}
+.update-modal-migration-file {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 10.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── UPDATE MODAL · LOCAL CHANGES GUARD (T-09, ADR-007) ───────────────────
+   /api/update 409 응답 시 actions 영역을 대체하여 안내 패널 노출.
+   tone: warn (block 동작이지만 사용자가 즉시 해결 가능 → error 아닌 warn). */
+.update-modal-local-changes {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-warn-soft);
+  background: rgba(240, 183, 47, 0.06);
+  box-shadow: inset 2px 0 0 var(--color-warn);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.update-modal-local-changes[hidden] { display: none; }
+
+.update-modal-local-changes-head {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.update-modal-local-changes-glyph {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--color-warn);
+  border: 1.5px solid var(--color-warn);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-strong);
+  font-size: 11px;
+  line-height: 1;
+}
+.update-modal-local-changes-glyph::before { content: "!"; }
+.update-modal-local-changes-title {
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  font-weight: var(--weight-strong);
+  color: var(--text);
+}
+.update-modal-local-changes-body {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-small);
+  line-height: 1.55;
+}
+
+.update-modal-local-changes-files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.update-modal-local-changes-files[hidden] { display: none; }
+.update-modal-local-changes-filelist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+  font-size: 10.5px;
+  max-height: 96px;
+  overflow-y: auto;
+}
+.update-modal-local-changes-file {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.update-modal-local-changes-file.is-more {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* 공통: 명령 코드 블록 (T-09 모달 + T-10 dashboard warning) */
+.update-modal-cmd-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.update-modal-cmd-label,
+.dashboard-warning-cmd-label {
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  font-weight: var(--weight-strong);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.update-modal-cmd-row,
+.dashboard-warning-cmd-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 4px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.update-modal-cmd,
+.dashboard-warning-cmd {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow-x: auto;
+}
+.update-modal-cmd-copy,
+.dashboard-warning-cmd-copy {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.update-modal-cmd-copy:hover,
+.dashboard-warning-cmd-copy:hover {
+  background: var(--surface-alt);
+  color: var(--text);
+  border-color: var(--border);
+}
+.update-modal-cmd-copy:focus-visible,
+.dashboard-warning-cmd-copy:focus-visible {
+  outline: 1px solid var(--accent-border);
+  outline-offset: 1px;
+}
+.update-modal-cmd-copy.is-copied,
+.dashboard-warning-cmd-copy.is-copied {
+  color: var(--green);
+  border-color: rgba(46, 160, 67, 0.32);
+  background: rgba(46, 160, 67, 0.08);
+}
+
+/* ── DASHBOARD WARNING · SHALLOW CLONE (T-10, ADR-007) ────────────────────
+   footer 위에 띄우는 비-차단 정보 배너. tone: warn (정보 + 행동 권장). */
+.dashboard-warning {
+  position: fixed;
+  z-index: 9000;
+  /* footer 바로 위에 자리잡되, 화면 좌측 가장자리에 컴팩트 노출 */
+  left: var(--space-3, 12px);
+  bottom: 36px;
+  max-width: 420px;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--color-warn-soft);
+  box-shadow: inset 2px 0 0 var(--color-warn), 0 4px 16px rgba(0, 0, 0, 0.32);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--font-meta);
+}
+.dashboard-warning[hidden] { display: none; }
+
+.dashboard-warning-glyph {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--color-warn);
+  border: 1.5px solid var(--color-warn);
+  font-weight: var(--weight-strong);
+  font-size: 11px;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+.dashboard-warning-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dashboard-warning-title {
+  font-weight: var(--weight-strong);
+  color: var(--text);
+  font-size: var(--text-body);
+  line-height: 1.35;
+}
+.dashboard-warning-text {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+.dashboard-warning-cmd-row {
+  width: 100%;
+}
+.dashboard-warning-cmd-row .dashboard-warning-cmd-label {
+  flex-shrink: 0;
+  margin-right: var(--space-1);
+}
+
+.dashboard-warning-dismiss {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  margin-top: -2px;
+  margin-right: -4px;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.dashboard-warning-dismiss:hover {
+  background: var(--surface-alt);
+  color: var(--text);
+}
+.dashboard-warning-dismiss:focus-visible {
+  outline: 1px solid var(--border-strong);
+  outline-offset: 1px;
+}
+
+/* prefers-reduced-motion — 점멸·트랜지션 비활성 */
+@media (prefers-reduced-motion: reduce) {
+  .update-modal-migration[data-state="failed"] .update-modal-migration-glyph { animation: none; }
 }

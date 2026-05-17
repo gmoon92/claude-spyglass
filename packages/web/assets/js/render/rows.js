@@ -4,7 +4,7 @@
 
 import { escHtml, fmtToken, fmtRelative, formatDuration, fmtTimestamp } from '../formatters.js';
 import { subTypeOf } from '../request-types.js';
-import { anomalyBadgesHtml } from './badges.js';
+import { anomalyBadgesHtml, bloatedSysBadgeDotHtml, bloatedSysBadgeMiniHtml } from './badges.js';
 import { trustOf, rowTrustClass, makeModelCell } from './model.js';
 import { makeActionCell, makeTargetCell, makeCacheCell } from './cells.js';
 import { contextPreview, extractFirstPrompt, extractPromptText, extractAssistantText } from './extract.js';
@@ -64,12 +64,26 @@ export function makeRequestRow(r, opts = {}) {
   const spikeLoopBadges = flags ? anomalyBadgesHtml(new Set([...flags].filter(f => f !== 'slow'))) : '';
   const slowBadge       = flags && flags.has('slow') ? `<span class="mini-badge badge-slow" data-mini-badge-tooltip="slow">slow</span>` : '';
 
+  // anomaly-bloated-sys T-14: 첫 prompt 행 mini 뱃지 + 행 단계 클래스.
+  //   서버는 첫 prompt(또는 단일 prompt 세션의 유일 prompt)에 r.bloated_sys를 부착한다.
+  //   prompt 외 행에는 응답 필드가 없거나 status='normal'이라 헬퍼가 빈 문자열 반환.
+  const bloatedMini = bloatedSysBadgeMiniHtml(r.bloated_sys);
+  // 행 시각 단계: warn → row-bloated-warn / critical → row-bloated-critical.
+  // CSS에서 inset box-shadow 또는 border-left를 부여 (badges.css 참조).
+  let bloatedRowCls = '';
+  const bsStatus = r.bloated_sys?.status;
+  if (bsStatus === 'warn')      bloatedRowCls = ' row-bloated-warn';
+  else if (bsStatus === 'critical') bloatedRowCls = ' row-bloated-critical';
+
   const trustCls = rowTrustClass(r);
   const haystack = buildSearchHaystack(r);
-  return `<tr class="${trustCls.trim()}" data-type="${escHtml(r.type||'')}" data-sub-type="${subTypeOf(r)}" data-trust="${trustOf(r)}" data-request-id="${escHtml(r.id||'')}" data-search-haystack="${escHtml(haystack)}">
+  const rowCls   = (trustCls + bloatedRowCls).trim();
+  // mini 뱃지는 spike/loop 뱃지와 같이 Target 셀에 합류 (시각 위계 일관)
+  const targetExtraBadges = spikeLoopBadges + bloatedMini;
+  return `<tr class="${rowCls}" data-type="${escHtml(r.type||'')}" data-sub-type="${subTypeOf(r)}" data-trust="${trustOf(r)}" data-request-id="${escHtml(r.id||'')}" data-search-haystack="${escHtml(haystack)}">
     <td class="cell-time num" data-cell="time">${fmtTs(r.timestamp)}</td>
     <td class="cell-action" data-cell="action">${makeActionCell(r)}</td>
-    ${makeTargetCellWithBadges(r, spikeLoopBadges)}
+    ${makeTargetCellWithBadges(r, targetExtraBadges)}
     ${makeModelCell(r)}
     <td class="cell-msg" data-cell="msg">${msgHtml}</td>
     <td class="cell-token num" data-cell="in">${r.tokens_input  > 0 ? fmtToken(r.tokens_input)  : '—'}</td>
@@ -106,6 +120,10 @@ export function makeSessionRow(s, isSelected) {
   const shortId  = s.id.slice(0, 8);
   const preview  = extractFirstPrompt(s.first_prompt_payload);
   const rel      = fmtRelative(s.started_at);
+  // anomaly-bloated-sys T-13: 사이드바 dot — critical만 노출 (ADR-005).
+  //   서버 응답에 bloated_sys 필드가 없거나 status='normal'/'warn'이면 빈 문자열.
+  //   warn 단계는 정책상 사이드바 노이즈 회피를 위해 미노출.
+  const bloatedDot = bloatedSysBadgeDotHtml(s.bloated_sys);
   return `<tr class="clickable${isSelected ? ' row-selected' : ''}" data-session-id="${escHtml(s.id)}">
     <td colspan="4" class="sess-row-cell" style="padding:5px 10px">
       <div class="sess-row-header">
@@ -113,6 +131,7 @@ export function makeSessionRow(s, isSelected) {
         <span class="sess-row-time">${rel}</span>
         <span class="sess-row-tokens">${fmtToken(s.total_tokens)}</span>
         <span class="sess-row-status${statusCls} ds-dot" data-tone="${statusTone}" data-size="md" title="${statusTitle}">${statusGlyph}</span>
+        ${bloatedDot}
       </div>
       ${preview ? `<div class="sess-row-preview" title="${escHtml(preview)}">${escHtml(preview)}</div>` : ''}
     </td>
