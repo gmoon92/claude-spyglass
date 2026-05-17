@@ -21,6 +21,7 @@
  */
 
 import { escHtml, fmtTime } from './formatters.js';
+import { getCollator } from './i18n-utils.js';
 import { getSelectedProject, getMetaSubTab, setMetaSubTab as stateSetMetaSubTab } from './state.js';
 import { toolIconHtml } from './render/badges.js';
 import { skMetaDocList } from './render/skeleton.js';
@@ -266,20 +267,28 @@ function highlightDeepLinkRow() {
 function renderLeftSummaryCards(counts) {
   const root = document.getElementById('metaDocsSummaryCards');
   if (!root) return;
+  const t = window.I18n.t.bind(window.I18n);
   root.innerHTML = `
-    <div class="meta-docs-summary-card meta-docs-summary-card--used" title="호출이 1회 이상 발생한 Behavior Definitions">
+    <div class="meta-docs-summary-card meta-docs-summary-card--used" data-meta-filter="display" data-value="all" title="${t('ui.meta-docs-view.card-used-title')}">
       <span class="meta-docs-summary-card-value">${counts.used}</span>
-      <span class="meta-docs-summary-card-label">사용</span>
+      <span class="meta-docs-summary-card-label">${t('ui.meta-docs-view.card-used-label')}</span>
     </div>
-    <div class="meta-docs-summary-card meta-docs-summary-card--unused" title="카탈로그엔 있으나 호출 0건">
+    <div class="meta-docs-summary-card meta-docs-summary-card--unused" data-meta-filter="display" data-value="unused" title="${t('ui.meta-docs-view.card-unused-title')}">
       <span class="meta-docs-summary-card-value">${counts.unused}</span>
-      <span class="meta-docs-summary-card-label">미사용</span>
+      <span class="meta-docs-summary-card-label">${t('ui.meta-docs-view.card-unused-label')}</span>
     </div>
-    <div class="meta-docs-summary-card meta-docs-summary-card--orphan" title="호출은 있는데 현재 카탈로그에 없음 (외부/삭제된 정의)">
+    <div class="meta-docs-summary-card meta-docs-summary-card--orphan" data-meta-filter="display" data-value="orphan" title="${t('ui.meta-docs-view.card-orphan-title')}">
       <span class="meta-docs-summary-card-value">${counts.orphan}</span>
       <span class="meta-docs-summary-card-label">orphan</span>
     </div>
   `;
+  if (root.dataset.metaBound === '1') return;
+  root.dataset.metaBound = '1';
+  root.addEventListener('click', (e) => {
+    const card = e.target.closest('[data-meta-filter]');
+    if (!card) return;
+    applyFilterChange(card.dataset.metaFilter, card.dataset.value);
+  });
 }
 
 /**
@@ -422,12 +431,13 @@ function renderHtml(rows, ctx = {}) {
 
   // 빈 상태 — 프로젝트 미등록/미동기화 안내
   if (rows.length === 0) {
+    const t = window.I18n.t.bind(window.I18n);
     const empty = (ctx.project && !ctx.matched)
       ? `<div class="state-empty">
-           <span class="state-empty-title">${escHtml(ctx.project)} 프로젝트에 등록된 Behavior Definitions가 없습니다</span>
-           <span class="state-empty-hint">이 프로젝트가 SessionStart로 동기화된 적이 없을 수 있습니다. 좌측 thead의 <strong>동기화</strong> 버튼을 누르면 알려진 모든 작업 공간을 다시 스캔합니다.</span>
+           <span class="state-empty-title">${t('ui.meta-docs-view.empty-project-title', { project: escHtml(ctx.project) })}</span>
+           <span class="state-empty-hint">${t('ui.meta-docs-view.empty-project-hint')}</span>
          </div>`
-      : `<div class="state-empty"><span class="state-empty-title">Behavior Definitions가 없습니다 — SessionStart 이후 자동 동기화됩니다</span></div>`;
+      : `<div class="state-empty"><span class="state-empty-title">${t('ui.meta-docs-view.empty-global-title')}</span></div>`;
     return `${filters}${empty}`;
   }
 
@@ -436,6 +446,7 @@ function renderHtml(rows, ctx = {}) {
   //    합계 876px — 메타 모드 메인 영역(좌측 패널 분량 제외) 폭에 가로 스크롤 없이 들어감.
   //  - thead th는 system-prompt-library와 동일하게 sortable + sort-asc/desc + aria-sort + ↕↑↓ 화살표.
   //  - col-resize 핸들은 bindEvents 마지막에 initColResize(table)로 자동 부착.
+  const t = window.I18n.t.bind(window.I18n);
   const head = `
     <table class="meta-docs-table">
       <colgroup>
@@ -448,18 +459,18 @@ function renderHtml(rows, ctx = {}) {
       </colgroup>
       <thead>
         <tr>
-          ${thHtml('type',         '타입')}
-          ${thHtml('name',         '이름')}
-          ${thHtml('source',       '경로')}
-          ${thHtml('invocations',  '횟수',       'num')}
-          ${thHtml('last_used_at', '최근 적용')}
-          ${thHtml('total_tokens', '누적 토큰',  'num')}
+          ${thHtml('type',         t('ui.meta-docs-view.col-type'))}
+          ${thHtml('name',         t('ui.meta-docs-view.col-name'))}
+          ${thHtml('source',       t('ui.meta-docs-view.col-source'))}
+          ${thHtml('invocations',  t('ui.meta-docs-view.col-invocations'), 'num')}
+          ${thHtml('last_used_at', t('ui.meta-docs-view.col-last-used'))}
+          ${thHtml('total_tokens', t('ui.meta-docs-view.col-total-tokens'), 'num')}
         </tr>
       </thead>
       <tbody>${rows.map(rowHtml).join('')}</tbody>
     </table>
   `;
-  return `${filters}${refreshHint}${head}`;
+  return `${filters}${head}`;
 }
 
 /**
@@ -473,7 +484,7 @@ function renderHtml(rows, ctx = {}) {
  */
 function thHtml(key, label, extraCls = '') {
   const sortState = sortThState(key);
-  const cls = `${extraCls} sortable ds-sort-head ${sortHeaderCls(key)}`.trim();
+  const cls = `${extraCls} sortable ${sortHeaderCls(key)}`.trim();
   return `<th data-meta-sort="${key}"
               class="${cls}"
               tabindex="0"
@@ -496,13 +507,6 @@ function sortThState(key) {
 function sortHeaderCls(key) {
   if (state.sort !== key) return '';
   return state.sortDir === 'asc' ? 'sort-asc' : 'sort-desc';
-}
-/** 헤더 ↕/↑/↓ 화살표 — 단일 책임 */
-function sortIndicator(key) {
-  if (state.sort !== key) return '<span class="sort-arrow sort-arrow-idle">↕</span>';
-  return state.sortDir === 'asc'
-    ? '<span class="sort-arrow">↑</span>'
-    : '<span class="sort-arrow">↓</span>';
 }
 /** WAI-ARIA aria-sort 속성 값 */
 function ariaSortValue(key) {
@@ -534,7 +538,7 @@ function rowHtml(r) {
   const tokens   = formatTokens(r.total_tokens ?? 0);
 
   const pathCell = orphan
-    ? `<span class="meta-doc-source-orphan" title="${escHtml(ORPHAN_TOOLTIP)}" tabindex="0">호출만 존재</span>`
+    ? `<span class="meta-doc-source-orphan" title="${escHtml(window.I18n.t('ui.meta-docs-view.orphan-tooltip'))}" tabindex="0">${window.I18n.t('ui.meta-docs-view.orphan-path-label')}</span>`
     : pathCellHtml(r);
 
   // description은 행 title 속성으로 hover 노출 — 별도 컬럼화하지 않음 (ADR-001).
@@ -543,7 +547,7 @@ function rowHtml(r) {
     : '';
 
   const deletedBadge = deleted
-    ? ` <span class="meta-doc-deleted-badge" title="현재 디스크에서 사라진 정의 (soft-deleted)">${svgWarn({ size: 12 })}</span>`
+    ? ` <span class="meta-doc-deleted-badge" title="${escHtml(window.I18n.t('ui.meta-docs-view.deleted-badge-title'))}">${svgWarn({ size: 12 })}</span>`
     : '';
 
   return `
@@ -592,8 +596,9 @@ function pathCellHtml(r) {
 }
 
 function renderFilters() {
+  const t = window.I18n.t.bind(window.I18n);
   const types = [
-    { v: 'all',     label: '전체'    },
+    { v: 'all',     label: t('ui.meta-docs-view.filter-all') },
     { v: 'agent',   label: 'Agent'   },
     { v: 'skill',   label: 'Skill'   },
     { v: 'command', label: 'Command' },
@@ -603,9 +608,9 @@ function renderFilters() {
   //   기존 state.scope는 source 라벨(userSettings/projectSettings) 기준 추가 필터였으나
   //   좌측 진입점과 의미 축이 겹쳐 사용자 혼동 유발 → 제거.
   const displays = [
-    { v: 'all',    label: '전체' },
-    { v: 'unused', label: '미사용만' },
-    { v: 'orphan', label: '호출만존재' },
+    { v: 'all',    label: t('ui.meta-docs-view.filter-all') },
+    { v: 'unused', label: t('ui.meta-docs-view.filter-unused') },
+    { v: 'orphan', label: t('ui.meta-docs-view.filter-orphan') },
   ];
 
   // ds-filter-btn 통합 (Wave 1): renderFilterBtn() 으로 내부 마크업 위임.
@@ -634,27 +639,24 @@ function renderFilters() {
   //  - 사용자 피드백(2026-05-14): emoji 🗑 → SVG trash 로 디자인 톤 일치.
   const includeDeletedHtml = `
     <label class="meta-docs-include-deleted"
-           title="과거 호출 이력은 있으나 디스크에서 사라진 항목까지 포함합니다">
+           title="${t('ui.meta-docs-view.include-deleted-title')}">
       <input type="checkbox"
              data-meta-include-deleted
              ${state.includeDeleted ? 'checked' : ''} />
       <span class="meta-docs-include-deleted-icon" aria-hidden="true">${svgTrash({ size: 12 })}</span>
-      <span class="meta-docs-include-deleted-label">삭제된 정의도 표시</span>
+      <span class="meta-docs-include-deleted-label">${t('ui.meta-docs-view.include-deleted-label')}</span>
     </label>
   `;
 
   // 정렬 컨트롤은 더 이상 상단 필터 바에 두지 않는다 — 표 헤더 클릭으로 일원화.
   return `
     <div class="meta-docs-filters">
-      <div class="meta-docs-filter-group"><span class="meta-docs-filter-label">타입</span>${btn('type', types, state.type)}</div>
-      <div class="meta-docs-filter-group"><span class="meta-docs-filter-label">표시</span>${btn('display', displays, state.display)}</div>
+      <div class="meta-docs-filter-group"><span class="meta-docs-filter-label">${t('ui.meta-docs-view.filter-type-label')}</span>${btn('type', types, state.type)}</div>
+      <div class="meta-docs-filter-group"><span class="meta-docs-filter-label">${t('ui.meta-docs-view.filter-display-label')}</span>${btn('display', displays, state.display)}</div>
       ${includeDeletedHtml}
     </div>
   `;
 }
-
-const ORPHAN_TOOLTIP =
-  '이 호출은 다른 워크스페이스(.claude/) 또는 빌트인/플러그인 정의에서 발생했을 수 있습니다. 동기화 시 다중 작업 공간을 함께 스캔하면 이 행이 카탈로그 행으로 합쳐집니다.';
 
 // =============================================================================
 // 이벤트 바인딩
@@ -755,7 +757,7 @@ function applyFilterChange(group, value) {
       state.scopeMode = 'all';
       pushToast({
         kind: 'info',
-        message: 'orphan은 어느 프로젝트 호출인지 단정할 수 없어 전체 프로젝트 모드로 전환했습니다.',
+        message: window.I18n.t('ui.meta-docs-view.orphan-scope-switch'),
         ttl: 5000,
       });
     }
@@ -774,9 +776,9 @@ async function runRefresh(buttonEl) {
   buttonEl.disabled = true;
   buttonEl.classList.add('is-loading');
   const labelEl = buttonEl.querySelector('.meta-docs-refresh-label');
-  if (labelEl) labelEl.textContent = '동기화 중…';
+  if (labelEl) labelEl.textContent = window.I18n.t('ui.meta-docs-view.syncing-label');
 
-  const startToast = pushToast({ kind: 'info', message: '동기화 시작…', ttl: 3000 });
+  const startToast = pushToast({ kind: 'info', message: window.I18n.t('ui.meta-docs-view.toast-sync-start'), ttl: 3000 });
 
   try {
     const body = buildRefreshBody();
@@ -790,11 +792,11 @@ async function runRefresh(buttonEl) {
 
     // 시작 토스트 정리 후 완료 토스트
     closeToast(startToast);
-    pushToast({ kind: 'success', message: '동기화 완료 — ' + norm.summaryText, ttl: 5000 });
+    pushToast({ kind: 'success', message: window.I18n.t('ui.meta-docs-view.toast-sync-done', { summary: norm.summaryText }), ttl: 5000 });
   } catch (err) {
     closeToast(startToast);
     const msg = err?.message ? String(err.message) : String(err);
-    pushToast({ kind: 'error', message: '동기화 실패: ' + msg, ttl: 7000 });
+    pushToast({ kind: 'error', message: window.I18n.t('ui.meta-docs-view.toast-sync-failed', { message: msg }), ttl: 7000 });
   } finally {
     // 결과 토스트는 별도 영역. 패널은 즉시 재조회.
     await loadMetaDocsLibrary();
@@ -803,7 +805,7 @@ async function runRefresh(buttonEl) {
       buttonEl.disabled = false;
       buttonEl.classList.remove('is-loading');
       const labelEl = buttonEl.querySelector('.meta-docs-refresh-label');
-      if (labelEl) labelEl.textContent = '동기화';
+      if (labelEl) labelEl.textContent = window.I18n.t('ui.meta-docs-view.sync-restore-label');
     }
   }
 }
@@ -822,32 +824,33 @@ function buildRefreshBody() {
 
 /** 응답 정규화 — global/project/cwds graceful skip */
 function normalizeRefreshResult(res) {
+  const t = window.I18n.t.bind(window.I18n);
   const data = res?.data ?? {};
   const parts = [];
   const fmt = (s) => {
     if (!s || typeof s !== 'object') return null;
     const up  = s.upserted ?? s.added ?? 0;
     const del = s.softDeleted ?? s.deleted ?? 0;
-    if (up === 0 && del === 0) return '변동 없음';
+    if (up === 0 && del === 0) return t('ui.meta-docs-view.refresh-no-change');
     const out = [];
-    if (up) out.push(`${up}개 추가`);
-    if (del) out.push(`${del}개 삭제`);
+    if (up) out.push(t('ui.meta-docs-view.refresh-add', { n: up }));
+    if (del) out.push(t('ui.meta-docs-view.refresh-del', { n: del }));
     return out.join(', ');
   };
 
   const g = fmt(data.global);
-  if (g) parts.push('글로벌 ' + g);
+  if (g) parts.push(t('ui.meta-docs-view.refresh-global', { detail: g }));
   const p = fmt(data.project);
-  if (p) parts.push('프로젝트 ' + p);
+  if (p) parts.push(t('ui.meta-docs-view.refresh-project', { detail: p }));
 
   const cwds = Array.isArray(data.cwds) ? data.cwds : [];
   const cwdsCount = cwds.length;
   if (cwdsCount) {
-    parts.push(`작업 공간 ${cwdsCount}개`);
+    parts.push(t('ui.meta-docs-view.refresh-workspaces', { n: cwdsCount }));
   }
 
   return {
-    summaryText: parts.length ? parts.join(', ') : '결과 없음',
+    summaryText: parts.length ? parts.join(', ') : t('ui.meta-docs-view.refresh-no-result'),
   };
 }
 
@@ -947,14 +950,12 @@ const DEFAULT_DIR = {
   total_tokens: 'desc',
 };
 
-/** 문자열 비교 (한/영 통합 ko collator) */
-const koCollator = (typeof Intl !== 'undefined' && Intl.Collator)
-  ? new Intl.Collator('ko', { sensitivity: 'base', numeric: true })
-  : null;
+/** 문자열 비교 — 활성 i18n 언어 기반 collator (i18n-utils.js SSoT 재사용) */
 function cmpString(a, b) {
   const sa = a == null ? '' : String(a);
   const sb = b == null ? '' : String(b);
-  return koCollator ? koCollator.compare(sa, sb) : sa.localeCompare(sb);
+  const collator = getCollator();
+  return collator ? collator.compare(sa, sb) : sa.localeCompare(sb);
 }
 /** 숫자 비교 (asc 기준). null/undefined는 0으로 처리 — 토큰합/호출수에 적합. */
 function cmpNumber(a, b) {
@@ -1050,7 +1051,7 @@ function formatTokens(n) {
 }
 
 function errorHtml(err) {
-  return `<div class="state-empty"><span class="state-empty-title">불러오기 실패: ${escHtml(String(err?.message ?? err))}</span></div>`;
+  return `<div class="state-empty"><span class="state-empty-title">${window.I18n.t('ui.meta-docs-view.load-failed', { message: escHtml(String(err?.message ?? err)) })}</span></div>`;
 }
 
 // 작은 fetch 래퍼 — sysLib 방식 동일

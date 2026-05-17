@@ -34,3 +34,10 @@
   opacity: 0.3;
   font-weight: 400;
 }
+
+/* guard: <th>/<td>에 ds-sort-head가 부여되어도 table-cell 동작을 유지.
+   .ds-sort-head는 <button> 같은 inline element용이며, 내부 화살표 정렬 헤더에만 사용해야 한다. */
+th.ds-sort-head,
+td.ds-sort-head {
+  display: table-cell;
+}
