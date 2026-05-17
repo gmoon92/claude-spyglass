@@ -10,23 +10,173 @@
  * - 001-init.sql → version 1
  * - 002-add-tool-detail.sql → version 2
  * - ...
- * - 012-timestamp-index-and-visible-view.sql → version 12
+ * - 035-add-migrations-meta-table.sql → version 35
  *
  * 실행 흐름:
  * 1. 현재 PRAGMA user_version 조회
  * 2. migrations/ 디렉토리 .sql 파일 정렬 (파일명 기준)
- * 3. 파일명에서 버전 파싱 (001, 002, ...)
+ * 3. 파일명에서 버전 파싱 (001, 002, ...) — 3자리 padding 한도(001~999) 강제
  * 4. currentVersion보다 큰 파일만 트랜잭션으로 실행
  * 5. 각 파일 적용 후 PRAGMA user_version = N 자동 설정
- * 6. 실패 시 트랜잭션 롤백 + 예외 throw
- * 7. debug 옵션 켜져 있을 때만 console.log 출력
+ * 6. v35 이후 메타테이블(`_migrations`) 존재 시 동일 트랜잭션에서 히스토리 INSERT
+ * 7. 실패 시 트랜잭션 롤백 + 예외 throw
+ * 8. debug 옵션 켜져 있을 때만 console.log 출력
+ *
+ * @see .claude/docs/plans/auto-update-migration-hardening/adr.md
+ *   ADR-001: `_migrations` 메타테이블 (PRAGMA + 메타테이블 병행)
+ *   ADR-002: 마이그레이션 번호 999 한도 (silent overflow 가드)
+ *   ADR-006: 부팅 panic 로그 fsync + 후속 부팅 lag 감지
  */
 
-import { readdirSync, readFileSync } from 'fs';
+import { readdirSync, readFileSync, appendFileSync, openSync, fsyncSync, closeSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import type { Database } from 'bun:sqlite';
 
 const MIGRATIONS_DIR = join(import.meta.dir, '..', 'migrations');
+
+// =============================================================================
+// ADR-002: 마이그레이션 번호 한도 (001~999, 3자리 padding)
+// =============================================================================
+//
+// `file.slice(0, 3)`로 앞 3자리를 버전으로 파싱하는 컨벤션 — 1000번이 들어오면
+// `slice(0,3)`이 `100`을 반환해 silent overflow가 발생할 수 있다(`100`을 기존
+// 100번보다 작은 버전으로 오해 → 스킵 또는 잘못된 순서 적용).
+//
+// 999 도달 시점에 4자리 padding 확장을 별도 ADR로 결정한다 (yagni — 현재 35번).
+// =============================================================================
+const MIGRATION_VERSION_LIMIT = 999;
+
+// 이 버전 이상부터 `_migrations` 메타테이블에 INSERT 수행. v35 자체는 메타테이블을
+// CREATE하는 트랜잭션 안에서 동시에 자기 자신 행을 INSERT한다.
+const META_TABLE_INTRODUCED_AT = 35;
+
+// =============================================================================
+// 모듈 상태 — 마지막 마이그레이션 실행 결과 (API 응답·테스트 용도)
+// =============================================================================
+
+/**
+ * `runMigrations()` 1회 실행의 결과 요약. `/api/update` 응답의
+ * `migrationsApplied` 필드 SSoT — 외부에서 변경 금지(읽기 전용).
+ */
+export interface MigrationRunResult {
+  /** 실행 시작 시점 PRAGMA user_version */
+  from: number;
+  /** 실행 종료 시점 PRAGMA user_version */
+  to: number;
+  /** 이번 실행에서 새로 적용된 SQL 파일명 (적용 순서 보존) */
+  files: string[];
+  /** 본 실행 누적 소요 시간 (ms) */
+  durationMs: number;
+}
+
+let lastRunResult: MigrationRunResult = {
+  from: 0,
+  to: 0,
+  files: [],
+  durationMs: 0,
+};
+
+/** 마지막 `runMigrations()` 결과 조회 — `/api/update` 응답 회수에 사용. */
+export function getLastMigrationRun(): MigrationRunResult {
+  return { ...lastRunResult, files: [...lastRunResult.files] };
+}
+
+/**
+ * 부팅 직후 user_version과 디렉토리 최신 파일 버전 비교.
+ * 이전 부팅에서 마이그레이션이 실패했다면 `current < latest`로 lag 감지.
+ */
+export interface MigrationLag {
+  /** 현재 적용된 user_version */
+  current: number;
+  /** 디렉토리에서 발견된 최신 파일 번호 */
+  latest: number;
+  /** 최신 파일명 (lag 진단 메시지에 노출) */
+  latestFile: string | null;
+}
+
+export function detectMigrationLag(db: Database): MigrationLag {
+  const currentResult = db.query('PRAGMA user_version').get() as { user_version: number } | undefined;
+  const current = currentResult?.user_version ?? 0;
+
+  let files: string[];
+  try {
+    files = readdirSync(MIGRATIONS_DIR).filter(f => f.endsWith('.sql')).sort();
+  } catch {
+    return { current, latest: current, latestFile: null };
+  }
+
+  // 가장 큰 버전 파일 찾기 — slice(0,3) 한도 가드 통과 파일만 인정
+  let latest = 0;
+  let latestFile: string | null = null;
+  for (const file of files) {
+    const versionStr = file.slice(0, 3);
+    const version = parseInt(versionStr, 10);
+    if (isNaN(version) || version < 1 || version > MIGRATION_VERSION_LIMIT) continue;
+    if (version > latest) {
+      latest = version;
+      latestFile = file;
+    }
+  }
+
+  return { current, latest, latestFile };
+}
+
+/**
+ * `_migrations` 테이블 존재 여부 — 마이그레이션 적용 트랜잭션 안에서
+ * INSERT 가능 여부를 판단하기 위해 사용.
+ */
+function hasMigrationsMetaTable(db: Database): boolean {
+  const row = db
+    .query("SELECT name FROM sqlite_master WHERE type='table' AND name='_migrations'")
+    .get() as { name: string } | undefined;
+  return !!row;
+}
+
+/**
+ * `_migrations` 최신 row의 filename 조회 — `/api/version` 응답 SSoT.
+ * 메타테이블이 없거나 비어있으면 null.
+ */
+export function getLatestMigrationFile(db: Database): string | null {
+  try {
+    if (!hasMigrationsMetaTable(db)) return null;
+    const row = db
+      .query(
+        `SELECT filename FROM _migrations
+         WHERE filename != '(legacy)'
+         ORDER BY version DESC LIMIT 1`,
+      )
+      .get() as { filename: string } | undefined;
+    if (row?.filename) return row.filename;
+    // legacy 백필만 있으면 가장 큰 version의 filename 그대로 반환
+    const legacy = db
+      .query(`SELECT filename FROM _migrations ORDER BY version DESC LIMIT 1`)
+      .get() as { filename: string } | undefined;
+    return legacy?.filename ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `package.json#version` 조회 — `_migrations.app_version` 컬럼 주입용.
+ * 환경 변수(`SPYGLASS_APP_VERSION`)가 있으면 우선 사용 (테스트·CI 주입).
+ *
+ * 실패 시 null 반환 — 메타테이블은 NULL 허용.
+ */
+function readAppVersion(): string | null {
+  if (process.env.SPYGLASS_APP_VERSION) {
+    return process.env.SPYGLASS_APP_VERSION;
+  }
+  try {
+    // packages/storage/src/migrator.ts → 프로젝트 루트 package.json
+    const pkgPath = join(import.meta.dir, '..', '..', '..', 'package.json');
+    const raw = readFileSync(pkgPath, 'utf-8');
+    const pkg = JSON.parse(raw) as { version?: string };
+    return pkg.version ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * SQL 문을 statement 단위로 분리.
@@ -66,6 +216,80 @@ function splitSqlStatements(sql: string): string[] {
 }
 
 /**
+ * 마이그레이션 파일명에서 버전 번호를 파싱.
+ *
+ * ADR-002 가드 — 999 초과 또는 4자리 이상이면 즉시 throw.
+ * `isNaN`은 호출 측에서 스킵 처리 가능하도록 null 반환 (가드 정의에 따라 분기).
+ *
+ * @returns 정상 파싱된 버전 번호 (1~999) 또는 null (스킵 가능한 invalid 파일명)
+ * @throws {Error} 4자리 이상 padding 등 SSoT 위반 (silent overflow 차단)
+ */
+export function parseMigrationVersion(file: string): number | null {
+  // 파일명 앞에서 연속된 숫자 prefix만 떼낸다 — 3자리를 초과하면 본 컨벤션 위반.
+  const match = file.match(/^(\d+)/);
+  if (!match) return null;
+
+  const digitPrefix = match[1];
+  if (digitPrefix.length > 3) {
+    throw new Error(
+      `[migrator] Migration version exceeds 999: "${file}" has ${digitPrefix.length}-digit prefix. ` +
+      `001~999 (3-digit padding) is the SSoT limit (ADR-002). ` +
+      `4-digit expansion requires a new ADR — rename all migration files and update slice(0,3) parsing.`,
+    );
+  }
+
+  const version = parseInt(digitPrefix.slice(0, 3), 10);
+  if (isNaN(version)) return null;
+
+  if (version > MIGRATION_VERSION_LIMIT) {
+    throw new Error(
+      `[migrator] Migration version ${version} exceeds limit ${MIGRATION_VERSION_LIMIT} (ADR-002).`,
+    );
+  }
+
+  return version;
+}
+
+/**
+ * 부팅 마이그레이션 panic 직전 로그를 `~/.spyglass/logs/server.log`에
+ * 강제 동기화 후 process 종료를 신뢰할 수 있게 만든다 (ADR-006).
+ *
+ * - 디렉토리 없으면 mkdirSync(recursive)
+ * - appendFileSync로 한 줄 기록 → openSync(O_WRONLY) → fsyncSync → closeSync
+ * - 실패해도 throw 금지 (panic 경로 이중 실패 방지)
+ */
+function flushPanicLog(error: unknown, file: string | null): void {
+  try {
+    const home = process.env.HOME || process.env.USERPROFILE || '/tmp';
+    const logDir = join(home, '.spyglass', 'logs');
+    const logPath = join(logDir, 'server.log');
+
+    if (!existsSync(logDir)) {
+      mkdirSync(logDir, { recursive: true });
+    }
+
+    const ts = new Date().toISOString();
+    const msg = (error as Error)?.stack || (error as Error)?.message || String(error);
+    const line =
+      `[${ts}] [migrator] PANIC during migration${file ? ` "${file}"` : ''}\n` +
+      `${msg}\n` +
+      `---\n`;
+
+    appendFileSync(logPath, line, { encoding: 'utf-8' });
+
+    // fsync로 디스크 도달 보장 — Node/Bun stderr buffer가 panic 직전 손실되는 사례 차단
+    const fd = openSync(logPath, 'r+');
+    try {
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    // panic 경로 이중 실패는 무시 — 가능한 한 원본 에러를 호출 측이 throw하도록 함
+  }
+}
+
+/**
  * 파일 기반 마이그레이션 실행
  *
  * @param db Bun SQLite Database 인스턴스
@@ -73,10 +297,18 @@ function splitSqlStatements(sql: string): string[] {
  * @throws 마이그레이션 실행 중 SQL 오류 발생 시
  */
 export function runMigrations(db: Database, debug: boolean = false): void {
+  const runStartedAt = Date.now();
+  const appliedFiles: string[] = [];
+  let fromVersion = 0;
+  let toVersion = 0;
+  let currentFile: string | null = null;
+
   try {
     // 현재 user_version 조회
     const currentResult = db.query('PRAGMA user_version').get() as { user_version: number } | undefined;
     const currentVersion = currentResult?.user_version ?? 0;
+    fromVersion = currentVersion;
+    toVersion = currentVersion;
 
     if (debug) {
       console.log(`[migrator] Current version: ${currentVersion}`);
@@ -92,6 +324,12 @@ export function runMigrations(db: Database, debug: boolean = false): void {
       if (debug) {
         console.log(`[migrator] Migrations directory not found or error reading: ${error}`);
       }
+      lastRunResult = {
+        from: fromVersion,
+        to: toVersion,
+        files: appliedFiles,
+        durationMs: Date.now() - runStartedAt,
+      };
       return;
     }
 
@@ -99,14 +337,14 @@ export function runMigrations(db: Database, debug: boolean = false): void {
       console.log(`[migrator] Found ${files.length} migration files`);
     }
 
+    const appVersion = readAppVersion();
+
     // 각 마이그레이션 파일 순차 실행
     for (const file of files) {
-      // 파일명에서 버전 파싱 (예: 001-init.sql → 1)
-      const versionStr = file.slice(0, 3);
-      const version = parseInt(versionStr, 10);
-
-      // 유효하지 않은 파일명은 스킵
-      if (isNaN(version)) {
+      currentFile = file;
+      // ADR-002 가드 — 파일명에서 버전 파싱 (999 초과는 throw)
+      const version = parseMigrationVersion(file);
+      if (version === null) {
         if (debug) {
           console.log(`[migrator] Skipping invalid filename: ${file}`);
         }
@@ -138,6 +376,8 @@ export function runMigrations(db: Database, debug: boolean = false): void {
         const nonPragmaStmts = stmts.filter(s => !s.toUpperCase().startsWith('PRAGMA'));
         const pragmaStmts = stmts.filter(s => s.toUpperCase().startsWith('PRAGMA'));
 
+        const fileStartedAt = Date.now();
+
         // user_version을 트랜잭션 안에서 설정하여 DDL과 버전 갱신을 원자적으로 처리
         // (트랜잭션 커밋 후 프로세스 종료 시 버전 불일치 방지)
         db.transaction(() => {
@@ -157,6 +397,20 @@ export function runMigrations(db: Database, debug: boolean = false): void {
             }
           }
           db.prepare(`PRAGMA user_version = ${version}`).run();
+
+          // ADR-001: 메타테이블이 존재할 때 적용 히스토리 INSERT (동일 트랜잭션 — 원자성 보장).
+          //   - v35(메타테이블 생성 자체) 마이그레이션은 위 nonPragmaStmts 실행으로 _migrations가
+          //     생성된 직후 본 분기로 진입 — 자기 자신 행을 INSERT 가능.
+          //   - v35 미만 마이그레이션이 적용되는 동안에는 메타테이블이 아직 없어 hasMigrationsMetaTable
+          //     이 false → INSERT 스킵. v35 적용 시 legacy 백필이 1..34 행을 일괄 채움.
+          if (version >= META_TABLE_INTRODUCED_AT && hasMigrationsMetaTable(db)) {
+            const durationMs = Date.now() - fileStartedAt;
+            const appliedAt = Math.floor(Date.now() / 1000); // unix epoch seconds
+            db.prepare(
+              `INSERT OR REPLACE INTO _migrations (version, filename, applied_at, app_version, duration_ms)
+               VALUES (?, ?, ?, ?, ?)`,
+            ).run(version, file, appliedAt, appVersion, durationMs);
+          }
         })();
 
         // 파일에 명시된 다른 PRAGMA는 트랜잭션 밖에서 실행
@@ -164,11 +418,16 @@ export function runMigrations(db: Database, debug: boolean = false): void {
           db.prepare(stmt).run();
         }
 
+        const elapsed = Date.now() - fileStartedAt;
+        appliedFiles.push(file);
+        toVersion = version;
+
         if (debug) {
-          console.log(`[migrator] Applied ${file} (version ${version})`);
+          console.log(`[migrator] Applied ${file} (version ${version}, ${elapsed}ms)`);
         }
       } catch (error) {
         console.error(`[migrator] Error applying ${file}: ${error}`);
+        flushPanicLog(error, file);
         throw error;
       }
     }
@@ -177,8 +436,24 @@ export function runMigrations(db: Database, debug: boolean = false): void {
       const finalResult = db.query('PRAGMA user_version').get() as { user_version: number } | undefined;
       console.log(`[migrator] Migration complete. Final version: ${finalResult?.user_version ?? 'unknown'}`);
     }
+
+    // 모듈 상태 갱신 — `/api/update` 응답이 본 결과를 회수
+    lastRunResult = {
+      from: fromVersion,
+      to: toVersion,
+      files: appliedFiles,
+      durationMs: Date.now() - runStartedAt,
+    };
   } catch (error) {
     console.error(`[migrator] Fatal error during migrations: ${error}`);
+    flushPanicLog(error, currentFile);
+    // 실패 시점 상태도 lastRunResult에 기록 — 진단 가능성 보존
+    lastRunResult = {
+      from: fromVersion,
+      to: toVersion,
+      files: appliedFiles,
+      durationMs: Date.now() - runStartedAt,
+    };
     throw error;
   }
 }

@@ -48,6 +48,20 @@ export {
 } from './connection';
 
 // =============================================================================
+// Migrator — 마이그레이션 실행 + 결과 회수 (auto-update-migration-hardening)
+// =============================================================================
+
+export {
+  runMigrations,
+  getLastMigrationRun,
+  getLatestMigrationFile,
+  detectMigrationLag,
+  parseMigrationVersion,
+  type MigrationRunResult,
+  type MigrationLag,
+} from './migrator';
+
+// =============================================================================
 // Session CRUD
 // =============================================================================
 
@@ -248,6 +262,8 @@ export {
   getProxyStats,
   getLatestProxyResponseBefore,
   getMaxContextProxyForSession,
+  // anomaly-bloated-sys (Migration 033/034): 세션 system context 메타 조회
+  getSessionSystemContextMeta,
   // ADR-001 P1-E (v23): tool_use_id ↔ api_request_id 정확 매핑
   persistProxyToolUses,
   getProxyToolUseById,

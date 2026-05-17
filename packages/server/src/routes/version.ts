@@ -2,21 +2,144 @@
  * 버전 + 업데이트 라우트 — /api/version, /api/update.
  *
  * 변경 이유: 엔드포인트 경로·응답 포맷·업데이트 절차 변경 시 한 곳만 수정.
+ *
+ * @see .claude/docs/plans/auto-update-migration-hardening/adr.md
+ *   ADR-004: /api/update 응답 contract 확장 (migrationsApplied)
+ *   ADR-005: /api/version 응답 확장 (dbUserVersion, latestMigrationFile)
+ *   ADR-006: 마이그레이션 lag 감지 (migrationLag 옵셔널 필드)
+ *   ADR-007: shallow clone 부팅 감지 (isShallowRepository)
  */
 
 import type { Database } from 'bun:sqlite';
 import { jsonResponse, type RouteHandler } from './_shared';
 import { getVersionCache, refreshAfterUpdate } from '../version-checker';
+import {
+  detectMigrationLag,
+  getLastMigrationRun,
+  getLatestMigrationFile,
+  type MigrationRunResult,
+} from '@spyglass/storage';
+
+// =============================================================================
+// 부팅 시점 1회 산출 — shallow clone 여부 캐시 (ADR-007)
+// =============================================================================
+//
+// `git rev-parse --is-shallow-repository`는 빠르지만 매 요청마다 spawn하는 것은
+// 낭비다. 모듈 로드 시점에 1회 실행해 캐시한다. `/api/update` 후 git pull 결과
+// 변동 가능성이 있어 refreshShallowFlag()로 재산출 가능.
+
+let isShallowCache: boolean = false;
+let isShallowResolved = false;
+
+function refreshShallowFlag(): void {
+  try {
+    const proc = Bun.spawnSync(['git', 'rev-parse', '--is-shallow-repository'], {
+      cwd: process.cwd(),
+    });
+    if (proc.exitCode !== 0) {
+      isShallowCache = false;
+    } else {
+      const out = proc.stdout.toString().trim();
+      isShallowCache = out === 'true';
+    }
+  } catch {
+    isShallowCache = false;
+  }
+  isShallowResolved = true;
+}
+
+function isShallowRepository(): boolean {
+  if (!isShallowResolved) refreshShallowFlag();
+  return isShallowCache;
+}
+
+// =============================================================================
+// /api/version 응답 contract — TypeScript 타입 SSoT (ADR-004, ADR-005, ADR-007)
+// =============================================================================
+
+export interface VersionResponseData {
+  currentVersion: string;
+  latestTag: string | null;
+  updateAvailable: boolean;
+  /** ADR-005: PRAGMA user_version 현재값 — 폴링 검증용 (옵셔널 — 호환성 보존). */
+  dbUserVersion?: number;
+  /** ADR-005: `_migrations` 최신 row의 filename (없으면 null). */
+  latestMigrationFile?: string | null;
+  /** ADR-007: shallow clone 환경 감지 — true면 dashboard warning 노출. */
+  isShallowRepository?: boolean;
+  /** ADR-006: 마이그레이션 lag 감지 — 비정상 부팅으로 user_version < 최신 파일일 때. */
+  migrationLag?: {
+    current: number;
+    latestFile: string | null;
+  };
+}
+
+// =============================================================================
+// /api/update 응답 contract — TypeScript 타입 SSoT (ADR-004)
+// =============================================================================
+
+export interface UpdateResponseData {
+  currentVersion: string;
+  latestTag: string | null;
+  updateAvailable: boolean;
+  restarting: boolean;
+  /**
+   * ADR-004: 본 update 호출이 트리거한 재기동 후 적용된 마이그레이션 결과.
+   *
+   * 주의 — 본 응답은 재기동 *전* 시점에 작성된다. update 호출 시점에는 신규 마이그레이션이
+   * 아직 적용되지 않았으므로 `from === to && files.length === 0`로 노출된다. 클라이언트는
+   * 재기동 직후 `/api/version` 폴링으로 `dbUserVersion`·`latestMigrationFile`을 회수해
+   * 실제 적용 결과를 확인해야 한다.
+   *
+   * (재기동된 새 프로세스의 부팅 마이그레이션 결과는 본 응답에 포함될 수 없다 — 응답 송신
+   * 후 재기동되므로 측정 불가.)
+   */
+  migrationsApplied?: MigrationRunResult;
+}
 
 // =============================================================================
 // GET /api/version
 // =============================================================================
 
-function handleGetVersion(): Response {
+function handleGetVersion(db: Database): Response {
   const cache = getVersionCache();
+
+  // 안전한 기본값 — 어느 데이터 조회 실패해도 응답 자체는 깨지지 않도록.
+  let dbUserVersion = 0;
+  let latestMigrationFile: string | null = null;
+  let migrationLag: { current: number; latestFile: string | null } | undefined;
+
+  try {
+    const lag = detectMigrationLag(db);
+    dbUserVersion = lag.current;
+    latestMigrationFile = getLatestMigrationFile(db);
+
+    // current < latest 면 미적용 상태 — 클라이언트에 안내
+    if (lag.current < lag.latest) {
+      migrationLag = {
+        current: lag.current,
+        latestFile: lag.latestFile,
+      };
+    }
+  } catch (err) {
+    console.warn('[VersionRoute] Failed to read migration state:', err);
+  }
+
+  const data: VersionResponseData = {
+    currentVersion: cache.currentVersion,
+    latestTag: cache.latestTag,
+    updateAvailable: cache.updateAvailable,
+    dbUserVersion,
+    latestMigrationFile,
+    isShallowRepository: isShallowRepository(),
+  };
+  if (migrationLag) {
+    data.migrationLag = migrationLag;
+  }
+
   return jsonResponse({
     success: true,
-    data: cache,
+    data,
   });
 }
 
@@ -53,23 +176,33 @@ function handlePostUpdate(): Response {
     );
   }
 
+  // git fetch가 unshallow를 자동 처리했을 수도 있으니 캐시 재산출.
+  refreshShallowFlag();
+
   // 3. 캐시 갱신 — package.json을 다시 읽어 currentVersion 업데이트
   refreshAfterUpdate();
   const cache = getVersionCache();
+
+  // ADR-004: 본 응답 시점에는 신규 마이그레이션이 아직 적용되지 않았다 (재기동 후 적용됨).
+  // 본 프로세스에서 부팅 시 적용된 마이그레이션 결과를 노출 — `from === to && files.length === 0`이면
+  // 본 부팅에서는 적용된 게 없음. 진짜 신규 적용 결과는 클라이언트가 재기동 직후 /api/version 폴링으로 회수.
+  const migrationsApplied = getLastMigrationRun();
 
   // 4. 응답 전송 후 비동기 자기 자신 재시작 — bun run dev (restart) 를
   //    detached child로 띄우면 commandRestart가 부모를 SIGTERM으로 종료시키고
   //    새 서버가 같은 PORT를 잡는다. 클라이언트는 polling으로 부활 감지.
   scheduleSelfRestart(cwd);
 
+  const data: UpdateResponseData = {
+    currentVersion: cache.currentVersion,
+    latestTag: cache.latestTag,
+    updateAvailable: cache.updateAvailable,
+    restarting: true,
+    migrationsApplied,
+  };
   return jsonResponse({
     success: true,
-    data: {
-      currentVersion: cache.currentVersion,
-      latestTag: cache.latestTag,
-      updateAvailable: cache.updateAvailable,
-      restarting: true,
-    },
+    data,
   });
 }
 
@@ -106,13 +239,13 @@ function scheduleSelfRestart(cwd: string): void {
 
 export const versionRouter: RouteHandler = (
   _req: Request,
-  _db: Database,
+  db: Database,
   _url: URL,
   path: string,
   method: string,
 ): Response | null => {
   if (path === '/api/version' && method === 'GET') {
-    return handleGetVersion();
+    return handleGetVersion(db);
   }
   if (path === '/api/update' && method === 'POST') {
     return handlePostUpdate();
