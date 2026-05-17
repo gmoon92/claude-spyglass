@@ -403,3 +403,250 @@ tr.row-trust-unknown:hover { opacity: 0.95; }
 }
 .turn-row[data-trust="synthetic"]:hover,
 .turn-row[data-trust="unknown"]:hover { opacity: 0.95; }
+
+/* ── UPDATE BADGE ─────────────────────────────────────────────────────────── */
+/* update-badge-dual-state:
+   배지는 항상 노출되는 "버전 상태 인디케이터" — 세 상태(available / latest / loading)를
+   모디파이어 클래스로 시각 분기. 베이스 룰은 톤-중립(레이아웃·타이포만), 색·hover는
+   각 모디파이어에서만 정의 (ADR-001).
+
+   인접 모드(메타/로그)와 무관하게 footer 한 줄을 항상 차지 → 레이아웃 점프 없음 (ADR-002). */
+.update-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: var(--font-meta);
+  font-weight: var(--weight-strong);
+  background: transparent;
+  color: inherit;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+/* update-badge-fix follow-up (2026-05-16) — hidden 회귀 픽스 보조 룰.
+   본 feature(update-badge-dual-state)에선 hidden을 더 이상 사용하지 않지만,
+   외부 호출자가 hidden을 토글할 가능성에 대비해 보조 룰 유지. */
+.update-badge[hidden] { display: none; }
+.update-badge-icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+.update-badge-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 아이콘 토글 — 모디파이어별로 1종만 노출 (마크업엔 3종 SVG 모두 존재) */
+.update-badge-icon { display: none; }
+.update-badge--available .update-badge-icon--available { display: block; }
+.update-badge--latest    .update-badge-icon--latest    { display: block; }
+.update-badge--loading   .update-badge-icon--loading   { display: block; }
+
+/* ── 상태 A: AVAILABLE ─ accent 톤, 클릭 유도 ─────────────────────────────── */
+.update-badge--available {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+.update-badge--available:hover  { background: var(--accent-bg-medium); }
+.update-badge--available:focus-visible { outline: 2px solid var(--accent-border); outline-offset: 1px; }
+
+/* ── 상태 B: LATEST ─ 중립 톤, 정보 표시 (클릭 비활성) ───────────────────── */
+.update-badge--latest {
+  background: var(--surface);
+  color: var(--text-muted);
+  border-color: var(--border);
+  cursor: default;
+}
+/* latest 상태의 hover는 베이스와 동일 톤 — "변화 없음"을 시각으로 전달 */
+.update-badge--latest:hover { background: var(--surface); color: var(--text-muted); }
+.update-badge--latest:focus-visible { outline: 1px solid var(--border); outline-offset: 1px; }
+/* 미세한 성공 시그널 — 체크 아이콘에만 green 톤. 텍스트는 중립 유지하여 시선 분산 방지. */
+.update-badge--latest .update-badge-icon--latest { color: var(--green); opacity: 0.8; }
+
+/* ── 상태 C: LOADING ─ 진입 직후 자리잡기 placeholder ─────────────────────── */
+.update-badge--loading {
+  background: var(--surface);
+  color: var(--text-dim);
+  border-color: var(--border);
+  cursor: default;
+  /* 아주 옅은 호흡 — 부재가 아니라 "확인 중"임을 알린다 */
+  animation: update-badge-loading-pulse 2.2s ease-in-out infinite;
+}
+.update-badge--loading:hover { background: var(--surface); }
+.update-badge--loading:focus-visible { outline: 1px solid var(--border); outline-offset: 1px; }
+@keyframes update-badge-loading-pulse {
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 1.0; }
+}
+
+/* ── UPDATE MODAL ─────────────────────────────────────────────────────────── */
+.update-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.update-modal-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.update-modal {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  max-width: 380px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  transform: translateY(8px);
+  transition: transform var(--dur-fast) var(--ease);
+}
+.update-modal-close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.update-modal-close:hover { background: var(--surface-alt); color: var(--text); }
+.update-modal-overlay.open .update-modal {
+  transform: translateY(0);
+}
+.update-modal-title {
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-1);
+  margin-bottom: 12px;
+}
+.update-modal-body {
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  color: var(--text-2);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+.update-version-compare {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+}
+.update-version-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.update-version-num {
+  font-size: 20px;
+  font-weight: var(--weight-strong);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.update-version-cell--new .update-version-num { color: var(--accent); }
+.update-version-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: lowercase;
+}
+.update-version-arrow {
+  font-size: 18px;
+  color: var(--text-dim);
+  line-height: 20px;
+  padding-bottom: 14px;
+}
+.update-modal-note {
+  margin: 0;
+  text-align: center;
+  font-size: var(--font-meta);
+  color: var(--text-dim);
+}
+.update-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.update-modal-btn {
+  padding: 6px 14px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: filter var(--dur-fast) var(--ease);
+}
+.update-modal-btn:hover {
+  filter: brightness(1.1);
+}
+.update-modal-btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.update-modal-btn-secondary {
+  background: var(--surface-alt);
+  color: var(--text-2);
+  border-color: var(--border);
+}
+.update-modal-error {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--badge-grad-error);
+  color: var(--red-text);
+  font-size: var(--text-small);
+  font-weight: 500;
+}
+.update-modal-success {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--badge-grad-success);
+  color: var(--green-text);
+  font-size: var(--text-small);
+  font-weight: 500;
+}
+.update-modal-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: update-modal-spin 0.8s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+@keyframes update-modal-spin {
+  to { transform: rotate(360deg); }
+}

@@ -2,6 +2,33 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
+  <script>
+    // FOUC 방지 — i18n.js 비동기 로딩 전에 URL ?lang= / localStorage / navigator
+    // 우선순위로 lang을 결정해 <html lang>을 즉시 설정. 이게 없으면 첫 페인트가
+    // 항상 ko로 렌더되어 :lang() CSS pseudo-content·스크린리더가 한국어로 한 번 잡힌 뒤
+    // i18n 로딩 후 다른 언어로 깜빡임(FOUC) 발생.
+    // 우선순위: URL ?lang → localStorage 'spyglass:lang' → navigator.language → 'ko'
+    (function () {
+      var SUPPORTED = ['ko', 'en', 'ja', 'zh'];
+      function pick() {
+        try {
+          var url = new URLSearchParams(window.location.search).get('lang');
+          if (url && SUPPORTED.indexOf(url) >= 0) return url;
+        } catch (_) {}
+        try {
+          var stored = localStorage.getItem('spyglass:lang');
+          if (stored && SUPPORTED.indexOf(stored) >= 0) return stored;
+        } catch (_) {}
+        var navs = navigator.languages || [navigator.language || ''];
+        for (var i = 0; i < navs.length; i++) {
+          var primary = String(navs[i]).split('-')[0].toLowerCase();
+          if (SUPPORTED.indexOf(primary) >= 0) return primary;
+        }
+        return 'ko';
+      }
+      document.documentElement.lang = pick();
+    })();
+  </script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Claude Spyglass</title>
@@ -37,8 +64,8 @@
     <svg class="ds-icon" data-icon="info" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="8" cy="8" r="6.5"/><line x1="8" y1="5" x2="8" y2="9"/><circle cx="8" cy="11.5" r="0.6" fill="currentColor" stroke="none"/>
     </svg>
-    <span id="errorMsg">서버에 연결할 수 없습니다.</span>
-    <button class="retry-btn" id="retryBtn">다시 시도</button>
+    <span id="errorMsg" data-i18n="ui.html.error-banner.msg">Cannot connect to server.</span>
+    <button class="retry-btn" id="retryBtn" data-i18n="ui.html.error-banner.retry">Retry</button>
   </div>
 
   <div class="main-layout">
@@ -46,9 +73,11 @@
     <!-- ADR-003 left-rail-meta-docs: 56px 앱 모드 rail.
          🚥 탐색(기본) / 📚 Behavior Definitions — 모드 전환 시 메인 영역 전체가 교체됨.
          초기 aria-current는 state.appMode(sessionStorage 복원)에 따라 app-rail.js가 동기화. -->
-    <aside class="app-rail" aria-label="앱 모드">
+    <aside class="app-rail" aria-label="App mode" data-i18n-attr-aria-label="ui.html.app-rail.aria">
       <button type="button" class="app-rail-btn" data-app-mode="browse"
-              aria-current="page" aria-label="탐색 (세션·요청 보기)" title="탐색">
+              aria-current="page" aria-label="Browse (sessions & requests)" title="Browse"
+              data-i18n-attr-aria-label="ui.html.app-rail.browse-aria"
+              data-i18n-attr-title="ui.html.app-rail.browse-title">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <!-- Lucide-style traffic/signal: 3 가로 막대 (top to bottom) — 세션/턴 흐름 -->
           <rect x="4"  y="5"  width="16" height="2.5" rx="1"/>
@@ -57,7 +86,9 @@
         </svg>
       </button>
       <button type="button" class="app-rail-btn" data-app-mode="metadocs"
-              aria-label="Behavior Definitions 카탈로그" title="Behavior Definitions">
+              aria-label="Behavior Definitions catalog" title="Behavior Definitions"
+              data-i18n-attr-aria-label="ui.html.app-rail.metadocs-aria"
+              data-i18n-attr-title="ui.html.app-rail.metadocs-title">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <!-- Lucide-style book: 펼친 책 — 정의/카탈로그 어휘 -->
           <path d="M3 4.5C3 3.7 3.7 3 4.5 3H11V20H4.5C3.7 20 3 19.3 3 18.5V4.5Z" stroke-linejoin="round"/>
@@ -69,9 +100,9 @@
     </aside>
 
     <aside class="left-panel">
-      <div class="panel-resize-handle" title="드래그: 너비 조절 · 더블클릭: 콘텐츠 너비에 맞춤"></div>
+      <div class="panel-resize-handle" title="Drag to resize · Double-click to fit content" data-i18n-attr-title="ui.html.left-panel.resize-title"></div>
       <!-- left-panel-observability-revamp ADR-006: Anomaly 발생 시에만 표시 (floating, 우상단) -->
-      <button class="anomaly-badge" id="anomalyBadge" hidden type="button" aria-label="이상 감지 알림"></button>
+      <button class="anomaly-badge" id="anomalyBadge" hidden type="button" aria-label="Anomaly detected" data-i18n-attr-aria-label="ui.html.left-panel.anomaly-aria"></button>
       <!-- brand-strip-cleanup ADR-001: 좌측 상단 brand-strip(.logo + .badge-live LIVE 카운트) 제거.
            LIVE 시각 신호는 obs-panel.LivePulse 카드가 활성 세션을 표시하므로 정보 손실 0.
            SSE 연결 상태는 #errorBanner 표출로 일원화. -->
@@ -89,18 +120,19 @@
                  body[data-app-mode] CSS 셀렉터로 단일 행만 노출. tbody 구조(3컬럼)는 공유. -->
             <thead>
               <tr class="thead-browse">
-                <th>프로젝트</th>
-                <th style="text-align:right">세션</th>
-                <th style="text-align:right">토큰</th>
+                <th data-i18n="ui.html.left-panel.th-project">Project</th>
+                <th style="text-align:right" data-i18n="ui.html.left-panel.th-session">Sessions</th>
+                <th style="text-align:right" data-i18n="ui.html.left-panel.th-token">Tokens</th>
               </tr>
               <tr class="thead-metadocs">
-                <th>프로젝트</th>
-                <th style="text-align:right">항목</th>
+                <th data-i18n="ui.html.left-panel.th-project">Project</th>
+                <th style="text-align:right" data-i18n="ui.html.left-panel.th-item">Items</th>
                 <th class="thead-sync-cell">
                   <button type="button" class="thead-sync-btn" data-meta-left-refresh="1"
-                          title="현재 cwd + 글로벌 + 알려진 모든 cwd 재스캔">
+                          title="Re-scan current cwd + global + all known cwds"
+                          data-i18n-attr-title="ui.html.left-panel.sync-title">
                     <span class="thead-sync-icon" aria-hidden="true"></span>
-                    <span class="thead-sync-label">동기화</span>
+                    <span class="thead-sync-label" data-i18n="ui.html.left-panel.sync-label">Sync</span>
                   </button>
                 </th>
               </tr>
@@ -160,7 +192,7 @@
            left-panel-vertical-resize.js의 initPanelVerticalResize가 드래그 로직을 담당.
            메타 모드(metadocs)에서는 동일 핸들이 [프로젝트 ↔ 요약 카드] 분할을 담당
            (bottomEl이 동적으로 #metaDocsSummaryCards로 resolve됨). -->
-      <div class="panel-vertical-handle" id="panelVerticalHandle" title="드래그: 높이 조절"></div>
+      <div class="panel-vertical-handle" id="panelVerticalHandle" title="Drag to resize height" data-i18n-attr-title="ui.html.left-panel.vertical-handle-title"></div>
 
       <!-- ADR-003 left-rail-meta-docs + brand-strip-cleanup ADR-002:
            메타 모드 좌측 요약 카드 컨테이너. body[data-app-mode="metadocs"]일 때만 노출.
@@ -170,13 +202,13 @@
 
       <div class="panel-section flex-section" id="browserSessionsSection">
         <div class="panel-header">
-          <span class="panel-label">세션</span>
-          <span class="panel-hint" id="sessionPaneHint">프로젝트를 선택하세요</span>
+          <span class="panel-label" data-i18n="ui.html.session-panel.label">Sessions</span>
+          <span class="panel-hint" id="sessionPaneHint" data-i18n="ui.html.session-panel.hint">Select a project</span>
         </div>
         <div class="panel-body">
           <table>
             <tbody id="browserSessionsBody">
-              <tr><td colspan="4" class="table-empty">프로젝트를 선택해주세요</td></tr>
+              <tr><td colspan="4" class="table-empty" data-i18n="ui.html.session-panel.empty">Please select a project</td></tr>
             </tbody>
           </table>
         </div>
@@ -184,7 +216,7 @@
 
       <!-- 세션/옵저빌리티 섹션 상하 분할 핸들.
            left-panel-vertical-resize.js의 initPanelBottomResize가 드래그 로직을 담당. -->
-      <div class="panel-vertical-handle" id="panelVerticalHandleBottom" title="드래그: 높이 조절"></div>
+      <div class="panel-vertical-handle" id="panelVerticalHandleBottom" title="Drag to resize height" data-i18n-attr-title="ui.html.left-panel.vertical-handle-title"></div>
 
       <!-- left-panel-observability-revamp ADR-001/004 + 후속 ADR-008:
            4컬럼 툴 통계 테이블 → 글랜서블 옵저빌리티 위젯 4 카드 + 1 floating badge.
@@ -241,6 +273,31 @@
         </div>
       </div>
 
+      <div class="left-panel-footer">
+        <!-- update-badge-dual-state — 두 상태(available / latest) + 초기 loading을 항상 노출하는 버전 상태 인디케이터.
+             상태는 .update-badge--available / .update-badge--latest / .update-badge--loading 모디파이어 토글로 분기 (version-check.js).
+             SVG 두 종을 동시에 마크업 — CSS가 모디파이어별로 보여줄 아이콘 1종만 노출. -->
+        <button class="update-badge update-badge--loading" id="updateBadge" type="button"
+                aria-label="Checking for updates"
+                data-i18n-attr-aria-label="ui.html.chart-section.update-badge-aria-loading">
+          <!-- available 상태 — 패키지 박스 + 위로 가는 흐름 (행동 유도) -->
+          <svg class="update-badge-icon update-badge-icon--available" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M7 1L12.5 3.5V10.5L7 13L1.5 10.5V3.5L7 1Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+            <path d="M1.5 3.5L7 6L12.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+            <path d="M7 6V13" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+          <!-- latest 상태 — 체크 마크 (안정/확인) -->
+          <svg class="update-badge-icon update-badge-icon--latest" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="7" cy="7" r="5.25" stroke="currentColor" stroke-width="1.25" fill="none"/>
+            <path d="M4.5 7.25L6.25 9L9.5 5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <!-- loading 상태 — 작은 도트 (시각적 placeholder) -->
+          <svg class="update-badge-icon update-badge-icon--loading" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="7" cy="7" r="2" fill="currentColor"/>
+          </svg>
+          <span class="update-badge-text">Checking…</span>
+        </button>
+      </div>
     </aside>
 
     <!-- 사이드바와 메인 사이의 경계선 중앙에 위치하는 토글.
@@ -249,7 +306,9 @@
          사이드바 펼침/접힘에 자동 따라감(panel-resize.js가 var 갱신).
          사각 형태(이전 둥근 폐기) + 평소 dim, hover 시 강조 + chevron 회전. -->
     <button class="sidebar-edge-toggle" id="btnPanelCollapse" type="button"
-            title="왼쪽 패널 토글 (⌘B)" aria-label="왼쪽 패널 토글">
+            title="Toggle left panel (⌘B)" aria-label="Toggle left panel"
+            data-i18n-attr-title="ui.html.sidebar-toggle.title"
+            data-i18n-attr-aria-label="ui.html.sidebar-toggle.aria">
       <svg class="ds-chevron" data-dir="left" aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M7.5 2L3.5 6L7.5 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
@@ -260,10 +319,10 @@
       <div class="view-section card card--compact" id="chartSection">
         <div class="view-section-header">
           <div class="chart-default-meta">
-            <span class="panel-label">요청 추이 (실시간)</span>
+            <span class="panel-label" data-i18n="ui.html.chart-section.label">Request trend (live)</span>
             <!-- chart-section-filter-sync ADR-002 — chartSubtitle은 timelineChart 본질(30분 sliding · 실시간)에 고정.
                  date-filter와 분리되어 의미 충돌 제거. -->
-            <span class="panel-hint" id="chartSubtitle">최근 30분 · 실시간</span>
+            <span class="panel-hint" id="chartSubtitle" data-i18n="ui.html.chart-section.subtitle">Last 30 min · live</span>
           </div>
           <div class="chart-detail-meta" hidden>
             <span class="detail-session-id" id="detailSessionId">—</span>
@@ -273,12 +332,26 @@
             <div class="detail-agg-badges detail-agg-badges--hidden" id="detailBadges"></div>
           </div>
           <div class="chart-actions">
+            <!-- 언어 스위처 — 각 언어의 native name으로 표시 (영어 모르는 사용자도 자국어 인지 가능). -->
+            <div class="lang-switcher-wrap">
+              <select id="lang-switcher"
+                      aria-label="Select language"
+                      role="combobox"
+                      data-i18n-attr-aria-label="ui.html.chart-section.lang-switcher-aria">
+                <option value="ko">한국어</option>
+                <option value="en">English</option>
+                <option value="ja">日本語</option>
+                <option value="zh">中文</option>
+              </select>
+            </div>
             <!-- header-removal: 날짜 필터를 데이터 컨텍스트(차트) 옆으로 이동.
                  ID `dateFilter` 보존 → main.js 이벤트 핸들러 수정 불필요. -->
             <!-- Wave 5: date-filter 버튼은 main.js initDateFilter()로 동적 생성 -->
             <div class="date-filter" id="dateFilter">
             </div>
-            <button class="btn-toggle" id="btnToggleChart" title="접기 / 펼치기" aria-label="접기">
+            <button class="btn-toggle" id="btnToggleChart" title="Collapse / expand" aria-label="Collapse"
+                    data-i18n-attr-title="ui.html.chart-section.toggle-title"
+                    data-i18n-attr-aria-label="ui.html.chart-section.toggle-aria">
               <svg class="ds-chevron" data-dir="down" aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
@@ -293,12 +366,14 @@
                  그룹 2: 누적 (세션 · 요청 · 토큰)    ─ /api/dashboard 필터 윈도우의 누적 볼륨
                  라벨/aria-label은 main.js applyRangeLabels(range)가 RANGE_LABELS SSoT에서 갱신.
                  detail 모드에서 자동 숨김(.chart-mode-detail .timeline-meta { display:none }). -->
-            <div class="timeline-meta" id="timelineMeta" role="group" aria-label="요약 지표">
-              <div class="timeline-meta-group" role="group" aria-label="요청 품질 (전체 기간)">
-                <span class="timeline-meta-group-label">품질 · 전체 기간</span>
+            <div class="timeline-meta" id="timelineMeta" role="group" aria-label="Summary stats"
+                 data-i18n-attr-aria-label="ui.html.timeline-meta.aria">
+              <div class="timeline-meta-group" role="group" aria-label="Request quality (all time)"
+                   data-i18n-attr-aria-label="ui.html.timeline-meta.quality-group-aria">
+                <span class="timeline-meta-group-label" data-i18n="ui.html.timeline-meta.quality-group-label">Quality · all time</span>
                 <div class="header-stat" data-stat-tooltip="avg-duration">
                   <span class="header-stat-value" id="statAvgDuration"><span class="skeleton"></span></span>
-                  <span class="header-stat-label">평균</span>
+                  <span class="header-stat-label" data-i18n="ui.html.timeline-meta.avg-label">Avg</span>
                 </div>
                 <div class="header-stat" data-stat-tooltip="p95">
                   <span class="header-stat-value" id="stat-p95">--</span>
@@ -306,29 +381,30 @@
                 </div>
                 <div class="header-stat" data-stat-tooltip="err">
                   <span class="header-stat-value" id="stat-error-rate">--</span>
-                  <span class="header-stat-label">오류율</span>
+                  <span class="header-stat-label" data-i18n="ui.html.timeline-meta.error-rate-label">Error rate</span>
                 </div>
               </div>
-              <div class="timeline-meta-group" role="group" aria-label="누적 볼륨 (전체 기간)">
-                <span class="timeline-meta-group-label">누적 · 전체 기간</span>
+              <div class="timeline-meta-group" role="group" aria-label="Cumulative volume (all time)"
+                   data-i18n-attr-aria-label="ui.html.timeline-meta.volume-group-aria">
+                <span class="timeline-meta-group-label" data-i18n="ui.html.timeline-meta.volume-group-label">Volume · all time</span>
                 <div class="header-stat" data-stat-tooltip="sessions">
                   <span class="header-stat-value" id="statSessions"><span class="skeleton"></span></span>
-                  <span class="header-stat-label">세션</span>
+                  <span class="header-stat-label" data-i18n="ui.html.timeline-meta.sessions-label">Sessions</span>
                 </div>
                 <div class="header-stat" data-stat-tooltip="requests">
                   <span class="header-stat-value" id="statRequests"><span class="skeleton"></span></span>
-                  <span class="header-stat-label">요청</span>
+                  <span class="header-stat-label" data-i18n="ui.html.timeline-meta.requests-label">Requests</span>
                 </div>
                 <div class="header-stat" data-stat-tooltip="tokens">
                   <span class="header-stat-value" id="statTokens"><span class="skeleton"></span></span>
-                  <span class="header-stat-label">토큰</span>
+                  <span class="header-stat-label" data-i18n="ui.html.timeline-meta.tokens-label">Tokens</span>
                 </div>
               </div>
             </div>
             <canvas id="timelineChart" height="64"></canvas>
             <canvas id="contextGrowthChart" hidden></canvas>
             <div class="context-chart-empty" id="contextChartEmpty" hidden>
-              <span class="context-chart-empty-text">데이터가 없습니다</span>
+              <span class="context-chart-empty-text" data-i18n="ui.html.timeline-meta.no-data">No data</span>
             </div>
             <div class="context-chart-meta">
               <span id="ctxUsageIndicator"></span>
@@ -368,21 +444,26 @@
           </div>
 
           <div class="cache-panel" id="cachePanel">
+            <!-- skeleton-loading (stats-aggregation T-11) — 첫 paint 시 0% 빈 바 + '--' 텍스트 깜빡임 제거.
+                 다른 위젯(obs-cards, requestsBody)과 동일한 data-skeleton="1" + .sk 자식 패턴.
+                 renderCachePanel(data) 첫 호출 시 cache-panel.js가 data-skeleton 표지를 제거하고 실제 값/width 적용. -->
             <div class="cache-panel-overall" id="cachePanelOverall">
               <div class="cache-section" data-cache-panel-tooltip="hit-rate">
                 <span class="cache-panel-label">Hit Rate</span>
-                <div class="cache-bar-wrap">
-                  <div class="cache-bar-fill" id="cacheHitFill" style="width:0%"></div>
+                <div class="cache-bar-wrap" data-skeleton="1">
+                  <span class="sk sk-bar" style="width:62%"></span>
+                  <div class="cache-bar-fill" id="cacheHitFill" style="width:0%" hidden></div>
                 </div>
-                <span class="cache-bar-pct" id="cacheHitPct">--</span>
+                <span class="cache-bar-pct" id="cacheHitPct" data-skeleton="1"><span class="sk sk-line sk-line--inline" style="width:28px"></span></span>
               </div>
               <div class="cache-section" data-cache-panel-tooltip="ratio">
                 <span class="cache-panel-label">Creation / Read</span>
-                <div class="cache-ratio-wrap">
-                  <div class="cache-ratio-creation" id="cacheRatioCreate" style="width:0%"></div>
-                  <div class="cache-ratio-read" id="cacheRatioRead" style="width:0%"></div>
+                <div class="cache-ratio-wrap" data-skeleton="1">
+                  <span class="sk sk-bar" style="width:100%"></span>
+                  <div class="cache-ratio-creation" id="cacheRatioCreate" style="width:0%" hidden></div>
+                  <div class="cache-ratio-read" id="cacheRatioRead" style="width:0%" hidden></div>
                 </div>
-                <span class="cache-ratio-label" id="cacheRatioLabel">--</span>
+                <span class="cache-ratio-label" id="cacheRatioLabel" data-skeleton="1"><span class="sk sk-line sk-line--inline" style="width:44px"></span></span>
               </div>
             </div>
           </div>
@@ -394,7 +475,7 @@
         <div id="defaultView" class="right-view active">
           <div class="view-section fill card">
             <div class="view-section-header">
-              <span class="panel-label">최근 요청</span>
+              <span class="panel-label" data-i18n="ui.html.requests-panel.label">Recent requests</span>
               <div class="feed-controls">
                 <div id="feedSearchContainer" class="feed-search"></div>
                 <div id="typeFilterBtns" class="type-filter-btns"></div>
@@ -479,7 +560,7 @@
                 </tbody>
               </table>
               <div style="padding:8px 12px;text-align:center">
-                <button id="loadMoreBtn" style="display:none;background:none;border:1px solid var(--border);color:var(--text-dim);padding:4px 16px;border-radius:var(--radius-md);cursor:pointer;font-family:inherit;font-size:11px">더 보기</button>
+                <button id="loadMoreBtn" style="display:none;background:none;border:1px solid var(--border);color:var(--text-dim);padding:4px 16px;border-radius:var(--radius-md);cursor:pointer;font-family:inherit;font-size:11px" data-i18n="ui.html.requests-panel.load-more">Load more</button>
               </div>
             </div>
           </div>
@@ -502,7 +583,7 @@
           </div>
 
           <div class="detail-loading" id="detailLoading" style="display:none">
-            <div class="state-loading"><div class="state-loading-spinner"></div><span>불러오는 중…</span></div>
+            <div class="state-loading"><div class="state-loading-spinner"></div><span data-i18n="ui.html.detail-loading">Loading…</span></div>
           </div>
 
           <div id="detailRequestsView" class="detail-content" style="display:none">
@@ -578,7 +659,7 @@
           </div>
 
           <div id="detailTurnView" class="detail-content">
-            <div id="turnUnifiedBody" role="region" aria-label="턴 목록">
+            <div id="turnUnifiedBody" role="region" aria-label="Turn list" data-i18n-attr-aria-label="ui.html.turn-list-aria">
               <!-- skeleton-loading T-07 — 첫 세션 선택 시 turn-views.js 가 정상 렌더로 교체 -->
               <article class="turn-card sk-turn-card" data-skeleton="1">
                 <div class="turn-card-summary">
@@ -635,7 +716,7 @@
 
           <!-- v22 LLM Input 탭 (system-prompt-exposure ADR-004 옵션 A) — system blocks + user messages 합본 -->
           <div id="detailLlmInputView" class="detail-content" style="display:none">
-            <div id="llmInputBody" class="llm-input-body" role="region" aria-label="API 페이로드">
+            <div id="llmInputBody" class="llm-input-body" role="region" aria-label="API payload" data-i18n-attr-aria-label="ui.html.llm-input-aria">
               <!-- skeleton-loading T-10 — showLatestLlmInput / renderLlmInput 시점에 skLlmInputCards 로 교체 -->
               <section class="llm-input-system sk-card" data-skeleton="1">
                 <header class="llm-input-msg-header"><span class="sk sk-line" style="width:120px;height:10px"></span></header>
@@ -654,7 +735,7 @@
 
           <!-- v22 System Prompt 라이브러리 탭 (ADR-004 옵션 B) — dedup 카탈로그 -->
           <div id="detailSysLibView" class="detail-content" style="display:none">
-            <div id="sysLibBody" class="syslib-body" role="region" aria-label="System Prompt Library">
+            <div id="sysLibBody" class="syslib-body" role="region" aria-label="System prompt library" data-i18n-attr-aria-label="ui.html.syslib-body-aria">
               <!-- skeleton-loading T-11 — loadSystemPromptLibrary 시점에 skSysLibCards 로 교체 -->
               <article class="syslib-card sk-card" data-skeleton="1">
                 <header><span class="sk sk-line" style="width:60%"></span></header>
@@ -688,7 +769,7 @@
     <!-- ADR-003 left-rail-meta-docs: Behavior Definitions 카탈로그 컨테이너 (rail 모드 'metadocs' 진입 시 노출).
          main-layout grid의 마지막 자식이지만 데이터 attribute로 가시성 제어 — appMode='browse' 시 hidden.
          body[data-app-mode] 룰로 .right-panel과 #metaDocsRoot의 가시성 토글. -->
-    <section id="metaDocsRoot" class="meta-docs-root" aria-label="Behavior Definitions 카탈로그">
+    <section id="metaDocsRoot" class="meta-docs-root" aria-label="Behavior Definitions catalog" data-i18n-attr-aria-label="ui.html.meta-docs.root-aria">
       <!-- 좌측 축약 패널: 프로젝트 셀렉터(기존 좌측 #browserProjectsBody 재사용) + 요약 카드 3개.
            body[data-app-mode="metadocs"] 일 때 좌측 obs-panel은 hide되고 summary cards가 .left-panel 안에서 노출됨.
            summary cards 마크업 자체는 meta-docs-view.js가 동적으로 .meta-docs-summary-cards 컨테이너에 inject. -->
@@ -698,10 +779,10 @@
            탭 전환은 메인 영역(아래 두 컨테이너)만 토글한다.
            라우팅: meta-docs-view.js의 setMetaSubTab('docs' | 'tools') — sessionStorage 'spyglass.metaSubTab' 영속화. -->
       <!-- Wave 5: meta-tab 버튼은 meta-docs-view.js initMetaSubTabs()로 동적 생성 -->
-      <div class="meta-tabs" role="tablist" aria-label="Behavior Definitions 서브 탭" id="metaTabBar">
+      <div class="meta-tabs" role="tablist" aria-label="Behavior Definitions sub-tabs" id="metaTabBar" data-i18n-attr-aria-label="ui.html.meta-docs.tabs-aria">
       </div>
 
-      <div id="metaDocsBody" class="meta-docs-body" role="tabpanel" aria-labelledby="metaTabDocs" aria-label="Behavior Definitions 본문">
+      <div id="metaDocsBody" class="meta-docs-body" role="tabpanel" aria-labelledby="metaTabDocs" aria-label="Behavior Definitions body" data-i18n-attr-aria-label="ui.html.meta-docs.body-aria">
         <!-- skeleton-loading T-09 — loadMetaDocsLibrary 호출 시 skMetaDocList 로 교체 -->
         <table class="meta-docs-table" data-skeleton="1"><tbody>
           <tr data-skeleton="1"><td><span class="sk sk-line" style="width:70%"></span></td><td><span class="sk sk-line" style="width:80%"></span></td><td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:28px"></span></td><td><span class="sk sk-line sk-line--inline" style="width:40px"></span></td></tr>
@@ -713,15 +794,52 @@
 
       <!-- ADR-004 meta-docs-tool-stats: 프로젝트 단위 도구 통계 매트릭스 — 기본 hidden.
            tool-stats.js의 loadProjectToolStats(projectName)이 매트릭스(.ts-mx)를 inject. -->
-      <div id="metaToolStatsBody" class="meta-tool-stats-body" role="tabpanel" aria-labelledby="metaTabToolStats" aria-label="프로젝트 도구 통계" hidden></div>
+      <div id="metaToolStatsBody" class="meta-tool-stats-body" role="tabpanel" aria-labelledby="metaTabToolStats" aria-label="Project tool stats" hidden data-i18n-attr-aria-label="ui.html.meta-docs.tool-stats-aria"></div>
     </section>
   </div>
 
   <footer class="footer">
     Claude Spyglass — real-time Claude Code monitor
-    <button class="footer-help-btn" id="btnHelpOpen" title="단축키 (?)" aria-label="키보드 단축키">?</button>
+    <button class="footer-help-btn" id="btnHelpOpen" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts"
+            data-i18n-attr-title="ui.html.footer.help-title"
+            data-i18n-attr-aria-label="ui.html.footer.help-aria">?</button>
   </footer>
 
+  <!-- 업데이트 확인 모달 -->
+  <div class="update-modal-overlay" id="updateModal" role="dialog" aria-modal="true" aria-labelledby="updateModalTitle">
+    <div class="update-modal">
+      <button class="update-modal-close" id="updateModalClose" type="button" aria-label="Close" data-i18n-attr-aria-label="ui.html.update-modal.close-aria">
+        <svg viewBox="0 0 12 12" width="12" height="12" fill="none" aria-hidden="true">
+          <path d="M3 3L9 9M9 3L3 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <div class="update-modal-title" id="updateModalTitle" data-i18n="ui.html.update-modal.title">Update available</div>
+      <div class="update-modal-body" id="updateModalBody">
+        <div class="update-version-compare">
+          <div class="update-version-cell">
+            <span class="update-version-num" id="updateCurrentVersion">—</span>
+            <span class="update-version-label" data-i18n="ui.html.update-modal.current-version">Current</span>
+          </div>
+          <span class="update-version-arrow" aria-hidden="true">→</span>
+          <div class="update-version-cell update-version-cell--new">
+            <span class="update-version-num" id="updateLatestVersion">—</span>
+            <span class="update-version-label" data-i18n="ui.html.update-modal.latest-version">Latest</span>
+          </div>
+        </div>
+        <p class="update-modal-note" data-i18n="ui.html.update-modal.note">The server will briefly restart after installation.</p>
+      </div>
+      <div class="update-modal-actions" id="updateModalActions">
+        <button class="update-modal-btn update-modal-btn-secondary" id="updateModalCancel" type="button" data-i18n="ui.html.update-modal.cancel">Cancel</button>
+        <button class="update-modal-btn update-modal-btn-primary" id="updateModalConfirm" type="button" data-i18n="ui.html.update-modal.confirm">Update</button>
+      </div>
+      <div class="update-modal-error" id="updateModalError" hidden></div>
+      <div class="update-modal-success" id="updateModalSuccess" hidden></div>
+    </div>
+  </div>
+
+  <script src="/assets/js/i18n.js"></script>
+  <script src="/assets/js/i18n-dom.js"></script>
+  <script src="/assets/js/lang-switcher.js"></script>
   <script type="module" src="/assets/js/main.js"></script>
 </body>
 </html>
