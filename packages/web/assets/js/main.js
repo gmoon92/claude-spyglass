@@ -193,6 +193,34 @@ async function renderMetaDocsTopForProject(projectName) {
   } catch { /* silent — 카드 상태 유지 */ }
 }
 
+/**
+ * 가상 user(global) 선택 시 전역 Behavior Definitions 호출 수 Top 5 렌더.
+ * 동일 name이 여러 source_root에 존재하면 invocations 합산. orphan(id=null) 제외.
+ * 실패 시 silent — Tool Categories 카드의 기존 상태 유지.
+ */
+async function renderMetaDocsTopForGlobal() {
+  try {
+    const res = await fetch('/api/meta-docs');
+    if (!res.ok) return;
+    const json = await res.json();
+    const rows = Array.isArray(json?.data) ? json.data : [];
+
+    const sumByName = new Map();
+    for (const r of rows) {
+      if (r.id == null) continue;
+      const inv = r.invocations ?? 0;
+      if (inv <= 0) continue;
+      sumByName.set(r.name, (sumByName.get(r.name) ?? 0) + inv);
+    }
+    const top5 = [...sumByName.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, invocations]) => ({ name, invocations }));
+
+    renderToolCategoriesCard({ mode: 'meta-docs', items: top5 });
+  } catch { /* silent — 카드 상태 유지 */ }
+}
+
 function autoActivateProject() {
   if (getSelectedProject()) return;
   const projects = getAllProjects();
@@ -218,6 +246,10 @@ function selectProject(name) {
     setSelectedProject(GLOBAL_PROJECT_KEY);
     setMetaScopeMode('all');         // 카탈로그 fetch + 좌측 카운트 동기 갱신은 setMetaScopeMode가 책임
     renderBrowserProjects();          // 선택 표시(row-selected) 즉시 갱신
+    // tool-stats-relocate: cardToolCategories가 metadocs 좌측으로 이전됐으므로,
+    // 글로벌 선택에서도 잔존 데이터가 남지 않도록 전역 Top 5로 갱신.
+    // resetToolCategoriesMode를 호출하지 않는 이유: meta-docs 모드 페이로드를 직접 덮어쓰므로 가드와 무관.
+    renderMetaDocsTopForGlobal();
     return;
   }
 
