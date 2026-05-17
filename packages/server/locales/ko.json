@@ -7,42 +7,42 @@
         "hint": "session resume 또는 hook 누락. UI는 \"세션 프롤로그\" 섹션으로 노출 (ADR-001 P1)",
         "unavailable": "orphan 행 확인 불가 (DB 없음 또는 오류)"
       },
-      "zeroResponseTurns": {
+      "zero-response-turns": {
         "ok": "response 0개 turn 0건",
         "warn": "response 0개 turn {count}건",
         "hint": "tool-only turn(정상) 또는 Stop/proxy fallback 모두 누락(이상). 개별 확인 필요",
         "unavailable": "response 0개 turn 확인 불가"
       },
-      "longProxyResponses": {
+      "long-proxy-responses": {
         "ok": "120s 초과 proxy 응답 0건",
         "warn": "120s 초과 proxy 응답 {count}건",
         "hint": "v23(P1-E) 정확 매칭 경로는 영향 없음. fallback 시간 기반 cross-link 경로에서만 잔여 위험 — 정보성",
         "unavailable": "120s 초과 proxy 응답 확인 불가"
       },
-      "duplicateResponses": {
+      "duplicate-responses": {
         "ok": "중복 response 0건",
         "fail": "중복 response {count}쌍 — 같은 메시지가 두 행으로 저장됨",
         "hint": "ADR-001 P1-A 수정 후엔 0이어야 한다. 코드 회귀 가능성 — 변경 이력 확인",
         "unavailable": "중복 response 확인 불가"
       },
-      "mismatchedTurnIds": {
+      "mismatched-turn-ids": {
         "ok": "mismatched turn_id 0건",
         "fail": "mismatched turn_id {count}건 — timestamp 기준 잘못 태깅된 행",
         "hint": "ADR-001 P1-A의 getTurnIdAt 적용 후 0이어야 한다. 회귀 가능성",
         "unavailable": "mismatched turn_id 확인 불가"
       },
-      "unlinkedToolCalls": {
+      "unlinked-tool-calls": {
         "ok": "tool_call api_request_id 매칭 100% ({total}건)",
-        "okSample": "tool_call {total}건 (표본 부족, 매칭률 평가 skip)",
-        "okPartial": "tool_call api_request_id 미매칭 {unlinked}/{total} ({pct}%)",
+        "ok-sample": "tool_call {total}건 (표본 부족, 매칭률 평가 skip)",
+        "ok-partial": "tool_call api_request_id 미매칭 {unlinked}/{total} ({pct}%)",
         "warn": "tool_call api_request_id 미매칭 {unlinked}/{total} ({pct}%)",
         "hint": "proxy SSE의 tool_use 캡처 누락 또는 hook 도착 순서 역전 의심 (ADR-001 P1-E)",
         "unavailable": "tool_call api_request_id 매칭 확인 불가",
-        "noRecent": "최근 1시간 내 tool_call 없음 (체크 skip)"
+        "no-recent": "최근 1시간 내 tool_call 없음 (체크 skip)"
       },
-      "orphanProxyToolUses": {
+      "orphan-proxy-tool-uses": {
         "ok": "proxy_tool_uses orphan 0건",
-        "okWithCount": "proxy_tool_uses orphan {count}건 (보통 사용자 취소된 tool_use)",
+        "ok-with-count": "proxy_tool_uses orphan {count}건 (보통 사용자 취소된 tool_use)",
         "unavailable": "proxy_tool_uses orphan 확인 불가"
       }
     },
@@ -50,69 +50,69 @@
       "bun": {
         "ok": "Bun {version}",
         "fail": "Bun {version} (require ≥ 1.0)",
-        "failNotInstalled": "Bun이 설치되지 않았습니다",
-        "hintUpgrade": "bun upgrade를 실행하세요",
-        "hintInstall": "https://bun.sh/install에서 설치하세요"
+        "fail-not-installed": "Bun이 설치되지 않았습니다",
+        "hint-upgrade": "bun upgrade를 실행하세요",
+        "hint-install": "https://bun.sh/install에서 설치하세요"
       },
-      "settingsJson": {
+      "settings-json": {
         "ok": "settings.json 정상",
-        "failMissing": "settings.json이 없습니다",
-        "failParse": "settings.json JSON 파싱 실패",
-        "hintInstall": "다음을 실행하세요: curl -fsSL https://raw.githubusercontent.com/gmoon92/claude-spyglass/main/scripts/install.sh | bash",
-        "hintFixJson": "올바른 JSON 형식으로 수정하세요"
+        "fail-missing": "settings.json이 없습니다",
+        "fail-parse": "settings.json JSON 파싱 실패",
+        "hint-install": "다음을 실행하세요: curl -fsSL https://raw.githubusercontent.com/gmoon92/claude-spyglass/main/scripts/install.sh | bash",
+        "hint-fix-json": "올바른 JSON 형식으로 수정하세요"
       },
-      "hooksRegistered": {
+      "hooks-registered": {
         "ok": "훅 등록됨 (SPYGLASS_DIR: {dir})",
-        "warnNoDir": "훅 설정 있음, 하지만 SPYGLASS_DIR 미설정",
-        "failNotRegistered": "훅이 등록되지 않았습니다",
-        "failUnavailable": "훅 설정 확인 불가 (settings.json 없음)",
-        "hintSetDir": "env.SPYGLASS_DIR을 설정하세요 (예: ~/.spyglass-src 또는 /path/to/claude-spyglass)",
-        "hintAddHooks": "settings.json에 spyglass-collect.sh 훅을 추가하세요",
-        "hintNeedSettings": "settings.json이 필요합니다"
+        "warn-no-dir": "훅 설정 있음, 하지만 SPYGLASS_DIR 미설정",
+        "fail-not-registered": "훅이 등록되지 않았습니다",
+        "fail-unavailable": "훅 설정 확인 불가 (settings.json 없음)",
+        "hint-set-dir": "env.SPYGLASS_DIR을 설정하세요 (예: ~/.spyglass-src 또는 /path/to/claude-spyglass)",
+        "hint-add-hooks": "settings.json에 spyglass-collect.sh 훅을 추가하세요",
+        "hint-need-settings": "settings.json이 필요합니다"
       },
-      "hookExecutable": {
+      "hook-executable": {
         "ok": "훅 스크립트 실행 권한 OK",
-        "warnNoDir": "SPYGLASS_DIR이 미설정되어 훅 스크립트 확인 불가",
-        "failMissing": "훅 스크립트가 없습니다: {path}",
-        "failNoPermission": "훅 스크립트 실행 권한 없음: {path}",
-        "failUnavailable": "훅 스크립트 위치 확인 불가",
-        "failCheckFailed": "훅 스크립트 확인 실패",
-        "hintSetDir": "settings.json에서 env.SPYGLASS_DIR을 설정하세요",
-        "hintCheckPath": "SPYGLASS_DIR 경로를 확인하세요",
-        "hintChmod": "chmod +x {path}",
-        "hintNeedSettings": "settings.json이 필요합니다",
-        "hintCheckFormat": "settings.json 형식을 확인하세요"
+        "warn-no-dir": "SPYGLASS_DIR이 미설정되어 훅 스크립트 확인 불가",
+        "fail-missing": "훅 스크립트가 없습니다: {path}",
+        "fail-no-permission": "훅 스크립트 실행 권한 없음: {path}",
+        "fail-unavailable": "훅 스크립트 위치 확인 불가",
+        "fail-check-failed": "훅 스크립트 확인 실패",
+        "hint-set-dir": "settings.json에서 env.SPYGLASS_DIR을 설정하세요",
+        "hint-check-path": "SPYGLASS_DIR 경로를 확인하세요",
+        "hint-chmod": "chmod +x {path}",
+        "hint-need-settings": "settings.json이 필요합니다",
+        "hint-check-format": "settings.json 형식을 확인하세요"
       }
     },
     "database": {
       "permissions": {
         "ok": "DB 권한: {perms}",
         "warn": "DB 권한: {perms} (권장: 600)",
-        "warnNoDb": "DB 파일이 아직 없습니다",
+        "warn-no-db": "DB 파일이 아직 없습니다",
         "fail": "DB 파일 권한 확인 실패",
-        "hintChmod": "chmod 600 {path}",
-        "hintAutoCreate": "서버를 실행하면 자동으로 생성됩니다",
-        "hintCorrupted": "DB 파일이 손상되었을 수 있습니다"
+        "hint-chmod": "chmod 600 {path}",
+        "hint-auto-create": "서버를 실행하면 자동으로 생성됩니다",
+        "hint-corrupted": "DB 파일이 손상되었을 수 있습니다"
       },
-      "schemaVersion": {
+      "schema-version": {
         "ok": "DB 스키마 v{version}",
-        "warnUnknown": "DB 스키마 버전을 알 수 없음 (v0)",
-        "warnOld": "DB 스키마 v{version} (권장: v12+)",
-        "warnNoDb": "DB 파일이 없어 스키마 버전 확인 불가",
-        "warnCheckFailed": "DB 스키마 버전 확인 실패",
-        "hintMigrate": "Track 1 마이그레이션이 아직 완료되지 않았거나, DB를 초기화하세요",
-        "hintAutoCreate": "서버를 실행하면 자동으로 생성됩니다",
-        "hintCorrupted": "DB 파일이 손상되었을 수 있습니다"
+        "warn-unknown": "DB 스키마 버전을 알 수 없음 (v0)",
+        "warn-old": "DB 스키마 v{version} (권장: v12+)",
+        "warn-no-db": "DB 파일이 없어 스키마 버전 확인 불가",
+        "warn-check-failed": "DB 스키마 버전 확인 실패",
+        "hint-migrate": "Track 1 마이그레이션이 아직 완료되지 않았거나, DB를 초기화하세요",
+        "hint-auto-create": "서버를 실행하면 자동으로 생성됩니다",
+        "hint-corrupted": "DB 파일이 손상되었을 수 있습니다"
       },
-      "recentActivity": {
+      "recent-activity": {
         "ok": "최근 5분 내 수집 활동 있음",
         "warn": "최근 수집: {minutes}분 전",
-        "warnNoData": "수집된 데이터 없음",
-        "warnUnavailable": "최근 수집 활동 확인 불가 (DB 없음)",
-        "warnError": "수집 활동 확인 중 오류 발생",
-        "hintRun": "Claude Code를 실행하고 bun run dev를 실행하세요",
-        "hintAutoCreate": "서버를 실행하고 Claude Code에서 명령을 실행하세요",
-        "hintCorrupted": "DB가 손상되었을 수 있습니다"
+        "warn-no-data": "수집된 데이터 없음",
+        "warn-unavailable": "최근 수집 활동 확인 불가 (DB 없음)",
+        "warn-error": "수집 활동 확인 중 오류 발생",
+        "hint-run": "Claude Code를 실행하고 bun run dev를 실행하세요",
+        "hint-auto-create": "서버를 실행하고 Claude Code에서 명령을 실행하세요",
+        "hint-corrupted": "DB가 손상되었을 수 있습니다"
       }
     },
     "server": {
@@ -124,14 +124,14 @@
     }
   },
   "fix": {
-    "dbPermissionOk": "DB 권한 수정: chmod 600 {path}",
-    "dbPermissionFail": "DB 권한 수정 실패: {path}",
-    "hookPermissionOk": "훅 스크립트 권한 수정: chmod +x {path}",
-    "hookPermissionFail": "훅 스크립트 권한 수정 실패",
-    "dupRemoved": "중복 response {count}건 제거 (ADR-001 P1-A)",
-    "mismatchFixed": "mismatched turn_id {count}건 교정 (ADR-001 P1-A)",
-    "orphanMapped": "orphan turn_id {count}건 retroactive 매핑 (ADR-001 P1-B)",
-    "dataFixFail": "데이터 정합성 보정 실패: {error}"
+    "db-permission-ok": "DB 권한 수정: chmod 600 {path}",
+    "db-permission-fail": "DB 권한 수정 실패: {path}",
+    "hook-permission-ok": "훅 스크립트 권한 수정: chmod +x {path}",
+    "hook-permission-fail": "훅 스크립트 권한 수정 실패",
+    "dup-removed": "중복 response {count}건 제거 (ADR-001 P1-A)",
+    "mismatch-fixed": "mismatched turn_id {count}건 교정 (ADR-001 P1-A)",
+    "orphan-mapped": "orphan turn_id {count}건 retroactive 매핑 (ADR-001 P1-B)",
+    "data-fix-fail": "데이터 정합성 보정 실패: {error}"
   },
   "cli": {
     "usage": "사용법: bun run packages/server/src/cli.ts doctor [--fix]",

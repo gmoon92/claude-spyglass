@@ -28,13 +28,13 @@ export function checkBunVersion(): CheckResult {
     return {
       status: 'fail',
       message: t('checks.environment.bun.fail', { version }),
-      hint: t('checks.environment.bun.hintUpgrade'),
+      hint: t('checks.environment.bun.hint-upgrade'),
     };
   } catch {
     return {
       status: 'fail',
-      message: t('checks.environment.bun.failNotInstalled'),
-      hint: t('checks.environment.bun.hintInstall'),
+      message: t('checks.environment.bun.fail-not-installed'),
+      hint: t('checks.environment.bun.hint-install'),
     };
   }
 }
@@ -48,8 +48,8 @@ export function checkSettingsJson(): CheckResult {
   if (!existsSync(settingsPath)) {
     return {
       status: 'fail',
-      message: t('checks.environment.settingsJson.failMissing'),
-      hint: t('checks.environment.settingsJson.hintInstall'),
+      message: t('checks.environment.settings-json.fail-missing'),
+      hint: t('checks.environment.settings-json.hint-install'),
     };
   }
 
@@ -57,13 +57,13 @@ export function checkSettingsJson(): CheckResult {
     JSON.parse(readFileSync(settingsPath, 'utf-8'));
     return {
       status: 'ok',
-      message: t('checks.environment.settingsJson.ok'),
+      message: t('checks.environment.settings-json.ok'),
     };
   } catch {
     return {
       status: 'fail',
-      message: t('checks.environment.settingsJson.failParse'),
-      hint: t('checks.environment.settingsJson.hintFixJson'),
+      message: t('checks.environment.settings-json.fail-parse'),
+      hint: t('checks.environment.settings-json.hint-fix-json'),
     };
   }
 }
@@ -77,8 +77,8 @@ export function checkHooksRegistered(): CheckResult {
   if (!existsSync(settingsPath)) {
     return {
       status: 'fail',
-      message: t('checks.environment.hooksRegistered.failUnavailable'),
-      hint: t('checks.environment.hooksRegistered.hintNeedSettings'),
+      message: t('checks.environment.hooks-registered.fail-unavailable'),
+      hint: t('checks.environment.hooks-registered.hint-need-settings'),
     };
   }
 
@@ -102,27 +102,27 @@ export function checkHooksRegistered(): CheckResult {
       if (!spyglassDir) {
         return {
           status: 'warn',
-          message: t('checks.environment.hooksRegistered.warnNoDir'),
-          hint: t('checks.environment.hooksRegistered.hintSetDir'),
+          message: t('checks.environment.hooks-registered.warn-no-dir'),
+          hint: t('checks.environment.hooks-registered.hint-set-dir'),
         };
       }
 
       return {
         status: 'ok',
-        message: t('checks.environment.hooksRegistered.ok', { dir: spyglassDir }),
+        message: t('checks.environment.hooks-registered.ok', { dir: spyglassDir }),
       };
     }
 
     return {
       status: 'fail',
-      message: t('checks.environment.hooksRegistered.failNotRegistered'),
-      hint: t('checks.environment.hooksRegistered.hintAddHooks'),
+      message: t('checks.environment.hooks-registered.fail-not-registered'),
+      hint: t('checks.environment.hooks-registered.hint-add-hooks'),
     };
   } catch {
     return {
       status: 'fail',
-      message: t('checks.environment.settingsJson.failParse'),
-      hint: t('checks.environment.settingsJson.hintFixJson'),
+      message: t('checks.environment.settings-json.fail-parse'),
+      hint: t('checks.environment.settings-json.hint-fix-json'),
     };
   }
 }
@@ -136,8 +136,8 @@ export function checkHookExecutable(): CheckResult {
   if (!existsSync(settingsPath)) {
     return {
       status: 'fail',
-      message: t('checks.environment.hookExecutable.failUnavailable'),
-      hint: t('checks.environment.hookExecutable.hintNeedSettings'),
+      message: t('checks.environment.hook-executable.fail-unavailable'),
+      hint: t('checks.environment.hook-executable.hint-need-settings'),
     };
   }
 
@@ -148,8 +148,8 @@ export function checkHookExecutable(): CheckResult {
     if (!spyglassDir) {
       return {
         status: 'warn',
-        message: t('checks.environment.hookExecutable.warnNoDir'),
-        hint: t('checks.environment.hookExecutable.hintSetDir'),
+        message: t('checks.environment.hook-executable.warn-no-dir'),
+        hint: t('checks.environment.hook-executable.hint-set-dir'),
       };
     }
 
@@ -158,8 +158,8 @@ export function checkHookExecutable(): CheckResult {
     if (!existsSync(hookScript)) {
       return {
         status: 'fail',
-        message: t('checks.environment.hookExecutable.failMissing', { path: hookScript }),
-        hint: t('checks.environment.hookExecutable.hintCheckPath'),
+        message: t('checks.environment.hook-executable.fail-missing', { path: hookScript }),
+        hint: t('checks.environment.hook-executable.hint-check-path'),
       };
     }
 
@@ -169,20 +169,20 @@ export function checkHookExecutable(): CheckResult {
     if (!isExecutable) {
       return {
         status: 'fail',
-        message: t('checks.environment.hookExecutable.failNoPermission', { path: hookScript }),
-        hint: t('checks.environment.hookExecutable.hintChmod', { path: hookScript }),
+        message: t('checks.environment.hook-executable.fail-no-permission', { path: hookScript }),
+        hint: t('checks.environment.hook-executable.hint-chmod', { path: hookScript }),
       };
     }
 
     return {
       status: 'ok',
-      message: t('checks.environment.hookExecutable.ok'),
+      message: t('checks.environment.hook-executable.ok'),
     };
   } catch {
     return {
       status: 'fail',
-      message: t('checks.environment.hookExecutable.failCheckFailed'),
-      hint: t('checks.environment.hookExecutable.hintCheckFormat'),
+      message: t('checks.environment.hook-executable.fail-check-failed'),
+      hint: t('checks.environment.hook-executable.hint-check-format'),
     };
   }
 }

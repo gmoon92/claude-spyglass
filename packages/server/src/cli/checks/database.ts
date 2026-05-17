@@ -18,8 +18,8 @@ export function checkDbPermissions(): CheckResult {
   if (!existsSync(dbPath)) {
     return {
       status: 'warn',
-      message: t('checks.database.permissions.warnNoDb'),
-      hint: t('checks.database.permissions.hintAutoCreate'),
+      message: t('checks.database.permissions.warn-no-db'),
+      hint: t('checks.database.permissions.hint-auto-create'),
     };
   }
 
@@ -33,7 +33,7 @@ export function checkDbPermissions(): CheckResult {
       return {
         status: 'warn',
         message: t('checks.database.permissions.warn', { perms: octalPerms }),
-        hint: t('checks.database.permissions.hintChmod', { path: dbPath }),
+        hint: t('checks.database.permissions.hint-chmod', { path: dbPath }),
       };
     }
 
@@ -45,7 +45,7 @@ export function checkDbPermissions(): CheckResult {
     return {
       status: 'fail',
       message: t('checks.database.permissions.fail'),
-      hint: t('checks.database.permissions.hintCorrupted'),
+      hint: t('checks.database.permissions.hint-corrupted'),
     };
   }
 }
@@ -57,8 +57,8 @@ export function checkDbSchemaVersion(): CheckResult {
   if (!existsSync(getDefaultDbPath())) {
     return {
       status: 'warn',
-      message: t('checks.database.schemaVersion.warnNoDb'),
-      hint: t('checks.database.schemaVersion.hintAutoCreate'),
+      message: t('checks.database.schema-version.warn-no-db'),
+      hint: t('checks.database.schema-version.hint-auto-create'),
     };
   }
 
@@ -71,28 +71,28 @@ export function checkDbSchemaVersion(): CheckResult {
     if (version === 0) {
       return {
         status: 'warn',
-        message: t('checks.database.schemaVersion.warnUnknown'),
-        hint: t('checks.database.schemaVersion.hintCorrupted'),
+        message: t('checks.database.schema-version.warn-unknown'),
+        hint: t('checks.database.schema-version.hint-corrupted'),
       };
     }
 
     if (version < 12) {
       return {
         status: 'warn',
-        message: t('checks.database.schemaVersion.warnOld', { version }),
-        hint: t('checks.database.schemaVersion.hintMigrate'),
+        message: t('checks.database.schema-version.warn-old', { version }),
+        hint: t('checks.database.schema-version.hint-migrate'),
       };
     }
 
     return {
       status: 'ok',
-      message: t('checks.database.schemaVersion.ok', { version }),
+      message: t('checks.database.schema-version.ok', { version }),
     };
   } catch {
     return {
       status: 'warn',
-      message: t('checks.database.schemaVersion.warnCheckFailed'),
-      hint: t('checks.database.schemaVersion.hintCorrupted'),
+      message: t('checks.database.schema-version.warn-check-failed'),
+      hint: t('checks.database.schema-version.hint-corrupted'),
     };
   }
 }
@@ -104,8 +104,8 @@ export function checkRecentActivity(): CheckResult {
   if (!existsSync(getDefaultDbPath())) {
     return {
       status: 'warn',
-      message: t('checks.database.recentActivity.warnUnavailable'),
-      hint: t('checks.database.recentActivity.hintAutoCreate'),
+      message: t('checks.database.recent-activity.warn-unavailable'),
+      hint: t('checks.database.recent-activity.hint-auto-create'),
     };
   }
 
@@ -125,7 +125,7 @@ export function checkRecentActivity(): CheckResult {
     if (result.length > 0) {
       return {
         status: 'ok',
-        message: t('checks.database.recentActivity.ok'),
+        message: t('checks.database.recent-activity.ok'),
       };
     }
 
@@ -144,8 +144,8 @@ export function checkRecentActivity(): CheckResult {
         const minutesAgo = Math.floor((Date.now() / 1000 - lastTimestamp) / 60);
         return {
           status: 'warn',
-          message: t('checks.database.recentActivity.warn', { minutes: minutesAgo }),
-          hint: t('checks.database.recentActivity.hintRun'),
+          message: t('checks.database.recent-activity.warn', { minutes: minutesAgo }),
+          hint: t('checks.database.recent-activity.hint-run'),
         };
       }
     } catch {
@@ -154,14 +154,14 @@ export function checkRecentActivity(): CheckResult {
 
     return {
       status: 'warn',
-      message: t('checks.database.recentActivity.warnNoData'),
-      hint: t('checks.database.recentActivity.hintRun'),
+      message: t('checks.database.recent-activity.warn-no-data'),
+      hint: t('checks.database.recent-activity.hint-run'),
     };
   } catch {
     return {
       status: 'warn',
-      message: t('checks.database.recentActivity.warnError'),
-      hint: t('checks.database.recentActivity.hintCorrupted'),
+      message: t('checks.database.recent-activity.warn-error'),
+      hint: t('checks.database.recent-activity.hint-corrupted'),
     };
   }
 }

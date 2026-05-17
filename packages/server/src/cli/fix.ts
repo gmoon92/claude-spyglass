@@ -23,11 +23,11 @@ export function applyFixes(): boolean {
       const stat = statSync(dbPath);
       if (stat.mode & 0o077) {
         execSync(`chmod 600 ${dbPath}`);
-        log('ok', t('fix.dbPermissionOk', { path: dbPath }));
+        log('ok', t('fix.db-permission-ok', { path: dbPath }));
         fixed = true;
       }
     } catch {
-      log('fail', t('fix.dbPermissionFail', { path: dbPath }));
+      log('fail', t('fix.db-permission-fail', { path: dbPath }));
     }
   }
 
@@ -44,13 +44,13 @@ export function applyFixes(): boolean {
           const stat = statSync(hookScript);
           if ((stat.mode & parseInt('0111', 8)) === 0) {
             execSync(`chmod +x ${hookScript}`);
-            log('ok', t('fix.hookPermissionOk', { path: hookScript }));
+            log('ok', t('fix.hook-permission-ok', { path: hookScript }));
             fixed = true;
           }
         }
       }
     } catch {
-      log('fail', t('fix.hookPermissionFail'));
+      log('fail', t('fix.hook-permission-fail'));
     }
   }
 
@@ -77,7 +77,7 @@ export function applyFixes(): boolean {
         )
       `).run();
       if (dupResult.changes > 0) {
-        log('ok', t('fix.dupRemoved', { count: dupResult.changes }));
+        log('ok', t('fix.dup-removed', { count: dupResult.changes }));
         fixed = true;
       }
 
@@ -105,7 +105,7 @@ export function applyFixes(): boolean {
           ), turn_id)
       `).run();
       if (mismatchResult.changes > 0) {
-        log('ok', t('fix.mismatchFixed', { count: mismatchResult.changes }));
+        log('ok', t('fix.mismatch-fixed', { count: mismatchResult.changes }));
         fixed = true;
       }
 
@@ -131,14 +131,14 @@ export function applyFixes(): boolean {
           )
       `).run();
       if (orphanResult.changes > 0) {
-        log('ok', t('fix.orphanMapped', { count: orphanResult.changes }));
+        log('ok', t('fix.orphan-mapped', { count: orphanResult.changes }));
         fixed = true;
       }
 
       closeDatabase();
     } catch (e) {
       try { closeDatabase(); } catch { /* ignore */ }
-      log('fail', t('fix.dataFixFail', { error: e instanceof Error ? e.message : String(e) }));
+      log('fail', t('fix.data-fix-fail', { error: e instanceof Error ? e.message : String(e) }));
     }
   }
 

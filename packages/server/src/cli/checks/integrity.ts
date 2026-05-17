@@ -80,12 +80,12 @@ export function checkZeroResponseTurns(): CheckResult {
     return row?.c ?? 0;
   }, -1);
 
-  if (count < 0) return { status: 'warn', message: t('checks.integrity.zeroResponseTurns.unavailable') };
-  if (count === 0) return { status: 'ok', message: t('checks.integrity.zeroResponseTurns.ok') };
+  if (count < 0) return { status: 'warn', message: t('checks.integrity.zero-response-turns.unavailable') };
+  if (count === 0) return { status: 'ok', message: t('checks.integrity.zero-response-turns.ok') };
   return {
     status: 'warn',
-    message: t('checks.integrity.zeroResponseTurns.warn', { count }),
-    hint: t('checks.integrity.zeroResponseTurns.hint'),
+    message: t('checks.integrity.zero-response-turns.warn', { count }),
+    hint: t('checks.integrity.zero-response-turns.hint'),
   };
 }
 
@@ -97,12 +97,12 @@ export function checkLongProxyResponses(): CheckResult {
     return row?.c ?? 0;
   }, -1);
 
-  if (count < 0) return { status: 'warn', message: t('checks.integrity.longProxyResponses.unavailable') };
-  if (count === 0) return { status: 'ok', message: t('checks.integrity.longProxyResponses.ok') };
+  if (count < 0) return { status: 'warn', message: t('checks.integrity.long-proxy-responses.unavailable') };
+  if (count === 0) return { status: 'ok', message: t('checks.integrity.long-proxy-responses.ok') };
   return {
     status: 'warn',
-    message: t('checks.integrity.longProxyResponses.warn', { count }),
-    hint: t('checks.integrity.longProxyResponses.hint'),
+    message: t('checks.integrity.long-proxy-responses.warn', { count }),
+    hint: t('checks.integrity.long-proxy-responses.hint'),
   };
 }
 
@@ -126,12 +126,12 @@ export function checkDuplicateResponses(): CheckResult {
     return row?.c ?? 0;
   }, -1);
 
-  if (count < 0) return { status: 'warn', message: t('checks.integrity.duplicateResponses.unavailable') };
-  if (count === 0) return { status: 'ok', message: t('checks.integrity.duplicateResponses.ok') };
+  if (count < 0) return { status: 'warn', message: t('checks.integrity.duplicate-responses.unavailable') };
+  if (count === 0) return { status: 'ok', message: t('checks.integrity.duplicate-responses.ok') };
   return {
     status: 'fail',
-    message: t('checks.integrity.duplicateResponses.fail', { count }),
-    hint: t('checks.integrity.duplicateResponses.hint'),
+    message: t('checks.integrity.duplicate-responses.fail', { count }),
+    hint: t('checks.integrity.duplicate-responses.hint'),
   };
 }
 
@@ -160,12 +160,12 @@ export function checkMismatchedTurnIds(): CheckResult {
     return row?.c ?? 0;
   }, -1);
 
-  if (count < 0) return { status: 'warn', message: t('checks.integrity.mismatchedTurnIds.unavailable') };
-  if (count === 0) return { status: 'ok', message: t('checks.integrity.mismatchedTurnIds.ok') };
+  if (count < 0) return { status: 'warn', message: t('checks.integrity.mismatched-turn-ids.unavailable') };
+  if (count === 0) return { status: 'ok', message: t('checks.integrity.mismatched-turn-ids.ok') };
   return {
     status: 'fail',
-    message: t('checks.integrity.mismatchedTurnIds.fail', { count }),
-    hint: t('checks.integrity.mismatchedTurnIds.hint'),
+    message: t('checks.integrity.mismatched-turn-ids.fail', { count }),
+    hint: t('checks.integrity.mismatched-turn-ids.hint'),
   };
 }
 
@@ -190,29 +190,29 @@ export function checkUnlinkedToolCalls(): CheckResult {
     return row ? { total: row.total ?? 0, unlinked: row.unlinked ?? 0 } : null;
   }, null);
 
-  if (!stats) return { status: 'warn', message: t('checks.integrity.unlinkedToolCalls.unavailable') };
-  if (stats.total === 0) return { status: 'ok', message: t('checks.integrity.unlinkedToolCalls.noRecent') };
+  if (!stats) return { status: 'warn', message: t('checks.integrity.unlinked-tool-calls.unavailable') };
+  if (stats.total === 0) return { status: 'ok', message: t('checks.integrity.unlinked-tool-calls.no-recent') };
   // 표본 < 5건이면 통계적으로 무의미 — 단일 미매칭이 100%로 보고되는 false alarm 방지.
   if (stats.total < 5) {
     return {
       status: 'ok',
-      message: t('checks.integrity.unlinkedToolCalls.okSample', { total: stats.total }),
+      message: t('checks.integrity.unlinked-tool-calls.ok-sample', { total: stats.total }),
     };
   }
   const pct = Math.round(100 * stats.unlinked / stats.total);
   if (stats.unlinked === 0) {
-    return { status: 'ok', message: t('checks.integrity.unlinkedToolCalls.ok', { total: stats.total }) };
+    return { status: 'ok', message: t('checks.integrity.unlinked-tool-calls.ok', { total: stats.total }) };
   }
   if (pct < 10) {
     return {
       status: 'ok',
-      message: t('checks.integrity.unlinkedToolCalls.okPartial', { unlinked: stats.unlinked, total: stats.total, pct }),
+      message: t('checks.integrity.unlinked-tool-calls.ok-partial', { unlinked: stats.unlinked, total: stats.total, pct }),
     };
   }
   return {
     status: 'warn',
-    message: t('checks.integrity.unlinkedToolCalls.warn', { unlinked: stats.unlinked, total: stats.total, pct }),
-    hint: t('checks.integrity.unlinkedToolCalls.hint'),
+    message: t('checks.integrity.unlinked-tool-calls.warn', { unlinked: stats.unlinked, total: stats.total, pct }),
+    hint: t('checks.integrity.unlinked-tool-calls.hint'),
   };
 }
 
@@ -230,11 +230,11 @@ export function checkOrphanProxyToolUses(): CheckResult {
     `).get() as { c: number } | undefined;
     return row?.c ?? 0;
   }, -1);
-  if (count < 0) return { status: 'warn', message: t('checks.integrity.orphanProxyToolUses.unavailable') };
-  if (count === 0) return { status: 'ok', message: t('checks.integrity.orphanProxyToolUses.ok') };
+  if (count < 0) return { status: 'warn', message: t('checks.integrity.orphan-proxy-tool-uses.unavailable') };
+  if (count === 0) return { status: 'ok', message: t('checks.integrity.orphan-proxy-tool-uses.ok') };
   return {
     status: 'ok',
-    message: t('checks.integrity.orphanProxyToolUses.okWithCount', { count }),
+    message: t('checks.integrity.orphan-proxy-tool-uses.ok-with-count', { count }),
   };
 }
 

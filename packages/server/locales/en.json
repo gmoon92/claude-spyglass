@@ -7,42 +7,42 @@
         "hint": "session resume or hook missing. UI exposes as \"session prologue\" section (ADR-001 P1)",
         "unavailable": "cannot check orphan rows (DB missing or error)"
       },
-      "zeroResponseTurns": {
+      "zero-response-turns": {
         "ok": "turns with 0 responses: 0",
         "warn": "turns with 0 responses: {count}",
         "hint": "tool-only turn (normal) or Stop/proxy fallback all missing (abnormal). manual check required",
         "unavailable": "cannot check turns with 0 responses"
       },
-      "longProxyResponses": {
+      "long-proxy-responses": {
         "ok": "proxy responses over 120s: 0",
         "warn": "proxy responses over 120s: {count}",
         "hint": "v23(P1-E) exact-match path unaffected. residual risk only in fallback time-based cross-link path — informational",
         "unavailable": "cannot check proxy responses over 120s"
       },
-      "duplicateResponses": {
+      "duplicate-responses": {
         "ok": "duplicate responses: 0",
         "fail": "duplicate responses {count} pairs — same message saved as two rows",
         "hint": "should be 0 after ADR-001 P1-A fix. possible code regression — check change history",
         "unavailable": "cannot check duplicate responses"
       },
-      "mismatchedTurnIds": {
+      "mismatched-turn-ids": {
         "ok": "mismatched turn_id: 0",
         "fail": "mismatched turn_id {count} — rows tagged incorrectly by timestamp",
         "hint": "should be 0 after applying ADR-001 P1-A getTurnIdAt. regression possible",
         "unavailable": "cannot check mismatched turn_id"
       },
-      "unlinkedToolCalls": {
+      "unlinked-tool-calls": {
         "ok": "tool_call api_request_id match 100% ({total} rows)",
-        "okSample": "tool_call {total} rows (insufficient sample, match rate evaluation skipped)",
-        "okPartial": "tool_call api_request_id unmatched {unlinked}/{total} ({pct}%)",
+        "ok-sample": "tool_call {total} rows (insufficient sample, match rate evaluation skipped)",
+        "ok-partial": "tool_call api_request_id unmatched {unlinked}/{total} ({pct}%)",
         "warn": "tool_call api_request_id unmatched {unlinked}/{total} ({pct}%)",
         "hint": "suspect proxy SSE tool_use capture miss or hook arrival order reversal (ADR-001 P1-E)",
         "unavailable": "cannot check tool_call api_request_id match",
-        "noRecent": "no tool_call in the last hour (check skipped)"
+        "no-recent": "no tool_call in the last hour (check skipped)"
       },
-      "orphanProxyToolUses": {
+      "orphan-proxy-tool-uses": {
         "ok": "proxy_tool_uses orphan: 0",
-        "okWithCount": "proxy_tool_uses orphan {count} rows (usually user-cancelled tool_use)",
+        "ok-with-count": "proxy_tool_uses orphan {count} rows (usually user-cancelled tool_use)",
         "unavailable": "cannot check proxy_tool_uses orphan"
       }
     },
@@ -50,69 +50,69 @@
       "bun": {
         "ok": "Bun {version}",
         "fail": "Bun {version} (require ≥ 1.0)",
-        "failNotInstalled": "Bun is not installed",
-        "hintUpgrade": "run bun upgrade",
-        "hintInstall": "install from https://bun.sh/install"
+        "fail-not-installed": "Bun is not installed",
+        "hint-upgrade": "run bun upgrade",
+        "hint-install": "install from https://bun.sh/install"
       },
-      "settingsJson": {
+      "settings-json": {
         "ok": "settings.json OK",
-        "failMissing": "settings.json is missing",
-        "failParse": "settings.json JSON parse failed",
-        "hintInstall": "run: curl -fsSL https://raw.githubusercontent.com/gmoon92/claude-spyglass/main/scripts/install.sh | bash",
-        "hintFixJson": "fix to valid JSON format"
+        "fail-missing": "settings.json is missing",
+        "fail-parse": "settings.json JSON parse failed",
+        "hint-install": "run: curl -fsSL https://raw.githubusercontent.com/gmoon92/claude-spyglass/main/scripts/install.sh | bash",
+        "hint-fix-json": "fix to valid JSON format"
       },
-      "hooksRegistered": {
+      "hooks-registered": {
         "ok": "hooks registered (SPYGLASS_DIR: {dir})",
-        "warnNoDir": "hooks configured, but SPYGLASS_DIR not set",
-        "failNotRegistered": "hooks are not registered",
-        "failUnavailable": "cannot check hooks (settings.json missing)",
-        "hintSetDir": "set env.SPYGLASS_DIR (e.g. ~/.spyglass-src or /path/to/claude-spyglass)",
-        "hintAddHooks": "add spyglass-collect.sh hooks to settings.json",
-        "hintNeedSettings": "settings.json is required"
+        "warn-no-dir": "hooks configured, but SPYGLASS_DIR not set",
+        "fail-not-registered": "hooks are not registered",
+        "fail-unavailable": "cannot check hooks (settings.json missing)",
+        "hint-set-dir": "set env.SPYGLASS_DIR (e.g. ~/.spyglass-src or /path/to/claude-spyglass)",
+        "hint-add-hooks": "add spyglass-collect.sh hooks to settings.json",
+        "hint-need-settings": "settings.json is required"
       },
-      "hookExecutable": {
+      "hook-executable": {
         "ok": "hook script executable permission OK",
-        "warnNoDir": "cannot check hook script (SPYGLASS_DIR not set)",
-        "failMissing": "hook script missing: {path}",
-        "failNoPermission": "hook script not executable: {path}",
-        "failUnavailable": "cannot locate hook script",
-        "failCheckFailed": "hook script check failed",
-        "hintSetDir": "set env.SPYGLASS_DIR in settings.json",
-        "hintCheckPath": "check SPYGLASS_DIR path",
-        "hintChmod": "chmod +x {path}",
-        "hintNeedSettings": "settings.json is required",
-        "hintCheckFormat": "check settings.json format"
+        "warn-no-dir": "cannot check hook script (SPYGLASS_DIR not set)",
+        "fail-missing": "hook script missing: {path}",
+        "fail-no-permission": "hook script not executable: {path}",
+        "fail-unavailable": "cannot locate hook script",
+        "fail-check-failed": "hook script check failed",
+        "hint-set-dir": "set env.SPYGLASS_DIR in settings.json",
+        "hint-check-path": "check SPYGLASS_DIR path",
+        "hint-chmod": "chmod +x {path}",
+        "hint-need-settings": "settings.json is required",
+        "hint-check-format": "check settings.json format"
       }
     },
     "database": {
       "permissions": {
         "ok": "DB permission: {perms}",
         "warn": "DB permission: {perms} (recommended: 600)",
-        "warnNoDb": "DB file does not exist yet",
+        "warn-no-db": "DB file does not exist yet",
         "fail": "DB file permission check failed",
-        "hintChmod": "chmod 600 {path}",
-        "hintAutoCreate": "will be created automatically when server starts",
-        "hintCorrupted": "DB file may be corrupted"
+        "hint-chmod": "chmod 600 {path}",
+        "hint-auto-create": "will be created automatically when server starts",
+        "hint-corrupted": "DB file may be corrupted"
       },
-      "schemaVersion": {
+      "schema-version": {
         "ok": "DB schema v{version}",
-        "warnUnknown": "DB schema version unknown (v0)",
-        "warnOld": "DB schema v{version} (recommended: v12+)",
-        "warnNoDb": "cannot check schema version (DB file missing)",
-        "warnCheckFailed": "DB schema version check failed",
-        "hintMigrate": "Track 1 migration may be incomplete, or reset the DB",
-        "hintAutoCreate": "will be created automatically when server starts",
-        "hintCorrupted": "DB file may be corrupted"
+        "warn-unknown": "DB schema version unknown (v0)",
+        "warn-old": "DB schema v{version} (recommended: v12+)",
+        "warn-no-db": "cannot check schema version (DB file missing)",
+        "warn-check-failed": "DB schema version check failed",
+        "hint-migrate": "Track 1 migration may be incomplete, or reset the DB",
+        "hint-auto-create": "will be created automatically when server starts",
+        "hint-corrupted": "DB file may be corrupted"
       },
-      "recentActivity": {
+      "recent-activity": {
         "ok": "collection activity within last 5 minutes",
         "warn": "last collection: {minutes} minutes ago",
-        "warnNoData": "no collected data",
-        "warnUnavailable": "cannot check recent activity (DB missing)",
-        "warnError": "error while checking collection activity",
-        "hintRun": "run Claude Code and execute bun run dev",
-        "hintAutoCreate": "start the server and run a command in Claude Code",
-        "hintCorrupted": "DB may be corrupted"
+        "warn-no-data": "no collected data",
+        "warn-unavailable": "cannot check recent activity (DB missing)",
+        "warn-error": "error while checking collection activity",
+        "hint-run": "run Claude Code and execute bun run dev",
+        "hint-auto-create": "start the server and run a command in Claude Code",
+        "hint-corrupted": "DB may be corrupted"
       }
     },
     "server": {
@@ -124,14 +124,14 @@
     }
   },
   "fix": {
-    "dbPermissionOk": "DB permission fixed: chmod 600 {path}",
-    "dbPermissionFail": "DB permission fix failed: {path}",
-    "hookPermissionOk": "hook script permission fixed: chmod +x {path}",
-    "hookPermissionFail": "hook script permission fix failed",
-    "dupRemoved": "duplicate responses removed: {count} rows (ADR-001 P1-A)",
-    "mismatchFixed": "mismatched turn_id fixed: {count} rows (ADR-001 P1-A)",
-    "orphanMapped": "orphan turn_id retroactively mapped: {count} rows (ADR-001 P1-B)",
-    "dataFixFail": "data consistency fix failed: {error}"
+    "db-permission-ok": "DB permission fixed: chmod 600 {path}",
+    "db-permission-fail": "DB permission fix failed: {path}",
+    "hook-permission-ok": "hook script permission fixed: chmod +x {path}",
+    "hook-permission-fail": "hook script permission fix failed",
+    "dup-removed": "duplicate responses removed: {count} rows (ADR-001 P1-A)",
+    "mismatch-fixed": "mismatched turn_id fixed: {count} rows (ADR-001 P1-A)",
+    "orphan-mapped": "orphan turn_id retroactively mapped: {count} rows (ADR-001 P1-B)",
+    "data-fix-fail": "data consistency fix failed: {error}"
   },
   "cli": {
     "usage": "Usage: bun run packages/server/src/cli.ts doctor [--fix]",

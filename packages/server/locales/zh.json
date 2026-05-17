@@ -7,42 +7,42 @@
         "hint": "session resume 或 hook 遗漏。UI 以 \"会话序言\" 区块展示 (ADR-001 P1)",
         "unavailable": "无法检查 orphan 行 (数据库缺失或错误)"
       },
-      "zeroResponseTurns": {
+      "zero-response-turns": {
         "ok": "0 个 response 的 turn: 0",
         "warn": "0 个 response 的 turn: {count}",
         "hint": "tool-only turn(正常) 或 Stop/proxy fallback 全部缺失(异常)。需单独检查",
         "unavailable": "无法检查 0 个 response 的 turn"
       },
-      "longProxyResponses": {
+      "long-proxy-responses": {
         "ok": "超过 120 秒的 proxy 响应: 0",
         "warn": "超过 120 秒的 proxy 响应: {count}",
         "hint": "v23(P1-E) 精确匹配路径不受影响。仅 fallback 时间交叉链接路径存在残余风险 — 仅供参考",
         "unavailable": "无法检查超过 120 秒的 proxy 响应"
       },
-      "duplicateResponses": {
+      "duplicate-responses": {
         "ok": "重复 response: 0",
         "fail": "重复 response {count} 对 — 同一条消息保存为两行",
         "hint": "ADR-001 P1-A 修复后应为 0。可能存在代码回退 — 请检查变更历史",
         "unavailable": "无法检查重复 response"
       },
-      "mismatchedTurnIds": {
+      "mismatched-turn-ids": {
         "ok": "mismatched turn_id: 0",
         "fail": "mismatched turn_id {count} — 按 timestamp 错误标记的行",
         "hint": "应用 ADR-001 P1-A 的 getTurnIdAt 后应为 0。可能存在回退",
         "unavailable": "无法检查 mismatched turn_id"
       },
-      "unlinkedToolCalls": {
+      "unlinked-tool-calls": {
         "ok": "tool_call api_request_id 匹配率 100% ({total} 行)",
-        "okSample": "tool_call {total} 行 (样本不足，跳过匹配率评估)",
-        "okPartial": "tool_call api_request_id 未匹配 {unlinked}/{total} ({pct}%)",
+        "ok-sample": "tool_call {total} 行 (样本不足，跳过匹配率评估)",
+        "ok-partial": "tool_call api_request_id 未匹配 {unlinked}/{total} ({pct}%)",
         "warn": "tool_call api_request_id 未匹配 {unlinked}/{total} ({pct}%)",
         "hint": "怀疑 proxy SSE 的 tool_use 捕获遗漏或 hook 到达顺序反转 (ADR-001 P1-E)",
         "unavailable": "无法检查 tool_call api_request_id 匹配",
-        "noRecent": "最近 1 小时内无 tool_call (检查跳过)"
+        "no-recent": "最近 1 小时内无 tool_call (检查跳过)"
       },
-      "orphanProxyToolUses": {
+      "orphan-proxy-tool-uses": {
         "ok": "proxy_tool_uses orphan: 0",
-        "okWithCount": "proxy_tool_uses orphan {count} 行 (通常是用户取消的 tool_use)",
+        "ok-with-count": "proxy_tool_uses orphan {count} 行 (通常是用户取消的 tool_use)",
         "unavailable": "无法检查 proxy_tool_uses orphan"
       }
     },
@@ -50,69 +50,69 @@
       "bun": {
         "ok": "Bun {version}",
         "fail": "Bun {version} (要求 ≥ 1.0)",
-        "failNotInstalled": "未安装 Bun",
-        "hintUpgrade": "请运行 bun upgrade",
-        "hintInstall": "请从 https://bun.sh/install 安装"
+        "fail-not-installed": "未安装 Bun",
+        "hint-upgrade": "请运行 bun upgrade",
+        "hint-install": "请从 https://bun.sh/install 安装"
       },
-      "settingsJson": {
+      "settings-json": {
         "ok": "settings.json 正常",
-        "failMissing": "缺少 settings.json",
-        "failParse": "settings.json JSON 解析失败",
-        "hintInstall": "请运行: curl -fsSL https://raw.githubusercontent.com/gmoon92/claude-spyglass/main/scripts/install.sh | bash",
-        "hintFixJson": "请修正为正确的 JSON 格式"
+        "fail-missing": "缺少 settings.json",
+        "fail-parse": "settings.json JSON 解析失败",
+        "hint-install": "请运行: curl -fsSL https://raw.githubusercontent.com/gmoon92/claude-spyglass/main/scripts/install.sh | bash",
+        "hint-fix-json": "请修正为正确的 JSON 格式"
       },
-      "hooksRegistered": {
+      "hooks-registered": {
         "ok": "钩子已注册 (SPYGLASS_DIR: {dir})",
-        "warnNoDir": "钩子已配置，但未设置 SPYGLASS_DIR",
-        "failNotRegistered": "钩子未注册",
-        "failUnavailable": "无法检查钩子 (缺少 settings.json)",
-        "hintSetDir": "请设置 env.SPYGLASS_DIR (例如: ~/.spyglass-src 或 /path/to/claude-spyglass)",
-        "hintAddHooks": "请在 settings.json 中添加 spyglass-collect.sh 钩子",
-        "hintNeedSettings": "需要 settings.json"
+        "warn-no-dir": "钩子已配置，但未设置 SPYGLASS_DIR",
+        "fail-not-registered": "钩子未注册",
+        "fail-unavailable": "无法检查钩子 (缺少 settings.json)",
+        "hint-set-dir": "请设置 env.SPYGLASS_DIR (例如: ~/.spyglass-src 或 /path/to/claude-spyglass)",
+        "hint-add-hooks": "请在 settings.json 中添加 spyglass-collect.sh 钩子",
+        "hint-need-settings": "需要 settings.json"
       },
-      "hookExecutable": {
+      "hook-executable": {
         "ok": "钩子脚本执行权限 OK",
-        "warnNoDir": "未设置 SPYGLASS_DIR，无法检查钩子脚本",
-        "failMissing": "缺少钩子脚本: {path}",
-        "failNoPermission": "钩子脚本无执行权限: {path}",
-        "failUnavailable": "无法定位钩子脚本",
-        "failCheckFailed": "钩子脚本检查失败",
-        "hintSetDir": "请在 settings.json 中设置 env.SPYGLASS_DIR",
-        "hintCheckPath": "请检查 SPYGLASS_DIR 路径",
-        "hintChmod": "chmod +x {path}",
-        "hintNeedSettings": "需要 settings.json",
-        "hintCheckFormat": "请检查 settings.json 格式"
+        "warn-no-dir": "未设置 SPYGLASS_DIR，无法检查钩子脚本",
+        "fail-missing": "缺少钩子脚本: {path}",
+        "fail-no-permission": "钩子脚本无执行权限: {path}",
+        "fail-unavailable": "无法定位钩子脚本",
+        "fail-check-failed": "钩子脚本检查失败",
+        "hint-set-dir": "请在 settings.json 中设置 env.SPYGLASS_DIR",
+        "hint-check-path": "请检查 SPYGLASS_DIR 路径",
+        "hint-chmod": "chmod +x {path}",
+        "hint-need-settings": "需要 settings.json",
+        "hint-check-format": "请检查 settings.json 格式"
       }
     },
     "database": {
       "permissions": {
         "ok": "DB 权限: {perms}",
         "warn": "DB 权限: {perms} (推荐: 600)",
-        "warnNoDb": "数据库文件尚不存在",
+        "warn-no-db": "数据库文件尚不存在",
         "fail": "数据库文件权限检查失败",
-        "hintChmod": "chmod 600 {path}",
-        "hintAutoCreate": "启动服务器后将自动创建",
-        "hintCorrupted": "数据库文件可能已损坏"
+        "hint-chmod": "chmod 600 {path}",
+        "hint-auto-create": "启动服务器后将自动创建",
+        "hint-corrupted": "数据库文件可能已损坏"
       },
-      "schemaVersion": {
+      "schema-version": {
         "ok": "DB 架构 v{version}",
-        "warnUnknown": "DB 架构版本未知 (v0)",
-        "warnOld": "DB 架构 v{version} (推荐: v12+)",
-        "warnNoDb": "无法检查架构版本 (数据库文件缺失)",
-        "warnCheckFailed": "DB 架构版本检查失败",
-        "hintMigrate": "Track 1 迁移可能尚未完成，或请重置数据库",
-        "hintAutoCreate": "启动服务器后将自动创建",
-        "hintCorrupted": "数据库文件可能已损坏"
+        "warn-unknown": "DB 架构版本未知 (v0)",
+        "warn-old": "DB 架构 v{version} (推荐: v12+)",
+        "warn-no-db": "无法检查架构版本 (数据库文件缺失)",
+        "warn-check-failed": "DB 架构版本检查失败",
+        "hint-migrate": "Track 1 迁移可能尚未完成，或请重置数据库",
+        "hint-auto-create": "启动服务器后将自动创建",
+        "hint-corrupted": "数据库文件可能已损坏"
       },
-      "recentActivity": {
+      "recent-activity": {
         "ok": "最近 5 分钟内有采集活动",
         "warn": "最近采集: {minutes} 分钟前",
-        "warnNoData": "无已采集数据",
-        "warnUnavailable": "无法检查最近采集活动 (数据库缺失)",
-        "warnError": "检查采集活动时发生错误",
-        "hintRun": "请运行 Claude Code 并执行 bun run dev",
-        "hintAutoCreate": "请启动服务器并在 Claude Code 中执行命令",
-        "hintCorrupted": "数据库可能已损坏"
+        "warn-no-data": "无已采集数据",
+        "warn-unavailable": "无法检查最近采集活动 (数据库缺失)",
+        "warn-error": "检查采集活动时发生错误",
+        "hint-run": "请运行 Claude Code 并执行 bun run dev",
+        "hint-auto-create": "请启动服务器并在 Claude Code 中执行命令",
+        "hint-corrupted": "数据库可能已损坏"
       }
     },
     "server": {
@@ -124,14 +124,14 @@
     }
   },
   "fix": {
-    "dbPermissionOk": "DB 权限已修复: chmod 600 {path}",
-    "dbPermissionFail": "DB 权限修复失败: {path}",
-    "hookPermissionOk": "钩子脚本权限已修复: chmod +x {path}",
-    "hookPermissionFail": "钩子脚本权限修复失败",
-    "dupRemoved": "已删除重复 response {count} 行 (ADR-001 P1-A)",
-    "mismatchFixed": "已修复 mismatched turn_id {count} 行 (ADR-001 P1-A)",
-    "orphanMapped": "已 retrospective 映射 orphan turn_id {count} 行 (ADR-001 P1-B)",
-    "dataFixFail": "数据一致性修复失败: {error}"
+    "db-permission-ok": "DB 权限已修复: chmod 600 {path}",
+    "db-permission-fail": "DB 权限修复失败: {path}",
+    "hook-permission-ok": "钩子脚本权限已修复: chmod +x {path}",
+    "hook-permission-fail": "钩子脚本权限修复失败",
+    "dup-removed": "已删除重复 response {count} 行 (ADR-001 P1-A)",
+    "mismatch-fixed": "已修复 mismatched turn_id {count} 行 (ADR-001 P1-A)",
+    "orphan-mapped": "已 retrospective 映射 orphan turn_id {count} 行 (ADR-001 P1-B)",
+    "data-fix-fail": "数据一致性修复失败: {error}"
   },
   "cli": {
     "usage": "用法: bun run packages/server/src/cli.ts doctor [--fix]",
