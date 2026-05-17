@@ -1,189 +1,98 @@
+/**
+ * anomaly.test.ts — 클라이언트 anomaly 표시 헬퍼 테스트
+ *
+ * @description
+ *   anomaly-bloated-sys ADR-003 적용으로 클라이언트 계산 로직(`detectAnomalies`)이 폐기됨.
+ *   기존 spike/loop/slow 산식·임계 검증 케이스는 서버 단위 테스트로 이관:
+ *     - packages/server/src/metrics/calculators/__tests__/anomaly.test.ts (T-21)
+ *
+ *   본 파일은 표시 매핑 헬퍼(`getAnomalyFlagsForRow`)만 가볍게 검증한다.
+ *   서버가 채운 `bloated_sys` / `agent_spike` 필드를 Set<string> 으로 정확히 변환하는지 확인.
+ *
+ * @see packages/web/assets/js/anomaly.js
+ * @see .claude/docs/plans/anomaly-bloated-sys/adr.md ADR-003
+ */
+
 import { describe, it, expect } from 'bun:test';
-import { detectAnomalies } from '../anomaly.js';
+import { getAnomalyFlagsForRow } from '../anomaly.js';
 
-// ── 헬퍼 ──────────────────────────────────────────────────────────────────────
-
-function prompt(id: string, session_id: string, tokens_input: number) {
-  return { id, type: 'prompt', session_id, tokens_input, turn_id: null, tool_name: null, duration_ms: 0 };
-}
-
-function tool(id: string, turn_id: string, tool_name: string, duration_ms = 0) {
-  return { id, type: 'tool_call', session_id: 's1', tokens_input: 0, turn_id, tool_name, duration_ms };
-}
-
-// ── spike ─────────────────────────────────────────────────────────────────────
-
-describe('detectAnomalies — spike', () => {
-  it('세션 내 평균의 2배 초과 → spike 플래그', () => {
-    // arr = [100, 100, 401], avg = 601/3 ≈ 200.33, avg*2 ≈ 400.67
-    // 401 > 400.67 → spike
-    const reqs = [
-      prompt('r1', 's1', 100),
-      prompt('r2', 's1', 100),
-      prompt('r3', 's1', 401),
-    ];
-    const map = detectAnomalies(reqs);
-    expect(map.get('r3')?.has('spike')).toBe(true);
-    expect(map.has('r1')).toBe(false);
-    expect(map.has('r2')).toBe(false);
+describe('getAnomalyFlagsForRow — bloated_sys 매핑 (ADR-001/003)', () => {
+  it('stage="warn" → "bloated-sys-warn" 플래그', () => {
+    const row = {
+      id: 'r1',
+      bloated_sys: { stage: 'warn', pct: 0.18, system_tokens: 1000 },
+    };
+    const flags = getAnomalyFlagsForRow(row);
+    expect(flags.has('bloated-sys-warn')).toBe(true);
+    expect(flags.has('bloated-sys-critical')).toBe(false);
   });
 
-  it('정확히 2배(400) → spike 아님 (> 조건, spike 포함 평균)', () => {
-    // arr = [100, 100, 400], avg = 600/3 = 200, avg*2 = 400
-    // 400 > 400 → false (strict >)
-    const reqs = [
-      prompt('r1', 's1', 100),
-      prompt('r2', 's1', 100),
-      prompt('r3', 's1', 400),
-    ];
-    const map = detectAnomalies(reqs);
-    expect(map.get('r3')?.has('spike')).toBeFalsy();
+  it('stage="critical" → "bloated-sys-critical" 플래그', () => {
+    const row = {
+      id: 'r1',
+      bloated_sys: { stage: 'critical', pct: 0.82, system_tokens: 9000 },
+    };
+    const flags = getAnomalyFlagsForRow(row);
+    expect(flags.has('bloated-sys-critical')).toBe(true);
+    expect(flags.has('bloated-sys-warn')).toBe(false);
   });
 
-  it('세션 내 요청 1개 → 비교 기준 없어 spike 없음', () => {
-    const reqs = [prompt('r1', 's1', 9999)];
-    const map = detectAnomalies(reqs);
-    expect(map.has('r1')).toBe(false);
+  it('stage=null → 플래그 없음', () => {
+    const row = {
+      id: 'r1',
+      bloated_sys: { stage: null, pct: 0.05, system_tokens: 100 },
+    };
+    const flags = getAnomalyFlagsForRow(row);
+    expect(flags.size).toBe(0);
   });
 
-  it('세션이 다르면 독립적으로 평균 계산', () => {
-    // s1: [100, 100, 401], avg ≈ 200.33 → r3 spike
-    // s2: [500, 500, 1000], avg ≈ 666.7, 1000 < 1333 → no spike
-    const reqs = [
-      prompt('r1', 's1', 100),
-      prompt('r2', 's1', 100),
-      prompt('r3', 's1', 401),
-      prompt('r4', 's2', 500),
-      prompt('r5', 's2', 500),
-      prompt('r6', 's2', 1000),
-    ];
-    const map = detectAnomalies(reqs);
-    expect(map.get('r3')?.has('spike')).toBe(true);
-    expect(map.get('r6')?.has('spike')).toBeFalsy();
+  it('bloated_sys 필드 자체가 없으면 무시', () => {
+    const row = { id: 'r1' };
+    const flags = getAnomalyFlagsForRow(row);
+    expect(flags.size).toBe(0);
   });
 });
 
-// ── loop ──────────────────────────────────────────────────────────────────────
-
-describe('detectAnomalies — loop', () => {
-  it('동일 tool 연속 정확히 3회 → 3개 모두 loop 플래그', () => {
-    const reqs = [
-      tool('t1', 'turn1', 'Bash'),
-      tool('t2', 'turn1', 'Bash'),
-      tool('t3', 'turn1', 'Bash'),
-    ];
-    const map = detectAnomalies(reqs);
-    expect(map.get('t1')?.has('loop')).toBe(true);
-    expect(map.get('t2')?.has('loop')).toBe(true);
-    expect(map.get('t3')?.has('loop')).toBe(true);
+describe('getAnomalyFlagsForRow — agent_spike 매핑 (ADR-002/003)', () => {
+  it('stage="spike" → "agent-spike" 플래그', () => {
+    const row = {
+      id: 'r1',
+      agent_spike: { stage: 'spike', multiplier: 12, child_token_sum: 30000 },
+    };
+    const flags = getAnomalyFlagsForRow(row);
+    expect(flags.has('agent-spike')).toBe(true);
   });
 
-  it('동일 tool 연속 4회 → 4개 모두 loop 플래그', () => {
-    const reqs = [
-      tool('t1', 'turn1', 'Read'),
-      tool('t2', 'turn1', 'Read'),
-      tool('t3', 'turn1', 'Read'),
-      tool('t4', 'turn1', 'Read'),
-    ];
-    const map = detectAnomalies(reqs);
-    ['t1', 't2', 't3', 't4'].forEach(id =>
-      expect(map.get(id)?.has('loop')).toBe(true)
-    );
+  it('stage=null → 플래그 없음', () => {
+    const row = {
+      id: 'r1',
+      agent_spike: { stage: null, multiplier: 2 },
+    };
+    const flags = getAnomalyFlagsForRow(row);
+    expect(flags.size).toBe(0);
   });
 
-  it('동일 tool 연속 2회 → loop 없음', () => {
-    const reqs = [
-      tool('t1', 'turn1', 'Bash'),
-      tool('t2', 'turn1', 'Bash'),
-    ];
-    const map = detectAnomalies(reqs);
-    expect(map.get('t1')?.has('loop')).toBeFalsy();
-    expect(map.get('t2')?.has('loop')).toBeFalsy();
-  });
-
-  it('tool이 중간에 달라지면 streak 초기화', () => {
-    // AA B AA → 어느 쪽도 3회 미달
-    const reqs = [
-      tool('t1', 'turn1', 'Bash'),
-      tool('t2', 'turn1', 'Bash'),
-      tool('t3', 'turn1', 'Read'),
-      tool('t4', 'turn1', 'Bash'),
-      tool('t5', 'turn1', 'Bash'),
-    ];
-    const map = detectAnomalies(reqs);
-    ['t1', 't2', 't3', 't4', 't5'].forEach(id =>
-      expect(map.get(id)?.has('loop')).toBeFalsy()
-    );
-  });
-
-  it('turn_id가 다르면 독립적으로 streak 계산', () => {
-    // turn1: 2회, turn2: 3회
-    const reqs = [
-      tool('t1', 'turn1', 'Bash'),
-      tool('t2', 'turn1', 'Bash'),
-      tool('t3', 'turn2', 'Read'),
-      tool('t4', 'turn2', 'Read'),
-      tool('t5', 'turn2', 'Read'),
-    ];
-    const map = detectAnomalies(reqs);
-    expect(map.get('t1')?.has('loop')).toBeFalsy();
-    expect(map.get('t2')?.has('loop')).toBeFalsy();
-    expect(map.get('t3')?.has('loop')).toBe(true);
-    expect(map.get('t4')?.has('loop')).toBe(true);
-    expect(map.get('t5')?.has('loop')).toBe(true);
+  it('agent_spike 필드 자체가 없으면 무시', () => {
+    const row = { id: 'r1' };
+    const flags = getAnomalyFlagsForRow(row);
+    expect(flags.size).toBe(0);
   });
 });
 
-// ── slow ──────────────────────────────────────────────────────────────────────
-
-describe('detectAnomalies — slow', () => {
-  it('duration_ms가 P95 초과 → slow 플래그', () => {
-    const reqs = [tool('t1', 'turn1', 'Bash', 1001)];
-    const map = detectAnomalies(reqs, 1000);
-    expect(map.get('t1')?.has('slow')).toBe(true);
+describe('getAnomalyFlagsForRow — 복수 플래그 + 엣지 케이스', () => {
+  it('bloated-sys + agent-spike 동시 부여 가능', () => {
+    const row = {
+      id: 'r1',
+      bloated_sys: { stage: 'critical' },
+      agent_spike: { stage: 'spike', multiplier: 15 },
+    };
+    const flags = getAnomalyFlagsForRow(row);
+    expect(flags.has('bloated-sys-critical')).toBe(true);
+    expect(flags.has('agent-spike')).toBe(true);
   });
 
-  it('duration_ms가 P95 정확히 같음 → slow 아님 (> 조건)', () => {
-    const reqs = [tool('t1', 'turn1', 'Bash', 1000)];
-    const map = detectAnomalies(reqs, 1000);
-    expect(map.get('t1')?.has('slow')).toBeFalsy();
-  });
-
-  it('duration_ms가 P95 미만 → slow 없음', () => {
-    const reqs = [tool('t1', 'turn1', 'Bash', 999)];
-    const map = detectAnomalies(reqs, 1000);
-    expect(map.get('t1')?.has('slow')).toBeFalsy();
-  });
-
-  it('p95DurationMs가 null → slow 검사 안 함', () => {
-    const reqs = [tool('t1', 'turn1', 'Bash', 9999999)];
-    const map = detectAnomalies(reqs, null);
-    expect(map.get('t1')?.has('slow')).toBeFalsy();
-  });
-});
-
-// ── 엣지 케이스 ──────────────────────────────────────────────────────────────
-
-describe('detectAnomalies — 엣지 케이스', () => {
-  it('빈 배열 → 빈 Map 반환', () => {
-    const map = detectAnomalies([]);
-    expect(map.size).toBe(0);
-  });
-
-  it('단일 요청 → 이상 없음', () => {
-    const map = detectAnomalies([prompt('r1', 's1', 9999)], 1);
-    expect(map.size).toBe(0);
-  });
-
-  it('하나의 요청에 여러 플래그 동시 가능', () => {
-    // loop + slow 동시
-    const reqs = [
-      tool('t1', 'turn1', 'Bash', 2000),
-      tool('t2', 'turn1', 'Bash', 2000),
-      tool('t3', 'turn1', 'Bash', 2000),
-    ];
-    const map = detectAnomalies(reqs, 1000);
-    expect(map.get('t1')?.has('loop')).toBe(true);
-    expect(map.get('t1')?.has('slow')).toBe(true);
+  it('null/undefined row 안전 처리', () => {
+    expect(getAnomalyFlagsForRow(null).size).toBe(0);
+    expect(getAnomalyFlagsForRow(undefined).size).toBe(0);
   });
 });

@@ -24,7 +24,10 @@ import {
   makeRequestRow, typeBadge, FLAT_VIEW_COLS, togglePromptExpand, _promptCache,
 } from '../renderers.js';
 import { captureInteraction, restoreInteraction } from '../dom-preserve.js';
-import { detectAnomalies } from '../anomaly.js';
+// anomaly-bloated-sys ADR-003: 클라이언트 계산 폐기.
+//  서버가 응답 행에 `bloated_sys`/`agent_spike` 필드를 채워 보낸다.
+//  packages/web/assets/js/anomaly.js 는 표시 매핑 헬퍼만 유지.
+import { getAnomalyFlagsForRow } from '../anomaly.js';
 import { setSourceData, drawDonut, renderTypeLegend } from '../chart.js';
 import { renderCachePanel, computeSessionCacheStats } from '../cache-panel.js';
 import { DETAIL_FILTER_CHANGED } from '../events.js';
@@ -120,7 +123,14 @@ export function applyDetailFilter() {
   const flatFiltered = filter === 'all' ? requests
     : SUB_TYPES.includes(filter)         ? requests.filter(r => subTypeOf(r) === filter)
     : requests.filter(r => r.type === filter);
-  const flatAnomalyMap = detectAnomalies(requests);
+  // anomaly-bloated-sys ADR-003: 서버가 채운 필드를 row.id → Set 로 단순 매핑.
+  //  - 클라이언트 계산 0건.
+  //  - 향후 spike/loop/slow 가 응답 필드로 추가되면 getAnomalyFlagsForRow 가 자동 흡수.
+  const flatAnomalyMap = new Map();
+  for (const r of requests) {
+    const flags = getAnomalyFlagsForRow(r);
+    if (flags.size > 0) flatAnomalyMap.set(r.id, flags);
+  }
 
   const turnFiltered = filter === 'all'           ? turns
     : filter === 'tool_call'                       ? turns.filter(t => t.tool_calls.length > 0)
