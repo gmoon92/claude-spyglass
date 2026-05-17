@@ -13,8 +13,15 @@ import {
   RANGE_LABELS, TIMELINE_META_PREFIXES, TIMELINE_META_ARIA_PREFIXES,
 } from './constants.js';
 
-export function applyRangeLabels(range = getActiveRange()) {
-  const rangeText = RANGE_LABELS[range] || RANGE_LABELS.all;
+/**
+ * date-range-filter ADR-007: range 인자가 문자열(legacy) / ActiveRange 객체 모두 흡수.
+ * 호출자 인터페이스 불변 — main.js의 setActiveRange 이벤트 핸들러도 label key 전달 가능.
+ */
+export function applyRangeLabels(rangeArg = getActiveRange()) {
+  const key = typeof rangeArg === 'string'
+    ? rangeArg
+    : (rangeArg && rangeArg.type === 'custom' ? 'custom' : (rangeArg?.value ?? 'all'));
+  const rangeText = RANGE_LABELS[key] || RANGE_LABELS.all;
   const groups = document.querySelectorAll('#timelineMeta .timeline-meta-group');
   groups.forEach((group, i) => {
     const label = group.querySelector('.timeline-meta-group-label');

@@ -9,6 +9,7 @@ import {
   addScrollLockCount, updateScrollLockBanner, resetScrollLockCount,
 } from '../../infra.js';
 import { FEED_UPDATED } from '../../events.js';
+import { getDateRange } from '../../api.js';
 
 // 피드 테이블에 유지할 최대 행 수. 초과 시 가장 오래된 행부터 제거.
 const FEED_ROW_CAP = 200;
@@ -28,6 +29,15 @@ const ROW_FLASH_DURATION_MS = 600;
  * 모든 셀을 다시 만들어 교체. 셀 빌더는 SSoT(`makeRequestRow` 내부와 동일).
  */
 export function prependRequest(r) {
+  // date-range-filter ADR-009: SSE 클라이언트 필터링 단일 진입점.
+  // 활성 range 밖 레코드는 prepend/inplace 모두 skip — stale 데이터 노출 방지.
+  // dr가 {} (=전체)일 때는 통과. inplace 업데이트도 차단해야 하므로 함수 맨 앞에서 가드.
+  const dr = getDateRange();
+  if (dr.from != null && dr.to != null) {
+    const ts = r.timestamp;
+    if (ts != null && (ts < dr.from || ts > dr.to)) return;
+  }
+
   const body      = document.getElementById('requestsBody');
   const feedBody  = document.getElementById('feedBody');
   const isNearTop = !feedBody || feedBody.scrollTop < 80;

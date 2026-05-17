@@ -10,14 +10,19 @@ export const CHART_COLLAPSED_KEY = 'spyglass:chart-collapsed';
 export const PANEL_HIDDEN_KEY    = 'spyglass:left-panel-hidden';
 export const KBD_HELP_BACKDROP_ID = 'kbdHelpBackdrop';
 
-// ── chart-section-filter-sync ADR-001/003 ──────────────────────────────────
+// ── chart-section-filter-sync ADR-001/003 + date-range-filter ADR-007 ──────
 // timeline-meta 두 그룹 라벨의 SSoT (default 모드 전용).
 // date-filter ↔ timeline-meta 라벨 매핑은 RANGE_LABELS 한 곳에서만 관리하고,
-// 호출처는 applyRangeLabels(range) 한 함수만 호출한다. 인자 생략 시 현재 활성 범위를 사용.
+// 호출처는 applyRangeLabels(range) 한 함수만 호출한다.
+// SSoT 통합 (ADR-007): ui.main.date-filter.<key>.label을 직접 참조 — 이중 트리 폐기.
 export const RANGE_LABELS = {
-  get all()   { return window.I18n.t('ui.default-view.date-filter.all'); },
-  get today() { return window.I18n.t('ui.default-view.date-filter.today'); },
-  get week()  { return window.I18n.t('ui.default-view.date-filter.week'); },
+  get '1h'()       { return window.I18n.t('ui.main.date-filter.1h.label'); },
+  get today()      { return window.I18n.t('ui.main.date-filter.today.label'); },
+  get yesterday()  { return window.I18n.t('ui.main.date-filter.yesterday.label'); },
+  get '7d'()       { return window.I18n.t('ui.main.date-filter.7d.label'); },
+  get '30d'()      { return window.I18n.t('ui.main.date-filter.30d.label'); },
+  get custom()     { return window.I18n.t('ui.main.date-filter.custom.label'); },
+  get all()        { return window.I18n.t('ui.main.date-filter.all.label'); },
 };
 
 // 그룹 본질(고정 정체성) — DOM 순서 기반 매핑.
