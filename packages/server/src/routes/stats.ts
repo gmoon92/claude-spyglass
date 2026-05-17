@@ -21,6 +21,8 @@
 import {
   getCacheStats,
   getProjectStats,
+  getProxyHourlyStats,
+  getProxyHourlyStatsByModel,
   getRequestStats,
   getRequestStatsByType,
   getSessionStats,
@@ -79,6 +81,22 @@ export const statsRouter: RouteHandler = (_req, db, url, path, method) => {
     const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
     const toTs   = url.searchParams.get('to')   ? parseInt(url.searchParams.get('to')!,   10) : undefined;
     const stats = getCacheStats(db, fromTs, toTs);
+    return jsonResponse({ success: true, data: stats });
+  }
+
+  // GET /api/stats/proxy — proxy_requests 사전 집계 통계 (응답시간/TTFT/비용/에러율)
+  if (path === '/api/stats/proxy' && method === 'GET') {
+    const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
+    const toTs   = url.searchParams.get('to')   ? parseInt(url.searchParams.get('to')!,   10) : undefined;
+    const stats = getProxyHourlyStats(db, fromTs, toTs);
+    return jsonResponse({ success: true, data: stats });
+  }
+
+  // GET /api/stats/proxy/by-model — 모델별 proxy 통계 (cost / latency 비교 차트용)
+  if (path === '/api/stats/proxy/by-model' && method === 'GET') {
+    const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
+    const toTs   = url.searchParams.get('to')   ? parseInt(url.searchParams.get('to')!,   10) : undefined;
+    const stats = getProxyHourlyStatsByModel(db, fromTs, toTs);
     return jsonResponse({ success: true, data: stats });
   }
 

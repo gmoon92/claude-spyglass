@@ -46,6 +46,7 @@ import { categorizeToolName, ALL_TOOL_CATEGORIES, type ToolCategory } from '../t
 import { buildMeta, jsonResponse, parseTimeWindow } from './_shared';
 import { computeBurnRate } from './calculators/burn-rate';
 import { computeCacheTrend } from './calculators/cache-trend';
+import { computeProxyTrend } from './calculators/proxy-trend';
 import { computeAnomalyTimeSeries } from './calculators/anomaly';
 
 /**
@@ -277,6 +278,14 @@ export async function metricsRouter(req: Request, db: Database): Promise<Respons
   // -------------------------------------------------------------------------
   if (path === '/api/metrics/cache-trend') {
     const data = computeCacheTrend(db, window);
+    return jsonResponse({ success: true, data, meta });
+  }
+
+  // -------------------------------------------------------------------------
+  // 11) Proxy Trend (proxy-hourly) — 24h × 1h 응답시간 / 에러율 / 비용 시계열
+  // -------------------------------------------------------------------------
+  if (path === '/api/metrics/proxy-trend') {
+    const data = computeProxyTrend(db, window);
     return jsonResponse({ success: true, data, meta });
   }
 
