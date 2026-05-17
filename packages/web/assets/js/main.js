@@ -22,10 +22,11 @@ import {
 } from './session-detail.js';
 import {
   fetchDashboard, fetchRequests, fetchAllSessions, fetchSessionsByProject,
-  fetchCacheStats, setActiveRange, setIsSSEConnected,
+  fetchCacheStats, setIsSSEConnected,
 } from './api.js';
-import { fmtToken, escHtml } from './formatters.js';
-import { renderFilterBtn } from './design-system/primitives/filter-button.js';
+import { fmtToken } from './formatters.js';
+import { mountDateRangeDropdown } from './components/date-range-dropdown.js';
+import { initDateRangeStorage } from './util/date-range-storage.js';
 import { togglePromptExpand, resolveExpandTarget } from './renderers.js';
 import { renderLlmInput } from './llm-input-view.js';
 import { initColResize } from './col-resize.js';
@@ -412,37 +413,20 @@ function startSSE() {
 }
 
 /**
- * Wave 5 — date-filter 버튼 3종 동적 생성.
+ * date-range-filter (Wave 9) — #dateFilter 컨테이너에 드롭다운 컴포넌트 mount.
  *
  * 책임:
- *  - #dateFilter 컨테이너에 filter-btn 버튼 3개를 renderFilterBtn()으로 주입한다.
- *  - renderFilterBtn 기본 출력(ds-filter-btn)에 기존 클래스(filter-btn / active),
- *    data-range, title(선택) 을 .replace로 삽입하여 이중 클래스 패턴을 유지한다.
- *  - 이벤트 위임은 #dateFilter [data-range] 셀렉터와 .filter-btn.active 토글이
- *    그대로 처리한다 — 변경 없음.
+ *  - components/date-range-dropdown.js (combobox+listbox, ADR-005) 1개 mount.
+ *  - 클릭/키보드 이벤트는 컴포넌트 내부에서 직접 처리 — main.js 위임 핸들러 제거 (flood 방지).
+ *  - range 변경 통지는 'cs:active-range-changed' 단일 이벤트로 — fetchAll/라벨 갱신은
+ *    init() 내부의 단일 구독 리스너에서 처리 (ADR-003).
  *
  * 호출자: init() — DOMContentLoaded 시 1회.
  */
 function initDateFilter() {
   const container = document.getElementById('dateFilter');
   if (!container) return;
-
-  /** @type {{ value: string, label: string, active: boolean, title: string }[]} */
-  const FILTERS = [
-    { value: 'all',   get label() { return window.I18n.t('ui.main.date-filter.all.label'); },   active: true,  get title() { return window.I18n.t('ui.main.date-filter.all.title'); } },
-    { value: 'today', get label() { return window.I18n.t('ui.main.date-filter.today.label'); }, active: false, get title() { return window.I18n.t('ui.main.date-filter.today.title'); } },
-    { value: 'week',  get label() { return window.I18n.t('ui.main.date-filter.week.label'); },  active: false, get title() { return window.I18n.t('ui.main.date-filter.week.title'); } },
-  ];
-
-  container.innerHTML = FILTERS.map(({ value, label, active, title }) => {
-    // renderFilterBtn 출력: <button class="ds-filter-btn" type="button" aria-pressed="..." data-strength="soft" data-value="...">label</button>
-    // → class="ds-filter-btn filter-btn [active]" data-range="..." title="..." 로 확장.
-    const activeCls = active ? ' active' : '';
-    const titleAttr = ` title="${escHtml(title)}"`;
-    return renderFilterBtn({ label, active, strength: 'soft', value })
-      .replace('class="ds-filter-btn"', `class="ds-filter-btn filter-btn${activeCls}"`)
-      .replace(`data-value="${value}"`, `data-value="${value}" data-range="${value}"${titleAttr}`);
-  }).join('');
+  mountDateRangeDropdown(container);
 }
 
 function initEventDelegation() {
@@ -517,20 +501,13 @@ function initEventDelegation() {
   document.getElementById('retryBtn').addEventListener('click', manualRefresh);
   document.getElementById('scrollLockBanner').addEventListener('click', jumpToLatest);
 
-  document.getElementById('dateFilter').addEventListener('click', e => {
-    const btn = e.target.closest('[data-range]');
-    if (!btn) return;
-    // .filter-btn .active + ds-filter-btn aria-pressed 동기화 — ds-filter-btn CSS는 [aria-pressed="true"]로 활성 시각을 결정한다.
-    document.querySelectorAll('#dateFilter .filter-btn').forEach(b => {
-      b.classList.remove('active');
-      b.setAttribute('aria-pressed', 'false');
-    });
-    btn.classList.add('active');
-    btn.setAttribute('aria-pressed', 'true');
-    setActiveRange(btn.dataset.range);
-    // chart-section-filter-sync ADR-001 — timeline-meta 라벨은 SSoT 함수로 갱신.
-    // chartSubtitle은 ADR-002에 따라 timelineChart 본질 고정 — 여기서 갱신하지 않는다.
-    applyRangeLabels(btn.dataset.range);
+  // date-range-filter ADR-003 — 활성 range 변경 단일 구독.
+  // 드롭다운 컴포넌트가 setActiveRange()를 호출 → 'cs:active-range-changed' 이벤트 발행 →
+  // 여기서 차트 라벨 + 4 fetch를 일괄 트리거. 위임 핸들러 폐기로 flood 방지.
+  document.addEventListener('cs:active-range-changed', (e) => {
+    const ar = e.detail;
+    const labelKey = ar.type === 'custom' ? 'custom' : ar.value;
+    applyRangeLabels(labelKey);
     fetchDashboard(); fetchRequests(); fetchCacheStats(); fetchAllSessions();
   });
 
@@ -624,6 +601,10 @@ async function init() {
   // i18n 리소스 fetch 완료 보장 — main 모듈 내 모든 t() 호출이 키가 아닌 번역값을 받도록.
   // I18n.init()은 idempotent하며 동일 lang+ns에 대해 메모리 캐시 재사용.
   try { await window.I18n.init(); } catch { /* i18n 실패해도 UI는 계속 — 키가 노출되지만 동작 차단 안 함 */ }
+
+  // date-range-filter ADR-004 — localStorage hydrator를 SSE/fetch보다 먼저 실행.
+  // preset만 복원(custom 휘발). custom 잔존 시 console.warn으로 안내.
+  initDateRangeStorage((msg) => { if (msg) console.warn('[date-range]', msg); });
 
   // ADR-003 left-rail-meta-docs: 앱 모드 rail 초기화 + sessionStorage 복원 적용.
   // applyAppMode를 콜백으로 주입 — rail 모듈은 모드 값만 전달, view 조작은 main 책임.

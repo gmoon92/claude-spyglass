@@ -7,6 +7,7 @@
 @import "./primitives/close-button.css";
 @import "./primitives/filter-button.css";
 @import "./primitives/tab.css";
+@import "./primitives/dropdown.css";
 @import "./stats/bar.css";
 @import "./badges/badge.css";
 @import "./chips/chip.css";
@@ -18,8 +19,10 @@
  *   - markers/sort-head   ← meta-docs-view, system-prompt-library, tool-stats의 sortIndicator
  *   - markers/dot         ← sess-row-status, obs-card-trend-icon, anomaly-badge-dot, legend-dot, meta-docs-toast-icon
  *   - primitives/close-button ← syslib-detail-close, llm-input-refs-popover-close, feed-search-clear, kbd-help-close
- *   - primitives/filter-button ← type-filter-btn, meta-doc-filter-btn, filter-btn(date)
+ *   - primitives/filter-button ← type-filter-btn, meta-doc-filter-btn, filter-btn(date)  (date는 dropdown으로 이전 — date-range-filter)
  *   - primitives/tab          ← view-tab, meta-tab
+ *   - primitives/dropdown (Wave 9 — date-range-filter) ← header.css .date-filter/.filter-btn(date),
+ *       향후 type-filter-btn/meta-doc-filter-btn 다중선택 모드 확장 시 흡수 후보
  *   - stats/bar               ← cache-bar-fill, cache-ratio-*, obs-cat-bar-fill, ts-mx-bar-fill
  *   - badges/badge            ← mini-badge .badge-*, type-badge .type-*
  *   - chips/chip              ← sub-type-chip, model-chip, tool-chip, target-role-badge, agent-chip

@@ -80,7 +80,18 @@
       "note": "설치하면 서버가 잠시 중단됩니다.",
       "body": "업데이트할까요?",
       "cancel": "취소",
-      "confirm": "업데이트"
+      "confirm": "업데이트",
+      "migration-section-label": "스키마 마이그레이션",
+      "migration-files-toggle": "적용 파일 보기",
+      "migration-files-collapse": "접기",
+      "local-changes-cmd-label": "권장 명령",
+      "local-changes-retry": "정리 후 다시 시도",
+      "copy": "복사",
+      "copied": "복사됨"
+    },
+    "dashboard-warning": {
+      "shallow-cmd-label": "권장 명령",
+      "shallow-dismiss-aria": "경고 닫기"
     },
     "syslib-body-aria": "시스템 프롬프트 라이브러리"
   },
@@ -95,6 +106,9 @@
       "hit": "히트",
       "creation": "등록비용",
       "hit-rate": "히트율"
+    },
+    "footer": {
+      "split": "system {sys}% / user {user}%"
     }
   },
   "left-panel": {
@@ -267,20 +281,63 @@
     "indicator": "누적 {value} / {limit} tokens ({percent}%)",
     "footer": "Turn {turn} · 최대 {max} tokens · 모델 한도: {limit}{model}"
   },
+  "anomaly": {
+    "bloated-sys": {
+      "warn": {
+        "label": "sys {pct}%",
+        "tooltip": "시스템 컨텍스트 비대 ({pct}%)",
+        "modal": "시스템 비대 · /mcp list 검토"
+      },
+      "critical": {
+        "label": "bloated {pct}%",
+        "tooltip": "system이 user를 압도 ({pct}%)",
+        "modal": "시스템 압도 · compact 무효 · CLAUDE.md 축소"
+      }
+    },
+    "agent-spike": {
+      "label": "↑×{n}",
+      "tooltip": "Agent가 부모 대비 {n}배",
+      "modal": "Agent 토큰 폭증 · ↑×{n} · 세션 분리 권장",
+      "summary": "↑{n}× larger than parent row"
+    }
+  },
   "main": {
     "date-filter": {
-      "all": {
-        "label": "전체",
-        "title": "수집된 전체 기간 데이터 표시"
+      "1h": {
+        "label": "최근 1시간",
+        "title": "지금부터 지난 1시간 데이터"
       },
       "today": {
         "label": "오늘",
         "title": "오늘 00:00(로컬 시간) 이후 데이터만 표시"
       },
-      "week": {
-        "label": "이번주",
-        "title": "이번 주 월요일 00:00(로컬 시간) 이후 데이터만 표시"
-      }
+      "yesterday": {
+        "label": "어제",
+        "title": "어제 00:00 ~ 23:59 (로컬 시간) 데이터"
+      },
+      "7d": {
+        "label": "최근 7일",
+        "title": "지금부터 지난 7일 데이터 (rolling)"
+      },
+      "30d": {
+        "label": "최근 30일",
+        "title": "지금부터 지난 30일 데이터"
+      },
+      "custom": {
+        "label": "사용자 지정 구간…",
+        "title": "임의의 시작일/종료일을 직접 지정",
+        "apply": "적용",
+        "from": "시작일",
+        "to": "종료일",
+        "warn-long-range": "90일 초과 조회는 서버에 부하를 줄 수 있습니다",
+        "label-with-range": "사용자 지정 ({from} ~ {to})",
+        "ephemeral-toast": "사용자 지정 범위는 새로고침 시 초기화됩니다"
+      },
+      "all": {
+        "label": "전체",
+        "title": "수집된 전체 기간 데이터 표시"
+      },
+      "trigger-aria": "날짜 범위 선택"
     },
     "system-filter": {
       "title": "System 라이브러리 탭으로 이동"
@@ -316,14 +373,29 @@
     "restart-complete": "재시작 완료. 페이지를 새로고침합니다…",
     "restart-timeout": "서버가 돌아오지 않습니다. 페이지를 수동으로 새로고침해 주세요.",
     "network-error": "네트워크 오류: {message}",
-    "update-request-failed": "업데이트 요청 실패"
+    "update-request-failed": "업데이트 요청 실패",
+    "migration": {
+      "applied": "마이그레이션 {n}건 적용 (v{from} → v{to})",
+      "applied-single": "마이그레이션 1건 적용 (v{from} → v{to})",
+      "none": "스키마 변경 없음",
+      "none-detail": "DB 버전 v{version} · 이번 업데이트엔 마이그레이션이 없습니다.",
+      "failed": "마이그레이션 실패",
+      "failed-file": "실패한 파일: {file}",
+      "failed-guide": "서버 로그를 확인하고, 필요하면 운영 가이드의 복구 절차를 따르세요.",
+      "duration": "{ms}ms 소요"
+    },
+    "local-changes": {
+      "title": "git 변경사항 감지",
+      "body": "working tree에 미커밋 변경이 있어 자동 업데이트를 진행할 수 없습니다. 아래 명령으로 변경을 정리한 뒤 다시 시도하세요.",
+      "files-label": "변경 파일",
+      "files-more": "외 {n}건"
+    },
+    "shallow": {
+      "warning": "shallow clone 환경 — 자동 업데이트 실패 위험",
+      "body": "이 설치본은 git shallow clone입니다. 자동 업데이트가 실패할 수 있으므로 아래 명령으로 full clone으로 승격하길 권장합니다."
+    }
   },
   "default-view": {
-    "date-filter": {
-      "all": "전체 기간",
-      "today": "오늘",
-      "week": "이번 주"
-    },
     "timeline-meta": {
       "prefix-quality": "품질",
       "prefix-volume": "누적",

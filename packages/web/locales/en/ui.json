@@ -80,7 +80,18 @@
       "note": "The server will briefly restart after installation.",
       "body": "Would you like to update?",
       "cancel": "Cancel",
-      "confirm": "Update"
+      "confirm": "Update",
+      "migration-section-label": "Schema migrations",
+      "migration-files-toggle": "Show applied files",
+      "migration-files-collapse": "Hide",
+      "local-changes-cmd-label": "Suggested commands",
+      "local-changes-retry": "Retry after cleanup",
+      "copy": "Copy",
+      "copied": "Copied"
+    },
+    "dashboard-warning": {
+      "shallow-cmd-label": "Suggested command",
+      "shallow-dismiss-aria": "Dismiss warning"
     },
     "syslib-body-aria": "System prompt library"
   },
@@ -95,6 +106,9 @@
       "hit": "Hits",
       "creation": "Creation",
       "hit-rate": "Hit rate"
+    },
+    "footer": {
+      "split": "system {sys}% / user {user}%"
     }
   },
   "left-panel": {
@@ -267,20 +281,63 @@
     "indicator": "Accumulated {value} / {limit} tokens ({percent}%)",
     "footer": "Turn {turn} · Max {max} tokens · Model limit: {limit}{model}"
   },
+  "anomaly": {
+    "bloated-sys": {
+      "warn": {
+        "label": "sys {pct}%",
+        "tooltip": "system context bloated ({pct}%)",
+        "modal": "system bloated · /mcp list"
+      },
+      "critical": {
+        "label": "bloated {pct}%",
+        "tooltip": "system dominates user ({pct}%)",
+        "modal": "system dominates · compact won't help"
+      }
+    },
+    "agent-spike": {
+      "label": "↑×{n}",
+      "tooltip": "Agent is {n}× parent row",
+      "modal": "Agent token spike · ↑×{n} · split session",
+      "summary": "↑{n}× larger than parent row"
+    }
+  },
   "main": {
     "date-filter": {
-      "all": {
-        "label": "All",
-        "title": "Show data for the entire collected period"
+      "1h": {
+        "label": "Last 1 hour",
+        "title": "Data from the past 1 hour"
       },
       "today": {
         "label": "Today",
         "title": "Show only data since today 00:00 (local time)"
       },
-      "week": {
-        "label": "This week",
-        "title": "Show only data since Monday 00:00 (local time) of this week"
-      }
+      "yesterday": {
+        "label": "Yesterday",
+        "title": "Data between yesterday 00:00 and 23:59 (local time)"
+      },
+      "7d": {
+        "label": "Last 7 days",
+        "title": "Rolling 7-day window"
+      },
+      "30d": {
+        "label": "Last 30 days",
+        "title": "Rolling 30-day window"
+      },
+      "custom": {
+        "label": "Custom range…",
+        "title": "Pick arbitrary start/end dates",
+        "apply": "Apply",
+        "from": "From",
+        "to": "To",
+        "warn-long-range": "Ranges over 90 days may strain the server",
+        "label-with-range": "Custom ({from} – {to})",
+        "ephemeral-toast": "Custom ranges reset on page reload"
+      },
+      "all": {
+        "label": "All",
+        "title": "Show data for the entire collected period"
+      },
+      "trigger-aria": "Select date range"
     },
     "system-filter": {
       "title": "Go to System library tab"
@@ -316,14 +373,29 @@
     "restart-complete": "Restart complete. Reloading page…",
     "restart-timeout": "Server did not come back. Please reload the page manually.",
     "network-error": "Network error: {message}",
-    "update-request-failed": "Update request failed"
+    "update-request-failed": "Update request failed",
+    "migration": {
+      "applied": "{n} migrations applied (v{from} → v{to})",
+      "applied-single": "1 migration applied (v{from} → v{to})",
+      "none": "No schema changes",
+      "none-detail": "DB v{version} · no migrations in this update.",
+      "failed": "Migration failed",
+      "failed-file": "Failed file: {file}",
+      "failed-guide": "Check server logs and follow the recovery steps in the ops guide if needed.",
+      "duration": "{ms}ms"
+    },
+    "local-changes": {
+      "title": "Git changes detected",
+      "body": "Your working tree has uncommitted changes, so auto-update cannot proceed. Clean them up with the commands below, then retry.",
+      "files-label": "Changed files",
+      "files-more": "+{n} more"
+    },
+    "shallow": {
+      "warning": "Shallow clone — auto-update may fail",
+      "body": "This install is a git shallow clone. Auto-update may fail; promote to a full clone with the command below."
+    }
   },
   "default-view": {
-    "date-filter": {
-      "all": "All time",
-      "today": "Today",
-      "week": "This week"
-    },
     "timeline-meta": {
       "prefix-quality": "Quality",
       "prefix-volume": "Volume",

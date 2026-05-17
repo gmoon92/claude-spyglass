@@ -80,7 +80,18 @@
       "note": "安装后服务器将短暂重启。",
       "body": "是否更新？",
       "cancel": "取消",
-      "confirm": "更新"
+      "confirm": "更新",
+      "migration-section-label": "数据库迁移",
+      "migration-files-toggle": "查看应用文件",
+      "migration-files-collapse": "收起",
+      "local-changes-cmd-label": "推荐命令",
+      "local-changes-retry": "整理后重试",
+      "copy": "复制",
+      "copied": "已复制"
+    },
+    "dashboard-warning": {
+      "shallow-cmd-label": "推荐命令",
+      "shallow-dismiss-aria": "关闭警告"
     },
     "syslib-body-aria": "系统提示词库"
   },
@@ -95,6 +106,9 @@
       "hit": "命中",
       "creation": "写入",
       "hit-rate": "命中率"
+    },
+    "footer": {
+      "split": "system {sys}% / user {user}%"
     }
   },
   "left-panel": {
@@ -267,20 +281,63 @@
     "indicator": "累计 {value} / {limit} tokens（{percent}%）",
     "footer": "Turn {turn} · 最大 {max} tokens · 模型上限: {limit}{model}"
   },
+  "anomaly": {
+    "bloated-sys": {
+      "warn": {
+        "label": "sys {pct}%",
+        "tooltip": "system 上下文膨胀 ({pct}%)",
+        "modal": "system 膨胀 · /mcp list 检查"
+      },
+      "critical": {
+        "label": "bloated {pct}%",
+        "tooltip": "system 压制 user ({pct}%)",
+        "modal": "system 压制 · compact 无效"
+      }
+    },
+    "agent-spike": {
+      "label": "↑×{n}",
+      "tooltip": "Agent 是父级 {n} 倍",
+      "modal": "Agent token 激增 · ↑×{n} · 建议拆分会话",
+      "summary": "↑{n}× larger than parent row"
+    }
+  },
   "main": {
     "date-filter": {
-      "all": {
-        "label": "全部",
-        "title": "显示全部收集时段的数据"
+      "1h": {
+        "label": "最近1小时",
+        "title": "过去 1 小时的数据"
       },
       "today": {
         "label": "今天",
         "title": "仅显示今天 00:00（本地时间）之后的数据"
       },
-      "week": {
-        "label": "本周",
-        "title": "仅显示本周一 00:00（本地时间）之后的数据"
-      }
+      "yesterday": {
+        "label": "昨天",
+        "title": "昨天 00:00 ~ 23:59（本地时间）的数据"
+      },
+      "7d": {
+        "label": "最近7天",
+        "title": "过去 7 天的滚动窗口"
+      },
+      "30d": {
+        "label": "最近30天",
+        "title": "过去 30 天的滚动窗口"
+      },
+      "custom": {
+        "label": "自定义范围…",
+        "title": "选择任意起止日期",
+        "apply": "应用",
+        "from": "起始日",
+        "to": "结束日",
+        "warn-long-range": "超过 90 天的查询可能造成服务器负载",
+        "label-with-range": "自定义 ({from} ~ {to})",
+        "ephemeral-toast": "自定义范围会在刷新时重置"
+      },
+      "all": {
+        "label": "全部",
+        "title": "显示全部收集时段的数据"
+      },
+      "trigger-aria": "选择日期范围"
     },
     "system-filter": {
       "title": "前往 System 库标签页"
@@ -316,14 +373,29 @@
     "restart-complete": "重启完成，正在重新加载页面…",
     "restart-timeout": "服务器未恢复，请手动刷新页面。",
     "network-error": "网络错误：{message}",
-    "update-request-failed": "更新请求失败"
+    "update-request-failed": "更新请求失败",
+    "migration": {
+      "applied": "已应用 {n} 个迁移 (v{from} → v{to})",
+      "applied-single": "已应用 1 个迁移 (v{from} → v{to})",
+      "none": "无 schema 变更",
+      "none-detail": "DB 版本 v{version} · 本次更新无迁移。",
+      "failed": "迁移失败",
+      "failed-file": "失败文件：{file}",
+      "failed-guide": "请查看服务器日志，必要时按运维指南执行恢复步骤。",
+      "duration": "{ms}ms"
+    },
+    "local-changes": {
+      "title": "检测到 git 变更",
+      "body": "工作目录存在未提交的变更，无法继续自动更新。请使用下方命令整理变更后重试。",
+      "files-label": "变更文件",
+      "files-more": "另有 {n} 个"
+    },
+    "shallow": {
+      "warning": "shallow clone 环境 — 自动更新可能失败",
+      "body": "当前安装是 git shallow clone。自动更新可能失败，建议使用下方命令升级为 full clone。"
+    }
   },
   "default-view": {
-    "date-filter": {
-      "all": "全时段",
-      "today": "今天",
-      "week": "本周"
-    },
     "timeline-meta": {
       "prefix-quality": "质量",
       "prefix-volume": "累计",

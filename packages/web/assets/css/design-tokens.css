@@ -42,6 +42,17 @@
   --purple:      var(--text-3);   /* violet 제거 — neutral fallback */
   --pink:        #f472b6;   /* WebSearch/WebFetch 전용 */
 
+  /* ── anomaly-bloated-sys (ADR-005) — semantic 별칭 + soft 톤
+   *  - `--color-warn/danger/accent`는 ADR 명세에서 사용되는 의미 표면 토큰.
+   *  - `*-soft`는 inset box-shadow / fill 영역에서 isolated tint를 표현할 때 사용.
+   *  - 색맹 시각 보존을 위해 비-색상 신호(글리프·border·점멸)와 함께 적용한다. */
+  --color-warn:        var(--warn);
+  --color-danger:      var(--error);
+  --color-accent:      var(--accent);
+  --color-warn-soft:   rgba(240,183,47,0.18);   /* warn tint (10% 이하 fill 안전) */
+  --color-danger-soft: rgba(244,113,116,0.22);  /* danger tint (inset 1px shadow용) */
+  --color-accent-soft: rgba(255,122,69,0.22);   /* accent tint (sparkline fill 영역) */
+
   /* ── L4. Typography 이중 계층 (ADR-WDO-006) ── */
   --font-ui:   'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', sans-serif;
   --font-data: 'SF Mono', 'SFMono-Regular', ui-monospace, 'Menlo', 'JetBrains Mono', 'Consolas', monospace;
@@ -317,6 +328,13 @@
   --card-bg:        var(--surface-alt);
   --card-border:    var(--border);
   --card-shadow:    none;
+
+  /* ── Floating elevation (date-range-filter ADR-006) ──
+     popover / dropdown 등 부유 컨테이너 공용. 흡수: llm-input-refs-popover,
+     turn-system-reminder-popover, design-system/primitives/dropdown.
+     단일 토큰만 유지 (스케일 확장은 사용처 늘 때 검토). */
+  --shadow-floating: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --z-floating:      1000;
 
   /* ── ADR-WDO-012: Orange-Centric Vivid Tokens ── */
   /* Brand Core */

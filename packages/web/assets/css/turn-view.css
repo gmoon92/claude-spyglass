@@ -370,7 +370,7 @@
   background: var(--floating);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-floating);
   font-family: var(--font-ui);
   color: var(--text-2);
   animation: turn-system-reminder-popover-in var(--dur-base) var(--ease);

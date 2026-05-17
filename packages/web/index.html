@@ -395,7 +395,11 @@
             <div class="detail-agg-badges detail-agg-badges--hidden" id="detailBadges"></div>
           </div>
           <div class="chart-actions">
-            <!-- 언어 스위처 — 각 언어의 native name으로 표시 (영어 모르는 사용자도 자국어 인지 가능). -->
+            <!-- date-range-filter: 사용 빈도가 높은 필터를 시선 우선순위(좌측 우선)에 배치.
+                 ID `dateFilter` 보존 → main.js mount 호환. -->
+            <div class="date-filter" id="dateFilter">
+            </div>
+            <!-- 언어 스위처 — 자주 바꾸지 않는 설정이라 우측으로 이동. native name 표시. -->
             <div class="lang-switcher-wrap">
               <select id="lang-switcher"
                       aria-label="Select language"
@@ -406,11 +410,6 @@
                 <option value="ja">日本語</option>
                 <option value="zh">中文</option>
               </select>
-            </div>
-            <!-- header-removal: 날짜 필터를 데이터 컨텍스트(차트) 옆으로 이동.
-                 ID `dateFilter` 보존 → main.js 이벤트 핸들러 수정 불필요. -->
-            <!-- Wave 5: date-filter 버튼은 main.js initDateFilter()로 동적 생성 -->
-            <div class="date-filter" id="dateFilter">
             </div>
             <button class="btn-toggle" id="btnToggleChart" title="Collapse / expand" aria-label="Collapse"
                     data-i18n-attr-title="ui.html.chart-section.toggle-title"
@@ -868,7 +867,11 @@
             data-i18n-attr-aria-label="ui.html.footer.help-aria">?</button>
   </footer>
 
-  <!-- 업데이트 확인 모달 -->
+  <!-- 업데이트 확인 모달
+       auto-update-migration-hardening:
+       - 마이그레이션 결과 3분기(성공/변경없음/실패)는 #updateModalMigration 영역에서 인플레이스 렌더 (T-08).
+       - local-changes(409) 차단 시 #updateModalLocalChanges 패널이 actions를 대신 표시 (T-09).
+       위 영역들은 기본 hidden — version-check.js가 응답 분기에 따라 토글한다. -->
   <div class="update-modal-overlay" id="updateModal" role="dialog" aria-modal="true" aria-labelledby="updateModalTitle">
     <div class="update-modal">
       <button class="update-modal-close" id="updateModalClose" type="button" aria-label="Close" data-i18n-attr-aria-label="ui.html.update-modal.close-aria">
@@ -890,6 +893,57 @@
           </div>
         </div>
         <p class="update-modal-note" data-i18n="ui.html.update-modal.note">The server will briefly restart after installation.</p>
+
+        <!-- 마이그레이션 결과 영역 (T-08) — data-state로 톤 분기 (success/empty/failed).
+             기본 hidden, version-check.js가 응답 후 활성화. -->
+        <section class="update-modal-migration" id="updateModalMigration" hidden data-state="empty" aria-live="polite">
+          <header class="update-modal-migration-head">
+            <span class="update-modal-migration-glyph" aria-hidden="true"></span>
+            <span class="update-modal-migration-label" id="updateModalMigrationLabel"></span>
+            <span class="update-modal-migration-duration" id="updateModalMigrationDuration" hidden></span>
+          </header>
+          <p class="update-modal-migration-detail" id="updateModalMigrationDetail" hidden></p>
+          <details class="update-modal-migration-files" id="updateModalMigrationFiles" hidden>
+            <summary class="update-modal-migration-files-summary">
+              <span class="update-modal-migration-files-toggle" data-i18n="ui.html.update-modal.migration-files-toggle">Show applied files</span>
+            </summary>
+            <ul class="update-modal-migration-files-list" id="updateModalMigrationFilesList"></ul>
+          </details>
+        </section>
+
+        <!-- local-changes (409) 안내 영역 (T-09) — body 자체를 대체. 기본 hidden. -->
+        <section class="update-modal-local-changes" id="updateModalLocalChanges" hidden role="alert">
+          <header class="update-modal-local-changes-head">
+            <span class="update-modal-local-changes-glyph" aria-hidden="true"></span>
+            <span class="update-modal-local-changes-title" data-i18n="ui.version-check.local-changes.title">Git changes detected</span>
+          </header>
+          <p class="update-modal-local-changes-body" data-i18n="ui.version-check.local-changes.body">Your working tree has uncommitted changes…</p>
+          <div class="update-modal-local-changes-files" id="updateModalLocalChangesFiles" hidden>
+            <span class="update-modal-cmd-label" data-i18n="ui.version-check.local-changes.files-label">Changed files</span>
+            <ul class="update-modal-local-changes-filelist" id="updateModalLocalChangesFilesList"></ul>
+          </div>
+          <div class="update-modal-cmd-block">
+            <span class="update-modal-cmd-label" data-i18n="ui.html.update-modal.local-changes-cmd-label">Suggested commands</span>
+            <div class="update-modal-cmd-row">
+              <code class="update-modal-cmd">git status</code>
+              <button class="update-modal-cmd-copy" type="button" data-copy="git status" data-i18n-attr-aria-label="ui.html.update-modal.copy" aria-label="Copy">
+                <svg viewBox="0 0 12 12" width="12" height="12" fill="none" aria-hidden="true">
+                  <rect x="3.5" y="3.5" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.2"/>
+                  <path d="M2 8V2.5C2 2 2 2 2.5 2H8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </div>
+            <div class="update-modal-cmd-row">
+              <code class="update-modal-cmd">git stash push -m 'before-spyglass-update'</code>
+              <button class="update-modal-cmd-copy" type="button" data-copy="git stash push -m 'before-spyglass-update'" data-i18n-attr-aria-label="ui.html.update-modal.copy" aria-label="Copy">
+                <svg viewBox="0 0 12 12" width="12" height="12" fill="none" aria-hidden="true">
+                  <rect x="3.5" y="3.5" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.2"/>
+                  <path d="M2 8V2.5C2 2 2 2 2.5 2H8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </section>
       </div>
       <div class="update-modal-actions" id="updateModalActions">
         <button class="update-modal-btn update-modal-btn-secondary" id="updateModalCancel" type="button" data-i18n="ui.html.update-modal.cancel">Cancel</button>
@@ -898,6 +952,33 @@
       <div class="update-modal-error" id="updateModalError" hidden></div>
       <div class="update-modal-success" id="updateModalSuccess" hidden></div>
     </div>
+  </div>
+
+  <!-- Dashboard shallow-clone warning (T-10) — /api/version isShallowRepository=true 시 노출.
+       footer 위에 띄우는 경량 배너. dismissible (localStorage 키로 다시 보지 않기 가능). -->
+  <div class="dashboard-warning dashboard-warning--shallow" id="dashboardShallowWarning" hidden role="status" aria-live="polite">
+    <span class="dashboard-warning-glyph" aria-hidden="true">!</span>
+    <div class="dashboard-warning-body">
+      <span class="dashboard-warning-title" data-i18n="ui.version-check.shallow.warning">Shallow clone — auto-update may fail</span>
+      <p class="dashboard-warning-text" data-i18n="ui.version-check.shallow.body">This install is a git shallow clone…</p>
+      <div class="dashboard-warning-cmd-row">
+        <span class="dashboard-warning-cmd-label" data-i18n="ui.html.dashboard-warning.shallow-cmd-label">Suggested command</span>
+        <code class="dashboard-warning-cmd">git fetch --unshallow</code>
+        <button class="dashboard-warning-cmd-copy" type="button" data-copy="git fetch --unshallow" data-i18n-attr-aria-label="ui.html.update-modal.copy" aria-label="Copy">
+          <svg viewBox="0 0 12 12" width="12" height="12" fill="none" aria-hidden="true">
+            <rect x="3.5" y="3.5" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M2 8V2.5C2 2 2 2 2.5 2H8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <button class="dashboard-warning-dismiss" id="dashboardShallowWarningDismiss" type="button"
+            aria-label="Dismiss"
+            data-i18n-attr-aria-label="ui.html.dashboard-warning.shallow-dismiss-aria">
+      <svg viewBox="0 0 12 12" width="10" height="10" fill="none" aria-hidden="true">
+        <path d="M3 3L9 9M9 3L3 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
   </div>
 
   <script src="/assets/js/i18n.js"></script>

@@ -25,3 +25,31 @@ export function getCollator() {
   if (typeof Intl === 'undefined' || !Intl.Collator) return null;
   return new Intl.Collator(getLocale(), { sensitivity: 'base', numeric: true });
 }
+
+/**
+ * Custom Range 라벨 포맷 — Intl.DateTimeFormat(locale)로 from/to 단축 표기 후
+ * i18n 키 `ui.main.date-filter.custom.label-with-range`에 {from}/{to} 치환.
+ *
+ * date-range-filter ADR-007: 라벨 자체는 키에 있고, locale별 날짜 표기만 Intl이 책임.
+ * ko: 5/1, en: 5/1, ja: 5/1, zh: 5/1 (numeric)
+ *
+ * @param {number|Date} from
+ * @param {number|Date} to
+ * @returns {string}
+ */
+export function formatDateRangeLabel(from, to) {
+  const fromMs = from instanceof Date ? from.getTime() : Number(from);
+  const toMs   = to   instanceof Date ? to.getTime()   : Number(to);
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) {
+    // 폴백 — i18n 키 없으면 'Custom'
+    return (typeof window !== 'undefined' && window.I18n?.t?.('ui.main.date-filter.custom.label')) || 'Custom';
+  }
+  const fmt = (typeof Intl !== 'undefined' && Intl.DateTimeFormat)
+    ? new Intl.DateTimeFormat(getLocale(), { month: 'numeric', day: 'numeric' })
+    : null;
+  const fromText = fmt ? fmt.format(new Date(fromMs)) : new Date(fromMs).toLocaleDateString();
+  const toText   = fmt ? fmt.format(new Date(toMs))   : new Date(toMs).toLocaleDateString();
+  const tmpl = (typeof window !== 'undefined' && window.I18n?.t?.('ui.main.date-filter.custom.label-with-range'))
+    || 'Custom ({from} – {to})';
+  return tmpl.replace('{from}', fromText).replace('{to}', toText);
+}

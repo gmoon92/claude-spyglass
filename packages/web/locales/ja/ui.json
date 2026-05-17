@@ -80,7 +80,18 @@
       "note": "インストール後、サーバーが一時的に再起動されます。",
       "body": "アップデートしますか？",
       "cancel": "キャンセル",
-      "confirm": "アップデート"
+      "confirm": "アップデート",
+      "migration-section-label": "スキーママイグレーション",
+      "migration-files-toggle": "適用ファイルを表示",
+      "migration-files-collapse": "閉じる",
+      "local-changes-cmd-label": "推奨コマンド",
+      "local-changes-retry": "整理後に再試行",
+      "copy": "コピー",
+      "copied": "コピー済み"
+    },
+    "dashboard-warning": {
+      "shallow-cmd-label": "推奨コマンド",
+      "shallow-dismiss-aria": "警告を閉じる"
     },
     "syslib-body-aria": "システムプロンプトライブラリ"
   },
@@ -95,6 +106,9 @@
       "hit": "ヒット",
       "creation": "登録",
       "hit-rate": "ヒット率"
+    },
+    "footer": {
+      "split": "system {sys}% / user {user}%"
     }
   },
   "left-panel": {
@@ -267,20 +281,63 @@
     "indicator": "累積 {value} / {limit} tokens ({percent}%)",
     "footer": "Turn {turn} · 最大 {max} tokens · モデル上限: {limit}{model}"
   },
+  "anomaly": {
+    "bloated-sys": {
+      "warn": {
+        "label": "sys {pct}%",
+        "tooltip": "system コンテキスト肥大 ({pct}%)",
+        "modal": "system 肥大 · /mcp list 確認"
+      },
+      "critical": {
+        "label": "bloated {pct}%",
+        "tooltip": "system が user を圧迫 ({pct}%)",
+        "modal": "system 圧迫 · compact 無効"
+      }
+    },
+    "agent-spike": {
+      "label": "↑×{n}",
+      "tooltip": "Agent が親比 {n} 倍",
+      "modal": "Agent トークン急増 · ↑×{n} · セッション分離推奨",
+      "summary": "↑{n}× larger than parent row"
+    }
+  },
   "main": {
     "date-filter": {
-      "all": {
-        "label": "全期間",
-        "title": "収集した全期間のデータを表示"
+      "1h": {
+        "label": "直近1時間",
+        "title": "現在から過去1時間のデータ"
       },
       "today": {
         "label": "今日",
         "title": "今日 00:00（ローカル時間）以降のデータのみ表示"
       },
-      "week": {
-        "label": "今週",
-        "title": "今週月曜日 00:00（ローカル時間）以降のデータのみ表示"
-      }
+      "yesterday": {
+        "label": "昨日",
+        "title": "昨日 00:00 〜 23:59（ローカル時間）のデータ"
+      },
+      "7d": {
+        "label": "直近7日",
+        "title": "過去7日間のローリングウィンドウ"
+      },
+      "30d": {
+        "label": "直近30日",
+        "title": "過去30日間のローリングウィンドウ"
+      },
+      "custom": {
+        "label": "カスタム範囲…",
+        "title": "任意の開始日／終了日を指定",
+        "apply": "適用",
+        "from": "開始日",
+        "to": "終了日",
+        "warn-long-range": "90日を超える検索はサーバー負荷の恐れがあります",
+        "label-with-range": "カスタム ({from} 〜 {to})",
+        "ephemeral-toast": "カスタム範囲はページ再読み込み時にリセットされます"
+      },
+      "all": {
+        "label": "全期間",
+        "title": "収集した全期間のデータを表示"
+      },
+      "trigger-aria": "期間選択"
     },
     "system-filter": {
       "title": "System ライブラリタブへ移動"
@@ -316,14 +373,29 @@
     "restart-complete": "再起動完了。ページを再読み込みします…",
     "restart-timeout": "サーバーが復帰しませんでした。手動でページを再読み込みしてください。",
     "network-error": "ネットワークエラー: {message}",
-    "update-request-failed": "アップデートリクエスト失敗"
+    "update-request-failed": "アップデートリクエスト失敗",
+    "migration": {
+      "applied": "マイグレーション {n} 件を適用 (v{from} → v{to})",
+      "applied-single": "マイグレーション 1 件を適用 (v{from} → v{to})",
+      "none": "スキーマ変更なし",
+      "none-detail": "DB バージョン v{version} · 今回のアップデートにマイグレーションはありません。",
+      "failed": "マイグレーション失敗",
+      "failed-file": "失敗したファイル: {file}",
+      "failed-guide": "サーバーログを確認し、必要に応じて運用ガイドの復旧手順に従ってください。",
+      "duration": "{ms}ms"
+    },
+    "local-changes": {
+      "title": "git の変更を検出",
+      "body": "working tree に未コミットの変更があるため自動アップデートを実行できません。下記コマンドで変更を整理してから再試行してください。",
+      "files-label": "変更ファイル",
+      "files-more": "他 {n} 件"
+    },
+    "shallow": {
+      "warning": "shallow clone 環境 — 自動アップデートが失敗する可能性",
+      "body": "このインストールは git の shallow clone です。自動アップデートが失敗する可能性があるため、下記コマンドで full clone に昇格することを推奨します。"
+    }
   },
   "default-view": {
-    "date-filter": {
-      "all": "全期間",
-      "today": "今日",
-      "week": "今週"
-    },
     "timeline-meta": {
       "prefix-quality": "品質",
       "prefix-volume": "累積",
