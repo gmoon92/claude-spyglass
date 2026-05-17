@@ -1,0 +1,245 @@
+/*
+ * 책임: 선택형 드롭다운 단일 원시 컴포넌트 — combobox(trigger) + listbox(menu) + option(item) 패턴.
+ * 흡수: header.css .date-filter / .filter-btn(date) — date-range-dropdown 컴포넌트로 대체.
+ *       향후 model selector, session-group selector 등 재사용.
+ * 위치 SSoT: util/floating-position.js (positionFloating). 메뉴는 position:fixed로 viewport 좌표.
+ * ARIA (date-range-filter ADR-005): trigger=combobox, menu=listbox, item=option (aria-selected).
+ *   listbox 내부에 input/form 금지 — Custom Range는 .ds-dropdown-footer (role=group) 외부 영역.
+ * 의존: design-tokens.css (--surface, --border, --text-1/2/3, --raised, --floating,
+ *       --shadow-floating, --z-floating, --accent, --accent-bg-medium, --accent-border,
+ *       --space-*, --radius-*, --dur-fast, --ease, --text-meta, --font-ui, --weight-medium)
+ */
+
+.ds-dropdown {
+  display: inline-flex;
+  /* trigger 자체는 normal flow, menu는 fixed로 띄움 */
+}
+
+/* === Trigger (combobox) =================================================== */
+.ds-dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-medium);
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  transition: color        var(--dur-fast) var(--ease),
+              background   var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+
+.ds-dropdown-trigger:hover {
+  color: var(--text-1);
+  border-color: var(--border-strong);
+}
+
+.ds-dropdown-trigger[aria-expanded="true"] {
+  color: var(--text-1);
+  border-color: var(--accent-border);
+  background: var(--accent-bg-medium);
+}
+
+.ds-dropdown-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 트리거 현재 라벨 영역 — i18n 라벨이 동적으로 들어감.
+   Custom Range 라벨("사용자 지정 (4/18 ~ 5/18)") 등 긴 라벨도 잘리지 않도록 폭 여유. */
+.ds-dropdown-trigger-label {
+  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 32ch;
+}
+
+/* 화살표 (CSS only) */
+.ds-dropdown-trigger::after {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform var(--dur-fast) var(--ease);
+  margin-left: var(--space-1);
+}
+.ds-dropdown-trigger[aria-expanded="true"]::after {
+  transform: rotate(-135deg) translateY(2px);
+}
+
+/* === Menu (listbox) ======================================================= */
+.ds-dropdown-menu {
+  position: fixed;       /* JS positionFloating이 매 open/resize/scroll 시 갱신 */
+  top: 0;
+  left: 0;
+  z-index: var(--z-floating);
+  min-width: 200px;
+  max-width: min(320px, calc(100vw - var(--space-4)));   /* mobile viewport guard */
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--floating);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-floating);
+  padding: var(--space-1);
+  font-family: var(--font-ui);
+  animation: ds-dropdown-in var(--dur-fast) var(--ease);
+}
+
+.ds-dropdown-menu[hidden] { display: none; }
+
+/* listbox는 menu 내부 ul (footer와 ARIA 분리) — 시각 어휘는 menu가 담당 */
+.ds-dropdown-listbox {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@keyframes ds-dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* a11y: reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  .ds-dropdown-menu { animation: none; }
+  .ds-dropdown-trigger::after { transition: none; }
+}
+
+/* === Item (option) ======================================================== */
+.ds-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-size: var(--text-meta);
+  line-height: 1.3;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ds-dropdown-item:hover,
+.ds-dropdown-item.is-active {   /* aria-activedescendant 시각 표현 (실제 focus 이동 X) */
+  background: var(--raised);
+  color: var(--text-1);
+}
+
+.ds-dropdown-item[aria-selected="true"] {
+  background: var(--accent-bg-medium);
+  color: var(--text-1);
+  font-weight: var(--weight-medium);
+}
+/* aria-selected + is-active 동시 — hover 시 두 톤이 겹치지 않게 selected 톤 유지 */
+.ds-dropdown-item[aria-selected="true"].is-active,
+.ds-dropdown-item[aria-selected="true"]:hover {
+  background: var(--accent-bg-medium);
+  color: var(--text-1);
+}
+
+.ds-dropdown-item[aria-disabled="true"] {
+  color: var(--text-4);
+  cursor: not-allowed;
+  background: transparent;
+}
+
+/* === Separator + Footer (Custom Range 영역) =============================== */
+.ds-dropdown-separator {
+  height: 1px;
+  margin: var(--space-1) 0;
+  background: var(--border);
+}
+
+/* footer는 listbox 외부 — role="group" 권장 (ARIA 위반 방지).
+   Custom Range from/to input + Apply 버튼이 들어갈 영역. */
+.ds-dropdown-footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.ds-dropdown-footer-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-meta);
+  color: var(--text-3);
+}
+
+.ds-dropdown-footer-label-text {
+  flex: 0 0 auto;
+}
+
+.ds-dropdown-footer-field input[type="date"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-data, var(--font-ui));
+  font-size: var(--text-meta);
+  color-scheme: dark;
+}
+
+.ds-dropdown-footer-field input[type="date"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent-border);
+}
+
+.ds-dropdown-footer-warn {
+  font-size: var(--text-meta);
+  color: var(--warn, #FFA94D);
+  line-height: 1.3;
+}
+
+.ds-dropdown-footer-apply {
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.ds-dropdown-footer-apply:hover:not(:disabled) {
+  background: var(--brand-deep, var(--accent));
+}
+
+.ds-dropdown-footer-apply:disabled {
+  background: var(--surface);
+  color: var(--text-4);
+  border-color: var(--border);
+  cursor: not-allowed;
+}
+
+.ds-dropdown-footer-apply:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 변형 (data attrs) — size 변형은 YAGNI로 미도입 ===========================*/
+.ds-dropdown-menu[data-width="trigger"] { min-width: var(--ds-dropdown-trigger-w, 200px); }
+.ds-dropdown-menu[data-width="wide"]    { min-width: 280px; }
+/* data-align은 positionFloating(opts.align)이 JS에서 처리 — CSS 마커만 두면 됨 */
