@@ -78,36 +78,36 @@ die() {
 # =============================================================================
 
 step_detect_bun() {
-  log_step "Bun 감지"
+  log_step "Detecting Bun"
 
   if command -v bun &> /dev/null; then
     local version
     version=$(bun --version)
-    log_success "Bun 이미 설치됨: $version"
+    log_success "Bun already installed: $version"
     return 0
   fi
 
-  log_warn "Bun이 설치되지 않았습니다"
-  log_hint "다음을 실행하여 Bun을 설치하세요:"
+  log_warn "Bun is not installed"
+  log_hint "Install Bun by running:"
   log_hint "  curl -fsSL https://bun.sh/install | bash"
-  log_hint "그 후 이 스크립트를 다시 실행하세요."
+  log_hint "Then re-run this script."
 
   if [[ -z "$DRY_RUN" ]]; then
-    read -p "지금 Bun을 설치하시겠습니까? (y/n) " -n 1 -r
+    read -p "Install Bun now? (y/n) " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
       if curl -fsSL https://bun.sh/install | bash; then
-        log_success "Bun 설치 완료"
+        log_success "Bun installation complete"
         # 현재 셸에 bun 로드
         export PATH="${HOME}/.bun/bin:${PATH}"
       else
-        die "Bun 설치 실패"
+        die "Bun installation failed"
       fi
     else
-      die "Bun 설치 필수"
+      die "Bun is required"
     fi
   else
-    log_info "[DRY-RUN] Bun 설치 스크립트 실행 (curl -fsSL https://bun.sh/install | bash)"
+    log_info "[DRY-RUN] Run Bun install script (curl -fsSL https://bun.sh/install | bash)"
   fi
 }
 
@@ -116,16 +116,16 @@ step_detect_bun() {
 # =============================================================================
 
 step_clone_repo() {
-  log_step "저장소 확인"
+  log_step "Checking repository"
 
   if [[ -d "$SPYGLASS_DIR/.git" ]]; then
-    log_success "저장소 이미 존재: $SPYGLASS_DIR"
-    log_info "최신 버전으로 업데이트 중..."
+    log_success "Repository already exists: $SPYGLASS_DIR"
+    log_info "Updating to latest version..."
 
     if [[ -z "$DRY_RUN" ]]; then
       cd "$SPYGLASS_DIR"
       git pull origin main || {
-        log_warn "git pull 실패 (오프라인 또는 네트워크 오류)"
+        log_warn "git pull failed (offline or network error)"
         return 0
       }
       cd - > /dev/null
@@ -133,13 +133,13 @@ step_clone_repo() {
       log_info "[DRY-RUN] git pull origin main (in $SPYGLASS_DIR)"
     fi
   else
-    log_info "저장소 클론 중... ($REPO_URL)"
+    log_info "Cloning repository... ($REPO_URL)"
 
     if [[ -z "$DRY_RUN" ]]; then
       if git clone "$REPO_URL" "$SPYGLASS_DIR"; then
-        log_success "저장소 클론 완료: $SPYGLASS_DIR"
+        log_success "Repository cloned: $SPYGLASS_DIR"
       else
-        die "저장소 클론 실패: $REPO_URL"
+        die "Repository clone failed: $REPO_URL"
       fi
     else
       log_info "[DRY-RUN] git clone $REPO_URL $SPYGLASS_DIR"
@@ -152,14 +152,14 @@ step_clone_repo() {
 # =============================================================================
 
 step_install_deps() {
-  log_step "의존성 설치"
+  log_step "Installing dependencies"
 
   if [[ -z "$DRY_RUN" ]]; then
     cd "$SPYGLASS_DIR"
     if bun install; then
-      log_success "의존성 설치 완료"
+      log_success "Dependencies installed"
     else
-      die "bun install 실패"
+      die "bun install failed"
     fi
     cd - > /dev/null
   else
@@ -172,21 +172,21 @@ step_install_deps() {
 # =============================================================================
 
 step_merge_hooks() {
-  log_step "settings.json 훅 설정"
+  log_step "Configuring settings.json hooks"
 
   local backup_file
   backup_file="${SETTINGS_JSON}.bak-$(date +%s)"
 
   # ~/.claude 디렉토리 생성
   if [[ -z "$DRY_RUN" ]]; then
-    mkdir -p "$(dirname "$SETTINGS_JSON")" || die "~/.claude 디렉토리 생성 실패"
+    mkdir -p "$(dirname "$SETTINGS_JSON")" || die "Failed to create ~/.claude directory"
   else
     log_info "[DRY-RUN] mkdir -p $(dirname "$SETTINGS_JSON")"
   fi
 
   # settings.json 존재 여부 확인
   if [[ ! -f "$SETTINGS_JSON" ]]; then
-    log_info "settings.json이 없습니다. 신규 생성 중..."
+    log_info "settings.json not found. Creating a new one..."
 
     if [[ -z "$DRY_RUN" ]]; then
       # 최소 설정으로 생성
@@ -198,12 +198,12 @@ step_merge_hooks() {
   "hooks": {}
 }
 EOF
-      log_success "settings.json 생성 완료"
+      log_success "settings.json created"
     else
       log_info "[DRY-RUN] Create settings.json with empty env.SPYGLASS_DIR"
     fi
   else
-    log_success "settings.json 존재: $SETTINGS_JSON"
+    log_success "settings.json found: $SETTINGS_JSON"
   fi
 
   # 기존 hooks 블록 확인
@@ -217,15 +217,15 @@ EOF
       non_empty_hooks=$(jq '.hooks | length' "$SETTINGS_JSON" 2>/dev/null || echo 0)
 
       if [[ "$non_empty_hooks" -gt 0 ]]; then
-        log_warn "이미 hooks가 설정되어 있습니다"
-        log_hint "기존 설정을 보존하고, 새로운 훅을 추가하려면 다음 설정 가이드를 참고하세요:"
-        log_hint "  $SPYGLASS_DIR/README.md (훅 설정 섹션)"
+        log_warn "Hooks are already configured"
+        log_hint "To preserve existing settings and add new hooks, see the configuration guide:"
+        log_hint "  $SPYGLASS_DIR/README.md (Hooks section)"
         return 0
       fi
     fi
 
     # hooks 블록이 비어있거나 없으면 병합
-    log_info "훅 설정 병합 중..."
+    log_info "Merging hook configuration..."
 
     # SPYGLASS_DIR을 JSON에 업데이트하고 hooks 병합
     local temp_settings
@@ -259,11 +259,11 @@ EOF
 
     # 백업 저장
     cp "$SETTINGS_JSON" "$backup_file"
-    log_success "백업 저장: $backup_file"
+    log_success "Backup saved: $backup_file"
 
     # 새 설정으로 덮어쓰기
     mv "$temp_settings" "$SETTINGS_JSON"
-    log_success "settings.json 업데이트 완료"
+    log_success "settings.json updated"
   else
     log_info "[DRY-RUN] Backup $SETTINGS_JSON to $backup_file"
     log_info "[DRY-RUN] Merge hooks configuration and update SPYGLASS_DIR"
@@ -275,13 +275,13 @@ EOF
 # =============================================================================
 
 step_create_spyglass_home() {
-  log_step "~/.spyglass 디렉토리 생성"
+  log_step "Creating ~/.spyglass directory"
 
   if [[ -z "$DRY_RUN" ]]; then
-    mkdir -p "$SPYGLASS_HOME/logs" || die "~/.spyglass/logs 생성 실패"
-    mkdir -p "$SPYGLASS_HOME/timing" || die "~/.spyglass/timing 생성 실패"
-    chmod 700 "$SPYGLASS_HOME" || die "~/.spyglass chmod 700 실패"
-    log_success "디렉토리 생성 및 권한 설정 완료"
+    mkdir -p "$SPYGLASS_HOME/logs" || die "Failed to create ~/.spyglass/logs"
+    mkdir -p "$SPYGLASS_HOME/timing" || die "Failed to create ~/.spyglass/timing"
+    chmod 700 "$SPYGLASS_HOME" || die "Failed to chmod 700 ~/.spyglass"
+    log_success "Directories created and permissions set"
   else
     log_info "[DRY-RUN] mkdir -p $SPYGLASS_HOME/logs $SPYGLASS_HOME/timing"
     log_info "[DRY-RUN] chmod 700 $SPYGLASS_HOME"
@@ -293,24 +293,24 @@ step_create_spyglass_home() {
 # =============================================================================
 
 step_finish() {
-  log_step "설치 완료"
+  log_step "Installation complete"
 
   echo ""
-  log_success "spyglass 설치가 완료되었습니다!"
+  log_success "spyglass installation complete!"
   echo ""
 
-  log_info "다음 단계:"
-  echo "  1. Claude Code 재시작 (훅 설정 반영)"
-  echo "  2. 서버 실행:"
+  log_info "Next steps:"
+  echo "  1. Restart Claude Code (to apply hook configuration)"
+  echo "  2. Run the server:"
   echo "     cd $SPYGLASS_DIR"
   echo "     bun run dev"
-  echo "  3. 환경 검증:"
+  echo "  3. Verify environment:"
   echo "     bun run doctor"
-  echo "  4. 대시보드 열기 (서버 실행 중):"
+  echo "  4. Open dashboard (while server is running):"
   echo "     open http://localhost:9999"
   echo ""
-  log_info "자세한 설정은 다음을 참고하세요:"
-  log_hint "$SPYGLASS_DIR/README.md (훅 설정 섹션)"
+  log_info "For detailed configuration, see:"
+  log_hint "$SPYGLASS_DIR/README.md (Hooks section)"
 }
 
 # =============================================================================

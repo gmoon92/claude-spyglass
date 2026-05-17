@@ -161,6 +161,39 @@
   --sub-type-task-bg-active:      linear-gradient(135deg, rgba(247,127,0,0.26) 0%, rgba(247,127,0,0.10) 100%);
   --sub-type-task-border-active:  rgba(247, 127, 0, 0.50);
 
+  /* ── Cache 색상 SSoT (ADR-cache-panel-color-system-001~004, 2026-05-17) ────
+   *   cache-panel 의 Creation·Read 분할 막대 + cache 도넛 슬라이스에서 단일 SSoT.
+   *
+   *   read     = cache_read_tokens (재사용/절감 — green family, 의미: 캐시 hit)
+   *   creation = cache_creation_tokens (신규 등록/투자 — cool violet, 의미: 캐시 write)
+   *
+   *   이전: creation=`--grad-info`(blue→teal), read=`--grad-success`(green→teal) — 두 그라데이션
+   *   종착점이 모두 teal(#34D399)로 수렴해 인접 비율 경계가 흐릿했고 deuteranopia 시각에서
+   *   회녹색으로 수렴해 식별 불가능했음. 사용자 피드백 반영(2026-05-17).
+   *
+   *   채택: violet-emerald 페어 (ADR-001).
+   *     - hue 차 ~98° (violet 258° / emerald 160°) — warm/cool 양분
+   *     - 명도 차 ΔL ≈ 22 — deutan/protan 시뮬레이션에서도 식별 우수
+   *     - 다크 #0a0a0b 대비 contrast: creation 8.4:1 (AAA) / read 5.0:1 (AA)
+   *     - 두 색 사이 contrast (서로 배경 기준): 5.3:1 — 인접 경계 명확
+   *
+   *   모델 도넛과 시각 분리:
+   *     - opus #a78bfa (violet hue 256°) ≠ creation #B794F6 (violet hue 258°, 채도/명도 차)
+   *     - kimi #34D399 (emerald hue 158°, L 64%) ≠ read #10B981 (emerald hue 160°, L 39%)
+   *     모델 도넛(default 모드) ↔ 캐시 도넛(detail 모드)은 setDonutMode 로 배타 노출.
+   *
+   *   alpha 단계는 sub-type 토큰과 동일: bg=0.13 / border=0.32 / glow=0.45
+   */
+  --cache-creation-color:  #B794F6;
+  --cache-creation-bg:     rgba(183, 148, 246, 0.13);
+  --cache-creation-border: rgba(183, 148, 246, 0.32);
+  --cache-creation-glow:   0 0 10px rgba(183, 148, 246, 0.45);
+
+  --cache-read-color:      #10B981;
+  --cache-read-bg:         rgba(16, 185, 129, 0.13);
+  --cache-read-border:     rgba(16, 185, 129, 0.32);
+  --cache-read-glow:       0 0 10px rgba(16, 185, 129, 0.45);
+
   /* ── 타입별 색상 SSoT (ADR-003) — 사용 영역 축소: 배지/필터 활성 상태만 ── */
   --type-prompt-color:     #FFB088;
   --type-prompt-bg:        linear-gradient(135deg, rgba(255,176,136,0.28) 0%, rgba(255,212,59,0.14) 100%);

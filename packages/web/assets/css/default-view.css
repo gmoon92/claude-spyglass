@@ -98,13 +98,19 @@ canvas { display: block; }
   pointer-events: none;
   filter: grayscale(0.6);
 }
+/* :lang() 기반 다국어 분기 — JS i18n으로 못 잡는 CSS content는 <html lang> 속성에 의존.
+   기본 = 영어(글로벌 fallback), 한/일/중은 :lang() override. i18n.js의 syncDocumentLang이
+   <html lang>을 활성 언어로 갱신하므로 언어 전환 시 자동 동기화. */
 #chartSection.chart-mode-detail .date-filter::after {
-  content: '세션 단위';
+  content: 'per session';
   margin-left: var(--space-2);
   font-size: var(--text-small);
   color: var(--text-4);
   font-style: italic;
 }
+:lang(ko) #chartSection.chart-mode-detail .date-filter::after { content: '세션 단위'; }
+:lang(ja) #chartSection.chart-mode-detail .date-filter::after { content: 'セッション単位'; }
+:lang(zh) #chartSection.chart-mode-detail .date-filter::after { content: '按会话'; }
 
 #chartSection .chart-actions {
   display: flex;

@@ -37,7 +37,7 @@ log_error()  { echo -e "${C_RED}✗${C_RESET}  $*" >&2; }
 # =============================================================================
 
 if ! command -v docker >/dev/null 2>&1; then
-  log_error "docker가 설치되어 있지 않습니다."
+  log_error "docker is not installed."
   exit 1
 fi
 
@@ -69,45 +69,45 @@ mkdir -p "${DIST_DIR}"
 # 빌드
 # =============================================================================
 
-log_info "Docker 이미지 빌드 중"
-log_info "  버전: v${VERSION}"
-log_info "  해시: ${GIT_HASH}"
-log_info "  태그: ${TAG_VERSIONED}, ${TAG_LATEST}"
+log_info "Building Docker image"
+log_info "  Version: v${VERSION}"
+log_info "  Hash:    ${GIT_HASH}"
+log_info "  Tags:    ${TAG_VERSIONED}, ${TAG_LATEST}"
 
 docker build \
   --tag "${TAG_VERSIONED}" \
   --tag "${TAG_LATEST}" \
   "${PROJECT_ROOT}"
 
-log_ok "이미지 빌드 완료"
+log_ok "Image build complete"
 
 # =============================================================================
 # tar.gz로 저장
 # =============================================================================
 
-log_info "이미지를 tar.gz로 저장 중..."
+log_info "Saving image to tar.gz..."
 docker save "${TAG_VERSIONED}" | gzip -9 > "${OUTPUT_PATH}"
 
 FILE_SIZE_HUMAN="$(du -h "${OUTPUT_PATH}" | cut -f1)"
-log_ok "저장 완료: ${OUTPUT_PATH} (${FILE_SIZE_HUMAN})"
+log_ok "Saved: ${OUTPUT_PATH} (${FILE_SIZE_HUMAN})"
 
 # =============================================================================
 # SHA-256 해시 생성
 # =============================================================================
 
-log_info "SHA-256 해시 생성 중..."
+log_info "Generating SHA-256 hash..."
 
 if command -v sha256sum >/dev/null 2>&1; then
   (cd "${DIST_DIR}" && sha256sum "${OUTPUT_BASENAME}" > "${CHECKSUM_PATH}")
 elif command -v shasum >/dev/null 2>&1; then
   (cd "${DIST_DIR}" && shasum -a 256 "${OUTPUT_BASENAME}" > "${CHECKSUM_PATH}")
 else
-  log_warn "sha256sum/shasum 미설치 — 해시 생성 건너뜀"
+  log_warn "sha256sum/shasum not installed — skipping hash generation"
   CHECKSUM_PATH=""
 fi
 
 if [[ -n "${CHECKSUM_PATH}" && -f "${CHECKSUM_PATH}" ]]; then
-  log_ok "해시: $(cat "${CHECKSUM_PATH}")"
+  log_ok "Hash: $(cat "${CHECKSUM_PATH}")"
 fi
 
 # =============================================================================
@@ -115,14 +115,14 @@ fi
 # =============================================================================
 
 echo
-log_ok "빌드 완료!"
+log_ok "Build complete!"
 echo
-echo "  이미지:      ${TAG_VERSIONED}"
+echo "  Image:      ${TAG_VERSIONED}"
 echo "  tarball:    ${OUTPUT_PATH}"
 [[ -n "${CHECKSUM_PATH}" ]] && echo "  SHA-256:    ${CHECKSUM_PATH}"
-echo "  크기:        ${FILE_SIZE_HUMAN}"
+echo "  Size:       ${FILE_SIZE_HUMAN}"
 echo
-echo "수신자 사용법:"
+echo "Recipient usage:"
 echo "  docker load < ${OUTPUT_BASENAME}"
 echo "  docker run -d --name spyglass \\"
 echo "    -p 9999:9999 \\"

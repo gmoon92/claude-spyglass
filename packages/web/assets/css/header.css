@@ -52,5 +52,54 @@
   font-weight: 600;
 }
 
+/* ── LANG SWITCHER ────────────────────────────────────────────────────────
+   헤더(차트 섹션 chart-actions) 우측에 배치되는 컴팩트 언어 셀렉터.
+   배경 투명 + border 사용으로 다크 팔레트와 조화.
+   깃발 아이콘 없음 — 텍스트 코드(KO/EN/JA/ZH)만 표시.
+   ────────────────────────────────────────────────────────────────────── */
+.lang-switcher-wrap {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+#lang-switcher {
+  /* 외형 초기화 */
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-3);
+  font-family: var(--font-ui);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  padding: 3px 22px 3px 8px;
+  cursor: pointer;
+  /* 커스텀 chevron (data-URI SVG) */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2 4.5L6 8.5L10 4.5' stroke='%238B949E' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  transition: border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  /* select 네이티브 드롭다운은 OS가 렌더링 — 배경 지정 제거로 다크 테마 호환 */
+}
+
+#lang-switcher:hover {
+  border-color: var(--text-4);
+  color: var(--text-2);
+}
+
+#lang-switcher:focus {
+  outline: none;
+  border-color: var(--info);
+  color: var(--text-2);
+}
+
+/* select 옵션은 OS 네이티브 렌더링이므로 배경색만 fallback */
+#lang-switcher option {
+  background: var(--floating);
+  color: var(--text-2);
+}
+
 /* ── 반응형 ───────────────────────────────────────────────────────────── */
 /* brand-strip-cleanup ADR-001: .badge-live 480px 미디어 룰 제거 (badge 자체 삭제). */

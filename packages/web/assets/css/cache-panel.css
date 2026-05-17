@@ -51,20 +51,29 @@
   height: 100%;
   border-radius: var(--radius-sm);
   transition: width 0.6s ease, background-color 0.3s;
-  background: var(--grad-neutral);
+  background: var(--neutral);
 }
 
+/* ── HIT RATE 임계 분기 — 솔리드 fill (ADR-cache-panel-color-system-002, 2026-05-17) ──
+ *   이전: 좌→우 hue-shift 그라데이션 (--grad-success: green→teal→cyan / --grad-warn: yellow→amber→orange).
+ *   정보 시각화 원칙: 단일 비율(hit_rate, 0~100%) 표현에는 단일 hue 가 정확. hue-shift 는
+ *   두 축 정보(시간×값) 전용. 색맹 시각에서도 좌→우 hue 변화는 시작점 hue 정보가 소실되어
+ *   임계 상태 인지에 노이즈를 더함.
+ *
+ *   해결: 임계 분기(is-high/is-mid/is-low)는 유지, 각 분기 내에서는 솔리드 + glow.
+ *   glow 가 정적 인상을 보완해 다크 모드 시각 위계 유지.
+ */
 .cache-bar-fill.is-high {
-  background: var(--grad-success);
-  box-shadow: 0 0 8px rgba(52, 211, 153, 0.5);
+  background: var(--success);
+  box-shadow: var(--glow-success);
 }
 .cache-bar-fill.is-mid  {
-  background: var(--grad-warn);
-  box-shadow: 0 0 8px rgba(240, 183, 47, 0.45);
+  background: var(--warn);
+  box-shadow: var(--glow-warn);
 }
 .cache-bar-fill.is-low  {
-  background: var(--grad-error);
-  box-shadow: 0 0 8px rgba(244, 113, 116, 0.45);
+  background: var(--error);
+  box-shadow: var(--glow-error);
 }
 
 .cache-bar-pct {
@@ -86,17 +95,25 @@
   background: var(--surface);
 }
 
+/* ── Creation·Read 분할 막대 — Violet-Emerald 페어 (ADR-cache-panel-color-system-001) ──
+ *   이전: creation=--grad-info(blue→teal) / read=--grad-success(green→teal) — 둘 다 teal
+ *   종착점이라 인접 경계가 흐릿. deuteranopia 시각에서 두 색이 회녹색으로 수렴해 식별 불가.
+ *
+ *   채택: creation=violet(cool, "신규 등록/투자") / read=emerald(green, "재사용/절감").
+ *   hue 차 ~98°, 명도 차 ΔL ≈ 22 — deutan/protan 시각에서도 식별 우수.
+ *   토큰 SSoT 는 design-tokens.css 의 --cache-{creation|read}-* 그룹 참조.
+ */
 .cache-ratio-creation {
   height: 100%;
-  background: var(--grad-info);
-  box-shadow: 0 0 8px rgba(56, 189, 248, 0.45);
+  background: var(--cache-creation-color);
+  box-shadow: var(--cache-creation-glow);
   transition: width 0.6s ease;
 }
 
 .cache-ratio-read {
   height: 100%;
-  background: var(--grad-success);
-  box-shadow: 0 0 8px rgba(52, 211, 153, 0.45);
+  background: var(--cache-read-color);
+  box-shadow: var(--cache-read-glow);
   transition: width 0.6s ease;
 }
 
@@ -114,4 +131,30 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   white-space: nowrap;
+}
+
+/* ── skeleton-loading (stats-aggregation T-11) ─────────────────────────────
+ * 첫 paint 시 0% 빈 바 + '--' 텍스트 깜빡임 제거.
+ * 마크업 패턴: .cache-bar-wrap[data-skeleton="1"] > .sk.sk-bar + .cache-bar-fill[hidden]
+ * fetchCacheStats 응답 도착 시 cache-panel.js가 data-skeleton 표지 제거 + 자식 .sk 제거 + [hidden] 해제.
+ * skeleton.css의 --sk-delay(80ms)로 80ms 이내 응답 시 shimmer 자체가 안 보임 → 깜빡임 0. */
+.cache-bar-wrap[data-skeleton="1"],
+.cache-ratio-wrap[data-skeleton="1"] {
+  /* wrap 자체의 background는 .sk-bar의 shimmer로 덮이도록 그대로 유지.
+   * height 6px / radius / overflow:hidden은 정상 상태와 동일하므로 추가 룰 불필요. */
+  display: flex;
+  align-items: center;
+}
+
+.cache-bar-wrap[data-skeleton="1"] > .sk-bar,
+.cache-ratio-wrap[data-skeleton="1"] > .sk-bar {
+  /* wrap의 inner height(6px)에 정확히 맞춤 — skeleton.css 기본 .sk-bar(6px)와 동일 */
+  height: 6px;
+  border-radius: var(--radius-sm);
+}
+
+.cache-bar-pct[data-skeleton="1"],
+.cache-ratio-label[data-skeleton="1"] {
+  /* 텍스트 자리(min-width)는 유지하되 색상은 sk가 자체 표현 */
+  color: transparent;
 }

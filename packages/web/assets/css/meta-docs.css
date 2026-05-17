@@ -352,12 +352,17 @@
 .meta-doc-row.meta-doc-unused td {
   opacity: 0.55;
 }
+/* :lang() 기반 다국어 분기 — pseudo-element content는 JS i18n 사각지대.
+   기본 = 영어 fallback, ko/ja/zh는 <html lang>에 따라 자동 분기. */
 .meta-doc-row.meta-doc-unused .meta-doc-name::after {
-  content: ' · 미사용';
+  content: ' · unused';
   font-size: 10px;
   color: var(--text-4, #707070);
   font-weight: 400;
 }
+:lang(ko) .meta-doc-row.meta-doc-unused .meta-doc-name::after { content: ' · 미사용'; }
+:lang(ja) .meta-doc-row.meta-doc-unused .meta-doc-name::after { content: ' · 未使用'; }
+:lang(zh) .meta-doc-row.meta-doc-unused .meta-doc-name::after { content: ' · 未使用'; }
 
 /* deleted — 빨간 배경 + 취소선 + ⚠ */
 .meta-doc-row.meta-doc-deleted td {
@@ -485,13 +490,17 @@
   border-left: 2px solid var(--warn);
   padding-left: 10px;
 }
+/* :lang() 기반 다국어 분기 — 위의 row 패턴과 동일 SSoT(다른 em-dash 마커만 차이). */
 .meta-doc-card.meta-doc-unused .meta-doc-card-name::after {
-  content: ' — 미사용';
+  content: ' — unused';
   color: var(--warn);
   font-size: 10.5px;
   font-weight: 400;
   margin-left: 4px;
 }
+:lang(ko) .meta-doc-card.meta-doc-unused .meta-doc-card-name::after { content: ' — 미사용'; }
+:lang(ja) .meta-doc-card.meta-doc-unused .meta-doc-card-name::after { content: ' — 未使用'; }
+:lang(zh) .meta-doc-card.meta-doc-unused .meta-doc-card-name::after { content: ' — 未使用'; }
 .meta-doc-card.meta-doc-deleted {
   opacity: 0.55;
 }
@@ -627,11 +636,14 @@ body[data-app-mode="metadocs"] #panelVerticalHandleBottom {
   display: none;
 }
 
-/* metadocs 모드 — left-panel grid를 4-row로 재정의:
+/* metadocs 모드 — left-panel grid를 5-row로 재정의 (update-badge-fix ADR-002):
      1) #browserProjectsSection : var(--projects-panel-height, 220px)  — 트랙 고정 → 자식 콘텐츠가 작아도 트랙이 작아지지 않음 (최소 3행 노출 보장)
      2) #panelVerticalHandle    : auto (8px)
      3) #metaDocsSummaryCards   : auto — 요약 카드는 콘텐츠 높이만 차지 (가로 1줄)
-     4) (빈 trailing track)      : 1fr — 남는 세로 공간 흡수 → row3가 stretch되어 카드가 길어지는 현상 방지
+     4) (빈 filler 트랙)         : 1fr — 남는 세로 공간 흡수 → row3가 stretch되어 카드가 길어지는 현상 방지
+     5) .left-panel-footer       : auto — update-badge가 한 줄로 컴팩트 노출.
+                                    이전엔 row4(1fr)에 footer가 자동 배치되어 좌측 패널 하단을 통째로 점유했음.
+                                    `.left-panel-footer { grid-row-end: -1 }`(left-panel.css)와 함께 자식 개수 변동에도 안정.
 
    fallback 220px = 헤더 36 + thead 36 + 약 3 row(40px*3) = 약 192px 이상.
    사용자가 핸들을 드래그하면 --projects-panel-height inline px가 우선 적용. */
@@ -640,7 +652,8 @@ body[data-app-mode="metadocs"] .left-panel {
     var(--projects-panel-height, 220px)
     auto
     auto
-    1fr;
+    1fr
+    auto;
 }
 body[data-app-mode="metadocs"] #browserProjectsSection {
   min-height: 0;
@@ -721,7 +734,8 @@ body[data-app-mode="metadocs"] .thead-browse   { display: none; }
   font-variant-numeric: tabular-nums;
   color: var(--text-2);
 }
-.cell-proj-meta-spacer { /* thead 동기화 셀 폭에 대응하는 빈 셀 */ }
+/* .cell-proj-meta-spacer: thead 동기화 셀 폭에 대응하는 빈 td.
+   colgroup이 폭을 결정하므로 별도 CSS 룰 불필요 → 룰셋 제거. */
 
 /* 가상 'user (global)' 행 — 일반 프로젝트와 시각 차별화:
  *  - 'global' 태그는 작은 칩(text-3 + accent border)으로 보조 정체성 표시
