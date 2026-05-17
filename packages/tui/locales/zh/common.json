@@ -1,0 +1,7 @@
+{
+  "search": {
+    "confirm-hint": " (Enter: 确认  Esc: 取消)",
+    "clear-hint": "  [Esc] 清除"
+  },
+  "token-confidence-low": "* 令牌置信度低（transcript解析失败或proxy回退）"
+}

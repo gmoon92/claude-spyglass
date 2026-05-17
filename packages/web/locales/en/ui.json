@@ -1,0 +1,407 @@
+{
+  "html": {
+    "error-banner": {
+      "msg": "Cannot connect to server.",
+      "retry": "Retry"
+    },
+    "app-rail": {
+      "aria": "App mode",
+      "browse-aria": "Browse (sessions & requests)",
+      "browse-title": "Browse",
+      "metadocs-aria": "Behavior Definitions catalog",
+      "metadocs-title": "Behavior Definitions"
+    },
+    "left-panel": {
+      "resize-title": "Drag to resize · Double-click to fit content",
+      "anomaly-aria": "Anomaly detected",
+      "th-project": "Project",
+      "th-session": "Sessions",
+      "th-token": "Tokens",
+      "th-item": "Items",
+      "sync-title": "Re-scan current cwd + global + all known cwds",
+      "sync-label": "Sync",
+      "vertical-handle-title": "Drag to resize height"
+    },
+    "session-panel": {
+      "label": "Sessions",
+      "hint": "Select a project",
+      "empty": "Please select a project"
+    },
+    "sidebar-toggle": {
+      "title": "Toggle left panel (⌘B)",
+      "aria": "Toggle left panel"
+    },
+    "chart-section": {
+      "label": "Request trend (live)",
+      "subtitle": "Last 30 min · live",
+      "lang-switcher-aria": "Select language",
+      "update-badge-aria": "Update available",
+      "update-badge-aria-available": "Update available — v{tag}",
+      "update-badge-aria-latest": "Up to date — v{tag}",
+      "update-badge-aria-loading": "Checking for updates",
+      "toggle-title": "Collapse / expand",
+      "toggle-aria": "Collapse"
+    },
+    "timeline-meta": {
+      "aria": "Summary stats",
+      "quality-group-aria": "Request quality (all time)",
+      "quality-group-label": "Quality · all time",
+      "avg-label": "Avg",
+      "error-rate-label": "Error rate",
+      "volume-group-aria": "Cumulative volume (all time)",
+      "volume-group-label": "Volume · all time",
+      "sessions-label": "Sessions",
+      "requests-label": "Requests",
+      "tokens-label": "Tokens",
+      "no-data": "No data"
+    },
+    "requests-panel": {
+      "label": "Recent requests",
+      "load-more": "Load more"
+    },
+    "detail-loading": "Loading…",
+    "turn-list-aria": "Turn list",
+    "llm-input-aria": "API payload",
+    "meta-docs": {
+      "root-aria": "Behavior Definitions catalog",
+      "tabs-aria": "Behavior Definitions sub-tabs",
+      "body-aria": "Behavior Definitions body",
+      "tool-stats-aria": "Project tool stats"
+    },
+    "footer": {
+      "help-title": "Keyboard shortcuts (?)",
+      "help-aria": "Keyboard shortcuts"
+    },
+    "update-modal": {
+      "title": "Update available",
+      "close-aria": "Close",
+      "current-version": "Current",
+      "latest-version": "Latest",
+      "note": "The server will briefly restart after installation.",
+      "body": "Would you like to update?",
+      "cancel": "Cancel",
+      "confirm": "Update"
+    },
+    "syslib-body-aria": "System prompt library"
+  },
+  "chart": {
+    "no-data": "No data",
+    "count-unit": "{count} reqs",
+    "label": {
+      "cache": "Cache",
+      "others": "Others",
+      "total": "Total",
+      "input": "Input",
+      "hit": "Hits",
+      "creation": "Creation",
+      "hit-rate": "Hit rate"
+    }
+  },
+  "left-panel": {
+    "no-data": "No data",
+    "live-count": "{count} live",
+    "select-project": "Select a project",
+    "session-count": "{project} · {count}",
+    "global-row-title": "user(global) — all cwds + global catalog"
+  },
+  "infra": {
+    "new-requests-banner": "{count} new request(s) — click to jump to latest"
+  },
+  "llm-input": {
+    "no-recent-proxy": "No recent proxy requests",
+    "no-session-proxy": "This session has no proxy requests",
+    "session-id-label": "Session ID:",
+    "load-failed": "Failed to load: {message}",
+    "request-not-found": "Request not found ({id})",
+    "no-system-field": "This request has no system field.",
+    "system-load-failed": "Body load failed or missing — only system_hash is known.",
+    "no-messages": "No messages",
+    "search-placeholder": "Search messages (2+ chars)",
+    "search-aria-label": "Search messages",
+    "expand-all": "Expand all",
+    "collapse-all": "Collapse all",
+    "expand-all-title": "Expand all messages",
+    "collapse-all-title": "Collapse all messages",
+    "proxy-selector-label": "Proxy requests ({count})",
+    "banner-text": "This tab shows the <strong>original payload</strong> sent by the proxy to the Anthropic API — it may differ from hook observation data (Turn view).",
+    "refs-popover-aria-label": "System prompt references",
+    "refs-popover-title": "References",
+    "refs-popover-loading": "Loading…",
+    "refs-popover-wait": "Please wait…",
+    "refs-popover-count": "{count} · newest first · hash {hash}…",
+    "refs-popover-empty": "No reference requests found.",
+    "refs-popover-load-failed": "Failed to load: {message}",
+    "refs-close-label": "Close",
+    "ref-session-unspecified": "No session",
+    "ref-session-current": "Current session",
+    "ref-jump-title": "Jump to this proxy request",
+    "ref-other-session-title": "Reference from another session — jump only supported within current session",
+    "ref-count-btn-title": "Click to view {count} API request(s) referencing this system prompt.",
+    "ref-count-span-title": "Number of API requests referencing this system prompt (by hash).",
+    "segment-count-title": "Number of text segments used as body in the original system array. (idx[0] is usually the billing header; idx[1]+ is the body)",
+    "byte-size-title": "Byte size of the system prompt body.",
+    "system-summary-title": "System prompt body received by LLM. The billing header at idx[0] of the original system array is removed during hash normalization.",
+    "payload-decode-failed": "payload decode failed",
+    "system-none": "no system"
+  },
+  "meta-docs-view": {
+    "col-type": "Type",
+    "col-name": "Name",
+    "col-source": "Path",
+    "col-invocations": "Calls",
+    "col-last-used": "Last used",
+    "col-total-tokens": "Total tokens",
+    "filter-type-label": "Type",
+    "filter-display-label": "Show",
+    "filter-all": "All",
+    "filter-unused": "Unused only",
+    "filter-orphan": "Orphan only",
+    "include-deleted-label": "Show deleted",
+    "include-deleted-title": "Include items with past invocations that no longer exist on disk",
+    "card-used-title": "Behavior Definitions invoked at least once",
+    "card-used-label": "Used",
+    "card-unused-title": "In catalog but never invoked",
+    "card-unused-label": "Unused",
+    "card-orphan-title": "Invoked but not in current catalog (external/deleted definition)",
+    "orphan-path-label": "Orphan",
+    "orphan-tooltip": "This invocation may have originated from another workspace (.claude/) or a built-in/plugin definition. Re-scanning multiple workspaces during sync will merge this row into a catalog entry.",
+    "deleted-badge-title": "Definition no longer on disk (soft-deleted)",
+    "empty-project-title": "No Behavior Definitions registered for {project}",
+    "empty-project-hint": "This project may never have been synced via SessionStart. Click the <strong>Sync</strong> button in the left thead to re-scan all known workspaces.",
+    "empty-global-title": "No Behavior Definitions — auto-synced after SessionStart",
+    "load-failed": "Failed to load: {message}",
+    "syncing-label": "Syncing…",
+    "toast-sync-start": "Sync started…",
+    "toast-sync-done": "Sync complete — {summary}",
+    "toast-sync-failed": "Sync failed: {message}",
+    "sync-restore-label": "Sync",
+    "orphan-scope-switch": "Orphan rows have no project context — switched to all-projects mode.",
+    "refresh-no-change": "No changes",
+    "refresh-add": "+{n}",
+    "refresh-del": "-{n}",
+    "refresh-global": "Global {detail}",
+    "refresh-project": "Project {detail}",
+    "refresh-workspaces": "{n} workspace(s)",
+    "refresh-no-result": "No results"
+  },
+  "tool-stats": {
+    "select-project": "Select a project",
+    "select-project-hint": "Select a project in the left panel to view the per-tool performance matrix.",
+    "load-failed": "Failed to load data",
+    "retry": "Retry",
+    "no-data": "No data",
+    "col-avg": "Avg resp.",
+    "col-calls": "Calls",
+    "col-tokens": "Tokens",
+    "col-pct": "Share",
+    "col-errors": "Errors"
+  },
+  "syslib": {
+    "no-prompts": "No system prompts (dedup catalog is empty)",
+    "view-prompt-aria": "View system prompt body",
+    "load-failed": "Failed to load: {message}",
+    "not-found": "Body not found.",
+    "modal-load-failed": "Failed to load: {message}",
+    "close-label": "Close"
+  },
+  "cache-panel": {
+    "hit-rate": {
+      "title": "Cache Hit Rate",
+      "desc": "Ratio of prompt-cache reads to total input tokens.\n≥70%: green · 30–69%: orange · <30%: red."
+    },
+    "ratio": {
+      "title": "Creation / Read Ratio",
+      "desc": "Write (initial creation) vs. Read (reuse) ratio of cache tokens.\nstable: Read ≥ 70% — cache is being reused well.\nbuilding: Read < 70% — cache is still being populated."
+    },
+    "precision-tooltip": "{pct}% (precise)"
+  },
+  "obs-panel": {
+    "no-data": "No data",
+    "no-cache": "No cache activity",
+    "no-activity": "No activity",
+    "no-tool-calls": "No tool calls",
+    "no-behavior-defs": "No Behavior Definitions calls",
+    "recent-activity": "Recent activity",
+    "yesterday": "Yesterday {val}",
+    "savings": "Saved {val}"
+  },
+  "obs-tooltip": {
+    "burn-rate": {
+      "title": "Burn Rate · 24h",
+      "desc": "Cumulative token total for prompt requests over the last 24 hours.\n· Large number: 24h accumulated input+output tokens\n· ▲/▼ %: change vs. the same window yesterday\n· sparkline: 24 hourly bars of token usage"
+    },
+    "cache-health": {
+      "title": "Cache Health · Prompt Cache",
+      "desc": "Current hit ratio and 24h trend for the prompt cache.\n· Large number: cache_read / (input + cache_read)\n· Grade (●): ≥70% green / 30–69% blue / <30% amber\n· Savings: accumulated input tokens reused via cache hits"
+    },
+    "live-pulse": {
+      "title": "Live Pulse · Real-time Activity",
+      "desc": "Current session activity status.\n· Large text: timestamp of the most recent event (relative)\n· ● n: number of active sessions (activity within the last 60s)\n· sparkline: tool calls in a 5-minute window (Phase 2)"
+    },
+    "tool-categories": {
+      "title": "Tool Categories · Distribution",
+      "desc": "Category breakdown of tool calls over the last 24 hours.\n· Agent : sub-agent calls (Task)\n· Skill : skill invocations\n· MCP   : external tool calls via MCP server\n· Native: built-in tools (Read/Write/Bash/Edit, etc.)"
+    },
+    "cat-Agent": {
+      "title": "Agent",
+      "desc": "Share of sub-agent calls via the Task tool.\nHigher child tool call counts indicate deeper nesting."
+    },
+    "cat-Skill": {
+      "title": "Skill",
+      "desc": "Share of skill (SKILL.md) invocations.\nUsed to encapsulate domain knowledge and workflows."
+    },
+    "cat-MCP": {
+      "title": "MCP",
+      "desc": "Share of external tool calls via MCP servers.\nExamples: playwright, context7, sequential-thinking."
+    },
+    "cat-Native": {
+      "title": "Native",
+      "desc": "Share of Claude Code built-in tool calls.\nRead / Write / Edit / Bash / Grep / Glob, etc."
+    },
+    "anomaly": {
+      "title": "Anomaly · Detection",
+      "desc": "Count of abnormal patterns in the last 24 hours.\n· Tool error rate ≥5% (30-minute window)\n· Same tool failed ≥3 times consecutively\n· Sub-agent depth ≥3 or fan-out ≥5\n· Turn tokens ≥ p95×2"
+    }
+  },
+  "context-chart": {
+    "indicator": "Accumulated {value} / {limit} tokens ({percent}%)",
+    "footer": "Turn {turn} · Max {max} tokens · Model limit: {limit}{model}"
+  },
+  "main": {
+    "date-filter": {
+      "all": {
+        "label": "All",
+        "title": "Show data for the entire collected period"
+      },
+      "today": {
+        "label": "Today",
+        "title": "Show only data since today 00:00 (local time)"
+      },
+      "week": {
+        "label": "This week",
+        "title": "Show only data since Monday 00:00 (local time) of this week"
+      }
+    },
+    "system-filter": {
+      "title": "Go to System library tab"
+    },
+    "kbd-help": {
+      "title": "Keyboard shortcuts",
+      "close": "Close",
+      "section": {
+        "nav": "Navigation",
+        "filter": "Filter",
+        "help": "Help"
+      },
+      "focus-search": "Focus search box",
+      "close-modal": "Close modal / expanded panel / search / detail view",
+      "focus-search-cmd": "Focus search box (Ctrl+F)",
+      "help-toggle": "Toggle this help"
+    },
+    "expand": {
+      "copy": "Copy",
+      "copied": "✓Copied"
+    }
+  },
+  "version-check": {
+    "available": "{tag} available",
+    "latest": "{tag} · Up to date",
+    "loading": "Checking…",
+    "updating": "Updating…",
+    "confirm": "Update",
+    "local-changes-error": "You have local changes. Commit or stash them and try again.",
+    "update-failed": "Update failed.",
+    "success": "Update complete. Restart with bun run dev in your terminal.",
+    "network-error": "Network error: {message}",
+    "update-request-failed": "Update request failed"
+  },
+  "default-view": {
+    "date-filter": {
+      "all": "All time",
+      "today": "Today",
+      "week": "This week"
+    },
+    "timeline-meta": {
+      "prefix-quality": "Quality",
+      "prefix-volume": "Volume",
+      "aria-quality": "Request quality",
+      "aria-volume": "Cumulative volume"
+    },
+    "layout": {
+      "expand": "Expand",
+      "collapse": "Collapse",
+      "go-home": "Go home"
+    }
+  },
+  "filter-bar": {
+    "all": "All",
+    "request-type": "Request type",
+    "tool-category": "Tool category",
+    "prompt": "User input",
+    "system": "System",
+    "tool-call": "Tool call",
+    "agent": "Agent",
+    "skill": "Skill",
+    "mcp": "MCP",
+    "prompt-title": "Show only user input (LLM inference requests)",
+    "system-title": "Show only system messages (context injection, etc.)",
+    "tool-call-title": "Show only tool execution requests (Read/Write/Bash, etc.)",
+    "agent-title": "Show only Agent tool executions",
+    "skill-title": "Show only Skill tool executions",
+    "mcp-title": "Show only MCP tool executions"
+  },
+  "search-box": {
+    "clear-label": "Clear search"
+  },
+  "stat-tooltip": {
+    "context-growth": {
+      "desc": "Shows the accumulated input_tokens flow during the session.\n• Area below the line (dark) = usage, area above (light) = remaining limit.\n• The limit is determined by the model_limits seed in the DB (Migration 026) — operators can update model mappings directly via SQL.\n• Additional signals: a [1m] suffix in the model name or the context-1m-2025-08-07 token in the anthropic-beta header promotes the limit to 1M.\n• This chart is based on proxy observations and may differ from actual usage after Claude's automatic compaction.",
+      "title": "Cumulative tokens"
+    },
+    "badge": {
+      "spike": "Token count exceeds 2× the session average",
+      "loop": "Same tool called 3 or more times consecutively",
+      "slow": "Execution time in the top 5%",
+      "error": "Tool execution failed",
+      "cache": "Prompt cache hit"
+    },
+    "sessions": {
+      "desc": "Number of Claude Code sessions created within the current filter period.\nA session starts when the claude command is executed.",
+      "title": "Total sessions"
+    },
+    "requests": {
+      "desc": "Total count of prompt, tool_call, and system type requests.\nBased on hook event receipts.",
+      "title": "Total requests"
+    },
+    "tokens": {
+      "desc": "Sum of input and output tokens.\nIncludes cache_creation and cache_read tokens.",
+      "title": "Total tokens"
+    },
+    "active": {
+      "desc": "Number of sessions currently running in real time.\nBased on ended_at NULL + activity within the last 30 minutes (storage/_shared.LIVE_STALE_THRESHOLD_MS).\nDot color: green = SSE connected, red = disconnected.",
+      "title": "Live sessions"
+    },
+    "avg-duration": {
+      "desc": "Average response time for prompt-type requests.\nIncludes LLM inference and network latency.",
+      "title": "Avg response time"
+    },
+    "p95": {
+      "desc": "95th percentile of tool_call response times.\nBaseline excluding the slowest 5% of requests.",
+      "title": "P95 response time"
+    },
+    "err": {
+      "desc": "Ratio of error responses among tool_call requests.\nDisplayed as a red warning when exceeding 5%.",
+      "title": "Error rate"
+    },
+    "point-hover": {
+      "accumulated-with-limit": "Accumulated {value} / {limit} tokens ({percent}%)",
+      "accumulated": "Accumulated {value} tokens",
+      "delta": "{delta} tokens vs. previous turn",
+      "model": "Model {model}"
+    }
+  },
+  "detail-view": {
+    "total-tokens": "Total {tokens} tokens",
+    "ended-at": "Ended: {time}"
+  }
+}

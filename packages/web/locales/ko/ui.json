@@ -1,0 +1,407 @@
+{
+  "html": {
+    "error-banner": {
+      "msg": "서버에 연결할 수 없습니다.",
+      "retry": "다시 시도"
+    },
+    "app-rail": {
+      "aria": "앱 모드",
+      "browse-aria": "탐색 (세션·요청 보기)",
+      "browse-title": "탐색",
+      "metadocs-aria": "Behavior Definitions 카탈로그",
+      "metadocs-title": "Behavior Definitions"
+    },
+    "left-panel": {
+      "resize-title": "드래그: 너비 조절 · 더블클릭: 콘텐츠 너비에 맞춤",
+      "anomaly-aria": "이상 감지 알림",
+      "th-project": "프로젝트",
+      "th-session": "세션",
+      "th-token": "토큰",
+      "th-item": "항목",
+      "sync-title": "현재 cwd + 글로벌 + 알려진 모든 cwd 재스캔",
+      "sync-label": "동기화",
+      "vertical-handle-title": "드래그: 높이 조절"
+    },
+    "session-panel": {
+      "label": "세션",
+      "hint": "프로젝트를 선택하세요",
+      "empty": "프로젝트를 선택해주세요"
+    },
+    "sidebar-toggle": {
+      "title": "왼쪽 패널 토글 (⌘B)",
+      "aria": "왼쪽 패널 토글"
+    },
+    "chart-section": {
+      "label": "요청 추이 (실시간)",
+      "subtitle": "최근 30분 · 실시간",
+      "lang-switcher-aria": "언어 선택",
+      "update-badge-aria": "업데이트 사용 가능",
+      "update-badge-aria-available": "업데이트 사용 가능 — v{tag}",
+      "update-badge-aria-latest": "최신 버전 — v{tag}",
+      "update-badge-aria-loading": "업데이트 확인 중",
+      "toggle-title": "접기 / 펼치기",
+      "toggle-aria": "접기"
+    },
+    "timeline-meta": {
+      "aria": "요약 지표",
+      "quality-group-aria": "요청 품질 (전체 기간)",
+      "quality-group-label": "품질 · 전체 기간",
+      "avg-label": "평균",
+      "error-rate-label": "오류율",
+      "volume-group-aria": "누적 볼륨 (전체 기간)",
+      "volume-group-label": "누적 · 전체 기간",
+      "sessions-label": "세션",
+      "requests-label": "요청",
+      "tokens-label": "토큰",
+      "no-data": "데이터가 없습니다"
+    },
+    "requests-panel": {
+      "label": "최근 요청",
+      "load-more": "더 보기"
+    },
+    "detail-loading": "불러오는 중…",
+    "turn-list-aria": "턴 목록",
+    "llm-input-aria": "API 페이로드",
+    "meta-docs": {
+      "root-aria": "Behavior Definitions 카탈로그",
+      "tabs-aria": "Behavior Definitions 서브 탭",
+      "body-aria": "Behavior Definitions 본문",
+      "tool-stats-aria": "프로젝트 도구 통계"
+    },
+    "footer": {
+      "help-title": "단축키 (?)",
+      "help-aria": "키보드 단축키"
+    },
+    "update-modal": {
+      "title": "업데이트 사용 가능",
+      "close-aria": "닫기",
+      "current-version": "현재",
+      "latest-version": "최신",
+      "note": "설치하면 서버가 잠시 중단됩니다.",
+      "body": "업데이트할까요?",
+      "cancel": "취소",
+      "confirm": "업데이트"
+    },
+    "syslib-body-aria": "시스템 프롬프트 라이브러리"
+  },
+  "chart": {
+    "no-data": "데이터가 없습니다",
+    "count-unit": "{count}건",
+    "label": {
+      "cache": "캐시",
+      "others": "그 외",
+      "total": "전체",
+      "input": "입력",
+      "hit": "히트",
+      "creation": "등록비용",
+      "hit-rate": "히트율"
+    }
+  },
+  "left-panel": {
+    "no-data": "데이터가 없습니다",
+    "live-count": "라이브 {count}개",
+    "select-project": "프로젝트를 선택하세요",
+    "session-count": "{project} · {count}개",
+    "global-row-title": "user(global) — 모든 cwd + 글로벌 카탈로그 합산"
+  },
+  "infra": {
+    "new-requests-banner": "새 요청 {count}개 — 클릭하여 최신으로 이동"
+  },
+  "llm-input": {
+    "no-recent-proxy": "최근 프록시 요청이 없습니다",
+    "no-session-proxy": "이 세션에는 proxy 요청이 없습니다",
+    "session-id-label": "세션 ID:",
+    "load-failed": "불러오기 실패: {message}",
+    "request-not-found": "요청을 찾을 수 없습니다 ({id})",
+    "no-system-field": "이 요청에 system 필드가 없습니다.",
+    "system-load-failed": "본문 로딩 실패 또는 미존재 — system_hash만 알려진 상태.",
+    "no-messages": "메시지 없음",
+    "search-placeholder": "메시지 검색 (2자 이상)",
+    "search-aria-label": "메시지 검색",
+    "expand-all": "전체 펼침",
+    "collapse-all": "전체 접기",
+    "expand-all-title": "모든 메시지 펼치기",
+    "collapse-all-title": "모든 메시지 접기",
+    "proxy-selector-label": "Proxy 요청 ({count}건)",
+    "banner-text": "이 탭은 proxy가 Anthropic API에 전송한 <strong>원본 페이로드</strong>입니다 — 훅 관측 데이터(턴 뷰)와 다를 수 있습니다.",
+    "refs-popover-aria-label": "System 프롬프트 참조 목록",
+    "refs-popover-title": "참조 목록",
+    "refs-popover-loading": "불러오는 중…",
+    "refs-popover-wait": "잠시만요…",
+    "refs-popover-count": "{count}건 · 최근순 · hash {hash}…",
+    "refs-popover-empty": "참조 요청이 없습니다.",
+    "refs-popover-load-failed": "불러오기 실패: {message}",
+    "refs-close-label": "닫기",
+    "ref-session-unspecified": "세션 미지정",
+    "ref-session-current": "현재 세션",
+    "ref-jump-title": "이 proxy 요청으로 점프",
+    "ref-other-session-title": "다른 세션의 참조 — 점프는 현재 세션 내에서만 지원",
+    "ref-count-btn-title": "클릭으로 이 시스템 프롬프트를 참조한 API 요청 {count}건의 목록 보기.",
+    "ref-count-span-title": "이 시스템 프롬프트(hash 기준)를 참조한 API 요청 수.",
+    "segment-count-title": "원본 system 배열에서 본문으로 사용된 텍스트 세그먼트 수. (보통 idx[0]은 결제용 헤더, idx[1] 이후가 본문)",
+    "byte-size-title": "시스템 프롬프트 본문의 바이트 크기.",
+    "system-summary-title": "LLM이 받은 시스템 프롬프트 본문. 원본 system 배열 idx[0]의 결제용(billing) 헤더는 hash 정규화 단계에서 제거됐습니다.",
+    "payload-decode-failed": "payload decode 실패",
+    "system-none": "system 없음"
+  },
+  "meta-docs-view": {
+    "col-type": "타입",
+    "col-name": "이름",
+    "col-source": "경로",
+    "col-invocations": "횟수",
+    "col-last-used": "최근 적용",
+    "col-total-tokens": "누적 토큰",
+    "filter-type-label": "타입",
+    "filter-display-label": "표시",
+    "filter-all": "전체",
+    "filter-unused": "미사용만",
+    "filter-orphan": "호출만존재",
+    "include-deleted-label": "삭제된 정의도 표시",
+    "include-deleted-title": "과거 호출 이력은 있으나 디스크에서 사라진 항목까지 포함합니다",
+    "card-used-title": "호출이 1회 이상 발생한 Behavior Definitions",
+    "card-used-label": "사용",
+    "card-unused-title": "카탈로그엔 있으나 호출 0건",
+    "card-unused-label": "미사용",
+    "card-orphan-title": "호출은 있는데 현재 카탈로그에 없음 (외부/삭제된 정의)",
+    "orphan-path-label": "호출만 존재",
+    "orphan-tooltip": "이 호출은 다른 워크스페이스(.claude/) 또는 빌트인/플러그인 정의에서 발생했을 수 있습니다. 동기화 시 다중 작업 공간을 함께 스캔하면 이 행이 카탈로그 행으로 합쳐집니다.",
+    "deleted-badge-title": "현재 디스크에서 사라진 정의 (soft-deleted)",
+    "empty-project-title": "{project} 프로젝트에 등록된 Behavior Definitions가 없습니다",
+    "empty-project-hint": "이 프로젝트가 SessionStart로 동기화된 적이 없을 수 있습니다. 좌측 thead의 <strong>동기화</strong> 버튼을 누르면 알려진 모든 작업 공간을 다시 스캔합니다.",
+    "empty-global-title": "Behavior Definitions가 없습니다 — SessionStart 이후 자동 동기화됩니다",
+    "load-failed": "불러오기 실패: {message}",
+    "syncing-label": "동기화 중…",
+    "toast-sync-start": "동기화 시작…",
+    "toast-sync-done": "동기화 완료 — {summary}",
+    "toast-sync-failed": "동기화 실패: {message}",
+    "sync-restore-label": "동기화",
+    "orphan-scope-switch": "orphan은 어느 프로젝트 호출인지 단정할 수 없어 전체 프로젝트 모드로 전환했습니다.",
+    "refresh-no-change": "변동 없음",
+    "refresh-add": "{n}개 추가",
+    "refresh-del": "{n}개 삭제",
+    "refresh-global": "글로벌 {detail}",
+    "refresh-project": "프로젝트 {detail}",
+    "refresh-workspaces": "작업 공간 {n}개",
+    "refresh-no-result": "결과 없음"
+  },
+  "tool-stats": {
+    "select-project": "프로젝트를 선택하세요",
+    "select-project-hint": "좌측 패널에서 프로젝트를 선택하면 도구별 성능 매트릭스가 표시됩니다.",
+    "load-failed": "데이터를 불러올 수 없습니다",
+    "retry": "다시 시도",
+    "no-data": "데이터가 없습니다",
+    "col-avg": "평균 응답",
+    "col-calls": "호출",
+    "col-tokens": "토큰",
+    "col-pct": "기여도",
+    "col-errors": "오류"
+  },
+  "syslib": {
+    "no-prompts": "시스템 프롬프트가 없습니다 (아직 dedup 카탈로그 비어있음)",
+    "view-prompt-aria": "시스템 프롬프트 본문 보기",
+    "load-failed": "불러오기 실패: {message}",
+    "not-found": "본문을 찾을 수 없습니다.",
+    "modal-load-failed": "불러오기 실패: {message}",
+    "close-label": "닫기"
+  },
+  "cache-panel": {
+    "hit-rate": {
+      "title": "Cache Hit Rate",
+      "desc": "전체 입력 토큰 중 프롬프트 캐시에서 읽힌 비율.\n70% 이상: green · 30~69%: orange · 30% 미만: red."
+    },
+    "ratio": {
+      "title": "Creation / Read Ratio",
+      "desc": "캐시 토큰의 Write(초기 생성) vs Read(재사용) 비율.\nstable: Read ≥ 70% — 캐시가 잘 재사용되고 있음.\nbuilding: Read < 70% — 캐시를 채우는 중."
+    },
+    "precision-tooltip": "{pct}% (정밀)"
+  },
+  "obs-panel": {
+    "no-data": "데이터 없음",
+    "no-cache": "캐시 미발생",
+    "no-activity": "활동 없음",
+    "no-tool-calls": "도구 호출 없음",
+    "no-behavior-defs": "Behavior Definitions 호출 없음",
+    "recent-activity": "최근 활동",
+    "yesterday": "어제 {val}",
+    "savings": "절감 {val}"
+  },
+  "obs-tooltip": {
+    "burn-rate": {
+      "title": "Burn Rate · 24시간",
+      "desc": "최근 24시간 동안 prompt 요청의 누적 토큰 합계.\n· 큰 숫자: 24시간 누적 input+output 토큰\n· ▲/▼ %  : 어제 동시각(24h 이전 같은 윈도우) 대비 변화율\n· sparkline: 1시간 단위 토큰 사용량 24개 막대"
+    },
+    "cache-health": {
+      "title": "Cache Health · 프롬프트 캐시",
+      "desc": "프롬프트 캐시의 현재 hit ratio와 24시간 추세.\n· 큰 숫자: cache_read / (input + cache_read)\n· 등급(●): ≥70% green / 30~69% blue / <30% amber\n· 절감: 캐시 히트로 재사용된 input 토큰 누적"
+    },
+    "live-pulse": {
+      "title": "Live Pulse · 실시간 활동",
+      "desc": "현재 세션 활동 상태.\n· 큰 텍스트: 가장 최근 이벤트 발생 시각 (relative)\n· ● n  : 활성 세션 수 (최근 60초 내 활동)\n· sparkline: 5분창 도구 호출 수 (Phase 2)"
+    },
+    "tool-categories": {
+      "title": "Tool Categories · 도구 분류",
+      "desc": "최근 24시간 도구 호출의 카테고리별 분포.\n· Agent : 서브에이전트 호출 (Task)\n· Skill : 스킬 실행\n· MCP   : MCP 서버 도구 호출\n· Native: 내장 도구 (Read/Write/Bash/Edit 등)"
+    },
+    "cat-Agent": {
+      "desc": "Task 도구를 통한 서브에이전트 호출 비중.\n자식 도구 호출이 많을수록 깊이가 깊어집니다.",
+      "title": "Agent"
+    },
+    "cat-Skill": {
+      "title": "Skill",
+      "desc": "스킬(SKILL.md) 호출 비중.\n도메인 지식·워크플로우 캡슐화에 활용됩니다."
+    },
+    "cat-MCP": {
+      "title": "MCP",
+      "desc": "MCP 서버를 통한 외부 도구 호출 비중.\n예: playwright, context7, sequential-thinking."
+    },
+    "cat-Native": {
+      "title": "Native",
+      "desc": "Claude Code 내장 도구 비중.\nRead / Write / Edit / Bash / Grep / Glob 등."
+    },
+    "anomaly": {
+      "title": "Anomaly · 이상 감지",
+      "desc": "최근 24시간 내 비정상 패턴 발생 건수.\n· 도구 실패율 ≥5% (30분 윈도우)\n· 동일 도구 ≥3회 연속 실패\n· 서브에이전트 깊이 ≥3 또는 팬아웃 ≥5\n· turn 토큰 ≥ p95×2"
+    }
+  },
+  "context-chart": {
+    "indicator": "누적 {value} / {limit} tokens ({percent}%)",
+    "footer": "Turn {turn} · 최대 {max} tokens · 모델 한도: {limit}{model}"
+  },
+  "main": {
+    "date-filter": {
+      "all": {
+        "label": "전체",
+        "title": "수집된 전체 기간 데이터 표시"
+      },
+      "today": {
+        "label": "오늘",
+        "title": "오늘 00:00(로컬 시간) 이후 데이터만 표시"
+      },
+      "week": {
+        "label": "이번주",
+        "title": "이번 주 월요일 00:00(로컬 시간) 이후 데이터만 표시"
+      }
+    },
+    "system-filter": {
+      "title": "System 라이브러리 탭으로 이동"
+    },
+    "kbd-help": {
+      "title": "키보드 단축키",
+      "close": "닫기",
+      "section": {
+        "nav": "탐색",
+        "filter": "필터",
+        "help": "도움말"
+      },
+      "focus-search": "검색창에 포커스",
+      "close-modal": "모달 / 확장 패널 / 검색 / 상세 뷰 닫기",
+      "focus-search-cmd": "검색창 포커스 (Ctrl+F)",
+      "help-toggle": "이 도움말 토글"
+    },
+    "expand": {
+      "copy": "복사",
+      "copied": "✓복사됨"
+    }
+  },
+  "version-check": {
+    "available": "{tag} 사용 가능",
+    "latest": "{tag} · 최신",
+    "loading": "확인 중…",
+    "updating": "업데이트 중…",
+    "confirm": "업데이트",
+    "local-changes-error": "로컬 변경이 있습니다. commit 또는 stash 후 다시 시도하세요.",
+    "update-failed": "업데이트에 실패했습니다.",
+    "success": "업데이트 완료. 터미널에서 bun run dev로 재시작하세요.",
+    "network-error": "네트워크 오류: {message}",
+    "update-request-failed": "업데이트 요청 실패"
+  },
+  "default-view": {
+    "date-filter": {
+      "all": "전체 기간",
+      "today": "오늘",
+      "week": "이번 주"
+    },
+    "timeline-meta": {
+      "prefix-quality": "품질",
+      "prefix-volume": "누적",
+      "aria-quality": "요청 품질",
+      "aria-volume": "누적 볼륨"
+    },
+    "layout": {
+      "expand": "펼치기",
+      "collapse": "접기",
+      "go-home": "홈으로 이동"
+    }
+  },
+  "filter-bar": {
+    "all": "전체",
+    "request-type": "요청 종류",
+    "tool-category": "도구 분류",
+    "prompt": "사용자 입력",
+    "system": "시스템",
+    "tool-call": "도구 실행",
+    "agent": "Agent",
+    "skill": "Skill",
+    "mcp": "MCP",
+    "prompt-title": "사용자 입력(LLM 추론 요청)만 표시",
+    "system-title": "시스템 메시지(컨텍스트 주입 등)만 표시",
+    "tool-call-title": "도구 실행 요청(Read/Write/Bash 등)만 표시",
+    "agent-title": "Agent 도구 실행만 표시",
+    "skill-title": "Skill 도구 실행만 표시",
+    "mcp-title": "MCP 도구 실행만 표시"
+  },
+  "search-box": {
+    "clear-label": "검색어 지우기"
+  },
+  "stat-tooltip": {
+    "context-growth": {
+      "title": "누적 토큰",
+      "desc": "세션 동안 누적된 input_tokens 흐름을 보여줍니다.\n• 라인 아래(진한 영역) = 사용량, 라인 위(옅은 영역) = 남은 한도.\n• 한도는 DB의 model_limits 시드(Migration 026)를 기준으로 결정합니다 — 운영자는 SQL로 모델 매핑을 직접 갱신할 수 있습니다.\n• 추가 신호: 모델명 [1m] suffix 또는 anthropic-beta 헤더의 context-1m-2025-08-07 토큰이 있으면 1M로 승격.\n• 이 차트는 proxy 관측 기반이며 Claude 런타임의 자동 compact 후 사용률과는 다를 수 있습니다."
+    },
+    "badge": {
+      "spike": "토큰이 세션 평균의 2배 초과",
+      "loop": "동일 도구 연속 3회 이상 호출",
+      "slow": "실행 시간 상위 5% 초과",
+      "error": "도구 실행 실패",
+      "cache": "프롬프트 캐시 히트"
+    },
+    "sessions": {
+      "title": "전체 세션",
+      "desc": "현재 필터 기간 내 생성된 Claude Code 세션 수.\n세션은 claude 명령 실행 시 시작됩니다."
+    },
+    "requests": {
+      "title": "전체 요청",
+      "desc": "prompt · tool_call · system 타입 요청의 총합.\n훅 이벤트 수신 기준."
+    },
+    "tokens": {
+      "title": "전체 토큰",
+      "desc": "입력 + 출력 토큰의 합산.\ncache_creation · cache_read 토큰 포함."
+    },
+    "active": {
+      "title": "실시간 세션",
+      "desc": "지금 실시간으로 실행 중인 세션 수.\nended_at NULL + 직전 30분 이내 활동 기준 (storage/_shared.LIVE_STALE_THRESHOLD_MS).\n도트 색: 녹색=SSE 연결됨, 빨강=끊김."
+    },
+    "avg-duration": {
+      "title": "평균 응답 시간",
+      "desc": "prompt 타입 요청의 평균 응답시간.\nLLM 추론 + 네트워크 지연 포함."
+    },
+    "p95": {
+      "title": "P95 응답 시간",
+      "desc": "tool_call 응답시간의 95번째 백분위.\n상위 5% 느린 요청을 제외한 기준값."
+    },
+    "err": {
+      "desc": "tool_call 중 오류 응답 비율.\n5% 초과 시 빨간색 경고로 표시.",
+      "title": "오류율"
+    },
+    "point-hover": {
+      "accumulated-with-limit": "누적 {value} / {limit} tokens ({percent}%)",
+      "accumulated": "누적 {value} tokens",
+      "delta": "전 턴 대비 {delta} tokens",
+      "model": "모델 {model}"
+    }
+  },
+  "detail-view": {
+    "total-tokens": "총 {tokens} 토큰",
+    "ended-at": "종료: {time}"
+  }
+}

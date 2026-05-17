@@ -1,0 +1,407 @@
+{
+  "html": {
+    "error-banner": {
+      "msg": "无法连接到服务器。",
+      "retry": "重试"
+    },
+    "app-rail": {
+      "aria": "应用模式",
+      "browse-aria": "浏览（会话与请求）",
+      "browse-title": "浏览",
+      "metadocs-aria": "Behavior Definitions 目录",
+      "metadocs-title": "Behavior Definitions"
+    },
+    "left-panel": {
+      "resize-title": "拖动调整宽度 · 双击适应内容宽度",
+      "anomaly-aria": "异常检测通知",
+      "th-project": "项目",
+      "th-session": "会话",
+      "th-token": "Token",
+      "th-item": "条目",
+      "sync-title": "重新扫描当前 cwd + 全局 + 所有已知 cwd",
+      "sync-label": "同步",
+      "vertical-handle-title": "拖动调整高度"
+    },
+    "session-panel": {
+      "label": "会话",
+      "hint": "请选择项目",
+      "empty": "请选择项目"
+    },
+    "sidebar-toggle": {
+      "title": "切换左侧面板 (⌘B)",
+      "aria": "切换左侧面板"
+    },
+    "chart-section": {
+      "label": "请求趋势（实时）",
+      "subtitle": "最近 30 分钟 · 实时",
+      "lang-switcher-aria": "选择语言",
+      "update-badge-aria": "有可用更新",
+      "update-badge-aria-available": "有可用更新 — v{tag}",
+      "update-badge-aria-latest": "已是最新 — v{tag}",
+      "update-badge-aria-loading": "正在检查更新",
+      "toggle-title": "折叠 / 展开",
+      "toggle-aria": "折叠"
+    },
+    "timeline-meta": {
+      "aria": "摘要指标",
+      "quality-group-aria": "请求质量（全时段）",
+      "quality-group-label": "质量 · 全时段",
+      "avg-label": "平均",
+      "error-rate-label": "错误率",
+      "volume-group-aria": "累计量（全时段）",
+      "volume-group-label": "累计 · 全时段",
+      "sessions-label": "会话",
+      "requests-label": "请求",
+      "tokens-label": "Token",
+      "no-data": "暂无数据"
+    },
+    "requests-panel": {
+      "label": "最近请求",
+      "load-more": "加载更多"
+    },
+    "detail-loading": "加载中…",
+    "turn-list-aria": "轮次列表",
+    "llm-input-aria": "API 载荷",
+    "meta-docs": {
+      "root-aria": "Behavior Definitions 目录",
+      "tabs-aria": "Behavior Definitions 子标签",
+      "body-aria": "Behavior Definitions 正文",
+      "tool-stats-aria": "项目工具统计"
+    },
+    "footer": {
+      "help-title": "键盘快捷键 (?)",
+      "help-aria": "键盘快捷键"
+    },
+    "update-modal": {
+      "title": "有可用更新",
+      "close-aria": "关闭",
+      "current-version": "当前",
+      "latest-version": "最新",
+      "note": "安装后服务器将短暂重启。",
+      "body": "是否更新？",
+      "cancel": "取消",
+      "confirm": "更新"
+    },
+    "syslib-body-aria": "系统提示词库"
+  },
+  "chart": {
+    "no-data": "暂无数据",
+    "count-unit": "{count}条",
+    "label": {
+      "cache": "缓存",
+      "others": "其他",
+      "total": "全部",
+      "input": "输入",
+      "hit": "命中",
+      "creation": "写入",
+      "hit-rate": "命中率"
+    }
+  },
+  "left-panel": {
+    "no-data": "暂无数据",
+    "live-count": "实时 {count} 个",
+    "select-project": "请选择项目",
+    "session-count": "{project} · {count}个",
+    "global-row-title": "user(global) — 所有 cwd + 全局目录合并"
+  },
+  "infra": {
+    "new-requests-banner": "新增 {count} 条请求 — 点击跳转至最新"
+  },
+  "llm-input": {
+    "no-recent-proxy": "暂无最近的代理请求",
+    "no-session-proxy": "此会话没有代理请求",
+    "session-id-label": "会话 ID：",
+    "load-failed": "加载失败：{message}",
+    "request-not-found": "未找到请求 ({id})",
+    "no-system-field": "该请求没有 system 字段。",
+    "system-load-failed": "正文加载失败或不存在 — 仅知晓 system_hash。",
+    "no-messages": "无消息",
+    "search-placeholder": "搜索消息（至少2个字符）",
+    "search-aria-label": "搜索消息",
+    "expand-all": "全部展开",
+    "collapse-all": "全部折叠",
+    "expand-all-title": "展开所有消息",
+    "collapse-all-title": "折叠所有消息",
+    "proxy-selector-label": "代理请求（{count}条）",
+    "banner-text": "此标签显示代理发送至 Anthropic API 的<strong>原始载荷</strong> — 可能与钩子观测数据（轮次视图）不同。",
+    "refs-popover-aria-label": "System 提示词引用列表",
+    "refs-popover-title": "引用列表",
+    "refs-popover-loading": "加载中…",
+    "refs-popover-wait": "请稍候…",
+    "refs-popover-count": "{count}条 · 最新优先 · hash {hash}…",
+    "refs-popover-empty": "未找到引用请求。",
+    "refs-popover-load-failed": "加载失败：{message}",
+    "refs-close-label": "关闭",
+    "ref-session-unspecified": "未指定会话",
+    "ref-session-current": "当前会话",
+    "ref-jump-title": "跳转到此代理请求",
+    "ref-other-session-title": "其他会话的引用 — 仅支持在当前会话内跳转",
+    "ref-count-btn-title": "点击查看引用此系统提示词的 {count} 条 API 请求。",
+    "ref-count-span-title": "引用此系统提示词（按 hash）的 API 请求数量。",
+    "segment-count-title": "原始 system 数组中用作正文的文本段数量。(通常 idx[0] 为计费用头部，idx[1] 起为正文)",
+    "byte-size-title": "系统提示词正文的字节大小。",
+    "system-summary-title": "LLM 接收到的系统提示词正文。原始 system 数组 idx[0] 的计费用头部已在 hash 规范化阶段移除。",
+    "payload-decode-failed": "载荷解码失败",
+    "system-none": "无 system"
+  },
+  "meta-docs-view": {
+    "col-type": "类型",
+    "col-name": "名称",
+    "col-source": "路径",
+    "col-invocations": "调用数",
+    "col-last-used": "最近使用",
+    "col-total-tokens": "累计Token",
+    "filter-type-label": "类型",
+    "filter-display-label": "显示",
+    "filter-all": "全部",
+    "filter-unused": "仅未使用",
+    "filter-orphan": "仅孤立项",
+    "include-deleted-label": "显示已删除",
+    "include-deleted-title": "包含有历史调用记录但已从磁盘删除的条目",
+    "card-used-title": "至少被调用过一次的 Behavior Definitions",
+    "card-used-label": "已使用",
+    "card-unused-title": "在目录中但从未被调用",
+    "card-unused-label": "未使用",
+    "card-orphan-title": "有调用记录但不在当前目录中（外部/已删除定义）",
+    "orphan-path-label": "孤立",
+    "orphan-tooltip": "此调用可能来自其他工作区(.claude/)或内置/插件定义。同步时同时扫描多个工作区将把此行合并为目录条目。",
+    "deleted-badge-title": "当前已从磁盘删除的定义 (soft-deleted)",
+    "empty-project-title": "{project} 项目中没有已注册的 Behavior Definitions",
+    "empty-project-hint": "此项目可能从未通过 SessionStart 同步。点击左侧表头的<strong>同步</strong>按钮可重新扫描所有已知工作区。",
+    "empty-global-title": "没有 Behavior Definitions — SessionStart 后将自动同步",
+    "load-failed": "加载失败：{message}",
+    "syncing-label": "同步中…",
+    "toast-sync-start": "同步开始…",
+    "toast-sync-done": "同步完成 — {summary}",
+    "toast-sync-failed": "同步失败：{message}",
+    "sync-restore-label": "同步",
+    "orphan-scope-switch": "孤立行无项目上下文，已切换至全项目模式。",
+    "refresh-no-change": "无变化",
+    "refresh-add": "+{n}个",
+    "refresh-del": "-{n}个",
+    "refresh-global": "全局 {detail}",
+    "refresh-project": "项目 {detail}",
+    "refresh-workspaces": "{n}个工作区",
+    "refresh-no-result": "无结果"
+  },
+  "tool-stats": {
+    "select-project": "请选择项目",
+    "select-project-hint": "在左侧面板选择项目后将显示工具性能矩阵。",
+    "load-failed": "数据加载失败",
+    "retry": "重试",
+    "no-data": "暂无数据",
+    "col-avg": "平均响应",
+    "col-calls": "调用次数",
+    "col-tokens": "Token",
+    "col-pct": "占比",
+    "col-errors": "错误"
+  },
+  "syslib": {
+    "no-prompts": "暂无系统提示词（dedup 目录为空）",
+    "view-prompt-aria": "查看系统提示词正文",
+    "load-failed": "加载失败：{message}",
+    "not-found": "未找到正文。",
+    "modal-load-failed": "加载失败：{message}",
+    "close-label": "关闭"
+  },
+  "cache-panel": {
+    "hit-rate": {
+      "title": "Cache Hit Rate",
+      "desc": "提示词缓存读取量占总输入 Token 的比例。\n≥70%: green · 30–69%: orange · <30%: red。"
+    },
+    "ratio": {
+      "title": "Creation / Read Ratio",
+      "desc": "缓存 Token 的 Write（首次写入）vs Read（复用）比率。\nstable: Read ≥ 70% — 缓存复用良好。\nbuilding: Read < 70% — 缓存仍在填充中。"
+    },
+    "precision-tooltip": "{pct}%（精确值）"
+  },
+  "obs-panel": {
+    "no-data": "暂无数据",
+    "no-cache": "无缓存活动",
+    "no-activity": "无活动",
+    "no-tool-calls": "无工具调用",
+    "no-behavior-defs": "无 Behavior Definitions 调用",
+    "recent-activity": "近期活动",
+    "yesterday": "昨天 {val}",
+    "savings": "节省 {val}"
+  },
+  "obs-tooltip": {
+    "burn-rate": {
+      "title": "Burn Rate · 24小时",
+      "desc": "过去24小时 prompt 请求的累计 Token 总量。\n· 大数字: 24小时累计 input+output Token\n· ▲/▼ %: 与昨日同时段相比的变化率\n· sparkline: 每小时 Token 用量的 24 根柱形图"
+    },
+    "cache-health": {
+      "title": "Cache Health · 提示词缓存",
+      "desc": "提示词缓存的当前命中率与24小时趋势。\n· 大数字: cache_read / (input + cache_read)\n· 等级(●): ≥70% green / 30–69% blue / <30% amber\n· 节省: 通过缓存命中复用的输入 Token 累计量"
+    },
+    "live-pulse": {
+      "title": "Live Pulse · 实时活动",
+      "desc": "当前会话活动状态。\n· 大文本: 最近一次事件发生时间（相对值）\n· ● n: 活跃会话数（最近60秒内有活动）\n· sparkline: 5分钟窗口内的工具调用数（Phase 2）"
+    },
+    "tool-categories": {
+      "title": "Tool Categories · 工具分类",
+      "desc": "过去24小时工具调用的类别分布。\n· Agent : 子代理调用（Task）\n· Skill : 技能调用\n· MCP   : 通过 MCP 服务器的外部工具调用\n· Native: 内置工具（Read/Write/Bash/Edit 等）"
+    },
+    "cat-Agent": {
+      "title": "Agent",
+      "desc": "通过 Task 工具进行的子代理调用占比。\n子工具调用越多，嵌套深度越深。"
+    },
+    "cat-Skill": {
+      "title": "Skill",
+      "desc": "技能（SKILL.md）调用占比。\n用于封装领域知识与工作流。"
+    },
+    "cat-MCP": {
+      "title": "MCP",
+      "desc": "通过 MCP 服务器的外部工具调用占比。\n示例：playwright、context7、sequential-thinking。"
+    },
+    "cat-Native": {
+      "title": "Native",
+      "desc": "Claude Code 内置工具占比。\nRead / Write / Edit / Bash / Grep / Glob 等。"
+    },
+    "anomaly": {
+      "title": "Anomaly · 异常检测",
+      "desc": "过去24小时内异常模式的发生次数。\n· 工具错误率 ≥5%（30分钟窗口）\n· 同一工具连续失败 ≥3次\n· 子代理深度 ≥3 或扇出 ≥5\n· turn Token ≥ p95×2"
+    }
+  },
+  "context-chart": {
+    "indicator": "累计 {value} / {limit} tokens（{percent}%）",
+    "footer": "Turn {turn} · 最大 {max} tokens · 模型上限: {limit}{model}"
+  },
+  "main": {
+    "date-filter": {
+      "all": {
+        "label": "全部",
+        "title": "显示全部收集时段的数据"
+      },
+      "today": {
+        "label": "今天",
+        "title": "仅显示今天 00:00（本地时间）之后的数据"
+      },
+      "week": {
+        "label": "本周",
+        "title": "仅显示本周一 00:00（本地时间）之后的数据"
+      }
+    },
+    "system-filter": {
+      "title": "前往 System 库标签页"
+    },
+    "kbd-help": {
+      "title": "键盘快捷键",
+      "close": "关闭",
+      "section": {
+        "nav": "导航",
+        "filter": "筛选",
+        "help": "帮助"
+      },
+      "focus-search": "聚焦搜索框",
+      "close-modal": "关闭模态框 / 展开面板 / 搜索 / 详情视图",
+      "focus-search-cmd": "聚焦搜索框 (Ctrl+F)",
+      "help-toggle": "切换此帮助"
+    },
+    "expand": {
+      "copy": "复制",
+      "copied": "✓已复制"
+    }
+  },
+  "version-check": {
+    "available": "{tag} 可用",
+    "latest": "{tag} · 已是最新",
+    "loading": "正在检查…",
+    "updating": "更新中…",
+    "confirm": "更新",
+    "local-changes-error": "存在本地更改，请先 commit 或 stash 后再试。",
+    "update-failed": "更新失败。",
+    "success": "更新完成。请在终端执行 bun run dev 以重启。",
+    "network-error": "网络错误：{message}",
+    "update-request-failed": "更新请求失败"
+  },
+  "default-view": {
+    "date-filter": {
+      "all": "全时段",
+      "today": "今天",
+      "week": "本周"
+    },
+    "timeline-meta": {
+      "prefix-quality": "质量",
+      "prefix-volume": "累计",
+      "aria-quality": "请求质量",
+      "aria-volume": "累计量"
+    },
+    "layout": {
+      "expand": "展开",
+      "collapse": "折叠",
+      "go-home": "返回首页"
+    }
+  },
+  "filter-bar": {
+    "all": "全部",
+    "request-type": "请求类型",
+    "tool-category": "工具分类",
+    "prompt": "用户输入",
+    "system": "系统",
+    "tool-call": "工具调用",
+    "agent": "Agent",
+    "skill": "Skill",
+    "mcp": "MCP",
+    "prompt-title": "仅显示用户输入（LLM推理请求）",
+    "system-title": "仅显示系统消息（上下文注入等）",
+    "tool-call-title": "仅显示工具执行请求（Read/Write/Bash等）",
+    "agent-title": "仅显示Agent工具执行",
+    "skill-title": "仅显示Skill工具执行",
+    "mcp-title": "仅显示MCP工具执行"
+  },
+  "search-box": {
+    "clear-label": "清除搜索"
+  },
+  "stat-tooltip": {
+    "context-growth": {
+      "desc": "显示会话期间累计的 input_tokens 流量。\n• 线下方（深色区域）= 已用量，线上方（浅色区域）= 剩余上限。\n• 上限由数据库中的 model_limits 种子（Migration 026）决定 — 管理员可通过 SQL 直接更新模型映射。\n• 附加信号：模型名称带有 [1m] 后缀，或 anthropic-beta 请求头中含有 context-1m-2025-08-07 令牌，则上限提升至 1M。\n• 本图表基于代理观测，可能与 Claude 运行时自动压缩后的实际使用率不同。",
+      "title": "累计令牌"
+    },
+    "badge": {
+      "spike": "Token 数超过会话平均值的 2 倍",
+      "loop": "同一工具连续调用 3 次以上",
+      "slow": "执行时间位于前 5%",
+      "error": "工具执行失败",
+      "cache": "命中提示词缓存"
+    },
+    "sessions": {
+      "desc": "当前筛选时间段内创建的 Claude Code 会话数。\n执行 claude 命令时会话开始。",
+      "title": "总会话数"
+    },
+    "requests": {
+      "desc": "prompt、tool_call、system 类型请求的总数。\n以钩子事件接收为基准。",
+      "title": "总请求数"
+    },
+    "tokens": {
+      "desc": "输入与输出 Token 的总和。\n包含 cache_creation 和 cache_read Token。",
+      "title": "总令牌数"
+    },
+    "active": {
+      "desc": "当前实时运行的会话数。\n以 ended_at 为 NULL 且最近 30 分钟内有活动为基准（storage/_shared.LIVE_STALE_THRESHOLD_MS）。\n圆点颜色：绿色 = SSE 已连接，红色 = 已断开。",
+      "title": "实时会话"
+    },
+    "avg-duration": {
+      "desc": "prompt 类型请求的平均响应时间。\n包含 LLM 推理和网络延迟。",
+      "title": "平均响应时间"
+    },
+    "p95": {
+      "desc": "tool_call 响应时间的第 95 百分位。\n排除最慢 5% 请求后的基准值。",
+      "title": "P95 响应时间"
+    },
+    "err": {
+      "desc": "tool_call 中错误响应的比率。\n超过 5% 时显示红色警告。",
+      "title": "错误率"
+    },
+    "point-hover": {
+      "accumulated-with-limit": "累计 {value} / {limit} tokens（{percent}%）",
+      "accumulated": "累计 {value} tokens",
+      "delta": "较上一轮 {delta} tokens",
+      "model": "模型 {model}"
+    }
+  },
+  "detail-view": {
+    "total-tokens": "共 {tokens} 个token",
+    "ended-at": "结束: {time}"
+  }
+}

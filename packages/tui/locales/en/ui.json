@@ -1,0 +1,40 @@
+{
+  "help-overlay": {
+    "title": "Help · spyglass",
+    "footer": "[?] / [Esc] / [q] to close",
+    "categories": {
+      "navigation": "Navigation",
+      "view": "View",
+      "live-feed": "Live Feed",
+      "tools-anomalies": "Tools / Anomalies",
+      "modal": "Modal",
+      "meta": "Meta"
+    },
+    "keys": {
+      "down": "down",
+      "up": "up",
+      "top": "top",
+      "bottom": "bottom",
+      "open-expand": "open/expand",
+      "back": "back",
+      "live-feed": "Live Feed",
+      "sessions": "Sessions",
+      "tools": "Tools",
+      "anomalies": "Anomalies",
+      "ambient-mode": "Ambient mode",
+      "zoom-panel": "Zoom panel",
+      "freeze": "freeze",
+      "follow": "follow",
+      "session": "session",
+      "search": "search",
+      "next-sub-tab": "next sub-tab",
+      "prev-sub-tab": "prev sub-tab",
+      "time-range": "time range",
+      "command": "command",
+      "this-help": "this help",
+      "quit": "quit",
+      "reconnect": "reconnect",
+      "redraw": "redraw"
+    }
+  }
+}

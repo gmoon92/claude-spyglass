@@ -1,0 +1,149 @@
+{
+  "checks": {
+    "integrity": {
+      "orphan": {
+        "ok": "orphan 行 (turn_id NULL): 0件",
+        "warn": "orphan 行 {count}件 — turnに紐付かないtool_call/response",
+        "hint": "session resumeまたはhookの漏れ。UIは\"セッションプロローグ\"セクションで表示 (ADR-001 P1)",
+        "unavailable": "orphan 行の確認不可 (DBがない、またはエラー)"
+      },
+      "zeroResponseTurns": {
+        "ok": "response 0件のturn: 0",
+        "warn": "response 0件のturn: {count}件",
+        "hint": "tool-only turn(正常)またはStop/proxy fallbackの両方欠落(異常)。個別確認が必要",
+        "unavailable": "response 0件のturnの確認不可"
+      },
+      "longProxyResponses": {
+        "ok": "120秒超過のproxy応答: 0件",
+        "warn": "120秒超過のproxy応答: {count}件",
+        "hint": "v23(P1-E)の正確マッチパスには影響なし。fallback時間ベースcross-linkパスのみ残存リスク — 情報提供",
+        "unavailable": "120秒超過のproxy応答の確認不可"
+      },
+      "duplicateResponses": {
+        "ok": "重複response: 0件",
+        "fail": "重複response {count}ペア — 同じメッセージが2行保存されている",
+        "hint": "ADR-001 P1-A修正後は0であるべき。コードのリグレッションの可能性 — 変更履歴を確認",
+        "unavailable": "重複responseの確認不可"
+      },
+      "mismatchedTurnIds": {
+        "ok": "mismatched turn_id: 0件",
+        "fail": "mismatched turn_id {count}件 — timestamp基準で誤ってタグ付けされた行",
+        "hint": "ADR-001 P1-AのgetTurnIdAt適用後は0であるべき。リグレッションの可能性",
+        "unavailable": "mismatched turn_idの確認不可"
+      },
+      "unlinkedToolCalls": {
+        "ok": "tool_call api_request_id マッチ率 100% ({total}件)",
+        "okSample": "tool_call {total}件 (サンプル不足、マッチ率評価をスキップ)",
+        "okPartial": "tool_call api_request_id 未マッチ {unlinked}/{total} ({pct}%)",
+        "warn": "tool_call api_request_id 未マッチ {unlinked}/{total} ({pct}%)",
+        "hint": "proxy SSEのtool_useキャプチャ漏れ、またはhook到着順序の逆転を疑う (ADR-001 P1-E)",
+        "unavailable": "tool_call api_request_id マッチの確認不可",
+        "noRecent": "直近1時間内にtool_callなし (チェックスキップ)"
+      },
+      "orphanProxyToolUses": {
+        "ok": "proxy_tool_uses orphan: 0件",
+        "okWithCount": "proxy_tool_uses orphan {count}件 (通常はユーザーがキャンセルしたtool_use)",
+        "unavailable": "proxy_tool_uses orphanの確認不可"
+      }
+    },
+    "environment": {
+      "bun": {
+        "ok": "Bun {version}",
+        "fail": "Bun {version} (require ≥ 1.0)",
+        "failNotInstalled": "Bunがインストールされていません",
+        "hintUpgrade": "bun upgradeを実行してください",
+        "hintInstall": "https://bun.sh/install からインストールしてください"
+      },
+      "settingsJson": {
+        "ok": "settings.json 正常",
+        "failMissing": "settings.jsonがありません",
+        "failParse": "settings.json JSONパース失敗",
+        "hintInstall": "次を実行してください: curl -fsSL https://raw.githubusercontent.com/gmoon92/claude-spyglass/main/scripts/install.sh | bash",
+        "hintFixJson": "正しいJSON形式に修正してください"
+      },
+      "hooksRegistered": {
+        "ok": "フック登録済み (SPYGLASS_DIR: {dir})",
+        "warnNoDir": "フック設定あり、ただしSPYGLASS_DIR未設定",
+        "failNotRegistered": "フックが登録されていません",
+        "failUnavailable": "フック設定の確認不可 (settings.jsonなし)",
+        "hintSetDir": "env.SPYGLASS_DIRを設定してください (例: ~/.spyglass-src または /path/to/claude-spyglass)",
+        "hintAddHooks": "settings.jsonにspyglass-collect.shフックを追加してください",
+        "hintNeedSettings": "settings.jsonが必要です"
+      },
+      "hookExecutable": {
+        "ok": "フックスクリプト実行権限 OK",
+        "warnNoDir": "SPYGLASS_DIR未設定のためフックスクリプト確認不可",
+        "failMissing": "フックスクリプトがありません: {path}",
+        "failNoPermission": "フックスクリプトに実行権限がありません: {path}",
+        "failUnavailable": "フックスクリプトの場所確認不可",
+        "failCheckFailed": "フックスクリプトの確認失敗",
+        "hintSetDir": "settings.jsonでenv.SPYGLASS_DIRを設定してください",
+        "hintCheckPath": "SPYGLASS_DIRのパスを確認してください",
+        "hintChmod": "chmod +x {path}",
+        "hintNeedSettings": "settings.jsonが必要です",
+        "hintCheckFormat": "settings.jsonの形式を確認してください"
+      }
+    },
+    "database": {
+      "permissions": {
+        "ok": "DB権限: {perms}",
+        "warn": "DB権限: {perms} (推奨: 600)",
+        "warnNoDb": "DBファイルがまだありません",
+        "fail": "DBファイル権限の確認失敗",
+        "hintChmod": "chmod 600 {path}",
+        "hintAutoCreate": "サーバーを実行すると自動的に作成されます",
+        "hintCorrupted": "DBファイルが破損している可能性があります"
+      },
+      "schemaVersion": {
+        "ok": "DBスキーマ v{version}",
+        "warnUnknown": "DBスキーマバージョン不明 (v0)",
+        "warnOld": "DBスキーマ v{version} (推奨: v12+)",
+        "warnNoDb": "DBファイルがないためスキーマバージョンの確認不可",
+        "warnCheckFailed": "DBスキーマバージョンの確認失敗",
+        "hintMigrate": "Track 1マイグレーションが未完了の可能性、またはDBを初期化してください",
+        "hintAutoCreate": "サーバーを実行すると自動的に作成されます",
+        "hintCorrupted": "DBファイルが破損している可能性があります"
+      },
+      "recentActivity": {
+        "ok": "直近5分以内に収集活動あり",
+        "warn": "最終収集: {minutes}分前",
+        "warnNoData": "収集されたデータなし",
+        "warnUnavailable": "直近収集活動の確認不可 (DBなし)",
+        "warnError": "収集活動の確認中にエラー発生",
+        "hintRun": "Claude Codeを実行し、bun run devを実行してください",
+        "hintAutoCreate": "サーバーを実行し、Claude Codeでコマンドを実行してください",
+        "hintCorrupted": "DBが破損している可能性があります"
+      }
+    },
+    "server": {
+      "port": {
+        "ok": "ポート {port} 利用可能",
+        "warn": "ポート {port} 使用中",
+        "hint": "別のプロセスがポートを使用中です。lsof -i :{port}で確認してください"
+      }
+    }
+  },
+  "fix": {
+    "dbPermissionOk": "DB権限修正: chmod 600 {path}",
+    "dbPermissionFail": "DB権限修正失敗: {path}",
+    "hookPermissionOk": "フックスクリプト権限修正: chmod +x {path}",
+    "hookPermissionFail": "フックスクリプト権限修正失敗",
+    "dupRemoved": "重複response {count}件削除 (ADR-001 P1-A)",
+    "mismatchFixed": "mismatched turn_id {count}件修正 (ADR-001 P1-A)",
+    "orphanMapped": "orphan turn_id {count}件をretrospectiveマッピング (ADR-001 P1-B)",
+    "dataFixFail": "データ整合性修正失敗: {error}"
+  },
+  "cli": {
+    "usage": "使用法: bun run packages/server/src/cli.ts doctor [--fix]",
+    "error-prefix": "エラー:"
+  },
+  "doctor": {
+    "title": "🔍 spyglass 環境チェック",
+    "auto-fix-done": "自動修正完了。doctorを再実行してください",
+    "fail-summary": "{fail}件失敗、{warn}件警告",
+    "fail-hint": "上記のヒントに従って問題を解決してください",
+    "warn-summary": "{warn}件警告",
+    "warn-hint": "必要に応じて上記のヒントを参照してください",
+    "all-pass": "すべてのチェックに合格しました!"
+  }
+}

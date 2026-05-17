@@ -1,0 +1,149 @@
+{
+  "checks": {
+    "integrity": {
+      "orphan": {
+        "ok": "orphan 行 (turn_id NULL): 0",
+        "warn": "orphan 行 {count} — 未绑定到任何 turn 的 tool_call/response",
+        "hint": "session resume 或 hook 遗漏。UI 以 \"会话序言\" 区块展示 (ADR-001 P1)",
+        "unavailable": "无法检查 orphan 行 (数据库缺失或错误)"
+      },
+      "zeroResponseTurns": {
+        "ok": "0 个 response 的 turn: 0",
+        "warn": "0 个 response 的 turn: {count}",
+        "hint": "tool-only turn(正常) 或 Stop/proxy fallback 全部缺失(异常)。需单独检查",
+        "unavailable": "无法检查 0 个 response 的 turn"
+      },
+      "longProxyResponses": {
+        "ok": "超过 120 秒的 proxy 响应: 0",
+        "warn": "超过 120 秒的 proxy 响应: {count}",
+        "hint": "v23(P1-E) 精确匹配路径不受影响。仅 fallback 时间交叉链接路径存在残余风险 — 仅供参考",
+        "unavailable": "无法检查超过 120 秒的 proxy 响应"
+      },
+      "duplicateResponses": {
+        "ok": "重复 response: 0",
+        "fail": "重复 response {count} 对 — 同一条消息保存为两行",
+        "hint": "ADR-001 P1-A 修复后应为 0。可能存在代码回退 — 请检查变更历史",
+        "unavailable": "无法检查重复 response"
+      },
+      "mismatchedTurnIds": {
+        "ok": "mismatched turn_id: 0",
+        "fail": "mismatched turn_id {count} — 按 timestamp 错误标记的行",
+        "hint": "应用 ADR-001 P1-A 的 getTurnIdAt 后应为 0。可能存在回退",
+        "unavailable": "无法检查 mismatched turn_id"
+      },
+      "unlinkedToolCalls": {
+        "ok": "tool_call api_request_id 匹配率 100% ({total} 行)",
+        "okSample": "tool_call {total} 行 (样本不足，跳过匹配率评估)",
+        "okPartial": "tool_call api_request_id 未匹配 {unlinked}/{total} ({pct}%)",
+        "warn": "tool_call api_request_id 未匹配 {unlinked}/{total} ({pct}%)",
+        "hint": "怀疑 proxy SSE 的 tool_use 捕获遗漏或 hook 到达顺序反转 (ADR-001 P1-E)",
+        "unavailable": "无法检查 tool_call api_request_id 匹配",
+        "noRecent": "最近 1 小时内无 tool_call (检查跳过)"
+      },
+      "orphanProxyToolUses": {
+        "ok": "proxy_tool_uses orphan: 0",
+        "okWithCount": "proxy_tool_uses orphan {count} 行 (通常是用户取消的 tool_use)",
+        "unavailable": "无法检查 proxy_tool_uses orphan"
+      }
+    },
+    "environment": {
+      "bun": {
+        "ok": "Bun {version}",
+        "fail": "Bun {version} (要求 ≥ 1.0)",
+        "failNotInstalled": "未安装 Bun",
+        "hintUpgrade": "请运行 bun upgrade",
+        "hintInstall": "请从 https://bun.sh/install 安装"
+      },
+      "settingsJson": {
+        "ok": "settings.json 正常",
+        "failMissing": "缺少 settings.json",
+        "failParse": "settings.json JSON 解析失败",
+        "hintInstall": "请运行: curl -fsSL https://raw.githubusercontent.com/gmoon92/claude-spyglass/main/scripts/install.sh | bash",
+        "hintFixJson": "请修正为正确的 JSON 格式"
+      },
+      "hooksRegistered": {
+        "ok": "钩子已注册 (SPYGLASS_DIR: {dir})",
+        "warnNoDir": "钩子已配置，但未设置 SPYGLASS_DIR",
+        "failNotRegistered": "钩子未注册",
+        "failUnavailable": "无法检查钩子 (缺少 settings.json)",
+        "hintSetDir": "请设置 env.SPYGLASS_DIR (例如: ~/.spyglass-src 或 /path/to/claude-spyglass)",
+        "hintAddHooks": "请在 settings.json 中添加 spyglass-collect.sh 钩子",
+        "hintNeedSettings": "需要 settings.json"
+      },
+      "hookExecutable": {
+        "ok": "钩子脚本执行权限 OK",
+        "warnNoDir": "未设置 SPYGLASS_DIR，无法检查钩子脚本",
+        "failMissing": "缺少钩子脚本: {path}",
+        "failNoPermission": "钩子脚本无执行权限: {path}",
+        "failUnavailable": "无法定位钩子脚本",
+        "failCheckFailed": "钩子脚本检查失败",
+        "hintSetDir": "请在 settings.json 中设置 env.SPYGLASS_DIR",
+        "hintCheckPath": "请检查 SPYGLASS_DIR 路径",
+        "hintChmod": "chmod +x {path}",
+        "hintNeedSettings": "需要 settings.json",
+        "hintCheckFormat": "请检查 settings.json 格式"
+      }
+    },
+    "database": {
+      "permissions": {
+        "ok": "DB 权限: {perms}",
+        "warn": "DB 权限: {perms} (推荐: 600)",
+        "warnNoDb": "数据库文件尚不存在",
+        "fail": "数据库文件权限检查失败",
+        "hintChmod": "chmod 600 {path}",
+        "hintAutoCreate": "启动服务器后将自动创建",
+        "hintCorrupted": "数据库文件可能已损坏"
+      },
+      "schemaVersion": {
+        "ok": "DB 架构 v{version}",
+        "warnUnknown": "DB 架构版本未知 (v0)",
+        "warnOld": "DB 架构 v{version} (推荐: v12+)",
+        "warnNoDb": "无法检查架构版本 (数据库文件缺失)",
+        "warnCheckFailed": "DB 架构版本检查失败",
+        "hintMigrate": "Track 1 迁移可能尚未完成，或请重置数据库",
+        "hintAutoCreate": "启动服务器后将自动创建",
+        "hintCorrupted": "数据库文件可能已损坏"
+      },
+      "recentActivity": {
+        "ok": "最近 5 分钟内有采集活动",
+        "warn": "最近采集: {minutes} 分钟前",
+        "warnNoData": "无已采集数据",
+        "warnUnavailable": "无法检查最近采集活动 (数据库缺失)",
+        "warnError": "检查采集活动时发生错误",
+        "hintRun": "请运行 Claude Code 并执行 bun run dev",
+        "hintAutoCreate": "请启动服务器并在 Claude Code 中执行命令",
+        "hintCorrupted": "数据库可能已损坏"
+      }
+    },
+    "server": {
+      "port": {
+        "ok": "端口 {port} 可用",
+        "warn": "端口 {port} 正在使用",
+        "hint": "其他进程正在使用该端口。请使用 lsof -i :{port} 检查"
+      }
+    }
+  },
+  "fix": {
+    "dbPermissionOk": "DB 权限已修复: chmod 600 {path}",
+    "dbPermissionFail": "DB 权限修复失败: {path}",
+    "hookPermissionOk": "钩子脚本权限已修复: chmod +x {path}",
+    "hookPermissionFail": "钩子脚本权限修复失败",
+    "dupRemoved": "已删除重复 response {count} 行 (ADR-001 P1-A)",
+    "mismatchFixed": "已修复 mismatched turn_id {count} 行 (ADR-001 P1-A)",
+    "orphanMapped": "已 retrospective 映射 orphan turn_id {count} 行 (ADR-001 P1-B)",
+    "dataFixFail": "数据一致性修复失败: {error}"
+  },
+  "cli": {
+    "usage": "用法: bun run packages/server/src/cli.ts doctor [--fix]",
+    "error-prefix": "错误:"
+  },
+  "doctor": {
+    "title": "🔍 spyglass 环境检查",
+    "auto-fix-done": "自动修复完成。请再次运行 doctor",
+    "fail-summary": "{fail} 项失败,{warn} 项警告",
+    "fail-hint": "请按照上述提示解决问题",
+    "warn-summary": "{warn} 项警告",
+    "warn-hint": "如有需要请参考上述提示",
+    "all-pass": "所有检查均通过!"
+  }
+}

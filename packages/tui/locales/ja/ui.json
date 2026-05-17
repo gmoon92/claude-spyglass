@@ -1,0 +1,40 @@
+{
+  "help-overlay": {
+    "title": "ヘルプ · spyglass",
+    "footer": "[?] / [Esc] / [q] で閉じる",
+    "categories": {
+      "navigation": "ナビゲーション",
+      "view": "ビュー",
+      "live-feed": "ライブフィード",
+      "tools-anomalies": "ツール / 異常",
+      "modal": "モーダル",
+      "meta": "その他"
+    },
+    "keys": {
+      "down": "下へ",
+      "up": "上へ",
+      "top": "先頭へ",
+      "bottom": "末尾へ",
+      "open-expand": "開く/展開",
+      "back": "戻る",
+      "live-feed": "ライブフィード",
+      "sessions": "セッション",
+      "tools": "ツール",
+      "anomalies": "異常",
+      "ambient-mode": "アンビエントモード",
+      "zoom-panel": "ズームパネル",
+      "freeze": "一時停止",
+      "follow": "フォロー",
+      "session": "セッション",
+      "search": "検索",
+      "next-sub-tab": "次のサブタブ",
+      "prev-sub-tab": "前のサブタブ",
+      "time-range": "時間範囲",
+      "command": "コマンド",
+      "this-help": "このヘルプ",
+      "quit": "終了",
+      "reconnect": "再接続",
+      "redraw": "再描画"
+    }
+  }
+}

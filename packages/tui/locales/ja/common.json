@@ -1,0 +1,7 @@
+{
+  "search": {
+    "confirm-hint": " (Enter: 確定  Esc: キャンセル)",
+    "clear-hint": "  [Esc] クリア"
+  },
+  "token-confidence-low": "* トークン信頼度低 (transcript解析失敗またはproxyフォールバック)"
+}

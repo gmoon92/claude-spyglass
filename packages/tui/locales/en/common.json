@@ -1,0 +1,7 @@
+{
+  "search": {
+    "confirm-hint": " (Enter: confirm  Esc: cancel)",
+    "clear-hint": "  [Esc] clear"
+  },
+  "token-confidence-low": "* Low token confidence (transcript parse failed or proxy fallback)"
+}

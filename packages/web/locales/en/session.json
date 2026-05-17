@@ -1,0 +1,51 @@
+{
+  "rows": {
+    "empty-message": "No message",
+    "no-data": "No data",
+    "status": {
+      "ended": "Ended session",
+      "live": "Live session",
+      "stale": "stale — SessionEnd possibly missing"
+    }
+  },
+  "session-detail": {
+    "turn-rows": {
+      "confidence-error": "Response metadata confidence error (collection failed)",
+      "confidence-low": "Low response metadata confidence (proxy fallback)",
+      "tool-empty": "No tool calls"
+    },
+    "turn-views": {
+      "bar-pct-title": "This turn's share of total session tokens. All turns in the same session sum to 100% (Turn IN+OUT ÷ session cumulative tokens).",
+      "sysrem-chip-title": "{count} new system reminder(s) in this turn. Click to view.",
+      "sysrem-title": "System Reminder",
+      "sysrem-count": "· {count}",
+      "sysrem-close": "Close",
+      "tab-turn": "Turn view",
+      "tab-requests": "Requests",
+      "tab-llm": "API payload",
+      "tab-syslib": "System library",
+      "tab-llm-title": "Original payload sent by proxy to the Anthropic API",
+      "max-cost-badge-title": "Turn with the highest token consumption in this session",
+      "max-cost-badge": "Max cost turn: T{n} ({tokens})",
+      "top-tool-badge-title": "Most frequently called tool in this session",
+      "top-tool-badge": "Top tool: {name} ({count} calls)",
+      "meta-tool-count": "{count} tool(s)",
+      "meta-title-tool": "Tools: number of tool_calls executed in this turn",
+      "meta-title-in": "IN: total input tokens for this turn",
+      "meta-title-out": "OUT: total output tokens for this turn",
+      "meta-title-dur": "⏱: LLM response time for user prompt",
+      "complexity-high": "Complex",
+      "complexity-mid": "Moderate",
+      "system-changed": "System prompt changed in this turn (hash 8-char prefix)",
+      "system-started": "System prompt started in this turn (hash 8-char prefix)",
+      "response-chip-label": "Assistant response",
+      "payload-btn-title": "View API payload closest to this turn's timestamp",
+      "payload-btn-aria": "View API payload",
+      "prologue-aria": "Session prologue",
+      "prologue-title": "Session Prologue",
+      "prologue-hint": "Activity before prompt registration",
+      "prologue-hint-title": "Tools and responses that arrived before the first user prompt was registered. May occur due to session resume or missing hooks.",
+      "prologue-transcript-tag": "Assistant response supplemented from transcript"
+    }
+  }
+}

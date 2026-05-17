@@ -1,0 +1,19 @@
+{
+  "formatters": {
+    "just-now": "just now",
+    "minutes-ago": "{n}m ago",
+    "hours-ago": "{n}h ago",
+    "days-ago": "{n}d ago"
+  },
+  "close": "Close",
+  "no-data": "No data",
+  "load-failed": "Failed to load: {message}",
+  "retry": "Retry",
+  "server-unavailable": "Cannot connect to server.",
+  "token-confidence-error": "Token confidence error (collection failed)",
+  "token-confidence-low": "Low token confidence (transcript parse failed or proxy fallback)",
+  "api-error": {
+    "dashboard-load-failed": "Dashboard load failed: {message}",
+    "request-list-load-failed": "Failed to load request list"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "rows": {
+    "empty-message": "无消息",
+    "no-data": "暂无数据",
+    "status": {
+      "ended": "已结束会话",
+      "live": "实时会话",
+      "stale": "stale — 可能缺少 SessionEnd"
+    }
+  },
+  "session-detail": {
+    "turn-rows": {
+      "confidence-error": "响应元数据可信度错误（采集失败）",
+      "confidence-low": "响应元数据可信度偏低（proxy 回退）",
+      "tool-empty": "无工具调用"
+    },
+    "turn-views": {
+      "bar-pct-title": "该轮次占会话总 Token 的比例。同一会话所有轮次之和为 100%（Turn IN+OUT ÷ 会话累计 Token）。",
+      "sysrem-chip-title": "此轮次中新出现的系统提醒 {count} 条，点击查看原文。",
+      "sysrem-title": "系统提醒",
+      "sysrem-count": "· {count}条",
+      "sysrem-close": "关闭",
+      "tab-turn": "轮次视图",
+      "tab-requests": "请求",
+      "tab-llm": "API 载荷",
+      "tab-syslib": "System 库",
+      "tab-llm-title": "proxy 发送至 Anthropic API 的原始载荷",
+      "max-cost-badge-title": "此会话中 Token 消耗最多的轮次",
+      "max-cost-badge": "最高消耗轮次：T{n}（{tokens}）",
+      "top-tool-badge-title": "此会话中调用次数最多的工具",
+      "top-tool-badge": "最多调用工具：{name}（{count}次）",
+      "meta-tool-count": "{count} 个工具",
+      "meta-title-tool": "工具：此轮次执行的 tool_call 数",
+      "meta-title-in": "IN：此轮次的输入 Token 总计",
+      "meta-title-out": "OUT：此轮次的输出 Token 总计",
+      "meta-title-dur": "⏱：用户提示词的 LLM 响应时间",
+      "complexity-high": "高",
+      "complexity-mid": "中等",
+      "system-changed": "此轮次中 system prompt 已更改（hash 前8位）",
+      "system-started": "此轮次中 system prompt 已开始（hash 前8位）",
+      "response-chip-label": "助手响应",
+      "payload-btn-title": "查看与此轮次时间最接近的 API 载荷",
+      "payload-btn-aria": "查看 API 载荷",
+      "prologue-aria": "会话序言",
+      "prologue-title": "会话序言",
+      "prologue-hint": "prompt 注册前的活动",
+      "prologue-hint-title": "在第一个用户提示词注册之前到达的工具与响应。可能由会话恢复或 hook 缺失引起。",
+      "prologue-transcript-tag": "从 transcript 补充的助手响应"
+    }
+  }
+}

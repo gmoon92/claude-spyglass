@@ -1,0 +1,407 @@
+{
+  "html": {
+    "error-banner": {
+      "msg": "サーバーに接続できません。",
+      "retry": "再試行"
+    },
+    "app-rail": {
+      "aria": "アプリモード",
+      "browse-aria": "ブラウズ（セッション・リクエスト表示）",
+      "browse-title": "ブラウズ",
+      "metadocs-aria": "Behavior Definitions カタログ",
+      "metadocs-title": "Behavior Definitions"
+    },
+    "left-panel": {
+      "resize-title": "ドラッグで幅調整 · ダブルクリックでコンテンツ幅に合わせる",
+      "anomaly-aria": "異常検知通知",
+      "th-project": "プロジェクト",
+      "th-session": "セッション",
+      "th-token": "トークン",
+      "th-item": "項目",
+      "sync-title": "現在の cwd + グローバル + 既知のすべての cwd を再スキャン",
+      "sync-label": "同期",
+      "vertical-handle-title": "ドラッグで高さ調整"
+    },
+    "session-panel": {
+      "label": "セッション",
+      "hint": "プロジェクトを選択してください",
+      "empty": "プロジェクトを選択してください"
+    },
+    "sidebar-toggle": {
+      "title": "左パネルを切り替え (⌘B)",
+      "aria": "左パネルを切り替え"
+    },
+    "chart-section": {
+      "label": "リクエスト推移（リアルタイム）",
+      "subtitle": "直近30分 · リアルタイム",
+      "lang-switcher-aria": "言語を選択",
+      "update-badge-aria": "アップデートあり",
+      "update-badge-aria-available": "アップデートあり — v{tag}",
+      "update-badge-aria-latest": "最新版 — v{tag}",
+      "update-badge-aria-loading": "アップデートを確認中",
+      "toggle-title": "折りたたむ / 展開する",
+      "toggle-aria": "折りたたむ"
+    },
+    "timeline-meta": {
+      "aria": "サマリー指標",
+      "quality-group-aria": "リクエスト品質（全期間）",
+      "quality-group-label": "品質 · 全期間",
+      "avg-label": "平均",
+      "error-rate-label": "エラー率",
+      "volume-group-aria": "累積ボリューム（全期間）",
+      "volume-group-label": "累積 · 全期間",
+      "sessions-label": "セッション",
+      "requests-label": "リクエスト",
+      "tokens-label": "トークン",
+      "no-data": "データがありません"
+    },
+    "requests-panel": {
+      "label": "最近のリクエスト",
+      "load-more": "もっと見る"
+    },
+    "detail-loading": "読み込み中…",
+    "turn-list-aria": "ターン一覧",
+    "llm-input-aria": "API ペイロード",
+    "meta-docs": {
+      "root-aria": "Behavior Definitions カタログ",
+      "tabs-aria": "Behavior Definitions サブタブ",
+      "body-aria": "Behavior Definitions 本文",
+      "tool-stats-aria": "プロジェクトツール統計"
+    },
+    "footer": {
+      "help-title": "キーボードショートカット (?)",
+      "help-aria": "キーボードショートカット"
+    },
+    "update-modal": {
+      "title": "アップデートあり",
+      "close-aria": "閉じる",
+      "current-version": "現在",
+      "latest-version": "最新",
+      "note": "インストール後、サーバーが一時的に再起動されます。",
+      "body": "アップデートしますか？",
+      "cancel": "キャンセル",
+      "confirm": "アップデート"
+    },
+    "syslib-body-aria": "システムプロンプトライブラリ"
+  },
+  "chart": {
+    "no-data": "データなし",
+    "count-unit": "{count}件",
+    "label": {
+      "cache": "キャッシュ",
+      "others": "その他",
+      "total": "全体",
+      "input": "入力",
+      "hit": "ヒット",
+      "creation": "登録",
+      "hit-rate": "ヒット率"
+    }
+  },
+  "left-panel": {
+    "no-data": "データなし",
+    "live-count": "{count} ライブ",
+    "select-project": "プロジェクトを選択",
+    "session-count": "{project} · {count}件",
+    "global-row-title": "user(global) — すべての cwd + グローバルカタログ合算"
+  },
+  "infra": {
+    "new-requests-banner": "新しいリクエスト {count}件 — クリックして最新へ移動"
+  },
+  "llm-input": {
+    "no-recent-proxy": "最近のプロキシリクエストなし",
+    "no-session-proxy": "このセッションにはプロキシリクエストがありません",
+    "session-id-label": "セッション ID:",
+    "load-failed": "読み込み失敗: {message}",
+    "request-not-found": "リクエストが見つかりません ({id})",
+    "no-system-field": "このリクエストには system フィールドがありません。",
+    "system-load-failed": "本文の読み込み失敗または未存在 — system_hash のみ判明。",
+    "no-messages": "メッセージなし",
+    "search-placeholder": "メッセージ検索 (2文字以上)",
+    "search-aria-label": "メッセージ検索",
+    "expand-all": "すべて展開",
+    "collapse-all": "すべて折りたたむ",
+    "expand-all-title": "すべてのメッセージを展開",
+    "collapse-all-title": "すべてのメッセージを折りたたむ",
+    "proxy-selector-label": "プロキシリクエスト ({count}件)",
+    "banner-text": "このタブは proxy が Anthropic API に送信した <strong>元のペイロード</strong>です — フック観測データ（ターンビュー）と異なる場合があります。",
+    "refs-popover-aria-label": "System プロンプト参照リスト",
+    "refs-popover-title": "参照リスト",
+    "refs-popover-loading": "読み込み中…",
+    "refs-popover-wait": "しばらくお待ちください…",
+    "refs-popover-count": "{count}件 · 新しい順 · hash {hash}…",
+    "refs-popover-empty": "参照リクエストがありません。",
+    "refs-popover-load-failed": "読み込み失敗: {message}",
+    "refs-close-label": "閉じる",
+    "ref-session-unspecified": "セッション未指定",
+    "ref-session-current": "現在のセッション",
+    "ref-jump-title": "このプロキシリクエストへジャンプ",
+    "ref-other-session-title": "別セッションの参照 — ジャンプは現在のセッション内のみ対応",
+    "ref-count-btn-title": "このシステムプロンプトを参照する API リクエスト {count}件の一覧を表示。",
+    "ref-count-span-title": "このシステムプロンプト（hash 基準）を参照する API リクエスト数。",
+    "segment-count-title": "元の system 配列で本文として使用されたテキストセグメント数。(通常 idx[0] は課金用ヘッダー、idx[1] 以降が本文)",
+    "byte-size-title": "システムプロンプト本文のバイトサイズ。",
+    "system-summary-title": "LLM が受け取ったシステムプロンプト本文。元の system 配列 idx[0] の課金用ヘッダーは hash 正規化段階で除去されています。",
+    "payload-decode-failed": "payload デコード失敗",
+    "system-none": "system なし"
+  },
+  "meta-docs-view": {
+    "col-type": "タイプ",
+    "col-name": "名前",
+    "col-source": "パス",
+    "col-invocations": "呼出数",
+    "col-last-used": "最終適用",
+    "col-total-tokens": "累計トークン",
+    "filter-type-label": "タイプ",
+    "filter-display-label": "表示",
+    "filter-all": "全て",
+    "filter-unused": "未使用のみ",
+    "filter-orphan": "孤立のみ",
+    "include-deleted-label": "削除済みも表示",
+    "include-deleted-title": "過去の呼び出し履歴はあるがディスクから消えた項目も含めます",
+    "card-used-title": "1回以上呼び出された Behavior Definitions",
+    "card-used-label": "使用済",
+    "card-unused-title": "カタログにあるが呼び出し0件",
+    "card-unused-label": "未使用",
+    "card-orphan-title": "呼び出しはあるが現在のカタログにない（外部/削除された定義）",
+    "orphan-path-label": "孤立",
+    "orphan-tooltip": "この呼び出しは別のワークスペース(.claude/)またはビルトイン/プラグイン定義から発生した可能性があります。同期時に複数のワークスペースをスキャンするとこの行がカタログ行に統合されます。",
+    "deleted-badge-title": "現在ディスクから消えた定義 (soft-deleted)",
+    "empty-project-title": "{project} に登録された Behavior Definitions がありません",
+    "empty-project-hint": "このプロジェクトは SessionStart で同期されていない可能性があります。左 thead の<strong>同期</strong>ボタンをクリックすると既知の全ワークスペースを再スキャンします。",
+    "empty-global-title": "Behavior Definitions がありません — SessionStart 後に自動同期されます",
+    "load-failed": "読み込み失敗: {message}",
+    "syncing-label": "同期中…",
+    "toast-sync-start": "同期開始…",
+    "toast-sync-done": "同期完了 — {summary}",
+    "toast-sync-failed": "同期失敗: {message}",
+    "sync-restore-label": "同期",
+    "orphan-scope-switch": "孤立行はプロジェクトのコンテキストがないため、全プロジェクトモードに切り替えました。",
+    "refresh-no-change": "変更なし",
+    "refresh-add": "{n}件追加",
+    "refresh-del": "{n}件削除",
+    "refresh-global": "グローバル {detail}",
+    "refresh-project": "プロジェクト {detail}",
+    "refresh-workspaces": "ワークスペース {n}個",
+    "refresh-no-result": "結果なし"
+  },
+  "tool-stats": {
+    "select-project": "プロジェクトを選択してください",
+    "select-project-hint": "左パネルでプロジェクトを選択するとツール別パフォーマンスマトリクスが表示されます。",
+    "load-failed": "データを読み込めません",
+    "retry": "再試行",
+    "no-data": "データなし",
+    "col-avg": "平均応答",
+    "col-calls": "呼び出し",
+    "col-tokens": "トークン",
+    "col-pct": "貢献度",
+    "col-errors": "エラー"
+  },
+  "syslib": {
+    "no-prompts": "システムプロンプトがありません（dedup カタログが空）",
+    "view-prompt-aria": "システムプロンプト本文を表示",
+    "load-failed": "読み込み失敗: {message}",
+    "not-found": "本文が見つかりません。",
+    "modal-load-failed": "読み込み失敗: {message}",
+    "close-label": "閉じる"
+  },
+  "cache-panel": {
+    "hit-rate": {
+      "title": "Cache Hit Rate",
+      "desc": "全入力トークンのうちプロンプトキャッシュから読み込まれた割合。\n≥70%: green · 30–69%: orange · <30%: red。"
+    },
+    "ratio": {
+      "title": "Creation / Read Ratio",
+      "desc": "キャッシュトークンの Write(初回生成) vs Read(再利用) 比率。\nstable: Read ≥ 70% — キャッシュが十分再利用されています。\nbuilding: Read < 70% — キャッシュを蓄積中です。"
+    },
+    "precision-tooltip": "{pct}% (精密値)"
+  },
+  "obs-panel": {
+    "no-data": "データなし",
+    "no-cache": "キャッシュなし",
+    "no-activity": "アクティビティなし",
+    "no-tool-calls": "ツール呼び出しなし",
+    "no-behavior-defs": "Behavior Definitions 呼び出しなし",
+    "recent-activity": "最近のアクティビティ",
+    "yesterday": "昨日 {val}",
+    "savings": "節約 {val}"
+  },
+  "obs-tooltip": {
+    "burn-rate": {
+      "title": "Burn Rate · 24時間",
+      "desc": "過去24時間のプロンプトリクエストの累積トークン合計。\n· 大きな数値: 24時間累積 input+output トークン\n· ▲/▼ %: 昨日同時刻比の変化率\n· sparkline: 1時間ごとのトークン使用量 24 本棒グラフ"
+    },
+    "cache-health": {
+      "title": "Cache Health · プロンプトキャッシュ",
+      "desc": "プロンプトキャッシュの現在のヒット率と24時間トレンド。\n· 大きな数値: cache_read / (input + cache_read)\n· グレード(●): ≥70% green / 30–69% blue / <30% amber\n· 節約: キャッシュヒットで再利用された入力トークン累計"
+    },
+    "live-pulse": {
+      "title": "Live Pulse · リアルタイム活動",
+      "desc": "現在のセッション活動状態。\n· 大きなテキスト: 最新イベント発生時刻 (relative)\n· ● n: アクティブセッション数 (直近60秒以内の活動)\n· sparkline: 5分窓のツール呼び出し数 (Phase 2)"
+    },
+    "tool-categories": {
+      "title": "Tool Categories · 分類",
+      "desc": "過去24時間のツール呼び出しカテゴリ別分布。\n· Agent : サブエージェント呼び出し (Task)\n· Skill : スキル実行\n· MCP   : MCP サーバー経由の外部ツール呼び出し\n· Native: 内蔵ツール (Read/Write/Bash/Edit 等)"
+    },
+    "cat-Agent": {
+      "title": "Agent",
+      "desc": "Task ツール経由のサブエージェント呼び出しの割合。\n子ツール呼び出しが多いほど深さが増します。"
+    },
+    "cat-Skill": {
+      "title": "Skill",
+      "desc": "スキル(SKILL.md)呼び出しの割合。\nドメイン知識・ワークフローのカプセル化に活用されます。"
+    },
+    "cat-MCP": {
+      "title": "MCP",
+      "desc": "MCP サーバー経由の外部ツール呼び出しの割合。\n例: playwright, context7, sequential-thinking。"
+    },
+    "cat-Native": {
+      "title": "Native",
+      "desc": "Claude Code 内蔵ツールの割合。\nRead / Write / Edit / Bash / Grep / Glob 等。"
+    },
+    "anomaly": {
+      "title": "Anomaly · 異常検知",
+      "desc": "過去24時間の異常パターン発生件数。\n· ツールエラー率 ≥5% (30分ウィンドウ)\n· 同一ツール ≥3回連続失敗\n· サブエージェント深さ ≥3 またはファンアウト ≥5\n· ターントークン ≥ p95×2"
+    }
+  },
+  "context-chart": {
+    "indicator": "累積 {value} / {limit} tokens ({percent}%)",
+    "footer": "Turn {turn} · 最大 {max} tokens · モデル上限: {limit}{model}"
+  },
+  "main": {
+    "date-filter": {
+      "all": {
+        "label": "全期間",
+        "title": "収集した全期間のデータを表示"
+      },
+      "today": {
+        "label": "今日",
+        "title": "今日 00:00（ローカル時間）以降のデータのみ表示"
+      },
+      "week": {
+        "label": "今週",
+        "title": "今週月曜日 00:00（ローカル時間）以降のデータのみ表示"
+      }
+    },
+    "system-filter": {
+      "title": "System ライブラリタブへ移動"
+    },
+    "kbd-help": {
+      "title": "キーボードショートカット",
+      "close": "閉じる",
+      "section": {
+        "nav": "ナビゲーション",
+        "filter": "フィルター",
+        "help": "ヘルプ"
+      },
+      "focus-search": "検索ボックスにフォーカス",
+      "close-modal": "モーダル / 展開パネル / 検索 / 詳細ビューを閉じる",
+      "focus-search-cmd": "検索ボックスにフォーカス (Ctrl+F)",
+      "help-toggle": "このヘルプを切り替え"
+    },
+    "expand": {
+      "copy": "コピー",
+      "copied": "✓コピー済み"
+    }
+  },
+  "version-check": {
+    "available": "{tag} が利用可能",
+    "latest": "{tag} · 最新",
+    "loading": "確認中…",
+    "updating": "アップデート中…",
+    "confirm": "アップデート",
+    "local-changes-error": "ローカルに変更があります。commit または stash してから再試行してください。",
+    "update-failed": "アップデートに失敗しました。",
+    "success": "アップデート完了。ターミナルで bun run dev を実行して再起動してください。",
+    "network-error": "ネットワークエラー: {message}",
+    "update-request-failed": "アップデートリクエスト失敗"
+  },
+  "default-view": {
+    "date-filter": {
+      "all": "全期間",
+      "today": "今日",
+      "week": "今週"
+    },
+    "timeline-meta": {
+      "prefix-quality": "品質",
+      "prefix-volume": "累積",
+      "aria-quality": "リクエスト品質",
+      "aria-volume": "累積ボリューム"
+    },
+    "layout": {
+      "expand": "展開する",
+      "collapse": "折りたたむ",
+      "go-home": "ホームへ移動"
+    }
+  },
+  "filter-bar": {
+    "all": "全て",
+    "request-type": "リクエスト種別",
+    "tool-category": "ツール分類",
+    "prompt": "ユーザー入力",
+    "system": "システム",
+    "tool-call": "ツール実行",
+    "agent": "Agent",
+    "skill": "Skill",
+    "mcp": "MCP",
+    "prompt-title": "ユーザー入力(LLM推論リクエスト)のみ表示",
+    "system-title": "システムメッセージ(コンテキスト注入等)のみ表示",
+    "tool-call-title": "ツール実行リクエスト(Read/Write/Bash等)のみ表示",
+    "agent-title": "Agentツール実行のみ表示",
+    "skill-title": "Skillツール実行のみ表示",
+    "mcp-title": "MCPツール実行のみ表示"
+  },
+  "search-box": {
+    "clear-label": "検索クリア"
+  },
+  "stat-tooltip": {
+    "context-growth": {
+      "desc": "セッション中に蓄積された input_tokens の推移を表示します。\n• ライン下(濃い領域) = 使用量、ライン上(薄い領域) = 残余上限。\n• 上限は DB の model_limits シード(Migration 026)を基準とします — 管理者は SQL でモデルマッピングを直接更新できます。\n• 追加シグナル: モデル名の [1m] サフィックス、または anthropic-beta ヘッダーの context-1m-2025-08-07 トークンがあれば 1M に昇格。\n• このチャートは proxy 観測に基づくため、Claude ランタイムの自動 compact 後の実際の使用率とは異なる場合があります。",
+      "title": "累積トークン"
+    },
+    "badge": {
+      "spike": "トークン数がセッション平均の 2 倍を超過",
+      "loop": "同一ツールを 3 回以上連続呼び出し",
+      "slow": "実行時間が上位 5% 超",
+      "error": "ツール実行失敗",
+      "cache": "プロンプトキャッシュヒット"
+    },
+    "sessions": {
+      "desc": "現在のフィルター期間内に作成された Claude Code セッション数。\nセッションは claude コマンド実行時に開始されます。",
+      "title": "総セッション数"
+    },
+    "requests": {
+      "desc": "prompt・tool_call・system タイプのリクエスト総数。\nフックイベント受信を基準とします。",
+      "title": "総リクエスト数"
+    },
+    "tokens": {
+      "desc": "入力トークンと出力トークンの合計。\ncache_creation・cache_read トークンを含みます。",
+      "title": "総トークン数"
+    },
+    "active": {
+      "desc": "現在リアルタイムで実行中のセッション数。\nended_at NULL かつ直近 30 分以内に活動あり(storage/_shared.LIVE_STALE_THRESHOLD_MS)。\nドット色: 緑 = SSE 接続中、赤 = 切断。",
+      "title": "ライブセッション"
+    },
+    "avg-duration": {
+      "desc": "prompt タイプリクエストの平均応答時間。\nLLM 推論とネットワーク遅延を含みます。",
+      "title": "平均応答時間"
+    },
+    "p95": {
+      "desc": "tool_call 応答時間の第 95 百分位。\n上位 5% の遅延リクエストを除いた基準値。",
+      "title": "P95応答時間"
+    },
+    "err": {
+      "desc": "tool_call 中のエラー応答の割合。\n5% を超えると赤色の警告で表示されます。",
+      "title": "エラー率"
+    },
+    "point-hover": {
+      "accumulated-with-limit": "累積 {value} / {limit} tokens ({percent}%)",
+      "accumulated": "累積 {value} tokens",
+      "delta": "前ターン比 {delta} tokens",
+      "model": "モデル {model}"
+    }
+  },
+  "detail-view": {
+    "total-tokens": "合計 {tokens} トークン",
+    "ended-at": "終了: {time}"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "help-overlay": {
+    "title": "帮助 · spyglass",
+    "footer": "[?] / [Esc] / [q] 关闭",
+    "categories": {
+      "navigation": "导航",
+      "view": "视图",
+      "live-feed": "实时流",
+      "tools-anomalies": "工具 / 异常",
+      "modal": "弹窗",
+      "meta": "其他"
+    },
+    "keys": {
+      "down": "向下",
+      "up": "向上",
+      "top": "顶部",
+      "bottom": "底部",
+      "open-expand": "打开/展开",
+      "back": "返回",
+      "live-feed": "实时流",
+      "sessions": "会话",
+      "tools": "工具",
+      "anomalies": "异常",
+      "ambient-mode": "环境模式",
+      "zoom-panel": "缩放面板",
+      "freeze": "冻结",
+      "follow": "跟随",
+      "session": "会话",
+      "search": "搜索",
+      "next-sub-tab": "下一子标签",
+      "prev-sub-tab": "上一子标签",
+      "time-range": "时间范围",
+      "command": "命令",
+      "this-help": "本帮助",
+      "quit": "退出",
+      "reconnect": "重新连接",
+      "redraw": "重绘"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "help-overlay": {
+    "title": "도움말 · spyglass",
+    "footer": "[?] / [Esc] / [q] 닫기",
+    "categories": {
+      "navigation": "탐색",
+      "view": "보기",
+      "live-feed": "라이브 피드",
+      "tools-anomalies": "도구 / 이상징후",
+      "modal": "모달",
+      "meta": "기타"
+    },
+    "keys": {
+      "down": "아래로",
+      "up": "위로",
+      "top": "맨 위로",
+      "bottom": "맨 아래로",
+      "open-expand": "열기/펼치기",
+      "back": "뒤로",
+      "live-feed": "라이브 피드",
+      "sessions": "세션",
+      "tools": "도구",
+      "anomalies": "이상징후",
+      "ambient-mode": "앰비언트 모드",
+      "zoom-panel": "패널 확대",
+      "freeze": "일시정지",
+      "follow": "따라가기",
+      "session": "세션",
+      "search": "검색",
+      "next-sub-tab": "다음 서브탭",
+      "prev-sub-tab": "이전 서브탭",
+      "time-range": "시간 범위",
+      "command": "명령",
+      "this-help": "이 도움말",
+      "quit": "종료",
+      "reconnect": "재연결",
+      "redraw": "다시 그리기"
+    }
+  }
+}

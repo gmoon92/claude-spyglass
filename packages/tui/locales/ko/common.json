@@ -1,0 +1,7 @@
+{
+  "search": {
+    "confirm-hint": " (Enter: 확정  Esc: 취소)",
+    "clear-hint": "  [Esc] 클리어"
+  },
+  "token-confidence-low": "* 토큰 신뢰도 낮음 (transcript 파싱 실패 또는 proxy fallback)"
+}

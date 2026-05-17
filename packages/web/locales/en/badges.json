@@ -1,0 +1,23 @@
+{
+  "renderers": {
+    "tool-status": {
+      "error": "Error"
+    },
+    "tool-hint": {
+      "lines": "[{n} lines]",
+      "error": "[Error]",
+      "saved": "[Saved]",
+      "files": "[{n} files]",
+      "matches": "[{n} matches]",
+      "failed": "[Failed]"
+    },
+    "model": {
+      "unknown": "Unknown model",
+      "synthetic": "SDK synthetic",
+      "no-info": "No model info"
+    },
+    "extract": {
+      "chars": "{n} chars total"
+    }
+  }
+}

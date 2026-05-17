@@ -1,0 +1,19 @@
+{
+  "formatters": {
+    "just-now": "방금",
+    "minutes-ago": "{n}분 전",
+    "hours-ago": "{n}시간 전",
+    "days-ago": "{n}일 전"
+  },
+  "close": "닫기",
+  "no-data": "데이터가 없습니다",
+  "load-failed": "불러오기 실패: {message}",
+  "retry": "다시 시도",
+  "server-unavailable": "서버에 연결할 수 없습니다.",
+  "token-confidence-error": "토큰 신뢰도 오류 (수집 실패)",
+  "token-confidence-low": "토큰 신뢰도 낮음 (transcript 파싱 실패 또는 proxy fallback)",
+  "api-error": {
+    "dashboard-load-failed": "대시보드 로드 실패: {message}",
+    "request-list-load-failed": "요청 목록 로드 실패"
+  }
+}

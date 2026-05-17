@@ -1,0 +1,51 @@
+{
+  "rows": {
+    "empty-message": "メッセージなし",
+    "no-data": "データがありません",
+    "status": {
+      "ended": "終了したセッション",
+      "live": "ライブセッション",
+      "stale": "stale — SessionEnd 欠落の可能性あり"
+    }
+  },
+  "session-detail": {
+    "turn-rows": {
+      "confidence-error": "応答メタ信頼度エラー（収集失敗）",
+      "confidence-low": "応答メタ信頼度低下（proxy フォールバック）",
+      "tool-empty": "ツール呼び出しなし"
+    },
+    "turn-views": {
+      "bar-pct-title": "このターンがセッション全体のトークンに占める割合。同じセッションの全ターン合計が 100%（Turn IN+OUT ÷ セッション累積トークン）。",
+      "sysrem-chip-title": "このターンで新たに登場したシステムリマインダー {count}件。クリックで原文を表示。",
+      "sysrem-title": "システムリマインダー",
+      "sysrem-count": "· {count}件",
+      "sysrem-close": "閉じる",
+      "tab-turn": "ターンビュー",
+      "tab-requests": "リクエスト",
+      "tab-llm": "API ペイロード",
+      "tab-syslib": "System ライブラリ",
+      "tab-llm-title": "proxy が Anthropic API に送信した元のペイロード",
+      "max-cost-badge-title": "このセッションで最もトークンを消費したターン",
+      "max-cost-badge": "最高コスト Turn: T{n}（{tokens}）",
+      "top-tool-badge-title": "このセッションで最も多く呼び出されたツール",
+      "top-tool-badge": "最多呼び出し Tool: {name}（{count}回）",
+      "meta-tool-count": "ツール {count}個",
+      "meta-title-tool": "ツール: このターンで実行された tool_call 数",
+      "meta-title-in": "IN: このターンの入力トークン合計",
+      "meta-title-out": "OUT: このターンの出力トークン合計",
+      "meta-title-dur": "⏱: ユーザープロンプトの LLM 応答時間",
+      "complexity-high": "複雑",
+      "complexity-mid": "中程度",
+      "system-changed": "このターンで system prompt が変更されました（hash 8文字プレフィックス）",
+      "system-started": "このターンで system prompt が開始されました（hash 8文字プレフィックス）",
+      "response-chip-label": "アシスタント応答",
+      "payload-btn-title": "このターン時刻に最も近い API ペイロードを表示",
+      "payload-btn-aria": "API ペイロードを表示",
+      "prologue-aria": "セッションプロローグ",
+      "prologue-title": "セッションプロローグ",
+      "prologue-hint": "prompt 登録前の活動",
+      "prologue-hint-title": "最初のユーザープロンプトが登録される前に到着したツール・応答です。セッションの再開またはフック欠落により発生する場合があります。",
+      "prologue-transcript-tag": "transcript から補完されたアシスタント応答"
+    }
+  }
+}
