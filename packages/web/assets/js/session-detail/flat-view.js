@@ -177,7 +177,10 @@ document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
   const { flatFiltered, flatAnomalyMap, turnFiltered, allTurns, allRequests } = e.detail;
 
   renderDetailRequests(flatFiltered, flatAnomalyMap);
-  renderTurnCards(turnFiltered, allTurns);
+  // anomaly-bloated-sys T-16: turn 카드 sparkline은 requests 응답의 agent_spike 객체에 의존.
+  //   turns 응답엔 agent_spike 메타데이터가 없어 turn-views는 allRequests를 한 번 더 받는다.
+  //   클라이언트 재계산이 아니라 서버 SSoT(agent_spike)의 다른 경로 노출 — ADR-003 준수.
+  renderTurnCards(turnFiltered, allTurns, allRequests);
 
   // chartSection이 detail 모드일 때 donut/cache panel 갱신 (ADR-017, ADR-WDO-010)
   //

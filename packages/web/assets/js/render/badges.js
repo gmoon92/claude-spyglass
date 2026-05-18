@@ -126,14 +126,19 @@ export function bloatedSysBadgeFullHtml(bloatedSys) {
 }
 export function bloatedSysBadgeDotHtml(bloatedSys) {
   // 사이드바 dot은 critical만 노출 (ADR-005)
-  if (!bloatedSys || bloatedSys.status !== 'critical') return '';
+  // 서버 컨트랙트는 `stage` (anomaly-bloated-sys ADR-003). 과거 `status` 별칭도 호환.
+  const stage = bloatedSys && (bloatedSys.stage ?? bloatedSys.status);
+  if (stage !== 'critical') return '';
   return _bloatedBadge(bloatedSys, 'dot');
 }
 
 function _bloatedBadge(bs, variant) {
-  if (!bs || (bs.status !== 'warn' && bs.status !== 'critical')) return '';
-  const status = bs.status;
-  const pct    = (bs.pct != null && Number.isFinite(bs.pct)) ? Math.round(bs.pct) : '?';
+  // 서버 컨트랙트 `stage` 우선 (anomaly-bloated-sys ADR-003), 과거 `status` 별칭도 호환.
+  const status = bs && (bs.stage ?? bs.status);
+  if (!status || (status !== 'warn' && status !== 'critical')) return '';
+  // pct 는 서버에서 0~1 fraction. label은 정수 % 기대 → 100배 환산.
+  const pctRaw = (bs.pct != null && Number.isFinite(bs.pct)) ? bs.pct : null;
+  const pct    = pctRaw == null ? '?' : Math.round(pctRaw > 1 ? pctRaw : pctRaw * 100);
   const tone   = status === 'critical' ? 'error' : 'warn';
   const stageCls = status === 'critical' ? ' is-critical' : ' is-warn';
   const i18nBase = `ui.anomaly.bloated-sys.${status}`;
@@ -163,8 +168,11 @@ function _bloatedBadge(bs, variant) {
  * 반환: HTML 또는 ''.  '' 반환 시 호출 측이 기본 spike 표지를 그대로 유지하면 됨.
  */
 export function agentSpikeBadgeHtml(agentSpike) {
-  if (!agentSpike || agentSpike.status !== 'critical') return '';
-  const ratio = Number(agentSpike.ratio);
+  // 서버 컨트랙트: stage='spike'(트리거) | null. ratio 대신 multiplier 사용.
+  // 과거 status='critical'/ratio 별칭도 호환.
+  const stage = agentSpike && (agentSpike.stage ?? agentSpike.status);
+  if (stage !== 'spike' && stage !== 'critical') return '';
+  const ratio = Number(agentSpike.multiplier ?? agentSpike.ratio);
   if (!Number.isFinite(ratio) || ratio < 3) return '';
   const n = Math.round(ratio);
   // 라벨 SSoT는 i18n 키이나, 시각 출력은 `↑` glyph + 수식 자식(.agent-spike-count)으로 분리해
@@ -189,8 +197,10 @@ export function agentSpikeBadgeHtml(agentSpike) {
  * @param {number[]} samples — 최대 20개 자식 토큰 시계열 (옵션)
  */
 export function turnSpikeSummaryHtml(agentSpike, samples) {
-  if (!agentSpike || agentSpike.status !== 'critical') return '';
-  const ratio = Number(agentSpike.ratio);
+  // 서버 컨트랙트: stage='spike' / multiplier. 과거 status/ratio 별칭 호환.
+  const stage = agentSpike && (agentSpike.stage ?? agentSpike.status);
+  if (stage !== 'spike' && stage !== 'critical') return '';
+  const ratio = Number(agentSpike.multiplier ?? agentSpike.ratio);
   if (!Number.isFinite(ratio) || ratio < 3) return '';
   const n = Math.round(ratio);
   const label = window.I18n.t('ui.anomaly.agent-spike.summary', { n });

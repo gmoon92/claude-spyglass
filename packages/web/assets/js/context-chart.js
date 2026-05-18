@@ -83,10 +83,22 @@ export function initContextChart() {
 
   // DETAIL_FILTER_CHANGED 구독 — 컨텍스트 차트 갱신.
   // turns 응답에 bloated_sys 정보가 같이 오면 풋터 split 표시에 사용.
+  //   단건 fetch(session-anomalies-loaded)가 먼저 도착해 _bloatedSysCache를 채워두면
+  //   여기서 null로 덮어쓰지 않는다 — turns 응답엔 anomaly 메타가 빠진 케이스가 SSoT.
   document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
     const { allTurns, bloatedSys } = e.detail || {};
-    _bloatedSysCache = bloatedSys || _extractBloatedSysFromTurns(allTurns);
+    const fromTurns = bloatedSys || _extractBloatedSysFromTurns(allTurns);
+    if (fromTurns) _bloatedSysCache = fromTurns;
+    // 캐시 유지 — 단건 fetch가 이미 채워뒀거나 turns 응답에 있으면 그대로 사용.
     renderContextChart(allTurns);
+  });
+
+  // anomaly-bloated-sys T-17: detail-view.js 단건 fetch 응답을 받아 baseline/풋터 split 동기.
+  //   사이드바 dot · 헤더 full 뱃지와 동일 SSoT — 클라이언트 보조 fetch 1회로 4종 표지 모두 갱신.
+  document.addEventListener('session-anomalies-loaded', (e) => {
+    const bs = e.detail?.bloatedSys || null;
+    _bloatedSysCache = bs;
+    if (_lastTurns) renderContextChart(_lastTurns);
   });
 
   // anomaly-bloated-sys T-17: 세션 헤더 hover → baseline 강조 동기화.
@@ -124,9 +136,11 @@ export function initContextChart() {
  */
 function _extractBloatedSysFromTurns(turns) {
   if (!Array.isArray(turns) || turns.length === 0) return null;
+  // 서버 컨트랙트 `stage` 우선, 과거 `status` 별칭 호환. null/'normal' 외에는 anomaly로 간주.
+  const _st = (x) => x && (x.stage ?? x.status);
   for (const t of turns) {
-    if (t?.prompt?.bloated_sys && t.prompt.bloated_sys.status !== 'normal') return t.prompt.bloated_sys;
-    if (t?.bloated_sys && t.bloated_sys.status !== 'normal') return t.bloated_sys;
+    if (t?.prompt?.bloated_sys && _st(t.prompt.bloated_sys) && _st(t.prompt.bloated_sys) !== 'normal') return t.prompt.bloated_sys;
+    if (t?.bloated_sys && _st(t.bloated_sys) && _st(t.bloated_sys) !== 'normal') return t.bloated_sys;
   }
   return null;
 }
@@ -233,9 +247,12 @@ export function renderContextChart(turns) {
     const modelSuffix = cw.model ? ` (${cw.model})` : '';
     const baseText = window.I18n.t('ui.context-chart.footer', { turn: last.turn_index, max: fmtK(Math.max(...values)), limit: cw.label, model: modelSuffix });
     const bs = _bloatedSysCache;
+    // 서버 컨트랙트 `stage` 우선 (anomaly-bloated-sys ADR-003), 과거 `status` 별칭 호환.
+    const bsStage = bs && (bs.stage ?? bs.status);
     let splitText = '';
-    if (bs && (bs.status === 'warn' || bs.status === 'critical') && Number.isFinite(bs.pct)) {
-      const sys  = Math.round(bs.pct);
+    if (bs && (bsStage === 'warn' || bsStage === 'critical') && Number.isFinite(bs.pct)) {
+      // pct는 0~1 fraction(서버 SSoT) 또는 0~100 정수(과거 별칭). 둘 다 정수 %로 환산.
+      const sys  = Math.round(bs.pct > 1 ? bs.pct : bs.pct * 100);
       const user = Math.max(0, 100 - sys);
       splitText = ' · ' + window.I18n.t('ui.chart.footer.split', { sys, user });
     }
@@ -290,9 +307,13 @@ export function renderContextChart(turns) {
   //   세션 헤더 bloated-sys 라벨 hover → opacity .55→1, stroke-width 1→1.5px (200ms 트랜지션).
   //   Canvas는 시간 기반 트랜지션이 어렵지만 _baselineGlow 토글로 즉시 강조 표시 가능.
   const bs = _bloatedSysCache;
-  if (bs && (bs.status === 'warn' || bs.status === 'critical') && Number.isFinite(bs.pct) && cw.size > 0) {
-    // bloated_sys.system_tokens (실측 값) 우선, 없으면 pct로 환산
-    const sysTokens = Number.isFinite(bs.system_tokens) ? bs.system_tokens : (bs.pct / 100) * cw.size;
+  // 서버 컨트랙트 `stage` 우선 — context-chart-footer-split과 동일 정규화.
+  const bsStage = bs && (bs.stage ?? bs.status);
+  if (bs && (bsStage === 'warn' || bsStage === 'critical') && Number.isFinite(bs.pct) && cw.size > 0) {
+    // bloated_sys.system_tokens (실측 값) 우선. 없으면 pct로 환산하되 pct는 0~1 fraction(SSoT)이므로 그대로 곱한다.
+    // 과거 별칭(0~100 정수) 호환: pct > 1이면 /100로 환산.
+    const pctFrac = bs.pct > 1 ? bs.pct / 100 : bs.pct;
+    const sysTokens = Number.isFinite(bs.system_tokens) ? bs.system_tokens : pctFrac * cw.size;
     const yBase = scaleY(sysTokens);
     ctx.save();
     const muted = getCssVar('--text-muted') || '#8B949E';

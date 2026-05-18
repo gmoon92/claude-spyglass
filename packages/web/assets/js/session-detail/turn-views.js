@@ -36,6 +36,9 @@ import {
 } from './state.js';
 import { targetInnerHtml, contextPreview } from '../renderers.js';
 import { turnSpikeSummaryHtml } from '../render/badges.js';
+import { applyBloatedSysHeader } from '../views/detail-view.js';
+import { getBloatedSysFor } from '../state/anomaly-cache.js';
+import { getSelectedSession } from '../state.js';
 // v21 (system-reminder-badge): turn 별 신규 reminder 산출 SSoT
 import { computeNewRemindersByTurn } from './system-reminder.js';
 // Wave 5: system-reminder 칩 아이콘을 design-system/icons/note.js 로 이전.
@@ -279,6 +282,11 @@ export function renderTurnView(turns, badgeTurns) {
     if (topTool) badgesHtml += `<span class="detail-agg-badge ds-badge" data-tone="neutral" title="${window.I18n.t('session.session-detail.turn-views.top-tool-badge-title')}">${window.I18n.t('session.session-detail.turn-views.top-tool-badge', { name: escHtml(topTool[0]), count: topTool[1] })}</span>`;
     badgesEl.innerHTML = badgesHtml;
     badgesEl.classList.remove('detail-agg-badges--hidden');
+    // anomaly-bloated-sys T-12: 헤더 집계 뱃지 갱신 후 bloated-sys full 뱃지를 재부착한다.
+    //   detail-view.js가 단건 fetch로 캐시해 둔 값이 있으면 applyBloatedSysHeader가 SSoT로 노출.
+    //   캐시 미스 시 빈 문자열 → 자연 폴백.
+    const _sid = getSelectedSession();
+    if (_sid) applyBloatedSysHeader(getBloatedSysFor(_sid));
   } else if (badgesEl) {
     badgesEl.classList.add('detail-agg-badges--hidden');
   }
@@ -378,9 +386,46 @@ function renderPrologueCardHtml(prologue) {
  *  - 펼침: buildTurnDetailRows로 세부 행 lazy 렌더 (펼친 카드만)
  *  - ADR-001 P1: prologue 비면 카드 안 그림. 있으면 turn 카드들 위에 별도 섹션.
  */
-export function renderTurnCards(turns, badgeTurns) {
+/**
+ * @param {Array} turns         turn filter 결과(보여줄 카드 목록)
+ * @param {Array} badgeTurns    헤더 집계용(전체 turn)
+ * @param {Array} [allRequests] flat 응답(/api/sessions/:id/requests) — agent_spike 추출에 사용.
+ *                              없으면 turn.agent_spike 폴백 — turns 응답이 향후 확장될 때 무중단.
+ */
+export function renderTurnCards(turns, badgeTurns, allRequests) {
   const container = document.getElementById('turnUnifiedBody');
   if (!container) return;
+
+  // anomaly-bloated-sys T-16: turn 단위 agent_spike 인덱스.
+  //   서버 SSoT는 행 단위(parent Agent tool의 agent_spike 객체) — 클라가 turn_id 기준으로 묶어
+  //   가장 큰 multiplier를 대표값으로 채택한다. (정상 케이스는 turn당 parent 1개)
+  //   계산 자체는 서버 데이터의 단순 그루핑이므로 ADR-003 클라이언트 anomaly 재계산 금지에 저촉되지 않음.
+  const spikeByTurn = new Map();
+  const samplesByTurn = new Map();
+  if (Array.isArray(allRequests)) {
+    // parent Agent/Skill 행 우선 — agent_spike 객체가 붙는 위치.
+    for (const r of allRequests) {
+      if (!r?.turn_id) continue;
+      if (r.agent_spike && (r.agent_spike.stage === 'spike' || r.agent_spike.stage === 'critical')) {
+        const cur = spikeByTurn.get(r.turn_id);
+        const m = Number(r.agent_spike.multiplier ?? r.agent_spike.ratio);
+        if (!cur || Number(cur.multiplier ?? cur.ratio) < m) spikeByTurn.set(r.turn_id, r.agent_spike);
+      }
+    }
+    // 자식 토큰 시계열 — parent_tool_use_id가 있는 행만 시간순.
+    for (const r of allRequests) {
+      if (!r?.turn_id || !r.parent_tool_use_id) continue;
+      const v = (r.tokens_input || 0) + (r.tokens_output || 0);
+      if (v <= 0) continue;
+      const arr = samplesByTurn.get(r.turn_id) || [];
+      arr.push({ ts: r.timestamp || 0, v });
+      samplesByTurn.set(r.turn_id, arr);
+    }
+    for (const [k, arr] of samplesByTurn) {
+      arr.sort((a, b) => a.ts - b.ts);
+      samplesByTurn.set(k, arr.map(x => x.v));
+    }
+  }
 
   const badgesEl = document.getElementById('detailBadges');
   const bTurns   = (badgeTurns && badgeTurns.length) ? badgeTurns : turns;
@@ -398,6 +443,11 @@ export function renderTurnCards(turns, badgeTurns) {
     if (topTool) badgesHtml += `<span class="detail-agg-badge ds-badge" data-tone="neutral" title="${window.I18n.t('session.session-detail.turn-views.top-tool-badge-title')}">${window.I18n.t('session.session-detail.turn-views.top-tool-badge', { name: escHtml(topTool[0]), count: topTool[1] })}</span>`;
     badgesEl.innerHTML = badgesHtml;
     badgesEl.classList.remove('detail-agg-badges--hidden');
+    // anomaly-bloated-sys T-12: 헤더 집계 뱃지 갱신 후 bloated-sys full 뱃지를 재부착한다.
+    //   detail-view.js가 단건 fetch로 캐시해 둔 값이 있으면 applyBloatedSysHeader가 SSoT로 노출.
+    //   캐시 미스 시 빈 문자열 → 자연 폴백.
+    const _sid = getSelectedSession();
+    if (_sid) applyBloatedSysHeader(getBloatedSysFor(_sid));
   } else if (badgesEl) {
     badgesEl.classList.add('detail-agg-badges--hidden');
   }
@@ -501,12 +551,16 @@ export function renderTurnCards(turns, badgeTurns) {
     const reminderChip = buildSystemReminderChip(turn.turn_index, turnReminders);
 
     // anomaly-bloated-sys T-16: 턴뷰 헤더 .turn-spike-summary + sparkline.
-    //   turn.agent_spike 응답이 critical이고 ratio ≥ 3일 때만 노출 (헬퍼 내부 판정).
-    //   샘플 시계열은 turn.tool_calls에서 자식 토큰을 시간순 추출 — 데이터 없으면 빈 baseline.
-    const spikeSamples = (turn.agent_spike?.samples) || (turn.tool_calls || [])
-      .map(tc => (tc.tokens_input || 0) + (tc.tokens_output || 0))
-      .filter(v => v > 0);
-    const spikeSummary = turnSpikeSummaryHtml(turn.agent_spike, spikeSamples);
+    //   서버 SSoT는 /requests의 parent Agent 행 agent_spike 객체. turns 응답엔 없으므로
+    //   상단에서 만든 spikeByTurn / samplesByTurn 인덱스로 보강. 둘 다 폴백을 가짐 — 외부 호출에서
+    //   allRequests를 안 넘기면 turn.agent_spike + turn.tool_calls로 자연 폴백.
+    const agentSpike = spikeByTurn.get(turn.turn_id) || turn.agent_spike || null;
+    const spikeSamples = (agentSpike?.samples)
+      || samplesByTurn.get(turn.turn_id)
+      || (turn.tool_calls || [])
+        .map(tc => (tc.tokens_input || 0) + (tc.tokens_output || 0))
+        .filter(v => v > 0);
+    const spikeSummary = turnSpikeSummaryHtml(agentSpike, spikeSamples);
 
     // search-expand-payload: 카드별 검색 haystack. flat-view 검색 흐름이 매칭 카드만 표시한다.
     const haystack = buildTurnHaystack(turn, turnReminders);

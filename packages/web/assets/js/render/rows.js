@@ -5,6 +5,7 @@
 import { escHtml, fmtToken, fmtRelative, formatDuration, fmtTimestamp } from '../formatters.js';
 import { subTypeOf } from '../request-types.js';
 import { anomalyBadgesHtml, bloatedSysBadgeDotHtml, bloatedSysBadgeMiniHtml } from './badges.js';
+import { getBloatedSysFor } from '../state/anomaly-cache.js';
 import { trustOf, rowTrustClass, makeModelCell } from './model.js';
 import { makeActionCell, makeTargetCell, makeCacheCell } from './cells.js';
 import { contextPreview, extractFirstPrompt, extractPromptText, extractAssistantText } from './extract.js';
@@ -70,10 +71,11 @@ export function makeRequestRow(r, opts = {}) {
   const bloatedMini = bloatedSysBadgeMiniHtml(r.bloated_sys);
   // 행 시각 단계: warn → row-bloated-warn / critical → row-bloated-critical.
   // CSS에서 inset box-shadow 또는 border-left를 부여 (badges.css 참조).
+  // 서버 컨트랙트는 `stage` (anomaly-bloated-sys ADR-003). 과거 `status` 별칭도 호환.
   let bloatedRowCls = '';
-  const bsStatus = r.bloated_sys?.status;
-  if (bsStatus === 'warn')      bloatedRowCls = ' row-bloated-warn';
-  else if (bsStatus === 'critical') bloatedRowCls = ' row-bloated-critical';
+  const bsStage = r.bloated_sys?.stage ?? r.bloated_sys?.status;
+  if (bsStage === 'warn')      bloatedRowCls = ' row-bloated-warn';
+  else if (bsStage === 'critical') bloatedRowCls = ' row-bloated-critical';
 
   const trustCls = rowTrustClass(r);
   const haystack = buildSearchHaystack(r);
@@ -123,7 +125,9 @@ export function makeSessionRow(s, isSelected) {
   // anomaly-bloated-sys T-13: 사이드바 dot — critical만 노출 (ADR-005).
   //   서버 응답에 bloated_sys 필드가 없거나 status='normal'/'warn'이면 빈 문자열.
   //   warn 단계는 정책상 사이드바 노이즈 회피를 위해 미노출.
-  const bloatedDot = bloatedSysBadgeDotHtml(s.bloated_sys);
+  //   /api/sessions 목록 응답엔 bloated_sys가 없으므로 detail-view.js의 단건 fetch 캐시를 우선 참조.
+  //   `_allSessions` 리로드(SSE/refresh)로 s.bloated_sys 주입이 사라져도 dot이 유지된다.
+  const bloatedDot = bloatedSysBadgeDotHtml(s.bloated_sys || getBloatedSysFor(s.id));
   return `<tr class="clickable${isSelected ? ' row-selected' : ''}" data-session-id="${escHtml(s.id)}">
     <td colspan="4" class="sess-row-cell" style="padding:5px 10px">
       <div class="sess-row-header">

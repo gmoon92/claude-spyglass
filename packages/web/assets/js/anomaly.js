@@ -22,12 +22,15 @@
  * 서버는 다음 필드를 각 행에 부여한다 (anomaly-enricher.ts):
  *  - bloated_sys: { stage: 'warn'|'critical'|null, pct, system_tokens, ... } | null
  *  - agent_spike: { stage: 'spike'|null, multiplier, ... } | null
+ *  - spike:       { stage: 'spike'|null } | null   (v2.0.1 회귀 복원)
+ *  - loop:        { stage: 'loop'|null  } | null   (v2.0.1 회귀 복원)
+ *  - slow:        { stage: 'slow'|null, p95_ms? } | null (v2.0.1 회귀 복원)
  *
- * 추가로 ADR-003 이전 spike/loop/slow 도 향후 서버에서 행 필드로 노출되면 본 헬퍼가 흡수.
- * 현재는 사용처가 anomaly.js의 Set<string> 시그니처를 기대하므로 동일 모양으로 변환.
+ * spike/loop/slow는 ADR-003 정책상 서버에서 계산 → 본 헬퍼는 stage 표시만 한다.
+ * 클라이언트 거울 계산 금지 — 입력은 항상 서버 응답 필드.
  *
  * @param {object} r — NormalizedRequest 형태의 응답 행
- * @returns {Set<'bloated-sys-warn'|'bloated-sys-critical'|'agent-spike'>}
+ * @returns {Set<'bloated-sys-warn'|'bloated-sys-critical'|'agent-spike'|'spike'|'loop'|'slow'>}
  */
 export function getAnomalyFlagsForRow(r) {
   const flags = new Set();
@@ -39,6 +42,11 @@ export function getAnomalyFlagsForRow(r) {
 
   const as = r.agent_spike;
   if (as && as.stage === 'spike') flags.add('agent-spike');
+
+  // v2.0.1 회귀 복원 — spike/loop/slow 행 필드 부착 매핑.
+  if (r.spike && r.spike.stage === 'spike') flags.add('spike');
+  if (r.loop  && r.loop.stage  === 'loop')  flags.add('loop');
+  if (r.slow  && r.slow.stage  === 'slow')  flags.add('slow');
 
   return flags;
 }

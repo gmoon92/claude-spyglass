@@ -13,8 +13,12 @@ import { fmtToken, fmtDate } from '../formatters.js';
 import { setChartMode, renderRightPanel } from './default-view.js';
 import { skTurnCardList } from '../render/skeleton.js';
 import { bloatedSysBadgeFullHtml } from '../render/badges.js';
+import { setBloatedSysFor } from '../state/anomaly-cache.js';
 
 let _abortController = null;
+
+// 세션 단위 anomaly 캐시는 별도 모듈(state/anomaly-cache.js)로 분리되어
+// render/rows.js·context-chart.js 등이 순환 의존성 없이 참조할 수 있다.
 
 export async function loadSession(id) {
   if (id === getSelectedSession()) return;
@@ -59,9 +63,33 @@ export async function loadSession(id) {
   document.getElementById('detailEndedAt').textContent = session?.ended_at ? window.I18n.t('ui.detail-view.ended-at', { time: fmtDate(session.ended_at) }) : '';
 
   // anomaly-bloated-sys T-12: 세션 헤더에 `▤ sys {pct}%` full 뱃지 부착.
-  //   서버 응답이 아직 없거나 status='normal'이면 빈 문자열 → DOM에서 자연 미노출.
+  //   서버 응답이 아직 없거나 stage='normal'이면 빈 문자열 → DOM에서 자연 미노출.
   //   hover 시 context-chart baseline 동기화 — `ctx-baseline-glow` 커스텀 이벤트 디스패치.
+  // /api/sessions 목록 응답에는 anomalies가 없으므로(서버 SSoT는 단건 /api/sessions/:id),
+  //   단건 API를 비동기로 fetch해 헤더 뱃지를 보강한다 — 부수효과 분리.
   applyBloatedSysHeader(session?.bloated_sys);
+  // 세션 전환 시 차트·사이드바·헤더의 이전 bloated_sys 잔재 제거 — 단건 fetch 응답 도착 전까지 빈 상태.
+  document.dispatchEvent(new CustomEvent('session-anomalies-loaded', {
+    detail: { sessionId: id, bloatedSys: null },
+  }));
+  (async () => {
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(id)}`, { signal });
+      if (!res.ok) return;
+      const json = await res.json();
+      const bs = json?.data?.anomalies?.bloated_sys ?? json?.data?.bloated_sys ?? null;
+      if (signal.aborted) return;
+      // SSoT 캐시에 저장 → 사이드바·차트·헤더가 동일 데이터 참조.
+      setBloatedSysFor(id, bs);
+      applyBloatedSysHeader(bs);
+      // 사이드바·context-chart 동기 — 동일 응답을 받아 자기 영역만 갱신한다.
+      document.dispatchEvent(new CustomEvent('session-anomalies-loaded', {
+        detail: { sessionId: id, bloatedSys: bs },
+      }));
+    } catch (e) {
+      if (e?.name === 'AbortError') return;
+    }
+  })();
 
   setDetailFilter('all');
   getDetailFilterBar()?.setActive('all');
@@ -93,7 +121,7 @@ export function abortCurrentSession() {
  *
  * @param {{ status, system_tokens, pct, threshold_warn, threshold_critical } | null} bloatedSys
  */
-function applyBloatedSysHeader(bloatedSys) {
+export function applyBloatedSysHeader(bloatedSys) {
   const host = document.getElementById('detailBadges');
   if (!host) return;
   // 기존 bloated-sys 뱃지 제거 (세션 전환 시)

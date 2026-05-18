@@ -20,6 +20,31 @@ export function setAllSessions(list) { _allSessions = list; }
 export function getAllProjects()  { return _allProjects; }
 
 /**
+ * anomaly-bloated-sys T-13: 사이드바 critical dot 보강.
+ *  - /api/sessions 목록 응답에는 bloated_sys 필드가 없다(서버 SSoT는 단건 /api/sessions/:id).
+ *  - detail-view.js의 단건 fetch가 끝나면 `session-anomalies-loaded` 이벤트를 받아
+ *    해당 세션 객체에 bloated_sys를 주입하고 사이드바를 재렌더한다.
+ *  - 이벤트 detail: { sessionId, bloatedSys }
+ *  - SessionEnd 누락 stale dot과 충돌 회피: bloated_sys--dot은 별도 위치(`makeSessionRow`에서
+ *    sess-row-status 뒤에 부착)이므로 두 dot이 시각적으로 공존.
+ *
+ * 등록 위치: 모듈 부수효과 — 앱 라이프사이클 동안 유지.
+ */
+document.addEventListener('session-anomalies-loaded', (e) => {
+  const { sessionId, bloatedSys } = e.detail || {};
+  if (!sessionId) return;
+  const target = _allSessions.find(s => s.id === sessionId);
+  if (!target) return;
+  // critical만 사이드바 dot 노출 (ADR-005), 그 외 단계는 미노출. null도 같이 캐시해
+  // 응답 변동 시 stale dot이 잘못 남는 것을 막는다.
+  target.bloated_sys = bloatedSys || null;
+  // 선택한 프로젝트의 사이드바만 다시 그린다 — 무관한 프로젝트면 영향 없음.
+  if (getSelectedProject() && target.project_name === getSelectedProject()) {
+    renderBrowserSessions();
+  }
+});
+
+/**
  * meta-docs-view.js에서 카탈로그 fetch 직후 호출 — 프로젝트별/글로벌 항목 수를 주입.
  * 호출 후 metadocs 모드일 때만 즉시 재렌더(browse 모드 영향 없음).
  *
