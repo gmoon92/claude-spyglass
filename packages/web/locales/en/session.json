@@ -45,7 +45,9 @@
       "prologue-title": "Session Prologue",
       "prologue-hint": "Activity before prompt registration",
       "prologue-hint-title": "Tools and responses that arrived before the first user prompt was registered. May occur due to session resume or missing hooks.",
-      "prologue-transcript-tag": "Assistant response supplemented from transcript"
+      "prologue-transcript-tag": "Assistant response supplemented from transcript",
+      "prompt-row-aria": "User prompt",
+      "prompt-icon-aria": "User prompt"
     }
   }
 }

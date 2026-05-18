@@ -45,7 +45,9 @@
       "prologue-title": "会话序言",
       "prologue-hint": "prompt 注册前的活动",
       "prologue-hint-title": "在第一个用户提示词注册之前到达的工具与响应。可能由会话恢复或 hook 缺失引起。",
-      "prologue-transcript-tag": "从 transcript 补充的助手响应"
+      "prologue-transcript-tag": "从 transcript 补充的助手响应",
+      "prompt-row-aria": "用户提示",
+      "prompt-icon-aria": "用户提示"
     }
   }
 }

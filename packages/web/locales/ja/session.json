@@ -45,7 +45,9 @@
       "prologue-title": "セッションプロローグ",
       "prologue-hint": "prompt 登録前の活動",
       "prologue-hint-title": "最初のユーザープロンプトが登録される前に到着したツール・応答です。セッションの再開またはフック欠落により発生する場合があります。",
-      "prologue-transcript-tag": "transcript から補完されたアシスタント応答"
+      "prologue-transcript-tag": "transcript から補完されたアシスタント応答",
+      "prompt-row-aria": "ユーザープロンプト",
+      "prompt-icon-aria": "ユーザープロンプト"
     }
   }
 }
