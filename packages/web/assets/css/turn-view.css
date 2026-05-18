@@ -123,6 +123,13 @@
 /* confidence-low-mark: tool-stats.css에서 정의 (D-09 중복 제거) */
 
 /* ── UNIFIED CARD CONTAINER ─────────────────────────────────────────────── */
+/* turn-header-prompt-prominence ADR-001: 스크롤바를 다른 패널(meta-docs / syslib /
+ * llm-input)이 채택한 8px thin + 토큰화 SSoT로 통일. 기존 OS 기본 스크롤바로 인한
+ * 카드 우측 경계 잘림과 시각 잡음을 해소한다.
+ *   - Firefox: scrollbar-width: thin + scrollbar-color (var() 토큰만 사용)
+ *   - WebKit:  8px thumb, hover 시 --text-3로 톤 상승 — grabable 어포던스 강화
+ *   - 신규 토큰 도입 없음 (--border-strong / --text-3 / --radius-sm SSoT)
+ */
 #turnUnifiedBody {
   display: flex;
   flex-direction: column;
@@ -131,7 +138,16 @@
   overflow-y: auto;
   height: 100%;
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
+#turnUnifiedBody::-webkit-scrollbar { width: 8px; height: 8px; }
+#turnUnifiedBody::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+#turnUnifiedBody::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+#turnUnifiedBody::-webkit-scrollbar-track { background: transparent; }
 
 .turn-card-empty {
   padding: var(--space-5);
@@ -185,13 +201,14 @@
   flex-shrink: 0;
 }
 
-/* 턴뷰 → API 페이로드 딥링크 액션 (deeplink pass) — 카드 헤더 우측, expand btn 좌측 */
+/* 턴뷰 → API 페이로드 딥링크 액션 (deeplink pass) — 카드 헤더 우측, expand btn 좌측.
+ * turn-header-prompt-prominence ADR-002 후: 부모 .turn-card-summary-actions가
+ * margin-left:auto로 묶음 우측정렬을 담당하므로 본 규칙에서는 margin-left를 제거. */
 .turn-card-action-payload {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
   padding: 2px var(--space-2);
-  margin-left: auto;
   background: transparent;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
@@ -248,6 +265,11 @@
   min-width: 24px;
 }
 
+/* DEPRECATED — turn-header-prompt-prominence ADR-002:
+ * .turn-card-preview는 헤더 Row 1에서 사용자 프롬프트를 자투리 공간에 표시했지만,
+ * 새 디자인에서는 prompt를 Row 2(.turn-card-prompt-row)로 승격해 폭 100%로 노출한다.
+ * 본 규칙은 외부 호환을 위해 남겨두되 renderTurnCards가 더 이상 이 클래스를 사용하지 않는다.
+ * 이후 라운드에서 사용처 없음 확인 후 제거 예정. */
 .turn-card-preview {
   font-size: var(--text-small);
   color: var(--text-2);
@@ -255,6 +277,75 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ── HEADER 우측 액션 묶음 (ADR-002) ───────────────────────────────────────
+ * payload 버튼 + expand chevron을 한 wrapper로 묶어 Row 1 우측 끝에 정렬.
+ * 개별 자식이 각자 margin-left:auto를 가지면 두 번째 자식이 헤더 가운데로 밀려나는
+ * flex 회귀를 차단. 묶음 단위로만 우측 정렬 책임을 가진다. */
+.turn-card-summary-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ── PROMPT ROW (ADR-002, ADR-003) ────────────────────────────────────────
+ * 사용자 프롬프트 = 턴 SSoT (turn-views.js L350 주석). 카드 접힌 상태에서도
+ * 여러 턴의 prompt를 한눈에 비교할 수 있도록 폭 100%·2줄 line-clamp로 노출한다.
+ *
+ * 위계 (Typographic Precision):
+ *   T번호 (text-small / weight-strong / accent)
+ *   → 메타 chip/배지 (text-small / dim)
+ *   → prompt text (text-body / weight-medium / --text-1)  ← 카드의 주제목
+ *
+ * line-clamp는 -webkit-box 패밀리만 사용 — Chromium/WebKit/Firefox 68+ 모두 지원.
+ * user-select:text (ADR-003) — 본문 드래그 복사 허용. 단순 click은 부모
+ * .turn-card-summary가 카드 토글로 위임 (브라우저 기본 click vs drag 구분에 의존). */
+.turn-card-prompt-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  /* turn-prompt-preview-regression ADR-002:
+   * 다중 세션 병렬 환경에서 1줄 prompt 카드(약 17px)와 2줄 prompt 카드(약 35px) 사이의
+   * 시각 단차를 제거. line-clamp:2의 "최대 2줄"과 대칭으로 "최소 2줄 분량 영역"을 보장 →
+   * 모든 카드의 prompt 영역이 동일 높이로 좌측 정렬돼 한눈 비교 가능.
+   *
+   * 계산식: --text-body(12px) × line-height 1.45 × 2줄 ≈ 34.8px.
+   * align-items:flex-start이므로 1줄 prompt는 위쪽 정렬되고 아래는 자연 여백(빈 두 번째 줄과 동등). */
+  min-height: calc(var(--text-body) * 1.45 * 2);
+}
+
+.turn-card-prompt-icon {
+  color: var(--text-3);
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  /* line-height 1.45와 baseline 정렬: 아이콘 12px 정사각형이 첫 줄 텍스트 ascender 중간에
+   * 오도록 한 단계 내려준다. 토큰화하기에는 1회용 광학 보정이라 그대로 둠. */
+  margin-top: 2px;
+  line-height: 1;
+}
+
+.turn-card-prompt-text {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  color: var(--text-1);
+  line-height: 1.45;
+  word-break: break-word;
+  /* 2줄 line-clamp — 한 줄 prompt는 자연스럽게 1줄만 차지, 긴 prompt는 정확히 2줄 + ellipsis. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  /* ADR-003: 사용자가 prompt 본문을 드래그 복사할 수 있도록 텍스트 선택 허용.
+   * 부모 .turn-card-summary는 user-select:none(클릭 토글 SSoT)이므로 명시적으로 풀어준다. */
+  user-select: text;
 }
 
 /* ── COMPLEXITY BADGE (ADR-008 — 토큰화) ──────────────────────────────────
