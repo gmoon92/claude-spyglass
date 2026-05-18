@@ -139,6 +139,40 @@ export interface AgentSpikeField {
 }
 
 /**
+ * spike anomaly 결과 — 세션별 prompt tokens_input 평균의 200% 초과 (v2.0.1 회귀 복원).
+ *
+ * prompt 행에만 부여. `stage`가 `null`이면 정상.
+ * page-scoped: enricher 호출 시 들어온 행 묶음 안에서만 세션 평균을 계산하므로
+ * 동일 세션의 prompt가 2건 이상일 때만 의미 있는 값을 반환한다.
+ *
+ * @see packages/server/src/metrics/calculators/anomaly.ts (`computeAnomalyTimeSeries`)
+ */
+export interface SpikeField {
+  stage: 'spike' | null;
+}
+
+/**
+ * loop anomaly 결과 — turn_id 안에서 동일 tool_name이 연속 3회 이상 (v2.0.1 회귀 복원).
+ *
+ * tool_call 행에만 부여. `stage`가 `null`이면 정상.
+ * page-scoped: 같은 turn의 모든 tool_call이 한 페이지에 들어와 있어야 검출.
+ */
+export interface LoopField {
+  stage: 'loop' | null;
+}
+
+/**
+ * slow anomaly 결과 — tool_call duration_ms가 전체 P95 초과 (v2.0.1 회귀 복원).
+ *
+ * tool_call 행에만 부여. `stage`가 `null`이면 정상.
+ * `p95_ms`는 계산된 임계값(전체 행 기준 P95).
+ */
+export interface SlowField {
+  stage: 'slow' | null;
+  p95_ms?: number;
+}
+
+/**
  * 정규화된 Request — 클라이언트 공통 입력 모델.
  *
  * raw `RequestRow`의 모든 필드를 보존하면서, 도메인 규칙으로 파생된 필드를 추가한다.
@@ -189,4 +223,23 @@ export interface NormalizedRequest extends Omit<RequestRow, 'model'> {
    * 클라이언트는 본 필드를 그대로 소비 (ADR-003 — 거울 계산 금지).
    */
   agent_spike?: AgentSpikeField | null;
+
+  /**
+   * spike anomaly — prompt 행이 세션 평균의 2배 초과 (v2.0.1 회귀 복원).
+   * prompt 외 행에서는 `null` 또는 필드 생략.
+   * 서버 단일 SSoT — 클라는 표시만.
+   */
+  spike?: SpikeField | null;
+
+  /**
+   * loop anomaly — tool_call이 같은 turn 안에서 동일 tool_name 연속 3회 이상에 포함 (v2.0.1 회귀 복원).
+   * tool_call 외 행에서는 `null` 또는 필드 생략.
+   */
+  loop?: LoopField | null;
+
+  /**
+   * slow anomaly — tool_call duration_ms가 전체 P95 초과 (v2.0.1 회귀 복원).
+   * tool_call 외 행에서는 `null` 또는 필드 생략.
+   */
+  slow?: SlowField | null;
 }

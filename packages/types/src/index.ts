@@ -22,6 +22,9 @@ export type {
   NormalizedRequest,
   BloatedSysField,
   AgentSpikeField,
+  SpikeField,
+  LoopField,
+  SlowField,
 } from './request';
 
 export type { NormalizedTurnItem } from './turn';

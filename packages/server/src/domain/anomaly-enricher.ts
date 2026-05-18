@@ -22,6 +22,7 @@
 import type { Database } from 'bun:sqlite';
 import { getSessionSystemContextMeta } from '@spyglass/storage';
 import {
+  computeRowAnomalies,
   detectAgentSpike,
   detectBloatedSys,
   toAgentSpikeField,
@@ -68,8 +69,38 @@ export function enrichWithAnomalies(
   // rows는 일반적으로 DESC로 들어오므로 세션별로 sortedAsc 후 첫 prompt를 찾는다.
   const firstPromptIds = computeFirstPromptIdsBySession(rows);
 
+  // v2.0.1 회귀 복원: spike/loop/slow 페이지 단위 검출 (id → stages 맵).
+  // SSE 단일 행 경로(enrichRowWithAnomalies)에는 적용 안 함 — 페이지 컨텍스트 부재.
+  const rowStages = computeRowAnomalies(
+    rows.map((r) => ({
+      id: r.id,
+      session_id: r.session_id ?? null,
+      turn_id: r.turn_id ?? null,
+      type: r.type,
+      tool_name: r.tool_name ?? null,
+      timestamp: r.timestamp,
+      tokens_input: r.tokens_input,
+      duration_ms: r.duration_ms,
+    })),
+  );
+
   return rows.map((r) => {
-    const next: NormalizedRequest = { ...r, bloated_sys: null, agent_spike: null };
+    const next: NormalizedRequest = {
+      ...r,
+      bloated_sys: null,
+      agent_spike: null,
+      spike: null,
+      loop: null,
+      slow: null,
+    };
+
+    // ── spike/loop/slow 부여 (페이지 컨텍스트) ──
+    const stages = rowStages.get(r.id);
+    if (stages) {
+      if (stages.spike.stage) next.spike = stages.spike;
+      if (stages.loop.stage) next.loop = stages.loop;
+      if (stages.slow.stage) next.slow = stages.slow;
+    }
 
     // ── bloated_sys: 첫 prompt 행 1건에만 부여 ──
     if (r.type === 'prompt' && r.session_id && firstPromptIds.has(r.id)) {
@@ -147,7 +178,16 @@ export function enrichRowWithAnomalies(
   db: Database,
   row: NormalizedRequest,
 ): NormalizedRequest {
-  const next: NormalizedRequest = { ...row, bloated_sys: null, agent_spike: null };
+  // spike/loop/slow는 페이지 컨텍스트(세션 평균 / 턴 루프 / 전체 P95) 의존이라
+  // 단일 행 enrich 경로에서는 검출 불가 → null 유지. 클라이언트 새로고침/페이지 fetch 시 흡수됨.
+  const next: NormalizedRequest = {
+    ...row,
+    bloated_sys: null,
+    agent_spike: null,
+    spike: null,
+    loop: null,
+    slow: null,
+  };
 
   if (row.type === 'prompt' && row.session_id) {
     const meta = getSessionSystemContextMeta(db, row.session_id);

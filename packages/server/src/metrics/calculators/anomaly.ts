@@ -464,3 +464,147 @@ export const __test = {
 
 // 외부 의존(테스트용) — AnomalyThresholds 재export.
 export type { AnomalyThresholds };
+
+// =============================================================================
+// 행 단위 spike / loop / slow (v2.0.1 회귀 복원)
+// =============================================================================
+//
+// 배경:
+//   v2.0.0 ADR-003에서 클라이언트 detectAnomalies가 폐기되었으나 서버 enricher가
+//   bloated_sys / agent_spike 2종만 부여하면서 spike / loop / slow 3종이 행 단위
+//   부착 경로에서 누락됨. v2.0.1 핫픽스에서 본 함수가 그 책임을 흡수한다.
+//
+// 알고리즘은 computeAnomalyTimeSeries와 동일 (세션별 prompt 평균 2배 / turn 내 동일 tool 3연속 / 전체 P95).
+// 다만 시계열 카운트가 아니라 "각 행이 stage 보유 여부"를 반환한다.
+//
+// 입력 행은 enricher가 정규화한 NormalizedRequest 한 페이지 — 같은 페이지 안에서만
+// 검출이 의미 있다(세션 평균/턴 루프 모두 페이지 컨텍스트 의존). SSE 단일 행 enrich에서는
+// 호출하지 않는다(이웃 없음).
+
+/**
+ * spike/loop/slow stage 결과 — 각 anomaly별 stage 또는 null + 부가 정보.
+ */
+export interface RowAnomalyStages {
+  spike: { stage: 'spike' | null };
+  loop: { stage: 'loop' | null };
+  slow: { stage: 'slow' | null; p95_ms?: number };
+}
+
+/**
+ * 행 anomaly 입력 — NormalizedRequest 부분 집합(필요 필드만).
+ *
+ * 외부 동일 이름 `AnomalyInputRow`(storage)와 시그니처가 다르므로(여기서는 row.id 기준 매핑)
+ * 본 인터페이스는 enricher 전용으로 둔다.
+ */
+export interface RowAnomalyInput {
+  id: string;
+  session_id: string | null | undefined;
+  turn_id?: string | null;
+  type: string;
+  tool_name?: string | null;
+  timestamp: number;
+  tokens_input: number;
+  duration_ms: number;
+}
+
+/**
+ * 페이지 단위 spike/loop/slow 검출 — 행 묶음을 받아 id → stage 매핑을 반환.
+ *
+ * 알고리즘 (computeAnomalyTimeSeries 동일):
+ *   - spike: 세션별 prompt tokens_input 평균(샘플 ≥ 2건) × 2 초과 → stage='spike'
+ *   - loop:  turn_id 안에서 동일 tool_name이 연속 3회 이상이면 그 세 행 모두 stage='loop'
+ *   - slow:  전체 tool_call duration_ms 중 P95(인덱스 ceil(n*0.95)-1) 초과 → stage='slow'
+ *
+ * pure function. 외부 상태 변경 없음. 입력 길이에 선형(loop만 turn별 정렬 stable, 입력 순서 그대로).
+ *
+ * @param rows — 한 응답에 들어갈 정규화 행 묶음 (timestamp DESC가 일반적이지만 정렬 비의존)
+ * @returns id → RowAnomalyStages 맵. 값이 모두 null인 행은 map에 없음(부피 최소화).
+ */
+export function computeRowAnomalies(
+  rows: RowAnomalyInput[],
+): Map<string, RowAnomalyStages> {
+  const result = new Map<string, RowAnomalyStages>();
+  if (rows.length === 0) return result;
+
+  // 1) 세션별 prompt tokens_input 평균 — 샘플 2건 이상일 때만 spike 후보 (단일 prompt면 평균=자기자신).
+  const sessionPromptInputs = new Map<string, number[]>();
+  for (const r of rows) {
+    if (r.type === 'prompt' && r.session_id && r.tokens_input > 0) {
+      const arr = sessionPromptInputs.get(r.session_id) ?? [];
+      arr.push(r.tokens_input);
+      sessionPromptInputs.set(r.session_id, arr);
+    }
+  }
+  const sessionAvg = new Map<string, number>();
+  for (const [sid, arr] of sessionPromptInputs) {
+    if (arr.length >= 2) {
+      sessionAvg.set(sid, arr.reduce((s, x) => s + x, 0) / arr.length);
+    }
+  }
+
+  // 2) 전체 P95 — tool_call duration_ms > 0만.
+  const durations: number[] = [];
+  for (const r of rows) {
+    if (r.type === 'tool_call' && r.duration_ms > 0) durations.push(r.duration_ms);
+  }
+  durations.sort((a, b) => a - b);
+  let p95 = 0;
+  if (durations.length > 0) {
+    const idx = Math.ceil(durations.length * 0.95) - 1;
+    p95 = durations[Math.min(Math.max(idx, 0), durations.length - 1)];
+  }
+
+  // 3) loop — turn_id 그룹 안에서 동일 tool_name 3연속.
+  //    computeAnomalyTimeSeries와 동일하게 입력 순서 그대로 사용(rows가 timestamp DESC면
+  //    "연속"이 시간 역순 기준 — 동일 turn 안에서는 순서가 일관되면 결과 동일).
+  //    안전을 위해 turn 내부에서 timestamp ASC 정렬한다.
+  const loopFlagged = new Set<string>();
+  const turnGroups = new Map<string, RowAnomalyInput[]>();
+  for (const r of rows) {
+    if (r.type === 'tool_call' && r.turn_id && r.tool_name) {
+      const arr = turnGroups.get(r.turn_id) ?? [];
+      arr.push(r);
+      turnGroups.set(r.turn_id, arr);
+    }
+  }
+  for (const [, calls] of turnGroups) {
+    calls.sort((a, b) => a.timestamp - b.timestamp);
+    let streak = 1;
+    for (let i = 1; i < calls.length; i++) {
+      if (calls[i].tool_name === calls[i - 1].tool_name) {
+        streak++;
+        if (streak >= 3) {
+          for (let j = i - streak + 1; j <= i; j++) {
+            loopFlagged.add(calls[j].id);
+          }
+        }
+      } else {
+        streak = 1;
+      }
+    }
+  }
+
+  // 4) 각 행에 stage 매핑 — anomaly 0건이면 map에 넣지 않음.
+  for (const r of rows) {
+    let spikeStage: 'spike' | null = null;
+    let loopStage: 'loop' | null = null;
+    let slowStage: 'slow' | null = null;
+
+    if (r.type === 'prompt' && r.session_id && r.tokens_input > 0) {
+      const avg = sessionAvg.get(r.session_id);
+      if (avg !== undefined && r.tokens_input > avg * 2) spikeStage = 'spike';
+    }
+    if (loopFlagged.has(r.id)) loopStage = 'loop';
+    if (r.type === 'tool_call' && p95 > 0 && r.duration_ms > p95) slowStage = 'slow';
+
+    if (spikeStage || loopStage || slowStage) {
+      result.set(r.id, {
+        spike: { stage: spikeStage },
+        loop: { stage: loopStage },
+        slow: { stage: slowStage, p95_ms: p95 || undefined },
+      });
+    }
+  }
+
+  return result;
+}
