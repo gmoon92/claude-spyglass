@@ -300,6 +300,45 @@ describe('Request module contract (SRP Phase 1 골든 테스트)', () => {
       expect(target?.responses[0].id).toBe('tn-resp');
     });
 
+    /**
+     * turn-prompt-preview-regression ADR-001 회귀 차단.
+     *
+     * 시나리오: prompt SELECT에서 preview 컬럼이 빠지면 응답의 turn.prompt.preview가
+     * undefined가 되어, 클라이언트의 turn-card prompt row(.turn-card-prompt-row)가
+     * DOM에 안 그려진다. 컨트랙트 누락 회귀가 다시 발생하지 않도록 명시 케이스로 차단.
+     *
+     * 3 케이스:
+     *  - null preview        → null로 정규화돼 응답에 도달
+     *  - 빈 문자열 preview   → 그대로 전달 (정책 SSoT는 클라이언트의 truthy 분기)
+     *  - 일반 텍스트 preview → 그대로 전달
+     */
+    it('prompt.preview 컨트랙트 — null/빈문자열/정상값 모두 응답에 도달 (ADR-001)', () => {
+      const cases: Array<{ turn: string; preview: string | null; expect: string | null }> = [
+        { turn: 'turn-prev-null',   preview: null,            expect: null },
+        { turn: 'turn-prev-empty',  preview: '',              expect: '' },
+        { turn: 'turn-prev-normal', preview: 'hello world',   expect: 'hello world' },
+      ];
+      let ts = 1_000_000_100_000;
+      for (const c of cases) {
+        createRequest(db.instance, {
+          id: `prev-${c.turn}`, session_id: sessionId, timestamp: ts++,
+          type: 'prompt', turn_id: c.turn, tokens_input: 10, tokens_output: 0,
+          tokens_total: 10, duration_ms: 0, model: 'claude-opus-4-7',
+          event_type: 'prompt',
+          preview: c.preview,
+        });
+      }
+
+      const turns = getTurnsBySession(db.instance, sessionId);
+      for (const c of cases) {
+        const t = turns.find(x => x.turn_id === c.turn);
+        expect(t?.prompt).toBeDefined();
+        // preview 키가 응답 객체에 반드시 존재해야 함 (undefined가 아님).
+        expect(t?.prompt).toHaveProperty('preview');
+        expect(t?.prompt?.preview).toBe(c.expect);
+      }
+    });
+
     it('turn 없는 세션은 빈 배열', () => {
       // sessionId의 모든 turn_id 없는 행만 있을 때
       const otherSession = 'sess-no-turn';
