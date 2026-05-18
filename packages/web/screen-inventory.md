@@ -117,15 +117,38 @@
 
 ## turn-view
 
-**책임**: 턴 카드 통합 뷰. prompt + tool chip 흐름 + IN/OUT/지속시간 + system reminder.
+**책임**: 턴 카드 통합 뷰. 사용자 프롬프트(1급) + 메타 시그널 + tool chip 흐름 + IN/OUT/지속시간 + system reminder.
 
-**컴포넌트 위계** (`renderTurnCards`):
+**컴포넌트 위계** (`renderTurnCards`) — turn-header-prompt-prominence 라운드(2026-05-18)에서 2-row 헤더로 재구성:
 - `.turn-card` — 카드 컨테이너 (펼침 상태 `.expanded`)
-- `.turn-card-summary[data-toggle-card]` — 헤더 (클릭 시 펼침 토글)
-- `.turn-card-header` — T번호 + preview + system badge + reminder chip + **spike summary** + payload btn + expand chevron
+- `.turn-card-summary[data-toggle-card]` — 헤더 영역 (클릭 시 카드 토글, `role="button"` / `tabindex="0"`)
+  - **Row 1** `.turn-card-header` — 메타 시그널 묶음
+    - `.turn-card-index` (T번호) → system 변경 배지 → `.turn-system-reminder-anchor` (chip+popover) → `.turn-spike-summary`
+    - `.turn-card-summary-actions` — 우측 정렬 액션 묶음 (`margin-left:auto`)
+      - `.turn-card-action-payload` (API 페이로드 딥링크)
+      - `.turn-card-expand-btn` (펼침 chevron, 회전 `-90deg↔0deg`)
+  - **Row 2** `.turn-card-prompt-row` — 사용자 프롬프트 1급 노출 (ADR-002)
+    - `.turn-card-prompt-icon` — 따옴표 SVG(`svgQuote`, 12px, `--text-3` 톤)
+    - `.turn-card-prompt-text` — 본문 (font-size `--text-body` / color `--text-1` / weight-medium / 2줄 line-clamp / `user-select:text`)
+    - prompt 없는 케이스(prologue로 분리됨)에는 Row 2 자체 미렌더
+    - **min-height 2줄 분량** (turn-prompt-preview-regression 라운드 ADR-002, 2026-05-18) — `calc(var(--text-body) * 1.45 * 2)`. 다중 세션 병렬 환경에서 1줄·2줄 prompt 카드의 시각 단차(약 17px)를 제거해 prompt 영역이 동일 높이로 좌측 정렬. `align-items:flex-start`로 1줄 prompt는 위쪽 정렬, 빈 아래 공간은 자연 여백
 - `.turn-card-flow` — 도구 chip 인터리빙 (`compressFlowWithResponses`)
 - `.turn-card-footer` — IN/OUT/⏱ + complexity + 비율%
 - `.turn-card-expanded` — 펼침 시 `buildTurnDetailRows(turn)` lazy 렌더
+
+**스크롤바 SSoT** (ADR-001):
+- `#turnUnifiedBody`에 `scrollbar-width: thin` + `scrollbar-color: var(--border-strong) transparent` (Firefox), WebKit 8px thumb=`--border-strong`(hover `--text-3`) / track=transparent.
+- meta-docs / syslib / llm-input-system-content / meta-tool-stats와 동일 패턴.
+
+**캡슐화 규칙** (CLAUDE.md 사용자 지침):
+- 헤더 HTML 골격 변경 시 `renderTurnCards`만 수정 — 인라인 스타일 금지, 모든 색·간격·radius는 `design-tokens.css` 토큰을 `var()`로 경유.
+- prompt 본문 변경/슬라이스 금지 — Row 2 line-clamp가 시각 한도를 담당. 텍스트 슬라이스를 코드에서 하면 `user-select` 드래그 복사 시 잘린 텍스트가 복사되는 회귀 발생.
+- payload + chevron은 반드시 `.turn-card-summary-actions` wrapper로 묶어 단일 우측 정렬 책임 보존.
+
+**데이터 컨트랙트 SSoT** (turn-prompt-preview-regression ADR-001):
+- `getTurnsBySession`(`packages/storage/src/queries/request/turn.ts`) 응답의 `turn.prompt`는 반드시 `preview: string | null` 필드를 포함해야 한다.
+- 클라이언트의 `turn.prompt?.preview ? escHtml(...) : ''` 분기가 Row 2 렌더 여부를 결정 — `undefined`가 도달하면 Row 2 자체가 안 그려져 다중 세션 식별 UX가 무효화된다.
+- 회귀 차단 테스트: `packages/storage/src/__tests__/request-contract.test.ts` "prompt.preview 컨트랙트 — null/빈문자열/정상값 모두 응답에 도달".
 
 **anomaly-bloated-sys 신호** (ADR-002/005):
 - **`.turn-spike-summary`** — turn.agent_spike.status === 'critical' AND ratio ≥ 3 일 때만 노출
@@ -226,6 +249,11 @@ ui.anomaly.agent-spike.modal           = "Agent 토큰 폭증 · ↑×{n} · 세
 ui.anomaly.agent-spike.summary         = "↑{n}× larger than parent row"
 ui.chart.footer.split                  = "system {sys}% / user {user}%"
 
+# turn-header-prompt-prominence 라운드 (2026-05-18) — ADR-002
+# turn-prompt-preview-regression 라운드 (2026-05-18) — ADR-004 동치 검증 완료, 변경 없음
+session.session-detail.turn-views.prompt-row-aria   = "사용자 프롬프트" / "User prompt" / "ユーザープロンプト" / "用户提示"
+session.session-detail.turn-views.prompt-icon-aria  = "사용자 프롬프트" / "User prompt" / "ユーザープロンプト" / "用户提示"
+
 # auto-update-migration-hardening 라운드 (2026-05-18) — T-13
 ui.version-check.migration.applied         = "마이그레이션 {n}건 적용 (v{from} → v{to})"
 ui.version-check.migration.applied-single  = "마이그레이션 1건 적용 (v{from} → v{to})"
@@ -270,6 +298,26 @@ ui.html.dashboard-warning.shallow-dismiss-aria = "경고 닫기"
 ---
 
 ## 변경 이력
+
+### 2026-05-18 — turn-header-prompt-prominence 라운드
+
+- 영향 화면: `turn-view` (단일)
+- 핵심 변경: 턴 카드 헤더를 **2-row 구조**로 재설계 — 사용자 프롬프트를 카드의 주제목(1급 요소)으로 승격해, 접힌 카드만 보고도 여러 턴의 prompt를 즉시 비교할 수 있게 한다.
+- 신규/변경 컴포넌트 (`packages/web/assets/`):
+  - `.turn-card-summary` 내부 2-row 분리 — Row 1 `.turn-card-header`(메타) + Row 2 `.turn-card-prompt-row`(prompt 1급)
+  - `.turn-card-summary-actions` (신규) — payload + chevron 우측 정렬 묶음 단일 SSoT
+  - `.turn-card-prompt-row` / `.turn-card-prompt-icon` / `.turn-card-prompt-text` (신규) — 12px 따옴표 SVG + 본문(text-body / text-1 / weight-medium / line-height 1.45 / 2줄 line-clamp / `user-select: text`)
+  - `.turn-card-action-payload`에서 `margin-left: auto` 제거 (부모 wrapper로 책임 이동)
+  - `.turn-card-preview` — deprecated 주석 처리 (외부 호환 보존, 이후 라운드에서 제거 예정)
+- 스크롤바 SSoT 통일 — `#turnUnifiedBody`에 `scrollbar-width: thin` + `scrollbar-color: var(--border-strong) transparent` + WebKit 8px thumb (`--border-strong`, hover `--text-3`) / radius `--radius-sm` / transparent track. meta-docs / syslib / llm-input-system-content / meta-tool-stats와 동일 패턴.
+- 신규 SVG 헬퍼: `design-system/icons/quote.js` — fill-only currentColor, viewBox 12x12, 채움형 따옴표 한 쌍 (svgDiamond 패밀리)
+- 신규 i18n 키 2종 × 4언어 (ko/en/ja/zh 완전 동치): `session.session-detail.turn-views.prompt-row-aria`, `session.session-detail.turn-views.prompt-icon-aria`
+- 코드 변경:
+  - `assets/js/session-detail/turn-views.js` — `renderTurnCards` 카드 HTML 골격 2-row 재구성, prompt 60자 슬라이스 제거(line-clamp로 위임)
+  - `assets/js/design-system/icons/quote.js` (신규 1파일)
+  - `assets/css/turn-view.css` — 신규 4 클래스 + `#turnUnifiedBody` 스크롤바 토큰화 + `.turn-card-action-payload` margin 제거 + `.turn-card-preview` deprecated 주석
+- 트레이드오프: 접힌 카드 높이 ~48px → ~70px → 한 화면 노출 턴 수 ~7 → ~5개 감소. 사용자의 명시적 우선순위(prompt 가독성)에 따른 수용 가능한 trade-off.
+- ADR 참조: ADR-001(스크롤바 SSoT) · ADR-002(2-row 헤더 + prompt 1급 승격) · ADR-003(chevron 위치 유지 + user-select 허용) — `.claude/docs/plans/turn-header-prompt-prominence/adr.md`
 
 ### 2026-05-18 — auto-update-migration-hardening 라운드
 
