@@ -51,83 +51,83 @@ function writePidFile(pidFile: string): void {
 async function commandStart(pidFile: string): Promise<void> {
   const fs = require('fs');
 
-  // 1. PID 파일로 실행 중인지 확인
-  if (fs.existsSync(pidFile)) {
-    const pid = parseInt(fs.readFileSync(pidFile, 'utf-8'), 10);
-    try {
-      process.kill(pid, 0);
-      console.log(`[Server] Already running (PID: ${pid})`);
-      process.exit(0);
-    } catch {
-      fs.unlinkSync(pidFile);
-    }
+  // 1. PORT를 LISTEN 중인 spyglass server가 이미 있는지 확인.
+  //    findProcessesByPort는 -sTCP:LISTEN 필터 → proxy 클라이언트(클로드 코드) 안 잡힘.
+  //    PID 파일을 신뢰하지 않는다 — stale + PID 재할당 시 무관한 프로세스를 "Already running"으로
+  //    잘못 보고할 수 있기 때문. LISTEN 결과만이 spyglass 식별의 SSoT.
+  const listeningPids = findProcessesByPort(PORT);
+  if (listeningPids.length > 0) {
+    console.log(`[Server] Already running (PID: ${listeningPids.join(', ')})`);
+    process.exit(0);
   }
 
-  // 2. 포트 사용 가능 여부 확인
+  // 2. stale PID 파일은 정리 (남아 있어도 LISTEN 안 함이 위 1번에서 확정됨)
+  if (fs.existsSync(pidFile)) {
+    try { fs.unlinkSync(pidFile); } catch {}
+  }
+
+  // 3. 포트 가용성 확인 — LISTEN은 없지만 TIME_WAIT 등으로 막힐 수 있음.
   if (!(await isPortAvailable(PORT))) {
-    console.error(`[Server] Port ${PORT} is already in use`);
-    const blockingPids = findProcessesByPort(PORT);
-    if (blockingPids.length > 0) {
-      console.error(`[Server] Blocking process(es): PID ${blockingPids.join(', ')}`);
-      console.error(`[Server] Run 'bun run dev' to restart with auto-cleanup`);
-    }
+    console.error(`[Server] Port ${PORT} is unavailable (likely TIME_WAIT)`);
+    console.error(`[Server] Run 'bun run dev' to restart with auto-cleanup`);
     process.exit(1);
   }
 
-  // 3. 서버 시작
+  // 4. 서버 시작
   startServer();
-
-  // PID 파일 저장
   writePidFile(pidFile);
-
-  // 종료 시그널 처리
   installShutdownHandlers(pidFile);
 }
 
 function commandStop(pidFile: string): void {
   const fs = require('fs');
-  if (!fs.existsSync(pidFile)) {
+
+  // PORT를 LISTEN 중인 spyglass server PID만 SIGTERM.
+  // PID 파일을 신뢰하지 않는다 — stale + PID 재할당 시 무관한 프로세스(예: 작업 중인
+  // 클로드 코드 CLI)를 죽일 수 있기 때문. LISTEN 결과만이 종료 대상 결정의 SSoT.
+  const listeningPids = findProcessesByPort(PORT);
+
+  if (listeningPids.length === 0) {
     console.log('[Server] Not running');
+    if (fs.existsSync(pidFile)) {
+      try { fs.unlinkSync(pidFile); } catch {}
+    }
     process.exit(0);
   }
 
-  const pid = parseInt(fs.readFileSync(pidFile, 'utf-8'), 10);
-  try {
-    process.kill(pid, 'SIGTERM');
-    console.log(`[Server] Stopped (PID: ${pid})`);
-    fs.unlinkSync(pidFile);
-  } catch (error) {
-    console.error('[Server] Failed to stop:', error);
-    process.exit(1);
+  for (const pid of listeningPids) {
+    try {
+      process.kill(pid, 'SIGTERM');
+      console.log(`[Server] Stopped (PID: ${pid})`);
+    } catch (error) {
+      console.error(`[Server] Failed to stop (PID: ${pid}):`, error);
+    }
+  }
+
+  if (fs.existsSync(pidFile)) {
+    try { fs.unlinkSync(pidFile); } catch {}
   }
 }
 
 async function commandRestart(pidFile: string): Promise<void> {
   const fs = require('fs');
 
-  // 1. 먼저 포트 사용 가능 여부 확인
-  if (await isPortAvailable(PORT)) {
-    console.log(`[Server] Port ${PORT} is available`);
+  // 1. PORT를 LISTEN 중인 spyglass server PID만 종료 대상으로 선정.
+  //    PID 파일의 savedPid를 무조건 kill 대상에 포함시키던 우회 경로 제거 —
+  //    stale + PID 재할당 시 proxy 클라이언트(클로드 코드 CLI 등)를 죽일 수 있기 때문.
+  //    LISTEN 결과만이 종료 대상 결정의 단일 SSoT.
+  const listeningPids = findProcessesByPort(PORT);
+
+  if (listeningPids.length === 0) {
+    console.log(`[Server] Port ${PORT} is available (no listening server)`);
   } else {
-    console.log(`[Server] Port ${PORT} is in use, attempting to free it...`);
+    console.log(`[Server] Stopping listening server(s): PID ${listeningPids.join(', ')}`);
 
-    // 2. PID 파일 또는 포트 점유 프로세스 찾기
-    let pidsToKill: number[] = [];
-    if (fs.existsSync(pidFile)) {
-      const savedPid = parseInt(fs.readFileSync(pidFile, 'utf-8'), 10);
-      fs.unlinkSync(pidFile);
-      pidsToKill = [savedPid, ...findProcessesByPort(PORT).filter(p => p !== savedPid)];
-    } else {
-      pidsToKill = findProcessesByPort(PORT);
-    }
-
-    // 3. 프로세스 종료 (포트 점유 프로세스 전체)
-    for (const pid of pidsToKill) {
+    for (const pid of listeningPids) {
       try {
         process.kill(pid, 'SIGTERM');
         console.log(`[Server] Stopping process (PID: ${pid})...`);
 
-        // 4. 프로세스 종료 대기
         const exited = await waitForProcessExit(pid, 5000);
         if (!exited) {
           console.log(`[Server] Force killing process (PID: ${pid})...`);
@@ -136,7 +136,12 @@ async function commandRestart(pidFile: string): Promise<void> {
       } catch {}
     }
 
-    // 5. 포트 해제 대기
+    // stale PID 파일 정리 (서버 PID는 LISTEN 결과로 식별 끝)
+    if (fs.existsSync(pidFile)) {
+      try { fs.unlinkSync(pidFile); } catch {}
+    }
+
+    // 포트 해제 대기 (OS 레벨 TIME_WAIT 등)
     console.log(`[Server] Waiting for port ${PORT} to be released...`);
     const released = await waitForPortRelease(PORT, 5000);
     if (!released) {
@@ -146,7 +151,7 @@ async function commandRestart(pidFile: string): Promise<void> {
     console.log(`[Server] Port ${PORT} is now available`);
   }
 
-  // 6. 서버 시작
+  // 2. 서버 시작
   startServer();
   writePidFile(pidFile);
   console.log(`[Server] Restarted (PID: ${process.pid})`);
@@ -156,16 +161,18 @@ async function commandRestart(pidFile: string): Promise<void> {
 
 function commandStatus(pidFile: string): void {
   const fs = require('fs');
+
+  // PORT LISTEN 필터로 spyglass server 식별 (PID 파일은 신뢰 X — PID 재할당 시 오탐 위험).
+  const listeningPids = findProcessesByPort(PORT);
+  if (listeningPids.length > 0) {
+    console.log(`[Server] Running (PID: ${listeningPids.join(', ')})`);
+    console.log(`[Server] Endpoint: http://${HOST}:${PORT}`);
+    return;
+  }
+
   if (fs.existsSync(pidFile)) {
-    const pid = fs.readFileSync(pidFile, 'utf-8').trim();
-    try {
-      process.kill(parseInt(pid, 10), 0);
-      console.log(`[Server] Running (PID: ${pid})`);
-      console.log(`[Server] Endpoint: http://${HOST}:${PORT}`);
-    } catch {
-      console.log('[Server] Not running (stale PID file)');
-      fs.unlinkSync(pidFile);
-    }
+    console.log('[Server] Not running (stale PID file)');
+    try { fs.unlinkSync(pidFile); } catch {}
   } else {
     console.log('[Server] Not running');
   }
