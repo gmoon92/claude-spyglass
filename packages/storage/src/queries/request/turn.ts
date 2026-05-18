@@ -75,6 +75,14 @@ export interface TurnItem {
   prompt: {
     id: string;
     timestamp: number;
+    /**
+     * turn-prompt-preview-regression ADR-001: prompt 본문 미리보기.
+     * requests.preview 컬럼(v7+) SSoT. hook(server/src/hook/preview.ts)이 prompt 행에도 정상 저장.
+     * 클라이언트 카드 헤더 Row 2(.turn-card-prompt-row)가 이 값을 1급 시각 요소로 노출 —
+     * undefined가 되면 선행 라운드 turn-header-prompt-prominence ADR-002의 의도가 무효화된다.
+     * null은 명시적 — 클라이언트는 turn.prompt?.preview 분기로 처리 가능.
+     */
+    preview: string | null;
     tokens_input: number;
     tokens_output: number;
     tokens_total: number;
@@ -160,8 +168,10 @@ export function getTurnsBySession(
   }>;
 
   // 2. 각 턴의 prompt 행 조회
+  // turn-prompt-preview-regression ADR-001: preview 컬럼 SELECT 포함.
+  // 다른 라우트(/api/sessions/:id/requests)는 이미 r.preview 노출 중 — turn 라우트만 누락된 비대칭 해소.
   const promptRows = db.query(`
-    SELECT turn_id, id, timestamp, tokens_input, tokens_output, tokens_total, duration_ms,
+    SELECT turn_id, id, timestamp, preview, tokens_input, tokens_output, tokens_total, duration_ms,
            model, payload, cache_read_tokens, cache_creation_tokens, tokens_confidence
     FROM requests
     WHERE session_id = ? AND turn_id IS NOT NULL AND type = 'prompt'
@@ -171,6 +181,7 @@ export function getTurnsBySession(
     turn_id: string;
     id: string;
     timestamp: number;
+    preview: string | null;
     tokens_input: number;
     tokens_output: number;
     tokens_total: number;
@@ -330,6 +341,11 @@ export function getTurnsBySession(
       prompt: prompt ? {
         id: prompt.id,
         timestamp: prompt.timestamp,
+        // turn-prompt-preview-regression ADR-001:
+        // hook이 빈 prompt를 ""로 저장하는 케이스(드물지만 가능)는 null로 정규화하지 않고 그대로 전달.
+        // 클라이언트(turn-views.js)는 `turn.prompt?.preview ? escHtml(...) : ''` 패턴으로
+        // 빈 문자열에도 Row 2를 안 그림 — 정책 SSoT를 클라이언트 한 곳에 둠.
+        preview: prompt.preview ?? null,
         tokens_input: prompt.tokens_input,
         tokens_output: prompt.tokens_output,
         tokens_total: prompt.tokens_total,
