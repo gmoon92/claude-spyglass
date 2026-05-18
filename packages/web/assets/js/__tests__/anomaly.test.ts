@@ -96,3 +96,51 @@ describe('getAnomalyFlagsForRow — 복수 플래그 + 엣지 케이스', () => 
     expect(getAnomalyFlagsForRow(undefined).size).toBe(0);
   });
 });
+
+describe('getAnomalyFlagsForRow — spike/loop/slow 매핑 (v2.0.1 회귀 복원)', () => {
+  it('spike.stage="spike" → "spike" 플래그', () => {
+    const row = { id: 'r1', spike: { stage: 'spike' } };
+    const flags = getAnomalyFlagsForRow(row);
+    expect(flags.has('spike')).toBe(true);
+  });
+
+  it('loop.stage="loop" → "loop" 플래그', () => {
+    const row = { id: 'r1', loop: { stage: 'loop' } };
+    const flags = getAnomalyFlagsForRow(row);
+    expect(flags.has('loop')).toBe(true);
+  });
+
+  it('slow.stage="slow" → "slow" 플래그 (+ p95_ms 부가 정보 보존)', () => {
+    const row = { id: 'r1', slow: { stage: 'slow', p95_ms: 5000 } };
+    const flags = getAnomalyFlagsForRow(row);
+    expect(flags.has('slow')).toBe(true);
+  });
+
+  it('stage=null인 spike/loop/slow는 무시', () => {
+    const row = {
+      id: 'r1',
+      spike: { stage: null },
+      loop:  { stage: null },
+      slow:  { stage: null, p95_ms: 5000 },
+    };
+    const flags = getAnomalyFlagsForRow(row);
+    expect(flags.size).toBe(0);
+  });
+
+  it('6종 anomaly 동시 부여 가능 — bloated-sys + agent-spike + spike + loop + slow', () => {
+    const row = {
+      id: 'r1',
+      bloated_sys: { stage: 'critical' },
+      agent_spike: { stage: 'spike', multiplier: 20 },
+      spike: { stage: 'spike' },
+      loop:  { stage: 'loop' },
+      slow:  { stage: 'slow', p95_ms: 3000 },
+    };
+    const flags = getAnomalyFlagsForRow(row);
+    expect(flags.has('bloated-sys-critical')).toBe(true);
+    expect(flags.has('agent-spike')).toBe(true);
+    expect(flags.has('spike')).toBe(true);
+    expect(flags.has('loop')).toBe(true);
+    expect(flags.has('slow')).toBe(true);
+  });
+});

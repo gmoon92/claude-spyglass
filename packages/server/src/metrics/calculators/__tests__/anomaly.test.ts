@@ -16,7 +16,13 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
-import { detectBloatedSys, detectAgentSpike, __test } from '../anomaly';
+import {
+  computeRowAnomalies,
+  detectBloatedSys,
+  detectAgentSpike,
+  __test,
+  type RowAnomalyInput,
+} from '../anomaly';
 import {
   DEFAULT_ANOMALY_THRESHOLDS,
   getAnomalyThresholds,
@@ -496,5 +502,187 @@ describe('detectAgentSpike — AND 조건 + WITH RECURSIVE 깊이 3 (ADR-002)', 
     // 30000만 합산
     expect(result.child_token_sum).toBe(30000);
     expect(result.child_count).toBe(1);
+  });
+});
+
+// =============================================================================
+// computeRowAnomalies — spike/loop/slow 행 단위 부착 (v2.0.1 회귀 복원)
+// =============================================================================
+
+function row(over: Partial<RowAnomalyInput>): RowAnomalyInput {
+  return {
+    id: over.id ?? 'r',
+    session_id: over.session_id ?? 'sess-1',
+    turn_id: over.turn_id ?? null,
+    type: over.type ?? 'tool_call',
+    tool_name: over.tool_name ?? null,
+    timestamp: over.timestamp ?? 0,
+    tokens_input: over.tokens_input ?? 0,
+    duration_ms: over.duration_ms ?? 0,
+  };
+}
+
+describe('computeRowAnomalies — spike (세션 prompt 평균 ×2 초과)', () => {
+  test('세션 평균의 2배 초과 prompt에 stage="spike" 부여', () => {
+    // 평균 = (1000 + 1500 + 8000) / 3 = 3500, 임계 = 7000.
+    // 8000 > 7000 → spike.
+    const out = computeRowAnomalies([
+      row({ id: 'p1', type: 'prompt', tokens_input: 1000, timestamp: 1 }),
+      row({ id: 'p2', type: 'prompt', tokens_input: 1500, timestamp: 2 }),
+      row({ id: 'p3', type: 'prompt', tokens_input: 8000, timestamp: 3 }),
+    ]);
+    expect(out.get('p3')?.spike.stage).toBe('spike');
+    expect(out.get('p1')?.spike.stage ?? null).toBeNull();
+    expect(out.get('p2')?.spike.stage ?? null).toBeNull();
+  });
+
+  test('단일 prompt 세션은 평균 샘플 부족 → 미검출', () => {
+    const out = computeRowAnomalies([
+      row({ id: 'p1', type: 'prompt', tokens_input: 9999, timestamp: 1 }),
+    ]);
+    expect(out.get('p1')).toBeUndefined();
+  });
+
+  test('서로 다른 세션은 독립 평균', () => {
+    // 세션 A: 1000 / 1500 평균 1250 → 임계 2500
+    // 세션 B: 10 / 10000 평균 5005 → 임계 10010 → 10000 미초과
+    const out = computeRowAnomalies([
+      row({ id: 'a1', session_id: 'A', type: 'prompt', tokens_input: 1000, timestamp: 1 }),
+      row({ id: 'a2', session_id: 'A', type: 'prompt', tokens_input: 1500, timestamp: 2 }),
+      row({ id: 'b1', session_id: 'B', type: 'prompt', tokens_input: 10,    timestamp: 3 }),
+      row({ id: 'b2', session_id: 'B', type: 'prompt', tokens_input: 10000, timestamp: 4 }),
+    ]);
+    expect(out.get('a1')?.spike.stage ?? null).toBeNull();
+    expect(out.get('a2')?.spike.stage ?? null).toBeNull();
+    expect(out.get('b2')?.spike.stage ?? null).toBeNull(); // 10000 < 10010
+  });
+});
+
+describe('computeRowAnomalies — loop (turn 내 동일 tool 3연속)', () => {
+  test('Read × 3 연속 → 세 행 모두 stage="loop"', () => {
+    const out = computeRowAnomalies([
+      row({ id: 'l1', type: 'tool_call', tool_name: 'Read', turn_id: 'T1', timestamp: 1, duration_ms: 100 }),
+      row({ id: 'l2', type: 'tool_call', tool_name: 'Read', turn_id: 'T1', timestamp: 2, duration_ms: 100 }),
+      row({ id: 'l3', type: 'tool_call', tool_name: 'Read', turn_id: 'T1', timestamp: 3, duration_ms: 100 }),
+    ]);
+    expect(out.get('l1')?.loop.stage).toBe('loop');
+    expect(out.get('l2')?.loop.stage).toBe('loop');
+    expect(out.get('l3')?.loop.stage).toBe('loop');
+  });
+
+  test('Read × 2 만 → loop 미검출', () => {
+    const out = computeRowAnomalies([
+      row({ id: 'l1', type: 'tool_call', tool_name: 'Read', turn_id: 'T1', timestamp: 1 }),
+      row({ id: 'l2', type: 'tool_call', tool_name: 'Read', turn_id: 'T1', timestamp: 2 }),
+    ]);
+    expect(out.get('l1')).toBeUndefined();
+    expect(out.get('l2')).toBeUndefined();
+  });
+
+  test('다른 turn에서는 연속 streak 분리', () => {
+    const out = computeRowAnomalies([
+      row({ id: 'a1', type: 'tool_call', tool_name: 'Read', turn_id: 'T1', timestamp: 1 }),
+      row({ id: 'a2', type: 'tool_call', tool_name: 'Read', turn_id: 'T1', timestamp: 2 }),
+      row({ id: 'b1', type: 'tool_call', tool_name: 'Read', turn_id: 'T2', timestamp: 3 }),
+    ]);
+    expect(out.get('a1')).toBeUndefined();
+    expect(out.get('b1')).toBeUndefined();
+  });
+
+  test('입력 순서 역(DESC)이어도 timestamp ASC 정렬 후 검출', () => {
+    // DESC 입력
+    const out = computeRowAnomalies([
+      row({ id: 'l3', type: 'tool_call', tool_name: 'Read', turn_id: 'T1', timestamp: 3 }),
+      row({ id: 'l2', type: 'tool_call', tool_name: 'Read', turn_id: 'T1', timestamp: 2 }),
+      row({ id: 'l1', type: 'tool_call', tool_name: 'Read', turn_id: 'T1', timestamp: 1 }),
+    ]);
+    expect(out.get('l1')?.loop.stage).toBe('loop');
+    expect(out.get('l2')?.loop.stage).toBe('loop');
+    expect(out.get('l3')?.loop.stage).toBe('loop');
+  });
+});
+
+describe('computeRowAnomalies — slow (전체 P95 초과)', () => {
+  test('P95를 초과한 단일 outlier에 stage="slow"', () => {
+    // duration: 100, 200, 200, 300, 90000 — sorted [100,200,200,300,90000], n=5,
+    // ceil(5*0.95)-1 = 5-1 = 4 → p95 = 90000. 초과 행은 없음 → none flagged.
+    // 충분한 표본을 만들어 outlier가 분리되게 한다.
+    const rows: RowAnomalyInput[] = [];
+    for (let i = 0; i < 19; i++) {
+      rows.push(row({ id: `s${i}`, type: 'tool_call', tool_name: 'Bash', duration_ms: 200, timestamp: i }));
+    }
+    rows.push(row({ id: 'slow-x', type: 'tool_call', tool_name: 'Bash', duration_ms: 90000, timestamp: 100 }));
+    // n=20, ceil(20*0.95)-1 = 19-1 = 18 → 정렬 후 인덱스 18은 200 (마지막 200), p95=200.
+    // slow-x(90000) > 200 → slow.
+    const out = computeRowAnomalies(rows);
+    expect(out.get('slow-x')?.slow.stage).toBe('slow');
+    expect(out.get('slow-x')?.slow.p95_ms).toBe(200);
+    expect(out.get('s0')?.slow.stage ?? null).toBeNull();
+  });
+
+  test('duration 0/음수 행은 P95 계산에 미포함 (tool_call만)', () => {
+    const out = computeRowAnomalies([
+      row({ id: 'p1', type: 'prompt', tokens_input: 100, duration_ms: 999999, timestamp: 1 }),
+      row({ id: 't1', type: 'tool_call', tool_name: 'Bash', duration_ms: 0, timestamp: 2 }),
+      row({ id: 't2', type: 'tool_call', tool_name: 'Bash', duration_ms: 100, timestamp: 3 }),
+    ]);
+    // tool_call duration > 0 표본은 단 1건(t2=100). p95=100 → 초과 없음.
+    expect(out.get('p1')?.slow.stage ?? null).toBeNull();
+    expect(out.get('t1')).toBeUndefined();
+    expect(out.get('t2')).toBeUndefined();
+  });
+});
+
+describe('computeRowAnomalies — DEMO-SPIKE-multi 회귀 시나리오', () => {
+  // 실제 데모 데이터(prompt 3건, Read 3연속, Bash 90000ms, Agent + Read×5)에 다른 세션의
+  // 정상 tool_call이 같은 페이지 응답에 포함된 일반 운영 컨텍스트를 재현 — P95 분포 정상화.
+  test('데모 시드의 모든 anomaly 행이 stage 부여됨 (페이지 컨텍스트 포함)', () => {
+    const rows: RowAnomalyInput[] = [
+      // 3 prompts — 평균 (1000+1500+8000)/3 = 3500, 임계 7000 → p3가 spike
+      row({ id: 'DEMO-multi-prompt-1', type: 'prompt', tokens_input: 1000, timestamp: 10, duration_ms: 0 }),
+      row({ id: 'DEMO-multi-prompt-2', type: 'prompt', tokens_input: 1500, timestamp: 20, duration_ms: 0 }),
+      row({ id: 'DEMO-multi-prompt-3', type: 'prompt', tokens_input: 8000, timestamp: 30, duration_ms: 0 }),
+      // 3 Read in LOOP turn → loop
+      row({ id: 'DEMO-multi-loop-1', type: 'tool_call', tool_name: 'Read', turn_id: 'DEMO-TURN-LOOP', timestamp: 40, duration_ms: 200 }),
+      row({ id: 'DEMO-multi-loop-2', type: 'tool_call', tool_name: 'Read', turn_id: 'DEMO-TURN-LOOP', timestamp: 41, duration_ms: 200 }),
+      row({ id: 'DEMO-multi-loop-3', type: 'tool_call', tool_name: 'Read', turn_id: 'DEMO-TURN-LOOP', timestamp: 42, duration_ms: 200 }),
+      // Bash 90000ms → slow (P95 초과)
+      row({ id: 'DEMO-multi-slow-1', type: 'tool_call', tool_name: 'Bash', turn_id: 'DEMO-TURN-SLOW', timestamp: 50, duration_ms: 90000 }),
+      // Agent + child Read × 5
+      row({ id: 'DEMO-multi-agent-parent', type: 'tool_call', tool_name: 'Agent', turn_id: 'DEMO-TURN-AGENT', timestamp: 60, duration_ms: 1000 }),
+      row({ id: 'DEMO-multi-agent-child-1', type: 'tool_call', tool_name: 'Read', turn_id: 'DEMO-TURN-AGENT', timestamp: 61, duration_ms: 100 }),
+      row({ id: 'DEMO-multi-agent-child-2', type: 'tool_call', tool_name: 'Read', turn_id: 'DEMO-TURN-AGENT', timestamp: 62, duration_ms: 100 }),
+      row({ id: 'DEMO-multi-agent-child-3', type: 'tool_call', tool_name: 'Read', turn_id: 'DEMO-TURN-AGENT', timestamp: 63, duration_ms: 100 }),
+      row({ id: 'DEMO-multi-agent-child-4', type: 'tool_call', tool_name: 'Read', turn_id: 'DEMO-TURN-AGENT', timestamp: 64, duration_ms: 100 }),
+      row({ id: 'DEMO-multi-agent-child-5', type: 'tool_call', tool_name: 'Read', turn_id: 'DEMO-TURN-AGENT', timestamp: 65, duration_ms: 100 }),
+    ];
+    // 동일 페이지에 함께 들어올 다른 세션 정상 tool_call (운영 시 일반적 — /api/requests limit=100).
+    // P95가 90000보다 작아져 slow가 정상 검출되도록 한다.
+    for (let i = 0; i < 30; i++) {
+      rows.push(row({
+        id: `OTHER-tool-${i}`, session_id: 'OTHER-sess', type: 'tool_call',
+        tool_name: 'Bash', turn_id: `OTHER-T${i}`, timestamp: 1000 + i, duration_ms: 300,
+      }));
+    }
+    const out = computeRowAnomalies(rows);
+    expect(out.get('DEMO-multi-prompt-3')?.spike.stage).toBe('spike');
+    expect(out.get('DEMO-multi-loop-1')?.loop.stage).toBe('loop');
+    expect(out.get('DEMO-multi-loop-2')?.loop.stage).toBe('loop');
+    expect(out.get('DEMO-multi-loop-3')?.loop.stage).toBe('loop');
+    expect(out.get('DEMO-multi-slow-1')?.slow.stage).toBe('slow');
+  });
+});
+
+describe('computeRowAnomalies — 엣지 케이스', () => {
+  test('빈 배열', () => {
+    expect(computeRowAnomalies([]).size).toBe(0);
+  });
+
+  test('전체가 정상이면 map empty', () => {
+    const out = computeRowAnomalies([
+      row({ id: 't1', type: 'tool_call', tool_name: 'Bash', duration_ms: 100, timestamp: 1 }),
+      row({ id: 't2', type: 'tool_call', tool_name: 'Read', duration_ms: 100, timestamp: 2 }),
+    ]);
+    expect(out.size).toBe(0);
   });
 });
