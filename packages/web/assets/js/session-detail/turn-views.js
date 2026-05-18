@@ -45,6 +45,8 @@ import { computeNewRemindersByTurn } from './system-reminder.js';
 import { svgNote } from '../design-system/icons/note.js';
 // Wave 8-B: 레거시 turn-toggle ▸ 글리프를 SVG chevron으로 교체.
 import { svgChevron } from '../design-system/icons/chevron.js';
+// turn-header-prompt-prominence ADR-002: 카드 헤더 Row 2 prompt 표지 따옴표 글리프.
+import { svgQuote } from '../design-system/icons/quote.js';
 
 /**
  * 턴 카드 푸터 .turn-card-bar-pct에 hover 시 노출되는 의미 설명 (web-design-balance-pass ADR-003).
@@ -490,9 +492,11 @@ export function renderTurnCards(turns, badgeTurns, allRequests) {
       ? `<span class="turn-system-changed ds-badge" data-tone="warn" title="${window.I18n.t(prevHash ? 'session.session-detail.turn-views.system-changed' : 'session.session-detail.turn-views.system-started')}">▲ <code>${escHtml(turn.system_hash.slice(0, 8))}</code></span>`
       : '';
 
-    const promptText = turn.prompt?.preview
-      ? escHtml(turn.prompt.preview.slice(0, 60)) + (turn.prompt.preview.length > 60 ? '…' : '')
-      : '';
+    // turn-header-prompt-prominence ADR-002:
+    // 헤더 Row 2가 .turn-card-prompt-text 2줄 line-clamp(CSS)를 담당하므로,
+    // 여기서 60자 슬라이스/말줄임표를 적용하지 않는다. 사용자가 본문을 드래그
+    // 복사할 때(ADR-003 user-select:text) 잘린 텍스트가 복사되는 회귀를 차단.
+    const promptText = turn.prompt?.preview ? escHtml(turn.prompt.preview) : '';
 
     // 흐름 chip — 도구 + 어시스턴트 응답을 시간순으로 인터리빙 (SSoT: compressFlowWithResponses).
     // 응답은 ◆ 마커 chip으로 노출 → "Bash → Read → ◆ → Edit → ◆ → Edit ×2" 형태로
@@ -565,17 +569,34 @@ export function renderTurnCards(turns, badgeTurns, allRequests) {
     // search-expand-payload: 카드별 검색 haystack. flat-view 검색 흐름이 매칭 카드만 표시한다.
     const haystack = buildTurnHaystack(turn, turnReminders);
 
+    // turn-header-prompt-prominence ADR-002:
+    //   .turn-card-summary 내부를 2-row로 분리.
+    //   Row 1 (.turn-card-header)   — T번호 + 시스템/리마인더/스파이크 시그널 + 우측 액션 묶음
+    //   Row 2 (.turn-card-prompt-row) — 사용자 프롬프트 표지 아이콘 + 본문 (2줄 line-clamp / user-select)
+    //   payload + chevron은 .turn-card-summary-actions wrapper로 묶어 margin-left:auto로 우측 정렬.
+    //   prompt가 없는 케이스(이론상 prologue로 분리)에는 Row 2 자체를 렌더하지 않음.
+    const promptRowAria = window.I18n.t('session.session-detail.turn-views.prompt-row-aria');
+    const promptIconAria = window.I18n.t('session.session-detail.turn-views.prompt-icon-aria');
+    const promptRowHtml = promptText
+      ? `<div class="turn-card-prompt-row" role="group" aria-label="${escHtml(promptRowAria)}">
+          <span class="turn-card-prompt-icon" role="img" aria-label="${escHtml(promptIconAria)}">${svgQuote({ size: 12 })}</span>
+          <span class="turn-card-prompt-text">${promptText}</span>
+        </div>`
+      : '';
+
     return `<div class="turn-card${expandedClass}" data-card-turn-id="${escHtml(turn.turn_id)}" data-search-haystack="${escHtml(haystack)}">
       <div class="turn-card-summary" data-toggle-card="${escHtml(turn.turn_id)}" role="button" aria-expanded="${ariaExpanded}" tabindex="0">
         <div class="turn-card-header">
           <span class="turn-card-index ds-badge" data-tone="neutral">T${turn.turn_index}</span>
-          ${promptText ? `<span class="turn-card-preview">${promptText}</span>` : ''}
           ${systemBadge}
           ${reminderChip}
           ${spikeSummary}
-          ${payloadActionBtn}
-          <span class="turn-card-expand-btn"><svg class="ds-chevron" data-dir="down" aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="turn-card-summary-actions">
+            ${payloadActionBtn}
+            <span class="turn-card-expand-btn"><svg class="ds-chevron" data-dir="down" aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          </span>
         </div>
+        ${promptRowHtml}
         ${chips ? `<div class="turn-card-flow">${chips}</div>` : ''}
         <div class="turn-card-footer">
           <span>IN ${tokIn}</span>
