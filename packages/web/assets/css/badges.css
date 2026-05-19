@@ -327,24 +327,23 @@ tr.row-bloated-critical > td:first-child,
 [data-mini-badge-tooltip] { cursor: help; }
 
 /* ── TOOL ICON COLOR ────────────────────────────────────────────────────── */
+/* tool-icon-svg-color-regression: 옛 텍스트 글리프(◉/◎) 시절의
+ * `background-clip:text + color:transparent` 트릭은 SVG(stroke="currentColor")
+ * 글리프에서는 stroke가 transparent로 상속되어 아이콘이 사라지는 회귀를 유발.
+ * 단색 토큰을 color에 직접 지정해 currentColor 기반 stroke가 보이도록 한다.
+ * 그라디언트 효과는 12px 사이즈에서 사실상 식별 불가 → 단색이 시각 비용 대비 가독성 우월.
+ * drop-shadow 글로우는 유지(스캔성·강조). */
 .tool-icon {
   font-weight: 700;
   display: inline-block;
+  line-height: 1;
 }
 .tool-icon-tool {
-  background: var(--grad-success);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
+  color: var(--success);
   filter: drop-shadow(0 0 4px rgba(52, 211, 153, 0.5));
 }
 .tool-icon-agent {
-  background: var(--grad-brand);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
+  color: var(--accent);
   filter: drop-shadow(0 0 4px rgba(255, 122, 69, 0.5));
 }
 

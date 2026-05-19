@@ -651,20 +651,16 @@
   line-height: 1;
 }
 
-/* ADR-007 R4: agent-chip layout 안 `.tool-icon-agent` 아이콘은 기본 brand-orange gradient
- * (`--grad-brand`) 대신 부모 chip의 modifier 색을 따른다. 이렇게 해야 Agent(warm)·Skill(lime)·
+/* ADR-007 R4: agent-chip layout 안 `.tool-icon-agent` 아이콘은 기본 brand 톤
+ * (`--accent`) 대신 부모 chip의 modifier 색을 따른다. 이렇게 해야 Agent(warm)·Skill(lime)·
  * Task(burnt-orange) chip 안의 ◎ 아이콘이 chip 텍스트와 같은 hue로 인지되어 분류 식별 명확.
  *
- *   - `.agent-chip`만 적용: 일반 행 cell-target의 `.tool-icon-agent`는 기존 brand-orange 유지
+ *   - `.agent-chip`만 적용: 일반 행 cell-target의 `.tool-icon-agent`는 기존 brand 톤 유지
  *     (action-name 안 아이콘은 chip이 아니라 본래 brand 톤이 자연스러움).
  *   - 강제 우선순위 보장 위해 currentColor 사용 — chip modifier가 색상을 결정 →
  *     ::before/::after 가 아닌 직접 자식이므로 currentColor 상속 안전.
- *   - 기존 `-webkit-text-fill-color: transparent`로 텍스트가 투명한 상태이므로 그것을 reset. */
+ *   - drop-shadow 글로우는 chip 안에서 시각 노이즈가 되므로 제거. */
 .agent-chip .tool-icon-agent {
-  background: none;
-  -webkit-background-clip: initial;
-  background-clip: initial;
-  -webkit-text-fill-color: currentColor;
   color: currentColor;
   filter: none;
 }
