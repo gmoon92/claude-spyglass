@@ -1,6 +1,6 @@
 {
   "env": {
-    "SPYGLASS_DIR": "/Users/<your-name>/spyglass-hooks"
+    "SPYGLASS_DIR": "/Users/<your-name>/.spyglass-src"
   },
   "hooks": {
     "PreToolUse":         [{ "matcher": "*", "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "timeout": 1, "async": true }] }],

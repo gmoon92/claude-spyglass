@@ -1,6 +1,6 @@
 {
   "env": {
-    "SPYGLASS_DIR": "/Users/<your-name>/spyglass-hooks"
+    "SPYGLASS_DIR": "/Users/<your-name>/.spyglass-src"
   },
   "hooks": {
     "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "async": true, "timeout": 1 }] }],
