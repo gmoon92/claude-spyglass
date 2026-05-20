@@ -18,7 +18,7 @@ function todayDateString(): string {
  * - 서버 시작 시 즉시 호출
  * - 이후 1시간 간격 인터벌에서도 호출 (날짜가 바뀐 시점을 놓치지 않기 위해)
  *
- * SPYGLASS_RETENTION_DAYS 환경변수로 보존 기간 설정 (기본: 1일)
+ * SPYGLASS_RETENTION_DAYS 환경변수로 보존 기간 설정 (기본: 30일)
  */
 function runDailyMaintenanceIfNeeded(database: SpyglassDatabase): void {
   try {
