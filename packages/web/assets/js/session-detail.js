@@ -20,7 +20,7 @@ export {
   API,
   detailSearchBox,
   getDetailFilter, setDetailFilter, getDetailRequests, getDetailTurns,
-  renderDetailRequests, applyDetailFilter,
+  applyDetailFilter,
   setDetailView, toggleTurn, toggleCardExpand, setTurnViewMode,
   renderTurnView, renderTurnCards, openLlmInputForTurn,
   initDetailTabBar,

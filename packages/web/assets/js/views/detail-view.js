@@ -40,7 +40,7 @@ export async function loadSession(id) {
   document.getElementById('detailLoading').style.display = 'block';
   // 로딩 중에는 모든 탭 뷰를 숨겨 이전 세션 데이터의 깜빡임을 방지한다.
   // 데이터 fetch 완료 후 setDetailView(getDetailTab())이 현재 탭만 다시 표시한다.
-  document.getElementById('detailRequestsView').style.display = 'none';
+  // (turn-view-tab fix: 레거시 #detailRequestsView 컨테이너 제거 — #detailTurnView 단일 SSoT)
   document.getElementById('detailTurnView').style.display = 'none';
 
   // skeleton-loading T-07: 이전 세션 turn 뷰의 잔여 콘텐츠를 skeleton 으로 리셋.

@@ -1,46 +1,47 @@
 /**
- * session-detail/turn-rows.js — 턴 내부의 prompt/tool_call/response 세부 행을 만드는 빌더.
+ * session-detail/turn-rows.js — 활성 턴의 요청 로그 행 빌더 (얇은 위임 모듈).
  *
  * 책임:
- *  - 단일 turn 객체를 받아 prompt 행 + 시간순(tool_call ↔ response) 인터리빙 + empty placeholder를
- *    HTML 문자열로 조립한다.
- *  - turn 행 빌더에 필요한 보조 helper(연속 도구 그룹화, 단일 행 빌더, 신뢰도 마크)를 함께 둔다.
- *  - 외부에서는 buildTurnDetailRows / compressContinuousTools / fmtActionLabel만 사용한다.
+ *  - 활성 턴을 받아 prompt + 도구·응답 인터리빙을 `makeRequestRow`(render/rows.js)에
+ *    위임해 9컬럼 표 HTML로 조립한다.
+ *  - 칩 ↔ 행 1:1 점프(ADR-turn-view-revamp-003)를 위해 각 행에 `data-chip-key`를
+ *    주입한다 — 키 생성 규칙은 본 모듈의 `chipKey` SSoT로 단일화.
+ *  - 흐름 그룹화 헬퍼(`compressContinuousTools`, `compressFlowWithResponses`)는
+ *    turn-views.js의 칩 렌더러가 재사용하므로 유지.
  *
  * 호출자:
- *  - turn-views.js : renderTurnView, renderTurnCards (양쪽 뷰가 동일 helper 공유)
+ *  - turn-views.js : renderTurnCards (새 spine + flow-head + log-table 모델)
  *
  * 의존성:
- *  - formatters: escHtml, fmtToken, fmtDate, formatDuration
- *  - renderers : contextPreview, toolIconHtml,
- *                targetInnerHtml, modelChipHtml, trustOf
+ *  - render/rows.js : `makeRequestRow(r, opts)` — 9컬럼 행 빌더 SSoT
+ *  - request-types  : `subTypeOf` — agent/skill/mcp 분류 SSoT
+ *  - formatters     : escHtml
  *
  * 설계 메모:
  *  v22 이후 한 turn 안에서 어시스턴트가 도구 호출 사이사이에 텍스트(중간 응답)를 출력한다.
- *  storage 단의 TurnItem.responses 배열은 timestamp 오름차순으로 들어오며,
- *  interleaveToolsAndResponses가 각 응답 timestamp를 경계로 toolCalls를 슬라이스해
- *  "도구 그룹 → 응답 → 도구 그룹 → 응답 …" 형태로 자연스럽게 인터리빙한다.
+ *  서버 정규화로 `turn.items[]`가 timestamp 오름차순 + `{kind:'tool'|'response', request}`로
+ *  도착하므로 본 모듈은 인터리빙/정렬 책임을 지지 않는다 (ADR-006 server-led ordering).
+ *
+ * @see ADR-turn-view-revamp-003 — 칩 → 첫 매칭 행 스크롤 (data-chip-key SSoT)
+ * @see ADR-turn-view-revamp-004 — turn-rows.js → makeRequestRow 위임
  */
 
-import { escHtml, fmtToken, fmtDate, formatDuration } from '../formatters.js';
-import { svgDiamond } from '../design-system/icons/diamond.js';
-import {
-  contextPreview, toolIconHtml,
-  targetInnerHtml, modelChipHtml, trustOf,
-} from '../renderers.js';
+import { escHtml } from '../formatters.js';
+import { makeRequestRow } from '../render/rows.js';
+import { subTypeOf, isAnchorTool } from '../request-types.js';
+
+// =============================================================================
+// 흐름 그룹화 헬퍼 — turn-views.js 칩 렌더러가 재사용한다 (SSoT 유지).
+// =============================================================================
 
 /**
- * 도구 이름 + count를 "Grep ×6" 형식의 HTML로 포맷한다 (SSoT).
- * count=1이면 이름만 반환. ×와 count 사이 공백 없음, 이름과 × 사이 공백 1개.
- */
-export function fmtActionLabel(baseName, count) {
-  if (count <= 1) return escHtml(baseName);
-  return `${escHtml(baseName)} <span class="turn-group-count">×${count}</span>`;
-}
-
-/**
- * 연속된 동일 도구 호출을 그룹화한다 (SSoT — chip/세부행 양쪽에서 재사용).
- * Agent/Skill/Task 계열은 agentName(tool_detail)까지 압축 키에 포함하여 서로 다른 에이전트를 구분.
+ * 연속된 동일 도구 호출을 그룹화한다 (SSoT — chip 렌더링에서 재사용).
+ *
+ * Agent/Skill/Task 계열은 `tool_detail`(agent sub-name) 까지 압축 키에 포함해
+ * 서로 다른 에이전트를 구분 — 동일 라벨로 인접해야 카운트가 증가한다.
+ *
+ * @param {Array<object>} toolCalls 도구 호출 요청 배열 (시간순)
+ * @returns {Array<{key:string,name:string,count:number,isAgent:boolean,agentName:string,items:object[]}>}
  */
 export function compressContinuousTools(toolCalls) {
   const compressed = [];
@@ -61,26 +62,100 @@ export function compressContinuousTools(toolCalls) {
 }
 
 /**
- * 도구 + 어시스턴트 응답을 시간순 흐름 chip 시퀀스로 변환한다 (turn 카드 헤더 chip SSoT).
+ * 도구 + 어시스턴트 응답을 시간순 흐름 항목으로 변환한다 (turn-spine 칩 SSoT).
  *
  * 반환 항목:
- *   { kind: 'tool', name, count, isAgent, agentName, items }   — 기존 compressContinuousTools 그룹
- *   { kind: 'response' }                                       — 어시스턴트 중간/최종 응답
+ *   { kind: 'tool', name, count, isAgent, agentName, items }   — compressContinuousTools 그룹
+ *   { kind: 'response', request }                              — 어시스턴트 중간/최종 응답
  *
  * 입력 우선순위:
- *  1) turn.items[] (서버 ADR-006 인터리빙) — 사용 가능하면 그대로 신뢰.
- *  2) 폴백: turn.tool_calls + turn.responses를 timestamp 기준 머지.
+ *  1) `turn.items[]` (서버 ADR-006 인터리빙) — 사용 가능하면 그대로 신뢰.
+ *  2) 폴백: `turn.tool_calls` + `turn.responses`를 timestamp 기준 머지.
  *
- * 그룹화 규칙: tool은 인접 동일 이름끼리 count 증가. 사이에 response가 끼면 그룹 끊기.
- * 결과적으로 화면 chip이 "Bash → Read → ◆ → Edit → ◆ → Edit → ◆ → Edit ×2"처럼
- * 실제 흐름과 일치 — 이전엔 응답이 chip에서 누락되어 "Edit ×4"로 보이는 오해 발생.
+ * 결과적으로 화면 칩이 "Bash → Read → ◆ → Edit → ◆ → Edit ×2"처럼 실제 흐름과 일치.
  *
- * @param turn TurnItem (server normalized)
- * @returns 흐름 항목 배열
+ * @param {object} turn TurnItem (server normalized)
+ * @returns {Array<object>} 흐름 항목 배열
  */
 export function compressFlowWithResponses(turn) {
-  if (turn?.items && turn.items.length) return compressItemsFlow(turn.items);
-  return compressLegacyFlow(turn?.tool_calls || [], turn?.responses || []);
+  const flow = (turn?.items && turn.items.length)
+    ? compressItemsFlow(turn.items)
+    : compressLegacyFlow(turn?.tool_calls || [], turn?.responses || []);
+  return compressNeutralWindows(flow);
+}
+
+/**
+ * ANCHOR(색상 시그널) 사이의 연속 NEUTRAL 도구 그룹을 한 칩으로 묶는다.
+ *
+ * 동기 (chip-density-noise):
+ *   `compressContinuousTools` 는 "연속 동일 도구" 만 ×N 압축한다. Bash→Read→Bash→Read 처럼
+ *   비연속 패턴은 1×N 그룹 200개로 풀려 flow-head 가 화면을 도배한다 (T2 활성 턴 200건).
+ *   디자인 어휘 "무채색 = 시각 노이즈" 를 따르면 노이즈를 한 단계 더 압축하는 게 자연스럽다.
+ *
+ * 정책:
+ *   - ANCHOR  : isAnchorTool(items[0]) true | kind==='response'
+ *   - NEUTRAL : 그 외 도구 그룹.
+ *   - 윈도우  : ANCHOR 사이의 연속 NEUTRAL 그룹들. items 합산 개수 N≥2 일 때만 묶음.
+ *               N=1 이면 단일 칩과 라벨 시각 차이가 모호하므로 통과시킨다.
+ *   - 라벨    : 첫 3종 ·-join, 4종+면 "·…" 꼬리. 카운트 = Σ items.length.
+ *
+ * 묶음 객체 모양 — chipHtml(turn-views.js) isGroup 분기와 동기:
+ *   { kind:'tool', name, count, items, kinds, isGroup:true, isAgent:false, agentName:'' }
+ *   - items[0] 가 chipKey 결정에 사용되어 묶음 클릭 → 첫 NEUTRAL 행 점프(turn-rows.js#injectChipKey).
+ *
+ * @param {Array<object>} flow compressFlowWithResponses 1차 결과
+ * @returns {Array<object>} ANCHOR 보존 + NEUTRAL 윈도우 묶음 적용
+ */
+export function compressNeutralWindows(flow) {
+  const out = [];
+  let buf = [];
+  const flush = () => {
+    if (buf.length === 0) return;
+    if (buf.length === 1) out.push(buf[0]);
+    else out.push(makeNeutralGroup(buf));
+    buf = [];
+  };
+  for (const item of flow) {
+    if (item.kind === 'response') { flush(); out.push(item); continue; }
+    const first = item.items?.[0];
+    if (isAnchorTool(first)) { flush(); out.push(item); continue; }
+    buf.push(item);
+  }
+  flush();
+  return out;
+}
+
+/**
+ * NEUTRAL 그룹들을 합쳐 묶음 칩 객체 1개로 만든다.
+ *
+ *  - items  : 모든 NEUTRAL 요청 flat 누적 (clickThru 점프 타겟 = items[0])
+ *  - count  : Σ g.items.length = Σ g.count (compressContinuousTools 가 g.count===g.items.length 보장)
+ *  - kinds  : 등장 순서 유지 중복 제거된 도구 이름 목록
+ *  - name   : "Read·Bash·Edit" 형태. 4종+ 면 "·…" 로 꼬리 축약 — 칩 폭 폭주 방지.
+ *
+ * @param {Array<{name:string,items:object[],count:number}>} groups
+ * @returns {object} 묶음 칩 메타
+ */
+function makeNeutralGroup(groups) {
+  const items = groups.flatMap(g => g.items);
+  const seen = new Set();
+  const kinds = [];
+  for (const g of groups) {
+    if (!seen.has(g.name)) { seen.add(g.name); kinds.push(g.name); }
+  }
+  const head = kinds.slice(0, 3).join('·');
+  const name = kinds.length > 3 ? `${head}·…` : head;
+  return {
+    kind: 'tool',
+    name,
+    count: items.length,
+    items,
+    kinds,
+    isGroup: true,
+    isAgent: false,
+    agentName: '',
+    key: `group|${kinds.join(',')}|${items.length}`,
+  };
 }
 
 function compressItemsFlow(items) {
@@ -96,7 +171,7 @@ function compressItemsFlow(items) {
     if (it.kind === 'tool') toolBuf.push(it.request);
     else if (it.kind === 'response') {
       flushTools();
-      flow.push({ kind: 'response' });
+      flow.push({ kind: 'response', request: it.request });
     }
   }
   flushTools();
@@ -115,7 +190,7 @@ function compressLegacyFlow(toolCalls, responses) {
     const seg = [];
     while (i < tools.length && (tools[i].timestamp || 0) <= (r.timestamp || 0)) seg.push(tools[i++]);
     if (seg.length) compressContinuousTools(seg).forEach(g => flow.push({ kind: 'tool', ...g }));
-    flow.push({ kind: 'response' });
+    flow.push({ kind: 'response', request: r });
   }
   if (i < tools.length) {
     compressContinuousTools(tools.slice(i)).forEach(g => flow.push({ kind: 'tool', ...g }));
@@ -123,231 +198,193 @@ function compressLegacyFlow(toolCalls, responses) {
   return flow;
 }
 
-/**
- * 턴 행 첫 컬럼 마커 아이콘 SSoT (web-design-balance-pass ADR-005).
- *  - 응답 행: `◆` info 톤 dot — 어시스턴트 텍스트 응답 표지.
- *  - 응답이 없는 tool-only turn placeholder: `—` dim 글리프(작게).
- *  - 도구 행 마커는 toolIconHtml(◉/◎)이 별도로 처리 — 여기서는 응답 전용만 캡슐화.
- *  - 호출자(renderResponseRow / renderEmptyResponseRow)는 이 함수를 통해서만 마커를 가져온다.
- *
- * 시각 어휘는 toolIconHtml의 ◉/◎와 형제 — 한 글리프, info 톤(--type-response-color)으로 구분.
- */
-function responseMarkerHtml() {
-  return `<span class="tool-icon tool-icon-response" aria-hidden="true">${svgDiamond({ size: 10 })}</span>`;
-}
-function emptyResponseMarkerHtml() {
-  return `<span class="tool-icon text-dim" aria-hidden="true">—</span>`;
-}
+// =============================================================================
+// data-chip-key SSoT — 칩과 행이 같은 키를 공유해 1:1 점프를 결정적으로 보장
+// =============================================================================
 
-/** 단일 tool_call 행 HTML. tool_call 자체는 모델 의미 없으므로 trust 표시 생략. */
-function renderToolRow(tc) {
-  const tcData    = { ...tc, type: 'tool_call' };
-  const tcPreview = contextPreview(tcData, 60); // toolResponseHint 힌트 포함 (중복 제거)
-  const tcTarget  = targetInnerHtml(tcData).html; // toolStatusBadge 인라인 포함 (중복 제거)
-  return `<div class="turn-row turn-row-tool" data-type="tool_call">
-      <span>&nbsp;</span>
-      <div class="tool-cell">
-        <span class="tool-main">${tcTarget}</span>
-        <span class="tool-sub">${tcPreview || ''}</span>
-      </div>
-      <span class="num cell-token">${tc.tokens_input  > 0 ? fmtToken(tc.tokens_input)  : '—'}</span>
-      <span class="num cell-token">${tc.tokens_output > 0 ? fmtToken(tc.tokens_output) : '—'}</span>
-      <span class="num cell-token text-dim">${formatDuration(tc.duration_ms)}</span>
-      <span class="num cell-time text-dim">${fmtDate(tc.timestamp)}</span>
-    </div>`;
+/**
+ * 단일 요청에서 TaskUpdate task id를 추출한다.
+ *
+ *  - payload.tool_input.taskId(원본 구조 그대로) → 1순위
+ *  - tool_detail(렌더 단계에서 합성된 "Task #N…") → fallback. "#6" 패턴에서 숫자만 잡는다.
+ *
+ * @param {object} r request
+ * @returns {string} taskId (없으면 빈 문자열)
+ */
+function parseTaskId(r) {
+  const fromInput = r?.payload?.tool_input?.taskId;
+  if (fromInput != null) return String(fromInput);
+  const detail = r?.tool_detail || '';
+  const m = detail.match(/#(\d+)/);
+  return m ? m[1] : '';
 }
 
 /**
- * 연속 tool_call 그룹들의 HTML을 만들어 이어 붙인다.
- *  - 단독 도구: renderToolRow 그대로
- *  - 그룹: chevron + 합계 토큰/시간을 담은 머리 행 + 자식 행
- */
-function renderToolSegmentHtml(toolCalls) {
-  if (!toolCalls || toolCalls.length === 0) return '';
-  const groups = compressContinuousTools(toolCalls);
-  return groups.map(group => {
-    if (group.count === 1) return renderToolRow(group.items[0]);
-    const sumIn  = group.items.reduce((s, tc) => s + (tc.tokens_input  || 0), 0);
-    const sumOut = group.items.reduce((s, tc) => s + (tc.tokens_output || 0), 0);
-    const sumDur = group.items.reduce((s, tc) => s + (tc.duration_ms   || 0), 0);
-    const firstName = group.name.split('__').pop();
-    const groupKey  = escHtml(group.key);
-    const childRows = group.items.map(tc => renderToolRow(tc)).join('');
-    return `<div class="turn-row turn-row-group" data-toggle-group="${groupKey}" data-type="tool_call">
-      <span class="turn-group-chevron"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-      <div class="tool-cell">
-        <span class="tool-main">${toolIconHtml(firstName)} ${fmtActionLabel(firstName, group.count)}</span>
-      </div>
-      <span class="num cell-token">${sumIn  > 0 ? fmtToken(sumIn)  : '—'}</span>
-      <span class="num cell-token">${sumOut > 0 ? fmtToken(sumOut) : '—'}</span>
-      <span class="num cell-token text-dim">${formatDuration(sumDur)}</span>
-      <span class="num cell-time text-dim">${fmtDate(group.items[0].timestamp)}</span>
-    </div>
-    <div class="turn-row-group-children">${childRows}</div>`;
-  }).join('');
-}
-
-/**
- * 단일 assistant 응답 행 HTML.
+ * 단일 요청을 chip 메타 객체로 정규화한다 (SSoT — chipKey/chipHtml이 공유).
  *
- * ADR-001 (log-view-unification): 서버 정규화로 response.model이 이미 turn.prompt.model로
- *   폴백 적용된 상태로 도착 (`NormalizedRequest.model_fallback_applied`로 추적 가능).
- *   따라서 클라에서의 자체 폴백 (`rawResp.model ?? promptModel ?? null`)은 제거됨.
+ *  - response → { type:'response', respSeq }
+ *  - TaskUpdate → { type:'task-event', id, status }
+ *  - Agent/Skill → { type:'agent'|'skill', label: tool_detail }
+ *  - MCP → { type:'mcp', label: shortName, fullName: tool_name }
+ *  - 그 외 tool → { type:'tool', label: tool_name }
+ *  - prompt / system / 정체 불명 → null (칩 없음)
  *
- * @deprecated `promptModel` 인자는 호환성을 위해 시그니처에 남기지만 무시됨.
- *   서버 정규화가 이미 폴백을 처리한다 (ADR-001).
+ * @param {object} r request (NormalizedRequest)
+ * @param {number} respSeq 응답일 때 턴 내 ◆ 등장 순번 (1-based)
+ * @returns {object|null} chip 메타
  */
-function renderResponseRow(rawResp, _promptModel /* unused — server already filled (ADR-001) */) {
-  const respData = { ...rawResp, type: 'response' };
-  const previewHtml = contextPreview(respData, 80);
-  const target      = targetInnerHtml(respData).html;
-  const trust       = trustOf(respData);
-  const trustAttr   = (trust === 'synthetic' || trust === 'unknown')
-    ? ` data-trust="${trust}"` : '';
-  const modelChip   = modelChipHtml(respData, { mini: true });
-  const confMark    = confidenceMarkHtml(respData.tokens_confidence);
-  return `
-    <div class="turn-row turn-row-response" data-type="response"${trustAttr}>
-      <span>${responseMarkerHtml()}</span>
-      <div class="tool-cell">
-        <span class="tool-main">${target}${modelChip}${confMark}</span>
-        ${previewHtml ? `<span class="tool-sub">${previewHtml}</span>` : ''}
-      </div>
-      <span class="num cell-token">${respData.tokens_input  > 0 ? fmtToken(respData.tokens_input)  : '—'}</span>
-      <span class="num cell-token">${respData.tokens_output > 0 ? fmtToken(respData.tokens_output) : '—'}</span>
-      <span class="num cell-token text-dim">—</span>
-      <span class="num cell-time text-dim">${fmtDate(respData.timestamp)}</span>
-    </div>`;
-}
+export function chipFromRequest(r, respSeq) {
+  if (!r) return null;
+  if (r.type === 'response') return { type: 'response', respSeq };
+  if (r.type !== 'tool_call') return null;
+  if (!r.tool_name) return null;
 
-/** 응답이 하나도 없는 turn에 표시할 placeholder. tool-only turn임을 명시. */
-function renderEmptyResponseRow() {
-  return `
-    <div class="turn-row turn-row-response turn-row-response--empty" data-type="response">
-      <span>${emptyResponseMarkerHtml()}</span>
-      <div class="tool-cell">
-        <span class="tool-sub">(no text response — tool-only turn)</span>
-      </div>
-      <span class="num cell-token">—</span>
-      <span class="num cell-token">—</span>
-      <span class="num cell-token text-dim">—</span>
-      <span class="num cell-time text-dim">—</span>
-    </div>`;
-}
-
-/**
- * tool_calls와 responses를 timestamp 기준으로 시간순 머지하여 HTML을 조립한다.
- *
- * @deprecated ADR-006 (log-view-unification): 서버가 `turn.items[]`로 이미 인터리빙된
- *   `{kind:'tool'|'response', request}` 배열을 보내준다.
- *   호환성을 위해 함수는 보존 (구버전 응답 또는 다른 호출자 대비)하지만, `buildTurnDetailRows`는
- *   `turn.items`가 있으면 `renderItemsHtml`을 우선 사용한다.
- */
-function interleaveToolsAndResponses(toolCalls, responses, promptModel) {
-  const tools = toolCalls || [];
-  const resps = responses || [];
-  if (resps.length === 0) {
-    return renderToolSegmentHtml(tools);
+  if (r.tool_name === 'TaskUpdate') {
+    const id = parseTaskId(r);
+    const status = r?.payload?.tool_input?.status || '';
+    return id ? { type: 'task-event', id, status } : null;
   }
+  const sub = subTypeOf(r);
+  if (sub === 'agent') return { type: 'agent', label: r.tool_detail || r.tool_name };
+  if (sub === 'skill') return { type: 'skill', label: r.tool_detail || r.tool_name };
+  if (sub === 'mcp')   return { type: 'mcp', label: r.tool_name.split('__').pop() || r.tool_name, fullName: r.tool_name };
+  return { type: 'tool', label: r.tool_name };
+}
+
+/**
+ * 정규화된 chip 메타 → 결정적 키 문자열 (SSoT — turn-spine / log-row 양쪽이 동일 키 사용).
+ *
+ * 키 형식 (plan §3.3):
+ *  - tool       → `tool:<label>`
+ *  - response   → `resp:<respSeq>`
+ *  - task-event → `task:<id>`
+ *  - agent      → `agent:<label>`
+ *  - skill      → `skill:<label>`
+ *  - mcp        → `mcp:<fullName>`
+ *
+ * count tool(×N)은 동일 키를 공유한다 — 첫 매칭 행이 점프 타겟.
+ *
+ * @param {object|null} chip chip 메타 (chipFromRequest 결과)
+ * @returns {string} chip key (불가능하면 빈 문자열)
+ *
+ * @see ADR-turn-view-revamp-003
+ */
+export function chipKey(chip) {
+  if (!chip) return '';
+  switch (chip.type) {
+    case 'response':   return chip.respSeq ? `resp:${chip.respSeq}` : '';
+    case 'task-event': return chip.id ? `task:${chip.id}` : '';
+    case 'agent':      return chip.label ? `agent:${chip.label}` : '';
+    case 'skill':      return chip.label ? `skill:${chip.label}` : '';
+    case 'mcp':        return `mcp:${chip.fullName || chip.label || ''}`;
+    case 'tool':       return chip.label ? `tool:${chip.label}` : '';
+    default:           return '';
+  }
+}
+
+/**
+ * 단일 요청을 받아 그 요청에 해당하는 행 chip-key를 계산한다 (편의 wrapper).
+ * `chipKey(chipFromRequest(r, respSeq))`와 동치.
+ */
+export function chipKeyForRequest(r, respSeq) {
+  return chipKey(chipFromRequest(r, respSeq));
+}
+
+// =============================================================================
+// 활성 턴 로그 행 빌더 — makeRequestRow 위임 + data-chip-key 주입
+// =============================================================================
+
+/**
+ * makeRequestRow 산출 HTML에 `data-chip-key="..."` 속성을 주입한다.
+ *
+ * 정책:
+ *  - 키가 빈 문자열이면 속성 자체를 부여하지 않는다 (불필요한 노이즈 회피).
+ *  - 행 시작 태그(`<tr ...>`)의 첫 공백 직후에 삽입 — 다른 속성 순서 보존.
+ *  - 같은 키가 여러 행에 박혀도 querySelector는 첫 매칭만 반환하므로 안전.
+ *
+ * @param {string} rowHtml makeRequestRow 결과 (`<tr ...>...</tr>`)
+ * @param {string} key 행의 chip-key
+ * @returns {string} chip-key가 주입된 행 HTML
+ */
+function injectChipKey(rowHtml, key) {
+  if (!key) return rowHtml;
+  return rowHtml.replace(/^<tr /, `<tr data-chip-key="${escHtml(key)}" `);
+}
+
+/**
+ * 활성 턴의 prompt + tool_calls + responses를 9컬럼 `<tr>` 행 HTML로 직렬화한다.
+ *
+ * 데이터 흐름:
+ *  1) prompt 행 → makeRequestRow({...turn.prompt, type:'prompt'}) — chip-key 없음.
+ *  2) 본문 행들 → `turn.items[]` 또는 폴백(tool_calls+responses) 시간순 머지.
+ *     각 행에 chipKey 주입 (response 행은 ◆ 등장 순번을 1-based로 누적).
+ *
+ * 옵션:
+ *  - `anomalyFlags`  : Map<requestId, Set<string>> — Spike/loop/slow 뱃지 부여용
+ *  - `showSession`   : 기본 false (활성 턴 1개에 묶인 행만 노출)
+ *
+ * @param {object} turn TurnItem (server normalized)
+ * @param {{anomalyFlags?: Map<string, Set<string>>, showSession?: boolean}} [opts]
+ * @returns {string} `<tr>` 행들의 HTML concat
+ *
+ * @see ADR-turn-view-revamp-004 — 하단 표는 기존 요청 탭 모듈(`makeRequestRow`) 100% 재사용.
+ */
+export function makeTurnLogRows(turn, opts = {}) {
+  if (!turn) return '';
+  const anomalyMap = opts.anomalyFlags || null;
+  const showSession = !!opts.showSession; // 기본 false — 활성 턴 좁힘 정책(Option α).
+  const rowOpts = (r) => ({
+    showSession,
+    anomalyFlags: anomalyMap?.get(r.id) || null,
+  });
+
+  const parts = [];
+
+  // 1) prompt 행 — chip-key 없음 (prompt에는 spine 칩이 존재하지 않음).
+  if (turn.prompt) {
+    const promptReq = { ...turn.prompt, type: 'prompt' };
+    parts.push(makeRequestRow(promptReq, rowOpts(promptReq)));
+  }
+
+  // 2) 본문 행 — 서버 인터리빙 items[] 우선, 미제공 시 시간순 머지로 폴백.
+  let respSeq = 0;
+  const walkItems = turn.items?.length
+    ? turn.items
+    : legacyInterleave(turn.tool_calls || [], turn.responses || []);
+
+  for (const it of walkItems) {
+    if (it.kind === 'response') {
+      respSeq += 1;
+      const req = { ...it.request, type: 'response' };
+      const key = chipKeyForRequest(req, respSeq);
+      parts.push(injectChipKey(makeRequestRow(req, rowOpts(req)), key));
+    } else if (it.kind === 'tool') {
+      const req = { ...it.request, type: 'tool_call' };
+      const key = chipKeyForRequest(req, respSeq);
+      parts.push(injectChipKey(makeRequestRow(req, rowOpts(req)), key));
+    }
+  }
+
+  return parts.join('');
+}
+
+/**
+ * 서버 인터리빙(`turn.items`)을 제공하지 않는 구버전 응답을 위한 폴백.
+ *
+ * tool_calls와 responses를 timestamp 기준으로 머지해 `{kind, request}` 시퀀스로 반환한다.
+ * 새 데이터 경로는 서버 SSoT의 items[]를 우선 사용 — 본 함수는 미세한 누락만 보정.
+ */
+function legacyInterleave(toolCalls, responses) {
+  const tools = toolCalls.slice().sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  const resps = responses.slice().sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  const out = [];
   let i = 0;
-  const parts = [];
-  for (const resp of resps) {
-    const segTools = [];
-    while (i < tools.length && tools[i].timestamp <= resp.timestamp) {
-      segTools.push(tools[i++]);
+  for (const r of resps) {
+    while (i < tools.length && (tools[i].timestamp || 0) <= (r.timestamp || 0)) {
+      out.push({ kind: 'tool', request: tools[i++] });
     }
-    parts.push(renderToolSegmentHtml(segTools));
-    parts.push(renderResponseRow(resp, promptModel));
+    out.push({ kind: 'response', request: r });
   }
-  if (i < tools.length) {
-    parts.push(renderToolSegmentHtml(tools.slice(i)));
-  }
-  return parts.join('');
-}
-
-/**
- * 서버에서 인터리빙된 `turn.items[]`를 HTML로 조립 (ADR-006).
- *
- * `items`는 timestamp 오름차순으로 정렬된 `{kind:'tool'|'response', request:NormalizedRequest}` 배열.
- * 연속된 `kind:'tool'` 항목들은 하나의 segment로 묶어 `renderToolSegmentHtml`로 그룹화하고,
- * `kind:'response'` 항목마다 `renderResponseRow`를 호출한다.
- *
- * 클라는 더 이상 인터리빙·시간순 정렬 책임을 지지 않는다.
- */
-function renderItemsHtml(items) {
-  if (!items || items.length === 0) return '';
-  const parts = [];
-  let segTools = [];
-  const flushTools = () => {
-    if (segTools.length > 0) {
-      parts.push(renderToolSegmentHtml(segTools));
-      segTools = [];
-    }
-  };
-  for (const it of items) {
-    if (it.kind === 'tool') {
-      segTools.push(it.request);
-    } else if (it.kind === 'response') {
-      flushTools();
-      // promptModel 인자는 서버 폴백 적용으로 무시됨 (ADR-001)
-      parts.push(renderResponseRow(it.request, null));
-    }
-  }
-  flushTools();
-  return parts.join('');
-}
-
-/**
- * 토큰 신뢰도 마크 (data-honesty-ui ADR-002).
- * tokens_confidence가 'low' 또는 'error'면 '*' + title 툴팁, 그 외엔 빈 문자열.
- */
-function confidenceMarkHtml(confidence) {
-  if (!confidence || confidence === 'high') return '';
-  const tip = confidence === 'error'
-    ? window.I18n.t('session.session-detail.turn-rows.confidence-error')
-    : window.I18n.t('session.session-detail.turn-rows.confidence-low');
-  return `<sup class="confidence-low-mark" title="${escHtml(tip)}">*</sup>`;
-}
-
-/**
- * 턴 내 세부 행(prompt + tool_call + responses 인터리빙)을 HTML로 조립한다.
- *  - prompt: 단일 행 (있을 때)
- *  - 본문: tool_calls와 responses의 시간순 머지 (interleaveToolsAndResponses)
- *  - 응답이 0개 + 도구가 있으면: tool-only turn placeholder
- *  - 둘 다 0개: '도구 호출 없음' 메시지
- *
- * 'estimated' 분기는 ADR-token-trust-cleanup-001로 제거됨 (trustOf가 더 이상 'estimated' 미발행).
- * response.model 폴백은 renderResponseRow 내부에서 처리한다.
- */
-export function buildTurnDetailRows(turn) {
-  const promptData        = turn.prompt ? { ...turn.prompt, type: 'prompt' } : null;
-  const promptPreviewHtml = promptData ? contextPreview(promptData, 80) : '';
-  const promptTarget      = promptData ? targetInnerHtml(promptData).html : '';
-  const promptTrust       = promptData ? trustOf(promptData) : 'trusted';
-  const promptTrustAttr   = (promptTrust === 'synthetic' || promptTrust === 'unknown')
-    ? ` data-trust="${promptTrust}"` : '';
-  const promptModelChip   = promptData ? modelChipHtml(promptData, { mini: true }) : '';
-  const promptConfMark    = promptData ? confidenceMarkHtml(promptData.tokens_confidence) : '';
-  const promptRow         = promptData ? `
-    <div class="turn-row turn-row-prompt" data-type="prompt"${promptTrustAttr}>
-      <span></span>
-      <div class="tool-cell">
-        <span class="tool-main">${promptTarget}${promptModelChip}${promptConfMark}</span>
-        ${promptPreviewHtml ? `<span class="tool-sub">${promptPreviewHtml}</span>` : ''}
-      </div>
-      <span class="num cell-token">${promptData.tokens_input  > 0 ? fmtToken(promptData.tokens_input)  : '—'}</span>
-      <span class="num cell-token">${promptData.tokens_output > 0 ? fmtToken(promptData.tokens_output) : '—'}</span>
-      <span class="num cell-token text-dim">${formatDuration(promptData.duration_ms)}</span>
-      <span class="num cell-time text-dim">${fmtDate(promptData.timestamp)}</span>
-    </div>` : '';
-
-  // ADR-006: 서버 정규화로 turn.items가 제공되면 우선 사용 (인터리빙 책임 서버 이관).
-  // 호환성: items가 없는 응답이면 기존 tool_calls/responses 폴백 경로.
-  const responses = turn.responses || [];
-  const mergedRows = turn.items
-    ? renderItemsHtml(turn.items)
-    : interleaveToolsAndResponses(turn.tool_calls || [], responses, turn.prompt?.model);
-  const responseRow = (responses.length === 0) ? renderEmptyResponseRow() : '';
-
-  return promptRow + (mergedRows || `<div class="turn-row-empty">${window.I18n.t('session.session-detail.turn-rows.tool-empty')}</div>`) + responseRow;
+  while (i < tools.length) out.push({ kind: 'tool', request: tools[i++] });
+  return out;
 }

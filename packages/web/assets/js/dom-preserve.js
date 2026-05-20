@@ -7,7 +7,6 @@
  *
  * 호출자:
  *   - main.js prependRequest (전체 피드)
- *   - session-detail/flat-view.js renderDetailRequests
  *   - session-detail/turn-views.js renderTurnCards
  *
  * SSoT 효과:

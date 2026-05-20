@@ -1,393 +1,703 @@
-/* ── TURN VIEW ──────────────────────────────────────────────────────────── */
-/* session-detail-unify ADR-003: 하드코딩 px/font-size → design-tokens 토큰.
-   레거시 .turn-list/.turn-item/.turn-header는 통합 카드 뷰(.turn-card)로 전환됐으나
-   호환성을 위해 토큰화한 상태로 보존. */
-.turn-list { padding: var(--space-1) 0; }
-.turn-item { border-bottom: 1px solid var(--border); }
-.turn-item:last-child { border-bottom: none; }
-
-.turn-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  cursor: pointer;
-  user-select: none;
-  transition: background var(--dur-fast) var(--ease);
-}
-.turn-header:hover { background: var(--accent-bg-light); }
-
-.turn-badge {
-  display: inline-block;
-  padding: 1px 7px;
-  border-radius: var(--radius-sm);
-  background: var(--badge-grad-brand);
-  color: var(--accent);
-  font-size: var(--text-small);
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  flex-shrink: 0;
-}
-.turn-time   { font-size: var(--text-small); color: var(--text-3); white-space: nowrap; }
-.turn-meta   { flex: 1; font-size: var(--text-small); color: var(--text-3); }
-.turn-tokens { font-size: var(--text-small); color: var(--accent); font-weight: var(--weight-strong); white-space: nowrap; }
-.turn-toggle { font-size: var(--text-small); color: var(--text-3); transition: transform var(--dur-base) var(--ease); }
-.turn-item.open .turn-toggle  { transform: rotate(90deg); }
-.turn-item.open .turn-header  { background: var(--accent-bg-light); }
-
-.turn-children { display: none; padding: var(--space-1) 0 var(--space-2); }
-.turn-item.open .turn-children { display: block; }
-
-/* turn-row grid (web-design-balance-pass ADR-005 — 좌측 정렬 SSoT):
- *   - 첫 컬럼 폭은 --turn-row-marker-w 토큰. 모든 행이 같은 첫 컬럼 폭 → 마커 슬롯 일관.
- *   - padding-left는 --turn-row-indent 토큰. 변종 행도 산식으로 동일 좌측 edge 유지.
- *   - 토큰만 바꾸면 6종 행 자동 재정렬 — 다운스케일 같은 변경에 회귀 안 발생.
+/* ─────────────────────────────────────────────────────────────────────────
+ * 파일      : packages/web/assets/css/turn-view.css
+ * 책임      : session-detail 의 "로그" 탭 — 상단 흐름 영역(flow-pane) +
+ *             하단 상세 표(log-pane) 의 시각 어휘 정의.
+ * 흡수 대상 : 과거 카드 모델(.turn-card / .turn-row / .turn-list / .turn-item ...)을
+ *             전면 폐기 — 통합 카드 / turn-rows.js 가 모두 사라지면서 함께 제거.
+ *             (백워드 호환 흔적 두지 않음 — JS 측도 곧 makeRequestRow 위임으로 전환)
+ * 시각 SSoT : ${CLAUDE_PROJECT_DIR}/.claude/.tmp/plans/turn-view-revamp/prototype.html
+ * ADR 백링크:
+ *   - ADR-turn-view-revamp-001 — turn-spine inline-flow + 활성 카드 박스 폐기
+ *   - ADR-turn-view-revamp-002 — flow-head 두 행 구성 + log-pane 헤더 제거 + 영역 h2 제거
+ *   - ADR-turn-view-revamp-003 — 칩 ↔ 행 1:1 점프 (data-chip-key) + row-highlight-flash
+ *   - ADR-turn-view-revamp-004 — "턴 뷰" + "요청" 두 탭 → 단일 "로그" 탭 통합
+ *   - ADR-turn-view-revamp-005 — flow-head 한 행 통합 + flow-pane 고정 / log-pane 스크롤 단일화 (2026-05-20)
  *
- * 산식 약속:
- *   border-left 없음     → padding-left = var(--turn-row-indent)
- *   border-left 있음     → padding-left = calc(var(--turn-row-indent) - var(--turn-row-border-w))
- * 두 경우 모두 두번째 grid 컬럼 시작 x좌표가 동일.
- */
-.turn-row {
-  display: grid;
-  grid-template-columns: var(--turn-row-marker-w) minmax(140px, 1fr) 56px 56px 72px 80px;
-  align-items: center;
-  padding: var(--space-1) var(--space-4) var(--space-1) var(--turn-row-indent);
-  font-size: var(--text-meta);
-}
-.turn-row > * { min-width: 0; }
-/* 숫자 컬럼 우정렬 — td.cell-token은 table 전용이라 span에 별도 지정 */
-.turn-row .cell-token { text-align: right; }
-.turn-row .cell-time  { text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.turn-row:hover { background: var(--accent-bg-light); }
-/* prompt: 좌측 border-left 2px → padding-left에서 border-w 흡수해 좌측 edge 일치. */
-.turn-row-prompt {
-  background: var(--white-bg-subtle);
-  border-left: var(--turn-row-border-w) solid var(--text-3);
-  margin: 0 var(--space-4) var(--space-1);
-  border-radius: var(--radius-sm);
-  padding-left: calc(var(--turn-row-indent) - var(--turn-row-border-w));
-}
-.turn-row-tool  { margin: 0 var(--space-4); }
-.turn-row-empty {
-  color: var(--text-3);
-  font-size: var(--text-small);
-  /* "도구 호출 없음" 안내. ADR-005 정렬 산식 따라 좌측 edge 일치 (turn-row-indent + space-4 margin). */
-  padding: var(--space-2) var(--space-4) var(--space-2) calc(var(--space-4) + var(--turn-row-indent));
-}
-
-/* ── 응답 행을 시각적 "마디(beat)"로 (web-design-balance-pass ADR-002 + ADR-005) ──
- * 한 턴 안에서 도구 호출 사이사이에 어시스턴트 텍스트 응답이 인터리빙된다.
- * 시간 흐름 "도구 → 응답 → 도구 → 응답 → …"를 시선이 자연스럽게 따라가도록,
- * 응답 행에 좌측 accent border (info 톤)와 옅은 배경 dim을 부여한다.
+ * 호출 흐름:
+ *   index.html → <link> 로 본 파일 로드
+ *   session-detail/turn-views.js → .flow-pane / .flow-head / .turn-spine 마크업 생성
+ *   session-detail/main.js       → 칩 클릭 위임 → .row-highlight-flash 토글
+ *   render/rows.js               → .log-pane .requests-table 안 행 마크업 생성
  *
- * ADR-005 회귀 수정: padding-left를 토큰 산식(--turn-row-indent - --turn-row-border-w)으로
- * 통일해 다른 5종 행과 좌측 edge가 정확히 일치. 응답 마커 아이콘은 첫 컬럼 슬롯에 배치
- * (turn-rows.js의 renderResponseRow가 toolIconHtml 패턴으로 추가). */
-.turn-row-response {
-  margin: 0 var(--space-4);
-  border-left: var(--turn-row-border-w) solid var(--type-response-color);
-  padding-left: calc(var(--turn-row-indent) - var(--turn-row-border-w));
-  background: var(--type-response-row-bg);
-  border-radius: var(--radius-sm);
-}
-.turn-row-response:hover {
-  /* 응답 행 hover는 dim accent로만 (border는 그대로 유지). */
-  background: var(--accent-bg-light);
-}
+ * 토큰 SSoT:
+ *   - 모든 색·간격·radius·duration 은 design-tokens.css 토큰만 참조.
+ *     매직 px / 매직 hex 미사용 (prototype 인라인 토큰은 design-tokens.css 으로 흡수).
+ * ───────────────────────────────────────────────────────────────────────── */
 
-/* 응답 행 첫 컬럼 마커 아이콘 — toolIconHtml 패턴과 시각 어휘 일관 (◉/◎ 형제).
- * info 톤 dot으로 "어시스턴트 응답"임을 한눈에 표시. */
-.tool-icon-response {
-  font-size: var(--text-data);
-  color: var(--type-response-color);
-  line-height: 1;
-}
-
-/* ── data-honesty-ui (ADR-004): tool-only turn 응답 부재 placeholder ─────── */
-/* response 행이 없는 turn은 프롬프트가 도구만 호출하고 텍스트 응답을 생성하지 않은
- * 상태. 사용자가 데이터 누락으로 오인하지 않도록 명시적 한 줄 표시.
- * empty placeholder는 "정보 없음"이므로 beat 강조에서 제외 — accent border 제거하되
- * 좌측 edge는 다른 행과 일치시키기 위해 padding-left에 border-w를 더해 보정. */
-.turn-row-response--empty {
-  margin: 0 var(--space-4);
-  padding-left: var(--turn-row-indent);
-  background: transparent;
-  border-left: 0;
-}
-.turn-row-response--empty .tool-sub {
-  color: var(--text-3);
-  font-style: italic;
-}
-
-/* confidence-low-mark: tool-stats.css에서 정의 (D-09 중복 제거) */
-
-/* ── UNIFIED CARD CONTAINER ─────────────────────────────────────────────── */
-/* turn-header-prompt-prominence ADR-001: 스크롤바를 다른 패널(meta-docs / syslib /
- * llm-input)이 채택한 8px thin + 토큰화 SSoT로 통일. 기존 OS 기본 스크롤바로 인한
- * 카드 우측 경계 잘림과 시각 잡음을 해소한다.
- *   - Firefox: scrollbar-width: thin + scrollbar-color (var() 토큰만 사용)
- *   - WebKit:  8px thumb, hover 시 --text-3로 톤 상승 — grabable 어포던스 강화
- *   - 신규 토큰 도입 없음 (--border-strong / --text-3 / --radius-sm SSoT)
- */
-#turnUnifiedBody {
+/* ─────────────────────────────────────────────────────────────────────────
+ * 영역 0 — #detailTurnView / #turnUnifiedBody 컨테이너 (ADR-005, 2026-05-20)
+ *
+ *   문제: 기존 `.detail-content { overflow-y: auto }`(detail-view.css) 는 turn-view 전체에
+ *         스크롤을 부여해 log-table 의 sticky thead 와 col-resize 가 효과를 잃었다.
+ *   결정: turn-view 한 곳에서만 detail-content 의 스크롤 책임을 #detailTurnView 가 덮어쓰고,
+ *         #turnUnifiedBody 를 flex 컨테이너로 만들어 flow-pane / log-pane 의 자식 크기를
+ *         단일 flex 축에서 분배한다.
+ *   적용 범위: `#detailTurnView` ID 셀렉터 (다른 탭 #detailLlmInputView / #detailSysLibView
+ *         미영향). 명시적 ID 셀렉터로 detail-view.css 의 class-only 룰을 안전하게 override.
+ * ───────────────────────────────────────────────────────────────────────── */
+#detailTurnView.detail-content {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  overflow-y: auto;
-  height: 100%;
-  box-sizing: border-box;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-strong) transparent;
+  overflow: hidden;
+  min-height: 0;
 }
-#turnUnifiedBody::-webkit-scrollbar { width: 8px; height: 8px; }
-#turnUnifiedBody::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: var(--radius-sm);
-}
-#turnUnifiedBody::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
-#turnUnifiedBody::-webkit-scrollbar-track { background: transparent; }
-
-.turn-card-empty {
-  padding: var(--space-5);
-  text-align: center;
-  color: var(--text-3);
-  font-size: var(--text-meta);
+#turnUnifiedBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
-/* ── CARD ───────────────────────────────────────────────────────────────── */
-.turn-card {
-  background: var(--bg-row, rgba(255,255,255,0.03));
+/* ─────────────────────────────────────────────────────────────────────────
+ * 영역 A — flow-pane (상단 흐름 영역)
+ *
+ * 구조:
+ *   .flow-pane
+ *     └─ <header class="flow-head">       — 한 행 구성 (ADR-002 갱신, 2026-05-20)
+ *           └─ .flow-head-row.flow-head-active  — marker · model · prompt · meta · extra(reminder/spike)
+ *     └─ <div class="turn-spine">         — 모든 턴이 inline-flow 로 흐름
+ *           └─ .turn-line × N + .spine-arrow (마커 사이 SVG 화살표)
+ *
+ * 레이아웃 (ADR-003, 2026-05-20):
+ *   flow-pane 은 #turnUnifiedBody flex 컨테이너의 자식이며 `flex: 0 0 auto` 로 자기 크기.
+ *   log-pane 만이 `flex: 1 1 auto` 로 남은 공간을 채워 스크롤을 단일화한다.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+/* .flow-pane — 상단 영역 컨테이너.
+ *   surface-alt 톤 + border 로 카드 외곽만 표시.
+ *   `flex: 0 0 auto` — #turnUnifiedBody 안에서 자기 크기로 고정. 로그 테이블만 스크롤되도록. */
+.flow-pane {
+  background: var(--surface-alt);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
-  transition: border-color var(--dur-fast) var(--ease);
-  overflow: hidden;
+  flex: 0 0 auto;
+  min-height: 0;
 }
 
-.turn-card:hover {
-  border-color: var(--accent);
-}
-
-.turn-card.expanded {
-  border-color: var(--accent);
-}
-
-/* ── CARD SUMMARY (클릭 가능 헤더 영역) ────────────────────────────────── */
-.turn-card-summary {
-  padding: var(--space-2) var(--space-3);
+/* .flow-head — flow-pane 의 헤더. 한 행 통합 (2026-05-20).
+ *   .flow-head-active 한 행이 marker/model/prompt/meta/extra 를 한 줄에 담는다.
+ *   메타가 한 곳(flow-head)에만 존재 — 중복 0, 데이터 동기화 비용 1개소.
+ *   setActive → updateFlowHead 가 marker/model/prompt/IN/OUT/복잡도/비용/reminder/spike 를 일괄 갱신. */
+.flow-head {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  cursor: pointer;
-  user-select: none;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
 }
 
-.turn-card-summary:hover {
-  background: var(--accent-bg-light);
-}
-
-/* ── EXPAND BUTTON ──────────────────────────────────────────────────────── */
-.turn-card-expand-btn {
-  color: var(--text-3);
-  line-height: 1;
-  display: inline-flex;
+/* .flow-head-row — 헤더 한 행. 좌→우 flex.
+ *   min-width:0 으로 자식의 ellipsis 가 정상 작동하도록 한다 (flex item 의 min-content 회피). */
+.flow-head-row {
+  display: flex;
   align-items: center;
-  transform: rotate(-90deg);
-  transition: transform var(--dur-base) var(--ease);
+  gap: var(--space-3);
+  min-width: 0;
+  width: 100%;
+}
+
+/* .flow-head-active — 활성 턴 메타 행.
+ *   prompt 는 flex:1 + ellipsis 로 가변 폭(긴 텍스트 안전 처리), meta · extra 는 우측 고정폭.
+ *   marker · model · prompt · meta · extra 는 모두 vertical-align: middle (inline-flex 베이스) 로 baseline 정렬. */
+.flow-head-active {
+  gap: var(--space-2);
+}
+.flow-head-active .turn-line-model {
+  margin: 0;
+}
+.flow-head-active .turn-line-prompt {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0 var(--space-2);
+  display: inline-block;
+  vertical-align: middle;
+}
+.flow-head-active .turn-line-meta {
+  margin: 0 0 0 auto;
   flex-shrink: 0;
 }
 
-/* 턴뷰 → API 페이로드 딥링크 액션 (deeplink pass) — 카드 헤더 우측, expand btn 좌측.
- * turn-header-prompt-prominence ADR-002 후: 부모 .turn-card-summary-actions가
- * margin-left:auto로 묶음 우측정렬을 담당하므로 본 규칙에서는 margin-left를 제거. */
-.turn-card-action-payload {
+/* .flow-head-extra — turn-line-meta 우측에 붙는 보조 칩 묶음 (system reminder · spike summary).
+ *   flex-shrink:0 으로 prompt ellipsis 가 작동해도 보조 칩이 잘리지 않는다.
+ *   비어 있어도 layout 영향이 없도록 padding/margin 은 의도적으로 최소화. */
+.flow-head-active .flow-head-extra {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  padding: 2px var(--space-2);
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+.flow-head-active .flow-head-extra:empty {
+  display: none;
+}
+
+/* .icon-btn — flow-head 의 액션 버튼 ("최신으로" 등) 공용 스타일.
+ *   투명 배경 + dim 보더 + hover 시 accent — 가벼운 secondary 버튼 위계. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 var(--space-2);
   background: transparent;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   color: var(--text-3);
+  font: var(--weight-medium) var(--text-small)/1 var(--font-ui);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+.icon-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * .turn-spine — 모든 턴이 inline-flow 로 이어지는 텍스트형 컨테이너.
+ *
+ * 디자인 결정 (ADR-001):
+ *   · flex-wrap 접근의 한계 : flex item 은 box 단위로만 줄바꿈되므로 활성 턴이
+ *     자기 너비를 다 차지해 마지막 칩 뒤 빈 영역이 남고 다음 마커가 다음 줄로 밀림.
+ *   · inline-flow 접근 : 모든 자식(turn-line / ds-turn-marker / tool-chip / arrow)이
+ *     inline 텍스트처럼 흐름. 줄바꿈은 자식 사이 어디서든 자연 발생.
+ *   · 활성 turn-line 배경/테두리 하이라이트는 두지 않음 — multi-line 분리 문제 자체 회피.
+ *     활성 표지는 ds-turn-marker[data-state="active"] accent 채움 + 칩 가시화로 전달.
+ *   · `box-decoration-break: clone` 금지 — multi-line 시 박스가 줄 단위로 쪼개져
+ *     "한 덩어리" 인지 실패하는 한계. 본 구현은 시도하지 않는다.
+ *
+ * 스크롤바 — meta-docs / syslib / llm-input 과 동일 8px thin 톤 SSoT (turn-view 일관성).
+ * ───────────────────────────────────────────────────────────────────────── */
+.turn-spine {
+  /* ADR-003 (2026-05-20): flow-pane 은 자기 크기, log-pane 이 메인 스크롤.
+   *   spine 은 자연 높이를 유지하되 max-height 로 화면 절반 이상을 잠식하지 않도록 캡.
+   *   spine 자체에 overflow-y:auto 를 두어 200+ 턴 마커가 여러 줄로 wrap 될 때 내부 스크롤. */
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+  display: block;
+  /* 줄 사이 여백 — pill 들이 vertical-align: middle 로 정렬되며 시각 호흡 확보.
+     32px 는 ds-turn-marker(22px) + 양 옆 여유로 행간 ≥ marker 보장. */
+  line-height: 32px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.turn-spine::-webkit-scrollbar { width: 8px; }
+.turn-spine::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+.turn-spine::-webkit-scrollbar-track { background: transparent; }
+
+/* .spine-arrow — 턴 마커 ↔ 턴 마커 사이의 inline SVG 화살표 (큰 톤).
+ *   chip-arrow(작은 톤) 와 형제 관계로 위계 분리. */
+.spine-arrow {
+  display: inline-block;
+  vertical-align: middle;
+  color: var(--text-4);
+  opacity: 0.7;
+  margin: 0 var(--space-1);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * .turn-line — 한 턴의 inline 컨테이너 (ADR-001).
+ *
+ *   기본 (collapsed) : ds-turn-marker pill 하나만 안에 있는 inline 래퍼
+ *   .is-active       : 마커 + chip-flow 가 inline 형제로 흐름 (배경/테두리 없음)
+ *
+ * 인라인 컨테이너이므로 자식 모두 inline / inline-flex 여야 한다.
+ * 배경/테두리 하이라이트 없음 — multi-line 분리 문제 회피 (ADR-001 결정).
+ * ───────────────────────────────────────────────────────────────────────── */
+.turn-line {
+  display: inline;
+  cursor: pointer;
+}
+.turn-line:not(.is-active):hover .ds-turn-marker {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+/* 활성 턴 — 박스 하이라이트 없이 마커 채움 + 칩 가시화로만 표지.
+ *   inline 요소는 transform 무효이므로 opacity fade 만 유지.
+ *   chip-flow 내부 칩은 별도 stagger animation 으로 좌→우 흐름 시각화 (아래 .chip-flow > * 룰). */
+.turn-line.is-active {
+  cursor: default;
+  animation: turn-line-fade-in var(--dur-drawer) var(--ease);
+}
+
+@keyframes turn-line-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * chip-flow stagger — 활성 턴의 chip 들이 좌→우로 약간 밀려 들어오며 페이드 인.
+ *   View Transitions API crossfade (turn-views.js#renderActiveTurn) 와 합쳐
+ *   "이전 영역은 매끄럽게 접히고 새 영역은 자연스럽게 펼쳐지는" 인지를 만든다.
+ *
+ *   설계 기준:
+ *     · `.do-chip-anim` 게이트 클래스 — JS 가 명시적으로 부여한 1회만 stagger 발현.
+ *       (turn-views.js#renderActiveTurn 이 활성 턴 ID 가 실제로 바뀐 직후에만 부여 → ~400ms 뒤 제거)
+ *     · SSE 신규 데이터 도착으로 spine innerHTML 이 교체되어도 클래스가 없으면 무자극 — 깜빡임 차단.
+ *     · stagger 는 nth-child 6 까지만 차등 — 그 이후는 같은 delay 로 묶어 비용 한정.
+ *     · ds-chip / spine-arrow / chip-arrow 등 모든 inline 자식에 일괄 적용.
+ *     · prefers-reduced-motion 사용자에게는 본 키프레임도 무력화 (하단 룰 SSoT).
+ * ───────────────────────────────────────────────────────────────────────── */
+@keyframes chip-flow-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.turn-line.is-active.do-chip-anim .chip-flow > * {
+  animation: chip-flow-enter var(--dur-base) var(--ease) both;
+}
+.turn-line.is-active.do-chip-anim .chip-flow > *:nth-child(1) { animation-delay: 0ms; }
+.turn-line.is-active.do-chip-anim .chip-flow > *:nth-child(2) { animation-delay: 30ms; }
+.turn-line.is-active.do-chip-anim .chip-flow > *:nth-child(3) { animation-delay: 60ms; }
+.turn-line.is-active.do-chip-anim .chip-flow > *:nth-child(4) { animation-delay: 90ms; }
+.turn-line.is-active.do-chip-anim .chip-flow > *:nth-child(5) { animation-delay: 120ms; }
+.turn-line.is-active.do-chip-anim .chip-flow > *:nth-child(6) { animation-delay: 150ms; }
+.turn-line.is-active.do-chip-anim .chip-flow > *:nth-child(n+7) { animation-delay: 180ms; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * View Transitions API — 활성 턴 전환 crossfade (ADR-006, 2026-05-20).
+ *
+ *   동작:
+ *     · turn-views.js#renderActiveTurn 이 활성 턴 ID 변경 시 document.startViewTransition(...)
+ *       으로 DOM swap 을 wrap 한다. 브라우저가 구·신 snapshot 을 자동 crossfade.
+ *     · `view-transition-name` 으로 flow-pane 과 log-pane 을 독립 그룹으로 분리 — 칩 흐름과
+ *       요청 표가 각자 자연스럽게 fade 되어 연관성이 시각적으로 유지된다.
+ *     · 미지원 브라우저(FF 132 이하 등) 는 즉시 swap 폴백 — 본 블록의 룰은 무시되고
+ *       동작은 동일하게 보존.
+ *
+ *   타이밍 토큰:
+ *     · old → fade-out  : --dur-base (200ms) — 사라지는 쪽을 약간 빠르게.
+ *     · new → fade-in   : --dur-drawer (280ms) — 들어오는 쪽이 조금 더 길게 머물러 인지 시간 확보.
+ *     · easing          : --ease (cubic-bezier(.2,.8,.2,1)) — 디자인 토큰 SSoT.
+ * ───────────────────────────────────────────────────────────────────────── */
+.flow-pane { view-transition-name: tv-flow-pane; }
+.log-pane  { view-transition-name: tv-log-pane; }
+
+::view-transition-old(tv-flow-pane),
+::view-transition-old(tv-log-pane),
+::view-transition-old(root) {
+  animation-duration: var(--dur-base);
+  animation-timing-function: var(--ease);
+}
+::view-transition-new(tv-flow-pane),
+::view-transition-new(tv-log-pane),
+::view-transition-new(root) {
+  animation-duration: var(--dur-drawer);
+  animation-timing-function: var(--ease);
+}
+
+/* prefers-reduced-motion — View Transitions snapshot 자체는 그려지나 애니메이션은 0.
+ *   chip-flow stagger / turn-line-fade-in 도 동시에 무력화. 사용자 접근성 정책 SSoT. */
+@media (prefers-reduced-motion: reduce) {
+  .turn-line.is-active,
+  .turn-line.is-active.do-chip-anim .chip-flow > * {
+    animation: none;
+  }
+  ::view-transition-old(tv-flow-pane),
+  ::view-transition-old(tv-log-pane),
+  ::view-transition-old(root),
+  ::view-transition-new(tv-flow-pane),
+  ::view-transition-new(tv-log-pane),
+  ::view-transition-new(root) {
+    animation-duration: 0ms;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * .ds-turn-marker — 한 턴의 식별자 pill (primitive).
+ *
+ *   inline-flex 라 inline-flow 에 자연 합류. 활성 상태는 accent 채움.
+ *
+ *   디자인 시스템 마이그레이션 후속 과제:
+ *     본 클래스는 turn-view 외 다른 영역에서 재사용이 적어 우선 본 파일에 정의.
+ *     향후 design-system/markers/turn-marker.css 로 추출해 흡수 가능.
+ * ───────────────────────────────────────────────────────────────────────── */
+.ds-turn-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  vertical-align: middle;
+  height: 22px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  background: var(--badge-grad-brand);
+  color: var(--accent);
   font-family: var(--font-data);
   font-size: var(--text-small);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-  transition: color var(--dur-fast) var(--ease),
-              border-color var(--dur-fast) var(--ease),
-              background var(--dur-fast) var(--ease);
-  flex-shrink: 0;
-}
-.turn-card-action-payload:hover {
-  color: var(--info);
-  border-color: var(--info);
-  background: var(--blue-bg-light);
-}
-.turn-card-action-payload:focus-visible {
-  outline: 2px solid var(--info);
-  outline-offset: 1px;
-}
-.turn-card-action-payload svg { display: block; }
-
-.turn-card.expanded .turn-card-expand-btn {
-  transform: rotate(0deg);
-}
-
-/* ── CARD EXPANDED SECTION ──────────────────────────────────────────────── */
-.turn-card-expanded {
-  display: none;
-  border-top: 1px solid var(--border);
-  padding: var(--space-1) 0 var(--space-2);
-  background: var(--white-bg-subtle);
-}
-
-.turn-card.expanded .turn-card-expanded {
-  display: block;
-}
-
-/* ── CARD HEADER ────────────────────────────────────────────────────────── */
-.turn-card-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 18px;
-}
-
-.turn-card-index {
-  font-size: var(--text-small);
   font-weight: var(--weight-strong);
-  color: var(--accent);
-  white-space: nowrap;
-  min-width: 24px;
-}
-
-/* ADR-003: 헤더 인라인 프롬프트 — T번호·배지와 우측 액션 사이에 단일 행으로 표시.
- * flex:1 + ellipsis로 공간을 꽉 채우되 절대 개행하지 않는다. */
-.turn-card-header-prompt {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--text-small);
-  color: var(--text-2);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* DEPRECATED — turn-header-prompt-prominence ADR-002:
- * .turn-card-preview는 헤더 Row 1에서 사용자 프롬프트를 자투리 공간에 표시했지만,
- * 새 디자인에서는 prompt를 Row 2(.turn-card-prompt-row)로 승격해 폭 100%로 노출한다.
- * ADR-003에서 다시 헤더 인라인(.turn-card-header-prompt)으로 재통합됨.
- * 본 규칙은 외부 호환을 위해 남겨두되 renderTurnCards가 더 이상 이 클래스를 사용하지 않는다. */
-.turn-card-preview {
-  font-size: var(--text-small);
-  color: var(--text-2);
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* ── HEADER 우측 액션 묶음 (ADR-002) ───────────────────────────────────────
- * payload 버튼 + expand chevron을 한 wrapper로 묶어 Row 1 우측 끝에 정렬.
- * 개별 자식이 각자 margin-left:auto를 가지면 두 번째 자식이 헤더 가운데로 밀려나는
- * flex 회귀를 차단. 묶음 단위로만 우측 정렬 책임을 가진다. */
-.turn-card-summary-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-left: auto;
-  flex-shrink: 0;
-}
-
-/* ── PROMPT ROW (ADR-002, ADR-003) ────────────────────────────────────────
- * 사용자 프롬프트 = 턴 SSoT (turn-views.js L350 주석). 카드 접힌 상태에서도
- * 여러 턴의 prompt를 한눈에 비교할 수 있도록 폭 100%·2줄 line-clamp로 노출한다.
- *
- * 위계 (Typographic Precision):
- *   T번호 (text-small / weight-strong / accent)
- *   → 메타 chip/배지 (text-small / dim)
- *   → prompt text (text-body / weight-medium / --text-1)  ← 카드의 주제목
- *
- * line-clamp는 -webkit-box 패밀리만 사용 — Chromium/WebKit/Firefox 68+ 모두 지원.
- * user-select:text (ADR-003) — 본문 드래그 복사 허용. 단순 click은 부모
- * .turn-card-summary가 카드 토글로 위임 (브라우저 기본 click vs drag 구분에 의존). */
-.turn-card-prompt-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  /* turn-prompt-preview-regression ADR-002:
-   * 다중 세션 병렬 환경에서 1줄 prompt 카드(약 17px)와 2줄 prompt 카드(약 35px) 사이의
-   * 시각 단차를 제거. line-clamp:2의 "최대 2줄"과 대칭으로 "최소 2줄 분량 영역"을 보장 →
-   * 모든 카드의 prompt 영역이 동일 높이로 좌측 정렬돼 한눈 비교 가능.
-   *
-   * 계산식: --text-body(12px) × line-height 1.45 × 2줄 ≈ 34.8px.
-   * align-items:flex-start이므로 1줄 prompt는 위쪽 정렬되고 아래는 자연 여백(빈 두 번째 줄과 동등). */
-  min-height: calc(var(--text-body) * 1.45 * 2);
-}
-
-.turn-card-prompt-icon {
-  color: var(--text-3);
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  /* line-height 1.45와 baseline 정렬: 아이콘 12px 정사각형이 첫 줄 텍스트 ascender 중간에
-   * 오도록 한 단계 내려준다. 토큰화하기에는 1회용 광학 보정이라 그대로 둠. */
-  margin-top: 2px;
+  letter-spacing: 0.04em;
   line-height: 1;
+  white-space: nowrap;
+  margin: 0 2px;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+.ds-turn-marker[data-state="active"] {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+.ds-turn-marker .marker-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.85;
+}
+.ds-turn-marker .marker-index {
+  font-variant-numeric: tabular-nums;
 }
 
-.turn-card-prompt-text {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--font-ui);
+/* ─────────────────────────────────────────────────────────────────────────
+ * 활성 턴 메타 — 모델 · prompt · IN/OUT meta.
+ *
+ *   turn-line 의 활성 상태에서 chip-flow 와 같은 inline-flow 에 합류하지만,
+ *   본 작업(ADR-002)에서는 메타를 flow-head 로 이동시켰다.
+ *   본 클래스들은 flow-head-active 안에서 사용되며 turn-line 안에서는
+ *   사용되지 않는다 (turn-views.js 마크업 책임).
+ * ───────────────────────────────────────────────────────────────────────── */
+.turn-line-model {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  vertical-align: middle;
+  height: 18px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  color: var(--text-2);
+  font-family: var(--font-data);
+  font-size: var(--text-small);
+  margin: 0 var(--space-1) 0 2px;
+}
+
+/* ── 모델 톤 — design-tokens.css 의 --model-{kind}-* 패밀리 재사용 ────────
+ *   #fhModelChip 의 data-tone 속성은 updateFlowHead(turn-views.js) 에서
+ *   modelClassOf 결과로 갱신된다.
+ *   .ds-chip[data-tone="opus"] 와 동일한 컬러 시그널을 flow-head 의 모델
+ *   pill 에도 부여하여 디자인 시스템 통일성을 확보한다.
+ *   .model-dot 은 currentColor 를 받아 부모 color 와 자동 동기화.
+ * ────────────────────────────────────────────────────────────────────── */
+.turn-line-model[data-tone="haiku"]    { color: var(--model-haiku-color);    border-color: var(--model-haiku-border); }
+.turn-line-model[data-tone="sonnet"]   { color: var(--model-sonnet-color);   border-color: var(--model-sonnet-border); }
+.turn-line-model[data-tone="opus"]     { color: var(--model-opus-color);     border-color: var(--model-opus-border); }
+.turn-line-model[data-tone="external"] { color: var(--model-external-color); border-color: var(--model-external-border); }
+.turn-line-model[data-tone="synthetic"] { color: var(--model-synthetic-color); border-color: var(--model-synthetic-border); border-style: dashed; }
+.turn-line-model[data-tone="unknown"]   { color: var(--model-unknown-color);   border-color: var(--model-unknown-border);  border-style: dashed; }
+
+.turn-line-model .model-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.85;
+}
+
+.turn-line-prompt {
+  display: inline;
   font-size: var(--text-body);
   font-weight: var(--weight-medium);
   color: var(--text-1);
-  line-height: 1.45;
-  word-break: break-word;
-  /* 2줄 line-clamp — 한 줄 prompt는 자연스럽게 1줄만 차지, 긴 prompt는 정확히 2줄 + ellipsis. */
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
-  /* ADR-003: 사용자가 prompt 본문을 드래그 복사할 수 있도록 텍스트 선택 허용.
-   * 부모 .turn-card-summary는 user-select:none(클릭 토글 SSoT)이므로 명시적으로 풀어준다. */
-  user-select: text;
+  margin: 0 var(--space-2);
 }
 
-/* ── COMPLEXITY BADGE (ADR-008 — 토큰화) ──────────────────────────────────
- * footer-relocation pass: 헤더에서 footer의 bar-pct 직전으로 이동.
- * footer는 flex baseline 정렬이라 별도 margin-left: auto 불필요 — bar-pct의
- * auto가 우측 끝으로 밀리고, 그 직전 위치에 자연스럽게 인접한다.
- */
-.turn-complexity {
-  font-size: var(--font-micro);
-  font-weight: var(--weight-strong);
+.turn-line-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  vertical-align: middle;
+  font-size: var(--text-meta);
+  color: var(--text-3);
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  margin: 0 var(--space-2);
+}
+.turn-line-meta .meta-sep {
+  color: var(--text-4);
+}
+
+/* .chip-flow — 활성 턴의 칩들을 감싸지만 자체 박스 X.
+ *   display: contents 로 자식(chip + chip-arrow) 이 turn-line 의 직접 자식처럼
+ *   동등하게 inline-flow 에 합류. */
+.chip-flow {
+  display: contents;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * tool-chip — 도구 호출 · response · task-event · agent · skill · mcp 칩 베이스.
+ *
+ *   prototype SSoT 의 inline-flex 베이스로 재정의 (기존 turn-view.css 의 padded-rect
+ *   chip 은 inline-flow 와 baseline 정렬이 어긋나 폐기).
+ *
+ *   타입별 색상 modifier 는 sub-type-{kind} 토큰을 참조 (turn-view-badges ADR-007).
+ *   chip 키 (data-chip-key) 는 ADR-003 의 칩 ↔ 행 1:1 점프 진입점.
+ * ───────────────────────────────────────────────────────────────────────── */
+.tool-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  vertical-align: middle;
+  height: 20px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text-3);
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  line-height: 1;
   white-space: nowrap;
-  padding: 2px var(--space-2);
+  margin: 0 1px;
+}
+.tool-chip .count {
+  color: var(--text-2);
+  font-weight: var(--weight-strong);
+}
+
+/* 분류별 색상 modifier — sub-type SSoT family (--sub-type-{kind}-{color,bg,border}) */
+.tool-chip-mcp {
+  color: var(--sub-type-mcp-color);
+  border-color: var(--sub-type-mcp-border);
+  background: var(--sub-type-mcp-bg);
+}
+.tool-chip-agent {
+  color: var(--sub-type-agent-color);
+  border-color: var(--sub-type-agent-border);
+  background: var(--sub-type-agent-bg);
+}
+.tool-chip-skill {
+  color: var(--sub-type-skill-color);
+  border-color: var(--sub-type-skill-border);
+  background: var(--sub-type-skill-bg);
+}
+.tool-chip-task {
+  color: var(--sub-type-task-color);
+  border-color: var(--sub-type-task-border);
+  background: var(--sub-type-task-bg);
+}
+
+/* tool-chip-group — ANCHOR 사이의 NEUTRAL 윈도우 묶음 칩 (chip-density-noise).
+ *   - 무채색 유지: sub-type 색상 modifier 미적용. 베이스 .tool-chip 톤 그대로.
+ *   - dashed 보더로 "여러 도구가 묶여 있다" 시각 단서만 추가 (신규 디자인 토큰 없음).
+ *   - 호버/포커스 동작은 .tool-chip[data-chip-key] 공통 규칙을 그대로 상속. */
+.tool-chip-group {
+  border-style: dashed;
+}
+
+/* response-chip (◆) — assistant 응답 마디 표지.
+ *   info(blue) 톤으로 시간순 흐름 안에서 도구 칩과 시각 분리. */
+.tool-chip.response-chip {
+  width: 22px;
+  height: 18px;
+  padding: 0;
+  justify-content: center;
+  border-color: var(--type-response-color);
+  background: var(--type-response-row-bg);
+  color: var(--type-response-color);
+  border-radius: var(--radius-sm) 5px;
+}
+.tool-chip.response-chip .diamond-glyph {
+  display: inline-block;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--type-response-color);
+  transform: translateY(-0.5px);
+}
+
+/* task-event — TaskUpdate pill ("#6 → completed" 형식).
+ *   task 톤(pumpkin) 사용. te-dot/te-id/te-arrow/te-status 자식 슬롯 인라인 정렬. */
+.tool-chip.task-event {
+  color: var(--sub-type-task-color);
+  border-color: var(--sub-type-task-border);
+  background: var(--sub-type-task-bg);
+  padding: 0 var(--space-2) 0 6px;
+}
+.tool-chip.task-event .te-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  margin-right: 2px;
+}
+.tool-chip.task-event .te-id {
+  font-family: var(--font-data);
+}
+.tool-chip.task-event .te-arrow {
+  color: var(--text-4);
+  margin: 0 2px;
+}
+.tool-chip.task-event .te-status {
+  font-weight: var(--weight-medium);
+}
+
+/* chip-arrow — 도구 흐름 안의 inline 화살표 (작은 톤).
+ *   spine-arrow(큰 톤) 와 형제. SVG 가 currentColor 로 색을 받으므로 dim 톤만 지정. */
+.chip-arrow {
+  display: inline-block;
+  vertical-align: middle;
+  color: var(--text-4);
+  margin: 0 2px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * 칩 키보드/포커스 접근성 (ADR-003).
+ *
+ *   data-chip-key 가 부여된 칩만 클릭 가능 — pointer + focus-visible ring.
+ *   tabindex/role/aria-label 은 turn-views.js 의 chipHtml 이 부여 (a11y).
+ *
+ *   sub-type-chip[data-meta-doc-type] 의 hover filter:brightness 패턴과 시각 어휘 분리.
+ *   본 칩은 "행 점프" 액션이라 cursor:pointer + accent hover 가 더 명확.
+ * ───────────────────────────────────────────────────────────────────────── */
+.tool-chip[data-chip-key] {
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease);
+}
+.tool-chip[data-chip-key]:hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+.tool-chip[data-chip-key]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * 영역 분리선 — flow-pane 과 log-pane 사이의 가벼운 시각 휴식 (ADR-002).
+ *
+ *   margin/border 가 아닌 명시적 separator div 로 두어 grid template 의 6px row
+ *   안에서 가운데 정렬된 짧은 dash 만 노출. 무거운 border 라인을 회피. */
+.pane-divider {
+  background: transparent;
+  position: relative;
+}
+.pane-divider::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 36px;
+  height: 2px;
+  background: var(--border-strong);
+  border-radius: 1px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * 영역 B — log-pane (활성 턴 요청 시퀀스 표)
+ *
+ *   턴 메타(마커/프롬프트/IN·OUT/모델) 는 flow-head 에 이미 통합되어 있으므로
+ *   본 패널엔 별도 헤더(<header>) 를 두지 않는다 — 표 자체가 영역의 의미를 전달 (ADR-002).
+ *
+ *   하단 표는 기존 render/rows.js 의 makeRequestRow(r, {showSession:false}) 산출물을
+ *   .requests-table 클래스로 그대로 재사용 (3.5 모듈 인벤토리) — table.css SSoT.
+ *   본 파일은 .log-pane / .log-table-wrap 컨테이너 시각만 정의.
+ * ───────────────────────────────────────────────────────────────────────── */
+.log-pane {
+  /* ADR-003 (2026-05-20): #turnUnifiedBody 의 메인 스크롤 영역.
+   *   `flex: 1 1 auto` + `min-height: 0` 으로 남은 공간을 채우고, 내부 log-table-wrap 만 스크롤. */
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* .log-table-wrap — 표 자체의 스크롤 컨테이너 (sticky thead 가 안에서 동작) */
+.log-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.log-table-wrap::-webkit-scrollbar { width: 8px; }
+.log-table-wrap::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
   border-radius: var(--radius-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
-.turn-complexity.mid {
-  color: var(--type-system-color);
-  background: var(--badge-grad-warn);
+.log-table-wrap::-webkit-scrollbar-track { background: transparent; }
+
+/* row-highlight-flash 의 시각 SSoT 는 본 파일 하단(L990+) 의 통합 정의를 참조.
+ * (legacy 1.4s 정의는 강화된 2.0s 정의로 흡수되어 제거됨 — 2026-05-20.) */
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * UTILITY — text-dim
+ *
+ *   inline style="color:var(--text-3)" 의 대체. HTML 직접 작성을 최소화하기 위해
+ *   본 파일에 보존. design-system 으로 흡수 후보. */
+.text-dim {
+  color: var(--text-3);
 }
-.turn-complexity.high {
-  color: var(--red-text);
-  background: var(--badge-grad-error);
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * agent-chip / agent-chip-name / tool-icon — 도구 칩 안 layout 보조 (보존)
+ *
+ *   turn-view-badges ADR-007 의 결정 — color 는 modifier(.tool-chip-{kind}) 가
+ *   결정하고 agent-chip 자체는 layout(gap·icon·name) 전용. inline style 주입 금지.
+ *
+ *   ADR-003 left-rail-meta-docs 의 메타 모드 진입 동선은 ADR-turn-view-revamp-003 으로
+ *   폐기되었으나 (Agent/Skill → 메타 진입 위임 제거), agent-chip 의 layout 자체는
+ *   sub-type-chip 호환을 위해 본 파일에서 유지한다.
+ * ───────────────────────────────────────────────────────────────────────── */
+.agent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
+.agent-chip .tool-icon {
+  font-size: inherit;
+  line-height: 1;
+}
+.agent-chip .tool-icon-agent {
+  color: currentColor;
+  filter: none;
+}
+.agent-chip-name {
+  max-width: 20ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * 보존 영역 — turn-view 내부에서 동작하는 별개 feature 의 스타일.
+ *
+ *   본 영역의 클래스들은 ADR-001/002/003/004 의 카드 폐기 범위 밖이며,
+ *   각자 자기 feature 의 SSoT 를 가진다. 본 파일 정리 시 그대로 보존.
+ * ───────────────────────────────────────────────────────────────────────── */
 
 /* ── SYSTEM-REMINDER CHIP + POPOVER ──────────────────────────────────────
  * 의미: 이 턴 본문 안에 새로 등장한 system-reminder 원문 N건.
  * 위계: dim 기본 + accent hover (tool-chip 베이스 톤과 호환).
- * 부모: 팝오버 anchor를 위해 .turn-system-reminder-anchor가 position:relative.
- *       (칩 자체에 relative를 주면 inline-flex의 카운트 baseline이 흔들리므로
+ * 부모: 팝오버 anchor 를 위해 .turn-system-reminder-anchor 가 position:relative.
+ *       (칩 자체에 relative 를 주면 inline-flex 의 카운트 baseline 이 흔들리므로
  *        wrapper span 한 겹으로 분리한다.)
  * SSoT: ${CLAUDE_PROJECT_DIR}/.claude/.tmp/plans/claude-spyglass/system-reminder-badge/design-spec.md
  * ──────────────────────────────────────────────────────────────────── */
@@ -453,10 +763,10 @@
 
 /* ── POPOVER (floating, not modal) ──────────────────────────────────────
  * 위치 결정 SSoT: system-reminder-popover.js (positionPopover).
- *   - `position: fixed`로 viewport 좌표계에 띄워 상위 .turn-card의 overflow:hidden
+ *   - `position: fixed` 로 viewport 좌표계에 띄워 상위 컨테이너의 overflow:hidden
  *     클리핑을 회피한다 (회귀: 카드 경계 안에서 잘려 보이던 버그).
- *   - top/left 값은 JS가 칩의 getBoundingClientRect() 기준으로 매 open / scroll /
- *     resize 시 갱신한다. CSS는 초기 좌표만 0으로 두고 시각 룰만 담당.
+ *   - top/left 값은 JS 가 칩의 getBoundingClientRect() 기준으로 매 open / scroll /
+ *     resize 시 갱신한다. CSS 는 초기 좌표만 0 으로 두고 시각 룰만 담당.
  *   - backdrop 없음. hidden 속성 토글이 단일 가시성 SSoT (JS 책임).
  * ───────────────────────────────────────────────────────────────────── */
 .turn-system-reminder-popover {
@@ -575,254 +885,17 @@
   tab-size: 4;
 }
 
-/* ── TOOL FLOW ──────────────────────────────────────────────────────────── */
-.turn-card-flow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 3px;
-  min-height: 20px;
-}
-
-/* tool-chip 시각 위계 (turn-view-badges ADR-007 — Inverted Emphasis):
- *   베이스 = dim — Bash/Read/Edit 등 빈번한 기본 도구는 차분히 물러서게.
- *   modifier `.tool-chip-{mcp,agent,skill}` = 강조 — 외부 호출·서브에이전트·스킬
- *   같은 의미 있는 호출만 도드라짐. 색상 토큰은 ADR-003에서 정의한 chip 토큰 재사용.
- *   이전엔 turn-views.js가 inline `style="border-color:...;color:..."`로 색을 주입했으나
- *   이번 ADR-007로 inline style 제거 + 클래스로만 위계 결정 (CLAUDE.md "inline style 금지"). */
-.tool-chip {
-  font-size: var(--text-small);
-  padding: 1px var(--space-2);
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  white-space: nowrap;
-  color: var(--text-3);
-  background: transparent;
-}
-
-.tool-chip-mcp {
-  color:        var(--sub-type-mcp-color);
-  border-color: var(--sub-type-mcp-border);
-  background:   var(--sub-type-mcp-bg);
-}
-.tool-chip-agent {
-  color:        var(--sub-type-agent-color);
-  border-color: var(--sub-type-agent-border);
-  background:   var(--sub-type-agent-bg);
-}
-.tool-chip-skill {
-  color:        var(--sub-type-skill-color);
-  border-color: var(--sub-type-skill-border);
-  background:   var(--sub-type-skill-bg);
-}
-.tool-chip-task {
-  color:        var(--sub-type-task-color);
-  border-color: var(--sub-type-task-border);
-  background:   var(--sub-type-task-bg);
-}
-
-/* 어시스턴트 응답 chip — 시간순 흐름에서 도구 사이에 끼는 텍스트 응답 표지.
-   본문 행의 ◆ 마커(`responseMarkerHtml`)와 동일 글리프·색상 SSoT 공유.
-   ADR-007: 기본 도구(dim)와 같은 라인에서 어울리도록 색상 강도는 유지. */
-.tool-chip.response-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  padding: 1px 6px;
-  color: var(--type-response-color, var(--text-2));
-  border-color: var(--type-response-color, var(--text-2));
-  background: transparent;
-  font-size: var(--text-small);
-  line-height: 1;
-}
-
-/* Agent/Skill 계열 chip — .tool-chip 위에 layout 추가 (ADR-001).
-   색상은 .tool-chip-agent / .tool-chip-skill modifier가 담당 (ADR-007).
-   .agent-chip 자체는 gap·icon·name layout 전용 — 색상 inline 주입 제거됨. */
-.agent-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-/* ADR-003 left-rail-meta-docs: agent-chip 클릭 시 Behavior Definitions 딥링크 — pointer + focus-visible */
-.agent-chip[data-meta-doc-type] {
-  cursor: pointer;
-  transition: filter var(--dur-fast) var(--ease);
-}
-.agent-chip[data-meta-doc-type]:hover {
-  filter: brightness(1.12);
-}
-.agent-chip[data-meta-doc-type]:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--accent-border);
-}
-
-.agent-chip .tool-icon {
-  font-size: inherit;
-  line-height: 1;
-}
-
-/* ADR-007 R4: agent-chip layout 안 `.tool-icon-agent` 아이콘은 기본 brand 톤
- * (`--accent`) 대신 부모 chip의 modifier 색을 따른다. 이렇게 해야 Agent(warm)·Skill(lime)·
- * Task(burnt-orange) chip 안의 ◎ 아이콘이 chip 텍스트와 같은 hue로 인지되어 분류 식별 명확.
+/* ─────────────────────────────────────────────────────────────────────────
+ * ASK USER QUESTION — 메시지 셀 펼침 영역 안의 구조화 HTML (보존).
  *
- *   - `.agent-chip`만 적용: 일반 행 cell-target의 `.tool-icon-agent`는 기존 brand 톤 유지
- *     (action-name 안 아이콘은 chip이 아니라 본래 brand 톤이 자연스러움).
- *   - 강제 우선순위 보장 위해 currentColor 사용 — chip modifier가 색상을 결정 →
- *     ::before/::after 가 아닌 직접 자식이므로 currentColor 상속 안전.
- *   - drop-shadow 글로우는 chip 안에서 시각 노이즈가 되므로 제거. */
-.agent-chip .tool-icon-agent {
-  color: currentColor;
-  filter: none;
-}
-
-.agent-chip-name {
-  max-width: 20ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* chip-arrow SVG (ADR-008 T12 — 텍스트 -> 에서 SVG 화살표로 교체) */
-.chip-arrow {
-  color: var(--text-dim);
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  vertical-align: middle;
-}
-
-/* ── CARD FOOTER (ADR-008 T14 — 위계 강화) ────────────────────────────── */
-.turn-card-footer {
-  display: flex;
-  gap: var(--space-3);
-  font-size: var(--font-meta);
-  color: var(--text-dim);
-  align-items: baseline;
-}
-.turn-card-footer > span {
-  font-variant-numeric: tabular-nums;
-}
-/* 토큰 % — Hero 메트릭 (시선 진입점) */
-.turn-card-bar-pct {
-  margin-left: auto;
-  color: var(--accent);
-  font-size: var(--font-major);
-  font-weight: var(--weight-strong);
-  letter-spacing: -0.01em;
-}
-
-/* ── TOOL ICONS ─────────────────────────────────────────────────────────── */
-/* badges.css의 .tool-icon-tool/.tool-icon-agent와 동일 토큰 사용 (ADR-003) */
-.tool-icon { font-size: var(--text-data); }
-
-/* ── TURN BAR ───────────────────────────────────────────────────────────── */
-.turn-bar { display: flex; align-items: center; gap: var(--space-1); flex-shrink: 0; width: 84px; }
-.turn-bar .bar-track { flex: 1; min-width: 36px; }
-.turn-bar .bar-fill  { background: var(--grad-warn); box-shadow: 0 0 6px rgba(240, 183, 47, 0.50); }
-.turn-bar .bar-label { font-size: var(--text-small); color: var(--text-3); min-width: 24px; text-align: right; }
-
-/* ── CARD BAR PCT (위 .turn-card-footer 섹션에 정의됨) ───────────────────── */
-
-/* ── TOOL CALL GROUP ROW (web-design-balance-pass ADR-005 — 토큰 산식) ───
- * 연속 동일 도구 그룹화 헤더 행 (buildTurnDetailRows). border-left를 padding에서
- * 흡수해 단독 tool 행과 좌측 edge가 정확히 일치하도록 토큰 산식 사용. */
-.turn-row-group {
-  cursor: pointer;
-  user-select: none;
-  background: var(--surface-alt);
-  border-left: var(--turn-row-border-w) solid var(--accent-border);    /* ADR-008: 그룹임을 시각적으로 강조 */
-  margin: 2px var(--space-4) 0;
-  padding-left: calc(var(--turn-row-indent) - var(--turn-row-border-w));
-  border-radius: var(--radius-sm);
-  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
-}
-.turn-row-group:hover {
-  background: var(--accent-bg-medium);
-  border-left-color: var(--accent);
-}
-/* 펼친 그룹 — chevron 회전 + 강조 유지 */
-.turn-row-group.open {
-  background: var(--accent-bg-medium);
-  border-left-color: var(--accent);
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-}
-.turn-group-chevron {
-  color: var(--text-3);
-  transition: transform var(--dur-base) var(--ease);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transform: rotate(-90deg);
-  width: 100%;
-}
-.turn-row-group.open .turn-group-chevron {
-  transform: rotate(0deg);
-}
-/* tool-main 내부 inline 자식 — display:inline 명시로 개행 방지 */
-.turn-group-count {
-  display: inline;
-  color: var(--accent);
-  font-weight: 600;
-}
-
-/* 그룹 하위 행 컨테이너 — 기본 숨김, .open 시 표시.
- * (web-design-balance-pass ADR-005 — 부모-자식 위계 명시 indent)
- * 컨테이너의 좌측 border-left는 부모 그룹과 시각 연결되도록 같은 accent를 사용.
- * 자식 tool 행은 부모보다 한 단계 더 들여써서 위계가 시선에 즉시 들어오게 한다. */
-.turn-row-group-children {
-  display: none;
-  background: var(--white-bg-subtle);
-  border-left: var(--turn-row-border-w) solid var(--accent-border);
-  margin: 0 var(--space-4) 2px;
-  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-}
-.turn-row-group.open + .turn-row-group-children {
-  display: block;
-}
-/* 자식 행 좌측 정렬 산식 (ADR-005):
- *   부모 컨테이너의 border-left(turn-row-border-w)를 자식 padding-left에서 흡수하여
- *   첫 컬럼 anchor 일치 + 부모 헤더 대비 한 단계 추가 indent(--space-3)로 위계 표시. */
-.turn-row-group-children .turn-row-tool {
-  margin: 0;
-  padding-left: calc(var(--turn-row-indent) - var(--turn-row-border-w) + var(--space-3));
-  border-bottom: 1px solid var(--border);
-}
-.turn-row-group-children .turn-row-tool:last-child {
-  border-bottom: none;
-}
-
-/* ── 턴 뷰 아이콘 정렬 (ADR-001) ──────────────────────────────────────────── */
-/* 모든 행 타입에서 첫 번째 span의 아이콘 위치 일치 — 그룹 chevron과 툴 아이콘 수직 정렬 */
-.turn-row > span:first-child {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-/* 그룹 행의 chevron 컨테이너 정렬 */
-.turn-row-group > span:first-child {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-/* 그룹 하위 행의 첫 번째 span(상태 배지)도 동일한 정렬 적용 */
-.turn-row-group-children .turn-row-tool > span:first-child {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* ── ASK USER QUESTION (web-design-balance-pass ADR-004) ───────────────────
- * AskUserQuestion 도구의 펼침 영역 시각화.
- * payload.tool_input의 questions[]·options[]·answers를 buildAskUserQuestionHtml가
- * 구조화 HTML로 만들고, togglePromptExpand가 HTML 모드로 직접 렌더한다.
+ *   render/expand.js 가 message 셀을 펼칠 때 본 마크업으로 questions[]/options[] 를
+ *   시각화한다. ADR-turn-view-revamp 범위 밖 (펼침 영역은 expand.js SSoT).
  *
  * 디자인 원칙:
- *  - 질문 카드는 옅은 surface 톤으로 묶어 "한 질문 = 한 단위"로 인지.
- *  - 옵션은 좌측 marker(○/●/☐/☑)로 단일/멀티 선택 형태와 결과를 동시에 표현.
+ *  - 질문 카드는 옅은 surface 톤으로 묶어 "한 질문 = 한 단위" 인지.
+ *  - 옵션은 좌측 marker(○/●/☐/☑) 로 단일/멀티 선택 형태와 결과를 동시 표현.
  *  - 선택된 답만 accent 톤으로 강조 — 다른 옵션은 default text-2.
- *  - description은 마우스 hover(title)와 작은 inline dim 텍스트로 이중 노출. */
+ *  - description 은 마우스 hover(title) 와 작은 inline dim 텍스트로 이중 노출. */
 .askq-block {
   display: flex;
   flex-direction: column;
@@ -921,18 +994,17 @@
   padding-left: calc(var(--space-2) - 2px);  /* border-left 흡수 — 좌측 정렬 유지 */
 }
 .askq-option-selected .askq-option-marker { color: var(--type-response-color); }
-.askq-option-selected .askq-option-label  {
+.askq-option-selected .askq-option-label {
   color: var(--text-1);
   font-weight: var(--weight-strong);
 }
 
-/* ── UTILITY ────────────────────────────────────────────────────────────── */
-/* inline style="color:var(--text-3)" 대체용 (HTML 직접 작성 최소화) */
-.text-dim { color: var(--text-3); }
-
-/* ── 세션 프롤로그 (ADR-001 P1) ─────────────────────────────────────────────
- * prompt가 등록되기 전에 도착한 도구·응답 행. 일반 turn과 시각 어휘를 공유하되
- * 좌측 dim accent border + 옅은 배경으로 "정상 turn 아님"을 명시한다. */
+/* ─────────────────────────────────────────────────────────────────────────
+ * 세션 프롤로그 (ADR-001 P1) — prompt 가 등록되기 전에 도착한 도구·응답 행 (보존).
+ *
+ *   일반 turn 과 시각 어휘를 공유하되 좌측 dim accent border + 옅은 배경으로
+ *   "정상 turn 아님"을 명시한다. 본 ADR(turn-view-revamp) 범위 밖.
+ * ───────────────────────────────────────────────────────────────────────── */
 .turn-prologue-card {
   margin: 0 var(--space-4) var(--space-3);
   border-left: var(--turn-row-border-w) solid var(--text-3);
@@ -990,7 +1062,7 @@
   font-family: var(--font-data);
   font-size: var(--text-small);
   color: var(--text-3);
-  background: var(--bg-1);
+  background: var(--bg-1, var(--surface));
   padding: 0 var(--space-1);
   border-radius: var(--radius-sm);
 }
@@ -998,4 +1070,46 @@
   color: var(--text-3);
   font-family: var(--font-data);
   font-size: var(--text-small);
+}
+
+/* ── ADR-turn-view-revamp-003 §3.4 — 칩 → 행 점프 시각 효과 ──
+ *
+ * 책임:
+ *   - 칩 클릭으로 매칭 행에 스크롤한 직후 2초간 강조를 페이드아웃해 사용자가 "어디로
+ *     점프했는지" 인지할 시간을 충분히 준다.
+ *   - 토큰은 design-tokens.css(SSoT) 의 `--color-accent-soft` / `--accent` / `--ease` 재사용.
+ *     배경(accent tint) + 첫 셀 좌측 inset shadow(굵은 accent bar) 의 이중 시그널로
+ *     "이 행이다" 가 한눈에 들어오도록 한다.
+ *
+ * 적용 대상:
+ *   - 활성 턴 log-pane 표 행(`.requests-table tr.row-highlight-flash`)
+ *       - 모든 td 배경 페이드(row-flash) + 첫 td 좌측 4px accent bar(row-flash-marker).
+ *   - turn-spine / flow-head 일반 칩(`[data-chip-key].row-highlight-flash`) — 칩 ↔ 칩 점프 시.
+ *       - 칩 자체 배경 페이드.
+ *
+ * 강화 이력 (2026-05-20):
+ *   1.4s → 2.0s 로 노출 시간 확장 + 좌측 accent bar 도입.
+ *   같은 행 연타 시 JS(main.js#flashChipTarget) 가 클래스 제거 → reflow → 재부여로
+ *   애니메이션을 강제로 재시작한다.
+ *
+ * 호출자: main.js `flashChipTarget()` (CHIP_FLASH_MS=2200ms 뒤 클래스 자동 제거)
+ */
+@keyframes row-flash {
+  0%   { background: var(--color-accent-soft); }
+  100% { background: transparent; }
+}
+@keyframes row-flash-marker {
+  0%   { box-shadow: inset 4px 0 0 var(--accent); }
+  85%  { box-shadow: inset 4px 0 0 var(--accent); }
+  100% { box-shadow: inset 0 0 0 transparent; }
+}
+.requests-table tr.row-highlight-flash td {
+  animation: row-flash 2.0s var(--ease) forwards;
+}
+.requests-table tr.row-highlight-flash td:first-child {
+  animation: row-flash 2.0s var(--ease) forwards,
+             row-flash-marker 2.0s var(--ease) forwards;
+}
+[data-chip-key].row-highlight-flash {
+  animation: row-flash 2.0s var(--ease) forwards;
 }

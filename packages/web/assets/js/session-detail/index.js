@@ -31,7 +31,9 @@ import { applyDetailFilter } from './flat-view.js';
 export {
   getDetailFilter, setDetailFilter, getDetailRequests, getDetailTurns,
 } from './state.js';
-export { renderDetailRequests, applyDetailFilter } from './flat-view.js';
+// renderDetailRequests 는 ADR-turn-view-revamp-004 (turn-view-tab fix) 에서 제거됨 —
+//   레거시 평면 요청 표(#detailRequestsView)와 함께 사라졌다. 외부 호출자는 없다.
+export { applyDetailFilter } from './flat-view.js';
 export {
   setDetailView, toggleTurn, toggleCardExpand, setTurnViewMode,
   renderTurnView, renderTurnCards, openLlmInputForTurn,

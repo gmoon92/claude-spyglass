@@ -13,7 +13,10 @@ let _appMode          = 'browse';
 let _metaSubTab       = 'docs';        // 'docs' | 'tools' (ADR-004 meta-docs-tool-stats)
 let _prevState        = null;          // { rightView, detailTab, sessionId } | null
 let _rightView        = 'default';
-let _detailTab        = 'turn';
+// ADR-turn-view-revamp-004: '턴 뷰' + '요청' 두 탭을 단일 '로그' 탭으로 통합.
+// 'log'는 turn-spine(상단) + log-pane(하단 표) 한 패널로 노출되는 단일 detail 모드.
+// 'llm' / 'syslib'은 기존 그대로 — deeplink·sub-filter 자동 전환에서 계속 사용.
+let _detailTab        = 'log';
 let _selectedProject  = null;
 let _selectedSession  = null;
 let _feedFilterBar    = null;

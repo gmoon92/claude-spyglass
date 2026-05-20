@@ -13,7 +13,10 @@ import {
   getPrevState, setPrevState, clearPrevState,
 } from './state.js';
 import { initAppRail, setRailActive } from './app-rail.js';
-import { enterMetaDocsMode, openMetaDocViaDeepLink, setMetaSubTab, refreshMetaActiveSubTab, initMetaDocsLeftNav, setMetaScopeMode, initMetaSubTabs } from './meta-docs-view.js';
+// ADR-turn-view-revamp-003: Agent/Skill 칩 → 메타 모드 딥링크 진입 위임이 폐기되어
+// `openMetaDocViaDeepLink` import 제거. 사용자가 메타 모드로 진입하는 동선은 좌측 rail의
+// `enterMetaDocsMode` 단일 경로로 통합. 메타 모드 내부 검색은 사이드바에서 직접 입력.
+import { enterMetaDocsMode, setMetaSubTab, refreshMetaActiveSubTab, initMetaDocsLeftNav, setMetaScopeMode, initMetaSubTabs } from './meta-docs-view.js';
 import {
   setDetailFilter, applyDetailFilter, setDetailView, toggleTurn,
   refreshDetailSession, initDetailSearch,
@@ -355,7 +358,17 @@ function startSSE() {
           fetchAllSessions();
         }
         prependRequest(req);
-        if (getSelectedSession() === req.session_id) refreshDetailSession(req.session_id);
+
+        // ADR-turn-view-revamp-§3.6 (Option α — active turn only):
+        //   1) 활성 턴이면 turn-spine + flow-head IN/OUT 카운터를 in-place 패치 (DOM 패치 단위 `data-cell`).
+        //   2) in-place 패치 성공 + 활성 턴 변동만 있는 케이스는 전체 fetch를 생략 — 사용자 시각 잡음/네트워크 최소화.
+        //   3) 패치 불가(비활성 턴, WT2 미머지 상태, 새 turn 생성 등) → 기존 refreshDetailSession 폴백 유지.
+        //
+        //   본 분기는 회귀 안전 — patchActiveTurnFromSSE가 false면 동작이 기존과 동일.
+        if (getSelectedSession() === req.session_id) {
+          const patched = patchActiveTurnFromSSE(req);
+          if (!patched) refreshDetailSession(req.session_id);
+        }
       } catch { /* silent */ }
 
       scheduleDashboardRefresh();
@@ -429,6 +442,242 @@ function initDateFilter() {
   mountDateRangeDropdown(container);
 }
 
+// ── ADR-turn-view-revamp-003: 칩 ↔ 행 점프 헬퍼 ─────────────────────────────────
+//
+// 책임:
+//   - 칩의 `data-chip-key` 값을 받아 동일 키를 가진 매칭 노드를 찾아 스크롤 + flash.
+//   - 칩 키 형식은 turn-rows.js `chipKey()`가 결정한다 — 본 모듈은 키 형식 비의존.
+//   - 매칭 우선순위: log-pane 행(`tbody tr[data-chip-key]`) → 일반 셀(`[data-chip-key]`).
+//   - 일치 노드가 없으면 silent fail (사용자 입력은 받지만 부수효과 없음).
+//
+// 호출자: `handleChipActivation` (click/keydown 위임의 단일 진입점)
+// 의존성: 없음 (순수 DOM 조회 + CSS 클래스 토글)
+
+/** flash 클래스 노출 시간 — 점프 시각 피드백을 더 명확하게 인지하도록 2.2초로 확장.
+ *  CSS keyframe(row-flash) 지속(2.0s) + 100ms 여유. 같은 행을 연타할 때 reflow 강제로
+ *  애니메이션이 재시작되므로 길이 자체가 사용자 인지에 직결된다. */
+const CHIP_FLASH_MS = 2200;
+
+/**
+ * 칩 키와 매칭되는 행/셀을 찾는다 (chip-key 기반 폴백 경로).
+ *
+ * 1순위: 활성 턴 log-pane(`#turnLogBody` tbody) 내부의 `tr[data-chip-key="..."]`
+ * 2순위: 같은 키를 가진 일반 노드(turn-spine 칩끼리 점프하는 경우 등)
+ *
+ * ADR-turn-view-revamp-004: 레거시 `#detailRequestsView`(세션 전체 평면 표) 제거 →
+ *   활성 턴 단일 SSoT(`#turnLogBody`)에서만 행 매칭.
+ *
+ * 주의 (#46 group-jump 정확도):
+ *   chip-key 는 중복 가능(예: 동명 도구가 여러 번 등장). DOM 첫 매칭이 반환되므로
+ *   NEUTRAL 윈도우 묶음 칩처럼 "그룹 내 첫 항목" 이 타깃인 경우엔 본 함수가 부적합.
+ *   그 경우는 `findChipTargetByRequestId` 를 먼저 사용한다.
+ *
+ * @param {string} key chip-key (예: "tool:Bash", "resp:3")
+ * @returns {Element|null}
+ */
+function findChipTarget(key) {
+  if (!key) return null;
+  const safe = CSS.escape(key);
+  // log-pane 우선 — plan §3.6 Option α (활성 턴 좁힘)
+  const logBody = document.getElementById('turnLogBody');
+  const row = logBody?.querySelector(`tr[data-chip-key="${safe}"]`);
+  if (row) return row;
+  // 폴백 — turn-spine / flow-head 일반 노드 (자기 칩 클릭 시 자기 행이 없으면 silent)
+  return document.querySelector(`#detailView [data-chip-key="${safe}"]`);
+}
+
+/**
+ * request id 로 활성 턴 log-pane 안의 정확한 행을 찾는다 (그룹 칩 우선 경로).
+ *
+ * 사용처: NEUTRAL 윈도우 묶음 칩(turn-views.js#chipHtml isGroup 분기)이
+ *   `data-target-request-id="<items[0].id>"` 를 부착 — chip-key 중복으로 인한
+ *   오점프(같은 도구명이 그룹 앞쪽에 또 있는 경우)를 차단한다.
+ *
+ * @param {string} rid request.id
+ * @returns {Element|null}
+ */
+function findChipTargetByRequestId(rid) {
+  if (!rid) return null;
+  const logBody = document.getElementById('turnLogBody');
+  return logBody?.querySelector(`tr[data-request-id="${CSS.escape(rid)}"]`) || null;
+}
+
+/**
+ * 노드를 화면 중앙으로 smooth scroll + `row-highlight-flash` 클래스 1.5초 부여.
+ * 클래스는 turn-view.css `@keyframes row-flash` 가 시각 책임 (SSoT).
+ *
+ * 같은 노드에 flash가 이미 적용 중이면 클래스 재부여로 애니메이션이 끊겨 보일 수 있으므로
+ * 일단 제거 후 다시 부여 — reflow 강제로 애니메이션을 재시작한다.
+ *
+ * @param {Element|null} el
+ */
+function flashChipTarget(el) {
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.remove('row-highlight-flash');
+  // eslint-disable-next-line no-unused-expressions — reflow 강제 (애니메이션 재시작)
+  void el.offsetWidth;
+  el.classList.add('row-highlight-flash');
+  setTimeout(() => el.classList.remove('row-highlight-flash'), CHIP_FLASH_MS);
+}
+
+/**
+ * 칩 활성화(클릭 또는 Enter/Space) 시 호출 — 단일 진입점.
+ *
+ * 타깃 결정 우선순위:
+ *   1) chip.dataset.targetRequestId 가 있으면 그 id 의 행으로 점프 (그룹 칩 등 정확 지정).
+ *   2) chip.dataset.chipKey 로 첫 매칭 행/노드 검색 (단일 도구·응답·task 칩 등).
+ *   3) 둘 다 없거나 매칭 실패면 silent.
+ *
+ * 자동 펼침 정책 (#46 — 사용자 요청 broaden):
+ *   기존엔 `task:` prefix 만 자동 펼침 대상이었으나, 사용자가 "뱃지 클릭시 로그 이동 +
+ *   펼치기 기능이 몇개 누락" 으로 보고 → 모든 칩(타깃이 log-pane `<tr>` 인 경우)에 대해
+ *   data-expand-id 를 가진 prompt-preview 가 있으면 `togglePromptExpand` 로 펼친다.
+ *   이미 펼쳐져 있으면(dataset.expanded === rid) no-op — 토글 닫힘 회피 가드.
+ *
+ * 칩 자체에 `tabindex="0"` / `role="button"` / `aria-label` 부여는 칩 빌더(turn-views.js)
+ * 책임 (SSoT). 본 함수는 동작만 책임.
+ *
+ * @param {Element} chip `[data-chip-key]` 노드 (선택적으로 `data-target-request-id` 동반)
+ */
+function handleChipActivation(chip) {
+  const key = chip?.dataset?.chipKey || '';
+  const targetRid = chip?.dataset?.targetRequestId || '';
+  // 1) request-id 우선 (그룹 칩 정확 지정), 2) chip-key 폴백.
+  const target = (targetRid && findChipTargetByRequestId(targetRid))
+              || (key && findChipTarget(key))
+              || null;
+  if (!target) return;
+  flashChipTarget(target);
+
+  // 모든 log-pane 행 타깃 — 점프 후 상세 메시지 자동 펼치기.
+  if (target.tagName === 'TR') {
+    const preview = target.querySelector('[data-expand-id]');
+    const rid = preview?.dataset?.expandId;
+    if (rid && target.dataset.expanded !== rid) {
+      togglePromptExpand(rid, target);
+    }
+  }
+}
+
+/**
+ * `#detailView` 컨테이너에 칩 클릭/키보드 위임을 1회 등록.
+ *
+ * 핸들러 1개로 click + keydown(Enter/Space)을 모두 처리해 turn-spine / flow-head /
+ * log-pane 어디에 칩이 박혀도 동작한다 — 칩 컨테이너가 늘어나도 위임 등록을 늘리지 않는다.
+ *
+ * 호출자: initEventDelegation()
+ */
+function initChipActivationDelegation() {
+  const root = document.getElementById('detailView');
+  if (!root) return;
+
+  root.addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-chip-key]');
+    if (!chip) return;
+    // log-pane 표 행(`tr`)은 행 자체에 chip-key가 박혀있어도 클릭 시 점프 동작을
+    // 트리거하지 않는다 — 표 행 클릭은 prompt-expand 등 다른 핸들러의 영역.
+    if (chip.tagName === 'TR') return;
+    e.preventDefault();
+    e.stopPropagation();
+    handleChipActivation(chip);
+  });
+
+  root.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const chip = e.target.closest('[data-chip-key][role="button"]');
+    if (!chip) return;
+    if (chip.tagName === 'TR') return;
+    e.preventDefault();
+    handleChipActivation(chip);
+  });
+}
+
+// ── ADR-turn-view-revamp-004 §3.6: SSE 활성 턴 in-place 갱신 ─────────────────────
+//
+// 책임:
+//   - SSE로 도착한 신규 request가 "활성 턴"에 속하면 turn-spine 칩 + flow-head IN/OUT
+//     카운터를 in-place 갱신한다 (DOM 패치 최소화 — 전체 재렌더 회피).
+//   - 비활성 턴(접힌 턴)에는 갱신을 시도하지 않는다 — 다음 활성화 시점에 일괄 재렌더.
+//   - DOM 패치 단위는 `data-cell` 속성이 박힌 노드(예: `data-cell="in"`, `data-cell="out"`,
+//     `data-cell="cache"`, `data-cell="duration"`).
+//   - log-pane 본문(`#turnLogBody`)에 새 행 append는 본 모듈이 담당하지 않는다.
+//     turn-rows.js의 `makeTurnLogRows` 또는 row builder를 호출하는 turn-views.js 영역.
+//
+// 동작 정책:
+//   - "활성 턴" 식별은 turn-spine 또는 flow-head DOM의 dataset(`data-active-turn-id`)으로
+//     판단한다. WT2 머지 전(현재 코드)에는 해당 속성이 없으므로 본 함수는 false 반환 →
+//     `refreshDetailSession` fallback이 자동 동작 (회귀 0).
+//   - 패치 가능 셀이 하나라도 없으면 false 반환 — caller가 fallback으로 전체 fetch를 트리거.
+
+/**
+ * 활성 턴 컨테이너(turn-spine의 활성 turn-line 또는 flow-head)를 찾는다.
+ *
+ * 후보 셀렉터(우선순위 순):
+ *   1) `#detailTurnView [data-active-turn-id="${turnId}"]` — turn-spine SSoT
+ *   2) `#detailTurnView .flow-head[data-turn-id="${turnId}"]` — flow-head 폴백
+ *
+ * @param {string} turnId
+ * @returns {Element|null}
+ */
+function findActiveTurnContainer(turnId) {
+  if (!turnId) return null;
+  const safe = CSS.escape(turnId);
+  return (
+    document.querySelector(`#detailTurnView [data-active-turn-id="${safe}"]`) ||
+    document.querySelector(`#detailTurnView .flow-head[data-turn-id="${safe}"]`) ||
+    null
+  );
+}
+
+/**
+ * 단일 셀(`[data-cell="<name>"]`)의 텍스트만 갈아끼운다 (in-place 패치).
+ * 셀이 없으면 silent fail — 호출자(`patchActiveTurnFromSSE`)가 셀 보강 시점을 판단한다.
+ */
+function patchCell(container, cellName, text) {
+  if (!container || text == null) return false;
+  const cell = container.querySelector(`[data-cell="${cellName}"]`);
+  if (!cell) return false;
+  cell.textContent = text;
+  return true;
+}
+
+/**
+ * SSE 신규 request → 활성 턴 turn-spine + flow-head IN/OUT 카운터 in-place 갱신.
+ *
+ * 처리 흐름:
+ *   1) `req.turn_id`로 활성 턴 컨테이너 검색 → 없으면 false (비활성 턴 또는 WT2 미머지 상태).
+ *   2) `data-cell="in"` / `"out"` / `"cache"` / `"duration"` 셀을 텍스트로 패치.
+ *   3) 패치한 셀이 1개 이상이면 true (호출자는 추가 fetch 생략 가능).
+ *
+ * 패치 실패(셀 미존재)는 정상 폴백 시나리오 — 호출자가 `refreshDetailSession`을 부른다.
+ *
+ * @param {object} req 신규 request payload (server normalized)
+ * @returns {boolean} in-place 패치 성공 여부
+ */
+function patchActiveTurnFromSSE(req) {
+  if (!req || !req.turn_id) return false;
+  const container = findActiveTurnContainer(req.turn_id);
+  if (!container) return false;
+
+  // 누적 합계가 컨테이너 dataset(`data-in-sum`, `data-out-sum`)으로 들어와 있으면 그 위에 누적한다.
+  // 없으면 단일 request의 토큰만 노출 (첫 SSE 도착 시점 — turn-views.js 첫 렌더가 미완 케이스).
+  const sumIn  = (parseInt(container.dataset.inSum  || '0', 10) || 0) + (req.tokens_input  || 0);
+  const sumOut = (parseInt(container.dataset.outSum || '0', 10) || 0) + (req.tokens_output || 0);
+  container.dataset.inSum  = String(sumIn);
+  container.dataset.outSum = String(sumOut);
+
+  const inText  = fmtToken(sumIn);
+  const outText = fmtToken(sumOut);
+
+  let patched = 0;
+  if (patchCell(container, 'in',  inText))  patched += 1;
+  if (patchCell(container, 'out', outText)) patched += 1;
+  // cache / duration 셀은 SSE 단건으로 누적 합계를 신뢰하기 어려워(서버 SSoT 의존) 패치 생략.
+  // 추후 server 측 summary 필드가 동봉되면 동일 패턴으로 확장.
+  return patched > 0;
+}
+
 function initEventDelegation() {
   document.querySelector('.left-panel').addEventListener('click', e => {
     const projRow = e.target.closest('[data-project]');
@@ -437,33 +686,22 @@ function initEventDelegation() {
     if (sessRow)  { loadSession(sessRow.dataset.sessionId); }
   });
 
-  // ADR-003 left-rail-meta-docs: Agent/Skill 배지 단일 클릭 → Behavior Definitions 딥링크.
-  // 글로벌 위임 — 턴 카드/세션 plain row 등 모든 chip에서 동작.
-  document.body.addEventListener('click', e => {
-    const chip = e.target.closest('[data-meta-doc-type][data-meta-doc-id]');
-    if (!chip) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const type = chip.dataset.metaDocType;
-    const id   = chip.dataset.metaDocId;
-    if (!type || !id) return;
-    // 현재 browse 상태이면 스냅샷 후 metadocs 진입
-    if (getAppMode() === 'browse') {
-      snapshotBrowseState();
-      applyAppMode('metadocs');
-    }
-    // metadocs 이미 진입 상태든 신규 진입이든 동일하게 딥링크 호출 (검색어 적용 + flash)
-    openMetaDocViaDeepLink({ type, id });
-  });
-
-  // Keyboard activation for chips with role="button" — Space/Enter
-  document.body.addEventListener('keydown', e => {
-    if (e.key !== 'Enter' && e.key !== ' ') return;
-    const chip = e.target.closest('[data-meta-doc-type][data-meta-doc-id][role="button"]');
-    if (!chip) return;
-    e.preventDefault();
-    chip.click();
-  });
+  // ── ADR-turn-view-revamp-003: 칩 클릭 → 매칭 행 스크롤 + flash (통합 위임) ──
+  //
+  // 책임:
+  //   - 모든 칩(`[data-chip-key]`)의 클릭 + 키보드 활성화를 단일 핸들러로 처리.
+  //   - 칩 키 SSoT는 session-detail/turn-rows.js의 `chipKey()` / `chipKeyForRequest()`.
+  //     본 위임은 셀렉터·키 형식을 알 필요가 없다 — 칩 측이 박은 key 그대로 매칭.
+  //   - 활성 턴 / 비활성 턴 구분은 turn-views.js의 setActive 로직이 책임 (본 위임은
+  //     "키가 박힌 행 또는 셀로 스크롤 + flash" 만 수행).
+  //
+  // 통합 이력:
+  //   - 기존 Agent/Skill 칩의 메타 모드 딥링크(`data-meta-doc-type`/`data-meta-doc-id`) 진입은
+  //     ADR-turn-view-revamp-003 결정에 따라 본 통합 위임으로 흡수·폐기.
+  //   - 메타 모드 진입은 좌측 rail 또는 사이드바를 통해 유지 (사용자 동선 보존).
+  //
+  // 위치: `#detailView` 한 곳에 위임 — turn-spine / flow-head / log-pane 모두 후손에 포함.
+  initChipActivationDelegation();
 
   // ADR-004 meta-docs-tool-stats: 메타 모드 서브 탭 [Behavior Definitions] / [도구 통계] 클릭.
   // [data-meta-subtab] 단일 SSoT — meta-docs-view.js의 setMetaSubTab이 가시성/aria/데이터 로드 일원화.
@@ -541,8 +779,14 @@ function initEventDelegation() {
       return;
     }
 
+    // ADR-turn-view-revamp-004: 신 모델에서는 turn-spine .turn-line[data-turn] 마커가 활성 턴 전환의 SSoT.
+    //   레거시 [data-toggle-turn](접힘/펼침 카드)도 호환을 위해 함께 처리한다.
+    //   활성 턴 전환 후 applyDetailFilter()를 호출해 필터 chip 카운트를 새 활성 턴 기준으로 재계산
+    //   (turn-view-tab fix: "활성 턴 좁힘" 정책 — flat-view.js applyDetailFilter 참조).
+    const turnMarker = e.target.closest('.turn-line[data-turn]');
+    if (turnMarker) { toggleTurn(turnMarker.dataset.turn); applyDetailFilter(); return; }
     const turnBtn  = e.target.closest('[data-toggle-turn]');
-    if (turnBtn) { toggleTurn(turnBtn.dataset.toggleTurn); return; }
+    if (turnBtn) { toggleTurn(turnBtn.dataset.toggleTurn); applyDetailFilter(); return; }
 
     if (e.target.closest('.turn-card-expanded')) {
       const groupRow = e.target.closest('[data-toggle-group]');
@@ -665,7 +909,9 @@ async function init() {
     },
   });
   initColResize(document.querySelector('#feedBody table'));
-  initColResize(document.querySelector('#detailRequestsView table'));
+  // #turnLogTable 은 renderTurnCards 가 동적으로 매번 새로 생성한다(필터 변경/SSE 갱신마다).
+  //   따라서 init() 시점이 아니라 turn-views.js 안에서 매 렌더 직후 initColResize 를 호출한다
+  //   (syslib / meta-docs 와 동일 패턴).
   initPanelResize(document.querySelector('.left-panel'), document.querySelector('.panel-resize-handle'));
   initPanelVerticalResize(
     document.getElementById('panelVerticalHandle'),
@@ -689,8 +935,8 @@ async function init() {
   initToolColors();
   initSystemReminderPopover();
   initDetailSearch();
-  initDetailTabBar();   // Wave 5: view-tab 4종 동적 생성
-  setDetailView('turn'); // Wave 8-A: 초기 aria-selected 동기화 — initDetailTabBar 직후 강제 싱크.
+  initDetailTabBar();   // ADR-turn-view-revamp-004: view-tab 3종 (로그/LLM/SysLib) 동적 생성
+  setDetailView('log');  // 초기 aria-selected 동기화 — initDetailTabBar 직후 강제 싱크.
                          // renderTab이 HTML 문자열로 aria-selected="true"를 생성하지만,
                          // 명시적 호출로 .active 클래스와 aria-selected 양쪽 SSoT를 보장.
   initMetaSubTabs();    // Wave 5: meta-tab 2종 동적 생성

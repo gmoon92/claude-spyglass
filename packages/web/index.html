@@ -647,77 +647,10 @@
             <div class="state-loading"><div class="state-loading-spinner"></div><span data-i18n="ui.html.detail-loading">Loading…</span></div>
           </div>
 
-          <div id="detailRequestsView" class="detail-content" style="display:none">
-            <table>
-              <colgroup>
-                <col style="width:100px">
-                <col style="width:88px">
-                <col style="width:120px">
-                <col style="width:130px">
-                <col>
-                <col style="width:48px"><col style="width:48px"><col style="width:52px"><col style="width:68px">
-              </colgroup>
-              <thead><tr><th>Time</th><th>Action</th><th>Target</th><th>Model</th><th>Message</th><th style="text-align:right">in</th><th style="text-align:right">out</th><th style="text-align:right"><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 1.5L3 9h4.5L6.5 14.5L13 7H8.5L9.5 1.5z"/></svg>Cache</th><th style="text-align:right">Duration</th></tr></thead>
-              <tbody id="detailRequestsBody">
-                <!-- skeleton-loading T-08 — 9컬럼 폭 흉내. loadSessionDetail 응답 후 정상 row 로 교체. -->
-                <tr data-skeleton="1">
-                  <td><span class="sk sk-line" style="width:78%"></span></td>
-                  <td><span class="sk sk-line" style="width:62%"></span></td>
-                  <td><span class="sk sk-line" style="width:72%"></span></td>
-                  <td><span class="sk sk-line" style="width:58%"></span></td>
-                  <td><span class="sk sk-line" style="width:90%"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:32px"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:32px"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:34px"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:44px"></span></td>
-                </tr>
-                <tr data-skeleton="1">
-                  <td><span class="sk sk-line" style="width:74%"></span></td>
-                  <td><span class="sk sk-line" style="width:55%"></span></td>
-                  <td><span class="sk sk-line" style="width:80%"></span></td>
-                  <td><span class="sk sk-line" style="width:50%"></span></td>
-                  <td><span class="sk sk-line" style="width:76%"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:28px"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:36px"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:30px"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:48px"></span></td>
-                </tr>
-                <tr data-skeleton="1">
-                  <td><span class="sk sk-line" style="width:82%"></span></td>
-                  <td><span class="sk sk-line" style="width:70%"></span></td>
-                  <td><span class="sk sk-line" style="width:65%"></span></td>
-                  <td><span class="sk sk-line" style="width:62%"></span></td>
-                  <td><span class="sk sk-line" style="width:84%"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:30px"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:32px"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:36px"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:42px"></span></td>
-                </tr>
-                <tr data-skeleton="1">
-                  <td><span class="sk sk-line" style="width:70%"></span></td>
-                  <td><span class="sk sk-line" style="width:58%"></span></td>
-                  <td><span class="sk sk-line" style="width:75%"></span></td>
-                  <td><span class="sk sk-line" style="width:54%"></span></td>
-                  <td><span class="sk sk-line" style="width:70%"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:26px"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:34px"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:30px"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:40px"></span></td>
-                </tr>
-                <tr data-skeleton="1">
-                  <td><span class="sk sk-line" style="width:76%"></span></td>
-                  <td><span class="sk sk-line" style="width:65%"></span></td>
-                  <td><span class="sk sk-line" style="width:68%"></span></td>
-                  <td><span class="sk sk-line" style="width:60%"></span></td>
-                  <td><span class="sk sk-line" style="width:82%"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:30px"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:30px"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:32px"></span></td>
-                  <td style="text-align:right"><span class="sk sk-line sk-line--inline" style="width:46px"></span></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <!-- ADR-turn-view-revamp-004 turn-view-tab fix:
+               레거시 #detailRequestsView (세션 전체 평면 요청 표) 제거.
+               신 로그 탭의 SSoT는 #detailTurnView 안의 turn-spine + log-pane 한 쌍.
+               (세션 전체 요청 200건 테이블은 더 이상 노출되지 않는다) -->
 
           <div id="detailTurnView" class="detail-content">
             <div id="turnUnifiedBody" role="region" aria-label="Turn list" data-i18n-attr-aria-label="ui.html.turn-list-aria">
