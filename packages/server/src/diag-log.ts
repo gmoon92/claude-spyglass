@@ -137,7 +137,7 @@ export function logDiagStatus(): void {
         + `       1) inline prefix : SPYGLASS_DIAG_ENABLED=1 bun run dev    # space, no '&'\n`
         + `       2) env wrapper   : env SPYGLASS_DIAG_ENABLED=1 bun run dev\n`
         + `       3) export (shell): export SPYGLASS_DIAG_ENABLED=1 && bun run dev\n`
-        + `       NOTE: 'SPYGLASS_DIAG_ENABLED=1 & bun run dev' is WRONG — '&' backgrounds the\n`
+        + `       NOTE: 'SPYGLASS_DIAG_ENABLED=1 && bun run dev' is WRONG — '&' backgrounds the\n`
         + `             assignment as a separate process; the var won't reach 'bun run dev'.\n`
         + `       optional flags : SPYGLASS_DIAG_LOG_DIR=<path>  SPYGLASS_DIAG_RAW_SSE=1\n`
         + `       categories ON  : model-trace.log, hook-payload.jsonl, proxy-payload.jsonl\n`
