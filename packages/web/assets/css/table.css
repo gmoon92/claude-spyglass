@@ -95,11 +95,30 @@ td.cell-empty  { color: var(--text-4); text-align: center; }
 td.cell-token.cell-empty { text-align: right; }
 td.cache-cell  { cursor: default; }
 
-/* ── ROW TYPE BORDER (ADR-006) ──────────────────────────────────────────── */
-tr[data-type="prompt"]    td:first-child { padding-left: var(--space-2); }
-tr[data-type="tool_call"] td:first-child { padding-left: var(--space-2); }
-tr[data-type="system"]    td:first-child { padding-left: var(--space-2); }
-tr.row-selected td:first-child { border-left: 2px solid !important; padding-left: var(--space-2) !important; }
+/* ── ROW TYPE BORDER (ADR-006 revised) ──────────────────────────────────────
+ * 비선택/선택 모든 데이터 행의 td:first-child 텍스트 시작점을 12px로 고정.
+ *
+ * Why: 기존 규칙은 prompt/tool_call/system 행에 padding-left=6px 만 부여하고
+ *      border-left 는 row-selected 일 때만 2px 채우는 패턴이라, 선택 전/후
+ *      텍스트가 좌우로 점프(+2px shift)했고 헤더(padding-left=12px)와도
+ *      6px 어긋났다. response 행은 padding-left 규칙 자체가 없어 12px 였기에
+ *      행 타입 간 정렬도 불일치(prompt/tool_call/system 327px, response 333px).
+ *
+ * How: 모든 데이터 td:first-child 에 transparent 2px border + 10px padding
+ *      (=12px 텍스트 시작점) 을 항상 부여. row-selected 는 색만 입혀
+ *      shift 없이 시각 강조. 헤더(padding-left 12px)와 완전 정렬.
+ *
+ * Trade-off: 비활성 행도 2px 투명 border 를 그리므로 paint 부담이 미세하게
+ *            증가하지만, 클릭 시 row 가 좌우로 흔들리는 UX 손실을 제거하는
+ *            대가로 충분히 수용 가능.
+ */
+tbody tr td:first-child {
+  border-left: 2px solid transparent;
+  padding-left: 10px;
+}
+tr.row-selected td:first-child {
+  border-left-color: var(--accent);
+}
 
 /* ── PROMPT EXPAND ──────────────────────────────────────────────────────── */
 .prompt-expand-row td { padding: 0 !important; border-bottom: 1px solid var(--border); }

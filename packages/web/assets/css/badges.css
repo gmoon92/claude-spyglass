@@ -400,7 +400,7 @@ tr.row-bloated-critical > td:first-child,
   filter: drop-shadow(0 0 4px rgba(255, 122, 69, 0.5));
 }
 
-/* ── TARGET ROLE BADGE (prompt/system row) ──────────────────────────────── */
+/* ── TARGET ROLE BADGE (prompt/system row) — legacy 보존 ─────────────────── */
 .target-role-badge {
   display: inline-flex; align-items: center; gap: 4px;
   font-family: var(--font-ui);
@@ -411,6 +411,20 @@ tr.row-bloated-critical > td:first-child,
 .role-badge-system    { color: var(--type-system-color); }
 .role-badge-assistant { color: var(--type-response-color); }
 .role-icon { font-size: var(--text-meta); }
+
+/* ── TARGET ROLE (#45 TG-A 통합 어휘) ────────────────────────────────────────
+ * 마크업 일관화 후, target-cell-inner.target-role-{role} 변형이 .action-name
+ * 컬러를 타입별 시그널 색으로 덮어쓴다. cells.js :: targetInnerHtml 의
+ * prompt/response/system 분기에서 사용한다.
+ *
+ * Why: ds-chip(.target-role-badge) 의 내부 padding 7px 때문에 prompt/response/system
+ *      행의 Target 콘텐츠가 tool_call 대비 +8px 우측으로 밀려 정렬이 어긋났다.
+ *      구조를 tool_call 과 동일한 target-cell-inner > action-name 으로 맞추되
+ *      색상 시그널만 modifier 로 보존한다.
+ */
+.target-cell-inner.target-role-user      .action-name { color: var(--type-prompt-color); }
+.target-cell-inner.target-role-assistant .action-name { color: var(--type-response-color); }
+.target-cell-inner.target-role-system    .action-name { color: var(--type-system-color); }
 
 /* ── TOOL CELL ──────────────────────────────────────────────────────────── */
 .tool-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

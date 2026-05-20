@@ -22,17 +22,32 @@ export function makeActionCell(r) {
   return typeBadge(r.type);
 }
 
-// Target 컬럼 내부 HTML (td 래퍼 없음) — 테이블/그리드 공용 재사용.
-// 반환값: { html, empty } — empty=true면 호출자가 "—" 같은 빈 placeholder를 자유롭게 감쌈.
+/**
+ * Target 컬럼 내부 HTML (td 래퍼 없음) — 테이블/그리드 공용 재사용.
+ *
+ * 반환값: { html, empty } — empty=true면 호출자가 "—" 같은 빈 placeholder를 자유롭게 감쌈.
+ *
+ * 마크업 일관화 (#45 TG-A):
+ *   prompt/response/system 행도 tool_call 과 동일하게 `target-cell-inner > action-name`
+ *   구조로 통일. 이전엔 `target-role-badge.ds-chip` (padding 2px 7px) 을 사용해
+ *   inner 컨텐츠 시작점이 td 좌측 padding 끝에서 +8px 안쪽으로 들어갔고, tool_call
+ *   행(target-cell-inner, padding 0)과 좌측 정렬이 어긋났다.
+ *
+ *   색상 시그널은 보존: target-cell-inner.target-role-{user,assistant,system}
+ *   modifier 가 .action-name 색상을 type-{prompt,response,system}-color 로 덮어쓴다
+ *   (badges.css :: TARGET ROLE BADGE 섹션 참조).
+ *
+ * 호출자: rows.js :: makeTargetCellWithBadges, cells.js :: makeTargetCell
+ */
 export function targetInnerHtml(r) {
   if (r.type === 'prompt') {
-    return { html: `<span class="target-role-badge role-badge-user ds-chip" data-tone="brand"><span class="role-icon">${svgToolDot({ size: 12 })}</span>user</span>`, empty: false };
+    return { html: `<span class="target-cell-inner target-role-user"><span class="action-name">${svgToolDot({ size: 12 })}user</span></span>`, empty: false };
   }
   if (r.type === 'response') {
-    return { html: `<span class="target-role-badge role-badge-assistant ds-chip" data-tone="info"><span class="role-icon">${svgToolDot({ size: 12 })}</span>assistant</span>`, empty: false };
+    return { html: `<span class="target-cell-inner target-role-assistant"><span class="action-name">${svgToolDot({ size: 12 })}assistant</span></span>`, empty: false };
   }
   if (r.type === 'system') {
-    return { html: `<span class="target-role-badge role-badge-system ds-chip" data-tone="warn"><span class="role-icon">${svgToolDot({ size: 12 })}</span>system</span>`, empty: false };
+    return { html: `<span class="target-cell-inner target-role-system"><span class="action-name">${svgToolDot({ size: 12 })}system</span></span>`, empty: false };
   }
   if (r.type !== 'tool_call' || !r.tool_name) {
     return { html: '—', empty: true };
