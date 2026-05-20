@@ -66,7 +66,8 @@
       "root-aria": "Behavior Definitions catalog",
       "tabs-aria": "Behavior Definitions sub-tabs",
       "body-aria": "Behavior Definitions body",
-      "tool-stats-aria": "Project tool stats"
+      "tool-stats-aria": "Project tool stats",
+      "flow-aria": "Behavior call flow"
     },
     "footer": {
       "help-title": "Keyboard shortcuts (?)",
@@ -160,6 +161,29 @@
     "system-none": "no system"
   },
   "meta-docs-view": {
+    "tab-docs-label": "Behavior Definitions",
+    "tab-tools-label": "Tools",
+    "flow": {
+      "scope-center": "Center",
+      "scope-window": "window: last {days} days",
+      "scope-turns": "observed: {turns}/{total} turns",
+      "legend-main": "Main flow (≥30%)",
+      "legend-normal": "Normal",
+      "legend-spoke": "Co-occurrence (dashed)",
+      "section-skill": "SKILL",
+      "section-agent": "AGENT",
+      "section-tool": "TOOL",
+      "section-mcp": "MCP",
+      "reset-title": "Restore initial layout",
+      "reset-label": "↺ Reset",
+      "zoom-in-title": "Zoom in",
+      "zoom-out-title": "Zoom out",
+      "empty-no-center": "No behavior definitions to visualize",
+      "empty-no-center-project": "No behavior definitions used in {project}",
+      "empty-zero-turns": "No invocations recorded for {name} yet",
+      "empty-hint": "Flow is computed from recent turns. It appears once at least one turn has run in the selected scope.",
+      "fetch-failed": "Failed to load flow: {message}"
+    },
     "col-type": "Type",
     "col-name": "Name",
     "col-source": "Path",

@@ -106,6 +106,7 @@
   <link rel="stylesheet" href="/assets/css/meta-docs.css">
   <link rel="stylesheet" href="/assets/css/context-chart.css">
   <link rel="stylesheet" href="/assets/css/tool-stats.css">
+  <link rel="stylesheet" href="/assets/css/flow-diagram.css">
   <link rel="stylesheet" href="/assets/css/obs-panel.css">
   <link rel="stylesheet" href="/assets/css/app-rail.css">
   <link rel="stylesheet" href="assets/css/design-system/_index.css">
@@ -768,10 +769,15 @@
            body[data-app-mode="metadocs"] 일 때 좌측 obs-panel은 hide되고 summary cards가 .left-panel 안에서 노출됨.
            summary cards 마크업 자체는 meta-docs-view.js가 동적으로 .meta-docs-summary-cards 컨테이너에 inject. -->
 
-      <!-- ADR-004 meta-docs-tool-stats: 서브 탭 — [Behavior Definitions] / [도구 통계].
-           좌측 content-pane(프로젝트 선택기 + 요약 카드)는 양쪽 탭에서 공통 노출.
+      <!-- ADR-004 meta-docs-tool-stats:
+           서브 탭 2종 — [메타 문서] / [도구 통계].
+           좌측 content-pane(프로젝트 선택기 + 요약 카드)는 두 탭 모두에서 공통 노출.
            탭 전환은 메인 영역(아래 두 컨테이너)만 토글한다.
-           라우팅: meta-docs-view.js의 setMetaSubTab('docs' | 'tools') — sessionStorage 'spyglass.metaSubTab' 영속화. -->
+           라우팅: meta-docs-view.js의 setMetaSubTab('docs' | 'tools') — sessionStorage 'spyglass.metaSubTab' 영속화.
+
+           meta-docs-flow ego-graph (2026-05-21 rev): 'flow' 별도 탭 폐기.
+             흐름 시각화는 'docs' 탭 상단 영역(#metaDocsFlowRegion)에서 표 첫 행을 중심으로 자동 렌더.
+             행 클릭 시 동일 영역이 클릭된 행의 ego-graph로 재렌더된다. -->
       <!-- Wave 5: meta-tab 버튼은 meta-docs-view.js initMetaSubTabs()로 동적 생성 -->
       <div class="meta-tabs" role="tablist" aria-label="Behavior Definitions sub-tabs" id="metaTabBar" data-i18n-attr-aria-label="ui.html.meta-docs.tabs-aria">
       </div>

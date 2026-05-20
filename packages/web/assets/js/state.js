@@ -10,6 +10,8 @@ const SS_APP_MODE     = 'spyglass.appMode';
 const SS_META_SUB_TAB = 'spyglass.metaSubTab'; // ADR-004 meta-docs-tool-stats
 
 let _appMode          = 'browse';
+// meta-docs-flow ego-graph (2026-05-21 rev): 'flow' 서브 탭 폐기, 메타 문서 탭 상단 영역으로 흡수.
+// 'docs' | 'tools' 2-way만 유효. 과거 'flow' 값이 sessionStorage에 남아 있으면 'docs'로 폴백.
 let _metaSubTab       = 'docs';        // 'docs' | 'tools' (ADR-004 meta-docs-tool-stats)
 let _prevState        = null;          // { rightView, detailTab, sessionId } | null
 let _rightView        = 'default';
@@ -39,9 +41,11 @@ export function setAppMode(m) {
 }
 
 // ── meta sub-tab (ADR-004 meta-docs-tool-stats) ──
-//   'docs'  : Behavior Definitions 카탈로그 (기본)
+//   'docs'  : 메타 문서 카탈로그 + 상단 ego-flow 영역 (기본)
 //   'tools' : 프로젝트 단위 도구별 성능 매트릭스
 //   sessionStorage 영속화 — 새로고침 시 마지막 서브 탭 복원. metadocs 모드에서만 의미 있음.
+//   meta-docs-flow ego-graph (2026-05-21 rev): 별도 'flow' 탭 폐기.
+//     흐름은 'docs' 탭 상단 영역(#metaDocsFlowRegion)에서 표 첫 행 기준으로 자동 렌더된다.
 export function getMetaSubTab()       { return _metaSubTab; }
 export function setMetaSubTab(t) {
   if (t !== 'docs' && t !== 'tools') return;

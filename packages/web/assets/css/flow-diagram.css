@@ -1,0 +1,312 @@
+/**
+ * flow-diagram.css — Behavior Definitions 메타 모드 "Call Flow" 영역 전용 스타일.
+ *
+ * 위치(2026-05-21 rev):
+ *  - 별도 'flow' 서브 탭이 폐기되고, 메타 문서 탭 본문 상단 영역(#metaDocsFlowRegion)
+ *    안에서 ego-graph가 렌더된다.
+ *  - meta-docs-view.js loadMetaDocsLibrary 가 카탈로그 정렬 후 첫 행을 기준으로 자동 1회,
+ *    카탈로그 행 클릭 시 해당 행 기준으로 재렌더.
+ *
+ * 책임:
+ *  - 좌(triggers) → 중(center) → 우(공출현 4 columns) ego-graph의 비주얼.
+ *  - 노드 카드는 무채색 기본(--surface-alt / --raised / --border-strong).
+ *  - 분류 시그널은 .ds-chip[data-tone=…] SSoT(design-system/chips/chip.css)를 그대로 재사용.
+ *  - 색상=시그널, 무채색=노이즈 (memory feedback_chip_color_semantics). 핵심 4곳에만 accent를 칠한다:
+ *      · HOT pill (사용률 ≥40%)                  → --accent
+ *      · center 카드 보더                         → --accent
+ *      · 메인 동맥 에지 (≥30%, is-hot)            → --accent
+ *      · % 라벨(is-hot)                           → --accent
+ *
+ * 호출자: index.html <link>, meta-docs-flow-view.js (DOM 부착 + 렌더).
+ *
+ * SSoT 참조:
+ *  - 색·폰트·radius: design-tokens.css
+ *  - 분류 칩: design-system/chips/chip.css의 .ds-chip[data-tone=agent|skill|task|mcp]
+ *  - 자체 :root 정의는 두지 않음(통합 원칙: design-tokens.css가 단일 출처).
+ */
+
+/* ============================================================================
+   상단 영역 컨테이너 — 메타 문서 탭 본문 상단에 SVG 영역을 잡는다.
+   하단에 1px 보더를 두어 카탈로그 필터/표와 시각적으로 분리.
+
+   resizable-flow (2026-05-21):
+     높이는 더 이상 hardcoded 380px이 아니라 --meta-docs-flow-height CSS 변수로 제어된다.
+     이 변수는 left-panel-vertical-resize.js의 initMetaDocsFlowResize가 드래그 시 갱신.
+     fallback 380px = 기본 노출 높이(SVG viewBox h=360 + toolbar ~36px).
+     min-height: 200px — 가시성 보장(toolbar + 한 줄 카드 = ~140px 이하로는 떨어지지 않게).
+   ============================================================================ */
+.meta-docs-flow-region {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;                                  /* split-scroll: 자기 고정 높이 유지 */
+  height: var(--meta-docs-flow-height, 380px);     /* resizable-flow: 드래그 핸들이 갱신 */
+  min-height: 200px;
+  margin: 0;
+  padding: 0;
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+  /* 격자 점 배경은 .flow-canvas가 담당. 컨테이너는 box만 잡는다. */
+}
+
+/* ============================================================================
+   Flow 전용 토큰 — design-tokens.css에 없는 값만 정의.
+   ============================================================================ */
+.meta-docs-flow-region {
+  --flow-grid-dot:   rgba(255, 255, 255, 0.045);
+  --flow-edge:       var(--border-strong);
+  --flow-edge-hi:    var(--accent);
+  --flow-edge-dim:   rgba(110, 118, 129, 0.45);
+  --flow-pct-bg:     #1d1d22;
+  --flow-pct-border: var(--border-strong);
+}
+
+/* ============================================================================
+   Toolbar — center 이름 + window + 관측 턴 수 + 범례 + Reset
+   ============================================================================ */
+.meta-docs-flow-region .flow-toolbar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 8px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+  flex-wrap: wrap;
+}
+.meta-docs-flow-region .flow-toolbar .flow-scope {
+  color: var(--text-3); font-size: var(--text-meta);
+  padding: 3px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+}
+.meta-docs-flow-region .flow-toolbar .flow-scope b { color: var(--text-2); font-weight: 600; }
+.meta-docs-flow-region .flow-toolbar .flow-spacer { flex: 1; }
+.meta-docs-flow-region .flow-toolbar .flow-legend {
+  display: inline-flex; gap: 14px; align-items: center;
+  font-size: var(--text-meta); color: var(--text-3);
+}
+.meta-docs-flow-region .flow-toolbar .flow-legend .flow-sw {
+  display: inline-block; width: 18px; height: 2px;
+  vertical-align: middle; margin-right: 5px;
+  border-radius: 2px;
+}
+.meta-docs-flow-region .flow-toolbar .flow-legend .flow-sw-dashed {
+  height: 0; border-top: 1px dashed var(--text-4); width: 18px;
+}
+.meta-docs-flow-region .flow-toolbar .flow-reset-btn,
+.meta-docs-flow-region .flow-toolbar .flow-zoom-btn {
+  height: 26px; padding: 0 10px;
+  font: inherit; font-size: var(--text-meta);
+  color: var(--text-2); background: var(--surface-alt);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.meta-docs-flow-region .flow-toolbar .flow-reset-btn:hover,
+.meta-docs-flow-region .flow-toolbar .flow-zoom-btn:hover {
+  background: var(--raised); color: var(--text-1);
+}
+/* zoom 버튼: +/- 단일 글자 — 정사각형 비주얼로 reset 버튼과 시각 위계 구분. */
+.meta-docs-flow-region .flow-toolbar .flow-zoom-btn {
+  min-width: 26px; padding: 0;
+  font-family: var(--font-data); font-weight: 700;
+  line-height: 1;
+}
+.meta-docs-flow-region .flow-toolbar .flow-zoom-group {
+  display: inline-flex; gap: 4px;
+}
+
+/* ============================================================================
+   Canvas — 격자 배경 + SVG (자동 스케일)
+   ============================================================================ */
+.meta-docs-flow-region .flow-canvas {
+  position: relative;
+  /* pan/zoom (2026-05-21): 빈영역 클릭+드래그로 viewBox 이동. grab/grabbing 커서로 즉시 어포던스 표시.
+     .is-panning은 bindPan이 mousedown 시 부여, mouseup에 제거. */
+  cursor: grab;
+  overflow: auto;
+  background-image: radial-gradient(var(--flow-grid-dot) 1px, transparent 1px);
+  background-size: 16px 16px;
+  flex: 1;
+  min-height: 0;
+  /* split-scroll (2026-05-21): 영역 내부 스크롤바 — viewBox가 작아져 SVG가 컨테이너보다 커질 때 노출. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.meta-docs-flow-region .flow-canvas::-webkit-scrollbar { width: 8px; height: 8px; }
+.meta-docs-flow-region .flow-canvas::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+.meta-docs-flow-region .flow-canvas::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+.meta-docs-flow-region .flow-canvas::-webkit-scrollbar-track { background: transparent; }
+.meta-docs-flow-region .flow-canvas.is-panning { cursor: grabbing; }
+.meta-docs-flow-region .flow-canvas svg.flow-svg {
+  display: block;
+  width: 100%; height: 100%;
+  /* SVG 자체에 명시적으로 grab 커서를 잡아도 좋지만, 노드 위에서는 .node의 cursor가 우선. */
+}
+
+/* ============================================================================
+   Edges — ego-graph 4종 (hot / dim / spoke / default-main)
+   ============================================================================ */
+.meta-docs-flow-region .edge {
+  fill: none;
+  stroke: var(--flow-edge); stroke-width: 1.6;
+  transition: stroke var(--dur-fast) var(--ease);
+}
+/* hot: 사용률 ≥40% — accent. */
+.meta-docs-flow-region .edge.is-hot   { stroke: var(--flow-edge-hi); stroke-width: 2.2; }
+/* dim: 사용률 ≤5% — 흐릿한 borderline. */
+.meta-docs-flow-region .edge.is-dim   { stroke: var(--flow-edge-dim); stroke-dasharray: 4 4; }
+/* spoke: center→공출현 — 점선. 화살표 없음(상호 공출현이므로 방향성 약함). */
+.meta-docs-flow-region .edge.is-spoke { stroke: var(--text-4); stroke-dasharray: 2 3; stroke-width: 1.2; }
+
+.meta-docs-flow-region .edge-pct rect {
+  fill: var(--flow-pct-bg);
+  stroke: var(--flow-pct-border); stroke-width: 1;
+  rx: 4;
+}
+.meta-docs-flow-region .edge-pct text {
+  fill: var(--text-2);
+  font-family: var(--font-data);
+  font-size: 10px; font-weight: 600;
+  dominant-baseline: middle; text-anchor: middle;
+}
+.meta-docs-flow-region .edge-pct text.sub {
+  fill: var(--text-4);
+  font-size: 9px; font-weight: 400;
+}
+.meta-docs-flow-region .edge-pct.is-hot rect           { stroke: var(--accent); }
+.meta-docs-flow-region .edge-pct.is-hot text:not(.sub) { fill: var(--accent); }
+
+/* ============================================================================
+   Section label — 우측 4 컬럼(SKILL / AGENT / TOOL / MCP) 헤더
+   ============================================================================ */
+.meta-docs-flow-region .slot-label {
+  fill: var(--text-4);
+  font-family: var(--font-data);
+  font-size: 9px; letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-anchor: middle; user-select: none;
+}
+
+/* ============================================================================
+   Nodes — 무채색 카드 + .ds-chip 차별화. variant 3종.
+   ============================================================================ */
+.meta-docs-flow-region .node {
+  background: var(--surface-alt);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex; align-items: center; gap: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.32);
+  transition:
+    transform var(--dur-fast) var(--ease),
+    border-color var(--dur-fast),
+    box-shadow var(--dur-fast);
+  cursor: grab;
+  user-select: none;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+.meta-docs-flow-region .node:hover { border-color: var(--text-4); }
+.meta-docs-flow-region .node.is-dragging {
+  cursor: grabbing;
+  border-color: var(--text-2);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
+  transform: scale(1.015);
+}
+
+.meta-docs-flow-region .node .icon {
+  width: 28px; height: 28px; flex: 0 0 28px;
+  border-radius: 6px;
+  display: grid; place-items: center;
+  background: var(--raised); color: var(--text-2);
+}
+.meta-docs-flow-region .node .icon svg { width: 16px; height: 16px; }
+
+.meta-docs-flow-region .node .body { line-height: 1.25; min-width: 0; flex: 1; }
+.meta-docs-flow-region .node .body .title-row {
+  display: flex; align-items: center; gap: 6px;
+}
+.meta-docs-flow-region .node .body .title {
+  color: var(--text-1); font-weight: 600;
+  font-size: var(--text-h3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.meta-docs-flow-region .node .body .sub {
+  color: var(--text-3); font-size: var(--text-meta);
+  font-family: var(--font-data); margin-top: 3px;
+  letter-spacing: -0.01em;
+}
+.meta-docs-flow-region .node .body .sub b { color: var(--text-2); font-weight: 600; }
+
+/* 분류 칩 — design-system/chips/chip.css SSoT 그대로. 카드 내부 정렬만 조정. */
+.meta-docs-flow-region .node .ds-chip {
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+
+.meta-docs-flow-region .meta-pills { display: inline-flex; gap: 4px; margin-left: auto; }
+
+/* HOT pill — 사용률 상위 시그널. accent 1맥락. */
+.meta-docs-flow-region .pill-hot {
+  padding: 1px 6px; border-radius: 9px;
+  background: var(--color-accent-soft); color: var(--accent);
+  border: 1px solid var(--accent);
+  font-family: var(--font-data); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.meta-docs-flow-region .pill-live {
+  padding: 1px 6px; border-radius: 9px;
+  background: var(--raised); color: var(--text-3);
+  border: 1px solid var(--border-strong);
+  font-family: var(--font-data); font-size: 10px;
+}
+
+/* ── Variant: center (선택된 메타 문서) ─────────────────────────────────
+   accent 보더 + 약한 외곽 글로우 + 살짝 큰 아이콘/타이틀로 시선 집중. */
+.meta-docs-flow-region .node.is-center {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 1px rgba(255, 122, 69, 0.28),
+    0 8px 22px rgba(0, 0, 0, 0.45);
+  padding: 12px 14px;
+}
+.meta-docs-flow-region .node.is-center .icon {
+  width: 36px; height: 36px; flex-basis: 36px;
+}
+.meta-docs-flow-region .node.is-center .icon svg { width: 20px; height: 20px; }
+.meta-docs-flow-region .node.is-center .body .title { font-size: var(--text-h2); }
+
+/* ── Variant: trigger (좌측 슬래시 커맨드) ───────────────────────────────
+   중립 무채색 카드. 카드 자체 크기는 default와 동일. */
+.meta-docs-flow-region .node.is-trigger {
+  /* 기본 .node 스타일 그대로. 칩 없이 좌측 트리거임을 위치(좌측 컬럼)로 표현. */
+}
+
+/* ── Variant: spoke (우측 공출현 4 컬럼) ────────────────────────────────
+   더 작은 카드 + 원형 아이콘. ds-chip이 종류를 표시한다. */
+.meta-docs-flow-region .node.is-spoke { padding: 6px 9px; gap: 8px; }
+.meta-docs-flow-region .node.is-spoke .icon {
+  width: 22px; height: 22px; flex-basis: 22px;
+  border-radius: 50%;
+}
+.meta-docs-flow-region .node.is-spoke .icon svg { width: 13px; height: 13px; }
+.meta-docs-flow-region .node.is-spoke .body .title { font-size: var(--text-meta); }
+.meta-docs-flow-region .node.is-spoke .body .sub { font-size: 10px; margin-top: 2px; }
+
+/* ============================================================================
+   Empty / loading 상태 — meta-docs.css의 .state-empty와 동일 톤 재사용
+   ============================================================================ */
+.meta-docs-flow-region .flow-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  flex: 1;
+  padding: 32px 16px; gap: 6px;
+  color: var(--text-3);
+  font-size: var(--text-meta);
+  text-align: center;
+}
+.meta-docs-flow-region .flow-empty-title {
+  color: var(--text-2); font-size: var(--text-h3); font-weight: 600;
+}

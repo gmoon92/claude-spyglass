@@ -66,7 +66,8 @@
       "root-aria": "Behavior Definitions カタログ",
       "tabs-aria": "Behavior Definitions サブタブ",
       "body-aria": "Behavior Definitions 本文",
-      "tool-stats-aria": "プロジェクトツール統計"
+      "tool-stats-aria": "プロジェクトツール統計",
+      "flow-aria": "呼び出しフロー"
     },
     "footer": {
       "help-title": "キーボードショートカット (?)",
@@ -160,6 +161,29 @@
     "system-none": "system なし"
   },
   "meta-docs-view": {
+    "tab-docs-label": "Behavior Definitions",
+    "tab-tools-label": "ツール",
+    "flow": {
+      "scope-center": "中心",
+      "scope-window": "ウィンドウ: 過去{days}日",
+      "scope-turns": "観測: {turns}/{total}ターン",
+      "legend-main": "主要フロー (≥30%)",
+      "legend-normal": "通常",
+      "legend-spoke": "共起 (点線)",
+      "section-skill": "SKILL",
+      "section-agent": "AGENT",
+      "section-tool": "TOOL",
+      "section-mcp": "MCP",
+      "reset-title": "初期レイアウトに復元",
+      "reset-label": "↺ Reset",
+      "zoom-in-title": "拡大",
+      "zoom-out-title": "縮小",
+      "empty-no-center": "表示できる Behavior Definition がありません",
+      "empty-no-center-project": "{project} で使用された Behavior Definition がありません",
+      "empty-zero-turns": "{name} の呼び出し履歴がまだありません",
+      "empty-hint": "フローは直近ターンから計算されます。選択範囲で1ターン以上実行されると表示されます。",
+      "fetch-failed": "フローの読み込みに失敗しました: {message}"
+    },
     "col-type": "タイプ",
     "col-name": "名前",
     "col-source": "パス",

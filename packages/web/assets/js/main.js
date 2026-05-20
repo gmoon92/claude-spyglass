@@ -703,8 +703,10 @@ function initEventDelegation() {
   // 위치: `#detailView` 한 곳에 위임 — turn-spine / flow-head / log-pane 모두 후손에 포함.
   initChipActivationDelegation();
 
-  // ADR-004 meta-docs-tool-stats: 메타 모드 서브 탭 [Behavior Definitions] / [도구 통계] 클릭.
-  // [data-meta-subtab] 단일 SSoT — meta-docs-view.js의 setMetaSubTab이 가시성/aria/데이터 로드 일원화.
+  // ADR-004 meta-docs-tool-stats:
+  //   메타 모드 서브 탭 [메타 문서] / [도구 통계] 클릭 위임.
+  //   [data-meta-subtab] 단일 SSoT — meta-docs-view.js의 setMetaSubTab이 가시성/aria/데이터 로드 일원화.
+  //   meta-docs-flow ego-graph (2026-05-21 rev): 'flow' 탭 제거 — 흐름은 'docs' 탭 상단 영역으로 흡수.
   document.body.addEventListener('click', e => {
     const tab = e.target.closest('[data-meta-subtab]');
     if (!tab) return;

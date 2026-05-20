@@ -66,7 +66,8 @@
       "root-aria": "Behavior Definitions 目录",
       "tabs-aria": "Behavior Definitions 子标签",
       "body-aria": "Behavior Definitions 正文",
-      "tool-stats-aria": "项目工具统计"
+      "tool-stats-aria": "项目工具统计",
+      "flow-aria": "Behavior 调用流程图"
     },
     "footer": {
       "help-title": "键盘快捷键 (?)",
@@ -160,6 +161,29 @@
     "system-none": "无 system"
   },
   "meta-docs-view": {
+    "tab-docs-label": "Behavior Definitions",
+    "tab-tools-label": "工具",
+    "flow": {
+      "scope-center": "中心",
+      "scope-window": "最近 {days} 天",
+      "scope-turns": "观测: {turns}/{total} 轮",
+      "legend-main": "主干 (≥30%)",
+      "legend-normal": "常规",
+      "legend-spoke": "共现 (虚线)",
+      "section-skill": "SKILL",
+      "section-agent": "AGENT",
+      "section-tool": "TOOL",
+      "section-mcp": "MCP",
+      "reset-title": "恢复节点初始位置",
+      "reset-label": "↺ 重置",
+      "zoom-in-title": "放大",
+      "zoom-out-title": "缩小",
+      "empty-no-center": "暂无可显示的 Behavior Definition",
+      "empty-no-center-project": "项目 {project} 暂无使用过的 Behavior Definition",
+      "empty-zero-turns": "{name} 暂无调用记录",
+      "empty-hint": "流程基于最近的轮次计算，当选中范围内至少有一轮运行后即可显示。",
+      "fetch-failed": "加载流程失败：{message}"
+    },
     "col-type": "类型",
     "col-name": "名称",
     "col-source": "路径",

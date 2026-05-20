@@ -8,8 +8,8 @@
       "aria": "앱 모드",
       "browse-aria": "탐색 (세션·요청 보기)",
       "browse-title": "탐색",
-      "metadocs-aria": "Behavior Definitions 카탈로그",
-      "metadocs-title": "Behavior Definitions"
+      "metadocs-aria": "메타 문서 카탈로그",
+      "metadocs-title": "메타 문서"
     },
     "left-panel": {
       "resize-title": "드래그: 너비 조절 · 더블클릭: 콘텐츠 너비에 맞춤",
@@ -63,10 +63,11 @@
     "turn-list-aria": "턴 목록",
     "llm-input-aria": "API 페이로드",
     "meta-docs": {
-      "root-aria": "Behavior Definitions 카탈로그",
-      "tabs-aria": "Behavior Definitions 서브 탭",
-      "body-aria": "Behavior Definitions 본문",
-      "tool-stats-aria": "프로젝트 도구 통계"
+      "root-aria": "메타 문서 카탈로그",
+      "tabs-aria": "메타 문서 서브 탭",
+      "body-aria": "메타 문서 본문",
+      "tool-stats-aria": "프로젝트 도구 통계",
+      "flow-aria": "호출 흐름 그래프"
     },
     "footer": {
       "help-title": "단축키 (?)",
@@ -160,6 +161,29 @@
     "system-none": "system 없음"
   },
   "meta-docs-view": {
+    "tab-docs-label": "메타 문서",
+    "tab-tools-label": "도구",
+    "flow": {
+      "scope-center": "중심",
+      "scope-window": "윈도우: 최근 {days}일",
+      "scope-turns": "관측: {turns}/{total}턴",
+      "legend-main": "주요 흐름 (≥30%)",
+      "legend-normal": "일반",
+      "legend-spoke": "공출현 (점선)",
+      "section-skill": "SKILL",
+      "section-agent": "AGENT",
+      "section-tool": "TOOL",
+      "section-mcp": "MCP",
+      "reset-title": "초기 레이아웃으로 복원",
+      "reset-label": "↺ Reset",
+      "zoom-in-title": "확대",
+      "zoom-out-title": "축소",
+      "empty-no-center": "표시할 메타 문서가 없습니다",
+      "empty-no-center-project": "{project}에 사용 이력이 있는 메타 문서가 없습니다",
+      "empty-zero-turns": "{name}의 호출 이력이 아직 없습니다",
+      "empty-hint": "흐름은 최근 턴 데이터를 기반으로 계산됩니다. 선택 범위에서 최소 1턴 이상 실행되면 표시됩니다.",
+      "fetch-failed": "흐름을 불러오지 못했습니다: {message}"
+    },
     "col-type": "타입",
     "col-name": "이름",
     "col-source": "경로",
@@ -173,7 +197,7 @@
     "filter-orphan": "호출만존재",
     "include-deleted-label": "삭제된 정의도 표시",
     "include-deleted-title": "과거 호출 이력은 있으나 디스크에서 사라진 항목까지 포함합니다",
-    "card-used-title": "호출이 1회 이상 발생한 Behavior Definitions",
+    "card-used-title": "호출이 1회 이상 발생한 메타 문서",
     "card-used-label": "사용",
     "card-unused-title": "카탈로그엔 있으나 호출 0건",
     "card-unused-label": "미사용",
@@ -181,9 +205,9 @@
     "orphan-path-label": "호출만 존재",
     "orphan-tooltip": "이 호출은 다른 워크스페이스(.claude/) 또는 빌트인/플러그인 정의에서 발생했을 수 있습니다. 동기화 시 다중 작업 공간을 함께 스캔하면 이 행이 카탈로그 행으로 합쳐집니다.",
     "deleted-badge-title": "현재 디스크에서 사라진 정의 (soft-deleted)",
-    "empty-project-title": "{project} 프로젝트에 등록된 Behavior Definitions가 없습니다",
+    "empty-project-title": "{project} 프로젝트에 등록된 메타 문서가 없습니다",
     "empty-project-hint": "이 프로젝트가 SessionStart로 동기화된 적이 없을 수 있습니다. 좌측 thead의 <strong>동기화</strong> 버튼을 누르면 알려진 모든 작업 공간을 다시 스캔합니다.",
-    "empty-global-title": "Behavior Definitions가 없습니다 — SessionStart 이후 자동 동기화됩니다",
+    "empty-global-title": "메타 문서가 없습니다 — SessionStart 이후 자동 동기화됩니다",
     "load-failed": "불러오기 실패: {message}",
     "syncing-label": "동기화 중…",
     "toast-sync-start": "동기화 시작…",
@@ -235,7 +259,7 @@
     "no-cache": "캐시 미발생",
     "no-activity": "활동 없음",
     "no-tool-calls": "도구 호출 없음",
-    "no-behavior-defs": "Behavior Definitions 호출 없음",
+    "no-behavior-defs": "메타 문서 호출 없음",
     "recent-activity": "최근 활동",
     "yesterday": "어제 {val}",
     "savings": "절감 {val}"

@@ -302,12 +302,20 @@ export {
   listMetaDocsWithUsage,
   getMetaDocByFilePath,
   countMetaDocs,
+  getMetaFlowAggregate,
+  getMetaFlowEgo,
   type MetaDocType,
   type MetaDocSource,
   type MetaDocumentRow,
   type UpsertMetaDocParams,
   type MetaDocUsageRow,
   type ListMetaDocsFilter,
+  type MetaFlowAggregate,
+  type MetaFlowFilter,
+  type MetaFlowEgo,
+  type MetaFlowEgoFilter,
+  type MetaFlowEgoCenterType,
+  type MetaFlowEgoSpoke,
 } from './queries/meta-document';
 
 // =============================================================================

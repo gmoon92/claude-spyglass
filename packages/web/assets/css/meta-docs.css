@@ -10,33 +10,52 @@
  */
 
 .meta-docs-body {
-  /* meta-table-scroll ADR-002: padding-top을 0으로 — sticky 요소(filters/thead)가
-     스크롤 컨테이너 상단(top:0)에 정확히 멈추도록. 상단 호흡은 첫 자식 .meta-docs-scope
-     의 자체 margin-bottom으로 자연 분배. 좌·우·하 padding은 보존. */
-  padding: 0 16px 24px;
+  /* split-scroll (2026-05-21): .meta-docs-body는 더 이상 자체 스크롤을 가지지 않는다.
+     상단 #metaDocsFlowRegion(드래그 가변 높이) + 하단 .meta-docs-catalog-area(1fr + overflow-y:auto)로
+     스크롤을 분리. body는 두 영역의 시각 갭을 만들기 위한 어두운 surface로 동작. */
+  padding: 0;
   font-size: 13px;
   color: var(--text, #e5e5e5);
-  /* meta-table-scroll ADR-001/004: .meta-docs-root(flex column, overflow:hidden)
-     안에서 body만 내부 스크롤. min-height:0으로 flex 자식이 부모를 늘리지 않게 막고,
-     overscroll-behavior:contain으로 휠 스크롤이 페이지로 전파되는 것을 차단. */
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface, #0f1014);
+}
+/* sub-tab-hidden-fix (2026-05-21): meta-docs-view.js applyMetaSubTab가 body.hidden 속성으로
+ * docs/tools 패널을 토글한다. 위에서 `display: flex`를 명시했기 때문에 브라우저 기본 룰
+ * `[hidden] { display: none }`이 specificity로 덮여, "도구" 탭으로 전환해도 docs body가
+ * 노출되는 회귀가 발생. 명시적으로 `[hidden]` 분기에서 display를 차단해 정상화한다.
+ * !important는 위 룰셋(display:flex)이 같은 셀렉터 specificity여서 충돌하는 것을 끊는 용도. */
+.meta-docs-body[hidden] { display: none !important; }
+
+/* split-scroll (2026-05-21): 카탈로그(필터바 + 표) 전용 스크롤 컨테이너.
+   - 자기 padding(0 16px 24px)을 가져 기존 body padding 역할을 그대로 흡수.
+   - sticky thead/filters가 본 컨테이너 상단(top:0)에 정확히 멈춘다.
+   - 좌·우·하단 풀폭을 채우고, 상단은 flow-region과의 시각 갭(margin)을 가진다.
+   - bg=surface-alt 로 body(surface)와 대비 → 사용자 요청 "왼쪽패널과 컨텐트 사이의 빈 영역" 느낌. */
+.meta-docs-catalog-area {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  /* meta-table-scroll ADR-003: 스크롤바 토큰 (syslib 컨벤션과 일치).
-     Firefox는 thin + scrollbar-color, WebKit은 ::-webkit-scrollbar로 8px. */
+  padding: 0 16px 24px;
+  background: var(--surface-alt, #17171a);
+  border-top: 1px solid var(--border, #26262b);
+  /* meta-table-scroll ADR-003: 스크롤바 토큰. */
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
 }
-.meta-docs-body::-webkit-scrollbar { width: 8px; height: 8px; }
-.meta-docs-body::-webkit-scrollbar-thumb {
+.meta-docs-catalog-area::-webkit-scrollbar { width: 8px; height: 8px; }
+.meta-docs-catalog-area::-webkit-scrollbar-thumb {
   background: var(--border-strong);
   border-radius: var(--radius-sm);
 }
-.meta-docs-body::-webkit-scrollbar-thumb:hover {
+.meta-docs-catalog-area::-webkit-scrollbar-thumb:hover {
   background: var(--text-3);
 }
-.meta-docs-body::-webkit-scrollbar-track { background: transparent; }
+.meta-docs-catalog-area::-webkit-scrollbar-track { background: transparent; }
 
 /* ── 스코프 헤더 (선택 프로젝트 ↔ 전체 프로젝트) ─────────────────────── */
 .meta-docs-scope {
@@ -388,6 +407,17 @@
 }
 .meta-doc-row.meta-doc-orphan td:first-child {
   border-left: 2px solid var(--warn, #F0B72F);
+  padding-left: 6px;
+}
+
+/* ── 흐름 영역 활성 행 — 카탈로그에서 현재 ego-graph center로 선택된 행에 좌측 accent 마커.
+ * meta-docs-view.js setActiveFlowRow가 클릭된 행에 data-flow-active="1"을 부여.
+ * 사용자 시선이 "지금 위 영역의 흐름은 이 행 기준"임을 즉시 파악하도록 좌측 보더 + 약한 배경. */
+.meta-doc-row[data-flow-active="1"] td {
+  background: var(--accent-bg-medium);
+}
+.meta-doc-row[data-flow-active="1"] td:first-child {
+  border-left: 2px solid var(--accent);
   padding-left: 6px;
 }
 

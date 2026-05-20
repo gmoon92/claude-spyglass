@@ -31,10 +31,14 @@ import { renderFilterBtn } from './design-system/primitives/filter-button.js';
 import { renderTab } from './design-system/primitives/tab.js';
 // meta-docs-table-view ADR-004 (2026-05-14): 로그/syslib 테이블과 동일한 col-resize 핸들을 부착.
 import { initColResize } from './col-resize.js';
+import { initMetaDocsFlowResize } from './left-panel-vertical-resize.js';
 // meta-docs feedback ADR (2026-05-14): 좌측 패널에 프로젝트별 Behavior Definitions 항목 수를 주입.
 import { setMetaDocsCounts } from './left-panel.js';
 // ADR-004 meta-docs-tool-stats: 프로젝트 단위 도구 통계 진입점.
 import { loadProjectToolStats } from './tool-stats.js';
+// meta-docs-flow ego-graph (2026-05-21 rev): 선택 메타 문서 중심 ego-graph 렌더 진입점.
+//   별도 'flow' 탭이 아니라 'docs' 탭 상단 영역(#metaDocsFlowRegion)에 그린다.
+import { loadFlowDiagram } from './meta-docs-flow-view.js';
 
 const CONTAINER_ID = 'metaDocsBody';
 
@@ -74,9 +78,13 @@ export function initMetaSubTabs() {
   if (!container) return;
 
   /** @type {{ value: string, label: string, id: string, controls: string, selected: boolean }[]} */
+  // meta-docs-flow ego-graph (2026-05-21 rev): 'flow' 탭 제거.
+  //   ego-graph는 docs 탭 상단 영역(#metaDocsFlowRegion)에서 인라인으로 표시되므로
+  //   서브 탭은 docs / tools 2종으로 회귀한다.
+  const t = window.I18n.t.bind(window.I18n);
   const TABS = [
-    { value: 'docs',  label: 'Behavior Definitions', id: 'metaTabDocs',      controls: 'metaDocsBody',      selected: true  },
-    { value: 'tools', label: 'Tools',                 id: 'metaTabToolStats', controls: 'metaToolStatsBody', selected: false },
+    { value: 'docs',  label: t('ui.meta-docs-view.tab-docs-label')  || 'Behavior Definitions', id: 'metaTabDocs',      controls: 'metaDocsBody',      selected: true  },
+    { value: 'tools', label: t('ui.meta-docs-view.tab-tools-label') || 'Tools',                 id: 'metaTabToolStats', controls: 'metaToolStatsBody', selected: false },
   ];
 
   container.innerHTML = TABS.map(({ value, label, id, controls, selected }) => {
@@ -166,29 +174,34 @@ export function setMetaSubTab(tab) {
 }
 
 /**
- * 서브 탭 가시성·aria·active 클래스 적용 + 'tools' 데이터 로드.
+ * 서브 탭 가시성·aria·active 클래스 적용 + 활성 탭별 데이터 로드.
  * setMetaSubTab과 enterMetaDocsMode 둘 다 호출하는 내부 헬퍼.
+ *
+ * meta-docs-flow ego-graph (2026-05-21 rev):
+ *   별도 'flow' 탭을 두지 않고 'docs' 탭 상단 영역에 ego-graph가 들어간다.
+ *   따라서 PANELS 배열에는 docs/tools 두 항목만 남는다. ego-graph 자체의 자동 로드는
+ *   loadMetaDocsLibrary가 카탈로그 정렬 후 첫 행을 기준으로 호출한다.
  */
 function applyMetaSubTab(tab) {
-  const docsBody  = document.getElementById('metaDocsBody');
-  const toolsBody = document.getElementById('metaToolStatsBody');
-  const tabDocs   = document.getElementById('metaTabDocs');
-  const tabTools  = document.getElementById('metaTabToolStats');
-  const isTools = tab === 'tools';
+  /**
+   * 탭 정의 — 가시성·aria·로더를 한 곳에서 선언적으로 표현.
+   * 새 탭을 추가할 때는 본 배열에 항목 하나만 추가하면 된다(스파게티 방지).
+   */
+  const PANELS = [
+    { value: 'docs',  bodyId: 'metaDocsBody',      tabId: 'metaTabDocs',      onActivate: () => { /* 카탈로그/흐름 이미 loadMetaDocsLibrary가 처리 */ } },
+    { value: 'tools', bodyId: 'metaToolStatsBody', tabId: 'metaTabToolStats', onActivate: () => loadProjectToolStats(getSelectedProject()) },
+  ];
 
-  if (docsBody)  docsBody.hidden  = isTools;
-  if (toolsBody) toolsBody.hidden = !isTools;
-  if (tabDocs) {
-    tabDocs.classList.toggle('active', !isTools);
-    tabDocs.setAttribute('aria-selected', isTools ? 'false' : 'true');
-  }
-  if (tabTools) {
-    tabTools.classList.toggle('active', isTools);
-    tabTools.setAttribute('aria-selected', isTools ? 'true' : 'false');
-  }
-  if (isTools) {
-    // 프로젝트명은 좌측 셀렉터의 selectedProject — 두 탭 공통 컨텍스트.
-    loadProjectToolStats(getSelectedProject());
+  for (const p of PANELS) {
+    const isActive = p.value === tab;
+    const body    = document.getElementById(p.bodyId);
+    const tabBtn  = document.getElementById(p.tabId);
+    if (body) body.hidden = !isActive;
+    if (tabBtn) {
+      tabBtn.classList.toggle('active', isActive);
+      tabBtn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    }
+    if (isActive) p.onActivate();
   }
 }
 
@@ -207,7 +220,7 @@ export function refreshMetaActiveSubTab() {
   if (tab === 'tools') {
     loadProjectToolStats(getSelectedProject());
   } else {
-    // 'docs'는 loadMetaDocsLibrary가 selectedProject 변경에 반응함 (기존 흐름 유지)
+    // 'docs' — loadMetaDocsLibrary가 selectedProject 변경에 반응 + 상단 ego-flow 영역도 자동 재렌더.
     loadMetaDocsLibrary();
   }
 }
@@ -369,11 +382,39 @@ export async function loadMetaDocsLibrary() {
     //   table DOM이 매번 새로 만들어지므로 5px 드래그 핸들도 재부착해야 한다.
     //   table이 없는 빈 상태 분기에서는 querySelector가 null → initColResize가 no-op.
     initColResize(container.querySelector('.meta-docs-table'));
+    // resize-handle (2026-05-21): 시각화 ↔ 카탈로그 상하 분할 핸들. 매 렌더마다 새 DOM이
+    //   생성되므로 동일 패턴(col-resize)으로 매 렌더 직후 재바인딩. 저장된 비율은 함수 내부에서 복원.
+    initMetaDocsFlowResize(
+      container.querySelector('#metaDocsFlowHandle'),
+      container.querySelector('#metaDocsFlowRegion'),
+      container.querySelector('.meta-docs-catalog-area'),
+    );
     // ADR-003: 좌측 요약 카드(사용/미사용/orphan) 동기 갱신
     renderLeftSummaryCards(computeRowCounts(sorted));
+
+    // meta-docs-flow ego-graph (2026-05-21 rev): 상단 흐름 영역 자동 로드.
+    //   사용자가 명시 요청한 동선 — "흐름 영역의 시각화 정보는 메타 문서 최종 많이 처음 노출된 행에 대한 정보를 노출".
+    //   정렬 결과의 첫 행을 중심으로 ego-graph 렌더. 첫 행이 orphan(id null)이면 첫 hit 행으로 fallback.
+    autoLoadFirstRowFlow(sorted, project);
   } catch (err) {
     container.innerHTML = errorHtml(err);
   }
+}
+
+/**
+ * meta-docs-flow ego-graph (2026-05-21 rev): 상단 흐름 영역 자동 로드 진입점.
+ *
+ *  - 정렬된 카탈로그의 첫 "초점이 될 만한" 행을 골라 loadFlowDiagram(...)을 호출한다.
+ *  - 우선순위: 발견 가능한(id != null) + 호출 수 > 0 인 첫 행. 없으면 첫 id != null 행.
+ *  - rows가 비었거나 모두 orphan이면 흐름 영역에 안내(빈 상태)를 그리도록 centerName=null.
+ *  - loadFlowDiagram은 자체 컨테이너(#metaDocsFlowRegion)를 찾지 못하면 no-op이므로 가드 불필요.
+ */
+function autoLoadFirstRowFlow(rows, project) {
+  let pick = rows.find(r => r.id != null && (r.invocations ?? 0) > 0);
+  if (!pick) pick = rows.find(r => r.id != null);
+  const centerType = pick?.type ?? null;
+  const centerName = pick?.name ?? null;
+  loadFlowDiagram({ centerType, centerName, project });
 }
 
 /**
@@ -428,6 +469,20 @@ function findSourceRootByProject(rows, projectName) {
 
 function renderHtml(rows, ctx = {}) {
   const filters = renderFilters();
+  // meta-docs-flow ego-graph (2026-05-21 rev): 상단 ego-graph 영역.
+  //   - meta-docs-flow-view.js loadFlowDiagram이 본 영역에 toolbar+SVG를 inject한다.
+  //   - 사용자 요청: "메타 문서 탭 상단에 흐름 영역을 만들어두고 하단에 기존 메타문서 테이블을 재배치".
+  //   - rows가 비어도 노출 — 빈 상태 안내를 loadFlowDiagram이 직접 그린다(빈 자리 깜빡임 방지).
+  // split-scroll (2026-05-21): 시각화 영역과 카탈로그 영역의 스크롤을 분리한다.
+  //   - .meta-docs-body는 overflow:hidden flex column.
+  //   - .meta-docs-flow-region는 자기 고정 높이(CSS 변수 --meta-docs-flow-height) — 함께 스크롤되지 않음.
+  //   - .meta-docs-catalog-area가 1fr + overflow-y:auto — 필터/표만 내부 스크롤.
+  //   - 두 영역 사이 시각 갭은 .meta-docs-body bg(surface) ↔ 자식 bg(surface-alt) 대비로 형성.
+  // resize-handle (2026-05-21): 좌측 패널 vertical-handle과 동일한 드래그 핸들을
+  //   #metaDocsFlowHandle로 삽입. left-panel-vertical-resize.js의 initMetaDocsFlowResize가
+  //   바인딩하여 --meta-docs-flow-height CSS 변수를 갱신. tooltip i18n은 좌측 패널과 동일 키 재사용.
+  const flowRegion = `<div id="metaDocsFlowRegion" class="meta-docs-flow-region" aria-label="Behavior call flow" data-i18n-attr-aria-label="ui.html.meta-docs.flow-aria"></div>`;
+  const flowHandle = `<div class="panel-vertical-handle meta-docs-flow-handle" id="metaDocsFlowHandle" title="Drag to resize height" data-i18n-attr-title="ui.html.left-panel.vertical-handle-title"></div>`;
 
   // 빈 상태 — 프로젝트 미등록/미동기화 안내
   if (rows.length === 0) {
@@ -438,7 +493,7 @@ function renderHtml(rows, ctx = {}) {
            <span class="state-empty-hint">${t('ui.meta-docs-view.empty-project-hint')}</span>
          </div>`
       : `<div class="state-empty"><span class="state-empty-title">${t('ui.meta-docs-view.empty-global-title')}</span></div>`;
-    return `${filters}${empty}`;
+    return `${flowRegion}${flowHandle}<div class="meta-docs-catalog-area">${filters}${empty}</div>`;
   }
 
   // meta-docs-table-view ADR-001/004 (2026-05-14): 카드 리스트 → 정렬·리사이즈 테이블.
@@ -470,7 +525,7 @@ function renderHtml(rows, ctx = {}) {
       <tbody>${rows.map(rowHtml).join('')}</tbody>
     </table>
   `;
-  return `${filters}${head}`;
+  return `${flowRegion}${flowHandle}<div class="meta-docs-catalog-area">${filters}${head}</div>`;
 }
 
 /**
@@ -708,8 +763,40 @@ async function onMetaContainerClick(e) {
     return;
   }
 
+  // 3) 카탈로그 행 클릭 — 상단 ego-flow 영역을 클릭된 행 중심으로 재렌더.
+  //    meta-docs-flow ego-graph (2026-05-21 rev): orphan 행(id 없음)은 흐름 추적 불가 → 무시.
+  //    re-render 비용을 줄이기 위해 loadMetaDocsLibrary 전체를 다시 부르지 않고
+  //    상단 영역만 loadFlowDiagram으로 교체. 활성 행 시각 표시는 [data-flow-active] 토글.
+  const row = e.target.closest('.meta-doc-row[data-name]');
+  if (row) {
+    if (!row.dataset.type || row.classList.contains('meta-doc-orphan')) return;
+    const project = state.scopeMode === 'selected' ? (getSelectedProject() || null) : null;
+    setActiveFlowRow(row);
+    loadFlowDiagram({
+      centerType: row.dataset.type,
+      centerName: row.dataset.name,
+      project,
+    });
+    return;
+  }
+
   // 동기화 버튼은 좌측 thead 셀(.thead-sync-btn)로 이관되어 본 핸들러에서 직접 처리하지 않음.
   // (initMetaDocsLeftNav가 body 위임으로 [data-meta-left-refresh] 셀렉터를 캐치 — single source.)
+}
+
+/**
+ * meta-docs-flow ego-graph (2026-05-21 rev): 표 내 활성 ego 중심 행 시각 표시.
+ *
+ *  - 동일 tbody에서 기존 [data-flow-active] 속성 제거 후 새 행에 부여.
+ *  - 실제 색상/배경은 CSS의 .meta-doc-row[data-flow-active="1"] 룰이 담당(캡슐화).
+ */
+function setActiveFlowRow(rowEl) {
+  if (!rowEl || !rowEl.parentElement) return;
+  const tbody = rowEl.parentElement;
+  for (const r of tbody.querySelectorAll('.meta-doc-row[data-flow-active="1"]')) {
+    r.removeAttribute('data-flow-active');
+  }
+  rowEl.setAttribute('data-flow-active', '1');
 }
 
 /**

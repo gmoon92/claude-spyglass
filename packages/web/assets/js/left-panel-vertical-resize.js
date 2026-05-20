@@ -2,9 +2,10 @@
 // ADR-002: CSS 변수 --projects-panel-height px 갱신, 저장은 비율(0..1)로 → 화면 크기 무관
 // ADR패턴: panel-resize.js 동일 설계 원칙 (CSS 변수 + spyglass: prefix localStorage)
 
-const STORAGE_KEY        = 'spyglass:panel-split';
-const STORAGE_KEY_BOTTOM = 'spyglass:panel-split-bottom';
-const MIN_PX             = 80;  // 각 섹션 최소 높이
+const STORAGE_KEY            = 'spyglass:panel-split';
+const STORAGE_KEY_BOTTOM     = 'spyglass:panel-split-bottom';
+const STORAGE_KEY_METADOCS   = 'spyglass:meta-docs-flow-split';
+const MIN_PX                 = 80;  // 각 섹션 최소 높이
 
 /**
  * 가용 높이 계산.
@@ -128,4 +129,23 @@ export function initPanelVerticalResize(handleEl, topEl, bottomEl) {
  */
 export function initPanelBottomResize(handleEl, topEl, bottomEl) {
   initResize(handleEl, topEl, bottomEl, '--sessions-panel-height', STORAGE_KEY_BOTTOM);
+}
+
+/**
+ * initMetaDocsFlowResize(handleEl, topEl, bottomEl)
+ * 메타 문서 모드의 시각화(흐름) 영역 ↔ 카탈로그(필터+표) 영역 상하 분할.
+ *
+ *  - topEl    : #metaDocsFlowRegion (ego-graph)
+ *  - bottomEl : .meta-docs-catalog-area (필터바 + 메타 문서 표)
+ *  - cssVar   : --meta-docs-flow-height (px) — flow-region 높이에 적용
+ *
+ * 좌측 패널과 다른 점: topEl이 .left-panel 자손이 아니므로 computeAvailable의
+ *   metadocs 분기가 false-fall-through되어 normal path(top+bottom 합)가 사용된다.
+ *   결과적으로 가용 공간 = 흐름 영역 + 카탈로그 영역. 정확히 우리가 원하는 분할 단위.
+ *
+ * 매 카탈로그 렌더마다 새 handle DOM이 생성되므로 본 함수도 매 렌더 직후 호출한다.
+ * 이전 handle 노드는 GC되어 listener 누수가 발생하지 않는다.
+ */
+export function initMetaDocsFlowResize(handleEl, topEl, bottomEl) {
+  initResize(handleEl, topEl, bottomEl, '--meta-docs-flow-height', STORAGE_KEY_METADOCS);
 }
