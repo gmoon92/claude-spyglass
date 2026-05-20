@@ -90,27 +90,11 @@ canvas { display: block; }
 /* detail 모드 — timeline 부속 meta 자동 숨김 (chart 영역이 contextGrowthChart로 swap) */
 #chartSection.chart-mode-detail .timeline-meta { display: none; }
 
-/* detail-filter-dim pass: detail 모드에선 도넛/캐시 데이터가 '세션 단위'라 전역 기간 필터가
- * 무의미. 클릭은 막고 시각적으로 dim 처리해 사용자 혼란을 제거. timeline 차트는 default 모드에서만
- * 다시 작동하므로 사용자가 default로 돌아갈 때 자동 회복. */
+/* detail-filter-scope pass: detail 모드에선 도넛/캐시 데이터가 '세션 단위'라 전역 기간 필터가
+ * 무의미. date-filter를 숨긴다. */
 #chartSection.chart-mode-detail .date-filter {
-  opacity: 0.4;
-  pointer-events: none;
-  filter: grayscale(0.6);
+  display: none;
 }
-/* :lang() 기반 다국어 분기 — JS i18n으로 못 잡는 CSS content는 <html lang> 속성에 의존.
-   기본 = 영어(글로벌 fallback), 한/일/중은 :lang() override. i18n.js의 syncDocumentLang이
-   <html lang>을 활성 언어로 갱신하므로 언어 전환 시 자동 동기화. */
-#chartSection.chart-mode-detail .date-filter::after {
-  content: 'per session';
-  margin-left: var(--space-2);
-  font-size: var(--text-small);
-  color: var(--text-4);
-  font-style: italic;
-}
-:lang(ko) #chartSection.chart-mode-detail .date-filter::after { content: '세션 단위'; }
-:lang(ja) #chartSection.chart-mode-detail .date-filter::after { content: 'セッション単位'; }
-:lang(zh) #chartSection.chart-mode-detail .date-filter::after { content: '按会话'; }
 
 #chartSection .chart-actions {
   display: flex;
