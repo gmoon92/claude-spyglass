@@ -265,11 +265,23 @@
   min-width: 24px;
 }
 
+/* ADR-003: 헤더 인라인 프롬프트 — T번호·배지와 우측 액션 사이에 단일 행으로 표시.
+ * flex:1 + ellipsis로 공간을 꽉 채우되 절대 개행하지 않는다. */
+.turn-card-header-prompt {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-small);
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* DEPRECATED — turn-header-prompt-prominence ADR-002:
  * .turn-card-preview는 헤더 Row 1에서 사용자 프롬프트를 자투리 공간에 표시했지만,
  * 새 디자인에서는 prompt를 Row 2(.turn-card-prompt-row)로 승격해 폭 100%로 노출한다.
- * 본 규칙은 외부 호환을 위해 남겨두되 renderTurnCards가 더 이상 이 클래스를 사용하지 않는다.
- * 이후 라운드에서 사용처 없음 확인 후 제거 예정. */
+ * ADR-003에서 다시 헤더 인라인(.turn-card-header-prompt)으로 재통합됨.
+ * 본 규칙은 외부 호환을 위해 남겨두되 renderTurnCards가 더 이상 이 클래스를 사용하지 않는다. */
 .turn-card-preview {
   font-size: var(--text-small);
   color: var(--text-2);

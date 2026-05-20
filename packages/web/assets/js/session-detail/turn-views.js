@@ -46,7 +46,6 @@ import { svgNote } from '../design-system/icons/note.js';
 // Wave 8-B: 레거시 turn-toggle ▸ 글리프를 SVG chevron으로 교체.
 import { svgChevron } from '../design-system/icons/chevron.js';
 // turn-header-prompt-prominence ADR-002: 카드 헤더 Row 2 prompt 표지 따옴표 글리프.
-import { svgQuote } from '../design-system/icons/quote.js';
 
 /**
  * 턴 카드 푸터 .turn-card-bar-pct에 hover 시 노출되는 의미 설명 (web-design-balance-pass ADR-003).
@@ -569,19 +568,12 @@ export function renderTurnCards(turns, badgeTurns, allRequests) {
     // search-expand-payload: 카드별 검색 haystack. flat-view 검색 흐름이 매칭 카드만 표시한다.
     const haystack = buildTurnHaystack(turn, turnReminders);
 
-    // turn-header-prompt-prominence ADR-002:
-    //   .turn-card-summary 내부를 2-row로 분리.
-    //   Row 1 (.turn-card-header)   — T번호 + 시스템/리마인더/스파이크 시그널 + 우측 액션 묶음
-    //   Row 2 (.turn-card-prompt-row) — 사용자 프롬프트 표지 아이콘 + 본문 (2줄 line-clamp / user-select)
+    // turn-header-prompt-prominence ADR-003:
+    //   prompt를 Row 2에서 Row 1(.turn-card-header) 인라인으로 통합.
+    //   배지들과 .turn-card-summary-actions 사이에 삽입 — flex:1 + ellipsis로 단일 행 축약.
     //   payload + chevron은 .turn-card-summary-actions wrapper로 묶어 margin-left:auto로 우측 정렬.
-    //   prompt가 없는 케이스(이론상 prologue로 분리)에는 Row 2 자체를 렌더하지 않음.
-    const promptRowAria = window.I18n.t('session.session-detail.turn-views.prompt-row-aria');
-    const promptIconAria = window.I18n.t('session.session-detail.turn-views.prompt-icon-aria');
-    const promptRowHtml = promptText
-      ? `<div class="turn-card-prompt-row" role="group" aria-label="${escHtml(promptRowAria)}">
-          <span class="turn-card-prompt-icon" role="img" aria-label="${escHtml(promptIconAria)}">${svgQuote({ size: 12 })}</span>
-          <span class="turn-card-prompt-text">${promptText}</span>
-        </div>`
+    const promptInlineHtml = promptText
+      ? `<span class="turn-card-header-prompt" title="${escHtml(promptText)}">${promptText}</span>`
       : '';
 
     return `<div class="turn-card${expandedClass}" data-card-turn-id="${escHtml(turn.turn_id)}" data-search-haystack="${escHtml(haystack)}">
@@ -591,12 +583,12 @@ export function renderTurnCards(turns, badgeTurns, allRequests) {
           ${systemBadge}
           ${reminderChip}
           ${spikeSummary}
+          ${promptInlineHtml}
           <span class="turn-card-summary-actions">
             ${payloadActionBtn}
             <span class="turn-card-expand-btn"><svg class="ds-chevron" data-dir="down" aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           </span>
         </div>
-        ${promptRowHtml}
         ${chips ? `<div class="turn-card-flow">${chips}</div>` : ''}
         <div class="turn-card-footer">
           <span>IN ${tokIn}</span>
