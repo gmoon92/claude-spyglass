@@ -751,30 +751,9 @@ body[data-app-mode="metadocs"] .thead-browse   { display: none; }
 /* .cell-proj-meta-spacer: thead 동기화 셀 폭에 대응하는 빈 td.
    colgroup이 폭을 결정하므로 별도 CSS 룰 불필요 → 룰셋 제거. */
 
-/* 가상 'user (global)' 행 — 일반 프로젝트와 시각 차별화:
- *  - 'global' 태그는 작은 칩(text-3 + accent border)으로 보조 정체성 표시
- *  - row-selected 일 때만 accent 강조(다른 프로젝트 동작과 동일) */
-.cell-proj-global td:first-child {
-  font-weight: 500;
-}
-.cell-proj-global-tag {
-  display: inline-block;
-  margin-left: 4px;
-  padding: 0 6px;
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--text-3);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  vertical-align: middle;
-  line-height: 1.5;
-}
-.cell-proj-global.row-selected .cell-proj-global-tag {
-  border-color: var(--accent);
-  color: var(--accent);
-}
+/* 가상 'user (global)' 행 — 라벨은 일반 프로젝트명과 동일한 평문으로 노출.
+ *  - 별도 칩/배지 없음(feedback 2026-05-21): 배지 형태가 실제 프로젝트 행과 이질감 유발.
+ *  - row-selected 강조는 일반 프로젝트 행과 공통 규칙(.row-selected)을 그대로 사용. */
 
 /* 요약 카드 컨테이너 — metadocs 모드에서만 노출. DOM 순서상 #browserProjectsSection
    직후에 위치 (brand-strip-cleanup ADR-002). grid auto-flow에 의해 2행 자동 배치. */

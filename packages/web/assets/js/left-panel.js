@@ -130,14 +130,17 @@ function renderMetaProjectRow(p) {
  *  - data-project="__global__" (GLOBAL_PROJECT_KEY) — main.js selectProject가 분기.
  *  - 클릭 시 meta-docs-view.js의 scopeMode를 'all'로 전환하고 전체 카탈로그를 표시.
  *  - 선택 표시는 getSelectedProject()가 GLOBAL_PROJECT_KEY와 일치할 때 활성.
+ *  - 라벨은 일반 프로젝트명과 동일한 평문 형태로 노출 — 배지/칩을 두지 않아
+ *    실제 프로젝트 행과의 시각적 이질감을 제거한다(feedback 2026-05-21).
  */
 function renderMetaGlobalRow() {
   const isSelected = getSelectedProject() === GLOBAL_PROJECT_KEY;
   const total = _metaCounts.total ?? 0;
   const t = window.I18n?.t ?? ((k) => k);
+  const label = t('ui.left-panel.global-row-label');
   return `<tr class="clickable cell-proj-global${isSelected ? ' row-selected' : ''}" data-project="${GLOBAL_PROJECT_KEY}"
               title="${t('ui.left-panel.global-row-title')}">
-    <td class="cell-proj-name"><span class="cell-proj-global-tag">global</span></td>
+    <td class="cell-proj-name" title="${escHtml(label)}">${escHtml(label)}</td>
     <td class="num cell-proj-meta-count" style="text-align:right">${fmt(total)}</td>
     <td class="cell-proj-meta-spacer"></td>
   </tr>`;

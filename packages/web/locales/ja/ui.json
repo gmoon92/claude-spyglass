@@ -116,6 +116,7 @@
     "live-count": "{count} ライブ",
     "select-project": "プロジェクトを選択",
     "session-count": "{project} · {count}件",
+    "global-row-label": "全体",
     "global-row-title": "user(global) — すべての cwd + グローバルカタログ合算"
   },
   "infra": {

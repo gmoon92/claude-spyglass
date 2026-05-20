@@ -116,6 +116,7 @@
     "live-count": "라이브 {count}개",
     "select-project": "프로젝트를 선택하세요",
     "session-count": "{project} · {count}개",
+    "global-row-label": "전체",
     "global-row-title": "user(global) — 모든 cwd + 글로벌 카탈로그 합산"
   },
   "infra": {

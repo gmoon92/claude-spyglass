@@ -116,6 +116,7 @@
     "live-count": "实时 {count} 个",
     "select-project": "请选择项目",
     "session-count": "{project} · {count}个",
+    "global-row-label": "全部",
     "global-row-title": "user(global) — 所有 cwd + 全局目录合并"
   },
   "infra": {

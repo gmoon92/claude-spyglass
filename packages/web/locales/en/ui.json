@@ -116,6 +116,7 @@
     "live-count": "{count} live",
     "select-project": "Select a project",
     "session-count": "{project} · {count}",
+    "global-row-label": "All",
     "global-row-title": "user(global) — all cwds + global catalog"
   },
   "infra": {
