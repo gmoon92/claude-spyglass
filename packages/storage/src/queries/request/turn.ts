@@ -146,6 +146,27 @@ export interface TurnItem {
 }
 
 /**
+ * 세션의 distinct turn_id 개수만 빠르게 반환.
+ *
+ * 책임:
+ *  - GET /api/sessions/:id 응답 메타(turn_count)와 anomaly 가이드용 보조 신호.
+ *  - getTurnsBySession은 4단계 join을 수행해 무거우니, 카운트만 필요할 때는 본 함수 사용.
+ *
+ * 정책:
+ *  - turn_id IS NULL(orphan) 행은 카운트 제외 — UI가 표기하는 "턴 수"와 동일한 정의.
+ *  - ACTIVE_REQUEST_FILTER_SQL 동일 적용 — 다른 turn 집계와 일관.
+ */
+export function countTurnsForSession(db: Database, sessionId: string): number {
+  const row = db.query<{ cnt: number }, [string]>(
+    `SELECT COUNT(DISTINCT turn_id) AS cnt
+       FROM requests
+      WHERE session_id = ? AND turn_id IS NOT NULL
+        AND ${ACTIVE_REQUEST_FILTER_SQL}`,
+  ).get(sessionId);
+  return row?.cnt ?? 0;
+}
+
+/**
  * 세션별 턴 목록 조회
  * - turn_id 기준으로 prompt + tool_calls 그룹화
  * - turn_index: 세션 내 순번 (1부터)

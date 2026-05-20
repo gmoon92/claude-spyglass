@@ -23,6 +23,7 @@
  */
 
 import {
+  countTurnsForSession,
   getActiveSessions,
   getAllSessions,
   getEventsBySession,
@@ -155,6 +156,9 @@ export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
   // GET /api/sessions/:id  (반드시 하위 경로 라우트 뒤에 위치)
   // anomaly-bloated-sys ADR-005: 세션 헤더/사이드바 dot 노출용 anomaly 요약을 같이 실어보낸다.
   // 트랙 B가 `data.anomalies.bloated_sys`를 헤더 full 뱃지 + 사이드바 dot 입력으로 사용.
+  // context-saturation: anomalies.context_saturation 안에 동일한 동적 windowMax 기반 신호와
+  // 게이지 표시용 메타(context_tokens, window_max, pct, threshold_*)를 함께 노출.
+  // turn_count는 클라이언트 UI 가이드 힌트(예: 20턴+ → /clear 권장)용 보조 메타.
   if (path.startsWith('/api/sessions/') && method === 'GET') {
     const id = path.replace('/api/sessions/', '');
     const session = getSessionById(db, id);
@@ -162,7 +166,8 @@ export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
       return jsonResponse({ success: false, error: 'Session not found' }, 404);
     }
     const anomalies = summarizeSessionAnomalies(db, id);
-    return jsonResponse({ success: true, data: { ...session, anomalies } });
+    const turn_count = countTurnsForSession(db, id);
+    return jsonResponse({ success: true, data: { ...session, anomalies, turn_count } });
   }
 
   return helperFallthrough(_req, db, url, path, method);

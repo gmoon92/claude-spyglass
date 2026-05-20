@@ -159,6 +159,46 @@ function _bloatedBadge(bs, variant) {
     title="${escHtml(fullTip)}" aria-label="${escHtml(fullTip)}">${escHtml(label)}</span>`;
 }
 
+/* ── CONTEXT-SATURATION 표지 헬퍼 SSoT ────────────────────────────────────
+ *
+ * 책임:
+ *   서버 응답 필드 `anomalies.context_saturation` 객체를 받아 HTML 문자열을 생성.
+ *   사용률 % 와 stage(warn/critical)를 노출하는 세션 헤더 뱃지.
+ *
+ * 단계 판정 정책 (호출 측은 raw 객체만 전달, 재계산 금지):
+ *   - stage === 'warn'     → 노란 톤 뱃지 (사용률 % 표시)
+ *   - stage === 'critical' → 빨간 톤 뱃지 + critical 클래스
+ *   - stage === null/'normal' → 빈 문자열
+ *
+ * 정책 SSoT는 서버(detectContextSaturation). 클라이언트는 stage·pct만 보고 색·라벨 결정.
+ *
+ * 호출자:
+ *   - full: views/detail-view.js (세션 헤더 detailBadges 영역)
+ */
+export function contextSaturationBadgeFullHtml(ctxSat) {
+  const stage = ctxSat && (ctxSat.stage ?? null);
+  if (stage !== 'warn' && stage !== 'critical') return '';
+  const pctRaw = (ctxSat.pct != null && Number.isFinite(ctxSat.pct)) ? ctxSat.pct : null;
+  const pct    = pctRaw == null ? '?' : Math.round(pctRaw > 1 ? pctRaw : pctRaw * 100);
+  const tone   = stage === 'critical' ? 'error' : 'warn';
+  const stageCls = stage === 'critical' ? ' is-critical' : ' is-warn';
+  const i18nBase = `ui.anomaly.context-saturation.${stage}`;
+  // i18n 키가 아직 없을 수 있으므로 fallback 라벨 제공 — translate 누락 시 키 그대로 노출되는 회귀 회피.
+  const tFallback = (key, fallback, vars) => {
+    try {
+      const t = window.I18n?.t?.(key, vars);
+      return t && t !== key ? t : fallback;
+    } catch { return fallback; }
+  };
+  const label   = tFallback(`${i18nBase}.label`,   `▦ ctx ${pct}%`, { pct });
+  const tooltip = tFallback(`${i18nBase}.tooltip`, `세션 컨텍스트 ${pct}% 사용 — 한도 가까움`, { pct });
+  const action  = tFallback(`${i18nBase}.modal`,   `/clear 또는 /compact 권장`, { pct });
+  const fullTip = `${tooltip} · ${action}`;
+  return `<span class="badge-context-saturation badge-context-saturation--full${stageCls} ds-badge"
+    data-tone="${tone}" data-context-saturation-stage="${stage}"
+    title="${escHtml(fullTip)}" aria-label="${escHtml(fullTip)}">${escHtml(label)}</span>`;
+}
+
 /**
  * Agent/Skill 부모 Target 셀 `↑×N` 표지.
  *  - agent_spike.status === 'critical' AND multiplier(ratio) ≥ 3 → '↑×N'

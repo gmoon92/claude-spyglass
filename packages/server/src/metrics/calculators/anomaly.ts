@@ -23,7 +23,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import type { AnomalyInputRow } from '@spyglass/storage';
+import { getMaxContextProxyForSession, type AnomalyInputRow } from '@spyglass/storage';
 import { getModelMaxTokens } from '../../model-limits';
 import {
   getAnomalyThresholds,
@@ -455,15 +455,123 @@ export function toAgentSpikeField(r: AgentSpikeResult): AgentSpikeField {
   };
 }
 
+// =============================================================================
+// context-saturation (세션 단위, 동적 windowMax 활용)
+// =============================================================================
+
+/**
+ * context-saturation 임계값 — 코드 default.
+ *
+ * 근거:
+ *  - claude-code autocompact 트리거가 약 75% 사용률 — 그 직전 70%를 warn으로 잡아 선제 경고.
+ *  - 85% critical은 autocompact 임박 + Lost-in-middle 위험 구간.
+ *  - 동적 windowMax를 분모로 사용하므로 모델별 임계 토큰 수는 자동으로 다름.
+ *    (Opus 4.7 1M → 700K warn / 850K critical, Kimi K2.6 139K → 97K warn / 118K critical)
+ *
+ * 1차에선 코드 default 만 사용. 운영자 조정 필요 시 anomaly_thresholds 스키마 확장(2차)으로.
+ */
+const CTX_SAT_WARN_PCT = 70;
+const CTX_SAT_CRITICAL_PCT = 85;
+
 // 테스트가 임계 상수에 접근할 수 있도록 노출.
 export const __test = {
   AGENT_SPIKE_MULTIPLIER_THRESHOLD,
   BYTES_PER_TOKEN,
+  CTX_SAT_WARN_PCT,
+  CTX_SAT_CRITICAL_PCT,
   isAgentSpikeParentCandidate,
 };
 
 // 외부 의존(테스트용) — AnomalyThresholds 재export.
 export type { AnomalyThresholds };
+
+export type ContextSaturationStage = 'warn' | 'critical' | null;
+
+/** context-saturation 결과 — stage가 null이면 anomaly 없음(normal/no-data 포함). */
+export interface ContextSaturationResult {
+  stage: ContextSaturationStage;
+  /** 세션에서 관측된 가장 큰 prompt context 토큰(tokens_input + cache_read + cache_creation). */
+  context_tokens: number;
+  /** 그 prompt가 사용한 model + beta 기준 동적 한도. */
+  window_max: number;
+  /** context_tokens / window_max (0~1 fraction). window_max == 0이면 0. */
+  pct: number;
+  /** 임계값 (0~1 fraction). 클라이언트가 게이지 색·툴팁 표기에 사용. */
+  threshold_warn: number;
+  threshold_critical: number;
+}
+
+/** API 응답 직렬화용 — 추가 필드 없으면 ContextSaturationResult와 동일 shape. */
+export type ContextSaturationField = ContextSaturationResult;
+
+/**
+ * 세션 1건의 context-saturation 검출.
+ *
+ * 알고리즘:
+ *   1) getMaxContextProxyForSession — 그 세션에서 가장 큰 context(input+caches) proxy 행.
+ *   2) windowMax = getModelMaxTokens(db, row.model, row.anthropic_beta) — 동적 한도.
+ *   3) contextTokens = tokens_input + cache_read + cache_creation.
+ *   4) pct = contextTokens / windowMax (windowMax 0 가드).
+ *   5) pct ≥ 0.85 → critical, ≥ 0.70 → warn, 그 외 → null.
+ *
+ * 세션에 prompt가 없으면(또는 proxy 행이 없으면) no-data로 normal 처리.
+ *
+ * @param db DB 인스턴스
+ * @param sessionId 검사할 session id
+ */
+export function detectContextSaturation(
+  db: Database,
+  sessionId: string,
+): ContextSaturationResult {
+  const warnFrac = CTX_SAT_WARN_PCT / 100;
+  const criticalFrac = CTX_SAT_CRITICAL_PCT / 100;
+
+  const row = getMaxContextProxyForSession(db, sessionId);
+  if (!row) return emptyContextSaturation(warnFrac, criticalFrac);
+
+  const contextTokens =
+    (row.tokens_input ?? 0)
+    + (row.cache_read_tokens ?? 0)
+    + (row.cache_creation_tokens ?? 0);
+  const windowMax = getModelMaxTokens(db, row.model, row.anthropic_beta);
+  const pct = windowMax > 0 ? contextTokens / windowMax : 0;
+
+  let stage: ContextSaturationStage = null;
+  if (pct >= criticalFrac) stage = 'critical';
+  else if (pct >= warnFrac) stage = 'warn';
+
+  return {
+    stage,
+    context_tokens: contextTokens,
+    window_max: windowMax,
+    pct,
+    threshold_warn: warnFrac,
+    threshold_critical: criticalFrac,
+  };
+}
+
+function emptyContextSaturation(warnFrac: number, criticalFrac: number): ContextSaturationResult {
+  return {
+    stage: null,
+    context_tokens: 0,
+    window_max: 0,
+    pct: 0,
+    threshold_warn: warnFrac,
+    threshold_critical: criticalFrac,
+  };
+}
+
+/** API/SSE 응답에 직렬화할 `context_saturation` 필드. shape이 동일하므로 통과 직렬화. */
+export function toContextSaturationField(r: ContextSaturationResult): ContextSaturationField {
+  return {
+    stage: r.stage,
+    context_tokens: r.context_tokens,
+    window_max: r.window_max,
+    pct: r.pct,
+    threshold_warn: r.threshold_warn,
+    threshold_critical: r.threshold_critical,
+  };
+}
 
 // =============================================================================
 // 행 단위 spike / loop / slow (v2.0.1 회귀 복원)

@@ -95,5 +95,6 @@ export {
   type TurnItem,
   // Turn 함수
   getTurnsBySession,
+  countTurnsForSession,
   getOrphanRowsBySession,
 } from './turn';

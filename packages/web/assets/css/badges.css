@@ -179,6 +179,59 @@ tr.row-bloated-critical > td:first-child,
   50%       { opacity: 0.35; transform: scale(0.85); }
 }
 
+/* ── CONTEXT SATURATION ──────────────────────────────────────────────────
+ *  세션 누적 context_tokens / windowMax 사용률 뱃지.
+ *  bloated-sys와 동일한 톤 토큰을 재사용(warn=노랑, critical=빨강)하여
+ *  사용자 인지 모델 일관성을 유지한다. glyph `▦`는 사용량/충전 메타포.
+ *  full 변형만 정의(헤더 detailBadges 영역 전용). dot/mini는 미사용. */
+.badge-context-saturation {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-ui);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: help;
+  border: 1px solid transparent;
+}
+.badge-context-saturation--full {
+  padding: 3px 8px;
+  margin-left: 6px;
+  font-size: var(--text-small);
+}
+.badge-context-saturation.is-warn,
+.badge-context-saturation[data-tone="warn"] {
+  color:        var(--color-warn);
+  background:   var(--color-warn-soft);
+  border-color: rgba(240,183,47,0.35);
+}
+.badge-context-saturation.is-critical,
+.badge-context-saturation[data-tone="error"] {
+  color:        var(--color-danger);
+  background:   var(--color-danger-soft);
+  border-color: rgba(244,113,116,0.45);
+  box-shadow:   inset 0 0 0 1px var(--color-danger-soft);
+}
+
+/* ── TURN COUNT GUIDE HINT ───────────────────────────────────────────────
+ *  20턴 이상 누적 시 detailBadges에 부착되는 가벼운 가이드 뱃지.
+ *  stage 없음 — muted 톤으로 anomaly와 시각적으로 분리해 "참고 신호"임을 표현. */
+.badge-turn-count--hint {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  margin-left: 6px;
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--text-dim);
+  background: rgba(255,255,255,0.04);
+  border: 1px dashed rgba(255,255,255,0.18);
+  border-radius: var(--radius-sm, 4px);
+  cursor: help;
+}
+
 /* ── AGENT SPIKE (↑×N) — 기존 .badge-spike 변형 ─────────────────────────
  *  N ≥ 3일 때만 `↑×N` 형식, N < 3은 기존 `↑` (회귀 차단).
  *  data-spike-variant="agent" 속성으로 부모 Agent/Skill 행의 Spike와 분리. */

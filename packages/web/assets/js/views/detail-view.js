@@ -12,7 +12,7 @@ import {
 import { fmtToken, fmtDate } from '../formatters.js';
 import { setChartMode, renderRightPanel } from './default-view.js';
 import { skTurnCardList } from '../render/skeleton.js';
-import { bloatedSysBadgeFullHtml } from '../render/badges.js';
+import { bloatedSysBadgeFullHtml, contextSaturationBadgeFullHtml } from '../render/badges.js';
 import { setBloatedSysFor } from '../state/anomaly-cache.js';
 
 let _abortController = null;
@@ -68,9 +68,11 @@ export async function loadSession(id) {
   // /api/sessions 목록 응답에는 anomalies가 없으므로(서버 SSoT는 단건 /api/sessions/:id),
   //   단건 API를 비동기로 fetch해 헤더 뱃지를 보강한다 — 부수효과 분리.
   applyBloatedSysHeader(session?.bloated_sys);
+  // context-saturation·turn_count는 목록 응답에 없으므로 단건 fetch 도착 전까지 빈 상태.
+  applyContextSaturationHeader(null, null);
   // 세션 전환 시 차트·사이드바·헤더의 이전 bloated_sys 잔재 제거 — 단건 fetch 응답 도착 전까지 빈 상태.
   document.dispatchEvent(new CustomEvent('session-anomalies-loaded', {
-    detail: { sessionId: id, bloatedSys: null },
+    detail: { sessionId: id, bloatedSys: null, contextSaturation: null, turnCount: null },
   }));
   (async () => {
     try {
@@ -78,13 +80,17 @@ export async function loadSession(id) {
       if (!res.ok) return;
       const json = await res.json();
       const bs = json?.data?.anomalies?.bloated_sys ?? json?.data?.bloated_sys ?? null;
+      const ctxSat = json?.data?.anomalies?.context_saturation ?? null;
+      const turnCount = Number.isFinite(json?.data?.turn_count) ? json.data.turn_count : null;
       if (signal.aborted) return;
       // SSoT 캐시에 저장 → 사이드바·차트·헤더가 동일 데이터 참조.
       setBloatedSysFor(id, bs);
       applyBloatedSysHeader(bs);
+      // context-saturation 헤더 뱃지 — bloated-sys와 같은 detailBadges 영역.
+      applyContextSaturationHeader(ctxSat, turnCount);
       // 사이드바·context-chart 동기 — 동일 응답을 받아 자기 영역만 갱신한다.
       document.dispatchEvent(new CustomEvent('session-anomalies-loaded', {
-        detail: { sessionId: id, bloatedSys: bs },
+        detail: { sessionId: id, bloatedSys: bs, contextSaturation: ctxSat, turnCount },
       }));
     } catch (e) {
       if (e?.name === 'AbortError') return;
@@ -121,6 +127,41 @@ export function abortCurrentSession() {
  *
  * @param {{ status, system_tokens, pct, threshold_warn, threshold_critical } | null} bloatedSys
  */
+/**
+ * 세션 헤더 detail-agg-badges 영역에 context-saturation full 뱃지를 부착한다.
+ *
+ *  - SSoT: 서버 응답 `anomalies.context_saturation` 객체. stage가 warn/critical 일 때만 노출.
+ *  - 동시에 turnCount(>=20)면 가벼운 가이드 힌트 뱃지(title 한 줄)를 함께 부착.
+ *    Lost-in-middle 가이드: 한도 사용률(stage)이 진짜 트리거이고, turn count는 보조 신호.
+ *
+ * @param {{ stage, context_tokens, window_max, pct, threshold_warn, threshold_critical } | null} ctxSat
+ * @param {number | null} turnCount
+ */
+export function applyContextSaturationHeader(ctxSat, turnCount) {
+  const host = document.getElementById('detailBadges');
+  if (!host) return;
+  // 기존 잔재 제거 — 세션 전환 시 이전 값 박힌 채로 남지 않도록.
+  host.querySelectorAll('.badge-context-saturation--full, .badge-turn-count--hint').forEach((el) => el.remove());
+
+  const html = contextSaturationBadgeFullHtml(ctxSat);
+  if (html) {
+    host.insertAdjacentHTML('beforeend', html);
+    host.classList.remove('detail-agg-badges--hidden');
+  }
+
+  // turn count 가이드 힌트 — 20턴 이상이면 가벼운 ⟲ 표지(stage 없이 톤 정보만).
+  if (Number.isFinite(turnCount) && turnCount >= 20) {
+    const tip = `세션 ${turnCount}턴 누적 — /clear 또는 새 세션 권장`;
+    host.insertAdjacentHTML(
+      'beforeend',
+      `<span class="badge-turn-count--hint ds-badge" data-tone="muted"
+         data-turn-count="${turnCount}"
+         title="${tip}" aria-label="${tip}">⟲ ${turnCount}t</span>`,
+    );
+    host.classList.remove('detail-agg-badges--hidden');
+  }
+}
+
 export function applyBloatedSysHeader(bloatedSys) {
   const host = document.getElementById('detailBadges');
   if (!host) return;

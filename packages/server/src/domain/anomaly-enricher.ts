@@ -25,8 +25,10 @@ import {
   computeRowAnomalies,
   detectAgentSpike,
   detectBloatedSys,
+  detectContextSaturation,
   toAgentSpikeField,
   toBloatedSysField,
+  toContextSaturationField,
 } from '../metrics/calculators/anomaly';
 import type { NormalizedRequest } from './request-normalizer';
 
@@ -238,24 +240,42 @@ export function enrichRowWithAnomalies(
  */
 export interface SessionAnomalySummary {
   bloated_sys: ReturnType<typeof toBloatedSysField> | null;
+  /**
+   * context-saturation: 세션 누적 prompt context가 동적 windowMax 대비 70%/85% 도달 신호.
+   * stage가 null이어도(normal/no-data) UI가 게이지 표시에 활용할 수 있도록 필드 자체는 항상 노출.
+   * SSoT 정책상 클라이언트는 stage·pct·threshold_*만 보고 색·라벨을 결정한다.
+   */
+  context_saturation: ReturnType<typeof toContextSaturationField> | null;
 }
 
 /**
- * 세션 1건의 bloated-sys 요약 계산.
+ * 세션 1건의 anomaly 요약 계산.
  *
- * 사용처: GET /api/sessions/:id 응답에 같이 실어 트랙 B가 헤더 full 뱃지를 그릴 수 있게 한다.
+ * 사용처: GET /api/sessions/:id 응답에 같이 실어 트랙 B가 헤더 full 뱃지와
+ * 사용률 게이지를 그릴 수 있게 한다.
+ *
+ * context-saturation은 system 프롬프트 메타가 없는 세션(implicit turn 등)에서도 의미가 있으므로
+ * meta 부재와 무관하게 항상 계산한다 — proxy_requests에 그 세션 행이 있으면 동작.
  */
 export function summarizeSessionAnomalies(
   db: Database,
   sessionId: string,
 ): SessionAnomalySummary {
   const meta = getSessionSystemContextMeta(db, sessionId);
-  if (!meta) return { bloated_sys: null };
-  const result = detectBloatedSys(db, {
-    systemByteSize: meta.system_byte_size,
-    model: meta.model,
-    anthropicBeta: meta.anthropic_beta,
-    projectId: meta.project_name,
-  });
-  return { bloated_sys: toBloatedSysField(result) };
+
+  const bloatedSys = meta
+    ? toBloatedSysField(detectBloatedSys(db, {
+      systemByteSize: meta.system_byte_size,
+      model: meta.model,
+      anthropicBeta: meta.anthropic_beta,
+      projectId: meta.project_name,
+    }))
+    : null;
+
+  const ctxSat = toContextSaturationField(detectContextSaturation(db, sessionId));
+
+  return {
+    bloated_sys: bloatedSys,
+    context_saturation: ctxSat,
+  };
 }
