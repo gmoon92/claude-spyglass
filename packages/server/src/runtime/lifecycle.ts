@@ -1,15 +1,39 @@
 /**
  * 서버 라이프사이클 — start/stop/isRunning + 모듈 내부 server·db 상태.
  *
- * 변경 이유: 서버 부팅 절차(DB 연결, 진단 로그 정리, 유지보수 스케줄, Bun.serve 설정) 변경 시 한 곳만 수정.
+ * 책임:
+ *  - Bun.serve 인스턴스 + DB 연결 + 스케줄러 lifecycle 한 곳에서 관리.
+ *  - startServer: 부팅 절차(DB 연결, 진단 로그 정리, 유지보수/버전 체크 스케줄, meta-docs sync).
+ *  - stopServer: graceful shutdown 시퀀스
+ *      1) 스케줄러 정리 (DB 접근 끊기)
+ *      2) SSE 클라이언트에 server_shutdown 이벤트 broadcast + 250ms grace
+ *      3) closeAllConnections — SSE 연결 정상 close (EventSource RST 회피)
+ *      4) await server.stop() — 새 연결 거부 + in-flight HTTP 응답 자연 종료
+ *      5) await awaitInFlight — proxy stream 분석/persist/broadcast IIFE 완료 대기
+ *      6) DB close
+ *
+ * 변경 이유:
+ *  - 서버 부팅 절차(DB, 진단 로그, 스케줄, Bun.serve 설정) 변경 시 한 곳.
+ *  - graceful shutdown 시퀀스(이벤트→close→serve.stop→IIFE→DB) 변경 시도 한 곳.
+ *
+ * 의존성:
+ *  - runtime/config: SHUTDOWN_TIMEOUT_MS
+ *  - runtime/in-flight: awaitInFlight (proxy IIFE 추적 완료 대기)
+ *  - sse: broadcastUpdate / closeAllConnections (대시보드 종료 알림 + 정리)
+ *
+ * 호출자:
+ *  - daemon.gracefulShutdown (SIGTERM/SIGINT 핸들러)
+ *  - server.test (단위 테스트)
  */
 
 import { SpyglassDatabase, getDatabase, closeDatabase } from '@spyglass/storage';
 import { clearDiagLogs, getDiagLogDir, logDiagStatus } from '../diag-log';
-import { PORT, HOST, DB_PATH } from './config';
+import { PORT, HOST, DB_PATH, SHUTDOWN_TIMEOUT_MS } from './config';
 import { startMaintenanceSchedule, stopMaintenanceSchedule } from './maintenance';
 import { handleRequest } from './dispatch';
 import { installServerStdioMirror } from './stdio-mirror';
+import { awaitInFlight, getInFlightCount } from './in-flight';
+import { broadcastUpdate, closeAllConnections } from '../sse';
 import {
   bootstrapSync as bootstrapMetaDocsSync,
   syncAllKnownCwds,
@@ -108,18 +132,66 @@ export function startServer(options: {
 }
 
 /**
- * 서버 종료
+ * 서버 graceful 종료.
+ *
+ * 시퀀스 (각 단계의 의도):
+ *  1. 스케줄러 정리 — startMaintenanceSchedule/startVersionCheckSchedule이 잡고 있는
+ *     setInterval을 해제. 이후 단계에서 DB가 닫힌 뒤 콜백이 발화하지 않도록 가장 먼저.
+ *  2. server_shutdown 브로드캐스트 + 250ms grace — SSE 클라이언트(대시보드)가
+ *     RST 단절이 아닌 명시적 종료 신호를 받게 한다 (EventSource error 이벤트로 인한
+ *     불필요한 자동 재연결 시도 회피). grace 짧게 — 사용자 인내심 보호.
+ *  3. closeAllConnections — SSE controller.close()로 정상 종료.
+ *     `idleTimeout: 0`으로 영구 유지되는 SSE 연결은 server.stop()이 자연 종료까지
+ *     무한히 대기할 위험이 있어서 명시 close가 필요 (B 검토).
+ *  4. await server.stop() — Bun.serve의 graceful stop. 새 연결 거부 + 활성 HTTP
+ *     요청이 응답을 끝낼 때까지 대기.
+ *  5. await awaitInFlight — proxy/handler/stream.ts의 fire-and-forget IIFE
+ *     (SSE 분석 → DB persist → broadcast)가 남아 있으면 deadline 내에서 대기.
+ *     server.stop()은 client 응답만 보장하므로, clone reader의 분석 IIFE는 별도 추적 필요.
+ *  6. DB close — IIFE persist까지 끝난 뒤에만 안전.
+ *
+ * 호출자: daemon.gracefulShutdown. deadline guard는 호출자에서 관리하므로
+ * 여기서는 awaitInFlight에 timeout만 전달하고 hang 방지에 집중.
  */
 export async function stopServer(): Promise<void> {
+  // 1. 스케줄러 정리
   stopMaintenanceSchedule();
   stopVersionCheckSchedule();
 
+  // 2. SSE 종료 신호 + 짧은 grace
+  try {
+    broadcastUpdate({
+      type: 'server_shutdown',
+      data: { reason: 'graceful', timeoutMs: SHUTDOWN_TIMEOUT_MS },
+    });
+  } catch (err) {
+    console.warn('[Server] shutdown broadcast failed:', err);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 250));
+
+  // 3. SSE 연결 정상 close
+  closeAllConnections();
+
+  // 4. Bun.serve graceful stop (in-flight HTTP 자연 종료 대기)
   if (server) {
-    server.stop();
+    await server.stop();
     server = null;
     console.log('[Server] Stopped');
   }
 
+  // 5. fire-and-forget IIFE 완료 대기 (proxy stream 분석/persist/broadcast)
+  const remaining = getInFlightCount();
+  if (remaining > 0) {
+    console.log(`[Server] Waiting for ${remaining} in-flight background task(s)...`);
+  }
+  const drained = await awaitInFlight(SHUTDOWN_TIMEOUT_MS);
+  if (!drained) {
+    console.warn(
+      `[Server] ${getInFlightCount()} in-flight task(s) did not finish within ${SHUTDOWN_TIMEOUT_MS}ms`,
+    );
+  }
+
+  // 6. DB close
   if (db) {
     closeDatabase();
     db = null;

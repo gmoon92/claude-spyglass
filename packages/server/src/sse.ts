@@ -30,7 +30,8 @@ export type SSEEventType =
   | 'session_update'
   | 'token_update'
   | 'stats_update'
-  | 'ping';
+  | 'ping'
+  | 'server_shutdown';
 
 /**
  * SSE 이벤트 데이터

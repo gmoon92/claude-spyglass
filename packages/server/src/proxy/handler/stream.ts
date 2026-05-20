@@ -11,6 +11,9 @@
  * 주의 (보존 필수):
  *  - decoder.decode(value, { stream: true }) — 옵션 누락 시 멀티바이트 SSE 깨짐.
  *  - IIFE fire-and-forget — handleStreamResponse는 void 반환, 내부에서 await 미수행.
+ *  - IIFE Promise는 runtime/in-flight.registerInFlight로 등록 — graceful shutdown 시
+ *    lifecycle.stopServer가 awaitInFlight로 분석/persist/broadcast 완료를 deadline 내
+ *    대기한다. 등록 누락 시 SIGTERM 도착으로 DB가 먼저 닫혀 SQLITE_CANTOPEN 손실 위험.
  *
  * 호출자: handler/index.ts
  */
@@ -20,6 +23,7 @@ import type { StreamState } from '../types';
 import { parseSSEChunk } from '../sse-state';
 import { extractResponseHeaders } from '../audit-headers';
 import { logResult } from '../log-result';
+import { registerInFlight } from '../../runtime/in-flight';
 import type { HandlerContext } from './_shared';
 import { createInitialState } from './_shared';
 import { diagOutboundStream } from './diag';
@@ -43,7 +47,8 @@ export function handleStreamResponse(
   const { reqMeta, startMs, method, url } = ctx;
   const analyticsClone = response.clone();
 
-  (async () => {
+  // graceful shutdown 추적: IIFE Promise를 등록하여 stopServer가 완료를 deadline 내 대기.
+  const analyticsPromise = (async () => {
     const state: StreamState = createInitialState(reqMeta, headerReqId);
 
     let rawSseBuffer = '';
@@ -93,6 +98,7 @@ export function handleStreamResponse(
       console.warn('[PROXY] DB save error:', err);
     }
   })();
+  registerInFlight(analyticsPromise);
 
   return new Response(response.body, { status: statusCode, headers: responseHeaders });
 }

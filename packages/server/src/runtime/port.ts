@@ -43,17 +43,34 @@ export function findProcessesByPort(port: number): number[] {
 }
 
 /**
- * 프로세스가 완전히 종료될 때까지 대기
+ * 프로세스가 완전히 종료될 때까지 대기.
+ *
+ * @param pid 감시할 PID
+ * @param timeoutMs deadline (기본 5초)
+ * @param onProgress 선택. 1초마다 호출되어 남은 ms를 인자로 받음.
+ *                   호출자는 stderr로 drain 진행도 표시 등에 사용.
+ * @returns timeout 안에 종료되면 true, 아니면 false.
+ *
+ * 호출자: daemon.ts commandRestart — graceful shutdown 대기 + 진행도 표시.
  */
-export async function waitForProcessExit(pid: number, timeoutMs: number = 5000): Promise<boolean> {
+export async function waitForProcessExit(
+  pid: number,
+  timeoutMs: number = 5000,
+  onProgress?: (remainingMs: number) => void,
+): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
+  let nextProgressAt = Date.now() + 1000;  // 첫 진행도 표시는 1초 후
   while (Date.now() < deadline) {
     try {
       process.kill(pid, 0);
-      await new Promise(resolve => setTimeout(resolve, 100));
     } catch {
       return true;
     }
+    if (onProgress && Date.now() >= nextProgressAt) {
+      onProgress(Math.max(0, deadline - Date.now()));
+      nextProgressAt = Date.now() + 1000;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
   return false;
 }
