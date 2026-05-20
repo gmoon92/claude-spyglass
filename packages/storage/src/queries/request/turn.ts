@@ -96,10 +96,20 @@ export interface TurnItem {
     tokens_confidence: string | null;
     /**
      * context-window-derivation: 이 턴 prompt 요청의 anthropic-beta 헤더 (proxy_requests join).
-     * 클라이언트는 model + anthropic_beta로 실제 context window 한도를 추론한다.
      * (예: `context-1m-2025-08-07` 포함 → 1M; Opus 4.7은 GA 1M이므로 beta 무관).
+     * 서버 SSoT인 model_limits 시드 + getModelMaxTokens()가 실제 한도 산출에 사용한다.
      */
     anthropic_beta: string | null;
+    /**
+     * context-window-unify: 서버가 model + anthropic_beta를 model_limits 시드와 결합해
+     * 산출한 실제 컨텍스트 윈도우 한도(토큰). 클라이언트는 자체 추론 없이 이 값만 표시한다.
+     *
+     * SSoT: packages/server/src/model-limits.ts `getModelMaxTokens()`.
+     * 채움 시점: routes/sessions.ts가 turns 응답을 만들 때 enrichment 단계에서 1회.
+     * 저장소(getTurnsBySession)는 절대 채우지 않으며, raw 응답에선 `undefined`.
+     * 클라이언트 폴백: 누락(undefined) 시 DEFAULT_CONTEXT_WINDOW(200K)로 안전 표시.
+     */
+    window_max?: number;
   } | null;
   /**
    * v22 (system-prompt-exposure) — 이 turn에 흐른 첫 proxy 요청의 system_hash.

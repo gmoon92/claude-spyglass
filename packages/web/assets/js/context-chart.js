@@ -1,13 +1,16 @@
 // Accumulated Tokens Chart — Canvas 기반 턴별 누적 토큰 라인 차트
 import { DETAIL_FILTER_CHANGED } from './events.js';
-import {
-  deriveContextWindowSize, formatContextWindowLabel, DEFAULT_CONTEXT_WINDOW,
-} from './context-window.js';
+import { formatContextWindowLabel, DEFAULT_CONTEXT_WINDOW } from './context-window.js';
 
 /**
- * 차트 스케일·풋터·툴팁에 쓰일 한도값을 턴 배열에서 추론한다.
- *  - 가장 최신 prompt 턴의 model + anthropic_beta 기준 (세션 중 모델이 거의 바뀌지 않음).
- *  - prompt가 하나도 없으면 표준 200K로 안전 폴백.
+ * 차트 스케일·풋터·툴팁에 쓰일 한도값을 턴 배열에서 결정.
+ *
+ * 정책:
+ *  - 서버 SSoT 단일화: turns 응답의 `prompt.window_max`(서버가 model_limits 시드 +
+ *    proxy_requests 관측 최대를 결합해 채워준 값)를 그대로 사용. 클라이언트는 자체 추론 없음.
+ *  - 세션 중 같은 모델이라도 관측 갱신으로 window_max가 미세 변동할 수 있으므로
+ *    가장 최신 prompt 턴의 값을 채택 (대다수 케이스에서 동일).
+ *  - 서버가 window_max를 누락한 비정상 경우만 DEFAULT_CONTEXT_WINDOW(200K)로 폴백.
  *
  * 반환값: { size, label, model } — UI 라벨링 일관성을 위해 함께 묶어 반환.
  */
@@ -15,7 +18,7 @@ function resolveSessionContextWindow(sortedTurns) {
   for (let i = sortedTurns.length - 1; i >= 0; i--) {
     const p = sortedTurns[i]?.prompt;
     if (p && p.model) {
-      const size = deriveContextWindowSize(p.model, p.anthropic_beta);
+      const size = Number.isFinite(p.window_max) && p.window_max > 0 ? p.window_max : DEFAULT_CONTEXT_WINDOW;
       return { size, label: formatContextWindowLabel(size), model: p.model };
     }
   }

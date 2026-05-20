@@ -315,5 +315,6 @@ export {
 
 export {
   getAllModelLimits as getAllModelLimitsFromDb,
+  getObservedMaxContextForModel,
   type ModelLimitRow,
 } from './queries/model-limits';

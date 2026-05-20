@@ -38,9 +38,33 @@ import {
   type Request,
   type TurnItem,
 } from '@spyglass/storage';
-import { normalizeRequests, normalizeTurns } from '../domain/request-normalizer';
+import { normalizeRequests, normalizeTurns, type NormalizedTurn } from '../domain/request-normalizer';
 import { enrichWithAnomalies, summarizeSessionAnomalies } from '../domain/anomaly-enricher';
+import { getModelMaxTokens } from '../model-limits';
 import { jsonResponse, type RouteHandler } from './_shared';
+
+/**
+ * context-window-unify: turns 응답 prompt에 서버 SSoT 한도(model_limits + 1M opt-in 규칙)를
+ * `window_max` 필드로 enrichment한다.
+ *
+ * 책임:
+ *  - 클라이언트가 자체 추론 로직(거울 구현)을 갖지 않도록 단일 진입점 제공.
+ *  - getModelMaxTokens()의 우선순위(`[1m]` suffix → `context-1m-2025-08-07` beta → DB 시드 → 200K 폴백)를
+ *    그대로 turns 응답에 노출 — anomaly 계산이 쓰는 분모와 정확히 동일.
+ *
+ * 호출 시점: normalizeTurns(...) 직후, jsonResponse 직전.
+ * SSoT: packages/server/src/model-limits.ts.
+ */
+function enrichTurnsWithWindowMax(
+  db: Parameters<RouteHandler>[1],
+  turns: NormalizedTurn[],
+): NormalizedTurn[] {
+  return turns.map((t) => {
+    if (!t.prompt) return t;
+    const windowMax = getModelMaxTokens(db, t.prompt.model, t.prompt.anthropic_beta);
+    return { ...t, prompt: { ...t.prompt, window_max: windowMax } };
+  });
+}
 
 export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
   // GET /api/sessions
@@ -86,7 +110,7 @@ export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
 
     if (rawTurns.length === 0 && rawOrphans.length > 0) {
       const implicit = buildImplicitTurnFromOrphans(db, sessionId, rawOrphans);
-      const turns = normalizeTurns([implicit], sessionId);
+      const turns = enrichTurnsWithWindowMax(db, normalizeTurns([implicit], sessionId));
       return jsonResponse({
         success: true,
         data: turns,
@@ -98,7 +122,7 @@ export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
     const mergedTurns = rawOrphans.length > 0
       ? absorbOrphansIntoFirstTurn(rawTurns, rawOrphans)
       : rawTurns;
-    const turns = normalizeTurns(mergedTurns, sessionId);
+    const turns = enrichTurnsWithWindowMax(db, normalizeTurns(mergedTurns, sessionId));
     return jsonResponse({
       success: true,
       data: turns,
@@ -304,6 +328,7 @@ function buildImplicitTurnFromOrphans(
     prompt: {
       id: `${turnId}-prompt`,
       timestamp: startedAt,
+      preview: null,
       tokens_input: promptInput,
       tokens_output: promptOutput,
       tokens_total: promptInput + promptOutput,
