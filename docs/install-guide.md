@@ -24,36 +24,35 @@ Claude Code 실행 과정을 가시화하는 spyglass를 **로컬 클론 + Bun �
 
 spyglass는 호스트에서 **Bun 프로세스로 직접 실행**되며, 두 가지 채널로 데이터를 수집합니다.
 
-```
-┌──────────────────────────── 호스트 ────────────────────────────┐
-│                                                                │
-│   Claude Code                                                  │
-│      │                                                         │
-│      ├─[채널 A: 훅]───────────────────────────────────────┐   │
-│      │   이벤트 발생 시 훅 스크립트 실행                   │   │
-│      │   bash $SPYGLASS_DIR/hooks/spyglass-collect.sh      │   │
-│      │   HTTP POST http://127.0.0.1:9999/collect           │   │
-│      │                                                     │   │
-│      └─[채널 B: 프록시]────────────────────────────────────┤   │
-│          ANTHROPIC_BASE_URL=http://127.0.0.1:9999 설정 시  │   │
-│          /v1/messages → spyglass 경유 → Anthropic API       │   │
-│                                                             ▼   │
-│                                             spyglass 서버       │
-│                                          (Bun, bun run dev)    │
-│                                                 │              │
-│                                                 ▼              │
-│                                       ~/.spyglass/             │
-│                                         ├── spyglass.db        │
-│                                         │     ├─ sessions      │
-│                                         │     ├─ requests      │
-│                                         │     ├─ claude_events │
-│                                         │     ├─ proxy_requests│
-│                                         │     └─ system_prompts│
-│                                         ├── server.pid         │
-│                                         ├── pricing.json       │
-│                                         └── logs/              │
-│                                                                │
-└────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph host["호스트"]
+        cc["Claude Code"]
+
+        subgraph chA["채널 A: 훅"]
+            hook["이벤트 발생 시<br/>bash $SPYGLASS_DIR/hooks/spyglass-collect.sh<br/>HTTP POST 127.0.0.1:9999/collect 또는 /events<br/>(이벤트 종류에 따라 분기)"]
+        end
+
+        subgraph chB["채널 B: 프록시"]
+            proxy["ANTHROPIC_BASE_URL=http://127.0.0.1:9999<br/>/v1/* → spyglass → Anthropic API"]
+        end
+
+        server["spyglass 서버<br/>(Bun, bun run dev)"]
+
+        subgraph data["~/.spyglass/"]
+            db["spyglass.db<br/>(sessions, requests, claude_events,<br/>proxy_requests, system_prompts)"]
+            pid["server.pid"]
+            logs["logs/<br/>(server.log, collect.log, hook-raw.jsonl)"]
+        end
+
+        cc --> hook
+        cc --> proxy
+        hook --> server
+        proxy --> server
+        server --> db
+        server --> pid
+        server --> logs
+    end
 ```
 
 | 채널 | 수집 데이터 | 설정 방법 |
@@ -67,7 +66,7 @@ spyglass는 호스트에서 **Bun 프로세스로 직접 실행**되며, 두 가
 
 - 훅은 **반드시 글로벌 사용자 설정 `~/.claude/settings.json`** 에만 등록합니다. 프로젝트 로컬 설정에는 등록하지 않습니다.
 - 모든 데이터는 `~/.spyglass/` 아래에 저장되며, 저장소 클론 디렉토리와 독립적입니다.
-- 서버는 `bun run dev`로 백그라운드 데몬화되어 PID 파일(`~/.spyglass/server.pid`)로 관리됩니다.
+- 서버는 `bun run dev`로 기동되며 터미널을 점유하는 포그라운드 Bun 프로세스로 동작합니다. PID는 `~/.spyglass/server.pid`에 기록되며, 백그라운드 실행이 필요하면 `nohup bun run dev > /dev/null 2>&1 &` 형태로 사용자가 분리해야 합니다.
 
 ---
 
@@ -139,7 +138,7 @@ cd "${HOME}/.spyglass-src"
 bun run dev
 ```
 
-`bun run dev`는 `restart` 동작입니다 — 기존에 실행 중이던 spyglass 서버 프로세스가 있으면 종료 후 재기동합니다. 백그라운드 데몬으로 동작하며 PID는 `~/.spyglass/server.pid`에 기록됩니다.
+`bun run dev`는 `restart` 동작입니다 — 기존에 실행 중이던 spyglass 서버 프로세스가 있으면 종료 후 재기동하고, stale PID 파일이 있으면 자동으로 정리합니다. **터미널을 점유하는 포그라운드 프로세스**이므로 별도 셸/탭에서 실행하거나 `nohup ... &`로 분리해야 합니다. PID는 `~/.spyglass/server.pid`에 기록됩니다.
 
 기본 바인딩: `127.0.0.1:9999` (loopback only).
 
@@ -218,7 +217,7 @@ jq --arg dir "$SPYGLASS_DIR" --slurpfile profile "$PROFILE" '
 # 병합 결과 검증
 jq '.env.SPYGLASS_DIR, (.hooks | keys | length)' "$SETTINGS"
 # "/Users/alice/.spyglass-src"
-# 29   (또는 6)
+# 27   (또는 6)
 ```
 
 ### 4.5 수동 병합 (jq 미사용 시)
@@ -277,6 +276,10 @@ jq '.env.SPYGLASS_DIR, (.hooks | keys | length)' "$SETTINGS"
 - Claude Code는 이벤트 키 수준의 `"*"` 와일드카드를 **지원하지 않습니다**. 이벤트는 **개별 등록**해야 합니다.
 - `matcher: "*"`는 `PreToolUse` / `PostToolUse` / `PostToolUseFailure`의 **도구 매칭 전용**입니다.
 - `type: "command"` 필드가 없으면 Claude Code가 훅을 무시합니다.
+- `async: true`와 `timeout: 1`은 **서로 다른 층위의 타임아웃**입니다.
+  - `timeout: 1` (settings.json): Claude Code가 동기 훅을 1초까지 기다리는 한도. `async: true`이면 Claude Code가 결과를 기다리지 않으므로 사실상 무의미합니다.
+  - `SPYGLASS_TIMEOUT` (환경변수, 기본 1초): `spyglass-collect.sh`가 내부적으로 `curl --max-time`에 적용하는 값. 서버 응답이 늦어도 훅이 1초 안에 종료됩니다.
+  - 결과적으로 두 값을 모두 1초로 두면 "Claude Code는 즉시 다음 단계 진행 + 훅 스크립트는 1초 안에 자기 정리" 라는 의도된 비동기 동작이 됩니다.
 
 ---
 
@@ -296,7 +299,7 @@ Claude Code  →  spyglass:9999/v1/messages  →  https://api.anthropic.com/v1/m
 
 - 클라이언트의 API 키(`x-api-key` / `Authorization`)는 그대로 Anthropic에 전달됩니다. spyglass는 키를 저장하지 않습니다.
 - 스트리밍(`stream: true`)과 비스트리밍 모두 지원합니다.
-- 응답 내용(텍스트)은 저장하지 않으며, 토큰 수·비용·시스템 프롬프트 해시 등 메타만 기록합니다.
+- 응답 내용(텍스트)은 저장하지 않으며, 토큰 수·시스템 프롬프트 해시 등 메타만 기록합니다.
 
 ### 5.2 활성화 방법
 
@@ -373,7 +376,7 @@ ANTHROPIC_UPSTREAM_URL=https://my-custom-gateway.example.com \
 
 ```bash
 sqlite3 "${HOME}/.spyglass/spyglass.db" \
-  "SELECT id, timestamp, model, tokens_input, tokens_output, cost_usd FROM proxy_requests ORDER BY timestamp DESC LIMIT 5;"
+  "SELECT id, timestamp, model, tokens_input, tokens_output FROM proxy_requests ORDER BY timestamp DESC LIMIT 5;"
 ```
 
 행이 쌓이면 프록시가 정상 동작 중입니다.
@@ -389,13 +392,14 @@ cd "${HOME}/.spyglass-src"
 bun run doctor
 ```
 
-다음 5단계를 자동 점검합니다:
+다음 항목들을 자동 점검합니다 (총 15개 체크):
 
-1. Bun 런타임 / 버전
-2. 서버 프로세스 / 헬스체크
-3. `~/.claude/settings.json` 훅 등록 여부 (`spyglass-collect.sh` 명령 포함 검사)
-4. `SPYGLASS_DIR` 경로 유효성
-5. DB 파일 / 마이그레이션 버전
+- **환경**: Bun 런타임/버전, `~/.claude/settings.json` 파싱, 훅 등록 여부, 훅 스크립트 실행 권한·SPYGLASS_DIR 경로
+- **DB**: `~/.spyglass/` 디렉토리 권한, 스키마 마이그레이션 버전, 최근 수집 활동
+- **서버**: 포트 LISTEN 상태 및 헬스체크
+- **무결성**: orphan row, zero-response 턴, 비정상적으로 긴 응답, 중복 응답, 턴 ID 불일치, 미연결 도구 호출, orphan proxy tool use
+
+문제가 발견되면 어느 단계인지와 함께 수정 가이드를 출력합니다.
 
 ### 6.2 훅 수집 로그
 
@@ -459,30 +463,11 @@ xdg-open http://127.0.0.1:9999
 |------|------|
 | DB | `~/.spyglass/spyglass.db` |
 | WAL/SHM | `~/.spyglass/spyglass.db-wal`, `~/.spyglass/spyglass.db-shm` |
-| 가격표 | `~/.spyglass/pricing.json` (자동 생성, 직접 편집 가능) |
 | 훅 로그 | `~/.spyglass/logs/collect.log` |
 | 훅 원본 페이로드 | `~/.spyglass/logs/hook-raw.jsonl` |
 | 서버 PID | `~/.spyglass/server.pid` |
 
-### 7.2 모델 가격 커스터마이징
-
-Anthropic 가격 변경 시 `~/.spyglass/pricing.json`을 편집하면 반영됩니다(없으면 첫 기동 시 기본값 자동 생성).
-
-```json
-[
-  {
-    "model": "claude-opus-4-7",
-    "input": 15,
-    "output": 75,
-    "cacheCreate": 18.75,
-    "cacheRead": 1.5
-  }
-]
-```
-
-단위는 **1M 토큰당 USD**. 파일은 프로세스 시작 시 1회 로드되므로 수정 후 `bun run dev`로 재시작.
-
-### 7.3 오래된 데이터 정리
+### 7.2 오래된 데이터 정리
 
 DB가 너무 커지면 오래된 행을 삭제하고 VACUUM으로 파일 크기를 줄입니다.
 
@@ -534,11 +519,10 @@ DB 마이그레이션은 서버 기동 시 자동 적용됩니다(`PRAGMA user_v
 # 1) 서버 상태 확인
 cd "${HOME}/.spyglass-src" && bun run status
 
-# 2) 포트 충돌 확인
+# 2) 포트 충돌 확인 (다른 프로세스가 9999를 점유 중인지)
 lsof -iTCP:9999 -sTCP:LISTEN
 
-# 3) PID 파일이 stale인 경우
-rm -f "${HOME}/.spyglass/server.pid"
+# 3) 그냥 재기동 — bun run dev 가 stale PID 파일을 자동 정리합니다
 cd "${HOME}/.spyglass-src" && bun run dev
 ```
 
@@ -552,7 +536,7 @@ cd "${HOME}/.spyglass-src" && bun run doctor
 수동 체크리스트:
 
 1. **글로벌 설정 확인** — `jq '.env.SPYGLASS_DIR, (.hooks|keys|length)' ~/.claude/settings.json`
-2. **훅 스크립트 실행 권한** — `ls -l "$(jq -r .env.SPYGLASS_DIR ~/.claude/settings.json)/hooks/spyglass-collect.sh"`
+2. **훅 스크립트 실행 권한** — `ls -l "$(jq -r '.env.SPYGLASS_DIR' ~/.claude/settings.json)/hooks/spyglass-collect.sh"`
 3. **Claude Code 재시작 여부** — 설정 변경 후 반드시 재시작
 4. **서버 실행 여부** — `curl -sf http://127.0.0.1:9999/health`
 5. **훅 로그** — `tail "${HOME}/.spyglass/logs/collect.log"` 에 오류가 있는지
@@ -580,10 +564,13 @@ unset ANTHROPIC_BASE_URL   # 현재 셸에서 임시 해제
 
 ### 9.4 `~/.spyglass` 권한 오류
 
+서버는 DB를 열 때마다 `~/.spyglass/` 디렉토리에 `chmod 0o700`을 자동 적용합니다. 따라서 정상적인 흐름에서는 권한 문제가 생기지 않습니다.
+
+소유자 불일치(예: 과거 root로 생성됨)로 권한 자동 복구가 실패하는 경우에만 수동 수정합니다:
+
 ```bash
-# 소유자가 본인이 아닌 경우 (예: 과거 root로 생성됨)
 sudo chown -R "$(id -u):$(id -g)" "${HOME}/.spyglass"
-chmod 700 "${HOME}/.spyglass"
+# 이후 bun run dev 한 번이면 chmod 700 까지 자동 복구
 ```
 
 ### 9.5 DB 마이그레이션 확인
@@ -592,7 +579,7 @@ chmod 700 "${HOME}/.spyglass"
 bun -e 'const {Database}=require("bun:sqlite");
   const db = new Database(`${process.env.HOME}/.spyglass/spyglass.db`);
   console.log(db.query("PRAGMA user_version").get());'
-# { user_version: 13 }   (마이그레이션 파일 수와 일치해야 함)
+# { user_version: 35 }   (업데이트마다 증가, 현재 최신값 기준)
 ```
 
 ### 9.6 완전 초기화
