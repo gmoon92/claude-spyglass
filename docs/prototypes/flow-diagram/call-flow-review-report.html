@@ -1,0 +1,713 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Spyglass — Call-Flow Prototype Review Report</title>
+<style>
+  :root {
+    --bg: #0a0a0b;
+    --surface: #111113;
+    --surface-alt: #17171a;
+    --raised: #1e1e22;
+    --border: #26262b;
+    --border-strong: #3a3a40;
+    --text-1: #F0F6FC;
+    --text-2: #C9D1D9;
+    --text-3: #8B949E;
+    --text-4: #6E7681;
+    --accent: #FF7A45;
+    --success: #3FB950;
+    --error: #F47174;
+    --warn: #F0B72F;
+    --info: #58A6FF;
+    --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --font-data: 'SF Mono', ui-monospace, 'Menlo', 'JetBrains Mono', monospace;
+    --radius-sm: 4px;
+    --radius-md: 8px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text-2); font-family: var(--font-ui); font-size: 14px; line-height: 1.6; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  h1, h2, h3, h4 { margin: 0; color: var(--text-1); }
+  h1 { font-size: 28px; letter-spacing: -0.02em; }
+  h2 { font-size: 20px; margin-top: 48px; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 16px; margin-top: 28px; margin-bottom: 10px; color: var(--text-2); }
+  h4 { font-size: 14px; margin-top: 18px; margin-bottom: 6px; color: var(--text-3); }
+  p { margin: 0 0 12px; }
+  ul, ol { margin: 0 0 16px; padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  code {
+    font-family: var(--font-data); font-size: 12px;
+    background: var(--raised); padding: 1px 4px; border-radius: var(--radius-sm);
+    color: var(--text-2);
+  }
+  pre {
+    background: var(--raised); border: 1px solid var(--border);
+    border-radius: var(--radius-md); padding: 14px 16px;
+    overflow-x: auto; font-family: var(--font-data); font-size: 12px;
+    line-height: 1.5; margin: 12px 0;
+  }
+  pre code { background: none; padding: 0; }
+  table {
+    width: 100%; border-collapse: collapse; margin: 16px 0;
+    font-size: 13px;
+  }
+  th, td {
+    text-align: left; padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--surface-alt); color: var(--text-2);
+    font-weight: 600; font-size: 12px; text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  td { vertical-align: top; }
+  tr:hover td { background: var(--surface-alt); }
+
+  .wrap { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  .cover {
+    padding: 48px 0 32px; border-bottom: 2px solid var(--accent);
+    margin-bottom: 32px;
+  }
+  .cover h1 { margin-bottom: 8px; }
+  .cover .meta {
+    display: flex; gap: 16px; color: var(--text-4); font-size: 12px; margin-top: 12px;
+  }
+  .cover .meta span { display: flex; align-items: center; gap: 6px; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 8px; border-radius: var(--radius-sm);
+    font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .badge-p0 { background: rgba(244,113,116,0.13); color: var(--error); border: 1px solid rgba(244,113,116,0.32); }
+  .badge-p1 { background: rgba(240,183,47,0.13); color: var(--warn); border: 1px solid rgba(240,183,47,0.32); }
+  .badge-p2 { background: rgba(88,166,255,0.13); color: var(--info); border: 1px solid rgba(88,166,255,0.32); }
+  .badge-ok { background: rgba(63,185,80,0.13); color: var(--success); border: 1px solid rgba(63,185,80,0.32); }
+
+  .callout {
+    background: var(--surface-alt); border-left: 3px solid var(--accent);
+    padding: 14px 18px; border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    margin: 16px 0;
+  }
+  .callout-warn { border-left-color: var(--warn); }
+  .callout-error { border-left-color: var(--error); }
+  .callout-success { border-left-color: var(--success); }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 720px) { .two-col { grid-template-columns: 1fr; } }
+
+  .toc {
+    position: sticky; top: 16px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: 16px; font-size: 12px;
+  }
+  .toc a { color: var(--text-3); display: block; padding: 3px 0; }
+  .toc a:hover { color: var(--text-1); }
+  .toc .toc-h2 { font-weight: 600; color: var(--text-2); margin-top: 8px; }
+  .toc .toc-h3 { padding-left: 12px; }
+
+  .summary-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 24px 0;
+  }
+  .summary-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: 16px; text-align: center;
+  }
+  .summary-card .num { font-size: 28px; font-weight: 700; color: var(--text-1); }
+  .summary-card .label { font-size: 11px; color: var(--text-4); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .roadmap-phase {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: 18px; margin-bottom: 12px;
+  }
+  .roadmap-phase h4 { color: var(--text-1); margin-top: 0; }
+  .roadmap-phase .phase-meta { color: var(--text-4); font-size: 12px; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       COVER
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <div class="cover">
+    <h1>Call-Flow Prototype Review Report</h1>
+    <p style="color:var(--text-3); margin-top:6px;">Spyglass 메타 문서 오케스트레이션 흐름 시각화 — 4관점 병렬 검토 종합 보고서</p>
+    <div class="meta">
+      <span>대상: <b style="color:var(--text-2)">prototypes/call-flow.html</b></span>
+      <span>검토일: <b style="color:var(--text-2)">2026-05-21</b></span>
+      <span>검토자: <b style="color:var(--text-2)">UI/UX · Data-Arch · Code-QA · Integration (Swarm)</b></span>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       EXECUTIVE SUMMARY
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <h2 id="exec">Executive Summary</h2>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="num" style="color:var(--error)">7</div>
+      <div class="label">P0 / Critical Issues</div>
+    </div>
+    <div class="summary-card">
+      <div class="num" style="color:var(--warn)">12</div>
+      <div class="label">P1 / High Priority</div>
+    </div>
+    <div class="summary-card">
+      <div class="num" style="color:var(--info)">9</div>
+      <div class="label">P2 / Medium Priority</div>
+    </div>
+    <div class="summary-card">
+      <div class="num" style="color:var(--success)">2</div>
+      <div class="label">Days to MVP</div>
+    </div>
+  </div>
+
+  <div class="callout callout-success">
+    <b>종합 평가:</b> 이 프로토타입은 <b>통합 준비가 거의 완료된 상태</b>입니다. 프론트엔드는 데모 데이터로 즉시 동작하며, 백엔드 API 구현만 하면 실제 데이터로 전환됩니다. 가장 큰 리스크는 성공/실패 분기를 위한 데이터 모델 부재이나, Phase 1에서 단순화하여 우회하고 Phase 2에서 스키마 확장으로 해결할 수 있습니다.
+  </div>
+
+  <p><b>핵심 결론:</b></p>
+  <ol>
+    <li><b>디자인:</b> 무채색 + accent 포인트 전략은 효과적이나, 접근성(WCAG AA 미달)과 슬롯 그룹화가 P0/P1 수준의 과제입니다.</li>
+    <li><b>데이터:</b> NODES/EDGES 구조는 DB 매핑에 적합하지만, <b>데이터와 표현의 분리</b>가 필수입니다. 서버는 "무엇인가"만, 클라이언트는 "어떻게 보이는가"만 담당해야 합니다.</li>
+    <li><b>코드:</b> 드래그 인터랙션 버그(null CTM, 터치 미지원)와 <code>renderAll()</code> 전체 재생성 방식이 성능 병목입니다. 즉시 수정이 필요합니다.</li>
+    <li><b>통합:</b> 프론트엔드는 이미 <code>packages/web/assets/</code>에 통합되어 있고, 백엔드 API <code>/api/meta-docs/flow</code>만 구현하면 1~2일 내 MVP 배포가 가능합니다.</li>
+  </ol>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       1. UI/UX DESIGN REVIEW
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <h2 id="uiux">1. UI/UX 디자인 검토</h2>
+
+  <h3>1.1 시각적 계층 구조</h3>
+  <p>좌→우 4열(trigger → command → hub → branch/terminal) + 하단 슬롯 행으로 3단계 구분은 명확합니다.</p>
+  <div class="callout callout-warn">
+    <b>문제:</b> 슬롯 행이 메인 플로우와 수직 거리가 너무 멀어(약 270px), 허브→슬롯의 연결 관계가 시각적으로 단절됩니다. 또한 7개 슬롯 노드가 동일한 Y좌표(600)에 일렬 배치되어 에지가 거의 평행하게 나와 개별 구분이 어렵습니다.
+  </div>
+  <p><b>개선안:</b> 슬롯 행을 허브 바로 아래(간격 60~80px)로 이동, 또는 collapsible panel로 변경. 슬롯 노드를 약간의 Y축 오프셋(±10px)으로 교차 배치하여 평행 에지 문제 완화.</p>
+
+  <h3>1.2 칩 색상 시맨틱</h3>
+  <p>skill(초록), agent(주황), task(주황-빨강), mcp(청록)으로 분류됩니다.</p>
+  <div class="callout callout-warn">
+    <b>문제:</b> <code>agent</code>(#FF9B6E)와 <code>task</code>(#F77F00)가 모두 주황 계열로 색각 구분이 어렵습니다. slot 노드에서는 분류 칩이 아예 제거되어 아이콘만으로 판단해야 합니다.
+  </div>
+  <p><b>개선안:</b> <code>task</code> 색상을 <code>--info</code> 계열(청록 #58A6FF 또는 #22D3EE)로 변경. slot 노드에도 축소된 분류 칩 유지.</p>
+
+  <h3>1.3 무채색 + accent 포인트 전략</h3>
+  <p>카드/아이콘 박스는 무채색, 중요 흐름 4곳만 accent/success/error로 강조하는 전략은 효과적입니다.</p>
+  <div class="callout">
+    <b>관찰:</b> <code>--flow-grid-dot: rgba(255,255,255,0.045)</code>는 배경 #0a0a0b 위에서 거의 보이지 않습니다(대비율 약 1.05:1). 장식적 텍스처 역할로는 괜찮으나, "격자"라는 명칭과 실제 가시성이 불일치합니다.
+  </div>
+
+  <h3>1.4 접근성 <span class="badge badge-p0">P0</span></h3>
+  <table>
+    <tr><th>항목</th><th>현황</th><th>기준</th><th>개선안</th></tr>
+    <tr>
+      <td>폰트 크기</td>
+      <td><code>slot-label</code> 9px, <code>edge-pct</code> 10px</td>
+      <td>WCAG 2.1 최소 12px 권장</td>
+      <td>9px → 11px, 10px → 11px 최소화</td>
+    </tr>
+    <tr>
+      <td>대비율</td>
+      <td><code>--text-4</code>(#6E7681) on <code>--bg</code>(#0a0a0b): 약 3.8:1</td>
+      <td>WCAG AA 4.5:1</td>
+      <td><code>--text-4</code> → #7A828C 이상으로 밝게 조정</td>
+    </tr>
+    <tr>
+      <td>키보드 네비게이션</td>
+      <td>완전 부재</td>
+      <td>필수</td>
+      <td>노드 <code>tabindex="0"</code>, 방향키 이동, <code>aria-label</code> 추가</td>
+    </tr>
+    <tr>
+      <td>ARIA</td>
+      <td>SVG에 <code>role</code> 없음, 노드에 <code>aria-label</code> 없음</td>
+      <td>필수</td>
+      <td><code>role="img"</code>, <code>aria-label="Behavior call flow diagram"</code></td>
+    </tr>
+  </table>
+
+  <h3>1.5 반응형 / 반응성</h3>
+  <div class="callout callout-warn">
+    <b>문제:</b> SVG <code>width="1480" height="780"</code>이 고정되어 있습니다. 줌/팬 기능이 없어 노드가 20개 이상 증가하면 화면 밖으로 나갑니다. 툴팁이 없어 상세 정보 확인이 불가능합니다.
+  </div>
+  <p><b>개선안:</b> wheel 이벤트로 줌(0.5x~3x), 스페이스+드래그로 팬. 노드 hover 시 상세 메타데이터 패널 표시(delay 200ms). <code>ResizeObserver</code>로 컨테이너 크기 감지.</p>
+
+  <h3>1.6 인지 부하</h3>
+  <ul>
+    <li>에지 라벨(% 칩)이 노드와 겹칠 수 있습니다(예: <code>h→b</code> 에지가 짧은데 라벨 "100% 분기"가 노드 영역과 충돌).</li>
+    <li>슬롯 노드 7개의 에지가 모두 <code>bottom→top</code>으로 평행하게 그려져 추적이 어렵습니다.</li>
+    <li>"Outcome"이라는 노드명이 직관적이지 않습니다 — "Branch Point" 또는 "Result"가 더 명확합니다.</li>
+    <li><code>pill-live</code>의 "live" 텍스트 의미가 불분명합니다.</li>
+  </ul>
+
+  <h3>1.7 디자인 시스템 통합</h3>
+  <p><code>:root</code> 토큰이 HTML 파일에 하드코딩되어 있어 <code>design-tokens.css</code>와 중복됩니다. <code>flow-diagram.css</code>에는 <code>--color-accent-soft</code>가 정의되지 않았습니다. transition이 <code>120ms cubic-bezier(.2,.8,.2,1)</code>로 하드코딩되어 있습니다.</p>
+  <p><b>개선안:</b> HTML의 <code>:root</code> 블록 완전 제거, <code>&lt;link rel="stylesheet" href="design-tokens.css"&gt;</code>로 대체. <code>.is-active</code>, <code>.ds-chip</code> 스타일을 각각 <code>flow-diagram.css</code>, <code>chip.css</code>로 이동.</p>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       2. DATA ARCHITECTURE REVIEW
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <h2 id="data">2. 데이터 아키텍처 검토</h2>
+
+  <h3>2.1 NODES/EDGES가 DB 데이터를 잘 표현하는가?</h3>
+  <div class="callout callout-warn">
+    <b>문제:</b> <code>sub</code> 필드가 HTML 문자열(<code>'&lt;b&gt;61&lt;/b&gt; turns'</code>)을 포함 — 데이터와 표현이 혼합됨. <code>x, y, w, h</code>가 노드 데이터에 포함 — 시각적 속성이 비즈니스 모델에 침투. <code>pills: ['hot']</code>, <code>variant: 'hub'</code> 등이 UI 상태 — 서버가 알 필요 없음.
+  </div>
+
+  <p><b>개선안: 데이터/표현 분리</b></p>
+  <pre><code>// 서버가 낼 순수 데이터
+interface FlowNode {
+  id: string;
+  type: 'trigger' | 'command' | 'agent' | 'branch' | 'outcome' | 'slot';
+  kind: string;
+  name: string;
+  stats: {
+    callCount: number;
+    percentage?: number;
+    avgToolsPerTurn?: number;
+  };
+  metadata: Record&lt;string, unknown&gt;;
+  groupId?: string;
+  parentId?: string;
+}
+
+interface FlowEdge {
+  id: string;
+  from: string;
+  to: string;
+  type: 'flow' | 'slot' | 'outcome';
+  stats: { count: number; percentage: number };
+  outcome?: 'success' | 'failure';
+}</code></pre>
+  <p>클라이언트는 <code>type + kind</code>를 받아 <code>icon</code>, <code>chip</code>, <code>variant</code>, <code>sub</code> 텍스트로 매핑합니다.</p>
+
+  <h3>2.2 확장성</h3>
+  <p><b>강점:</b> <code>kind</code>가 자유 문자열이어서 새 분류 추가가 쉬움.<br><b>약점:</b> <code>variant</code> enum에 새 타입 추가 시 클라이언트/서버 양쪽 수정 필요.</p>
+  <p><b>개선안:</b> <code>type</code>은 제한된 enum으로 두고(노드 역할), <code>kind</code>는 완전 개방형 문자열로 유지. <code>metadata</code> 객체로 확장 필드 격리.</p>
+
+  <h3>2.3 API 응답 구조</h3>
+  <pre><code>GET /api/meta-docs/flow?project=claude-spyglass&window=7d
+
+{
+  "meta": {
+    "project": "claude-spyglass",
+    "window": "7d",
+    "generatedAt": "2026-05-21T10:00:00Z",
+    "totalTurns": 61,
+    "layoutVersion": "v1"
+  },
+  "nodes": [...],
+  "edges": [...],
+  "groups": [
+    { "id": "skills", "label": "SKILLS", "kind": "skill", "nodeIds": ["s1","s2"] },
+    { "id": "agents", "label": "AGENTS", "kind": "agent", "nodeIds": ["a1","a2"] },
+    { "id": "tools",  "label": "TOOLS",  "kind": "task",  "nodeIds": ["l1","l2","l3"] }
+  ]
+}</code></pre>
+
+  <h3>2.4 노드 위치 관리 전략</h3>
+  <p><b>권장: 하이브리드 접근</b></p>
+  <table>
+    <tr><th>단계</th><th>전략</th></tr>
+    <tr><td>초기 배치</td><td>클라이언트 자동 배치 (dagre.js 또는 자체 토폴로지 알고리즘)</td></tr>
+    <tr><td>사용자 조정</td><td><code>localStorage</code>에 <code>nodeId → {x, y}</code> 저장</td></tr>
+    <tr><td>재배치 트리거</td><td>서버 <code>layoutVersion</code> 변경 시 자동 재배치</td></tr>
+    <tr><td>서버 영속화</td><td>선택사항 — 사용자 설정 동기화가 필요할 때만</td></tr>
+  </table>
+
+  <h3>2.5 실시간 데이터 갱신</h3>
+  <p><b>권장: 버전 기반 diff + SSE</b></p>
+  <pre><code>{ "nodes": [...], "edges": [...], "version": "v20260521-100000-abc123" }</code></pre>
+  <p>클라이언트는 버전 비교로 변경된 노드/엣지만 식별. <code>stats</code> 변경 시 DOM 텍스트 노드만 교체, <code>foreignObject</code> 전체 재생성 금지.</p>
+
+  <h3>2.6 대용량 데이터 성능</h3>
+  <table>
+    <tr><th>규모</th><th>전략</th></tr>
+    <tr><td>~100 노드</td><td>현재 SVG + foreignObject 유지</td></tr>
+    <tr><td>~500 노드</td><td>LOD: 줌 아웃 시 foreignObject → 단순 SVG rect+text</td></tr>
+    <tr><td>~2000 노드</td><td>가상화: viewport 밖 노드 DOM 제거</td></tr>
+    <tr><td>5000+ 노드</td><td>Canvas 2D 또는 WebGL 고려</td></tr>
+  </table>
+
+  <h3>2.7 Slot 노드 그룹화</h3>
+  <p>현재는 암묵적 — <code>y=600</code> 라인에 배치 + 텍스트 라벨. 데이터 모델에 그룹 개념 없음.</p>
+  <p><b>개선안: 명시적 Group 모델</b></p>
+  <pre><code>interface FlowGroup {
+  id: string;
+  label: string;
+  kind: string;
+  nodeIds: string[];
+  layout: { direction: 'horizontal' | 'vertical'; spacing: number };
+}</code></pre>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       3. CODE QUALITY REVIEW
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <h2 id="code">3. 코드 품질 검토</h2>
+
+  <h3>3.1 SVG + foreignObject 크로스 브라우저 이슈 <span class="badge badge-p1">P1</span></h3>
+  <div class="callout callout-warn">
+    <b>문제:</b> Safari에서 <code>foreignObject</code> 내부 HTML 요소가 제대로 렌더링되지 않거나 크기가 0으로 계산될 수 있습니다. <code>overflow</code> 속성이 명시되지 않았습니다.
+  </div>
+  <p><b>개선:</b> <code>fo.setAttribute('overflow', 'visible')</code> 추가. card에 <code>position: relative; width: 100%; height: 100%</code> 추가.</p>
+
+  <h3>3.2 드래그 인터랙션 버그 <span class="badge badge-p0">P0</span></h3>
+  <table>
+    <tr><th>버그</th><th>위치</th><th>시나리오</th></tr>
+    <tr>
+      <td>CTM null 오류</td>
+      <td><code>svgPoint()</code> 733-738</td>
+      <td>SVG가 <code>display: none</code>이거나 DOM에 없을 때 <code>getScreenCTM()</code>이 null 반환</td>
+    </tr>
+    <tr>
+      <td>터치 미지원</td>
+      <td><code>bindDrag()</code> 746-786</td>
+      <td>모바일/터치스크린에서 드래그 불가</td>
+    </tr>
+    <tr>
+      <td>DOM 재배치 오버헤드</td>
+      <td><code>nodesLayer.appendChild()</code> 765</td>
+      <td>드래그 시작 시마다 DOM 재배치로 성능 저하</td>
+    </tr>
+  </table>
+  <p><b>즉시 수정:</b> <code>svgPoint()</code>에 null 체크, 터치 이벤트 지원, DOM 재배치 대신 CSS z-index 사용.</p>
+
+  <h3>3.3 renderAll() 성능 <span class="badge badge-p0">P0</span></h3>
+  <div class="callout callout-error">
+    <b>문제:</b> 전체 DOM을 <code>innerHTML = ''</code>로 지우고 모든 노드/에지를 처음부터 재생성. 노드 100개, 에지 200개 시 300개 DOM 요소 생성. 실시간 데이터 갱신 시 전체 화면 깜빡임.
+  </div>
+  <p><b>개선:</b> 변경 감지 기반 부분 업데이트. 기존 DOM 재사용, 삭제된 것만 정리. <code>DocumentFragment</code> 사용.</p>
+
+  <h3>3.4 베지어 곡선 정확성 <span class="badge badge-p1">P1</span></h3>
+  <ul>
+    <li>최소 거리 40px 고정으로 짧은 거리에서 시각적 왜곡 발생.</li>
+    <li><code>anchorPoint</code>가 노드 중앙에서 시작 — 에지가 노드 내부를 관통하는 것처럼 보임.</li>
+    <li>라벨 위치가 t=0.5 고정 — 곡률 큰 경우 시각적 중간점과 불일치.</li>
+  </ul>
+  <p><b>개선:</b> <code>padding: 4px</code> 적용. 상대적 거리(<code>dist * 0.4</code>) 사용. 곡률 기반 라벨 위치 조정.</p>
+
+  <h3>3.5 메모리 누수 <span class="badge badge-p1">P1</span></h3>
+  <ul>
+    <li>이벤트 리스너 등록 후 제거 메커니즘 없음 — <code>renderAll()</code> 반복 호출 시 누적.</li>
+    <li><code>nodeIndex.clear()</code>만으로 이전 <code>foEl</code> 참조 해제 불완전.</li>
+    <li><code>innerHTML</code> 사용으로 파싱 오버헤드.</li>
+  </ul>
+  <p><b>개선:</b> <code>addManagedListener()</code> / <code>cleanupListeners()</code> 패턴 적용. DOM 참조 명시적 해제.</p>
+
+  <h3>3.6 모듈 분해 전략</h3>
+  <p>주석에 언급된 분해 계획은 관심사 분리가 잘 되어 있습니다.</p>
+  <pre><code>packages/web/assets/js/
+├── types/
+│   └── flow-diagram.ts       # 타입 정의
+├── utils/
+│   └── svg-math.js           # 베지어 곡선, 좌표 변환
+├── render/
+│   ├── flow-diagram.js       # 순수 렌더링
+│   └── flow-diagram-drag.js  # 드래그, 줌, 팬
+└── views/
+    └── meta-docs-flow-view.js # 진입점 + fetch</code></pre>
+
+  <h3>3.7 TypeScript 마이그레이션</h3>
+  <pre><code>export interface Node {
+  id: string; kind: NodeKind; title: string;
+  x: number; y: number; w: number; h: number;
+  variant?: Variant; pills?: string[];
+}
+export interface Edge {
+  id: string; from: string; to: string;
+  kind: EdgeKind; label?: EdgeLabel;
+  anchorFrom?: AnchorSide; anchorTo?: AnchorSide;
+}</code></pre>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       4. INTEGRATION REVIEW
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <h2 id="integration">4. 통합 실용성 검토</h2>
+
+  <h3>4.1 현재 상태 요약</h3>
+  <table>
+    <tr><th>구성요소</th><th>상태</th><th>경로</th></tr>
+    <tr><td>CSS</td><td>tracked</td><td><code>packages/web/assets/css/flow-diagram.css</code></td></tr>
+    <tr><td>JS 뷰</td><td>tracked</td><td><code>packages/web/assets/js/meta-docs-flow-view.js</code> (555줄)</td></tr>
+    <tr><td>HTML 컨테이너</td><td>tracked</td><td><code>index.html</code> #metaDocsFlowBody</td></tr>
+    <tr><td>탭 등록</td><td>tracked</td><td><code>meta-docs-view.js</code> initMetaSubTabs()</td></tr>
+    <tr><td>백엔드 API</td><td><b>미구현</b></td><td><code>/api/meta-docs/flow</code> — 404 fallbackToDemo()</td></tr>
+  </table>
+
+  <div class="callout callout-success">
+    <b>결론:</b> 프론트엔드는 데모 데이터로 즉시 동작하며, 백엔드 API만 구현하면 실제 데이터로 전환된다. <code>prototypes/call-flow.html</code>은 삭제하지 않고 참고용으로 유지 가능.
+  </div>
+
+  <h3>4.2 단계별 로드맵</h3>
+
+  <div class="roadmap-phase">
+    <h4>Phase 1-A: 백엔드 API <span class="badge badge-p0">P0</span></h4>
+    <div class="phase-meta">예상 소요: 1~2일</div>
+    <ul>
+      <li><code>packages/server/src/routes/meta-docs.ts</code>에 <code>GET /api/meta-docs/flow?project=&windowDays=</code> 추가</li>
+      <li><code>packages/storage/src/queries/meta-document.ts</code>에 <code>getMetaDocFlowStats()</code> 추가</li>
+      <li>응답 스키마: <code>{ nodes, edges, meta }</code></li>
+    </ul>
+  </div>
+
+  <div class="roadmap-phase">
+    <h4>Phase 1-B: i18n 완성 <span class="badge badge-p1">P1</span></h4>
+    <div class="phase-meta">예상 소요: 반나절</div>
+    <ul>
+      <li><code>locales/ko.json</code>, <code>en.json</code>에 <code>ui.meta-docs-view.flow.*</code> 키 추가</li>
+      <li>"SKILLS"/"AGENTS"/"TOOLS" 라벨 i18n화</li>
+    </ul>
+  </div>
+
+  <div class="roadmap-phase">
+    <h4>Phase 1-C: 데모 데이터 제거 <span class="badge badge-p1">P1</span></h4>
+    <div class="phase-meta">예상 소요: 반나절</div>
+    <ul>
+      <li><code>fallbackToDemo()</code> 제거 또는 빈 상태로 변경</li>
+      <li><code>meta-docs-flow-view.js</code> 상단 TODO 처리</li>
+    </ul>
+  </div>
+
+  <div class="roadmap-phase">
+    <h4>Phase 2: 고도화 <span class="badge badge-p2">P2</span></h4>
+    <div class="phase-meta">예상 소요: 2~3주</div>
+    <ul>
+      <li>성공/실패 분기 정확한 집계 (스키마 확장 필요)</li>
+      <li>자동 레이아웃 (dagre-js 또는 자체 휴리스틱)</li>
+      <li>실시간 SSE 업데이트</li>
+      <li>노드 클릭 시 상세 드로어</li>
+    </ul>
+  </div>
+
+  <h3>4.3 DB 테이블 매핑</h3>
+  <table>
+    <tr><th>그래프 요소</th><th>데이터 소스</th><th>비고</th></tr>
+    <tr><td>User Prompt (trigger)</td><td><code>requests</code> COUNT</td><td>기존 스키마</td></tr>
+    <tr><td>슬래시 커맨드</td><td><code>requests.slash_command</code> GROUP BY</td><td>Migration 024 완료</td></tr>
+    <tr><td>Main Agent (hub)</td><td><code>requests</code> 최빈 model, 턴 수</td><td>기존 스키마</td></tr>
+    <tr><td>Outcome → Success/Failure</td><td><b>현재 스키마에 없음</b></td><td>Phase 2에서 <code>event_type</code> 확장 필요</td></tr>
+    <tr><td>SKILLS 슬롯</td><td><code>requests</code> WHERE tool_name='Skill'</td><td>기존 스키마</td></tr>
+    <tr><td>AGENTS 슬롯</td><td><code>requests</code> WHERE tool_name='Agent'</td><td>기존 스키마</td></tr>
+    <tr><td>TOOLS 슬롯</td><td><code>requests</code> WHERE tool_name IN (...)</td><td>툴 이름 정규화 필요</td></tr>
+  </table>
+
+  <h3>4.4 리스크 및 완화책</h3>
+  <table>
+    <tr><th>우선순위</th><th>항목</th><th>리스크</th><th>완화책</th></tr>
+    <tr><td><span class="badge badge-p0">P0</span></td><td>성공/실패 데이터 모델 부재</td><td>Flow 그래프 핵심 시각이 데모에 머무름</td><td>Phase 1에서 분기 노드 숨김. <code>requests</code>에 <code>outcome</code> 컬럼 추가 (Migration 025)</td></tr>
+    <tr><td><span class="badge badge-p1">P1</span></td><td>대량 GROUP BY 성능</td><td>SQLite 10만 건 이상 시 지연</td><td><code>idx_requests_slash</code> 등 이미 존재. 추가: <code>(timestamp, tool_name, tool_detail)</code></td></tr>
+    <tr><td><span class="badge badge-p1">P1</span></td><td>슬래시커맨드 추출 정확도</td><td>payload 파싱 누락</td><td>정확도 모니터링 대시보드 추가</td></tr>
+    <tr><td><span class="badge badge-p2">P2</span></td><td>SVG 메모리 (노드 50+)</td><td>foreignObject 50개 이상 시 성능 저하</td><td>가상 스크롤링 또는 노드 압축</td></tr>
+  </table>
+
+  <h3>4.5 "순서대로 제대로 동작" 검증 전략</h3>
+  <ol>
+    <li><b>정량 검증:</b> 7일 윈도우 내 슬래시커맨드 호출 → 에이전트 호출 → 스킬 호출의 체인 비율이 문서에 기술된 순서와 일치하는지.</li>
+    <li><b>정성 검증:</b> 랜덤 샘플 세션을 선택해 turn-view의 로그와 Flow 그래프의 에지를 수동 비교.</li>
+    <li><b>이상 탐지:</b> "슬래시커맨드 없이 Agent가 호출된 경우" 또는 "Skill이 Agent보다 먼저 호출된 경우"를 anomaly로 플래깅.</li>
+  </ol>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       5. MASTER PRIORITY MATRIX
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <h2 id="priority">5. 종합 개선 우선순위 매트릭스</h2>
+
+  <table>
+    <tr>
+      <th>우선순위</th>
+      <th>영역</th>
+      <th>항목</th>
+      <th>영향도</th>
+      <th>추정 공수</th>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p0">P0</span></td>
+      <td>접근성</td>
+      <td>ARIA, 키보드 네비게이션, 폰트/대비 WCAG AA 준수</td>
+      <td>높음</td>
+      <td>2~3h</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p0">P0</span></td>
+      <td>코드</td>
+      <td><code>svgPoint()</code> null 체크, 터치 이벤트 지원</td>
+      <td>높음</td>
+      <td>1h</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p0">P0</span></td>
+      <td>코드</td>
+      <td><code>renderAll()</code> 부분 업데이트 방식으로 변경</td>
+      <td>높음</td>
+      <td>2~3h</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p0">P0</span></td>
+      <td>백엔드</td>
+      <td><code>/api/meta-docs/flow</code> API 구현</td>
+      <td>높음</td>
+      <td>반나절~1일</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p0">P0</span></td>
+      <td>데이터</td>
+      <td><code>requests</code> 테이블에 <code>outcome</code> 컬럼 추가 (Migration 025)</td>
+      <td>높음</td>
+      <td>2h</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p1">P1</span></td>
+      <td>UI/UX</td>
+      <td>줌/팬, 툴팁 구현</td>
+      <td>높음</td>
+      <td>4~6h</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p1">P1</span></td>
+      <td>UI/UX</td>
+      <td>칩 색상 구분 (task → 청록 계열)</td>
+      <td>중간</td>
+      <td>30분</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p1">P1</span></td>
+      <td>UI/UX</td>
+      <td>디자인 시스템 SSoT 정리 (<code>:root</code> 하드코딩 제거)</td>
+      <td>중간</td>
+      <td>1~2h</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p1">P1</span></td>
+      <td>코드</td>
+      <td>베지어 곡선 정확성 (padding, 상대적 거리)</td>
+      <td>중간</td>
+      <td>1h</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p1">P1</span></td>
+      <td>코드</td>
+      <td>이벤트 리스너 정리 메커니즘, 메모리 누수 방지</td>
+      <td>중간</td>
+      <td>1h</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p1">P1</span></td>
+      <td>통합</td>
+      <td>i18n 키 추가, "SKILLS"/"AGENTS"/"TOOLS" 라벨 i18n화</td>
+      <td>중간</td>
+      <td>2h</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p1">P1</span></td>
+      <td>통합</td>
+      <td>데모 데이터 제거, 빈 상태 fallback</td>
+      <td>중간</td>
+      <td>1h</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p2">P2</span></td>
+      <td>UI/UX</td>
+      <td>슬롯 그룹화 (collapsible panel, 배경 패널)</td>
+      <td>중간</td>
+      <td>3~4h</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p2">P2</span></td>
+      <td>UI/UX</td>
+      <td>반응형 (<code>ResizeObserver</code>)</td>
+      <td>중간</td>
+      <td>2h</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p2">P2</span></td>
+      <td>UI/UX</td>
+      <td>격자 가시성 조정 (alpha 0.08~0.10)</td>
+      <td>낮음</td>
+      <td>15분</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p2">P2</span></td>
+      <td>데이터</td>
+      <td>자동 레이아웃 (dagre.js)</td>
+      <td>중간</td>
+      <td>1일</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p2">P2</span></td>
+      <td>데이터</td>
+      <td>실시간 SSE 업데이트</td>
+      <td>중간</td>
+      <td>1일</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p2">P2</span></td>
+      <td>코드</td>
+      <td>모듈 분해 (utils/svg-math.js, render/flow-diagram-drag.js)</td>
+      <td>낮음</td>
+      <td>2~3h</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p2">P2</span></td>
+      <td>코드</td>
+      <td>ES Module 전환</td>
+      <td>낮음</td>
+      <td>1~2h</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-p2">P2</span></td>
+      <td>코드</td>
+      <td>TypeScript 마이그레이션</td>
+      <td>낮음</td>
+      <td>1일</td>
+    </tr>
+  </table>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       6. CONCLUSION
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <h2 id="conclusion">6. 결론</h2>
+
+  <div class="callout callout-success">
+    <b>Call-Flow 프로토타입은 프로덕션 도입에 충분한 수준입니다.</b><br>
+    프론트엔드는 이미 <code>packages/web/assets/</code>에 통합되어 있고, 백엔드 API만 구현하면 1~2일 내 MVP 배포가 가능합니다.
+  </div>
+
+  <p><b>즉시 실행할 것 (오늘):</b></p>
+  <ol>
+    <li><code>svgPoint()</code> null 체크 추가 (5분)</li>
+    <li><code>--text-4</code> 색상 밝게 조정 (5분)</li>
+    <li><code>renderAll()</code> 부분 업데이트 방식 설계 (30분)</li>
+  </ol>
+
+  <p><b>이번 주 내 완료할 것:</b></p>
+  <ol>
+    <li><code>/api/meta-docs/flow</code> 백엔드 API 구현</li>
+    <li>접근성 개선 (ARIA, 키보드, 폰트 크기)</li>
+    <li>터치 이벤트 지원</li>
+    <li>데이터/표현 분리 리팩토링</li>
+  </ol>
+
+  <p><b>다음 분기 (Phase 2)에서 할 것:</b></p>
+  <ol>
+    <li>성공/실패 분기 정확한 집계 (스키마 확장)</li>
+    <li>자동 레이아웃 + 줌/팬</li>
+    <li>실시간 SSE 업데이트</li>
+    <li>노드 클릭 → 상세 사용 이력 드로어</li>
+  </ol>
+
+  <div style="margin-top:48px; padding-top:24px; border-top:1px solid var(--border); color:var(--text-4); font-size:12px;">
+    본 보고서는 UI/UX, 데이터 아키텍처, 코드 품질, 통합 실용성 4개 관점의 병렬 검토 결과를 종합하여 작성되었습니다.<br>
+    생성일: 2026-05-21 | 검토 대상: prototypes/call-flow.html (v2)
+  </div>
+
+</div>
+</body>
+</html>

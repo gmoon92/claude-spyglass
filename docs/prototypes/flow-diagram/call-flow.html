@@ -1,0 +1,805 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Spyglass — Meta-Doc Call Flow (prototype v2)</title>
+<!--
+  ============================================================================
+  Prototype v2 — 메타 문서 호출 흐름 시각화 (드래그 가능, 디자인 시스템 정렬)
+  ============================================================================
+
+  요약
+    - 좌→우 흐름: User Prompt → 슬래시커맨드 → Main Agent(허브) → Outcome → Success/Failure
+    - 허브 하단 슬롯: SKILLS / AGENTS / TOOLS (점선 연결)
+    - 모든 노드 카드는 드래그로 이동 가능, 연결된 에지가 자동 재계산
+    - 데이터-driven: 하단 <script>의 NODES, EDGES 배열만 바꾸면 그래프 변경
+
+  디자인 결정
+    - 카드/아이콘 박스는 모두 무채색 (--surface-alt / --raised / --text-2~3)
+    - 분류 시그널은 카드 안의 .ds-chip[data-tone=…] 으로만 표시
+       (디자인 시스템의 chip.css SSoT 그대로 흡수)
+    - 색을 부여하는 시그널 4곳:
+         · HOT pill              (상위 호출 슬래시커맨드)         → --accent
+         · 허브 보더             (메인 에이전트)                  → --accent
+         · 메인 동맥 에지 (≥30%) (가장 잦은 흐름)                 → --accent
+         · 성공/실패 분기 에지   (Outcome → ok/ng)                → --success/--error
+      그 외는 모두 무채색·dim·dashed.
+
+  통합 시 분해 예정
+    packages/web/assets/css/flow-diagram.css        ← :root 토큰 미러 삭제, 본 스타일만
+    packages/web/assets/js/meta-docs-flow-view.js   ← 진입 + /api/meta-docs/flow fetch
+    packages/web/assets/js/render/flow-diagram.js   ← NODES/EDGES → SVG 렌더 + drag
+  ============================================================================
+-->
+<style>
+  /* ──────────────────────────────────────────────────────────────────────
+     Mirrored tokens (final 통합 시 design-tokens.css 사용으로 대체)
+     ────────────────────────────────────────────────────────────────────── */
+  :root {
+    --bg:           #0a0a0b;
+    --surface:      #111113;
+    --surface-alt:  #17171a;
+    --raised:       #1e1e22;
+    --floating:     #26262b;
+    --border:       #26262b;
+    --border-strong:#3a3a40;
+
+    --text-1: #F0F6FC;
+    --text-2: #C9D1D9;
+    --text-3: #8B949E;
+    --text-4: #6E7681;
+
+    --error:   #F47174;
+    --warn:    #F0B72F;
+    --success: #3FB950;
+    --info:    #58A6FF;
+    --accent:  #FF7A45;
+
+    --color-accent-soft:  rgba(255,122,69,0.22);
+    --color-success-soft: rgba(63,185,80,0.18);
+    --color-error-soft:   rgba(244,113,116,0.18);
+
+    /* design-system/chips: sub-type 톤 (alpha 0.13/0.32 — 작은 칩 전용) */
+    --sub-type-agent-color:  #FF9B6E;
+    --sub-type-agent-bg:     rgba(255,155,110,0.13);
+    --sub-type-agent-border: rgba(255,155,110,0.32);
+    --sub-type-skill-color:  #A3E635;
+    --sub-type-skill-bg:     rgba(163,230,53,0.13);
+    --sub-type-skill-border: rgba(163,230,53,0.32);
+    --sub-type-task-color:   #F77F00;
+    --sub-type-task-bg:      rgba(247,127,0,0.13);
+    --sub-type-task-border:  rgba(247,127,0,0.32);
+    --sub-type-mcp-color:    #22D3EE;
+    --sub-type-mcp-bg:       rgba(34,211,238,0.13);
+    --sub-type-mcp-border:   rgba(34,211,238,0.32);
+
+    --font-ui:   'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --font-data: 'SF Mono', ui-monospace, 'Menlo', 'JetBrains Mono', 'Consolas', monospace;
+    --text-h2:   16px;
+    --text-h3:   15px;
+    --text-body: 12px;
+    --text-meta: 11px;
+    --radius-sm: 4px;
+
+    /* flow 전용 토큰 (신규) */
+    --flow-grid-dot:   rgba(255,255,255,0.045);
+    --flow-edge:       var(--border-strong);
+    --flow-edge-hi:    var(--accent);
+    --flow-edge-dim:   rgba(110,118,129,0.45);
+    --flow-pct-bg:     #1d1d22;
+    --flow-pct-border: var(--border-strong);
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────
+     Layout & toolbar
+     ────────────────────────────────────────────────────────────────────── */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text-2);
+    font-family: var(--font-ui); font-size: var(--text-body);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .flow-shell { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+
+  .flow-toolbar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 18px;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    user-select: none;
+  }
+  .flow-toolbar h1 {
+    margin: 0; font-size: var(--text-h2); font-weight: 600;
+    color: var(--text-1); letter-spacing: -0.01em;
+  }
+  .flow-toolbar .scope {
+    color: var(--text-3); font-size: var(--text-meta);
+    padding: 3px 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+    background: var(--surface-alt);
+  }
+  .flow-toolbar .scope b { color: var(--text-2); }
+  .flow-toolbar .spacer { flex: 1; }
+  .flow-toolbar button {
+    height: 26px; padding: 0 10px; font: inherit; font-size: var(--text-meta);
+    color: var(--text-2); background: var(--surface-alt);
+    border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+  .flow-toolbar button:hover { background: var(--raised); color: var(--text-1); }
+  .flow-toolbar button.is-active {
+    background: var(--color-accent-soft); border-color: var(--accent); color: var(--text-1);
+  }
+  .flow-toolbar .legend {
+    display: inline-flex; gap: 14px; align-items: center;
+    font-size: var(--text-meta); color: var(--text-3);
+  }
+  .flow-toolbar .legend .sw {
+    display: inline-block; width: 18px; height: 2px; vertical-align: middle;
+    margin-right: 5px; border-radius: 2px;
+  }
+  .flow-toolbar .legend .sw-dashed {
+    height: 0; border-top: 1px dashed var(--text-4); width: 18px;
+  }
+
+  .flow-canvas {
+    position: relative; overflow: auto;
+    background-image: radial-gradient(var(--flow-grid-dot) 1px, transparent 1px);
+    background-size: 16px 16px;
+  }
+
+  svg.flow-svg { display: block; }
+
+  /* ──────────────────────────────────────────────────────────────────────
+     Edges (path + label)
+     ────────────────────────────────────────────────────────────────────── */
+  .edge {
+    fill: none; stroke: var(--flow-edge); stroke-width: 1.6;
+    transition: stroke 120ms cubic-bezier(.2,.8,.2,1);
+  }
+  .edge.is-hot     { stroke: var(--flow-edge-hi); stroke-width: 2.2; }
+  .edge.is-dim     { stroke: var(--flow-edge-dim); stroke-dasharray: 4 4; }
+  .edge.is-success { stroke: var(--success); }
+  .edge.is-error   { stroke: var(--error); }
+  .edge.is-slot    { stroke: var(--text-4); stroke-dasharray: 2 3; stroke-width: 1.2; }
+
+  .edge-pct rect {
+    fill: var(--flow-pct-bg); stroke: var(--flow-pct-border); stroke-width: 1; rx: 4;
+  }
+  .edge-pct text {
+    fill: var(--text-2); font-family: var(--font-data);
+    font-size: 10px; font-weight: 600;
+    dominant-baseline: middle; text-anchor: middle;
+  }
+  .edge-pct text.sub { fill: var(--text-4); font-size: 9px; font-weight: 400; }
+
+  .edge-pct.is-hot     rect { stroke: var(--accent); }
+  .edge-pct.is-hot     text:not(.sub) { fill: var(--accent); }
+  .edge-pct.is-success rect { stroke: var(--success); }
+  .edge-pct.is-success text:not(.sub) { fill: var(--success); }
+  .edge-pct.is-error   rect { stroke: var(--error); }
+  .edge-pct.is-error   text:not(.sub) { fill: var(--error); }
+
+  .slot-label {
+    fill: var(--text-4); font-family: var(--font-data);
+    font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
+    text-anchor: middle; user-select: none;
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────
+     Nodes — 무채색 기본. 분류는 .ds-chip[data-tone] 으로만.
+     ────────────────────────────────────────────────────────────────────── */
+  .node {
+    background: var(--surface-alt);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.32);
+    transition:
+      transform 120ms cubic-bezier(.2,.8,.2,1),
+      border-color 120ms,
+      box-shadow 120ms;
+    cursor: grab;
+    user-select: none;
+  }
+  .node:hover { border-color: var(--text-4); }
+  .node.is-dragging {
+    cursor: grabbing;
+    border-color: var(--text-2);
+    box-shadow: 0 12px 28px rgba(0,0,0,0.55);
+    transform: scale(1.015);
+  }
+
+  .node .icon {
+    width: 28px; height: 28px; flex: 0 0 28px;
+    border-radius: 6px; display: grid; place-items: center;
+    background: var(--raised); color: var(--text-2);
+  }
+  .node .icon svg { width: 16px; height: 16px; }
+
+  .node .body { line-height: 1.25; min-width: 0; flex: 1; }
+  .node .body .title-row {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .node .body .title {
+    color: var(--text-1); font-weight: 600;
+    font-size: var(--text-h3);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .node .body .sub {
+    color: var(--text-3); font-size: var(--text-meta);
+    font-family: var(--font-data); margin-top: 3px; letter-spacing: -0.01em;
+  }
+  .node .body .sub b { color: var(--text-2); font-weight: 600; }
+
+  /* ── .ds-chip — chip.css SSoT 흡수형. 노드 분류 표시 전용. */
+  .ds-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 1px 6px;
+    border: 1px solid transparent; border-radius: var(--radius-sm);
+    font: 600 10px/1 var(--font-ui);
+    letter-spacing: 0.04em; text-transform: uppercase;
+    white-space: nowrap; vertical-align: middle;
+  }
+  .ds-chip[data-tone="agent"]   { color: var(--sub-type-agent-color); background: var(--sub-type-agent-bg); border-color: var(--sub-type-agent-border); }
+  .ds-chip[data-tone="skill"]   { color: var(--sub-type-skill-color); background: var(--sub-type-skill-bg); border-color: var(--sub-type-skill-border); }
+  .ds-chip[data-tone="task"]    { color: var(--sub-type-task-color);  background: var(--sub-type-task-bg);  border-color: var(--sub-type-task-border); }
+  .ds-chip[data-tone="mcp"]     { color: var(--sub-type-mcp-color);   background: var(--sub-type-mcp-bg);   border-color: var(--sub-type-mcp-border); }
+  .ds-chip[data-tone="neutral"] { color: var(--text-3); border-color: var(--border-strong); }
+
+  .meta-pills { display: inline-flex; gap: 4px; margin-left: auto; }
+
+  /* HOT pill — 상위 호출률 시그널. accent 1맥락. */
+  .pill-hot {
+    padding: 1px 6px; border-radius: 9px;
+    background: var(--color-accent-soft); color: var(--accent);
+    border: 1px solid var(--accent);
+    font-family: var(--font-data); font-size: 10px; font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .pill-live {
+    padding: 1px 6px; border-radius: 9px;
+    background: var(--raised); color: var(--text-3);
+    border: 1px solid var(--border-strong);
+    font-family: var(--font-data); font-size: 10px;
+  }
+
+  /* HUB — 메인 에이전트 카드. 보더만 accent, 내부는 무채색. */
+  .node.is-hub {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(255,122,69,0.28), 0 8px 22px rgba(0,0,0,0.45);
+    padding: 12px 14px;
+  }
+  .node.is-hub .icon { width: 36px; height: 36px; flex-basis: 36px; }
+  .node.is-hub .icon svg { width: 20px; height: 20px; }
+  .node.is-hub .body .title { font-size: var(--text-h2); }
+
+  /* 슬롯 노드 (skill/agent/tool 자식) — 더 작은 카드 */
+  .node.is-slot {
+    padding: 6px 9px; gap: 8px;
+  }
+  .node.is-slot .icon { width: 22px; height: 22px; flex-basis: 22px; border-radius: 50%; }
+  .node.is-slot .icon svg { width: 13px; height: 13px; }
+  .node.is-slot .body .title { font-size: var(--text-meta); }
+  .node.is-slot .body .sub { font-size: 10px; margin-top: 2px; }
+
+  /* Terminal 노드 (success / fail) — 아이콘 박스만 의미 색 */
+  .node.is-terminal-ok .icon { background: var(--color-success-soft); color: var(--success); }
+  .node.is-terminal-ng .icon { background: var(--color-error-soft);   color: var(--error); }
+</style>
+</head>
+<body>
+<div class="flow-shell">
+
+  <!-- ── Toolbar ──────────────────────────────────────────── -->
+  <div class="flow-toolbar">
+    <h1>Behavior Call Flow</h1>
+    <span class="scope">project: <b>claude-spyglass</b></span>
+    <span class="scope">window: 최근 7일</span>
+
+    <div class="spacer"></div>
+
+    <span class="legend">
+      <span><span class="sw" style="background:var(--accent)"></span>주요 흐름 (≥30%)</span>
+      <span><span class="sw" style="background:var(--border-strong)"></span>일반</span>
+      <span><span class="sw sw-dashed"></span>슬롯/저빈도</span>
+    </span>
+
+    <button class="is-active">Flow</button>
+    <button>Docs</button>
+    <button>Tools</button>
+    <button id="btnReset" title="레이아웃 초기 위치로 복원">↺ Reset</button>
+  </div>
+
+  <!-- ── Canvas ──────────────────────────────────────────── -->
+  <div class="flow-canvas">
+    <svg id="flowSvg" class="flow-svg"
+         width="1480" height="780"
+         viewBox="0 0 1480 780"
+         xmlns="http://www.w3.org/2000/svg">
+
+      <defs>
+        <!-- 화살촉 marker — 색상 변형별 -->
+        <marker id="arr"          viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 Z" fill="var(--border-strong)"/>
+        </marker>
+        <marker id="arr-hot"      viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 Z" fill="var(--accent)"/>
+        </marker>
+        <marker id="arr-success"  viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 Z" fill="var(--success)"/>
+        </marker>
+        <marker id="arr-error"    viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 Z" fill="var(--error)"/>
+        </marker>
+      </defs>
+
+      <!-- 슬롯 라벨은 위치 고정 (허브 아래 헤더) -->
+      <text class="slot-label" x="380"  y="475">SKILLS</text>
+      <text class="slot-label" x="660"  y="475">AGENTS</text>
+      <text class="slot-label" x="980"  y="475">TOOLS</text>
+
+      <!-- 렌더러가 채울 그룹들 (순서: edges → nodes, nodes가 위로 오게) -->
+      <g id="edgesLayer"></g>
+      <g id="labelsLayer"></g>
+      <g id="nodesLayer"></g>
+    </svg>
+  </div>
+</div>
+
+<!-- ============================================================================
+     데이터 + 렌더러 + 드래그
+     이 블록은 통합 시 render/flow-diagram.js + meta-docs-flow-view.js로 분해.
+     ============================================================================ -->
+<script>
+"use strict";
+
+/**
+ * SVG 아이콘 모음 — currentColor 사용, 16x16 viewBox 기준.
+ * 통합 시 design-system/icons/ 에 이미 있는 아이콘이 있으면 그쪽을 우선 사용.
+ */
+const ICONS = {
+  chat:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  cmd:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
+  agent:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="3"/><circle cx="8.5" cy="13.5" r="1.2" fill="currentColor"/><circle cx="15.5" cy="13.5" r="1.2" fill="currentColor"/><path d="M12 3v4"/><circle cx="12" cy="2.5" r="1.2" fill="currentColor"/></svg>',
+  branch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="M6 9v6"/><path d="M9 18h6"/><path d="M9 6h6a3 3 0 0 1 3 3v6"/></svg>',
+  check:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+  xmark:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+  book:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2z"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+  plan:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21l3-3 7-7 3 3-7 7-3 0z"/><path d="M14 4l6 6"/></svg>',
+  file:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+  edit:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4z"/></svg>',
+};
+
+/**
+ * NODES — 시각화의 노드 카드.
+ *   kind      카드의 분류. ds-chip[data-tone]에도 매핑됨.
+ *   x,y       SVG viewBox 좌표 (좌상단). 드래그 시 갱신됨.
+ *   w,h       카드의 폭/높이. 에지 anchor 계산에 사용.
+ *   variant   'hub' | 'slot' | 'terminal-ok' | 'terminal-ng' | undefined
+ *   pills     카드 우측 상단 메타 칩 (HOT, live 등 — 시그널 한정)
+ *
+ *   통합 시 /api/meta-docs/flow 응답을 이 shape으로 매핑.
+ */
+const NODES = [
+  // ── trigger
+  { id: 't0', kind: 'trigger', title: 'User Prompt',  sub: '<b>61</b> turns',                            icon: 'chat',   x:   40, y: 130, w: 160, h: 80 },
+
+  // ── slash commands (col1)
+  { id: 'c1', kind: 'command', title: '/ultrareview', sub: '<b>38</b>회 · 62%',                          icon: 'cmd',    x:  240, y: 130, w: 200, h: 80, pills: ['hot'] },
+  { id: 'c2', kind: 'command', title: '/git:commit',  sub: '<b>14</b>회 · 23%',                          icon: 'cmd',    x:  240, y: 220, w: 200, h: 80 },
+  { id: 'c3', kind: 'command', title: '/memory',      sub: '<b>3</b>회 · 4%',                            icon: 'cmd',    x:  240, y: 310, w: 200, h: 80 },
+
+  // ── hub
+  { id: 'h',  kind: 'agent',   title: 'Main Agent',   sub: 'Opus 4.7 · <b>61</b> 턴 · 평균 4.2 도구/턴', icon: 'agent',  x:  520, y: 230, w: 260, h: 100, variant: 'hub', pills: ['live'], chip: null },
+
+  // ── branch + terminals
+  { id: 'b',  kind: 'branch',  title: 'Outcome',      sub: '결과 분기 (true/false)',                      icon: 'branch', x:  880, y: 240, w: 160, h: 100 },
+  { id: 'ok', kind: 'success', title: 'Success',       sub: '<b>43</b>턴 · 71%',                          icon: 'check',  x: 1120, y: 140, w: 200, h: 80, variant: 'terminal-ok' },
+  { id: 'ng', kind: 'failure', title: 'Failure / Retry', sub: '<b>18</b>턴 · 29%',                        icon: 'xmark',  x: 1120, y: 360, w: 200, h: 80, variant: 'terminal-ng' },
+
+  // ── slot row (skills / agents / tools 자식)
+  { id: 's1', kind: 'skill', title: 'git:commit',   sub: '<b>27</b>회 · 18%', icon: 'book',   x:  300, y: 600, w: 140, h: 56, variant: 'slot' },
+  { id: 's2', kind: 'skill', title: 'skill-creator', sub: '<b>9</b>회 · 6%',  icon: 'book',   x:  450, y: 600, w: 140, h: 56, variant: 'slot' },
+  { id: 'a1', kind: 'agent', title: 'Explore',      sub: '<b>22</b>회 · 14%', icon: 'search', x:  600, y: 600, w: 130, h: 56, variant: 'slot' },
+  { id: 'a2', kind: 'agent', title: 'Plan',         sub: '<b>11</b>회 · 7%',  icon: 'plan',   x:  740, y: 600, w: 130, h: 56, variant: 'slot' },
+  { id: 'l1', kind: 'task',  title: 'Read',         sub: '<b>184</b>회 · 85%', icon: 'file',  x:  880, y: 600, w: 130, h: 56, variant: 'slot' },
+  { id: 'l2', kind: 'task',  title: 'Bash',         sub: '<b>62</b>회 · 32%', icon: 'cmd',    x: 1020, y: 600, w: 130, h: 56, variant: 'slot' },
+  { id: 'l3', kind: 'task',  title: 'Edit',         sub: '<b>118</b>회 · 60%', icon: 'edit',  x: 1160, y: 600, w: 130, h: 56, variant: 'slot' },
+];
+
+/**
+ * EDGES — 노드 간 호출 관계.
+ *   kind      'main' | 'hot' | 'dim' | 'success' | 'error' | 'slot'
+ *               · hot     : 메인 동맥(≥30%) — accent
+ *               · dim     : 저빈도(<5%)    — dashed dim
+ *               · success/error : 분기 라인 — 의미 색
+ *               · slot    : 허브 → 슬롯 자식 점선
+ *   label     { pct, count?, sub? } — 화살표 위에 그릴 % 칩
+ *   tone      라벨 칩의 강조 색 ('hot' | 'success' | 'error' | undefined)
+ *
+ *   anchorFrom/anchorTo가 비면 chooseAnchors()가 노드 위치로 자동 결정.
+ */
+const EDGES = [
+  { id: 'e0', from: 't0', to: 'c1', kind: 'main' },
+  { id: 'e1', from: 'c1', to: 'h',  kind: 'hot',  label: { pct: 62, count: 38 }, tone: 'hot' },
+  { id: 'e2', from: 'c2', to: 'h',  kind: 'main', label: { pct: 23 } },
+  { id: 'e3', from: 'c3', to: 'h',  kind: 'dim',  label: { pct: 4 } },
+  { id: 'e4', from: 'h',  to: 'b',  kind: 'hot',  label: { pct: 100, sub: '분기' }, tone: 'hot' },
+  { id: 'e5', from: 'b',  to: 'ok', kind: 'success', label: { pct: 71 }, tone: 'success' },
+  { id: 'e6', from: 'b',  to: 'ng', kind: 'error',   label: { pct: 29 }, tone: 'error' },
+
+  // 허브 하단 슬롯 점선 — anchorFrom/To 강제하여 항상 bottom/top
+  { id: 'sk1', from: 'h', to: 's1', kind: 'slot', anchorFrom: 'bottom', anchorTo: 'top' },
+  { id: 'sk2', from: 'h', to: 's2', kind: 'slot', anchorFrom: 'bottom', anchorTo: 'top' },
+  { id: 'ag1', from: 'h', to: 'a1', kind: 'slot', anchorFrom: 'bottom', anchorTo: 'top' },
+  { id: 'ag2', from: 'h', to: 'a2', kind: 'slot', anchorFrom: 'bottom', anchorTo: 'top' },
+  { id: 'to1', from: 'h', to: 'l1', kind: 'slot', anchorFrom: 'bottom', anchorTo: 'top' },
+  { id: 'to2', from: 'h', to: 'l2', kind: 'slot', anchorFrom: 'bottom', anchorTo: 'top' },
+  { id: 'to3', from: 'h', to: 'l3', kind: 'slot', anchorFrom: 'bottom', anchorTo: 'top' },
+];
+
+const INITIAL_POSITIONS = NODES.map(n => ({ id: n.id, x: n.x, y: n.y }));
+
+/**
+ * 분류(kind) → ds-chip[data-tone] 매핑.
+ * 디자인 시스템 chip.css의 SSoT를 그대로 따른다.
+ * 'command/trigger/branch/success/failure'는 따로 칩을 두지 않는다 — 아이콘으로 충분히 식별됨.
+ */
+const KIND_TO_TONE = {
+  skill: 'skill',
+  agent: 'agent',
+  task:  'task',
+  mcp:   'mcp',
+};
+
+/**
+ * kind → 카드 좌상단에 표시할 분류 라벨 텍스트.
+ * 분류 칩을 두지 않는 종류는 null.
+ */
+const KIND_TO_LABEL = {
+  skill: 'SKILL',
+  agent: 'AGENT',
+  task:  'TOOL',
+  mcp:   'MCP',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 렌더링
+// ─────────────────────────────────────────────────────────────────────────────
+
+const svgEl       = document.getElementById('flowSvg');
+const edgesLayer  = document.getElementById('edgesLayer');
+const labelsLayer = document.getElementById('labelsLayer');
+const nodesLayer  = document.getElementById('nodesLayer');
+
+/** SVGNS — createElementNS용 */
+const SVGNS  = 'http://www.w3.org/2000/svg';
+const HTMLNS = 'http://www.w3.org/1999/xhtml';
+
+const nodeIndex = new Map();  // id → { node, foEl }
+const edgeIndex = new Map();  // id → { edge, pathEl, labelEl }
+
+/**
+ * 한 노드의 HTML 카드(foreignObject)를 만든다.
+ * 카드는 무채색 기본, kind에 따른 ds-chip 만 차별화.
+ */
+function makeNodeFO(node) {
+  const fo = document.createElementNS(SVGNS, 'foreignObject');
+  fo.setAttribute('x', node.x);
+  fo.setAttribute('y', node.y);
+  fo.setAttribute('width', node.w);
+  fo.setAttribute('height', node.h);
+  fo.dataset.nodeId = node.id;
+
+  // ── 카드 본체 (HTML)
+  const card = document.createElementNS(HTMLNS, 'div');
+  card.className = 'node';
+  if (node.variant === 'hub')         card.classList.add('is-hub');
+  if (node.variant === 'slot')        card.classList.add('is-slot');
+  if (node.variant === 'terminal-ok') card.classList.add('is-terminal-ok');
+  if (node.variant === 'terminal-ng') card.classList.add('is-terminal-ng');
+  card.dataset.nodeId = node.id;
+
+  // ── icon 박스
+  const icon = document.createElementNS(HTMLNS, 'div');
+  icon.className = 'icon';
+  icon.innerHTML = ICONS[node.icon] || '';
+  card.appendChild(icon);
+
+  // ── body
+  const body = document.createElementNS(HTMLNS, 'div');
+  body.className = 'body';
+
+  const titleRow = document.createElementNS(HTMLNS, 'div');
+  titleRow.className = 'title-row';
+  const title = document.createElementNS(HTMLNS, 'div');
+  title.className = 'title';
+  title.textContent = node.title;
+  titleRow.appendChild(title);
+
+  // 분류 칩 (skill / agent / task / mcp 만)
+  const tone = KIND_TO_TONE[node.kind];
+  if (tone && KIND_TO_LABEL[node.kind] && node.variant !== 'slot') {
+    const chip = document.createElementNS(HTMLNS, 'span');
+    chip.className = 'ds-chip';
+    chip.dataset.tone = tone;
+    chip.textContent = KIND_TO_LABEL[node.kind];
+    titleRow.appendChild(chip);
+  }
+  body.appendChild(titleRow);
+
+  if (node.sub) {
+    const sub = document.createElementNS(HTMLNS, 'div');
+    sub.className = 'sub';
+    sub.innerHTML = node.sub;
+    body.appendChild(sub);
+  }
+  card.appendChild(body);
+
+  // ── 우측 pills (HOT, live 등)
+  if (node.pills && node.pills.length) {
+    const pills = document.createElementNS(HTMLNS, 'span');
+    pills.className = 'meta-pills';
+    for (const p of node.pills) {
+      const el = document.createElementNS(HTMLNS, 'span');
+      if (p === 'hot')  { el.className = 'pill-hot';  el.textContent = 'HOT'; }
+      else if (p === 'live') { el.className = 'pill-live'; el.textContent = 'live'; }
+      else                   { el.className = 'pill-live'; el.textContent = p; }
+      pills.appendChild(el);
+    }
+    card.appendChild(pills);
+  }
+
+  fo.appendChild(card);
+  return fo;
+}
+
+/**
+ * 노드 한 변에서 에지가 출발/도착하는 앵커 포인트.
+ *   side: 'left' | 'right' | 'top' | 'bottom'
+ */
+function anchorPoint(node, side) {
+  switch (side) {
+    case 'left':   return { x: node.x,            y: node.y + node.h / 2 };
+    case 'right':  return { x: node.x + node.w,   y: node.y + node.h / 2 };
+    case 'top':    return { x: node.x + node.w/2, y: node.y };
+    case 'bottom': return { x: node.x + node.w/2, y: node.y + node.h };
+  }
+}
+
+/**
+ * 두 노드 사이의 가장 자연스러운 양쪽 앵커를 자동 결정.
+ * 수직 거리가 수평 거리보다 80% 이상 크면 top/bottom, 아니면 left/right.
+ */
+function chooseAnchors(from, to) {
+  const dx = (to.x + to.w/2) - (from.x + from.w/2);
+  const dy = (to.y + to.h/2) - (from.y + from.h/2);
+  if (Math.abs(dy) > Math.abs(dx) * 0.8) {
+    return dy > 0 ? ['bottom', 'top'] : ['top', 'bottom'];
+  }
+  return dx > 0 ? ['right', 'left'] : ['left', 'right'];
+}
+
+/**
+ * 베지어 path 와 라벨 위치(t=0.5)를 동시에 계산.
+ * 통합 시 동일 함수를 SVG.js helper 모듈로 이동.
+ */
+function bezierFor(fromNode, toNode, anchorFrom, anchorTo) {
+  const [sa, sb] = (anchorFrom && anchorTo) ? [anchorFrom, anchorTo] : chooseAnchors(fromNode, toNode);
+  const p1 = anchorPoint(fromNode, sa);
+  const p2 = anchorPoint(toNode,   sb);
+
+  let c1, c2;
+  if (sa === 'right' || sa === 'left') {
+    const dx = Math.max(40, Math.abs(p2.x - p1.x) * 0.5);
+    c1 = { x: p1.x + (sa === 'right' ?  dx : -dx), y: p1.y };
+    c2 = { x: p2.x + (sb === 'left'  ? -dx :  dx), y: p2.y };
+  } else {
+    const dy = Math.max(40, Math.abs(p2.y - p1.y) * 0.5);
+    c1 = { x: p1.x, y: p1.y + (sa === 'bottom' ?  dy : -dy) };
+    c2 = { x: p2.x, y: p2.y + (sb === 'top'    ? -dy :  dy) };
+  }
+
+  // 베지어 t=0.5 지점 (3차 베지어의 분석적 중간점)
+  const mid = {
+    x: 0.125 * p1.x + 0.375 * c1.x + 0.375 * c2.x + 0.125 * p2.x,
+    y: 0.125 * p1.y + 0.375 * c1.y + 0.375 * c2.y + 0.125 * p2.y,
+  };
+
+  return {
+    d: `M ${p1.x},${p1.y} C ${c1.x},${c1.y} ${c2.x},${c2.y} ${p2.x},${p2.y}`,
+    mid,
+  };
+}
+
+/**
+ * 한 에지의 path + label 요소를 만든다.
+ * 결과는 edgeIndex에 캐시되어 드래그 시 재계산에 쓰임.
+ */
+function makeEdge(edge) {
+  const from = nodeById(edge.from);
+  const to   = nodeById(edge.to);
+  const { d, mid } = bezierFor(from, to, edge.anchorFrom, edge.anchorTo);
+
+  const path = document.createElementNS(SVGNS, 'path');
+  path.classList.add('edge');
+  if (edge.kind === 'hot')     { path.classList.add('is-hot');     path.setAttribute('marker-end', 'url(#arr-hot)'); }
+  else if (edge.kind === 'dim')     { path.classList.add('is-dim');     path.setAttribute('marker-end', 'url(#arr)'); }
+  else if (edge.kind === 'success') { path.classList.add('is-success'); path.setAttribute('marker-end', 'url(#arr-success)'); }
+  else if (edge.kind === 'error')   { path.classList.add('is-error');   path.setAttribute('marker-end', 'url(#arr-error)'); }
+  else if (edge.kind === 'slot')    { path.classList.add('is-slot'); }
+  else                              { path.setAttribute('marker-end', 'url(#arr)'); }
+  path.setAttribute('d', d);
+  path.dataset.edgeId = edge.id;
+  edgesLayer.appendChild(path);
+
+  // 라벨 (있을 때만)
+  let labelEl = null;
+  if (edge.label) {
+    labelEl = makeLabel(edge, mid);
+    labelsLayer.appendChild(labelEl);
+  }
+
+  edgeIndex.set(edge.id, { edge, pathEl: path, labelEl });
+}
+
+/** % 칩 SVG <g> 만들기 */
+function makeLabel(edge, mid) {
+  const g = document.createElementNS(SVGNS, 'g');
+  g.classList.add('edge-pct');
+  if (edge.tone === 'hot')     g.classList.add('is-hot');
+  if (edge.tone === 'success') g.classList.add('is-success');
+  if (edge.tone === 'error')   g.classList.add('is-error');
+
+  const hasSub = edge.label.sub || edge.label.count !== undefined;
+  const w = hasSub ? 52 : 42;
+  const h = hasSub ? 24 : 18;
+
+  const rect = document.createElementNS(SVGNS, 'rect');
+  rect.setAttribute('x', -w/2);
+  rect.setAttribute('y', -h/2);
+  rect.setAttribute('width',  w);
+  rect.setAttribute('height', h);
+  g.appendChild(rect);
+
+  const pct = document.createElementNS(SVGNS, 'text');
+  pct.setAttribute('y', hasSub ? -2 : 0);
+  pct.textContent = `${edge.label.pct}%`;
+  g.appendChild(pct);
+
+  if (hasSub) {
+    const sub = document.createElementNS(SVGNS, 'text');
+    sub.setAttribute('y', 8);
+    sub.classList.add('sub');
+    sub.textContent = edge.label.count !== undefined ? `${edge.label.count}회` : edge.label.sub;
+    g.appendChild(sub);
+  }
+
+  g.setAttribute('transform', `translate(${mid.x},${mid.y})`);
+  return g;
+}
+
+/** 한 에지의 path d + label 위치를 노드의 현재 위치 기준으로 갱신. */
+function refreshEdge(edge) {
+  const ref = edgeIndex.get(edge.id);
+  if (!ref) return;
+  const from = nodeById(edge.from);
+  const to   = nodeById(edge.to);
+  const { d, mid } = bezierFor(from, to, edge.anchorFrom, edge.anchorTo);
+  ref.pathEl.setAttribute('d', d);
+  if (ref.labelEl) ref.labelEl.setAttribute('transform', `translate(${mid.x},${mid.y})`);
+}
+
+/** 특정 노드와 연결된 모든 에지를 갱신. 드래그 mousemove에서 호출. */
+function refreshEdgesOf(nodeId) {
+  for (const edge of EDGES) {
+    if (edge.from === nodeId || edge.to === nodeId) refreshEdge(edge);
+  }
+}
+
+function nodeById(id) { return NODES.find(n => n.id === id); }
+
+function renderAll() {
+  // 청소
+  edgesLayer.innerHTML  = '';
+  labelsLayer.innerHTML = '';
+  nodesLayer.innerHTML  = '';
+  nodeIndex.clear();
+  edgeIndex.clear();
+
+  // 노드 먼저 만들어두고 (앵커 계산에 .w/.h 필요), DOM 부착
+  for (const node of NODES) {
+    const fo = makeNodeFO(node);
+    nodesLayer.appendChild(fo);
+    nodeIndex.set(node.id, { node, foEl: fo });
+  }
+
+  // 에지는 노드가 다 있어야 그릴 수 있음
+  for (const edge of EDGES) makeEdge(edge);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 드래그
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * SVG 좌표계로 변환된 마우스 포인트.
+ * viewBox가 캔버스 픽셀과 1:1이 아니어도 안전.
+ */
+function svgPoint(evt) {
+  const pt = svgEl.createSVGPoint();
+  pt.x = evt.clientX;
+  pt.y = evt.clientY;
+  return pt.matrixTransform(svgEl.getScreenCTM().inverse());
+}
+
+/**
+ * 드래그 바인딩.
+ *   - mousedown: .node 카드를 찾아 시작점 기록
+ *   - mousemove: NODES[i].x/y 업데이트 → foreignObject 이동 → 연결 에지 재계산
+ *   - mouseup:   종료, 노드를 z-index 맨 위로 (DOM 마지막으로 append)
+ */
+function bindDrag() {
+  let active = null; // { id, offsetX, offsetY, card, fo }
+
+  svgEl.addEventListener('mousedown', (e) => {
+    const card = e.target.closest('.node');
+    if (!card) return;
+    const id = card.dataset.nodeId;
+    const ref = nodeIndex.get(id);
+    if (!ref) return;
+    const p = svgPoint(e);
+    active = {
+      id,
+      offsetX: p.x - ref.node.x,
+      offsetY: p.y - ref.node.y,
+      card,
+      fo: ref.foEl,
+    };
+    card.classList.add('is-dragging');
+    // z-index 효과: 드래그 중 노드를 nodesLayer의 마지막으로 이동
+    nodesLayer.appendChild(ref.foEl);
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!active) return;
+    const p = svgPoint(e);
+    const ref = nodeIndex.get(active.id);
+    if (!ref) return;
+    ref.node.x = p.x - active.offsetX;
+    ref.node.y = p.y - active.offsetY;
+    active.fo.setAttribute('x', ref.node.x);
+    active.fo.setAttribute('y', ref.node.y);
+    refreshEdgesOf(active.id);
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (!active) return;
+    active.card.classList.remove('is-dragging');
+    active = null;
+  });
+}
+
+// 초기 위치 복원
+document.getElementById('btnReset').addEventListener('click', () => {
+  for (const init of INITIAL_POSITIONS) {
+    const ref = nodeIndex.get(init.id);
+    if (!ref) continue;
+    ref.node.x = init.x;
+    ref.node.y = init.y;
+    ref.foEl.setAttribute('x', init.x);
+    ref.foEl.setAttribute('y', init.y);
+  }
+  for (const edge of EDGES) refreshEdge(edge);
+});
+
+renderAll();
+bindDrag();
+</script>
+</body>
+</html>
