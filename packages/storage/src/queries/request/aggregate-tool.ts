@@ -100,6 +100,32 @@ export function getSessionToolStats(
 }
 
 /**
+ * 프로젝트 단위 행 라벨 표현식 — Agent/Skill 세분화 SSoT.
+ *
+ * 책임:
+ *  - 메타 모드 [도구] 탭은 `tool_name` 단일 컬럼으로 행을 묶는다.
+ *  - MCP 도구는 이미 `mcp__<server>__<tool>` 풀네임이라 자연스럽게 세분화되어 노출되지만,
+ *    `Agent` / `Skill`은 raw tool_name이 한 토큰이라 모든 subagent_type / skill 호출이
+ *    한 행으로 합쳐져 의미를 잃었다(사용자 피드백 2026-05-21).
+ *  - 본 CASE식은 Agent/Skill 행에 한해 `tool_detail`(subagent_type 또는 skill 이름)을
+ *    함수 호출 스타일로 감싸 별도 라벨로 노출한다 — 예: `Agent(Plan)`, `Skill(document-skills:symbol-map)`.
+ *  - 프론트엔드 아이콘 판정(`/^(Agent|Skill|Task)/`)은 접두사 매칭이므로 ◎ 오렌지 칩이 그대로 유지된다.
+ *
+ * 비-Agent/Skill / tool_detail 누락 행은 원본 tool_name을 그대로 사용 — 회귀 없음.
+ *
+ * SELECT 와 GROUP BY 양쪽에 같은 식을 써야 하므로 상수로 추출해 SSoT 보장.
+ */
+const PROJECT_TOOL_LABEL_EXPR = `
+  CASE
+    WHEN tool_name = 'Agent' AND COALESCE(tool_detail, '') <> ''
+      THEN 'Agent(' || tool_detail || ')'
+    WHEN tool_name = 'Skill' AND COALESCE(tool_detail, '') <> ''
+      THEN 'Skill(' || tool_detail || ')'
+    ELSE tool_name
+  END
+`.trim();
+
+/**
  * 프로젝트 범위 도구별 성능 통계 (Feature meta-docs-tool-stats ADR-004).
  *
  * @description
@@ -110,6 +136,7 @@ export function getSessionToolStats(
  *   - `fromTs` / `toTs`는 `requests.timestamp` 범위 옵션 필터.
  *   - JOIN이 아닌 IN 서브쿼리 — `idx_sessions_project` 인덱스로 효율적 매칭.
  *   - 신뢰도/event_type/type 필터는 `getSessionToolStats`와 동일 유지(SSoT).
+ *   - Agent/Skill 세분화: `PROJECT_TOOL_LABEL_EXPR` 참조 (subagent_type / skill 이름 단위 행 분리).
  */
 export function getProjectToolStats(
   db: Database,
@@ -138,7 +165,7 @@ export function getProjectToolStats(
         ${tsWhereExtra}
     )
     SELECT
-      tool_name,
+      ${PROJECT_TOOL_LABEL_EXPR} AS tool_name,
       COUNT(*) AS call_count,
       COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE 0 END), 0) AS total_tokens,
       COALESCE(AVG(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE NULL END), 0) AS avg_tokens,
@@ -154,7 +181,7 @@ export function getProjectToolStats(
       AND tool_name IS NOT NULL
       AND (event_type IS NULL OR event_type = 'tool')
       ${tsWhereExtra}
-    GROUP BY tool_name
+    GROUP BY ${PROJECT_TOOL_LABEL_EXPR}
     ORDER BY total_tokens DESC, call_count DESC
   `).all(...cteParams, ...params) as SessionToolStats[];
 }
