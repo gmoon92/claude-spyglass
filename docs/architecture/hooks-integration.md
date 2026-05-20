@@ -8,7 +8,7 @@
 이 문서는 훅이 발화되는 시점부터 DB·SSE에 반영되는 시점까지의 데이터 흐름과
 등록·확장·진단 방법을 단일 진실 공급원(single source of truth) 수준으로 정리합니다.
 
-> 설치·운영의 큰 그림은 [`install-guide.md`](./install-guide.md)를 참고하세요.
+> 설치·운영의 큰 그림은 [`install-guide.md`](../install-guide.md)를 참고하세요.
 > 본 문서는 **훅 메커니즘 자체**에 집중합니다.
 
 ---
@@ -45,31 +45,23 @@ spyglass는 **모든 훅을 단 하나의 bash 스크립트**(`hooks/spyglass-co
 스크립트는 stdin 페이로드를 받아 로컬 spyglass 서버(`http://127.0.0.1:9999`)로 HTTP POST 합니다.
 Claude Code 프로세스를 블로킹하지 않도록 백그라운드(`&`)에서 비동기 전송됩니다.
 
-```text
-┌─ Claude Code ──────────────────────────────────────────────┐
-│  도구 호출 · prompt 입력 · Session 변화                    │
-│         │                                                  │
-│         ▼  (stdin: JSON)                                   │
-│   bash $SPYGLASS_DIR/hooks/spyglass-collect.sh             │
-│         │                                                  │
-│         ├─ ~/.spyglass/logs/hook-raw.jsonl                 │
-│         │     (원장: 모든 이벤트 1줄씩 보존)               │
-│         │                                                  │
-│         ▼  (curl -X POST, 비동기 fire-and-forget)          │
-│   spyglass 서버 :9999                                      │
-│         ├─ POST /collect    PreToolUse · PostToolUse ·     │
-│         │                   UserPromptSubmit               │
-│         └─ POST /events     Session* · Stop · Notification │
-│                             · PreCompact · 그 외 전부      │
-│                  │                                         │
-│                  ▼                                         │
-│         정규화 → SQLite                                    │
-│             • requests        (prompt / tool / response)   │
-│             • claude_events   (raw 페이로드 원장)          │
-│             • sessions        (세션 메타)                  │
-│                  │                                         │
-│                  └─→ SSE 브로드캐스트 → 웹·TUI 실시간 갱신 │
-└────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    CC[Claude Code\n도구 호출 · prompt 입력 · Session 변화]
+    SH[spyglass-collect.sh\nstdin: JSON]
+    LOG[hook-raw.jsonl\n원장: 모든 이벤트 1줄씩 보존]
+    COLLECT[POST /collect\nPreToolUse · PostToolUse · UserPromptSubmit]
+    EVENTS[POST /events\nSession* · Stop · Notification · PreCompact · 그 외]
+    DB[SQLite\nrequests · claude_events · sessions]
+    SSE[SSE 브로드캐스트\n웹·TUI 실시간 갱신]
+
+    CC -->|stdin JSON| SH
+    SH --> LOG
+    SH -->|curl 비동기 fire-and-forget| COLLECT
+    SH -->|curl 비동기 fire-and-forget| EVENTS
+    COLLECT -->|정규화| DB
+    EVENTS -->|원장 저장| DB
+    DB --> SSE
 ```
 
 > **약어 안내** — SSE: Server-Sent Events(서버→클라이언트 단방향 실시간 스트림).
@@ -92,7 +84,7 @@ Claude Code 프로세스를 블로킹하지 않도록 백그라운드(`&`)에서
 spyglass는 Claude Code가 보내는 모든 훅을 받을 수 있도록 설계되어 있습니다.
 이벤트는 두 부류로 나뉩니다 — **정밀하게 정규화하는 이벤트**(전용 핸들러 보유)와
 **raw 원장만 보존하는 이벤트**(스키마-라이트 보존).
-spyglass가 지원하는 총 이벤트 수는 **28종**입니다(`/collect` 3종 + `/events` 25종).
+spyglass가 지원하는 총 이벤트 수는 **27종**입니다(`/collect` 3종 + `/events` 24종).
 
 ### 2.1 정규화되는 이벤트 (`/collect` 라우트)
 
@@ -325,7 +317,9 @@ curl -s -w "\n%{http_code}" \
 
 ```ts
 if (path === '/collect') {
-  return handleHookHttpRequest(req, db);   // packages/server/src/hook/http-entry.ts
+  const result = await handleHookHttpRequest(req, db);   // packages/server/src/hook/http-entry.ts
+  if (result.status === 200) invalidateDashboardCache();
+  return result;
 }
 if (path === '/events') {
   if (req.method === 'POST') return eventsCollectHandler(req, db.instance);
@@ -335,67 +329,56 @@ if (path === '/events') {
 
 같은 `/events` 경로가 **POST는 수집, GET은 SSE 구독**으로 양분되는 점을 기억하세요.
 
+**`invalidateDashboardCache()`** (`packages/server/src/routes/dashboard.ts`):
+`/api/dashboard` 응답 캐시(TTL 30s)를 무효화하는 함수입니다. 활성 세션 중 훅 이벤트가 폭풍처럼 연속 도착할 때 매번 캐시를 비우면 Bun 이벤트 루프가 포화될 수 있으므로, **5초 debounce** 방식으로 동작합니다 — 첫 호출 시 5초 타이머를 시작하고, 타이머가 살아있는 동안 추가 호출은 흡수합니다. 타이머 만료 시 `_dashboardCache = null`로 초기화됩니다.
+호출 지점: `dispatch.ts`(`/collect` 200 응답), `events.ts`(Stop 훅 처리), `proxy/handler/broadcast.ts`(proxy INSERT).
+테스트·긴급 상황에서는 debounce를 우회하는 `invalidateDashboardCacheNow()`를 사용합니다.
+
 ### 4.2 `/collect` 파이프라인 (정규화 채널)
 
-```
-handleHookHttpRequest(req, db)
-  │
-  │  ① JSON 파싱 + console.log("[RECV] ...") + diagJson('hook-payload', ...)
-  │
-  ▼
-dispatchHookEvent(raw, ctx)              // dispatcher.ts (Strategy registry)
-  │
-  ├─ raw.hook_event_name === 'PreToolUse'        → PreToolUseHandler.handle
-  ├─ raw.hook_event_name === 'PostToolUse'       → PostToolUseHandler.handle
-  ├─ raw.hook_event_name === 'UserPromptSubmit'  → UserPromptSubmitHandler.handle
-  └─ 그 외                                       → SystemEventHandler.handle (fallback)
-  │
-  ▼
-handler.handle(raw, ctx)                  // raw → NormalizedHookPayload 정제
-  │   • transcript 읽고 model / tokens / cache_* 추출
-  │   • extractToolDetail(toolName, toolInput, toolResponse?)
-  │   • extractHookAuditMeta(raw) — permission_mode/agent_id/...
-  │   • extractSlashCommand(prompt) — /foo → 'foo'
-  │
-  ▼
-processHookEvent(db, payload)             // processor.ts
-  │   • ensureSession (sessions INSERT OR IGNORE)
-  │   • saveRequest   (Upsert: PostToolUse는 동일 tool_use_id의 pre_tool UPDATE)
-  │   • updateSessionTotalTokens (pre_tool은 스킵, 그 외 누적)
-  │   • broadcastNewRequest (event_type='pre_tool'은 송출 X)
-  │
-  ▼
-HookProcessResult { success, request_id, session_id, saved, error? }
+```mermaid
+flowchart TD
+    ENTRY[handleHookHttpRequest\nJSON 파싱 + diagJson]
+    DISPATCH[dispatchHookEvent\ndispatcher.ts Strategy Registry]
+    PRE[PreToolUseHandler.handle]
+    POST[PostToolUseHandler.handle]
+    PROMPT[UserPromptSubmitHandler.handle]
+    FALLBACK[SystemEventHandler.handle\nfallback]
+    NORMALIZE[handler.handle\nraw → NormalizedHookPayload\n· transcript 파싱 model/tokens/cache\n· extractToolDetail\n· extractHookAuditMeta\n· extractSlashCommand]
+    PROCESS[processHookEvent\nprocessor.ts\n· ensureSession\n· saveRequest Upsert\n· updateSessionTotalTokens\n· broadcastNewRequest]
+    RESULT[HookProcessResult\nsuccess · request_id · session_id]
+
+    ENTRY --> DISPATCH
+    DISPATCH -->|PreToolUse| PRE
+    DISPATCH -->|PostToolUse| POST
+    DISPATCH -->|UserPromptSubmit| PROMPT
+    DISPATCH -->|그 외| FALLBACK
+    PRE --> NORMALIZE
+    POST --> NORMALIZE
+    PROMPT --> NORMALIZE
+    FALLBACK --> NORMALIZE
+    NORMALIZE --> PROCESS
+    PROCESS --> RESULT
 ```
 
 ### 4.3 `/events` 파이프라인 (raw 보존 채널)
 
-```
-eventsCollectHandler(req, db)             // events.ts
-  │
-  │  ① 필수 필드 검증 (hook_event_name, session_id)
-  │  ② diagJson('hook-payload', ...) — /collect와 동일하게 보존
-  │
-  ▼
-createEvent(db, {
-  event_id: crypto.randomUUID(),
-  event_type: payload.hook_event_name,    // 원본 이름 그대로
-  session_id, transcript_path, cwd,
-  agent_id, agent_type, timestamp,
-  payload: JSON.stringify(raw),
-  schema_version: 1,
-  permission_mode, source, end_reason, model,
-  stop_hook_active, task_id, task_subject, notification_type,
-});
-  ▼
-event_type 분기:
-  • SessionEnd   → endSession(...)        + broadcastSessionUpdate({ action: 'ended' })
-  • SessionStart → reactivateSession(...) + broadcastSessionUpdate({ action: 'started' })
-                  + syncMetaDocsCwd(db, cwd)  // slash command 카탈로그 동기화
-  • Stop         → saveAssistantResponse(db, payload, timestamp)
-                  (transcript 백필로 모든 assistant text 응답 INSERT OR IGNORE,
-                   last_assistant_message → requests 테이블에 type='response')
-  • 그 외       → claude_events 저장만 (추가 처리 없음)
+```mermaid
+flowchart TD
+    ENTRY[eventsCollectHandler\n필수 필드 검증 + diagJson]
+    CREATE[createEvent\nclaude_events INSERT\nevent_type = hook_event_name 원본]
+    BRANCH{event_type 분기}
+    SE[SessionEnd\nendSession\n+ broadcastSessionUpdate ended]
+    SS[SessionStart\nreactivateSession\n+ broadcastSessionUpdate started\n+ syncMetaDocsCwd]
+    STOP[Stop\nsaveAssistantResponse\ntranscript 백필 INSERT OR IGNORE\nlast_assistant_message → requests]
+    OTHER[그 외\nclaude_events 저장만]
+
+    ENTRY --> CREATE
+    CREATE --> BRANCH
+    BRANCH -->|SessionEnd| SE
+    BRANCH -->|SessionStart| SS
+    BRANCH -->|Stop| STOP
+    BRANCH -->|그 외| OTHER
 ```
 
 ### 4.4 저장되는 테이블 요약
@@ -429,7 +412,7 @@ event_type 분기:
 ## 5. `.claude/settings.json` 등록 방법
 
 **요약**: 두 가지 프로파일이 있습니다 — **minimal**(6개 이벤트, 코어 기능 충분) /
-**full**(28개 이벤트, 모든 메트릭 활성화). 모든 항목은 동일한 명령(`bash $SPYGLASS_DIR/hooks/spyglass-collect.sh`)을 가리킵니다.
+**full**(27개 이벤트, 모든 메트릭 활성화). 모든 항목은 동일한 명령(`bash $SPYGLASS_DIR/hooks/spyglass-collect.sh`)을 가리킵니다.
 
 > 훅은 반드시 **글로벌 `~/.claude/settings.json`** 에 등록하세요.
 > 프로젝트 단위 설정에 두면 다른 프로젝트의 작업이 누락됩니다.
@@ -488,7 +471,7 @@ event_type 분기:
 }
 ```
 
-### 5.3 full 프로파일 — 28개 이벤트 (권장, `docs/examples/settings.hooks.full.json`)
+### 5.3 full 프로파일 — 27개 이벤트 (권장, `docs/examples/settings.hooks.full.json`)
 
 **대상**: 모든 메트릭(compact·permission·subagent·worktree 등)을 활용하고 싶을 때.
 모든 항목은 동일한 패턴을 따르므로 한 줄로 요약하면 다음과 같습니다.
@@ -513,7 +496,7 @@ event_type 분기:
 | 시스템 상태 | `ConfigChange`, `WorktreeCreate`, `WorktreeRemove`, `InstructionsLoaded`, `CwdChanged`, `FileChanged` |
 
 전체 파일은 `docs/examples/settings.hooks.full.json`을 참고하세요.
-`jq` 자동 병합 절차는 [`install-guide.md` §4.4](./install-guide.md#44-자동-병합-jq-사용--권장)를 사용하세요.
+`jq` 자동 병합 절차는 [`install-guide.md` §4.4](../install-guide.md#44-자동-병합-jq-사용--권장)를 사용하세요.
 
 ### 5.4 등록 검증
 
@@ -546,26 +529,25 @@ transcript 백필(Stop), 서브에이전트 자식 추출의 4가지 핵심 패�
 
 도구 1회 호출은 두 개의 훅을 발생시키며, spyglass는 같은 `tool_use_id`를 가진 두 페이로드를 **한 개의 `requests` 행으로 병합**합니다.
 
-```
-T0  PreToolUse  (tool_use_id=toolu_01ABC)
-      → PreToolUseHandler
-          • toolTimingMap.set('toolu_01ABC', T0)
-          • requests INSERT  id='pre-T0-xxxxxxxx', event_type='pre_tool',
-                              tool_name='Bash', tool_detail='ls -la',
-                              tokens_*=0, duration_ms=0
-          • 세션 토큰 누적 X (pre_tool=0)
-          • SSE 송출 X (미완성)
+```mermaid
+sequenceDiagram
+    participant CC as Claude Code
+    participant SH as spyglass-collect.sh
+    participant SV as 서버 /collect
+    participant DB as requests 테이블
+    participant SSE as SSE 브로드캐스트
 
-T1  PostToolUse (tool_use_id=toolu_01ABC, duration_ms=412)
-      → PostToolUseHandler
-          • findPreToolRecord → 'pre-T0-xxxxxxxx' 존재
-          • UPDATE requests SET duration_ms=412, tokens_*=..., cache_*=...,
-                                 model=COALESCE(?, model),
-                                 event_type='tool', payload=<post raw>
-            WHERE id='pre-T0-xxxxxxxx'
-          • updateSessionTotalTokens
-          • SSE broadcastNewRequest(id='pre-T0-xxxxxxxx', phase='created')
-            ↳ id는 DB의 실제 id — fetchRequests와 일치 보장
+    CC->>SH: PreToolUse (tool_use_id=toolu_01ABC)
+    SH->>SV: POST /collect
+    SV->>DB: INSERT pre_tool 행\nevent_type=pre_tool, duration_ms=0
+    Note over DB: toolTimingMap.set(toolu_01ABC, T0)
+    Note over SSE: SSE 송출 X (미완성)
+
+    CC->>SH: PostToolUse (tool_use_id=toolu_01ABC, duration_ms=412)
+    SH->>SV: POST /collect
+    SV->>DB: findPreToolRecord → pre-T0-xxxxxxxx 존재
+    SV->>DB: UPDATE requests\nSET event_type=tool, duration_ms=412\ntokens/cache/model 갱신
+    SV->>SSE: broadcastNewRequest(id=pre-T0-xxxxxxxx)
 ```
 
 부수 효과 (`PostToolUseHandler.handle` 후반부):
@@ -576,22 +558,25 @@ T1  PostToolUse (tool_use_id=toolu_01ABC, duration_ms=412)
 
 ### 6.2 UserPromptSubmit
 
-```
-사용자가 입력 →
-  └─ UserPromptSubmit
-      └─ /collect → UserPromptSubmitHandler
-          • resolveTranscriptContext(raw) — transcript 파싱 (model, tokens)
-          • extractSlashCommand(raw.prompt) — '/foo ...' → 'foo'
-          • requests INSERT
-              id='prompt-T-xxxxxxxx'
-              type='prompt', event_type='prompt'
-              turn_id = assignTurnId(...)   ← 새 turn 채번
-              model = transcript.model (best-effort)
-              tokens_* = transcript usage (없으면 0)
-              slash_command = 'foo' | null
-              permission_mode, ...audit
-          • 세션 토큰 누적
-          • SSE 송출
+```mermaid
+flowchart TD
+    USER[사용자 입력]
+    HOOK[UserPromptSubmit 훅 발화]
+    COLLECT[POST /collect\nUserPromptSubmitHandler]
+    TRANSCRIPT[resolveTranscriptContext\ntranscript 파싱: model, tokens]
+    SLASH[extractSlashCommand\n/foo → foo]
+    INSERT[requests INSERT\ntype=prompt, event_type=prompt\nturn_id 새 채번\nmodel/tokens_*/slash_command/permission_mode]
+    TOKEN[세션 토큰 누적]
+    SSE[SSE 송출]
+
+    USER --> HOOK
+    HOOK --> COLLECT
+    COLLECT --> TRANSCRIPT
+    COLLECT --> SLASH
+    TRANSCRIPT --> INSERT
+    SLASH --> INSERT
+    INSERT --> TOKEN
+    INSERT --> SSE
 ```
 
 신규 세션의 첫 프롬프트는 transcript에 아직 어시스턴트 라인이 없어 `tokens_*=0`, `model=NULL`로 저장될 수 있습니다.
@@ -603,11 +588,11 @@ T1  PostToolUse (tool_use_id=toolu_01ABC, duration_ms=412)
 
 - **SessionStart** — `reactivateSession(db, session_id)`(`ended_at=NULL`) + SSE `session.started` + `cwd` 기준 Behavior Definitions 카탈로그 동기화 (5초 throttle).
 - **SessionEnd** — `endSession(db, session_id, timestamp)`(`ended_at` 설정) + SSE `session.ended`.
-- **Stop** — `saveAssistantResponse(db, payload, timestamp)`:
-  1. `extractAssistantTextEntries(transcript_path)`로 turn 내 모든 어시스턴트 텍스트 응답을 `INSERT OR IGNORE`.
-  2. `last_assistant_message`가 비어 있으면 `proxy_requests`의 120초 윈도우로 폴백(fallback).
-  3. `requests` INSERT (`type='response'`, `event_type='assistant_response'`, `turn_id = getTurnIdAt(session, timestamp)`).
-  4. SSE `broadcastNewRequest` 송출.
+- **Stop** — `saveAssistantResponse(db, payload, timestamp)` 4단계 폴백 시퀀스:
+  1. **transcript 백필** — `extractAssistantTextEntries(transcript_path)`로 turn 내 모든 어시스턴트 텍스트 항목을 `persistAssistantTextResponses`로 `INSERT OR IGNORE`. 마지막 항목의 `message_id`를 `lastEntryMessageId`로 보관.
+  2. **메시지 소스 결정** — Stop 페이로드의 `last_assistant_message`를 1차 소스로 사용. 비어 있으면 `proxy_requests` 120초 윈도우(`getLatestProxyResponseBefore`)로 폴백. 그래도 없으면 no-op 반환.
+  3. **중복 INSERT 회피** — `lastEntryMessageId`가 있고 `requests` 테이블에 해당 행(`resp-msg-<message_id>`)이 이미 존재하면 자체 INSERT 생략, `invalidateDashboardCache()` 호출 후 반환 (transcript 백필 행이 SSoT).
+  4. **self-INSERT + SSE 송출** — transcript/proxy에서 토큰·모델을 best-effort 추출하고 `getTurnIdAt` → `getLastTurnId` 순으로 `turn_id` 결정 후 `createRequest`(`type='response'`, `event_type='assistant_response'`)로 INSERT. `invalidateDashboardCache()` 호출 후 DB에서 행을 다시 SELECT해 정규화(`normalizeRequest`) + 이상치 부여(`enrichRowWithAnomalies`) → `broadcastNewRequest` 송출.
 
 ### 6.4 Compact / Permission / Worktree 등
 

@@ -248,37 +248,64 @@ createSearchBox('feedSearchContainer', {
 
 ### 5.1 의존 그래프 (주요 모듈)
 
-```
-main.js
-├── 렌더링
-│   ├── chart.js / context-chart.js     canvas (timeline / 도넛 / 컨텍스트)
-│   └── renderers.js (re-export)
-│       └── render/{badges,model,cells,extract,expand,rows,skeleton}.js
-│
-├── 데이터 / 통신
-│   ├── api.js                          fetchDashboard / fetchRequests / ...
-│   │   ├── formatters.js               fmt / fmtToken / fmtRelative / escHtml
-│   │   ├── cache-panel.js / obs-panel.js
-│   │   └── anomaly.js / left-panel.js / events.js
-│   └── sse.js                          /events (new_request / proxy / session_update)
-│
-├── 뷰
-│   ├── views/default-view.js
-│   │   └── default/{bootstrap,chart-policy,feed-live,feed-interactions,...}.js
-│   ├── views/detail-view.js            loadSession / abortCurrentSession
-│   └── session-detail.js / meta-docs-view.js / tool-stats.js / system-prompt-library.js
-│
-├── 상태 / 컴포넌트
-│   ├── state.js                        appMode / metaSubTab / rightView / selected* SSoT
-│   ├── components/{filter-bar,search-box}.js
-│   └── i18n.js + i18n-dom.js           전역 window.I18n
-│
-├── 인터랙션
-│   ├── panel-resize.js / left-panel-vertical-resize.js / col-resize.js
-│   └── stat-tooltip.js / cache-tooltip.js / cache-panel-tooltip.js / obs-tooltip.js
-│
-└── 부가
-    └── version-check.js / sparkline.js / dom-preserve.js / infra.js
+```mermaid
+graph TD
+  main["main.js"]
+
+  subgraph 렌더링
+    chart["chart.js / context-chart.js\ncanvas(timeline/도넛/컨텍스트)"]
+    renderers["renderers.js (re-export)"]
+    render["render/{badges,model,cells,\nextract,expand,rows,skeleton}.js"]
+    renderers --> render
+  end
+
+  subgraph 데이터_통신
+    api["api.js\nfetchDashboard / fetchRequests / ..."]
+    formatters["formatters.js"]
+    cache_obs["cache-panel.js / obs-panel.js"]
+    anomaly["anomaly.js / left-panel.js / events.js"]
+    sse["sse.js\n/events(new_request/proxy/session_update)"]
+    api --> formatters
+    api --> cache_obs
+    api --> anomaly
+  end
+
+  subgraph 뷰
+    default_view["views/default-view.js"]
+    default_sub["default/{bootstrap,chart-policy,\nfeed-live,feed-interactions,...}.js"]
+    detail_view["views/detail-view.js\nloadSession / abortCurrentSession"]
+    misc_view["session-detail.js / meta-docs-view.js\ntool-stats.js / system-prompt-library.js"]
+    default_view --> default_sub
+  end
+
+  subgraph 상태_컴포넌트
+    state["state.js\nappMode/metaSubTab/rightView/selected* SSoT"]
+    components["components/{filter-bar,search-box}.js"]
+    i18n["i18n.js + i18n-dom.js\n전역 window.I18n"]
+  end
+
+  subgraph 인터랙션
+    resize["panel-resize.js / left-panel-vertical-resize.js / col-resize.js"]
+    tooltip["stat-tooltip.js / cache-tooltip.js\ncache-panel-tooltip.js / obs-tooltip.js"]
+  end
+
+  subgraph 부가
+    misc["version-check.js / sparkline.js\ndom-preserve.js / infra.js"]
+  end
+
+  main --> chart
+  main --> renderers
+  main --> api
+  main --> sse
+  main --> default_view
+  main --> detail_view
+  main --> misc_view
+  main --> state
+  main --> components
+  main --> i18n
+  main --> resize
+  main --> tooltip
+  main --> misc
 ```
 
 ### 5.2 `api.js` — 서버 통신
@@ -309,12 +336,48 @@ main.js
 6. 패널 resize / 툴팁 / 탭 / 단축키 초기화
 7. `setInterval(advanceBuckets, 60_000)` + `setInterval(fetchAllSessions, 30_000)`
 
-SSE 콜백 `onNewRequest` 흐름:
+SSE 채널 및 클라이언트 구독 흐름:
 
+```mermaid
+flowchart TD
+  EventSource["EventSource('/events')"]
+
+  new_request["이벤트: new_request\n(훅 데이터 — requests 테이블)"]
+  new_proxy_request["이벤트: new_proxy_request\n(프록시 데이터 — proxy_requests 테이블)"]
+  session_update["이벤트: session_update\n(세션 started/ended/token_update)"]
+  ping["이벤트: ping\n(8초 연결 유지)"]
+
+  onNewRequest["onNewRequest(e)"]
+  onNewProxyRequest["onNewProxyRequest(e)"]
+  onSessionUpdate["onSessionUpdate(e)"]
+
+  recordRequest["recordRequest()"]
+  drawTimeline["drawTimeline()"]
+  prependRequest["prependRequest(req)"]
+  refreshDetail["refreshDetailSession(...)"]
+  scheduleRefresh["scheduleDashboardRefresh()\ndebounce 1s · maxWait 3s"]
+
+  EventSource --> new_request
+  EventSource --> new_proxy_request
+  EventSource --> session_update
+  EventSource --> ping
+
+  new_request --> onNewRequest
+  new_proxy_request --> onNewProxyRequest
+  session_update --> onSessionUpdate
+
+  onNewRequest --> recordRequest
+  recordRequest --> drawTimeline
+  onNewRequest --> prependRequest
+  prependRequest --> refreshDetail
+  onNewRequest --> scheduleRefresh
+
+  onSessionUpdate --> sidebarUpdate["세션 캐시 갱신\n+ 사이드바 재렌더"]
+  onNewProxyRequest --> proxyFeed["프록시 피드 갱신\n(UI 미노출 경로)"]
 ```
-recordRequest() → drawTimeline() → prependRequest(req) → refreshDetailSession(...)
-                → scheduleDashboardRefresh()    // debounce 1s · maxWait 3s
-```
+
+> `sse.js`는 `onNewProxyRequest`·`onSessionUpdate`가 콜백으로 전달된 경우에만 해당 채널을 등록합니다(후방 호환).
+> 서버(`packages/server/src/sse.ts`)는 연결 직후 `ping`을 1회 전송하고 이후 8초 간격으로 반복합니다.
 
 ### 5.4 `renderers.js` — DOM 렌더
 
@@ -323,12 +386,62 @@ recordRequest() → drawTimeline() → prependRequest(req) → refreshDetailSess
 | 모듈 | 책임 |
 |------|------|
 | `render/badges.js` | `typeBadge`, `toolIconHtml`, `toolStatusBadge`, `toolResponseHint` |
+| `render/icons.js` | 디자인 시스템 아이콘 호환 shim. `design-system/icons/*` 개별 SVG를 하나의 import 경로로 re-export |
 | `render/model.js` | 모델 라벨 / 짧은 이름 / 컬러 매핑 |
 | `render/cells.js` | `makeActionCell`, `makeTargetCell`, `makeModelCell`, `makeCacheCell` |
 | `render/extract.js` | payload에서 preview / role / tool_response 추출 |
 | `render/expand.js` | `togglePromptExpand`, `resolveExpandTarget` |
 | `render/rows.js` | `makeRequestRow`, `makeSessionRow`, `makeTurnRow` |
 | `render/skeleton.js` | skeleton row 정책 |
+
+### 5.4-b `views/default/` — DefaultView 서브모듈
+
+`views/default-view.js`가 조립하는 내부 모듈로, 각 파일의 변경 이유(축)가 분리되어 있습니다.
+
+| 모듈 | 담당 축 | 책임 |
+|------|---------|------|
+| `bootstrap.js` | G축 — 조립 | `initDefaultView` 컴포지션 루트. 모듈 부팅 순서와 클로저(검색 박스) 보관 |
+| `chart-policy.js` | A축 — 차트 정책 | 타임라인·도넛 모드 전환 정책, `timeline-meta` 라벨 갱신, `ResizeObserver` 정책 |
+| `constants.js` | 공용 상수 | `localStorage` 키 (`spyglass:lastProject` 등) 등 여러 모듈이 공유하는 상수 |
+| `feed-interactions.js` | C축 — 인터랙션 | 검색 박스·클릭 위임·필터 바 — 사용자 입력 → 피드 표시 상태 매핑 |
+| `feed-live.js` | B축 — 라이브 | SSE `new_request`를 피드 테이블에 prepend / in-place 갱신. `prependRequest` SSoT |
+| `keyboard.js` | D축 — 키보드 | `Esc` 우선순위 정책, `/`·`?`·`1~7` 등 단축키 정의 및 KBD 도움말 모달 |
+| `layout-persist.js` | E축 — 레이아웃 영속 | 차트 섹션·좌측 패널 접힘 상태 `localStorage` 저장·복원. 키 네임스페이스 마이그레이션 |
+
+### 5.4-c `session-detail/` — 세션 상세 서브모듈
+
+`session-detail.js`(루트)는 facade로, 실 구현은 아래 4개 파일로 분리되어 있습니다.
+
+| 모듈 | 책임 |
+|------|------|
+| `session-detail/index.js` | facade — 데이터 로드(`loadSessionDetail`, `refreshDetailSession`), 검색 박스 초기화(`initDetailSearch`), 외부 호출자 인터페이스 re-export |
+| `session-detail/state.js` | 모듈 수준 상태 단일 캡슐화 (필터 / 요청·턴 목록 / 검색어 / 펼침 ID / 필터 결과) |
+| `session-detail/flat-view.js` | 평면 요청 표 렌더(`renderDetailRequests`) + 필터·검색 처리(`applyDetailFilter`). `DETAIL_FILTER_CHANGED` 이벤트로 차트·뷰 디커플링 |
+| `session-detail/turn-views.js` | 턴 카드 뷰(`renderTurnCards`) / 레거시 테이블 뷰(`renderTurnView`) + 탭 전환·카드 펼침 |
+| `session-detail/turn-rows.js` | 단일 turn 내부 행 빌더 — prompt / tool_call / response 인터리빙 HTML 조립 |
+| `session-detail/system-reminder.js` | `<system-reminder>` 블록 추출 + dedup / diff SSoT |
+| `session-detail/system-reminder-popover.js` | system-reminder 칩 ↔ 팝오버 인터랙션 (토글·위치·포커스 복귀) |
+
+### 5.4-d 루트 레벨 주요 JS 모듈 (`packages/web/assets/js/`)
+
+| 모듈 | 책임 |
+|------|------|
+| `main.js` | 부트스트랩 진입점. i18n → 모드 복원 → 데이터 초기 로드 → SSE 구독 → 인터랙션 초기화 |
+| `sse.js` | `connectSSE()` — `EventSource('/events')` 연결 관리 및 3채널 구독 (`new_request` / `new_proxy_request` / `session_update`) |
+| `api.js` | 서버 REST 통신 전담. 응답 `{ success, data }` 래핑, 8초 `AbortSignal.timeout`, 에러 배너 |
+| `state.js` | `appMode` / `metaSubTab` / `rightView` / `selected*` 등 전역 UI 상태 SSoT |
+| `chart.js` | timeline 막대 차트 + donut 도넛 차트 canvas 렌더 |
+| `context-chart.js` | 세션 상세 진입 시 컨텍스트 성장 차트로 교체되는 canvas 렌더 |
+| `formatters.js` | 순수 포맷 함수 (`fmt`, `fmtToken`, `formatDuration`, `fmtRelative`, `escHtml`, ...) |
+| `renderers.js` | `render/*` re-export 진입점 |
+| `events.js` | 훅 이벤트 관련 처리 |
+| `anomaly.js` | 이상 이벤트 표시 매핑 헬퍼 (`getAnomalyFlagsForRow` 등) |
+| `left-panel.js` | 좌측 패널 프로젝트·세션 섹션 렌더 |
+| `infra.js` | 스크롤 잠금 배너 등 범용 인프라 헬퍼 |
+| `dom-preserve.js` | 인터랙션 상태(스크롤 위치·펼침) 캡처/복원 유틸 |
+| `i18n.js` + `i18n-dom.js` | `window.I18n` 전역 — 언어 로딩·전환·DOM 자동 적용 |
+| `sparkline.js` | 미니 스파크라인 캔버스 헬퍼 |
+| `version-check.js` | 서버 버전 폴링 → 신버전 감지 시 `#updateModal` 노출 |
 
 ### 5.5 `formatters.js`
 

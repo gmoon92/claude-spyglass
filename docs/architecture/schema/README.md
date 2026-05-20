@@ -8,7 +8,7 @@ Claude Spyglass SQLite 데이터베이스 스키마 설명서입니다.
 |------|------|
 | DB 파일 | `~/.spyglass/spyglass.db` |
 | 엔진 | SQLite (WAL 모드) |
-| 테이블 수 | 9개 |
+| 테이블 수 | 14개 |
 
 ## 테이블 목록
 
@@ -23,61 +23,103 @@ Claude Spyglass SQLite 데이터베이스 스키마 설명서입니다.
 | `meta_documents` | agents/skills/commands/CLAUDE.md 카탈로그 | [meta-documents.md](meta-documents.md) |
 | `meta_doc_resolutions` | cwd별 (type, name) → meta_document_id 매핑 | [meta-documents.md](meta-documents.md) |
 | `model_limits` | Claude 모델별 context/output limit | [model-limits.md](model-limits.md) |
+| `metadata` | 서버 운영용 key-value 저장소 | — |
+| `stats_hourly` | hook 요청 사전 집계 (시간 단위) | — |
+| `stats_proxy_hourly` | proxy 요청 사전 집계 (시간 단위) | — |
+| `anomaly_thresholds` | bloated-sys / agent-spike 임계값 SSoT (project_id, model_id) 기준 warn_pct / critical_pct | — |
+| `_migrations` | 마이그레이션 적용 히스토리 시스템 메타 (filename, applied_at, app_version, duration_ms) | — |
 
 ## ERD
 
-```
-┌──────────────────┐         ┌──────────────────────┐
-│     sessions     │         │       requests       │
-├──────────────────┤         ├──────────────────────┤
-│ PK id            │◄────────┤ FK session_id        │
-│    project_name  │         │    type              │
-│    started_at    │         │    tool_name         │
-│    ended_at      │    ┌────┤    api_request_id    │
-│    total_tokens  │    │    │    tool_use_id       │
-└──────────────────┘    │    │    tokens_*          │
-         │              │    │    duration_ms       │
-         │              │    └──────────────────────┘
-         ▼              │
-┌──────────────────┐    │    ┌──────────────────────┐
-│  claude_events   │    │    │    proxy_requests     │
-├──────────────────┤    │    ├──────────────────────┤
-│ PK id            │    └───►│ PK id (api_request_id│
-│    event_id      │         │    session_id        │
-│    event_type    │         │    system_hash ──────┼──┐
-│    session_id    │         │    tokens_*          │  │
-│    timestamp     │         │    duration_ms       │  │
-│    payload       │         └──────────────────────┘  │
-└──────────────────┘                  │                │
-                                      │                │
-                         ┌────────────┘                │
-                         ▼                             ▼
-              ┌──────────────────────┐   ┌─────────────────────┐
-              │   proxy_tool_uses    │   │   system_prompts    │
-              ├──────────────────────┤   ├─────────────────────┤
-              │ PK id                │   │ PK system_hash      │
-              │ FK api_request_id    │   │    content          │
-              │    tool_use_id       │   │    byte_size        │
-              └──────────────────────┘   │    ref_count        │
-                                         └─────────────────────┘
+```mermaid
+erDiagram
+    sessions {
+        TEXT id PK
+        string project_name
+        datetime started_at
+        datetime ended_at
+        int total_tokens
+    }
+    requests {
+        TEXT id PK
+        TEXT session_id FK
+        string type
+        string tool_name
+        string api_request_id
+        string tool_use_id
+        int tokens_input
+        int tokens_output
+        int tokens_total
+        int duration_ms
+    }
+    claude_events {
+        int id PK
+        string event_id
+        string event_type
+        int session_id FK
+        datetime timestamp
+        json payload
+    }
+    proxy_requests {
+        string id PK
+        int session_id FK
+        string system_hash FK
+        int tokens_input
+        int tokens_output
+        int duration_ms
+    }
+    proxy_tool_uses {
+        int id PK
+        string api_request_id FK
+        string tool_use_id
+    }
+    system_prompts {
+        string system_hash PK
+        text content
+        int byte_size
+        int ref_count
+    }
+    meta_documents {
+        int id PK
+        string type
+        string name
+        string content_hash
+        string file_path
+    }
+    meta_doc_resolutions {
+        int id PK
+        int meta_document_id FK
+        string cwd
+        string type
+        string name
+    }
+    model_limits {
+        TEXT pattern PK
+        int max_tokens
+        string notes
+    }
+    anomaly_thresholds {
+        TEXT project_id PK
+        TEXT model_id PK
+        int warn_pct
+        int critical_pct
+        int updated_at
+    }
+    _migrations {
+        int version PK
+        text filename
+        int applied_at
+        text app_version
+        int duration_ms
+    }
 
-┌──────────────────────┐         ┌───────────────────────────┐
-│    meta_documents    │         │   meta_doc_resolutions    │
-├──────────────────────┤         ├───────────────────────────┤
-│ PK id                │◄────────┤ FK meta_document_id       │
-│    type              │         │    cwd                    │
-│    name              │         │    type                   │
-│    content_hash      │         │    name                   │
-│    file_path         │         └───────────────────────────┘
-└──────────────────────┘
-
-┌──────────────────────┐
-│     model_limits     │
-├──────────────────────┤
-│ PK model             │
-│    context_window    │
-│    max_output        │
-└──────────────────────┘
+    sessions ||--o{ requests : "session_id"
+    sessions ||--o{ claude_events : "session_id"
+    sessions ||--o{ proxy_requests : "session_id"
+    requests }o--o| proxy_requests : "api_request_id"
+    proxy_requests ||--o{ proxy_tool_uses : "api_request_id"
+    proxy_requests }o--o| system_prompts : "system_hash"
+    meta_documents ||--o{ meta_doc_resolutions : "meta_document_id"
 ```
 
 ## 설정 (PRAGMA)

@@ -10,14 +10,15 @@ claude-spyglass의 모든 설정 옵션을 다룹니다. 환경 변수, `.env` �
 
 claude-spyglass는 별도의 JSON 설정 파일을 두지 않고 **환경 변수**를 단일 소스로 사용합니다. 값이 충돌할 때 적용 우선순위는 다음 그림과 같습니다 — 위쪽이 더 높습니다.
 
-```
-   [1] 셸/OS 환경 변수             ← 가장 높음 (임시 오버라이드)
-        ↓ (없으면)
-   [2] 프로젝트 루트 .env           ← Bun 런타임이 자동 로드
-        ↓ (없으면)
-   [3] ~/.claude/settings.json/env  ← 훅 자식 프로세스에만 전달
-        ↓ (없으면)
-   [4] 코드 내 기본값                ← 최후 fallback
+```mermaid
+flowchart TD
+    A["[1] 셸/OS 환경 변수 ← 가장 높음 (임시 오버라이드)"]
+    B["[2] 프로젝트 루트 .env ← Bun 런타임이 자동 로드"]
+    C["[3] ~/.claude/settings.json/env ← 훅 자식 프로세스에만 전달"]
+    D["[4] 코드 내 기본값 ← 최후 fallback"]
+    A -->|없으면| B
+    B -->|없으면| C
+    C -->|없으면| D
 ```
 
 각 채널의 적용 범위:
@@ -41,10 +42,12 @@ claude-spyglass는 별도의 JSON 설정 파일을 두지 않고 **환경 변수
 |------|------|--------|------|--------|
 | `SPGLASS_PORT` | number | `9999` | HTTP/SSE 서버 리스닝 포트 | `packages/server/src/runtime/config.ts` |
 | `SPGLASS_HOST` | string | `127.0.0.1` | 서버 바인딩 주소 (외부 노출 시 `0.0.0.0`) | `packages/server/src/runtime/config.ts` |
-| `SPGLASS_DB_PATH` | string | `$HOME/.spyglass/spyglass.db` | SQLite 파일 절대 경로 | `packages/storage/src/connection.ts` |
+| `SPGLASS_DB_PATH` | string | `$HOME/.spyglass/spyglass.db` | SQLite 파일 절대 경로 | `packages/server/src/runtime/config.ts` |
 | `SPYGLASS_PID_FILE` | string | `$HOME/.spyglass/server.pid` | 서버 데몬 PID 파일 경로 | `packages/server/src/runtime/daemon.ts` |
 | `SPYGLASS_SERVER_LOG` | string | `$HOME/.spyglass/logs/server.log` | 서버 stdout/stderr 미러링 파일 | `packages/server/src/runtime/stdio-mirror.ts` |
 | `SPYGLASS_RETENTION_DAYS` | number | `30` | 일별 cleanup에서 보존할 세션 일수 | `packages/server/src/runtime/maintenance.ts` |
+| `SPYGLASS_SHUTDOWN_TIMEOUT_MS` | number | `10000` | graceful shutdown 최대 대기 시간(ms). SIGTERM/SIGINT 핸들러 guard timer 및 in-flight 요청 완료 대기에 사용 | `packages/server/src/runtime/config.ts` |
+| `SPYGLASS_APP_VERSION` | string | (미설정 — `package.json` 버전 자동 읽기) | DB 마이그레이션 기록(`_migrations.app_version`)에 주입할 버전 문자열. 테스트·CI에서 명시적으로 주입할 때 사용 | `packages/storage/src/migrator.ts` |
 
 ### TUI 런타임
 
@@ -53,6 +56,7 @@ claude-spyglass는 별도의 JSON 설정 파일을 두지 않고 **환경 변수
 | `SPYGLASS_API_URL` | string | `http://127.0.0.1:9999` | TUI가 서버에 접근할 base URL | `packages/tui/src/app.tsx` |
 | `SPYGLASS_PROJECT` | string | `basename(cwd)` | 필터링 대상 프로젝트명 (현재 디렉토리 이름으로 자동 추정) | `packages/tui/src/lib/current-project.ts` |
 | `SPYGLASS_ALL_PROJECTS` | `0`/`1` | (미설정) | `1`이면 프로젝트 필터를 끄고 전체 세션 표시 | `packages/tui/src/lib/current-project.ts` |
+| `SPYGLASS_NO_MOTION` | `0`/`1` | (미설정) | `1`이면 TUI 애니메이션·동적 리프레시를 비활성화. 터미널이 motion을 지원하지 않거나 접근성 설정이 필요할 때 사용 | `packages/tui/src/lib/capabilities.ts` |
 | `DEBUG_ALIGN` | `0`/`1` | (미설정) | TUI 테이블 정렬 디버그 출력 (테스트 전용) | `packages/tui/src/__tests__/tool-row-alignment.test.ts` |
 
 ### 언어/로케일
@@ -114,18 +118,16 @@ DEFAULT_LANG    = 'ko'
 
 기본 포트는 **9999** (`DEFAULT_PORT`, `packages/server/src/runtime/config.ts`). 아래 4곳이 모두 같은 포트를 가리켜야 정상 동작합니다 — 하나라도 어긋나면 데이터 수집이 중단됩니다.
 
-```
-                      ┌──────────────────────────────┐
-   Claude CLI ───────►│  ANTHROPIC_BASE_URL : 9999   │  (~/.claude/settings.json)
-                      └────────────┬─────────────────┘
-                                   │
-   hooks/spyglass-collect.sh ─────►│  SPYGLASS_PORT      : 9999
-                                   ▼
-                      ┌──────────────────────────────┐
-                      │  서버 listen  SPGLASS_PORT   │  : 9999
-                      └────────────▲─────────────────┘
-                                   │
-   TUI (packages/tui) ────────────►│  SPYGLASS_API_URL   : http://127.0.0.1:9999
+```mermaid
+flowchart TD
+    CLI["Claude CLI\n(~/.claude/settings.json)"]
+    HOOK["hooks/spyglass-collect.sh"]
+    TUI["TUI (packages/tui)"]
+    SRV["서버 listen\nSPGLASS_PORT : 9999"]
+
+    CLI -->|"ANTHROPIC_BASE_URL : 9999"| SRV
+    HOOK -->|"SPYGLASS_PORT : 9999"| SRV
+    TUI -->|"SPYGLASS_API_URL : http://127.0.0.1:9999"| SRV
 ```
 
 | 역할 | 변수 | 위치 |

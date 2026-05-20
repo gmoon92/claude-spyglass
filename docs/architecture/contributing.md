@@ -75,7 +75,7 @@ bun install
 
 `bun install` 직후 `package.json`의 `prepare` 스크립트가 자동 실행되어 `git config core.hooksPath .githooks` 가 적용됩니다.
 이로써 `post-push` 훅이 등록됩니다.
-`packages/**` 또는 `hooks/**` 변경을 푸시한 직후 `claude -p` 가 호출되어 `docs/architecture.md` / `README.md` 가 자동 현행화됩니다.
+`packages/**` 또는 `hooks/**` 변경을 푸시한 직후 `claude -p` 가 호출되어 `docs/architecture/architecture.md` / `README.md` 가 자동 현행화됩니다.
 자세한 동작은 [`.githooks/post-push`](../.githooks/post-push) 를 참조하세요.
 
 `prepare` 가 실행되지 않은 환경에서는 `bun run prepare` 를 수동 실행하세요.
@@ -87,7 +87,7 @@ CI 등 훅이 불필요한 곳은 `git config --unset core.hooksPath` 로 해제
 bun run doctor   # 환경·DB·서버 무결성 점검
 bun start        # 서버 데몬 기동
 bun run tui      # TUI 대시보드
-# 웹 대시보드: http://localhost:18080 (기본)
+# 웹 대시보드: http://localhost:9999 (기본)
 ```
 
 서버가 떠 있는 상태에서 Claude Code 세션을 한 번 실행해 데이터를 적재하면 실제 데이터로 UI를 확인할 수 있습니다.
@@ -126,9 +126,10 @@ bun run tui      # TUI 대시보드
 |---------------|------|
 | `spyglass.db` (WAL) | SQLite 메인 DB |
 | `spyglass.db-wal`, `spyglass.db-shm` | WAL 모드 사이드카 파일 |
-| `timing/{session_id}` | PreToolUse 타임스탬프 |
-| `hook-raw.jsonl` | 디버깅용 raw 이벤트 |
-| `spyglass.log`, `spyglass.pid` | 데몬 로그·PID |
+| `logs/server.log` | 서버 stdout/stderr 미러 |
+| `logs/collect.log` | 훅 스크립트 호출·에러 로그 |
+| `logs/hook-raw.jsonl` | 훅이 받은 raw 페이로드 (1줄/이벤트) |
+| `server.pid` | 데몬 PID |
 
 DB 를 초기화하려면 `~/.spyglass/` 를 통째로 지우세요.
 통계 테이블만 재구성하려면 `bun run rebuild-stats` 또는 `bun run rebuild-stats-proxy` 를 실행합니다.
@@ -364,7 +365,7 @@ DB 스키마·쿼리·집계·훅 데이터 흐름 변경은 모두 **`data-anal
 3. **회귀 테스트 추가** — 새 컬럼/테이블이 기존 통계 쿼리에 영향을 주지 않는지 검증.
 4. **로컬 검증** — `~/.spyglass/spyglass.db` 를 백업한 뒤 `bun start` → 마이그레이션 적용 확인.
 5. **집계 재계산 검증** — `bun run rebuild-stats` / `rebuild-stats-proxy` 가 깨지지 않는지 확인.
-6. **문서 동기화** — `docs/architecture.md` 의 테이블 목록은 push 시 `post-push` 훅이 자동 현행화. 훅이 없는 환경이면 `doc-spec` 스킬로 수동 갱신.
+6. **문서 동기화** — `docs/architecture/architecture.md` 의 테이블 목록은 push 시 `post-push` 훅이 자동 현행화. 훅이 없는 환경이면 `doc-spec` 스킬로 수동 갱신.
 
 ### 7.3 훅 수집 스크립트 변경
 
@@ -396,11 +397,11 @@ DB 스키마·쿼리·집계·훅 데이터 흐름 변경은 모두 **`data-anal
 
 `designer` 에이전트는 다음 4단계를 **순서대로** 호출합니다.
 
-```
-1. doc-planning  →  plan.md     (목표·범위 정의)
-2. doc-adr       →  adr.md      (기술 결정 기록)
-3. doc-tasks     →  tasks.md    (작업 분해)
-4. ui-designer   →  Phase 1~5   (실제 구현)
+```mermaid
+flowchart LR
+    A[doc-planning\nplan.md\n목표·범위 정의] --> B[doc-adr\nadr.md\n기술 결정 기록]
+    B --> C[doc-tasks\ntasks.md\n작업 분해]
+    C --> D[ui-designer\nPhase 1~5\n실제 구현]
 ```
 
 > **3개 문서(plan / adr / tasks)가 완성된 후에만** 4단계 구현을 진행합니다.
@@ -429,27 +430,22 @@ Ink 컴포넌트는 `packages/tui/src/components/` 와 `screens/` 로 분리되�
 
 ```
 docs/                              ← 사용자·외부 대상 문서
-├── architecture.md                ← post-push 훅이 자동 현행화 (doc-spec)
-├── index.md, install-guide.md, …
-├── examples/, schema/             ← 사용 예시, DB 스키마 다이어그램
-└── planning/                      ← 초기 개발 레거시 (수정 금지)
+├── install-guide.md
+├── examples/                      ← 훅 settings.json 예제
+└── architecture/                  ← index.md, architecture.md, schema/, images/
 
-.claude/                           ← Claude Code 메타 (자동화)
-├── docs/
-│   ├── plans/<feature>/{plan,adr,tasks}.md
-│   ├── research/                  ← 기술 조사·비교
-│   ├── evaluation/                ← 스킬 평가
-│   └── prompts/<feature>/{tasks,agents}/<이름>.md
-├── skills/                        ← 사용 가능한 스킬
-├── agents/                        ← 사용 가능한 서브에이전트
-└── settings.json                  ← 훅 등록·권한 설정
+.claude/                           ← Claude Code 메타
+├── .tmp/
+│   └── logs/                      ← 진단 로그 (DIAG ON 시: model-trace.log, hook-payload.jsonl, proxy-payload.jsonl)
+├── worktrees/                     ← git worktree 작업 공간
+└── settings.local.json            ← 로컬 설정 오버라이드 (git 미추적)
 ```
 
 ### 9.2 어떤 문서를 어디에 쓰는가
 
 | 문서 종류 | 위치 | 스킬 |
 |-----------|------|-----------|
-| 아키텍처(전체) | `docs/architecture.md` | `doc-spec` |
+| 아키텍처(전체) | `docs/architecture/architecture.md` | `doc-spec` |
 | 기능별 plan | `.claude/docs/plans/<feature>/plan.md` | `doc-planning` |
 | 기능별 ADR | `.claude/docs/plans/<feature>/adr.md` | `doc-adr` |
 | 기능별 tasks | `.claude/docs/plans/<feature>/tasks.md` | `doc-tasks` |
@@ -467,7 +463,7 @@ docs/                              ← 사용자·외부 대상 문서
 
 `packages/**` 또는 `hooks/**` 변경을 push 하면 `.githooks/post-push` 가 동작합니다.
 변경 diff (최대 200줄) 와 `.githooks/doc-sync-prompt.md` 를 `claude -p --dangerously-skip-permissions` 로 실행합니다.
-`docs/architecture.md` / `README.md` 가 수정되면 `[skip-doc-sync]` 마커를 포함한 커밋·푸시가 자동 수행됩니다 (재귀 차단용).
+`docs/architecture/architecture.md` / `README.md` 가 수정되면 `[skip-doc-sync]` 마커를 포함한 커밋·푸시가 자동 수행됩니다 (재귀 차단용).
 
 > 자동화 대상은 위 두 파일로 한정됩니다.
 > 기능별 ADR / plan / tasks 는 `doc-*` 스킬로 수동 관리하세요.
@@ -520,7 +516,7 @@ feat(cache-donut): 캐시 비율 도넛에 호버 툴팁 추가
 
 ### 10.4 .githooks 동작 요약
 
-`post-push` 훅은 `git push` 직후 `packages/**` 또는 `hooks/**` 변경이 감지되면 `docs/architecture.md` · `README.md` 를 자동 현행화합니다.
+`post-push` 훅은 `git push` 직후 `packages/**` 또는 `hooks/**` 변경이 감지되면 `docs/architecture/architecture.md` · `README.md` 를 자동 현행화합니다.
 
 - 재귀 방지 마커: `[skip-doc-sync]`
 - 일시 비활성화: `git -c core.hooksPath=/dev/null push`
@@ -547,7 +543,7 @@ feat(cache-donut): 캐시 비율 도넛에 호버 툴팁 추가
 | `doc-planning` | "plan 문서" | feature 단위 `plan.md` 작성 |
 | `doc-adr` | "ADR 추가" | feature 단위 `adr.md` 작성 |
 | `doc-tasks` | "Task 완료" | feature 단위 `tasks.md` + JSON 인덱스 |
-| `doc-spec` | "아키텍처 문서" | `docs/architecture.md` 현행화 |
+| `doc-spec` | "아키텍처 문서" | `docs/architecture/architecture.md` 현행화 |
 | `dev-orchestrator` | "전문가 회의" | plan → ADR → tasks → 실행 전체 조율 |
 | `dev-verify` | "검증해줘" | dev-orchestrator 결과를 코드/Playwright 검증 |
 | `data-analyst` | "테이블 추가", "마이그레이션" | SQLite 스키마·집계·훅 데이터 흐름 |
@@ -615,7 +611,7 @@ PR 을 열기 전에 항목을 확인하세요. **아래 코드 블록을 그대
 
 **문서**
 
-- [ ] `docs/architecture.md` 영향 영역이 정확함 (post-push 신뢰 가능)
+- [ ] `docs/architecture/architecture.md` 영향 영역이 정확함 (post-push 신뢰 가능)
 - [ ] 새 메타 문서가 feature 명 컨벤션 준수
 - [ ] `docs/planning/` 레거시 건드리지 않음
 
@@ -656,7 +652,7 @@ PR 을 열기 전에 항목을 확인하세요. **아래 코드 블록을 그대
 - [ ] 해당 플랫폼의 `screen-inventory.md` 현행화
 
 **문서**
-- [ ] `docs/architecture.md` 영향 영역이 정확함 (post-push 신뢰 가능)
+- [ ] `docs/architecture/architecture.md` 영향 영역이 정확함 (post-push 신뢰 가능)
 - [ ] 새 메타 문서가 feature 명 컨벤션 준수
 - [ ] `docs/planning/` 레거시 건드리지 않음
 
@@ -672,7 +668,7 @@ PR 을 열기 전에 항목을 확인하세요. **아래 코드 블록을 그대
 ## 참고 링크
 
 - `CLAUDE.md` — 프로젝트 최상위 개발 원칙
-- `docs/architecture.md` — 현행 아키텍처 (자동 현행화)
+- `docs/architecture/architecture.md` — 현행 아키텍처 (자동 현행화)
 - `docs/install-guide.md` — 사용자 설치 가이드
 - `.claude/skills/` — 사용 가능한 스킬 카탈로그
 - `.claude/agents/` — 사용 가능한 서브에이전트 카탈로그

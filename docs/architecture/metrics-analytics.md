@@ -24,21 +24,19 @@ claude-spyglass가 어떤 지표를 어떤 산식으로 집계하고, 어느 계
 
 ### 1.1 데이터 흐름
 
-```
-Claude Code Hook ─┐
-                  ├─POST─► server/api.ts ─► SQLite (requests, claude_events, sessions, proxy_requests)
-proxy 요청 ───────┘                                       │
-                                                          ▼
-                                      stats_hourly / stats_proxy_hourly  (1h 사전 집계, 트리거 자동 갱신)
-                                                          │
-                                                          ▼
-                                 queries/* (aggregate-*, metrics/*, session/*)
-                                                          │
-                              ┌───────────────────────────┼───────────────────────────┐
-                              ▼                           ▼                           ▼
-                       /api/stats/*               /api/metrics/*                /api/dashboard
-                              │                           │                           │
-                              └──────────► 대시보드 (chart.js, cache-panel.js, heatmap 등) ◄┘
+```mermaid
+flowchart TD
+    A[Claude Code Hook] --> C[server/api.ts]
+    B[proxy 요청] --> C
+    C -->|POST| D[(SQLite\nrequests / claude_events\nsessions / proxy_requests)]
+    D --> E[stats_hourly / stats_proxy_hourly\n1h 사전 집계, 트리거 자동 갱신]
+    E --> F[queries/*\naggregate-* / metrics/* / session/*]
+    F --> G[/api/stats/*]
+    F --> H[/api/metrics/*]
+    F --> I[/api/dashboard]
+    G --> J[대시보드\nchart.js / cache-panel.js / heatmap 등]
+    H --> J
+    I --> J
 ```
 
 ### 1.2 계층별 책임
@@ -239,15 +237,11 @@ const hitRate = totalBillableInput > 0 ? totalCacheRead / totalBillableInput : 0
 
 ### 4.1 버킷 산식 — ms vs sec
 
-```
-requests.timestamp (ms)        stats_hourly.hour_ts (sec)
-──────────────────────         ──────────────────────────
-1715000123456 ms                    1715000400 sec
-     │                                   │
-     │ /1000 /3600 *3600 *1000           │ Math.floor(ms/1000/3600)*3600
-     ▼                                   ▼
-1715000400000 ms ◄────── ×1000 ─── 1715000400 sec
-   (Burn Rate)                       (Cache Trend)
+```mermaid
+flowchart LR
+    A["requests.timestamp (ms)\n1715000123456 ms"] -->|"/1000 /3600 *3600 *1000"| B["1715000400000 ms\nBurn Rate"]
+    C["stats_hourly.hour_ts (sec)\n1715000400 sec"] -->|"Math.floor(ms/1000/3600)*3600"| D["1715000400 sec\nCache Trend"]
+    D -->|"×1000"| B
 ```
 
 - **Burn Rate** (`requests` 직접): `(CAST(timestamp / 3600000 AS INTEGER) * 3600000)` — ms 정렬
@@ -272,13 +266,17 @@ raw SQL은 데이터가 있는 시간대만 반환합니다. 응답 단계에서
 
 **Burn Rate 비교** (`metrics/calculators/burn-rate.ts`): 24h 윈도우와 정확히 24h 이전 동기간을 비교해 `delta_pct = ((current - yesterday) / yesterday) * 100` 산출. 어제 0이면 `null`(UI "—").
 
-**Anomaly** (`metrics/calculators/anomaly.ts`) — 클라이언트 `anomaly.js`와 동일 알고리즘:
+**Anomaly** (`metrics/calculators/anomaly.ts`, 임계 `anomaly-thresholds.ts`) — 5종 검출:
 
-| 종류 | 판정 기준 |
-|------|----------|
-| **spike** | 세션별 prompt `tokens_input` 평균의 200% 초과 |
-| **loop**  | `turn_id` 내 동일 `tool_name` 연속 3회 이상 |
-| **slow**  | 전체 `tool_call duration_ms`의 P95 초과 (`idx = ceil(N * 0.95) - 1`) |
+| 종류 | 판정 기준 | 데이터 소스 |
+|------|----------|------------|
+| **spike** | 세션별 prompt `tokens_input` 평균(샘플 ≥ 2)의 200% 초과 | `requests` |
+| **loop**  | `turn_id` 내 동일 `tool_name` 연속 3회 이상 | `requests` |
+| **slow**  | 전체 `tool_call duration_ms`의 P95 초과 (`idx = ceil(N * 0.95) - 1`) | `requests` |
+| **bloated-sys** | `system_byte_size / 4 / model_max_tokens ≥ warn_pct/100`; warn ≥ 15%, critical ≥ 25% (`anomaly_thresholds` 시드) | `proxy_requests` |
+| **agent-spike** | Agent/Skill/Task 부모의 자식합(WITH RECURSIVE 깊이 3): `pct_of_window ≥ warn_pct/100` AND `child_sum / parent ≥ 10×` | `requests` |
+
+`bloated-sys` / `agent-spike` 임계는 `anomaly-thresholds.ts`(`anomaly_thresholds` 테이블, Migration 033)에서 `(project_id, model_id)` 우선순위로 조회하며, 시드 누락 시 코드 폴백 warnPct=15 / criticalPct=25를 사용합니다. `spike` / `loop` / `slow` 3종은 시계열 버킷 카운트(`anomalies-timeseries`)와 행 단위 stage 부여(`computeRowAnomalies`) 두 경로를 모두 지원합니다.
 
 ---
 
@@ -440,11 +438,23 @@ stats_hourly에 AFTER DELETE 트리거를 두지 않는 대신, retention 직후
 | `anomalies-timeseries` | spike/loop/slow 시계열 | 시계열 |
 | `burn-rate` | 24h × 1h 토큰 + 어제비교 | 시계열 |
 | `cache-trend` | 24h × 1h hit_rate | 시계열 |
-| `proxy-trend` | 24h × 1h 응답시간/에러율 | 시계열 |
+| `proxy-trend` | 24h × 1h 응답시간/에러율/비용 | 시계열 |
 
 ### 9.3 응답 contract
 
 모든 `/api/metrics/*`는 `{ success, data, meta: { range, from?, to?, generated_at } }` 형태로 응답합니다 (`metrics/_shared.ts#MetricsResponse`). `range`는 `'24h' | '7d' | '30d' | 'custom' | 'all'` 중 하나.
+
+#### `proxy-trend` 응답 shape (`ProxyTrendPayload`, `metrics/calculators/proxy-trend.ts`)
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `buckets` | `ProxyTrendBucket[]` | 24개 1h 버킷 (빈 버킷은 0/null) |
+| `avg_response_time_ms_now` | `number \| null` | 최신 valid 버킷의 평균 응답시간 (ms) |
+| `error_rate_now` | `number \| null` | 최신 valid 버킷의 에러율 (0~1) |
+| `total_cost_usd` | `number` | 24h 전체 버킷 `cost_usd` 합산 (소수 6자리 반올림); `stats_proxy_hourly.cost_usd_sum` 기반 |
+| `total_requests` | `number` | 24h 전체 버킷 요청 수 합산 |
+
+버킷 단위 `cost_usd`는 `cost_usd_sum / 1` (1버킷이 이미 집계값)을 소수 6자리로 반올림한 값이며, `total_cost_usd`는 이 버킷 값들의 합을 다시 소수 6자리로 반올림합니다 (`Math.round(sum * 1_000_000) / 1_000_000`).
 
 ---
 

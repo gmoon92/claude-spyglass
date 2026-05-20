@@ -5,24 +5,14 @@
 
 ## 데이터 흐름 한눈 보기
 
-```
-  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐
-  │ ① 수집   │──▶│ ② 운반   │──▶│ ③ 저장   │──▶│ ④ 집계   │──▶│ ⑤ 전달   │
-  │ Claude   │   │ bash     │   │ /collect │   │ stats_   │   │ SSE      │
-  │ Code hook│   │ script   │   │ /events  │   │ hourly   │   │ REST API │
-  └──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘
-       │              │              │              │              │
-     stdin         curl POST      INSERT /        AFTER INSERT   new_request
-     JSON          (백그라운드)    UPDATE         트리거(028)     new_proxy_request
-                                  SQLite                         session_update
-                                                                      │
-                                                       ┌──────────────┴──────────────┐
-                                                       ▼                             ▼
-                                                ┌──────────────┐             ┌──────────────┐
-                                                │ 웹 대시보드  │             │ TUI (Ink CLI)│
-                                                │ EventSource  │             │ eventsource  │
-                                                │ prependReq…  │             │ feedStore    │
-                                                └──────────────┘             └──────────────┘
+```mermaid
+flowchart LR
+  A["① 수집\nClaude Code hook\nstdin JSON"] --> B["② 운반\nbash script\ncurl POST(백그라운드)"]
+  B --> C["③ 저장\n/collect /events\nINSERT/UPDATE SQLite"]
+  C --> D["④ 집계\nstats_hourly\nAFTER INSERT 트리거(028)"]
+  D --> E["⑤ 전달\nSSE / REST API\nnew_request\nnew_proxy_request\nsession_update"]
+  E --> F["웹 대시보드\nEventSource\nprependReq…"]
+  E --> G["TUI (Ink CLI)\neventsource\nfeedStore"]
 ```
 
 용어 약어:
@@ -452,13 +442,16 @@ connectSSE({
 
 CLAUDE.md 규칙대로 `prependRequest(r)`는 동일 `id` 행이 있으면 **인플레이스 업데이트(위치 보존)**, 없으면 prepend.
 
-```
-prependRequest(req) → views/default-view.js
-  ├─ 기존 <tr data-request-id="pre-xxx"> 검색
-  │    있으면 → 같은 tr의 innerHTML만 makeRequestRow(req)로 교체 (위치 유지)
-  │    없으면 → 새 tr을 #feedBody 최상단에 삽입
-  └─ chart.js의 toolIconHtml(r.tool_name, r.event_type) 호출로
-       event_type='pre_tool'면 pulse 애니메이션, 'tool'이면 정적 아이콘 자동 분기
+```mermaid
+flowchart TD
+  A["prependRequest(req)\n→ views/default-view.js"] --> B{"기존 tr[data-request-id] 검색"}
+  B -- "있으면" --> C["같은 tr의 innerHTML만\nmakeRequestRow(req)로 교체\n(위치 유지)"]
+  B -- "없으면" --> D["새 tr을 #feedBody\n최상단에 삽입"]
+  C --> E["chart.js toolIconHtml(r.tool_name, r.event_type) 호출"]
+  D --> E
+  E --> F{"event_type?"}
+  F -- "pre_tool" --> G["pulse 애니메이션"]
+  F -- "tool" --> H["정적 아이콘"]
 ```
 
 ### 10.4 통계 갱신 디바운스 (`main.js:286-304`)
@@ -522,69 +515,82 @@ TUI는 React + Ink로 구현되며 데이터 경로가 두 갈래로 나뉜다.
 
 ### 12.1 Bash 도구 호출 1회 (PreToolUse → PostToolUse)
 
-```
- Claude       collect.sh      /collect           DB                 SSE        web
-   │              │               │               │                  │          │
-   │ PreToolUse   │               │               │                  │          │
-   ├─stdin JSON──▶│ append jsonl  │               │                  │          │
-   │              ├─curl POST(bg)▶│ PreToolUseHandler                │          │
-   │              │               │  timing.set(tid)                 │          │
-   │              │               │  INSERT──────▶│ id=pre-…         │          │
-   │              │               │               │ event_type=pre   │ (no SSE) │
-   │              │               │◀──── 200 ─────│                  │          │
-   │              │               │  invalidateCache                 │          │
-   │  (도구 실행 …)                                                              │
-   │                                                                            │
-   │ PostToolUse  │               │               │                  │          │
-   ├─stdin JSON──▶│ append jsonl  │               │                  │          │
-   │              ├─curl POST(bg)▶│ PostToolUseHandler               │          │
-   │              │               │  findPreToolRecord ─ 매칭         │          │
-   │              │               │  resolveApiRequestId             │          │
-   │              │               │  mergePostToolInto…(UPDATE)─────▶│          │
-   │              │               │               │ event_type=tool  │          │
-   │              │               │               │ tokens, dur 채움  │          │
-   │              │               │  getRequestById(pre-…)           │          │
-   │              │               │  normalizeRequest(row)           │          │
-   │              │               │  broadcastNewRequest────────────▶│          │
-   │              │               │               │                  │  data.id │
-   │              │               │               │                  │  ='pre-…'│
-   │              │               │               │                  ├─────────▶│ prependRequest
-   │              │               │               │                  │          │  (in-place
-   │              │               │               │                  │          │   교체)
-   │              │               │◀──── 200 ─────│                  │          │ scheduleDashboardRefresh
+```mermaid
+sequenceDiagram
+  participant Claude
+  participant collect.sh
+  participant collect as /collect
+  participant DB
+  participant SSE
+  participant web
+
+  Claude->>collect.sh: PreToolUse stdin JSON
+  collect.sh->>collect.sh: append jsonl
+  collect.sh->>collect: curl POST(bg) PreToolUse
+  collect->>collect: timing.set(tid)
+  collect->>DB: INSERT id=pre-… event_type=pre
+  Note over SSE: (no SSE)
+  DB-->>collect: 200
+  collect->>collect: invalidateCache
+
+  Note over Claude: 도구 실행 …
+
+  Claude->>collect.sh: PostToolUse stdin JSON
+  collect.sh->>collect.sh: append jsonl
+  collect.sh->>collect: curl POST(bg) PostToolUse
+  collect->>collect: findPreToolRecord 매칭
+  collect->>collect: resolveApiRequestId
+  collect->>DB: UPDATE id=pre-… event_type=tool, tokens, dur 채움
+  collect->>DB: getRequestById(pre-…)
+  collect->>collect: normalizeRequest(row)
+  collect->>SSE: broadcastNewRequest data.id='pre-…'
+  SSE->>web: prependRequest (in-place 교체)
+  DB-->>collect: 200
+  collect->>collect: scheduleDashboardRefresh
 ```
 
 ### 12.2 SessionStart + UserPromptSubmit + Stop (turn 1건)
 
-```
- Claude    collect.sh   /events       /collect             DB             SSE       web
-   │ SessionStart                                                          │         │
-   ├──────────▶│curl POST▶│ createEvent────────▶ claude_events             │         │
-   │           │          │ reactivateSession                              │         │
-   │           │          │ broadcastSessionUpdate(started)───────────────▶│         │
-   │           │          │                                                ├────────▶│ 마커 갱신
-   │           │          │ syncMetaDocsCwd                                │         │
-   │                                                                                 │
-   │ UserPromptSubmit                                                                │
-   ├──────────▶│curl POST───────────▶│ UserPromptSubmitHandler                       │
-   │           │                     │  parseTranscript                              │
-   │           │                     │  assignTurnId → T1                            │
-   │           │                     │  INSERT──────────▶ id=prompt-…                │
-   │           │                     │                    turn_id=…-T1               │
-   │           │                     │  broadcastNewRequest─────────────────────────▶│
-   │           │                     │                                     ├────────▶│ prepend
-   │                                                                                 │
-   │ (PreToolUse / PostToolUse 반복 … 12.1 참조)                                       │
-   │                                                                                 │
-   │ Stop                                                                            │
-   ├──────────▶│curl POST▶│ createEvent────────▶ claude_events                       │
-   │           │          │ saveAssistantResponse                                    │
-   │           │          │  ├─ extractAssistantTextEntries → persist…               │
-   │           │          │  ├─ last_assistant_message → INSERT (resp-…)             │
-   │           │          │  ├─ getTurnIdAt(stop_ts) → 같은 turn                      │
-   │           │          │  ├─ api_request_id = lastEntryMessageId                  │
-   │           │          │  ├─ broadcastNewRequest ────────────────────────────────▶│
-   │           │          │  └─ invalidateDashboardCache                             │
+```mermaid
+sequenceDiagram
+  participant Claude
+  participant collect.sh
+  participant events as /events
+  participant collect as /collect
+  participant DB
+  participant SSE
+  participant web
+
+  Claude->>collect.sh: SessionStart
+  collect.sh->>events: curl POST
+  events->>DB: createEvent → claude_events
+  events->>events: reactivateSession
+  events->>SSE: broadcastSessionUpdate(started)
+  SSE->>web: 마커 갱신
+  events->>events: syncMetaDocsCwd
+
+  Claude->>collect.sh: UserPromptSubmit
+  collect.sh->>collect: curl POST
+  collect->>collect: UserPromptSubmitHandler
+  collect->>collect: parseTranscript
+  collect->>collect: assignTurnId → T1
+  collect->>DB: INSERT id=prompt-… turn_id=…-T1
+  collect->>SSE: broadcastNewRequest
+  SSE->>web: prepend
+
+  Note over Claude: PreToolUse / PostToolUse 반복 … 12.1 참조
+
+  Claude->>collect.sh: Stop
+  collect.sh->>events: curl POST
+  events->>DB: createEvent → claude_events
+  events->>events: saveAssistantResponse
+  events->>events: extractAssistantTextEntries → persist…
+  events->>DB: last_assistant_message → INSERT (resp-…)
+  events->>events: getTurnIdAt(stop_ts) → 같은 turn
+  events->>events: api_request_id = lastEntryMessageId
+  events->>SSE: broadcastNewRequest
+  SSE->>web: 응답 행 추가
+  events->>events: invalidateDashboardCache
 ```
 
 ---

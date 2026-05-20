@@ -121,13 +121,32 @@ built-in·bundled·plugin은 현재 MVP에서 resolution 대상에 포함하지 
 
 ## 관계
 
-```
-meta_documents  (1)
-    │
-    │  meta_document_id (ON DELETE CASCADE)
-    │
-meta_doc_resolutions  (N)
-    cwd × type × name → meta_document_id
+```mermaid
+erDiagram
+    meta_documents {
+        INTEGER id PK
+        TEXT type
+        TEXT name
+        TEXT source
+        TEXT source_root
+        TEXT file_path
+        TEXT description
+        INTEGER user_invocable
+        TEXT frontmatter_json
+        INTEGER first_seen_at
+        INTEGER last_seen_at
+        INTEGER deleted_at
+    }
+
+    meta_doc_resolutions {
+        TEXT cwd PK
+        TEXT type PK
+        TEXT name PK
+        INTEGER meta_document_id FK
+        INTEGER resolved_at
+    }
+
+    meta_documents ||--o{ meta_doc_resolutions : "meta_document_id (ON DELETE CASCADE)"
 ```
 
 - **meta_documents 1 : meta_doc_resolutions N** — 하나의 카탈로그 행이 여러 cwd에서 winning row로 선택될 수 있습니다.

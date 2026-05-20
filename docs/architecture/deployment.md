@@ -5,7 +5,7 @@
 이 문서는 그런 모든 배포 시나리오를 다룹니다.
 
 > **이 문서를 읽어야 할까?**
-> - 단일 사용자 워크스테이션이라면 → [`install-guide.md`](./install-guide.md) 한 페이지로 충분합니다.
+> - 단일 사용자 워크스테이션이라면 → [`install-guide.md`](../install-guide.md) 한 페이지로 충분합니다.
 > - **데몬화 · Docker · 백업 · 업그레이드 · 헬스 모니터링**이 필요하다면 → 이 문서를 계속 읽으세요.
 
 ---
@@ -38,23 +38,25 @@
 > **공통 데이터 경로**: 네 시나리오 모두 **`~/.spyglass/`** 를 사용하므로 운영 중 시나리오 전환이 가능합니다.
 > **주의**: 두 서버가 동시에 같은 SQLite 파일을 쓰지 마세요.
 
-```
-┌──────────────────────────── 호스트 ─────────────────────────────┐
-│                                                                 │
-│  ┌─[로컬]──────────────┐    ┌─[Docker]─────────────────────┐   │
-│  │  Claude Code         │    │  spyglass 컨테이너            │   │
-│  │   │                  │    │   ├─ Bun 1.2 + 서버           │   │
-│  │   ├─ 훅 HTTP →───────┼────┼───→ :9999                    │   │
-│  │   └─ /v1 프록시 →────┼────┼───→ /v1/*                    │   │
-│  │                      │    │                              │   │
-│  │  bun run dev (Daemon)│    │  HEALTHCHECK /health          │   │
-│  │  PID: ~/.spyglass/   │    │  VOLUME /data/.spyglass       │   │
-│  │       server.pid     │    └───────────────┬───────────────┘   │
-│  └──────────┬───────────┘                    │                   │
-│             │                                ▼                   │
-│             └─────────→  ${HOME}/.spyglass/  (DB·로그·PID)        │
-│                                                                  │
-└──────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph 호스트
+        CC["Claude Code\n훅 HTTP / v1 프록시"]
+        subgraph 로컬["로컬 (bun run dev / Daemon)"]
+            PID["PID: ~/.spyglass/server.pid"]
+        end
+        subgraph Docker["Docker 컨테이너"]
+            SRV["Bun 1.2 + 서버\n:9999"]
+            HC["HEALTHCHECK /health"]
+            VOL["VOLUME /data/.spyglass"]
+        end
+        DATA["~/.spyglass/\nDB · 로그 · PID"]
+    end
+
+    CC -->|"훅 HTTP"| SRV
+    CC -->|"/v1 프록시"| SRV
+    로컬 --> DATA
+    Docker --> DATA
 ```
 
 ---
@@ -149,7 +151,7 @@ curl -sf http://127.0.0.1:9999/health && echo OK
 `bun run dev`는 fork 후 자식 프로세스를 백그라운드로 떼어내고 PID를 `~/.spyglass/server.pid`에 기록합니다.
 **셸을 닫아도 서버는 계속 실행**됩니다. 별도 `nohup`·`&`·`disown`은 필요 없습니다.
 
-> 자세한 절차는 [`install-guide.md`](./install-guide.md)를 참고하세요.
+> 자세한 절차는 [`install-guide.md`](../install-guide.md)를 참고하세요.
 
 ### 3.5 트러블슈팅
 
@@ -568,7 +570,7 @@ const retentionDays = parseInt(process.env.SPYGLASS_RETENTION_DAYS ?? '30', 10);
 SPYGLASS_RETENTION_DAYS=7 bun run dev      # 7일만 보존
 ```
 
-수동 정리는 [`install-guide.md` § 7.3](./install-guide.md#73-오래된-데이터-정리) 참조.
+수동 정리는 [`install-guide.md` § 7.3](../install-guide.md#73-오래된-데이터-정리) 참조.
 
 ---
 
@@ -650,6 +652,9 @@ Docker의 경우 `docker-compose.yml`의 `ports: "8088:9999"` 처럼 호스트 �
 | `SPYGLASS_PID_FILE` | `runtime/daemon.ts` | PID 파일 경로 | `~/.spyglass/server.pid` |
 | `SPYGLASS_SERVER_LOG` | `runtime/stdio-mirror.ts` | 서버 로그 미러 경로 | `~/.spyglass/logs/server.log` |
 | `SPYGLASS_RETENTION_DAYS` | `runtime/maintenance.ts` | 데이터 보존 기간(일) | `30` |
+| `SPYGLASS_SHUTDOWN_TIMEOUT_MS` | `runtime/config.ts` | graceful shutdown 최대 대기 시간(ms). SIGTERM/SIGINT 핸들러 guard timer 및 in-flight 요청 완료 대기에 사용 | `10000` |
+| `SPYGLASS_NO_MOTION` | `packages/tui/src/lib/capabilities.ts` | `1`이면 TUI 애니메이션·동적 리프레시를 비활성화 | 미설정 |
+| `SPYGLASS_APP_VERSION` | `packages/storage/src/migrator.ts` | DB 마이그레이션 기록에 주입할 버전 문자열. 테스트·CI에서 명시적으로 주입할 때 사용 | 미설정 (`package.json` 버전 자동 읽기) |
 | `ANTHROPIC_UPSTREAM_URL` | `proxy/upstream.ts` | 기본 프록시 upstream | `https://api.anthropic.com` |
 | `MOONSHOT_UPSTREAM_URL` | `proxy/upstream.ts` | `kimi-*` 모델 upstream | `https://api.moonshot.ai/anthropic` |
 | `CUSTOM_UPSTREAMS` | `proxy/upstream.ts` | 추가 prefix→URL 매핑 (`prefix1=url1,prefix2=url2`) | 없음 |
@@ -676,7 +681,7 @@ Docker의 경우 `docker-compose.yml`의 `ports: "8088:9999"` 처럼 호스트 �
 | `ANTHROPIC_AUTH_TOKEN` | 비공식 모델(kimi 등) 사용 시 |
 | `ANTHROPIC_MODEL` | 모델 명시 (예: `kimi-k2.6`) |
 
-자세한 활성화 절차는 [`install-guide.md` § 5](./install-guide.md#5-claude-code-프록시-설정) 참조.
+자세한 활성화 절차는 [`install-guide.md` § 5](../install-guide.md#5-claude-code-프록시-설정) 참조.
 
 ---
 
@@ -876,7 +881,7 @@ docker inspect spyglass --format='{{json .State.Health}}' | jq
 
 ### 11.5 그 외
 
-추가 트러블슈팅 항목은 [`install-guide.md` § 9](./install-guide.md#9-문제-해결) 를 참조하세요.
+추가 트러블슈팅 항목은 [`install-guide.md` § 9](../install-guide.md#9-문제-해결) 를 참조하세요.
 
 - 헬스체크 실패
 - 데이터 미수집
@@ -888,10 +893,10 @@ docker inspect spyglass --format='{{json .State.Health}}' | jq
 
 ## 참고 문서
 
-- [`install-guide.md`](./install-guide.md) — 단일 사용자 설치 가이드
-- [`examples/settings.hooks.minimal.json`](./examples/settings.hooks.minimal.json) — 최소 훅 프로파일
-- [`examples/settings.hooks.full.json`](./examples/settings.hooks.full.json) — 권장(전체) 훅 프로파일
-- 프로젝트 루트 [`README.md`](../README.md) — 기능과 철학 개요
+- [`install-guide.md`](../install-guide.md) — 단일 사용자 설치 가이드
+- [`examples/settings.hooks.minimal.json`](../examples/settings.hooks.minimal.json) — 최소 훅 프로파일
+- [`examples/settings.hooks.full.json`](../examples/settings.hooks.full.json) — 권장(전체) 훅 프로파일
+- 프로젝트 루트 [`README.md`](../../README.md) — 기능과 철학 개요
 - 프로젝트 루트 [`Dockerfile`](../Dockerfile), [`docker-compose.yml`](../docker-compose.yml)
 - [`scripts/build-image.sh`](../scripts/build-image.sh) — tarball 패키징 스크립트
 - [`scripts/install.sh`](../scripts/install.sh) — one-liner 설치 스크립트

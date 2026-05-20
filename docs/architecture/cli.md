@@ -14,6 +14,7 @@ claude-spyglass CLI는 모니터링 서버 데몬 제어와 환경 진단을 담
   - [`status` — 상태 조회](#status--상태-조회)
   - [`doctor` — 진단](#doctor--진단)
   - [`doctor --fix` — 자동 수정](#doctor---fix--자동-수정)
+  - [`analyze` — 운영자 수동 백필](#analyze--운영자-수동-백필)
   - [foreground (default) — 포그라운드 실행](#foreground-default--포그라운드-실행)
 - [doctor 체크 상세](#doctor-체크-상세)
 - [데이터 보조 스크립트](#데이터-보조-스크립트)
@@ -28,14 +29,14 @@ claude-spyglass CLI는 모니터링 서버 데몬 제어와 환경 진단을 담
 
 ## 개요
 
-CLI 진입점과 기본 동작을 요약합니다. 데몬은 PID 파일 기반 싱글톤으로 동작합니다.
+CLI 진입점과 기본 동작을 요약합니다. 데몬은 `lsof -sTCP:LISTEN` 기반 포트 점유 확인으로 싱글톤을 보장합니다.
 
 CLI는 두 개의 진입점으로 나뉩니다.
 
 | 진입점 | 역할 | 파일 |
 |--------|------|------|
 | 데몬 디스패처 | `start` / `stop` / `restart` / `status` (+ 포그라운드 폴백) | `packages/server/src/index.ts` → `runtime/daemon.ts` |
-| 진단 CLI | `doctor` (옵션: `--fix`) | `packages/server/src/cli.ts` → `cli/doctor.ts` |
+| 진단 CLI | `doctor` (옵션: `--fix`) / `analyze` | `packages/server/src/cli.ts` → `cli/doctor.ts` / `cli/analyze.ts` |
 
 **기본값**
 
@@ -62,7 +63,7 @@ bun run packages/server/src/index.ts start
 bun run packages/server/src/cli.ts doctor --fix
 ```
 
-데몬 명령은 비대화식이며, 서버는 호출자 셸이 종료되어도 PID 파일을 통해 살아남습니다. `SIGINT`(Ctrl+C)·`SIGTERM` 수신 시 DB 연결을 닫고 PID 파일을 정리한 뒤 종료합니다.
+데몬 명령은 비대화식이며, 서버는 호출자 셸이 종료되어도 백그라운드에서 살아남습니다. `SIGINT`(Ctrl+C)·`SIGTERM` 수신 시 graceful shutdown 시퀀스(스케줄러 → SSE 브로드캐스트 → `server.stop()` → in-flight 대기 → DB close)를 거쳐 종료하고 PID 파일을 정리합니다.
 
 ## 명령 인덱스
 
@@ -72,18 +73,19 @@ bun run packages/server/src/cli.ts doctor --fix
 
 | 명령 | 설명 | 호출 예시 |
 |------|------|-----------|
-| `start` | PID 파일이 없고 포트가 비어 있으면 서버 기동 | `bun run start` |
-| `stop` | PID 파일을 읽어 SIGTERM 송신, PID 파일 삭제 | `bun run stop` |
-| `restart` | 포트 점유 프로세스(LISTEN 한정)를 정리한 뒤 재기동 | `bun run dev` |
-| `status` | PID 파일과 프로세스 존재 여부 확인 | `bun run status` |
+| `start` | `lsof -sTCP:LISTEN` 로 LISTEN 확인, 포트 가용 시 서버 기동 | `bun run start` |
+| `stop` | `lsof -sTCP:LISTEN` 로 LISTEN PID 탐색 후 SIGTERM 송신 | `bun run stop` |
+| `restart` | 포트 LISTEN 프로세스를 SIGTERM 후 재기동 | `bun run dev` |
+| `status` | `lsof -sTCP:LISTEN` 로 실제 LISTEN 여부 확인 | `bun run status` |
 | (인자 없음) | 포그라운드 실행 (`Ctrl+C` 종료) | `bun run packages/server/src/index.ts` |
 
 **진단**
 
 | 명령 | 설명 | 호출 예시 |
 |------|------|-----------|
-| `doctor` | 14개 환경/DB/서버/무결성 체크 실행 | `bun run doctor` |
+| `doctor` | 15개 환경/DB/서버/무결성 체크 실행 | `bun run doctor` |
 | `doctor --fix` | 자동 수정 가능한 항목(권한, 데이터 정합성) 보정 | `bun run doctor --fix` |
+| `analyze --backfill <범위>` | 기간 범위 지정 운영자 수동 백필 (system_byte_size / parent_tool_use_id 진단) | `bun run packages/server/src/cli.ts analyze --backfill 2026-05-01:2026-05-18` |
 
 **데이터 보조 스크립트**
 
@@ -107,14 +109,14 @@ bun run packages/server/src/cli.ts doctor --fix
 
 ### `start` — 서버 기동
 
-PID 파일을 점검한 뒤 새 데몬을 띄웁니다 (`runtime/daemon.ts#commandStart`).
+포트 점유 여부를 `lsof -sTCP:LISTEN` 으로 확인한 뒤 새 데몬을 띄웁니다 (`runtime/daemon.ts#commandStart`).
 
 **동작 순서**
 
-1. `~/.spyglass/server.pid` 가 존재하면 `kill -0` 으로 생존 확인.
-   - 살아 있으면 `Already running` 출력 후 종료.
-   - 죽어 있으면 stale 파일을 지우고 다음 단계로 진행.
-2. `Bun.serve` 로 포트 가용성 테스트. 점유 시 `lsof -ti tcp:9999 -sTCP:LISTEN` 으로 LISTEN PID만 추려 안내 후 `exit 1`.
+1. `lsof -sTCP:LISTEN` 으로 포트 9999 를 LISTEN 중인 PID 탐색.
+   - LISTEN PID 가 있으면 `Already running (PID: …)` 출력 후 `exit 0`.
+   - 없으면 stale PID 파일이 남아 있어도 제거 후 다음 단계로 진행.
+2. `isPortAvailable()` 로 포트 가용성 재확인. TIME_WAIT 등으로 불가 시 `exit 1`.
 3. `startServer()` 호출 — DB 연결, 진단 로그 디렉터리 정리, 유지보수/버전 체크 스케줄 등록, `meta-docs` 부팅 동기화, HTTP listen.
 4. PID 파일 기록 + `SIGINT`/`SIGTERM` 핸들러 설치.
 
@@ -153,14 +155,14 @@ PID 파일을 점검한 뒤 새 데몬을 띄웁니다 (`runtime/daemon.ts#comma
 
 ### `stop` — 서버 중지
 
-PID 파일을 읽어 SIGTERM을 보냅니다 (`runtime/daemon.ts#commandStop`).
+`lsof -sTCP:LISTEN` 으로 포트 9999 를 LISTEN 중인 PID를 찾아 SIGTERM을 보냅니다 (`runtime/daemon.ts#commandStop`).
 
 **동작 순서**
 
-1. PID 파일이 없으면 `Not running` 출력 후 `exit 0`.
-2. 있으면 `process.kill(pid, 'SIGTERM')` 송신 후 PID 파일 삭제. 실패 시 `exit 1`.
+1. `lsof -sTCP:LISTEN` 으로 LISTEN PID 탐색. 없으면 `Not running` 출력 후 `exit 0`. 잔여 stale PID 파일도 정리.
+2. 있으면 각 PID 에 `process.kill(pid, 'SIGTERM')` 송신 후 PID 파일 삭제. 실패 시 `exit 1`.
 
-서버 측은 `SIGTERM` 핸들러에서 유지보수/버전 체크 스케줄 정지 → `server.stop()` → `closeDatabase()` 를 거쳐 정상 종료합니다.
+서버 측은 `SIGTERM` 핸들러에서 유지보수/버전 체크 스케줄 정지 → SSE `server_shutdown` 브로드캐스트 → `server.stop()` → in-flight 완료 대기 → `closeDatabase()` 를 거쳐 정상 종료합니다.
 
 **예시 출력**
 
@@ -187,8 +189,8 @@ PID 파일을 읽어 SIGTERM을 보냅니다 (`runtime/daemon.ts#commandStop`).
 
 **동작 순서**
 
-1. 포트가 비어 있으면 곧장 새 서버 기동.
-2. 점유 중이면 PID 파일의 PID + `lsof` LISTEN PID 들에 `SIGTERM`. 5초 내 종료되지 않으면 `SIGKILL`.
+1. `lsof -sTCP:LISTEN` 로 LISTEN PID 탐색. 없으면 곧장 새 서버 기동.
+2. LISTEN PID 들에 `SIGTERM`. `SHUTDOWN_TIMEOUT_MS`(기본 10초) 내 종료되지 않으면 `SIGKILL`.
 3. 포트가 OS 레벨에서 해제될 때까지 최대 5초 대기 (TIME_WAIT 등). 실패 시 `exit 1`.
 4. `startServer()` + PID 파일 기록 + 시그널 핸들러 설치.
 
@@ -217,14 +219,14 @@ LISTEN 필터(`-sTCP:LISTEN`)가 핵심입니다. 필터가 없으면 `9999` 포
 
 ### `status` — 상태 조회
 
-PID 파일과 실제 프로세스 존재 여부를 교차 확인합니다 (`runtime/daemon.ts#commandStatus`).
+`lsof -sTCP:LISTEN` 으로 포트 점유를 실제로 확인합니다 (`runtime/daemon.ts#commandStatus`). PID 파일은 stale 정리 보조 용도에만 사용합니다.
 
 **동작 순서**
 
-1. PID 파일이 없으면 `Not running` 출력.
-2. 있으면 `kill -0` 으로 생존 여부 확인.
-   - 살아 있으면 PID + 엔드포인트 출력.
-   - 죽어 있으면 stale PID 파일을 삭제하면서 안내.
+1. `lsof -sTCP:LISTEN` 으로 LISTEN PID 탐색.
+   - LISTEN PID 가 있으면 `Running (PID: …)` + 엔드포인트 출력. in-flight 백그라운드 태스크가 있으면 건 수도 표시.
+   - 없으면 stale PID 파일이 남아 있으면 삭제하고 `Not running (stale PID file)` 출력.
+   - PID 파일도 없으면 `Not running` 출력.
 
 **예시 출력**
 
@@ -250,7 +252,7 @@ PID 파일과 실제 프로세스 존재 여부를 교차 확인합니다 (`runt
 
 ### `doctor` — 진단
 
-설치/환경/DB/turn 무결성을 한 번에 점검합니다. `cli/doctor.ts` 가 14개 체크를 순차 실행하여 `✓` / `⚠` / `✗` 으로 출력합니다.
+설치/환경/DB/turn 무결성을 한 번에 점검합니다. `cli/doctor.ts` 가 15개 체크를 순차 실행하여 `✓` / `⚠` / `✗` 으로 출력합니다.
 
 **호출**
 
@@ -320,6 +322,57 @@ bun run packages/server/src/cli.ts doctor
 수정이 한 건이라도 적용되면 끝에 `✓ 자동 수정 완료. 다시 doctor를 실행하세요` 가 출력됩니다. 안내대로 `--fix` 없이 한 번 더 `doctor` 를 돌려 잔여 항목을 확인하세요.
 
 `--fix` 는 권한·정합성만 건드립니다. Bun 설치, 훅 등록, 포트 해제는 사용자가 직접 처리해야 합니다.
+
+---
+
+### `analyze` — 운영자 수동 백필
+
+`cli/analyze.ts` 가 기간 범위를 받아 두 가지 보정 작업을 수행합니다. **자동 실행이 금지된 수동 트리거 전용** 명령입니다.
+
+**호출**
+
+```bash
+bun run packages/server/src/cli.ts analyze --backfill 2026-05-01:2026-05-18
+bun run packages/server/src/cli.ts analyze --backfill 2026-05-01:2026-05-18 --dry-run
+```
+
+**옵션**
+
+| 옵션 | 의미 |
+|------|------|
+| `--backfill <YYYY-MM-DD:YYYY-MM-DD>` | 처리 기간 지정 (필수). 시작일 00:00:00Z ~ 종료일 23:59:59.999Z |
+| `--dry-run` | DB 변경 없이 처리 예상 건수만 출력 |
+| `--help` / `-h` | 사용법 출력 |
+
+**백필 대상**
+
+| 대상 | 설명 |
+|------|------|
+| `proxy_requests.system_byte_size` | payload(zstd) 를 복호하여 body.system 정규화 후 byte_size 채움. `system_hash IS NULL` 행만 대상 (멱등). |
+| `requests.parent_tool_use_id` | `source='subagent-transcript'` 중 `parent_tool_use_id IS NULL` 행 수 보고 (현재 라운드는 진단만; 실제 UPDATE 는 후속 패치). |
+
+**예시 출력**
+
+```text
+analyze [DRY-RUN]  2026-05-01T00:00:00.000Z → 2026-05-18T23:59:59.999Z
+
+[proxy] system_byte_size 대상: 312건
+[proxy] 처리 완료: 312 / 312
+---
+proxy_requests.system_byte_size
+  대상: 312  처리: 312  갱신: 308  디코드오류: 4  system없음: 0
+requests.parent_tool_use_id
+  후보: 0  적용: 0
+
+dry-run 완료. 실제 적용하려면 --dry-run 없이 재실행하세요.
+```
+
+**종료 코드**
+
+| 코드 | 의미 |
+|------|------|
+| `0` | 정상 완료 (도움말 출력 포함) |
+| `1` | `--backfill` 범위 누락 또는 파싱 오류 |
 
 ---
 
@@ -448,7 +501,38 @@ bun run backfill:system-prompts
 | 변수 | 기본값 | 설명 |
 |------|--------|------|
 | `SPYGLASS_DIR` | — | `settings.json` 의 `env` 값. 훅 스크립트 위치 |
-| `ANTHROPIC_BASE_URL` | — | 설정 시 `/v1/*` Anthropic 프록시 활성화 |
+| `ANTHROPIC_BASE_URL` | — | 설정 시 Claude Code 가 `/v1/*` 프록시로 요청을 라우팅 |
+
+**진단 로그 (`diag-log.ts`)**
+
+서버 재시작 시 플래그가 고정됩니다(모듈 로드 시점 1회 평가). 변경 후에는 서버를 재시작해야 반영됩니다.
+
+| 변수 | 기본값 | 설명 |
+|------|--------|------|
+| `SPYGLASS_DIAG_ENABLED` | — (비활성) | `'1'` 또는 `'true'` 로 설정 시 진단 jsonl 로그 활성화. 기본값은 비활성(no-op) — 운영 시 디스크 사용량 0 |
+| `SPYGLASS_DIAG_LOG_DIR` | `<cwd>/.claude/.tmp/logs` | 진단 로그 디렉터리 경로 override |
+| `SPYGLASS_DIAG_RAW_SSE` | — (비활성) | `'1'` 로 설정 시 proxy SSE 응답 본문 raw 를 jsonl 에 포함 (최대 200KB, 파일 비대 주의) |
+
+**출력 카테고리** (`SPYGLASS_DIAG_ENABLED=1` 활성 시):
+
+| 파일 | 내용 |
+|------|------|
+| `model-trace.log` | 모델 추출/분기 추적 (사람-읽기 한 줄 trace) |
+| `hook-payload.jsonl` | 훅 진입 시 raw payload (1줄/이벤트) |
+| `proxy-payload.jsonl` | 프록시 진입+종료 시 raw 본문/헤더 (1줄/단계) |
+
+**활성화 예시**
+
+```bash
+# inline prefix (권장 — 공백으로 연결, '&' 사용 금지)
+SPYGLASS_DIAG_ENABLED=1 bun run dev
+
+# 로그 위치 override
+SPYGLASS_DIAG_ENABLED=1 SPYGLASS_DIAG_LOG_DIR=/tmp/spyglass-diag bun run dev
+
+# SSE raw body 포함
+SPYGLASS_DIAG_ENABLED=1 SPYGLASS_DIAG_RAW_SSE=1 bun run dev
+```
 
 ---
 

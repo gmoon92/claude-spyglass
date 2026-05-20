@@ -119,7 +119,7 @@ export type ScreenId =
 | `anomalies` | `4` | `Anomalies` | 최근 이상 이벤트(P0/P1/P2) 12개 |
 | `ambient` | `m` | `Ambient` | 회의실 빔프로젝터용 풀스크린 PulseWave |
 
-`m` 키는 `ambient`와 직전 화면 사이를 토글합니다 (`app.tsx`의 `onAmbient`).
+`m` 키는 `ambient` ↔ `live` 간을 토글합니다 — 현재 화면이 `ambient`이면 `live`로, 아니면 `ambient`로 전환합니다(이전 화면 정보를 보관하지 않음). 출처: `app.tsx`의 `onAmbient` (`setView((v) => (v === 'ambient' ? 'live' : 'ambient'))`).
 
 
 ## 4. 각 스크린별 상세
@@ -226,7 +226,9 @@ data-honesty-ui).
 
 | 키 | 동작 |
 | --- | --- |
-| `t` | 시간 범위 순환 |
+| `t` | 시간 범위 순환 (`1h → 6h → 24h → 7d`) |
+
+> Anomalies 화면에는 서브탭이 없으므로 Tab / Shift+Tab 키를 사용하지 않습니다.
 
 ### 4.6 Ambient (`m`) — `screens/Ambient.tsx`
 
@@ -273,7 +275,7 @@ data-honesty-ui).
 | LiveFeed 전용 | `f` | follow 토글 |
 | LiveFeed 전용 | `g` / `G` | top / bot |
 | LiveFeed 전용 | `/` | 검색 진입 |
-| Tools / Anomalies | `Tab` / `Shift+Tab` | 서브탭 순환 |
+| Tools 전용 | `Tab` / `Shift+Tab` | 서브탭 순환 |
 | Tools / Anomalies | `t` | 시간 범위 순환 |
 | 모달(HelpOverlay) | `?` / `Esc` / `q` | 닫기 |
 
@@ -288,6 +290,7 @@ data-honesty-ui).
 | 컴포넌트 | 책임 |
 | --- | --- |
 | `ResponsiveShell` | `useTermCols` / `useTermRows`로 컬럼 추적, breakpoint 미만이면 sidebar 숨김 |
+| `MainPanel` | 활성 화면의 포커스 영역 래퍼. `Card`를 `flexGrow=1`로 감싸 남은 공간을 채움 |
 | `Sidebar` | 세션 목록 8개 + "Tools · today" BarChart |
 | `Strip` | BigKpi 3개(REQ/MIN, P95, ERR%) + SessionsSidebar 박스 |
 
@@ -308,6 +311,24 @@ data-honesty-ui).
 | `TurnCard` | SessionDetail의 Turn 1개. 헤더 + 프롬프트 + 툴 + TokenTree 푸터 |
 | `TokenTree` | input / output / cache_read / cache_creation / total 트리 |
 | `Badge` / `Ticker` | tone 색 라벨 / 이벤트 도착 시 400ms ▮ ↔ ▯ 플래시 |
+| `Divider` | `── LABEL ────` 형식의 섹션 구분선 |
+| `Icon` | 툴 아이콘 단일 해석 지점. `design-tokens.ts`의 `icon.*` 토큰 → ASCII 글리프 |
+| `KeyValue` | 정렬된 LABEL · VALUE 행 쌍 |
+| `Timestamp` | 자체 틱(self-tick)하는 dim 색상 시각 표시 |
+
+### 6.3-b primitives — 저수준 레이아웃 프리미티브
+
+`components/primitives/index.tsx`가 제공하는 토큰 기반 기초 컴포넌트입니다. 신규 코드는
+이 파일을 통해 `Box` / `Text` / 공용 프리미티브를 가져와야 합니다.
+
+| 컴포넌트 | 책임 |
+| --- | --- |
+| `Box` | `ink`의 `Box` 재-export (import 경로 통일) |
+| `Text` | `ink`의 `Text` 재-export (import 경로 통일) |
+| `Spacer` | 토큰 단위 빈 공간 (`cols` / `rows` 옵션). 매직 넘버 사용 금지 |
+| `Label` | ALL CAPS 소문자 라벨 (`tokens.color.muted.fg`, 문자열 자동 대문자 변환) |
+| `Metric` | L1 히어로 숫자 — bold 값 + dim 단위 조합 |
+| `Code` | `ink` `Text` props를 그대로 전달하는 인라인 코드 래퍼 |
 
 ### 6.4 charts — 차트
 

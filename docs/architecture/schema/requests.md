@@ -76,6 +76,7 @@ CHECK (type IN ('prompt', 'tool_call', 'system', 'response'))
 | `idx_requests_type_event_ts` | `type, event_type, timestamp DESC` | — | 집계·통계 쿼리 최적화 |
 | `idx_requests_tool_duration_partial` | `duration_ms ASC` | type='tool_call' AND event_type='tool' AND duration_ms>0 | P95 지연 계산 |
 | `idx_requests_session_type_ts_asc` | `session_id, type, timestamp ASC` | — | 세션 첫 prompt 시각 조회 |
+| `idx_requests_session_timestamp` | `session_id, timestamp DESC` | — | anomaly 검출 세션 단위 범위 스캔 |
 
 ## 외래키
 

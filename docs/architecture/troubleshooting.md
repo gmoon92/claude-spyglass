@@ -79,7 +79,7 @@ claude-spyglass에서 자주 발생하는 문제를 **증상 → 원인 → 해�
 cd "${HOME}/.spyglass-src" && bun run dev   # 자동 정리 후 재기동
 ```
 
-`bun run dev`(=`restart`)는 다음을 수행합니다 (`daemon.ts:105`).
+`bun run dev`(=`restart`)는 다음을 수행합니다 (`runtime/daemon.ts:172`).
 
 1. 포트 가용 검사 → 점유 시 PID 파일과 lsof `-sTCP:LISTEN` 결과 합산
 2. `SIGTERM` → 5초 대기 → 실패 시 `SIGKILL`
@@ -101,7 +101,7 @@ kill -TERM <pid>               # 5초 후에도 살아있으면 kill -KILL
 
 **증상**: `[Server] Already running (PID: 12345)`인데 실제 PID가 죽어있음.
 
-**원인**: `kill -9` 등 강제 종료 후 PID 파일이 정리되지 않음. `bun run status`는 `kill(pid, 0)`으로 검사해 stale 파일을 자동 제거합니다 (`daemon.ts:166`).
+**원인**: `kill -9` 등 강제 종료 후 PID 파일이 정리되지 않음. `bun run status`는 lsof `-sTCP:LISTEN`으로 포트를 검사해 stale 파일을 자동 제거합니다 (`runtime/daemon.ts:233`).
 
 **해결**:
 
@@ -111,7 +111,7 @@ bun run dev
 # 또는 단순히 bun run status 를 한 번 호출 → 자동 정리
 ```
 
-**예방**: `kill -9` 대신 `bun run stop` 또는 Ctrl+C. SIGINT/SIGTERM 핸들러가 PID 파일을 자동 정리합니다 (`daemon.ts:22`).
+**예방**: `kill -9` 대신 `bun run stop` 또는 Ctrl+C. SIGINT/SIGTERM 핸들러가 PID 파일을 자동 정리합니다 (`runtime/daemon.ts:97`).
 
 ### 2.3 Bun 버전 미달 / 미설치
 
@@ -156,7 +156,7 @@ chmod 600 "${HOME}/.spyglass/spyglass.db" 2>/dev/null || true
 
 ### 2.5 PID 파일 경로 분리
 
-운영/임시 인스턴스를 동시에 띄우려면 `SPYGLASS_PID_FILE`로 분리 (`daemon.ts:17`): `SPYGLASS_PID_FILE=/tmp/spyglass-test.pid bun run packages/server/src/index.ts start`.
+운영/임시 인스턴스를 동시에 띄우려면 `SPYGLASS_PID_FILE`로 분리 (`runtime/daemon.ts:19`): `SPYGLASS_PID_FILE=/tmp/spyglass-test.pid bun run packages/server/src/index.ts start`.
 
 ---
 
@@ -175,7 +175,7 @@ chmod 600 "${HOME}/.spyglass/spyglass.db" 2>/dev/null || true
 
 **원인**: `~/.claude/settings.json`의 `hooks.{UserPromptSubmit, PreToolUse, PostToolUse, SessionStart, SessionEnd, Stop}` 어디에도 `spyglass-collect.sh`를 호출하는 항목이 없음 (`environment.ts:90`).
 
-**해결**: 설치 가이드 [4.4 자동 병합](./install-guide.md#44-자동-병합-jq-사용--권장)을 다시 실행. 직접 편집 시 다음 형태를 따릅니다.
+**해결**: 설치 가이드 [4.4 자동 병합](../install-guide.md#44-자동-병합-jq-사용--권장)을 다시 실행. 직접 편집 시 다음 형태를 따릅니다.
 
 ```json
 {
@@ -224,7 +224,7 @@ echo "$SPYGLASS_DIR"   # 출력값을 그대로 settings.json에 붙여넣기
 ```bash
 chmod +x "${HOME}/.spyglass-src/hooks/spyglass-collect.sh"
 # 또는
-bun run doctor --fix   # fix.ts:42에서 자동 chmod +x
+bun run doctor --fix   # fix.ts:46에서 자동 chmod +x
 ```
 
 **예방**: `git pull` 후 권한이 풀리면 `bun run doctor --fix`. 동기화 폴더(iCloud/Dropbox)는 권한을 임의로 변경하므로 `.spyglass-src`는 동기화 대상에서 제외하세요.
@@ -292,7 +292,7 @@ bun run dev
 
 **원인**: 훅 스크립트는 `SPYGLASS_HOST`(기본 `localhost`), `SPYGLASS_PORT`(기본 `9999`)로 엔드포인트를 만듭니다 (`hooks/spyglass-collect.sh:18`). 한쪽만 커스터마이즈하면 미스매치.
 
-**해결**: `~/.claude/settings.json`의 `env`에서 양쪽을 일치시킵니다. 서버는 `SPGLASS_HOST`/`SPGLASS_PORT`(오타 아님, 코드 그대로)를 우선 인식 (`runtime/config.ts:13`).
+**해결**: `~/.claude/settings.json`의 `env`에서 양쪽을 일치시킵니다. 서버는 `SPGLASS_HOST`/`SPGLASS_PORT`(오타 아님, 코드 그대로)를 우선 인식 (`runtime/config.ts:17`).
 
 **예방**: 기본값(`localhost:9999`)을 그대로 쓰는 것이 가장 안전. 변경해야 한다면 서버·훅·프록시 셋 모두에 동일 값을 박으세요.
 
@@ -336,7 +336,7 @@ tail -f "${HOME}/.spyglass/logs/server.log"
 
 ### 5.1 마이그레이션 도중 SQL 오류
 
-**증상**: 서버 부팅 시 `[migrator] Error applying 015-proxy-requests-enrich.sql: SQLiteError: ...`. 트랜잭션이 롤백되고 throw가 발생 (`storage/migrator.ts:170`).
+**증상**: 서버 부팅 시 `[migrator] Error applying 015-proxy-requests-enrich.sql: SQLiteError: ...`. 트랜잭션이 롤백되고 throw가 발생 (`storage/migrator.ts:431`).
 
 **원인 가능성**:
 - 비공식 도구로 스키마를 수정해 컬럼/테이블 충돌
@@ -367,7 +367,7 @@ tail -f "${HOME}/.spyglass/logs/server.log"
    sqlite3 "${HOME}/.spyglass/spyglass.db" "PRAGMA wal_checkpoint(TRUNCATE); VACUUM;"
    ```
 
-4. **migrator는 중복 컬럼/테이블을 자동 무시** — `duplicate column name`, `already exists`는 건너뛰므로 (`migrator.ts:150`) 같은 마이그레이션을 두 번 적용해도 안전합니다.
+4. **migrator는 중복 컬럼/테이블을 자동 무시** — `duplicate column name`, `already exists`는 건너뛰므로 (`migrator.ts:390`) 같은 마이그레이션을 두 번 적용해도 안전합니다.
 
 5. **재기동**
 
@@ -449,7 +449,7 @@ curl -i http://127.0.0.1:9999/health
 
 ### 6.2 SSE 연결 끊김
 
-`idleTimeout: 0`으로 명시 설정 (`runtime/lifecycle.ts:98`)되어 있으므로 정상이면 끊기지 않습니다.
+`idleTimeout: 0`으로 명시 설정 (`runtime/lifecycle.ts:122`)되어 있으므로 정상이면 끊기지 않습니다.
 
 ```bash
 # SSE 직접 테스트
@@ -487,7 +487,7 @@ spyglass는 모든 응답에 `Access-Control-Allow-Origin: *`를 박습니다 (`
 
 ### 7.1 색이 깨지거나 빠짐
 
-`packages/tui/src/lib/capabilities.ts:17`에서:
+`packages/tui/src/lib/capabilities.ts:16`에서:
 - `COLORTERM`이 `truecolor`/`24bit`를 포함 → truecolor
 - `TERM`이 `256` 포함 → 256색
 - `NO_COLOR`가 비어있지 않음 → 16색
@@ -601,7 +601,7 @@ ANALYZE;
 SQL
 ```
 
-`VACUUM`은 임시 파일을 만들어 교체하므로 현재 DB 크기 만큼의 여유 공간이 필요합니다. 오래된 데이터 삭제는 [설치 가이드 7.3](./install-guide.md#73-오래된-데이터-정리).
+`VACUUM`은 임시 파일을 만들어 교체하므로 현재 DB 크기 만큼의 여유 공간이 필요합니다. 오래된 데이터 삭제는 [설치 가이드 7.3](../install-guide.md#73-오래된-데이터-정리).
 
 ---
 
@@ -611,7 +611,7 @@ SQL
 
 ### 9.1 git pull 후에도 배지가 남아있음
 
-`updateAvailable === true`이면 자체 인터벌이 멈춥니다 (`lifecycle.ts:64`). 서버 재시작이 필요합니다.
+버전 체크 인터벌은 `startVersionCheckSchedule()` 으로 시작됩니다 (`version-checker.ts:178`). 서버 재시작이 필요합니다.
 
 ```bash
 cd "${HOME}/.spyglass-src"
@@ -647,7 +647,7 @@ git pull && bun install && bun run dev
 | `~/.spyglass/logs/server.log` | 서버 stdout/stderr 미러 (INFO/WARN/ERROR/FATAL) | `stdio-mirror.ts` |
 | `~/.spyglass/logs/collect.log` | 훅 스크립트 호출·에러 | `spyglass-collect.sh:41` |
 | `~/.spyglass/logs/hook-raw.jsonl` | 훅이 받은 raw 페이로드 1줄/이벤트 | `spyglass-collect.sh:91` |
-| `~/.spyglass/server.pid` | 데몬 PID | `daemon.ts:42` |
+| `~/.spyglass/server.pid` | 데몬 PID | `runtime/daemon.ts:43` |
 | `<cwd>/.claude/.tmp/logs/*.log,*.jsonl` | 진단 로그 (DIAG ON 시) | `diag-log.ts` |
 
 ### 10.2 일반 운영 로그
@@ -696,9 +696,9 @@ jq -r '.hook_event_name // "null"' "${HOME}/.spyglass/logs/hook-raw.jsonl" \
 > unset SPYGLASS_DIAG_ENABLED && bun run dev
 > ```
 >
-> **함정**: `SPYGLASS_DIAG_ENABLED=1 & bun run dev` (← 백그라운드 `&`)는 환경변수가 다른 프로세스로 빠져 `bun run dev`에 전달되지 않습니다. 반드시 공백 한 칸으로 prefix 하세요.
+> **함정**: `SPYGLASS_DIAG_ENABLED=1 && bun run dev` (← 백그라운드 `&`)는 환경변수가 다른 프로세스로 빠져 `bun run dev`에 전달되지 않습니다. 반드시 공백 한 칸으로 prefix 하세요.
 >
-> 부팅 배너에서 현재 상태를 확인할 수 있습니다 (`diag-log.ts:137`).
+> 부팅 배너에서 현재 상태를 확인할 수 있습니다 (`diag-log.ts:127`).
 
 ### 10.5 로그 회전
 
@@ -838,7 +838,7 @@ spyglass는 보안상 `127.0.0.1`에만 바인딩. SSH 포워딩으로 접근하
 `SPYGLASS_PID_FILE`, `SPGLASS_PORT`, `SPGLASS_DB_PATH`를 분리하면 가능. 단, 훅은 한 곳으로만 보내므로 테스트/디버그 한정.
 
 **Q6. proxy_requests 테이블이 비어있다.**
-프록시는 선택사항. `ANTHROPIC_BASE_URL`을 설정해 클라이언트가 spyglass를 경유하게 하세요. 설치 가이드 [5절](./install-guide.md#5-claude-code-프록시-설정) 참조.
+프록시는 선택사항. `ANTHROPIC_BASE_URL`을 설정해 클라이언트가 spyglass를 경유하게 하세요. 설치 가이드 [5절](../install-guide.md#5-claude-code-프록시-설정) 참조.
 
 **Q7. 통계가 깨졌다.**
 `stats_hourly`, `stats_proxy_hourly`는 trigger로 동기 갱신됩니다(v028+). BULK DELETE 후 검증이 필요하면 `bun run rebuild-stats`, `bun run rebuild-stats-proxy`.
@@ -880,7 +880,7 @@ ls -1t "${HOME}/.claude/settings.json.bak-"* 2>/dev/null | head -1 \
 
 ## 참고
 
-- [설치 가이드](./install-guide.md)
+- [설치 가이드](../install-guide.md)
 - [doctor 검사 코드](../packages/server/src/cli/checks/)
 - [자동 수정 코드](../packages/server/src/cli/fix.ts)
 - [서버 라이프사이클](../packages/server/src/runtime/lifecycle.ts)

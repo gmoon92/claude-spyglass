@@ -98,10 +98,10 @@ curl -sf http://127.0.0.1:9999/health && echo OK
 
 `~/.claude/settings.json`에 `env.SPYGLASS_DIR`과 훅 프로파일을 병합합니다. 예제 프로파일은 두 가지가 제공됩니다.
 
-- [`examples/settings.hooks.minimal.json`](./examples/settings.hooks.minimal.json) — 6개 훅 (최소 구성)
-- [`examples/settings.hooks.full.json`](./examples/settings.hooks.full.json) — 27개 훅 (권장)
+- [`examples/settings.hooks.minimal.json`](../examples/settings.hooks.minimal.json) — 6개 훅 (최소 구성)
+- [`examples/settings.hooks.full.json`](../examples/settings.hooks.full.json) — 27개 훅 (권장)
 
-전체 `jq` 병합 절차는 [설치 가이드](./install-guide.md#4-claude-code-훅-설정)를 참고하세요. 등록 후에는 Claude Code를 **완전히 종료한 뒤 재시작**해야 훅이 로드됩니다.
+전체 `jq` 병합 절차는 [설치 가이드](../install-guide.md#4-claude-code-훅-설정)를 참고하세요. 등록 후에는 Claude Code를 **완전히 종료한 뒤 재시작**해야 훅이 로드됩니다.
 
 ### 5. 대시보드 접속
 
@@ -164,7 +164,7 @@ claude-spyglass/
 │   └── types/               # 워크스페이스 공유 타입
 ├── hooks/spyglass-collect.sh  # Claude Code 훅 진입점 (POST /collect)
 ├── scripts/                 # install.sh, delete-old-data.ts, i18n-extract.ts 등
-├── docs/                    # 본 문서 · install-guide · examples/ · schema/ · images/
+├── docs/                    # install-guide.md, examples/, architecture/(index.md · schema/ · images/ 포함)
 ├── docker/, docker-compose.yml, Dockerfile
 └── package.json             # bun workspaces 루트
 ```
@@ -237,16 +237,28 @@ bun run prepare   # git config core.hooksPath .githooks (저장소 자동 실행
 
 spyglass는 두 갈래로 데이터를 모읍니다. 훅 채널은 기본으로 켜져 있고, 프록시 채널은 토큰·비용 정밀도가 필요할 때 선택적으로 활성화합니다.
 
-```text
-── 훅 채널 (항상 활성) ──────────────────────────────────
-Claude Code  →  spyglass-collect.sh  →  POST /collect
-                                       POST /events (raw)
-                                       SSE  /events (broadcast)
+```mermaid
+flowchart LR
+    CC[Claude Code]
 
-── 프록시 채널 (선택, ANTHROPIC_BASE_URL 설정) ──────────
-Claude Code  →  spyglass:9999/v1/*  →  api.anthropic.com/v1/*
-                     │ 메타 기록
-                     └→ proxy_requests
+    subgraph 훅채널["훅 채널 (항상 활성)"]
+        SH[spyglass-collect.sh]
+        PC[POST /collect]
+        PE[POST /events raw]
+        SE[SSE /events broadcast]
+    end
+
+    subgraph 프록시채널["프록시 채널 (선택, ANTHROPIC_BASE_URL 설정)"]
+        SP[spyglass:9999/v1/*]
+        AN[api.anthropic.com/v1/*]
+        PR[(proxy_requests)]
+    end
+
+    CC --> SH --> PC
+    PC --> PE
+    PC --> SE
+    CC --> SP --> AN
+    SP --> PR
 ```
 
 두 채널 모두 동일한 `~/.spyglass/spyglass.db`에 기록되며, 대시보드는 SSE로 실시간 업데이트됩니다.
@@ -259,7 +271,7 @@ Claude Code  →  spyglass:9999/v1/*  →  api.anthropic.com/v1/*
 
 ### 시작하기
 
-- [설치 가이드](./install-guide.md) — 클론·기동·훅 등록·프록시 설정의 전체 절차
+- [설치 가이드](../install-guide.md) — 클론·기동·훅 등록·프록시 설정의 전체 절차
 - [구성(Configuration)](./configuration.md) — `SPYGLASS_*` / `ANTHROPIC_*` 환경변수 레퍼런스
 - [아키텍처](./architecture.md) — 서버·스토리지·TUI·웹 구성요소와 의존 관계
 
@@ -305,8 +317,8 @@ Claude Code  →  spyglass:9999/v1/*  →  api.anthropic.com/v1/*
 
 ### 예제·샘플
 
-- [최소 훅 프로파일](./examples/settings.hooks.minimal.json) — 6개 훅 (UserPromptSubmit, PreToolUse, PostToolUse, SessionStart, SessionEnd, Stop)
-- [권장 훅 프로파일](./examples/settings.hooks.full.json) — 27개 훅 (전체 HOOK_EVENTS)
+- [최소 훅 프로파일](../examples/settings.hooks.minimal.json) — 6개 훅 (UserPromptSubmit, PreToolUse, PostToolUse, SessionStart, SessionEnd, Stop)
+- [권장 훅 프로파일](../examples/settings.hooks.full.json) — 27개 훅 (전체 HOOK_EVENTS)
 
 ---
 

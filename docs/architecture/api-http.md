@@ -27,7 +27,7 @@ claude-spyglass 서버(`packages/server`)가 제공하는 모든 HTTP 엔드포�
 | 항목 | 값 | 비고 |
 | --- | --- | --- |
 | 런타임 | **Bun** (`Bun.serve`) | |
-| 진입점 | `packages/server/src/runtime/lifecycle.ts` → `startServer()` | |
+| 진입점 | `packages/server/src/index.ts` → `runtime/daemon.ts#dispatchDaemonCommand()` → `runtime/lifecycle.ts#startServer()` | |
 | 메인 라우터 | `packages/server/src/runtime/dispatch.ts` → `handleRequest()` | |
 | 기본 포트 | **9999** | `SPGLASS_PORT` 환경변수로 변경 |
 | 기본 호스트 | **127.0.0.1** | `SPGLASS_HOST` 환경변수로 변경 |
@@ -442,13 +442,13 @@ es.addEventListener('session_update', e => {
 
 ## 6. Anthropic Proxy
 
-`/v1/*` 요청을 Anthropic 또는 모델 prefix별 upstream으로 포워딩하면서 메트릭과 SSE 이벤트를 수집하는 투명 프록시입니다.
+`/v1/*` 경로로 들어오는 모든 요청을 **무조건** Anthropic 또는 모델 prefix별 upstream으로 포워딩하는 투명 프록시입니다. 경로 매칭만으로 활성화되며, 조건부 헤더나 별도 활성화 플래그는 없습니다(`runtime/dispatch.ts: path.startsWith('/v1/')`).
 
 ### 6.1 `ANY /v1/*`
 
-`packages/server/src/proxy/handler/index.ts` → `handleProxy()`가 모든 `/v1/*` 요청을 upstream으로 포워딩하면서 메트릭/SSE를 수집합니다.
+`packages/server/src/proxy/handler/index.ts` → `handleProxy()`가 경로 prefix `/v1/` 에 매칭된 모든 요청을 upstream으로 포워딩하면서 메트릭/SSE를 수집합니다.
 
-upstream 선택은 `selectUpstreamUrl()`이 모델 prefix별로 처리합니다.
+upstream 선택은 `selectUpstreamUrl()`이 request body의 `model` 필드 prefix별로 처리합니다.
 
 | 모델 prefix | Upstream | 환경변수 |
 | --- | --- | --- |

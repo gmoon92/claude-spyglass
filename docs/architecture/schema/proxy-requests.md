@@ -122,10 +122,34 @@ HTTP 프록시 레이어에서 수집한 Anthropic API 호출 메트릭과 도�
 
 ### 관계
 
-- `proxy_requests.session_id` → `sessions.id` (NULL 허용)
-- `proxy_requests.system_hash` → `system_prompts.hash` (NULL 허용)
-- `proxy_requests.api_request_id` ↔ `proxy_tool_uses.api_request_id` (1:N)
-- `proxy_requests` ↔ `requests` (hook 데이터): `correlated_requests` VIEW 또는 `session_id` 직접 JOIN
+```mermaid
+erDiagram
+    proxy_requests {
+        TEXT id PK
+        TEXT session_id FK
+        TEXT system_hash FK
+        TEXT api_request_id
+    }
+    sessions {
+        TEXT id PK
+    }
+    system_prompts {
+        TEXT hash PK
+    }
+    proxy_tool_uses {
+        TEXT tool_use_id PK
+        TEXT api_request_id FK
+    }
+    requests {
+        TEXT id PK
+        TEXT session_id
+    }
+
+    proxy_requests }o--o| sessions : "session_id (NULL 허용)"
+    proxy_requests }o--o| system_prompts : "system_hash (NULL 허용)"
+    proxy_requests ||--o{ proxy_tool_uses : "api_request_id (1:N)"
+    proxy_requests }o--o{ requests : "correlated_requests VIEW / session_id JOIN"
+```
 
 ---
 
@@ -156,8 +180,22 @@ HTTP 프록시 레이어에서 수집한 Anthropic API 호출 메트릭과 도�
 
 ### 관계
 
-- `proxy_tool_uses.api_request_id` → `proxy_requests.api_request_id` (N:1)
-- `proxy_tool_uses.tool_use_id` ↔ `requests.tool_use_id` (hook 측 PostToolUse와 1:1 매칭)
+```mermaid
+erDiagram
+    proxy_tool_uses {
+        TEXT tool_use_id PK
+        TEXT api_request_id FK
+    }
+    proxy_requests {
+        TEXT api_request_id
+    }
+    requests {
+        TEXT tool_use_id
+    }
+
+    proxy_tool_uses }o--|| proxy_requests : "api_request_id (N:1)"
+    proxy_tool_uses ||--o| requests : "tool_use_id (1:1, PostToolUse 매칭)"
+```
 
 ---
 

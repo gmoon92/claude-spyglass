@@ -26,7 +26,7 @@ claude-spyglass의 영속 저장소(SQLite) 아키텍처, 마이그레이션, �
 - 코드 SSoT: [`packages/storage`](../packages/storage)
 - 스키마 정의: [`packages/storage/src/schema.ts`](../packages/storage/src/schema.ts)
 - 마이그레이션 디렉토리: [`packages/storage/migrations/`](../packages/storage/migrations)
-- 현재 스키마 버전: **23** (`SCHEMA_VERSION` 상수). 실제 적용 마이그레이션 파일은 `032`까지 존재합니다 — 파일명 NNN과 `PRAGMA user_version`이 1:1 매핑되며, `SCHEMA_VERSION`은 정적 문서화 상수입니다.
+- 현재 스키마 버전: **23** (`SCHEMA_VERSION` 상수). 실제 적용 마이그레이션 파일은 `035`까지 존재합니다 — 파일명 NNN과 `PRAGMA user_version`이 1:1 매핑되며, `SCHEMA_VERSION`은 정적 문서화 상수입니다.
 
 ---
 
@@ -41,7 +41,7 @@ claude-spyglass의 영속 저장소(SQLite) 아키텍처, 마이그레이션, �
 | Journal 모드 | WAL (Write-Ahead Logging) | `PRAGMA journal_mode = WAL` |
 | 파일 권한 | DB 파일 `0600`, 디렉토리 `0700` | `applyFilePermissions()` |
 | WAL autocheckpoint | 200 페이지 (~800KB) | `PRAGMA wal_autocheckpoint = 200` |
-| 활성 테이블 수 | 11개 — `sessions`, `requests`, `claude_events`, `proxy_requests`, `proxy_tool_uses`, `system_prompts`, `meta_documents`, `meta_doc_resolutions`, `model_limits`, `metadata`, `stats_hourly`, `stats_proxy_hourly` | + 뷰 `correlated_requests`, `v_meta_doc_usage` |
+| 활성 테이블 수 | 14개 — `sessions`, `requests`, `claude_events`, `proxy_requests`, `proxy_tool_uses`, `system_prompts`, `meta_documents`, `meta_doc_resolutions`, `model_limits`, `metadata`, `stats_hourly`, `stats_proxy_hourly`, `anomaly_thresholds`, `_migrations` | + 뷰 `correlated_requests`, `v_meta_doc_usage` |
 
 ### 왜 SQLite인가
 
@@ -140,7 +140,7 @@ PRAGMA wal_autocheckpoint = 200;        -- ~800KB마다 자동 checkpoint (기�
 
 ### 3.4 마이그레이션 이력 요약
 
-총 32개 마이그레이션을 다음 3단계로 묶어 정리합니다.
+총 35개 마이그레이션을 다음 3단계로 묶어 정리합니다.
 
 <details>
 <summary><b>초기 (v001 ~ v010) — 기본 스키마 + 토큰·이벤트 도입</b></summary>
@@ -179,7 +179,7 @@ PRAGMA wal_autocheckpoint = 200;        -- ~800KB마다 자동 checkpoint (기�
 </details>
 
 <details open>
-<summary><b>최근 (v021 ~ v032) — 압축·dedup·meta-docs·사전 집계</b></summary>
+<summary><b>최근 (v021 ~ v035) — 압축·dedup·meta-docs·사전 집계·anomaly</b></summary>
 
 | 버전 | 핵심 변경 |
 |------|-----------|
@@ -195,6 +195,9 @@ PRAGMA wal_autocheckpoint = 200;        -- ~800KB마다 자동 checkpoint (기�
 | 030 | `stats_hourly`에 `event_type` 차원 + `tokens_high` 4개 컬럼 (테이블 재생성) |
 | 031 | `duration_ms_sum/count` 의미 변경 (NULL 제외 모든 행) |
 | 032 | `stats_proxy_hourly` 테이블 + 트리거 + 백필 |
+| 033 | `anomaly_thresholds` 테이블 — bloated-sys / agent-spike 임계값(warn_pct, critical_pct) SSoT. 기본 시드: warn=15%, critical=25% |
+| 034 | anomaly 검출 보조 인덱스 추가 — `idx_proxy_requests_system_byte_null` (system_byte_size NULL 부분 인덱스), `idx_requests_tool_use_id`, `idx_requests_session_timestamp` (session_id, timestamp DESC) |
+| 035 | `_migrations` 메타테이블 신설 — 마이그레이션 적용 히스토리(filename, applied_at, app_version, duration_ms) SSoT. legacy v1~v34 백필 포함 |
 
 </details>
 
@@ -206,31 +209,86 @@ PRAGMA wal_autocheckpoint = 200;        -- ~800KB마다 자동 checkpoint (기�
 
 ### 4.1 ERD
 
-```
-sessions (id PK)
-  │
-  │ 1:N  (FK CASCADE)
-  ▼
-  ├─ requests (id PK, session_id FK)
-  │    ├─ tool_use_id ──────────────► proxy_tool_uses.tool_use_id
-  │    ├─ api_request_id ───────────► proxy_requests.api_request_id
-  │    └─ parent_tool_use_id ──self─► requests.tool_use_id
-  │
-  ├─ claude_events    (event_id UQ, session_id)
-  │
-  └─ proxy_requests   (id PK, session_id, system_hash ─► system_prompts.hash)
-        └─ api_request_id  ◄───  proxy_tool_uses.api_request_id
+```mermaid
+erDiagram
+    sessions {
+        TEXT id PK
+    }
+    requests {
+        TEXT id PK
+        TEXT session_id FK
+        TEXT tool_use_id
+        TEXT api_request_id
+        TEXT parent_tool_use_id
+    }
+    claude_events {
+        TEXT event_id
+        TEXT session_id
+    }
+    proxy_requests {
+        INTEGER id PK
+        TEXT session_id
+        TEXT system_hash FK
+        TEXT api_request_id
+    }
+    proxy_tool_uses {
+        TEXT tool_use_id PK
+        TEXT api_request_id
+    }
+    system_prompts {
+        TEXT hash PK
+    }
+    meta_documents {
+        INTEGER id PK
+    }
+    meta_doc_resolutions {
+        TEXT cwd PK
+        TEXT type PK
+        TEXT name PK
+        INTEGER meta_document_id FK
+    }
+    stats_hourly {
+        INTEGER hour_ts
+        TEXT model
+        TEXT type
+        TEXT event_type
+    }
+    stats_proxy_hourly {
+        INTEGER hour_ts
+        TEXT model
+    }
+    model_limits {
+        TEXT pattern PK
+    }
+    metadata {
+        TEXT key PK
+    }
+    anomaly_thresholds {
+        TEXT project_id PK
+        TEXT model_id PK
+        INTEGER warn_pct
+        INTEGER critical_pct
+        INTEGER updated_at
+    }
+    _migrations {
+        INTEGER version PK
+        TEXT filename
+        INTEGER applied_at
+        TEXT app_version
+        INTEGER duration_ms
+    }
 
-meta_documents (id PK)
-  │
-  │ 1:N  (FK CASCADE)
-  ▼
-  └─ meta_doc_resolutions (cwd, type, name) PK
-
-stats_hourly        (hour_ts, model, type, event_type) UQ   ◄── 트리거(requests INSERT/UPDATE)
-stats_proxy_hourly  (hour_ts, model) UQ                     ◄── 트리거(proxy_requests INSERT)
-
-model_limits (pattern PK)        metadata (key PK)
+    sessions ||--o{ requests : "1:N FK CASCADE"
+    sessions ||--o{ claude_events : "1:N"
+    sessions ||--o{ proxy_requests : "1:N"
+    requests }o--o| proxy_tool_uses : "tool_use_id"
+    requests }o--o| proxy_requests : "api_request_id"
+    requests }o--o| requests : "parent_tool_use_id → tool_use_id"
+    proxy_requests }o--o| system_prompts : "system_hash → hash"
+    proxy_requests ||--o{ proxy_tool_uses : "api_request_id"
+    meta_documents ||--o{ meta_doc_resolutions : "1:N FK CASCADE"
+    requests ||--o{ stats_hourly : "INSERT/UPDATE 트리거"
+    proxy_requests ||--o{ stats_proxy_hourly : "INSERT 트리거"
 ```
 
 > 트리거: 특정 테이블에 INSERT/UPDATE/DELETE가 발생할 때 SQLite가 자동으로 실행하는 SQL 핸들러. 본 프로젝트에서는 raw 테이블의 변경을 사전 집계 테이블에 즉시 반영하는 데 사용합니다.
@@ -240,7 +298,8 @@ model_limits (pattern PK)        metadata (key PK)
 - **Raw 수집**: `sessions`, `requests`, `claude_events`, `proxy_requests`, `proxy_tool_uses`
 - **카탈로그·정규화**: `system_prompts`, `meta_documents`, `meta_doc_resolutions`, `model_limits`
 - **사전 집계**: `stats_hourly`, `stats_proxy_hourly`
-- **운영 메타**: `metadata`
+- **운영 메타**: `metadata`, `anomaly_thresholds`
+- **시스템 메타**: `_migrations`
 - **뷰**: `correlated_requests`, `v_meta_doc_usage`
 
 ---
@@ -430,6 +489,31 @@ v32에서 신설. proxy_requests 사전 집계 SSoT. 차원 `(hour_ts, model)` U
 - 비용: `cost_usd_sum` REAL (쿼리 단에서 ROUND)
 
 트리거: `trg_proxy_stats_after_insert` 하나만 (proxy_requests UPDATE 경로 거의 없음 — ADR-002).
+
+### 5.11 `anomaly_thresholds`
+
+v33에서 신설. bloated-sys / agent-spike anomaly 임계값 SSoT. `(project_id, model_id)` 복합 PK.
+
+- `project_id` TEXT NOT NULL DEFAULT `'*'`, `model_id` TEXT NOT NULL DEFAULT `'*'` — `'*'`는 전역 폴백 와일드카드 (NULL 미사용, ADR-004)
+- `warn_pct` INTEGER NOT NULL, `critical_pct` INTEGER NOT NULL — 윈도우 비율 정수 (15 = 15%)
+- `notes` TEXT, `updated_at` INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+
+우선순위 조회: (project_id+model_id 동시 일치) → (project_id 일치) → (model_id 일치) → 전역(`'*'/'*'`) 폴백. 기본 시드: `warn_pct=15, critical_pct=25` (ADR-001).
+
+캐시: `server/src/anomaly-thresholds.ts`가 첫 호출 시 1회 로드 → 인메모리 보존. SQL 갱신 후 즉시 반영 시 `invalidateAnomalyThresholdsCache()` 호출.
+
+### 5.12 `_migrations`
+
+v35에서 신설. 마이그레이션 적용 히스토리 시스템 메타 테이블. `version` INTEGER PK.
+
+- `filename` TEXT NOT NULL — 적용된 SQL 파일명
+- `applied_at` INTEGER NOT NULL — 적용 시각 (unix epoch seconds)
+- `app_version` TEXT — 적용 시점 spyglass 앱 버전 (package.json#version); legacy 백필 시 NULL
+- `duration_ms` INTEGER — 적용 소요 시간 (ms); legacy 백필 시 NULL
+
+인덱스: `idx_migrations_applied_at_desc` `(applied_at DESC, version DESC)` — `/api/version`의 `latestMigrationFile` 조회·lag 감지용.
+
+v1~v34 레거시 백필: `filename='(legacy)'`, `applied_at=백필 시각`, `app_version/duration_ms=NULL`. `PRAGMA user_version`과 1:1 대응하는 감사 테이블이며 `migrator.ts`가 각 파일 적용 트랜잭션 안에서 INSERT 실행 (원자성 보장).
 
 ---
 

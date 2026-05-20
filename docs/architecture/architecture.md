@@ -24,7 +24,7 @@
 | 2 | 시스템 다이어그램 | 데이터 흐름, HTTP 디스패처, 부팅 라이프사이클 |
 | 3 | 모노레포 구조 | 5개 패키지 의존 그래프와 책임 |
 | 4 | `packages/server` | HTTP·SSE·Hook·Proxy·Metrics·Meta-docs |
-| 5 | `packages/storage` | SQLite 스키마와 32개 마이그레이션 |
+| 5 | `packages/storage` | SQLite 스키마와 35개 마이그레이션 |
 | 6 | `packages/tui` | Ink 기반 터미널 UI |
 | 7 | `packages/web` | Vanilla JS 웹 대시보드 |
 | 8 | `packages/types` | 공통 타입 contract |
@@ -72,12 +72,12 @@ Claude Code hook → spyglass-collect.sh → POST /collect → SQLite → SSE �
 | **실시간 시각화** | SSE(`/events`) — 새 요청 도착 시 즉시 푸시. TUI 지연 50ms 이내. |
 | **무손실 수집** | 훅 raw 페이로드는 `~/.spyglass/logs/hook-raw.jsonl`에 원장 기록 후 서버 전달(이중 안전). |
 | **카탈로그형 분석** | Behavior Definitions(SKILL.md / agents.md / CLAUDE.md / commands) 메타 문서 카탈로그를 별도 테이블로 정규화. |
-| **사후 감사** | 32개 마이그레이션 누적으로 모든 분석 컬럼이 영속화(트랜스크립트 재파싱 비용 0). |
+| **사후 감사** | 35개 마이그레이션 누적으로 모든 분석 컬럼이 영속화(트랜스크립트 재파싱 비용 0). |
 
 ### 1.4 기능 분포
 
 - **수집**: `hooks/spyglass-collect.sh` + `packages/server/src/hook/`
-- **영속화**: `packages/storage/` (SQLite + WAL, 32 migrations, schema_version=23)
+- **영속화**: `packages/storage/` (SQLite + WAL, 35 migrations, schema_version=23)
 - **HTTP API**: `packages/server/src/api.ts` + `routes/*` + `metrics/router.ts`
 - **실시간**: `packages/server/src/sse.ts` (`broadcastNewRequest`, `broadcastNewProxyRequest`, `broadcastSessionUpdate`)
 - **프록시(선택)**: `packages/server/src/proxy/` — Anthropic API를 HTTP 레벨로 미러링하여 헤더·SSE까지 직접 수집(opt-in)
@@ -92,106 +92,110 @@ Claude Code hook → spyglass-collect.sh → POST /collect → SQLite → SSE �
 
 ### 2.1 데이터 흐름 — 큰 그림
 
-```
-                                                ┌─────────────────────┐
-                                                │  Claude Code (CLI)  │
-                                                │  └ hook 시스템      │
-                                                └──────────┬──────────┘
-                                                           │ stdin (raw JSON)
-                                                           ▼
-                                              ┌─────────────────────────┐
-                                              │ hooks/spyglass-collect  │
-                                              │   .sh                   │
-                                              │  • hook-raw.jsonl 원장  │
-                                              │  • hook_event_name 분기 │
-                                              └──┬───────────────────┬──┘
-                                                 │                   │
-                                  POST /collect  │                   │  POST /events
-                                  (Pre/Post/UPS) ▼                   ▼  (Session*)
-                          ┌──────────────────────────────────────────────────────┐
-                          │            spyglass server  (Bun.serve)              │
-                          │                                                      │
-                          │  /collect  ─►  hook/  ─► dispatcher (Strategy)       │
-                          │                  │       ├ PreToolUseHandler        │
-                          │                  │       ├ PostToolUseHandler       │
-                          │                  │       ├ UserPromptSubmitHandler  │
-                          │                  │       └ SystemEventHandler       │
-                          │                  ▼                                   │
-                          │              processor → persist → SQLite           │
-                          │                                                      │
-                          │  /events POST ─► events.collectHandler ─► claude_events
-                          │  /events GET  ─► sseRouter (stream)                  │
-                          │  /api/*       ─► routes/ (sessions/requests/...)     │
-                          │  /api/metrics ─► metrics/router (계산기)             │
-                          │  /v1/*        ─► proxy/handler (opt-in 미러링)       │
-                          │  /            ─► packages/web index.html            │
-                          │  /assets/*    ─► packages/web/assets/* (정적)        │
-                          └──────────────┬────────────────────────┬──────────────┘
-                                         │ write                  │ broadcast (SSE)
-                                         ▼                        ▼
-                              ┌────────────────────┐    ┌────────────────────┐
-                              │   SQLite (WAL)     │    │  in-memory SSE     │
-                              │  ~/.spyglass/      │    │  connections Set   │
-                              │  spyglass.db       │    └─────────┬──────────┘
-                              │                    │              │
-                              │  • sessions        │              │
-                              │  • requests        │              ▼
-                              │  • claude_events   │    ┌────────────────────┐
-                              │  • proxy_requests  │    │  Client (browser/  │
-                              │  • system_prompts  │    │   TUI)             │
-                              │  • meta_documents  │    │                    │
-                              │  • stats_hourly    │    │  EventSource       │
-                              │  • model_limits    │    │   → 'new_request'  │
-                              └────────────────────┘    │   → 'new_proxy_..' │
-                                         ▲              │   → 'session_..'   │
-                                         │ read         │   → 'ping'         │
-                                         └──────────────┴────────────────────┘
-                                                 GET /api/*
+```mermaid
+flowchart TD
+    CC["Claude Code (CLI)\n└ hook 시스템"]
+    COLLECT["hooks/spyglass-collect.sh\n• hook-raw.jsonl 원장\n• hook_event_name 분기"]
+    SERVER["spyglass server (Bun.serve)"]
+    DISPATCHER["dispatcher (Strategy)\n├ PreToolUseHandler\n├ PostToolUseHandler\n├ UserPromptSubmitHandler\n└ SystemEventHandler"]
+    PROC["processor → persist"]
+    CE["events.collectHandler → claude_events"]
+    SSE_ROUTER["sseRouter (stream)"]
+    ROUTES["routes/ (sessions/requests/...)"]
+    METRICS["metrics/router (계산기)"]
+    PROXY_H["proxy/handler (opt-in 미러링)"]
+    WEB_STATIC["packages/web index.html / assets/*"]
+    SQLITE["SQLite (WAL)\n~/.spyglass/spyglass.db\n• sessions\n• requests\n• claude_events\n• proxy_requests\n• system_prompts\n• meta_documents\n• stats_hourly\n• model_limits"]
+    SSE_SET["in-memory SSE\nconnections Set"]
+    CLIENT["Client (browser / TUI)\nEventSource\n→ new_request\n→ new_proxy_request\n→ session_update\n→ ping"]
+
+    CC -->|"stdin (raw JSON)"| COLLECT
+    COLLECT -->|"POST /collect (Pre/Post/UPS)"| SERVER
+    COLLECT -->|"POST /events (Session*)"| SERVER
+
+    SERVER --> |"/collect → hook/"| DISPATCHER
+    DISPATCHER --> PROC
+    PROC -->|write| SQLITE
+    SERVER --> |"/events POST"| CE
+    SERVER --> |"/events GET"| SSE_ROUTER
+    SERVER --> |"/api/*"| ROUTES
+    SERVER --> |"/api/metrics"| METRICS
+    SERVER --> |"/v1/*"| PROXY_H
+    SERVER --> |"/ 및 /assets/*"| WEB_STATIC
+
+    PROC -->|"broadcast (SSE)"| SSE_SET
+    SSE_SET --> CLIENT
+    CLIENT -->|"GET /api/*"| SQLITE
 ```
 
 ### 2.2 진입점 — `Bun.serve` HTTP 디스패처
 
 `packages/server/src/runtime/dispatch.ts:18`의 `handleRequest`가 단일 진입점이며, **경로 prefix별**로 도메인 핸들러에 위임한다.
 
-```
-HTTP 요청 ─► handleRequest (dispatch.ts)
-            │
-            ├─ OPTIONS         → CORS preflight 204
-            ├─ /v1/*           → handleProxy (proxy/handler/index.ts)
-            ├─ /collect        → handleHookHttpRequest (hook/http-entry.ts)
-            ├─ /events (POST)  → eventsCollectHandler (events.ts)
-            ├─ /events (GET)   → sseRouter (sse.ts)
-            ├─ /api/*          → apiRouter (api.ts)
-            ├─ /health         → JSON ok
-            ├─ /               → web/index.html (또는 Accept:json 시 API info)
-            ├─ /assets/*       → packages/web/assets/* 정적 서빙
-            ├─ /locales/*      → packages/web/locales/* (i18n JSON)
-            ├─ /favicon.*      → 정적 서빙
-            └─ 그 외           → 404
+```mermaid
+flowchart TD
+    REQ["HTTP 요청"]
+    HR["handleRequest (dispatch.ts)"]
+    OPT["CORS preflight 204"]
+    V1["handleProxy (proxy/handler/index.ts)"]
+    COLLECT["handleHookHttpRequest (hook/http-entry.ts)"]
+    EV_POST["eventsCollectHandler (events.ts)"]
+    EV_GET["sseRouter (sse.ts)"]
+    API["apiRouter (api.ts)"]
+    HEALTH["JSON ok"]
+    ROOT["web/index.html 또는 API info"]
+    ASSETS["packages/web/assets/* 정적 서빙"]
+    LOCALES["packages/web/locales/* (i18n JSON)"]
+    FAVICON["정적 서빙"]
+    NOT_FOUND["404"]
+
+    REQ --> HR
+    HR -->|OPTIONS| OPT
+    HR -->|"/v1/*"| V1
+    HR -->|"/collect"| COLLECT
+    HR -->|"/events POST"| EV_POST
+    HR -->|"/events GET"| EV_GET
+    HR -->|"/api/*"| API
+    HR -->|"/health"| HEALTH
+    HR -->|"/"| ROOT
+    HR -->|"/assets/*"| ASSETS
+    HR -->|"/locales/*"| LOCALES
+    HR -->|"/favicon.*"| FAVICON
+    HR -->|"그 외"| NOT_FOUND
 ```
 
 ### 2.3 라이프사이클
 
 서버는 `packages/server/src/index.ts`(19줄짜리 진입점)가 `dispatchDaemonCommand`로 위임한다. 데몬은 PID 파일(`~/.spyglass/server.pid`) 기반 싱글톤이다.
 
-```
-bun run start  ──►  index.ts
-                     └─ dispatchDaemonCommand('start')  (runtime/daemon.ts)
-                          ├─ commandStart        : PID 파일 확인 + 포트 점유 검사 + startServer()
-                          ├─ commandStop         : SIGTERM 시그널 송신
-                          ├─ commandRestart      : 점유 프로세스 정리 후 재시작
-                          ├─ commandStatus       : PID 존재 + kill(0) 체크
-                          └─ commandForeground   : 기본(인수 없음). 백그라운드 없이 동작.
+```mermaid
+flowchart TD
+    START["bun run start"]
+    INDEX["index.ts"]
+    DAEMON["dispatchDaemonCommand('start')\n(runtime/daemon.ts)"]
+    CMD_START["commandStart\nPID 파일 확인 + 포트 점유 검사 + startServer()"]
+    CMD_STOP["commandStop\nSIGTERM 시그널 송신"]
+    CMD_RESTART["commandRestart\n점유 프로세스 정리 후 재시작"]
+    CMD_STATUS["commandStatus\nPID 존재 + kill(0) 체크"]
+    CMD_FG["commandForeground\n기본(인수 없음). 백그라운드 없이 동작."]
 
-startServer() (runtime/lifecycle.ts)
-   1) installServerStdioMirror()       — stdout/stderr → ~/.spyglass/logs/server.log
-   2) clearDiagLogs()                  — 진단 jsonl 디렉토리 정리
-   3) getDatabase({ dbPath })          — SQLite 연결 + WAL pragma + 마이그레이션
-   4) startMaintenanceSchedule(db)     — 일별 유지보수(이전 데이터 정리)
-   5) startVersionCheckSchedule()      — 1h 간격 npm registry 버전 체크
-   6) bootstrapMetaDocsSync(db, ...)   — meta-docs 글로벌 스캔 (CLAUDE/SKILL/agents)
-   7) Bun.serve({ port, hostname, fetch: handleRequest, idleTimeout: 0 })
-                                       — idleTimeout=0 (SSE 연결 유지)
+    S1["1) installServerStdioMirror()\nstdout/stderr → ~/.spyglass/logs/server.log"]
+    S2["2) clearDiagLogs()\n진단 jsonl 디렉토리 정리"]
+    S3["3) getDatabase({ dbPath })\nSQLite 연결 + WAL pragma + 마이그레이션"]
+    S4["4) startMaintenanceSchedule(db)\n일별 유지보수(이전 데이터 정리)"]
+    S5["5) startVersionCheckSchedule()\n1h 간격 npm registry 버전 체크"]
+    S6["6) bootstrapMetaDocsSync(db, ...)\nmeta-docs 글로벌 스캔 (CLAUDE/SKILL/agents)"]
+    S7["7) Bun.serve({ port, hostname, fetch: handleRequest, idleTimeout: 0 })\nidleTimeout=0 (SSE 연결 유지)"]
+
+    START --> INDEX
+    INDEX --> DAEMON
+    DAEMON --> CMD_START
+    DAEMON --> CMD_STOP
+    DAEMON --> CMD_RESTART
+    DAEMON --> CMD_STATUS
+    DAEMON --> CMD_FG
+    CMD_START --> S1
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7
 ```
 
 ---
@@ -223,26 +227,20 @@ claude-spyglass/
 
 ### 3.1 패키지 의존 그래프
 
-```
-        ┌─────────────────────┐
-        │  @spyglass/types    │   ← 모든 패키지가 import. 변경 이유 단일성(SRP).
-        └──────────┬──────────┘
-                   │ import (type-only)
-        ┌──────────┴──────────────────────────────┐
-        ▼                          ▼              ▼
-┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐
-│ @spyglass/      │   │ @spyglass/      │   │ packages/web    │
-│   storage       │   │   server        │   │  (JSDoc only)   │
-│  (SQLite SSoT)  │   │  (HTTP/SSE)     │   └─────────────────┘
-└────────┬────────┘   └────────┬────────┘
-         │                     │
-         │   import workspace  │
-         └─────────┬───────────┘
-                   │
-         ┌─────────▼──────────┐
-         │  @spyglass/tui     │
-         │  (Ink + React)     │
-         └────────────────────┘
+```mermaid
+flowchart TD
+    TYPES["@spyglass/types\n모든 패키지가 import. 변경 이유 단일성(SRP)."]
+    STORAGE["@spyglass/storage\n(SQLite SSoT)"]
+    SERVER["@spyglass/server\n(HTTP/SSE)"]
+    WEB["packages/web\n(JSDoc only)"]
+    TUI["@spyglass/tui\n(Ink + React)"]
+
+    TYPES -->|"import (type-only)"| STORAGE
+    TYPES -->|"import (type-only)"| SERVER
+    TYPES -->|"import (type-only)"| WEB
+    TYPES -->|"import (type-only)"| TUI
+    STORAGE -->|"import workspace"| TUI
+    SERVER -->|"import workspace"| TUI
 ```
 
 핵심 관찰: **상위(types)는 누구에게도 의존하지 않고**, **하위(tui)는 모든 패키지 + types에 의존**한다. 양 방향 의존성은 금지(types→storage 같은 역방향 import 없음).
@@ -273,6 +271,7 @@ packages/server/src/
 ├── events.ts                      — POST /events 핸들러 (SessionStart/Stop 등).
 ├── metrics.ts                     — 메트릭 라우터 re-export (얇은 호환 shim).
 ├── model-limits.ts                — model_limits 테이블 캐시.
+├── anomaly-thresholds.ts          — anomaly_thresholds 테이블 조회·캐시 (project/model별 warn/critical 임계값 SSoT).
 ├── tool-category.ts               — Tool 이름 → category 분류 (search/exec/...)
 ├── version-checker.ts             — npm registry 1h 폴링.
 ├── diag-log.ts                    — 진단 jsonl 기록기.
@@ -285,7 +284,8 @@ packages/server/src/
 │   ├── dispatch.ts                — handleRequest (경로 prefix 디스패처)
 │   ├── port.ts                    — 포트 점유 검사·해제 유틸
 │   ├── stdio-mirror.ts            — stdout/stderr → server.log 미러링
-│   └── maintenance.ts             — 일별 유지보수 스케줄(오래된 데이터 정리)
+│   ├── maintenance.ts             — 일별 유지보수 스케줄(오래된 데이터 정리)
+│   └── in-flight.ts               — 처리 중 요청 추적기 (graceful shutdown용 in-flight 카운터)
 │
 ├── routes/                        — REST API 라우터 (도메인별)
 │   ├── _shared.ts                 — jsonResponse, buildMeta, parseTimeWindow 등
@@ -412,32 +412,33 @@ export async function apiRouter(req, db) {
 
 `/collect` 엔드포인트는 Claude Code 훅에서 오는 raw JSON을 처리한다. **`packages/server/src/hook/`**는 Strategy 패턴으로 설계되어 새 이벤트 타입 추가가 1줄(`dispatcher.ts`의 `HANDLERS` 배열)이다.
 
-```
-POST /collect
-   │
-   ▼
-hook/http-entry.ts
-   │ raw body 추출 + 진단 jsonl 기록
-   ▼
-hook/dispatcher.ts          REGISTRY: Map<event_name, Handler>
-   │ hook_event_name 매칭
-   ├─► PreToolUseHandler          (event_type='pre_tool', SSE 브로드캐스트 X)
-   ├─► PostToolUseHandler         (event_type='tool', 같은 tool_use_id의 pre 행 UPDATE)
-   ├─► UserPromptSubmitHandler    (request_type='prompt', slash_command 추출)
-   └─► SystemEventHandler (fallback)  (Notification/SessionStart 등)
-   │ handle() → NormalizedHookPayload
-   ▼
-hook/processor.ts (processHookEvent)
-   │ session upsert + turn_id 할당 + audit-meta 정제
-   ▼
-hook/persist.ts (saveRequest)
-   │ DB transaction:
-   │   1) sessions UPSERT
-   │   2) requests INSERT or UPDATE (pre→tool 머지)
-   │   3) persistSubagentChildren (Agent transcript의 자식 tool_use)
-   ▼
-broadcastNewRequest()           SSE event: 'new_request' { ...norm, event_phase }
-broadcastSessionUpdate()        SSE event: 'session_update'
+```mermaid
+flowchart TD
+    ENTRY["POST /collect"]
+    HTTP["hook/http-entry.ts\nraw body 추출 + 진단 jsonl 기록"]
+    DISP["hook/dispatcher.ts\nREGISTRY: Map(event_name, Handler)\nhook_event_name 매칭"]
+    PRE["PreToolUseHandler\nevent_type='pre_tool', SSE 브로드캐스트 X"]
+    POST["PostToolUseHandler\nevent_type='tool', 같은 tool_use_id의 pre 행 UPDATE"]
+    UPS["UserPromptSubmitHandler\nrequest_type='prompt', slash_command 추출"]
+    SYS["SystemEventHandler (fallback)\nNotification/SessionStart 등"]
+    PROC["hook/processor.ts (processHookEvent)\nsession upsert + turn_id 할당 + audit-meta 정제"]
+    PERSIST["hook/persist.ts (saveRequest)\nDB transaction:\n1) sessions UPSERT\n2) requests INSERT or UPDATE (pre→tool 머지)\n3) persistSubagentChildren"]
+    BROADCAST["broadcastNewRequest()\nSSE event: 'new_request' { ...norm, event_phase }"]
+    SESSION_UPDATE["broadcastSessionUpdate()\nSSE event: 'session_update'"]
+
+    ENTRY --> HTTP
+    HTTP --> DISP
+    DISP --> PRE
+    DISP --> POST
+    DISP --> UPS
+    DISP --> SYS
+    PRE -->|"handle() → NormalizedHookPayload"| PROC
+    POST -->|"handle() → NormalizedHookPayload"| PROC
+    UPS -->|"handle() → NormalizedHookPayload"| PROC
+    SYS -->|"handle() → NormalizedHookPayload"| PROC
+    PROC --> PERSIST
+    PERSIST --> BROADCAST
+    PERSIST --> SESSION_UPDATE
 ```
 
 핵심 규칙(`CLAUDE.md`에도 명시):
@@ -456,28 +457,26 @@ broadcastSessionUpdate()        SSE event: 'session_update'
 
 ANTHROPIC_BASE_URL을 spyglass로 설정하면 모든 Anthropic API 호출이 서버를 거친다. 단계별 모듈로 분해(`proxy/handler/*`):
 
-```
-client (Claude Code) ─► /v1/messages
-    │
-    ▼
-handleProxy (handler/index.ts)
-    │
-    ├─ buildInboundContext       — body bytes + headers + 압축(zstd) + hook 매칭 키 추출
-    ├─ diagInbound               — 진단 jsonl phase=in
-    ├─ forwardToUpstream         — fetch(target) (실패 시 502 매핑)
-    ├─ buildResponseHeaders      — CORS + 헤더 정리
-    │
-    ├─ if SSE stream:
-    │   handleStreamResponse (stream.ts)
-    │     • body를 클라이언트로 그대로 흘리며 clone으로 분석
-    │     • SSE 청크 파싱 → AnthropicUsage 누적 (sse-state.ts)
-    │     • 종료 시 persist → broadcast
-    │
-    └─ if JSON non-stream:
-        handleJsonResponse (non-stream.ts)
-          • response.json() 한 번 파싱
-          • persist (proxy_requests INSERT in tx)
-          • broadcastNewProxyRequest (SSE)
+```mermaid
+flowchart TD
+    CLIENT["client (Claude Code)"]
+    ENTRY["/v1/messages"]
+    HP["handleProxy (handler/index.ts)"]
+    BIC["buildInboundContext\nbody bytes + headers + 압축(zstd) + hook 매칭 키 추출"]
+    DIAG["diagInbound\n진단 jsonl phase=in"]
+    FWD["forwardToUpstream\nfetch(target) (실패 시 502 매핑)"]
+    HEADERS["buildResponseHeaders\nCORS + 헤더 정리"]
+    STREAM["handleStreamResponse (stream.ts)\n• body를 클라이언트로 그대로 흘리며 clone으로 분석\n• SSE 청크 파싱 → AnthropicUsage 누적 (sse-state.ts)\n• 종료 시 persist → broadcast"]
+    JSON_RESP["handleJsonResponse (non-stream.ts)\n• response.json() 한 번 파싱\n• persist (proxy_requests INSERT in tx)\n• broadcastNewProxyRequest (SSE)"]
+
+    CLIENT -->|"POST /v1/messages"| ENTRY
+    ENTRY --> HP
+    HP --> BIC
+    BIC --> DIAG
+    DIAG --> FWD
+    FWD --> HEADERS
+    HEADERS -->|"if SSE stream"| STREAM
+    HEADERS -->|"if JSON non-stream"| JSON_RESP
 ```
 
 저장은 `proxy_requests` 테이블(스키마 v14 추가). `hook` 테이블(`requests`)과는 **`api_request_id`로 cross-link**(v19 마이그레이션)되어 같은 API 호출에 대한 hook/proxy 두 측 메타를 매칭할 수 있다.
@@ -506,23 +505,31 @@ handleProxy (handler/index.ts)
 
 Claude Code의 `.claude/agents/`, `.claude/skills/`, `~/.claude/commands/`, `CLAUDE.md` 등 **모델 동작을 정의하는 markdown 파일**을 자동 스캔하여 `meta_documents` 테이블에 카탈로그화한다.
 
-```
-server boot
-   │
-   ├─ discoverKnownCwds(db)            — sessions 테이블에서 cwd 후보 모음
-   │
-   ├─ bootstrapMetaDocsSync            — 글로벌(~/.claude) 1회 스캔
-   │
-   └─ (≤10 cwd) syncCwd 동기 / (>10) setImmediate 백그라운드
-        │
-        ▼
-syncCwd(cwd)
-   │
-   ├─ resolveProjectChain(cwd)         — ~/.claude → <project>/.claude 체인
-   ├─ scanRoot(root)                   — 각 디렉토리에서 SKILL.md/agents/CLAUDE.md 파일 모음
-   ├─ upsertMetaDocument               — 파일별 dedup INSERT
-   ├─ markMissingAsDeleted             — 디스크 사라진 항목은 soft delete
-   └─ replaceResolutionsForCwd         — cwd ↔ doc 매핑 갱신
+```mermaid
+flowchart TD
+    BOOT["server boot"]
+    DISCOVER["discoverKnownCwds(db)\nsessions 테이블에서 cwd 후보 모음"]
+    BOOTSTRAP["bootstrapMetaDocsSync\n글로벌(~/.claude) 1회 스캔"]
+    SYNC_DECISION{"cwd 수"}
+    SYNC_SYNC["syncCwd 동기 (≤10 cwd)"]
+    SYNC_BG["setImmediate 백그라운드 (>10 cwd)"]
+    RESOLVE["resolveProjectChain(cwd)\n~/.claude → project/.claude 체인"]
+    SCAN["scanRoot(root)\n각 디렉토리에서 SKILL.md/agents/CLAUDE.md 파일 모음"]
+    UPSERT["upsertMetaDocument\n파일별 dedup INSERT"]
+    MARK["markMissingAsDeleted\n디스크 사라진 항목은 soft delete"]
+    REPLACE["replaceResolutionsForCwd\ncwd ↔ doc 매핑 갱신"]
+
+    BOOT --> DISCOVER
+    BOOT --> BOOTSTRAP
+    BOOT --> SYNC_DECISION
+    SYNC_DECISION -->|"≤10 cwd"| SYNC_SYNC
+    SYNC_DECISION -->|">10 cwd"| SYNC_BG
+    SYNC_SYNC --> RESOLVE
+    SYNC_BG --> RESOLVE
+    RESOLVE --> SCAN
+    SCAN --> UPSERT
+    UPSERT --> MARK
+    MARK --> REPLACE
 ```
 
 SessionStart 훅이 새 cwd를 감지하면 lazy 재동기화한다.
@@ -547,13 +554,13 @@ SessionStart 훅이 새 cwd를 감지하면 lazy 재동기화한다.
 
 ## 5. `packages/storage` — SQLite 영속 계층
 
-> **TL;DR** — 32개 마이그레이션이 누적된 SQLite(WAL 모드). `index.ts` barrel이 80여 개 함수를 한 곳에서 노출하며, 시간대별 사전 집계(`stats_hourly`)로 차트 응답 시간을 5ms 수준으로 유지한다.
+> **TL;DR** — 35개 마이그레이션이 누적된 SQLite(WAL 모드). `index.ts` barrel이 80여 개 함수를 한 곳에서 노출하며, 시간대별 사전 집계(`stats_hourly`)로 차트 응답 시간을 5ms 수준으로 유지한다.
 
 ### 5.1 디렉토리 구조
 
 ```
 packages/storage/
-├── migrations/                    — 32개 SQL 마이그레이션 (001 ~ 032)
+├── migrations/                    — 35개 SQL 마이그레이션 (001 ~ 035)
 │   ├── 001-init.sql                          — sessions, requests 테이블 초기 생성
 │   ├── 002-add-tool-detail.sql               — requests.tool_detail
 │   ├── 003-add-turn-id.sql                   — requests.turn_id (인터리빙 식별)
@@ -769,19 +776,16 @@ import { getDatabase, createSession, getRequestsBySession, broadcastNewRequest }
 
 ### 5.6 사전 집계 (stats_hourly)
 
-마이그레이션 v27~v32는 **트리거 기반 사전 집계**를 도입했다.
+마이그레이션 v27~v35는 **트리거 기반 사전 집계**를 도입했다.
 
-```
-requests INSERT
-   │
-   ▼ AFTER INSERT trigger (v28)
-INSERT INTO stats_hourly
-  (hour_bucket, session_id, type, event_type, model, ...)
-VALUES (...)
-ON CONFLICT DO UPDATE SET
-  request_count = request_count + 1,
-  tokens_total = tokens_total + NEW.tokens_total,
-  ...
+```mermaid
+flowchart TD
+    INSERT["requests INSERT"]
+    TRIGGER["AFTER INSERT trigger (v28)"]
+    UPSERT["INSERT INTO stats_hourly\n(hour_bucket, session_id, type, event_type, model, ...)\nON CONFLICT DO UPDATE SET\n  request_count = request_count + 1,\n  tokens_total = tokens_total + NEW.tokens_total, ..."]
+
+    INSERT --> TRIGGER
+    TRIGGER --> UPSERT
 ```
 
 24h 차트(`/api/metrics/burn-rate`, `/api/metrics/cache-trend`)는 raw `requests` 스캔 대신 사전 집계 테이블을 쿼리하여 응답 시간 ~5ms 유지.
@@ -1686,5 +1690,5 @@ export { handleHookHttpRequest, ... } from './http-entry';
 
 ---
 
-**문서 기준**: `claude-spyglass` 저장소 코드 트리 2026-05 시점 (schema_version=23, migrations 032).
+**문서 기준**: `claude-spyglass` 저장소 코드 트리 2026-05 시점 (schema_version=23, migrations 035).
 **갱신 책임**: 변경 PR 작성자. 새 마이그레이션·라우트·SSE 이벤트 추가 시 §9·§11·§14 표를 함께 갱신할 것.
