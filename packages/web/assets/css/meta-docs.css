@@ -319,7 +319,15 @@
   font-size: 12px;
   font-weight: 500;
 }
+/* 경로 셀 — col-resize.js가 colgroup <col>의 width를 동적으로 변경하므로
+ * (table-layout: fixed 기준), 폭이 좁아져도 inline-block + max-width: 100% 조합으로
+ * td 내부에서 자동 ellipsis가 동작하도록 한다. <span>(inline)은 자체적으로
+ * overflow/text-overflow가 동작하지 않아 옆 셀로 텍스트가 침범하는 문제가 있어
+ * 2026-05-21 feedback에 따라 block-level box로 전환. */
 .meta-doc-source-root {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
   margin-top: 2px;
   color: var(--text-4, #6E7681);
   font-size: 11px;
