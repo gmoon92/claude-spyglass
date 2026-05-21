@@ -912,6 +912,49 @@ body[data-app-mode="browse"] #metaDocsSummaryCards {
   z-index: 7;
 }
 
+/* meta-tabs-shared-date-filter:
+ *   .meta-tabs 내부를 [좌측 탭 그룹] ── [우측 액션(공유 date-filter)]로 분리.
+ *   탭(보는 대상)과 필터(보는 범위)는 의미가 직교하는 동위 컨트롤이므로,
+ *   같은 줄 양 끝 배치(Signal over Noise)로 시각적 위계를 평탄하게 유지.
+ *   .meta-tab 자손 룰은 그대로 적용되므로 탭 자체 정렬·강조에는 영향 없음. */
+.meta-tabs .meta-tabs-list {
+  display: inline-flex;
+  align-items: stretch;
+  gap: var(--space-1);
+  /* flex shrink 방지 — 우측 액션이 좁아져도 탭 라벨은 보존 */
+  flex-shrink: 0;
+}
+
+.meta-tabs .meta-tabs-actions {
+  display: inline-flex;
+  align-items: center;
+  /* 두 슬롯(date-range, lang-switcher) 사이 자연 간격 — 컨트롤 칩 간 호흡 확보.
+     슬롯 자체에는 margin/padding을 두지 않고 부모가 gap으로만 책임짐(SSoT). */
+  gap: var(--space-2);
+  /* 우측 정렬. 부모 .meta-tabs가 padding: 0 var(--space-3)로 우측 여백을 책임지므로
+     자체 padding-right 불필요. */
+  margin-left: auto;
+  /* 좁은 화면에서 dropdown 트리거가 잘리지 않도록 최소 사이즈 보장 */
+  min-width: 0;
+}
+
+/* date-range 드롭다운 mount 슬롯 — 컴포넌트 내부 .ds-dropdown* 스타일이 외관을 책임.
+   슬롯은 inline-flex 정렬만 담당, 별도 색·테두리 부여 금지(이중 칩 회피). */
+.meta-tabs .meta-tabs-date-range {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* lang-switcher mount 슬롯 — 메타 모드 진입 시 JS가 .lang-switcher-wrap을 이곳으로
+   이동시킴. header.css의 .lang-switcher-wrap / #lang-switcher 룰은 부모 스코프 없는
+   전역 선택자라 DOM이 옮겨와도 동일한 외관(border/색/폰트 토큰)이 그대로 적용됨.
+   따라서 슬롯은 정렬만 담당하고, 별도 색·테두리·패딩 부여 금지(이중 표현 회피).
+   date-range 슬롯과 같은 inline-flex 정렬 정책을 유지해 시각적 베이스라인 일치. */
+.meta-tabs .meta-tabs-lang-switcher {
+  display: inline-flex;
+  align-items: center;
+}
+
 .meta-tab {
   position: relative;
   display: inline-flex;

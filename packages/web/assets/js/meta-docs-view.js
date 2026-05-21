@@ -22,6 +22,7 @@
 
 import { escHtml, fmtTime } from './formatters.js';
 import { getCollator } from './i18n-utils.js';
+import { getDateRange } from './api.js';
 import { getSelectedProject, getMetaSubTab, setMetaSubTab as stateSetMetaSubTab } from './state.js';
 import { toolIconHtml } from './render/badges.js';
 import { skMetaDocList } from './render/skeleton.js';
@@ -39,6 +40,10 @@ import { loadProjectToolStats } from './tool-stats.js';
 // meta-docs-flow ego-graph (2026-05-21 rev): 선택 메타 문서 중심 ego-graph 렌더 진입점.
 //   별도 'flow' 탭이 아니라 'docs' 탭 상단 영역(#metaDocsFlowRegion)에 그린다.
 import { loadFlowDiagram } from './meta-docs-flow-view.js';
+// meta-tabs-shared-date-filter (view-mode-reentry-filter-button-regression 2026-05-21):
+//   chart-actions의 #dateFilter element를 metaTabsDateRange 슬롯으로 DOM 이동시켜
+//   메타 모드에서도 노출. mountDateRangeDropdown은 main.js initDateFilter()가 1회 호출
+//   (단일 인스턴스 보장) — 본 모듈은 element 이동/복귀만 책임진다.
 
 const CONTAINER_ID = 'metaDocsBody';
 
@@ -87,7 +92,7 @@ export function initMetaSubTabs() {
     { value: 'tools', label: t('ui.meta-docs-view.tab-tools-label') || 'Tools',                 id: 'metaTabToolStats', controls: 'metaToolStatsBody', selected: false },
   ];
 
-  container.innerHTML = TABS.map(({ value, label, id, controls, selected }) => {
+  const tabsHtml = TABS.map(({ value, label, id, controls, selected }) => {
     // renderTab 출력: <button class="ds-tab" type="button" role="tab" aria-selected="..." data-tab-value="...">label</button>
     // → class="ds-tab meta-tab [active]" id="..." aria-controls="..." data-meta-subtab="..." 로 확장.
     const activeCls = selected ? ' active' : '';
@@ -95,6 +100,80 @@ export function initMetaSubTabs() {
       .replace('class="ds-tab"', `class="ds-tab meta-tab${activeCls}"`)
       .replace(`data-tab-value="${value}"`, `id="${id}" aria-controls="${controls}" data-meta-subtab="${value}" data-tab-value="${value}"`);
   }).join('');
+
+  // meta-tabs-shared-date-filter:
+  //   - 좌측 .meta-tabs-list: 탭 버튼 그룹 (기존 .meta-tab 룰 그대로 적용)
+  //   - 우측 .meta-tabs-actions: 공유 date-filter 슬롯 (#metaTabsDateRange) + lang-switcher 슬롯 (#metaTabsLangSwitcher)
+  //   메타 모드에서는 chart-actions(.right-panel)가 숨겨지므로 두 위젯 모두 이 슬롯으로 이동한다.
+  //   레이아웃은 meta-docs.css에서 .meta-tabs flex justify-content로 처리.
+  container.innerHTML =
+    `<div class="meta-tabs-list" role="presentation">${tabsHtml}</div>` +
+    `<div class="meta-tabs-actions">` +
+      `<div id="metaTabsDateRange" class="meta-tabs-date-range"></div>` +
+      `<div id="metaTabsLangSwitcher" class="meta-tabs-lang-switcher"></div>` +
+    `</div>`;
+}
+
+// ─── meta-tabs-shared-date-filter: chart-actions의 #dateFilter element DOM 이동 ──
+//
+// view-mode-reentry-filter-button-regression (2026-05-21):
+//   기존 구현은 metaTabsDateRange 슬롯에 mountDateRangeDropdown으로 별도 dropdown
+//   인스턴스를 mount했지만, main.js initDateFilter()가 이미 chart-actions의 #dateFilter
+//   에 동일 컴포넌트를 mount해놓아 동일 id(cs-date-range-trigger 등)가 DOM에 2개 존재.
+//   id 중복은 getElementById/aria-controls/이벤트 처리에 잠재 버그를 만들고,
+//   메타 모드 ↔ browse 전환 시 두 인스턴스의 활성 range 동기화가 어긋날 수 있다.
+//
+//   해결: lang-switcher와 동일한 DOM 이동 패턴으로 통합.
+//   chart-actions의 #dateFilter element 자체를 metaTabsDateRange 슬롯으로 이동시키고
+//   메타 모드 종료 시 원위치로 복귀. 단일 dropdown 인스턴스 + 단일 id가 유지된다.
+let _dateFilterOrigParent = null;
+let _dateFilterOrigNext = null;
+function moveDateFilterToMetaTabs() {
+  const dateFilter = document.getElementById('dateFilter');
+  const slot = document.getElementById('metaTabsDateRange');
+  if (!dateFilter || !slot) return;
+  // 이미 슬롯 안에 있으면 noop — idempotent.
+  if (dateFilter.parentElement === slot) return;
+  // 원위치 정보 보관 (최초 이동 시점에만).
+  if (!_dateFilterOrigParent) {
+    _dateFilterOrigParent = dateFilter.parentElement;
+    _dateFilterOrigNext = dateFilter.nextSibling;
+  }
+  slot.appendChild(dateFilter);
+}
+function restoreDateFilterToChartActions() {
+  const dateFilter = document.getElementById('dateFilter');
+  if (!dateFilter || !_dateFilterOrigParent) return;
+  if (dateFilter.parentElement === _dateFilterOrigParent) return;
+  _dateFilterOrigParent.insertBefore(dateFilter, _dateFilterOrigNext || null);
+}
+
+// ─── meta-tabs-shared-lang-switcher: 기존 .lang-switcher-wrap을 DOM 이동 ──
+//
+// chart-actions에 정의된 단일 #lang-switcher select element를 통째로 metaTabsLangSwitcher 슬롯으로
+// 옮긴다. element 자체를 이동하므로 lang-switcher.js에서 등록한 change 리스너와
+// I18n.onChange 콜백이 보존된다(이벤트 리스너는 element에 묶여 있어 부모 변경과 무관).
+// 원위치 복귀를 위해 원래 부모와 다음 형제 노드를 보관한다.
+let _langSwitcherOrigParent = null;
+let _langSwitcherOrigNext = null;
+function moveLangSwitcherToMetaTabs() {
+  const wrap = document.querySelector('.lang-switcher-wrap');
+  const slot = document.getElementById('metaTabsLangSwitcher');
+  if (!wrap || !slot) return;
+  // 이미 슬롯 안에 있으면 noop — idempotent.
+  if (wrap.parentElement === slot) return;
+  // 원위치 정보 보관 (최초 이동 시점에만).
+  if (!_langSwitcherOrigParent) {
+    _langSwitcherOrigParent = wrap.parentElement;
+    _langSwitcherOrigNext = wrap.nextSibling;
+  }
+  slot.appendChild(wrap);
+}
+function restoreLangSwitcherToChartActions() {
+  const wrap = document.querySelector('.lang-switcher-wrap');
+  if (!wrap || !_langSwitcherOrigParent) return;
+  if (wrap.parentElement === _langSwitcherOrigParent) return;
+  _langSwitcherOrigParent.insertBefore(wrap, _langSwitcherOrigNext || null);
 }
 
 /**
@@ -151,8 +230,48 @@ export async function enterMetaDocsMode() {
   // ADR-004 meta-docs-tool-stats: 마지막 서브 탭 복원 (기본 'docs').
   //   - 카탈로그 로드는 두 탭 모두에서 좌측 요약 카드를 위해 항상 수행.
   //   - 'tools' 탭이라면 추가로 프로젝트 도구 통계도 로드.
+  // meta-tabs-shared-date-filter (view-mode-reentry-filter-button-regression 2026-05-21):
+  //   chart-actions의 #dateFilter element 자체를 metaTabsDateRange 슬롯으로 DOM 이동.
+  //   별도 인스턴스 mount가 아니라 element 이동이므로 동일 id 중복이 발생하지 않고,
+  //   글로벌 _activeRange 구독자도 단일이라 메타 ↔ browse 토글 시 라벨/상태가 항상 일치.
+  moveDateFilterToMetaTabs();
+  // 메타 모드에서는 .right-panel(chart-actions 포함)이 숨겨져 .lang-switcher-wrap이 가려진다.
+  // 동일 element를 metaTabsLangSwitcher 슬롯으로 DOM 이동 — 기존 이벤트 리스너 보존.
+  moveLangSwitcherToMetaTabs();
+  // meta-docs-date-range-filter (2026-05-21): 글로벌 active-range가 바뀌면 카탈로그도 재로드.
+  //   flow 모듈과 동일 패턴 — document에 1회만 등록(중복 가드).
+  ensureMetaDocsRangeHandler();
   await loadMetaDocsLibrary();
   applyMetaSubTab(getMetaSubTab());
+}
+
+// ─── meta-docs-date-range-filter (2026-05-21): 글로벌 active-range 구독 ────────
+//
+// 화면 상단 #dateFilter가 발행하는 'cs:active-range-changed' 이벤트에 반응해
+// 카탈로그를 재 fetch한다. 메타 모드에서만 의미가 있어 body[data-app-mode]로 게이트.
+// document 레벨 1회 등록 — flow 모듈(meta-docs-flow-view.js)이 사용하는 동일 패턴.
+let _rangeHandlerBound = false;
+function ensureMetaDocsRangeHandler() {
+  if (_rangeHandlerBound) return;
+  _rangeHandlerBound = true;
+  document.addEventListener('cs:active-range-changed', () => {
+    if (document.body.dataset.appMode !== 'metadocs') return;
+    // 'docs' 서브 탭에서만 카탈로그 fetch 의미가 있다. 'tools' 탭은 별도 모듈이 처리.
+    if (getMetaSubTab() !== 'docs') return;
+    loadMetaDocsLibrary();
+  });
+}
+
+/**
+ * 메타 모드 → browse 복귀 hook. main.js applyAppMode('browse') 분기에서 호출.
+ * 현재 책임 (view-mode-reentry-filter-button-regression 2026-05-21):
+ *  - #dateFilter element를 chart-actions 원위치로 복귀 → browse 모드 차트 헤더에서 다시 노출.
+ *  - .lang-switcher-wrap을 chart-actions 원위치로 복귀.
+ *  두 element 모두 DOM 이동 패턴이므로 인스턴스/이벤트 리스너가 보존된다.
+ */
+export function exitMetaDocsMode() {
+  restoreDateFilterToChartActions();
+  restoreLangSwitcherToChartActions();
 }
 
 /**
@@ -328,11 +447,21 @@ export async function loadMetaDocsLibrary() {
     // 1) 선택 프로젝트 결정 — scopeMode + 좌측 패널 selectedProject 결합
     const project = state.scopeMode === 'selected' ? (getSelectedProject() || null) : null;
 
+    // meta-docs-date-range-filter (2026-05-21): 글로벌 active-range(api.js _activeRange)를
+    // probe/본 fetch 양쪽에 공통 적용. 빈 객체({})면 fromTs/toTs 파라미터를 보내지 않아
+    // 서버는 v_meta_doc_usage VIEW(전체 기간) 폴백을 사용한다.
+    const dr = getDateRange();
+    const rangeQs = new URLSearchParams();
+    if (dr.from !== undefined) rangeQs.set('fromTs', String(dr.from));
+    if (dr.to   !== undefined) rangeQs.set('toTs',   String(dr.to));
+    const rangeQsStr = rangeQs.toString();
+
     // 2) 전체 카탈로그 probe — 항상 1회 fetch.
     //    meta-docs feedback ADR (2026-05-14): selected 모드 + 매칭 실패에서도 좌측 카운트가
     //    0으로 떨어지지 않도록 type/includeDeleted 필터 무관한 raw 카탈로그를 받아 둔다.
-    //    좌측 카운트 + project source_root 매칭에 공통으로 사용.
-    const probeRes = await fetchJson('/api/meta-docs');
+    //    좌측 카운트 + project source_root 매칭에 공통으로 사용. range 필터는 동일 적용.
+    const probeUrl = rangeQsStr ? `/api/meta-docs?${rangeQsStr}` : '/api/meta-docs';
+    const probeRes = await fetchJson(probeUrl);
     const probeList = Array.isArray(probeRes?.data) ? probeRes.data : [];
 
     // 좌측 thead '항목' 컬럼 카운트 즉시 동기 — 본 fetch 결과를 기다리지 않고 먼저 채워서
@@ -348,17 +477,27 @@ export async function loadMetaDocsLibrary() {
     state.resolvedSource = project ? { project, sourceRoot: resolvedSourceRoot, matched } : null;
 
     // 3) 본 fetch — 매칭된 source_root가 있으면 ?source_root= 부착. type/includeDeleted 필터 포함.
-    //    'all' 모드 + type='all' + includeDeleted=false 면 probe 결과를 그대로 재사용해 fetch 절감.
-    const params = new URLSearchParams();
+    //    'all' 모드 + type='all' + includeDeleted=false + 동일 range 면 probe 결과를 그대로 재사용해 fetch 절감.
+    //    range는 probe와 본 fetch에 동일 적용되므로 추가 분기 없이 그대로 부착하면 된다.
+    //
+    //    meta-docs-project-filter-parity (2026-05-21):
+    //      ego-graph 와 카탈로그 호출 집계 단위를 맞추기 위해 project 가 매칭되면
+    //      ?project= 도 함께 부착한다. 서버는 sessions JOIN 으로 사용 집계를 좁혀
+    //      해당 project_name 외 세션(orphan 포함) 호출은 invocations 에서 제외한다.
+    //      probe(전체 카탈로그) 단계에는 project 를 붙이지 않는다 — 좌측 카운트는
+    //      카탈로그 size 만 보장하면 충분하고, project 매칭 자체가 probe 결과를 토대로 수행된다.
+    const params = new URLSearchParams(rangeQsStr);
     if (state.type !== 'all') params.set('type', state.type);
     if (state.includeDeleted) params.set('includeDeleted', '1');
     if (resolvedSourceRoot) params.set('source_root', resolvedSourceRoot);
+    if (project && matched) params.set('project', project);
     const qs = params.toString();
+    // probe와 동일한 쿼리(=range만 있는 경우)면 재 fetch 없이 결과 재사용.
+    const sameAsProbe = qs === rangeQsStr;
 
     let list = [];
     if (!project || matched) {
-      if (!qs) {
-        // 필터 동일 — probe 재사용
+      if (sameAsProbe) {
         list = probeList;
       } else {
         const res = await fetchJson('/api/meta-docs?' + qs);

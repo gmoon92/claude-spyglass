@@ -16,7 +16,7 @@ import { initAppRail, setRailActive } from './app-rail.js';
 // ADR-turn-view-revamp-003: Agent/Skill 칩 → 메타 모드 딥링크 진입 위임이 폐기되어
 // `openMetaDocViaDeepLink` import 제거. 사용자가 메타 모드로 진입하는 동선은 좌측 rail의
 // `enterMetaDocsMode` 단일 경로로 통합. 메타 모드 내부 검색은 사이드바에서 직접 입력.
-import { enterMetaDocsMode, setMetaSubTab, refreshMetaActiveSubTab, initMetaDocsLeftNav, setMetaScopeMode, initMetaSubTabs } from './meta-docs-view.js';
+import { enterMetaDocsMode, exitMetaDocsMode, setMetaSubTab, refreshMetaActiveSubTab, initMetaDocsLeftNav, setMetaScopeMode, initMetaSubTabs } from './meta-docs-view.js';
 import {
   setDetailFilter, applyDetailFilter, setDetailView, toggleTurn,
   refreshDetailSession, initDetailSearch,
@@ -98,6 +98,10 @@ function applyAppMode(mode) {
     enterMetaDocsMode();
     return;
   }
+
+  // browse 복귀 — 메타 모드에서 metaTabBar 우측 슬롯으로 이동했던 .lang-switcher-wrap을
+  // chart-actions 원위치로 복귀시켜야 .right-panel(chart) 안에서 다시 노출된다.
+  exitMetaDocsMode();
 
   // 항상 즉시 좌측 패널을 재렌더 — 메타 모드의 tbody 잔존(가상 행 / 항목수 컬럼)을 무조건 비움.
   //   selectProject는 fetchSessionsByProject 등 부수 흐름이 있어 GLOBAL 복원 케이스에서만 사용.
@@ -852,6 +856,17 @@ async function init() {
   // preset만 복원(custom 휘발). custom 잔존 시 console.warn으로 안내.
   initDateRangeStorage((msg) => { if (msg) console.warn('[date-range]', msg); });
 
+  // meta-tabs-shared-slots-init-order (2026-05-21):
+  //   applyAppMode(getAppMode())가 sessionStorage='metadocs' 복원 시 enterMetaDocsMode()를 호출하고
+  //   그 안의 moveDateFilterToMetaTabs / moveLangSwitcherToMetaTabs가 #metaTabsDateRange /
+  //   #metaTabsLangSwitcher 슬롯으로 element를 옮긴다.
+  //   슬롯 생성(initMetaSubTabs)과 #dateFilter dropdown mount(initDateFilter)가 applyAppMode 보다
+  //   뒤에 있으면 첫 진입에서 slot=null이라 silent noop → metaTabBar 우측이 0×0 빈 div로 남는
+  //   회귀 발생. SSoT: 슬롯·원본 element를 applyAppMode 이전에 모두 준비.
+  initMetaSubTabs();    // Wave 5: meta-tab 2종 + 우측 슬롯(date-range / lang-switcher) 동적 생성
+  initDateFilter();     // Wave 5: #dateFilter 컨테이너에 date-range dropdown mount
+  initMetaDocsLeftNav();
+
   // ADR-003 left-rail-meta-docs: 앱 모드 rail 초기화 + sessionStorage 복원 적용.
   // applyAppMode를 콜백으로 주입 — rail 모듈은 모드 값만 전달, view 조작은 main 책임.
   applyAppMode(getAppMode());
@@ -941,9 +956,10 @@ async function init() {
   setDetailView('log');  // 초기 aria-selected 동기화 — initDetailTabBar 직후 강제 싱크.
                          // renderTab이 HTML 문자열로 aria-selected="true"를 생성하지만,
                          // 명시적 호출로 .active 클래스와 aria-selected 양쪽 SSoT를 보장.
-  initMetaSubTabs();    // Wave 5: meta-tab 2종 동적 생성
-  initDateFilter();     // Wave 5: date-filter 3종 동적 생성
-  initMetaDocsLeftNav();
+  // meta-tabs-shared-slots-init-order (2026-05-21):
+  //   initMetaSubTabs / initDateFilter / initMetaDocsLeftNav는 applyAppMode(getAppMode())
+  //   직전으로 이동(이 함수 상단). DOM 이동 패턴이 첫 메타 모드 진입에서도 silent fail
+  //   없이 동작하도록 슬롯·원본 element를 먼저 준비한다. 여기서는 중복 호출 제거.
   setInterval(() => { advanceBuckets(); drawTimeline(); }, 60000);
   setInterval(() => fetchAllSessions(), 30000);
 }

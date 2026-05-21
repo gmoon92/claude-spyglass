@@ -25,6 +25,8 @@ import { toolIconHtml } from './renderers.js';
 import { skToolMatrix } from './render/skeleton.js';
 import { renderSortHead } from './design-system/markers/sort-head.js';
 import { getCollator } from './i18n-utils.js';
+import { getDateRange } from './api.js';
+import { getMetaSubTab } from './state.js';
 
 export const API = '';
 
@@ -79,7 +81,16 @@ export async function loadProjectToolStats(projectName) {
 
   _projectContainer.innerHTML = skToolMatrix(6);
   try {
-    const res  = await fetch(`${API}/api/projects/${encodeURIComponent(_currentProjectName)}/tool-stats`);
+    // meta-tabs-shared-date-filter: 글로벌 active-range를 from/to로 첨부.
+    //   백엔드(getProjectToolStats)는 fromTs/toTs를 timestamp 범위 필터로 사용.
+    //   range '전체'면 빈 객체 → 파라미터 미부착 → 백엔드 기본 동작.
+    const params = new URLSearchParams();
+    const dr = getDateRange();
+    if (dr.from !== undefined) params.set('from', String(dr.from));
+    if (dr.to   !== undefined) params.set('to',   String(dr.to));
+    const qs = params.toString();
+    const url = `${API}/api/projects/${encodeURIComponent(_currentProjectName)}/tool-stats${qs ? '?' + qs : ''}`;
+    const res  = await fetch(url);
     const json = await res.json();
     _projectStats = json.data || [];
     renderMatrix(_projectContainer, _projectStats);
@@ -100,6 +111,27 @@ export function clearProjectToolStats() {
   _projectStats = [];
   _currentProjectName = null;
 }
+
+// ─── meta-tabs-shared-date-filter: 글로벌 active-range 구독 ──────────────────
+//
+// 'cs:active-range-changed' 이벤트는 metaTabBar 우측 공유 date-filter / 메인
+// chartSection의 #dateFilter / 메타 흐름 ego-graph 모두에서 동일하게 트리거된다.
+// 본 모듈은 [도구 통계] 탭이 활성이고 마지막 프로젝트가 알려진 경우에만 재 fetch한다.
+// 비활성 상태(다른 탭 또는 metadocs 미진입)에서는 no-op — 다음 탭 진입 시
+// loadProjectToolStats가 최신 active-range를 자동으로 첨부하므로 일관성 유지.
+let _rangeHandlerBound = false;
+function ensureRangeHandler() {
+  if (_rangeHandlerBound) return;
+  _rangeHandlerBound = true;
+  document.addEventListener('cs:active-range-changed', () => {
+    // metadocs 모드 + 'tools' 서브 탭일 때만 재 fetch (불필요한 호출 회피).
+    if (document.body.dataset.appMode !== 'metadocs') return;
+    if (getMetaSubTab() !== 'tools') return;
+    if (!_currentProjectName) return;
+    loadProjectToolStats(_currentProjectName);
+  });
+}
+ensureRangeHandler();
 
 /** 응답시간 포맷터 — 단일 책임. 0/누락은 '—' 처리해 max 산정 왜곡을 호출 측에서 막는다. */
 function fmtDur(ms) {
