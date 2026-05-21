@@ -153,6 +153,87 @@ export function saveRequest(
       turnId = getLastTurnId(db, payload.session_id) ?? undefined;
     }
 
+    // meta-flow tree (Migration 037): 슬래시 커맨드 행은 가상 tool_use_id를 부여해
+    // 같은 turn의 root-level 호출 자식들과 parent_tool_use_id로 연결 가능하게 만든다.
+    let resolvedToolUseId: string | null = toolUseId;
+    let resolvedParentToolUseId: string | null = null;
+    if (payload.request_type === 'prompt' && payload.slash_command && turnId) {
+      resolvedToolUseId = `slash:${turnId}`;
+    } else if (
+      payload.request_type === 'tool_call'
+      && turnId
+      && toolUseId
+      && !toolUseId.startsWith('slash:')
+    ) {
+      // root-level 호출(payload상 부모 없음)이 같은 turn의 슬래시 가상 ID를 부모로 갖도록 연결.
+      // pre_tool 매 행마다 1회 조회 — turn당 최대 1건이므로 비용 미미. 슬래시 행이 없으면 NULL 유지.
+      const slashVirtualId = `slash:${turnId}`;
+      const slashExists = db.query(
+        "SELECT 1 FROM requests WHERE tool_use_id = ? AND slash_command IS NOT NULL LIMIT 1",
+      ).get(slashVirtualId);
+      if (slashExists) {
+        resolvedParentToolUseId = slashVirtualId;
+      }
+    }
+
+    // meta-flow tree (Migration 038/039): 서브에이전트 자식 행은 agent_type=<부모 Agent 이름> 만
+    // 채워질 뿐 parent_tool_use_id 는 비어 있다 (subagent 측 hook 페이로드에 부모 toolUseId 없음).
+    // rolling-parent 규칙(transcript.ts L184~):
+    //   - Skill/Task 행은 매칭 Agent 를 부모로 (Skill 끼리는 형제).
+    //   - 그 외 도구는 같은 (session,turn,agent_type) 안의 직전 Skill/Task 를 부모로, 없으면 Agent.
+    if (!resolvedParentToolUseId
+      && payload.agent_type
+      && turnId
+      && payload.session_id) {
+      const isSkillOrTask = payload.tool_name === 'Skill'
+        || payload.tool_name === 'Task'
+        || payload.tool_name?.startsWith('Skill')
+        || payload.tool_name?.startsWith('Task');
+
+      // 1순위: Skill/Task 가 아닐 때 — 직전 Skill/Task 의 tool_use_id.
+      if (!isSkillOrTask) {
+        const rollingSkill = db.query(
+          `SELECT tool_use_id FROM requests
+           WHERE agent_type = ?
+             AND session_id = ?
+             AND turn_id = ?
+             AND (tool_name IN ('Skill','Task')
+                  OR tool_name LIKE 'Skill%'
+                  OR tool_name LIKE 'Task%')
+             AND tool_use_id IS NOT NULL
+             AND timestamp < ?
+           ORDER BY timestamp DESC
+           LIMIT 1`,
+        ).get(payload.agent_type, payload.session_id, turnId, payload.timestamp) as
+          | { tool_use_id: string }
+          | null;
+        if (rollingSkill?.tool_use_id) {
+          resolvedParentToolUseId = rollingSkill.tool_use_id;
+        }
+      }
+
+      // 2순위: Skill/Task 가 없거나 self 가 Skill/Task 인 경우 — 매칭 Agent.
+      if (!resolvedParentToolUseId) {
+        const parentRow = db.query(
+          `SELECT tool_use_id FROM requests
+           WHERE tool_name = 'Agent'
+             AND tool_detail = ?
+             AND session_id = ?
+             AND turn_id = ?
+             AND tool_use_id IS NOT NULL
+             AND (event_type IS NULL OR event_type = 'tool')
+             AND timestamp <= ?
+           ORDER BY timestamp DESC
+           LIMIT 1`,
+        ).get(payload.agent_type, payload.session_id, turnId, payload.timestamp) as
+          | { tool_use_id: string }
+          | null;
+        if (parentRow?.tool_use_id) {
+          resolvedParentToolUseId = parentRow.tool_use_id;
+        }
+      }
+    }
+
     createRequest(db, {
       id: payload.id,
       session_id: payload.session_id,
@@ -171,7 +252,8 @@ export function saveRequest(
       cache_creation_tokens: payload.cache_creation_tokens ?? 0,
       cache_read_tokens: payload.cache_read_tokens ?? 0,
       preview: extractPreview(payload) ?? undefined,
-      tool_use_id: toolUseId,
+      tool_use_id: resolvedToolUseId,
+      parent_tool_use_id: resolvedParentToolUseId,
       event_type: payload.event_type || null,
       tokens_confidence: payload.tokens_confidence,
       tokens_source: payload.tokens_source,
