@@ -2,12 +2,20 @@
  * design-system/icons/tool-dot.js — 일반 도구 아이콘 (◉ 글리프 대체, fish-eye)
  *
  * 책임:
- *  - 일반 도구(Bash/Read/Edit 등 비-Agent)를 표지하는 외곽 원 + 안쪽 큰 점 SVG 아이콘을 단독 모듈로 노출.
+ *  - 일반 도구(Bash/Read/Edit 등 비-Agent/Skill/Task)를 표지하는 외곽 원 + 안쪽 큰 점 SVG
+ *    아이콘을 단독 모듈로 노출.
  *  - viewBox 0 0 16 16, fill + stroke 혼용, currentColor.
  *
  * 흡수:
- *  - render/badges.js toolIconHtml ◉ 글리프 (isAgent === false 분기)
+ *  - render/badges.js toolIconHtml — 기본(default) 분기 (Agent/Task/Skill 외 모든 도구)
  *  - render/cells.js targetInnerHtml ◉ 글리프 (role-icon, user/system/assistant 케이스)
+ *
+ * 디자인 의도:
+ *  - fish-eye(외곽 링 + 채워진 점) = "실행되는 단일 호출" 뉘앙스.
+ *  - 같은 글리프를 [[skill-dot]]도 사용하지만 용도가 다름:
+ *      · tool-dot: 일반 도구 (turn-spine에선 아이콘 미부착, flat-view·cells에서 부착)
+ *      · skill-dot: Skill 전용 (turn-spine 칩에 부착, 색상은 라임 #A3E635)
+ *  - turn-spine에서 시각 충돌이 없는 이유 — tool-dot은 그곳에서 호출되지 않음.
  *
  * 의존:
  *  - currentColor 토큰 (hex 색상 하드코딩 금지)
@@ -16,6 +24,10 @@
  * 디자인 패밀리:
  *  - 외곽 원 + 안쪽 큰 점 (fish-eye) — ◉ 글리프와 동일 의미.
  *  - 기본 size 12 — 도구 아이콘 텍스트와 광학 정렬.
+ *
+ * 관련 모듈:
+ *  - [[skill-dot]]  Skill 전용 fish-eye (같은 글리프, 다른 용도/색)
+ *  - [[agent-dot]]  Agent/Task용 bullseye (시각 구분 짝)
  *
  * @module design-system/icons/tool-dot
  */

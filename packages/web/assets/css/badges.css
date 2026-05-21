@@ -399,6 +399,13 @@ tr.row-bloated-critical > td:first-child,
   color: var(--accent);
   filter: drop-shadow(0 0 4px rgba(255, 122, 69, 0.5));
 }
+/* skill-icon-color (2026-05-22): Agent와 동일 광학 위계로 라임 톤 적용.
+ * sub-type-skill-color (#A3E635)와 drop-shadow 글로우를 매칭해 turn-spine 칩에서
+ * Agent(살구)와 Skill(라임)이 글리프+색의 이중 신호로 분간되도록 한다. */
+.tool-icon-skill {
+  color: var(--sub-type-skill-color);
+  filter: drop-shadow(0 0 4px rgba(163, 230, 53, 0.5));
+}
 
 /* ── TARGET ROLE BADGE (prompt/system row) — legacy 보존 ─────────────────── */
 .target-role-badge {

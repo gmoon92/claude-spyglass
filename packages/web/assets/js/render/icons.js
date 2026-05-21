@@ -12,6 +12,7 @@
  *  - Wave 5: 전체 구현을 design-system/icons/ 로 이전, 이 파일은 shim으로 전환.
  *  - Wave 6: svgBolt(D-27 ⚡), svgRadio/svgCheck(D-28 askq ○●☐☑), svgDiamond(D-29 ◆) 추가.
  *  - Wave 8-B: svgStatusActive/Stale/Ended(세션 상태), svgToolDot/AgentDot(도구 아이콘) 추가.
+ *  - Wave 8-C: svgSkillDot(Skill 전용 fish-eye, turn-spine 아이콘 짝) 추가 (2026-05-22).
  */
 export { svgTrash }        from '../design-system/icons/trash.js';
 export { svgWarn }         from '../design-system/icons/warn.js';
@@ -30,3 +31,4 @@ export { svgStatusStale }  from '../design-system/icons/status-stale.js';
 export { svgStatusEnded }  from '../design-system/icons/status-ended.js';
 export { svgToolDot }      from '../design-system/icons/tool-dot.js';
 export { svgAgentDot }     from '../design-system/icons/agent-dot.js';
+export { svgSkillDot }     from '../design-system/icons/skill-dot.js';

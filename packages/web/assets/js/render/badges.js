@@ -8,7 +8,7 @@
 
 import { escHtml } from '../formatters.js';
 import { subTypeOf } from '../request-types.js';
-import { svgToolDot, svgAgentDot } from '../design-system/icons/_index.js';
+import { svgToolDot, svgAgentDot, svgSkillDot } from '../design-system/icons/_index.js';
 
 export function typeBadge(type) {
   const known = ['prompt', 'tool_call', 'system', 'response'];
@@ -19,10 +19,39 @@ export function typeBadge(type) {
   return `<span class="type-badge type-${cls} ds-badge" data-tone="${tone}" title="${escHtml(type)}" aria-label="${escHtml(type)}">${escHtml(label)}</span>`;
 }
 
-// eventType: r.event_type 그대로 전달 — 'pre_tool'이면 pulse 애니메이션 자동 적용
+/**
+ * 도구 아이콘 라우팅 SSoT — 도구 이름과 이벤트 타입으로 SVG 글리프와 톤 클래스를 결정.
+ *
+ * 디자인 어휘 (2026-05-22 분리):
+ *  - Skill           → svgSkillDot (fish-eye: 외곽 링 + 채워진 점), tone="skill" (#A3E635 라임)
+ *  - Agent / Task    → svgAgentDot (bullseye: 이중 stroke 링),       tone="agent" (#FF9B6E 살구)
+ *  - 그 외 일반 도구  → svgToolDot  (fish-eye: tool-dot.js),          tone="tool"  (무채색)
+ *
+ * 왜 Skill을 Agent에서 분리했나:
+ *  - 사용자 요구: turn-spine 칩에서 Skill / Agent 가 시각적으로 식별되어야 함.
+ *  - 이전엔 isAgent 정규식 `/^(Agent|Skill|Task)/` 으로 셋 다 동일 bullseye를 받아
+ *    turn-spine·flat-view·tool-stats 모두에서 Skill과 Agent를 분간할 수 없었음.
+ *  - 색상 토큰 `--sub-type-skill-color` vs `--sub-type-agent-color`는 이미 분리되어 있었으나
+ *    글리프가 동일해 신호가 약했다 — 글리프+색의 이중 신호로 강화.
+ *
+ * 호출자(전 적용 면):
+ *  - session-detail/turn-views.js#chipHtml  : turn-spine inline-flow 칩
+ *  - render/cells.js#targetInnerHtml        : flat-view 행 Target 셀 role-icon
+ *  - tool-stats.js (per-tool 통계 행)
+ *  - meta-docs-view.js#metaDocTypeBadge     : 'Agent' 하드코딩으로 호출 (Behavior Definitions
+ *    카탈로그는 의도적으로 동일 톤 — 변경 영향 없음)
+ *
+ * @param {string|null|undefined} toolName  도구 식별자 (예: 'Skill', 'Agent', 'Bash')
+ * @param {string|null} [eventType=null]    'pre_tool'이면 실행 중 pulse 애니메이션 클래스 부착
+ * @returns {string} 아이콘 SVG를 감싼 `<span>` HTML
+ */
 export function toolIconHtml(toolName, eventType = null) {
-  const isAgent  = toolName && /^(Agent|Skill|Task)/.test(toolName);
-  const runCls   = eventType === 'pre_tool' ? ' tool-icon-running' : '';
+  const isSkill = toolName === 'Skill' || (typeof toolName === 'string' && toolName.startsWith('Skill'));
+  const isAgent = !isSkill && toolName && /^(Agent|Task)/.test(toolName);
+  const runCls  = eventType === 'pre_tool' ? ' tool-icon-running' : '';
+  if (isSkill) {
+    return `<span class="tool-icon tool-icon-skill${runCls} ds-icon">${svgSkillDot({ size: 12 })}</span>`;
+  }
   return isAgent
     ? `<span class="tool-icon tool-icon-agent${runCls} ds-icon">${svgAgentDot({ size: 12 })}</span>`
     : `<span class="tool-icon tool-icon-tool${runCls} ds-icon">${svgToolDot({ size: 12 })}</span>`;

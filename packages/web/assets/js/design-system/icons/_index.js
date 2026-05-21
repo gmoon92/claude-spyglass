@@ -34,3 +34,4 @@ export { svgStatusStale }  from './status-stale.js';
 export { svgStatusEnded }  from './status-ended.js';
 export { svgToolDot }      from './tool-dot.js';
 export { svgAgentDot }     from './agent-dot.js';
+export { svgSkillDot }     from './skill-dot.js';
