@@ -56,7 +56,6 @@ import {
 } from './state.js';
 import { targetInnerHtml, contextPreview } from '../renderers.js';
 import { turnSpikeSummaryHtml } from '../render/badges.js';
-import { modelClassOf, modelChipLabel } from '../render/model.js';
 import { applyBloatedSysHeader } from '../views/detail-view.js';
 import { getBloatedSysFor } from '../state/anomaly-cache.js';
 import { getSelectedSession } from '../state.js';
@@ -280,14 +279,17 @@ export function renderSpine(turns, activeTurnId) {
 }
 
 // =============================================================================
-// flow-head — 활성 턴 메타 (marker / model / prompt / IN / OUT / 복잡도 / 비용)
+// flow-head — 활성 턴 메타 (prompt / IN / OUT / 복잡도 / 비용)
+//   flow-head-minimal (2026-05-22): marker/model 칩 제거 — 사용자 프롬프트가 주역.
 // =============================================================================
 
 /**
  * 활성 턴 메타를 flow-head 두 번째 행에 한꺼번에 갱신한다 (ADR-002).
  *
- *  - 갱신 대상: #fhMarkerIndex / #fhModel / #fhPrompt / #fhTokIn / #fhTokOut /
- *               #fhComplexity / #fhCost
+ *  - 갱신 대상: #fhPrompt / #fhTokIn / #fhTokOut / #fhComplexity / #fhCost
+ *  - flow-head-minimal (2026-05-22): 사용자 프롬프트를 주역으로 만들기 위해
+ *    턴 마커(T#) 칩과 모델 칩(#fhModelChip / #fhModel)을 헤더 행에서 제거.
+ *    관련 갱신 로직과 import도 함께 정리해 dead code를 남기지 않는다.
  *  - 비용(%) 은 세션 누적 토큰 대비 본 턴 점유율. sessionTotalTokens===0 이면 '—'.
  *  - 복잡도: tool_call_count > 15 → 복잡(warn), > 5 → 중간(info), 그 외 빈 라벨.
  *  - DOM에 본 ID들이 없으면 silent skip (HTML 변경 전에는 칩만 동작).
@@ -302,21 +304,6 @@ export function updateFlowHead(turn, sessionTotalTokens) {
     if (!el) return;
     el.textContent = value;
   };
-
-  set('fhMarkerIndex', `T${turn.turn_index}`);
-
-  // 모델 칩 — design-tokens.css 의 --model-{kind}-* 패밀리로 색상 시그널 부여.
-  //   modelClassOf  → 'haiku' | 'sonnet' | 'opus' | 'external' | 'synthetic' | 'unknown'
-  //   modelChipLabel → "Opus 4.7" / "Haiku 4.5" / "모델불명" 등 짧은 라벨 (render/model.js SSoT)
-  //   #fhModelChip 의 data-tone 속성을 통해 turn-view.css 의 톤 규칙이 적용된다.
-  const modelId  = turn.prompt?.model || null;
-  const modelCls = modelClassOf(modelId);
-  const chipEl   = document.getElementById('fhModelChip');
-  if (chipEl) {
-    chipEl.setAttribute('data-tone', modelCls);
-    chipEl.setAttribute('title', modelId || window.I18n.t('badges.renderers.model.no-info'));
-  }
-  set('fhModel', modelId ? modelChipLabel(modelId, modelCls) : '—');
 
   const promptEl = document.getElementById('fhPrompt');
   if (promptEl) {
@@ -974,11 +961,6 @@ export function renderTurnCards(turns, badgeTurns, allRequests) {
       <section class="flow-pane" aria-label="${window.I18n.t('session.session-detail.turn-views.prologue-aria')}" data-region="flow">
         <header class="flow-head">
           <div class="flow-head-row flow-head-active" id="flowHeadActive">
-            <span class="ds-turn-marker" data-state="active" id="fhMarker">
-              <span class="marker-dot"></span>
-              <span class="marker-index" id="fhMarkerIndex">—</span>
-            </span>
-            <span class="turn-line-model" id="fhModelChip" data-tone="unknown"><span class="model-dot"></span><span id="fhModel">—</span></span>
             <span class="turn-line-prompt" id="fhPrompt" title=""></span>
             <span class="turn-line-meta">
               IN <span id="fhTokIn">—</span>
