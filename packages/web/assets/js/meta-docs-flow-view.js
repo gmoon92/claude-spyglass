@@ -22,15 +22,19 @@
  *
  * 데이터 스키마(서버 buildEgoFlowGraph 출력):
  *   {
- *     nodes: [{ id, kind:'center'|'trigger'|'skill'|'agent'|'tool'|'mcp',
- *               title, sub?, icon, x, y, w, h, variant?, pills? }],
- *     edges: [{ id, from, to, kind:'main'|'hot'|'dim'|'spoke',
- *               label?:{pct,count?}, tone?:'hot',
+ *     nodes: [{ id, kind:'center'|'trigger'|'skill'|'agent'|'mcp'|'command',
+ *               title, sub?, icon, x, y, w, h, variant?, pills?, depth?:number }],
+ *     edges: [{ id, from, to, kind:'main'|'call',
+ *               strength?:'strong'|'medium'|'weak'|'sparse', tone?:'hot',
  *               anchorFrom?:'left|right|top|bottom', anchorTo?:same }],
- *     sectionLabels: [{ x, y, kind:'skill'|'agent'|'tool'|'mcp' }],
+ *     sectionLabels: [{ x, y, kind:`parent-${N}`|`depth-${N}`|'turn-after' }],
  *     meta: { project, windowDays, center:{type,name}|null, centerTurns, totalTurns,
  *             viewBox:{w,h} }
  *   }
+ *
+ *   meta-docs-flow-tree (2026-05-21): cooccurrence 4 카테고리 컬럼을 폐기하고
+ *   BFS depth(1~3) 호출 트리 컬럼으로 교체. edge-pct 박스도 삭제 — 노드 카드
+ *   sub의 "N회 · M%"가 동일 정보를 표현해 중복을 제거했다.
  *
  * 색상 어휘(memory feedback_chip_color_semantics):
  *   색상=시그널, 무채색=노이즈. HOT/center 외에는 기본 톤 유지.
@@ -40,6 +44,7 @@
  */
 
 import { escHtml } from './formatters.js';
+import { getDateRange } from './api.js';
 
 // ============================================================================
 // 아이콘 (SVG, currentColor) — 노드 카드의 좌측 박스에 들어간다.
@@ -57,17 +62,20 @@ const ICONS = {
 
 // kind → 카드 우상단 .ds-chip data-tone 매핑 (chip.css SSoT 재사용).
 //   center/trigger는 칩을 표시하지 않는다(중복 표지 — 카드 자체가 강조).
+//   callTree는 skill/agent/mcp만 노출. tool/command는 사용 안 하지만 정의는 남겨 둔다.
 const KIND_TO_TONE = {
-  skill: 'skill',
-  agent: 'agent',
-  tool:  'task',
-  mcp:   'mcp',
+  skill:   'skill',
+  agent:   'agent',
+  tool:    'task',
+  mcp:     'mcp',
+  command: 'command',
 };
 const KIND_TO_LABEL = {
-  skill: 'SKILL',
-  agent: 'AGENT',
-  tool:  'TOOL',
-  mcp:   'MCP',
+  skill:   'SKILL',
+  agent:   'AGENT',
+  tool:    'TOOL',
+  mcp:     'MCP',
+  command: 'CMD',
 };
 
 const SVGNS  = 'http://www.w3.org/2000/svg';
@@ -93,6 +101,19 @@ const ZOOM_MIN = 0.25;    // 초기 대비 25%까지 확대(작은 viewBox = 큰
 const ZOOM_MAX = 4;       // 초기 대비 4배까지 축소(큰 viewBox = 작은 시각)
 
 // ============================================================================
+// date-range 통합 상태 (meta-docs-flow-date-filter-relaxed-init ADR-001
+//   + meta-tabs-shared-date-filter rev 2026-05-21)
+//
+// metaTabBar 우측의 공유 date-filter(meta-docs-view.js mountMetaTabsDateRange)와
+// 글로벌 active-range(api.js _activeRange + 'cs:active-range-changed' 이벤트)를
+// 공유한다. flow toolbar의 자체 드롭다운은 제거됨 — 한 페이지에 하나의 필터 SSoT.
+//   - _lastArgs : 마지막 loadFlowDiagram 호출 인자 — range 변경 시 동일 center로 재로드
+//   - _rangeHandlerBound : cs:active-range-changed 핸들러 중복 등록 가드
+// ============================================================================
+let _lastArgs = null;
+let _rangeHandlerBound = false;
+
+// ============================================================================
 // 진입점 — meta-docs-view.js loadMetaDocsLibrary / 행 클릭에서 호출
 // ============================================================================
 
@@ -113,6 +134,12 @@ export async function loadFlowDiagram(args) {
   if (!container) return;
 
   const { centerType, centerName, project } = args || {};
+
+  // 마지막 호출 인자 보관 — cs:active-range-changed 이벤트에서 동일 center로 재로드한다.
+  _lastArgs = { centerType, centerName, project };
+
+  // 글로벌 active-range 이벤트 1회만 구독 (옵션 A: 메인 페이지 #dateFilter와 동기).
+  ensureRangeHandler();
 
   // 중심 미지정 — 카탈로그가 비어 있거나 모두 orphan인 케이스. 안내만 노출.
   if (!centerType || !centerName) {
@@ -150,7 +177,6 @@ export async function loadFlowDiagram(args) {
   if (!svgEl) return; // 방어적 — shellHtml 형태가 변경된 경우
   const canvasEl    = container.querySelector('.flow-canvas');
   const edgesLayer  = svgEl.querySelector('#flowEdgesLayer');
-  const labelsLayer = svgEl.querySelector('#flowLabelsLayer');
   const nodesLayer  = svgEl.querySelector('#flowNodesLayer');
 
   // 카테고리 헤더 라벨 — 서버는 위치+kind만 발행, 텍스트는 i18n으로 채운다.
@@ -172,6 +198,12 @@ export async function loadFlowDiagram(args) {
   //
   // 상단 트림(섹션 라벨 제거 대응): 라벨이 사라지면 y=0~cardYStart 구간이 빈 공간이 됨.
   // 모든 노드 중 최소 y를 찾아 viewBox.y를 조정해 불필요한 상단 여백을 제거한다.
+  //
+  // 주의(ADR-003 meta-docs-flow-date-filter-relaxed-init):
+  //   이 블록은 setup용 viewBox 초기 계산이다. init() 끝의 computeRelaxedLayout()이
+  //   노드 폭 기반으로 더 정확한 baseline(_view/_viewInitial)을 다시 산출하면서
+  //   여기서 잡은 값을 덮어쓴다. 코드 단순화를 위해 본 블록을 제거하는 것은
+  //   후속 리팩토링 ADR에서 회귀 검증 후 진행.
   let maxRight  = _view.x + _view.w;
   let maxBottom = _view.y + _view.h;
   let minTop    = Infinity; // 최상단 노드 y — viewBox.y 트림에 사용
@@ -197,13 +229,50 @@ export async function loadFlowDiagram(args) {
   }
 
   for (const edge of _edges) {
-    makeEdge(edge, edgesLayer, labelsLayer, edgeIndex);
+    makeEdge(edge, edgesLayer, edgeIndex);
   }
+
+  // 사용자 요구(ADR-002 meta-docs-flow-date-filter-relaxed-init):
+  // "Reset 눌렀을 때 보여지는 위치가 좋다(여유롭게 보인다)."
+  //   → 초기 그리기 직후에도 동일 computeRelaxedLayout을 호출해 baseline을 통일.
+  //   _view/_viewInitial 모두 새 값으로 갱신되어 Reset 클릭 시 항상 동일 배치로 복원.
+  //   노드 폭 측정이 끝난 뒤(resizeNodeToContent 완료) 호출되어야 안전.
+  computeRelaxedLayout(nodeIndex, edgeIndex, svgEl);
+
+  // meta-tabs-shared-date-filter rev 2026-05-21:
+  //   flow toolbar 자체 드롭다운(#metaFlowDateRange) 제거됨. metaTabBar 우측
+  //   공유 date-filter가 'cs:active-range-changed'를 발행하면 ensureRangeHandler
+  //   가 _lastArgs로 동일 center를 재로드한다.
 
   bindResetButton(container, svgEl, nodeIndex, edgeIndex);
   bindDrag(svgEl, nodesLayer, nodeIndex, edgeIndex);
   bindPan(svgEl, canvasEl);
   bindZoom(container, svgEl);
+  bindSubRowClick(svgEl);
+}
+
+// ============================================================================
+// date-range 통합 헬퍼 — meta-tabs-shared-date-filter rev 2026-05-21
+// ============================================================================
+
+/**
+ * 글로벌 `cs:active-range-changed` 이벤트 핸들러를 단 1회만 등록.
+ *
+ *  - metaTabBar 우측의 공유 date-filter(meta-docs-view.js mountMetaTabsDateRange)가
+ *    setActiveRange()를 호출 → 이 이벤트가 발행 → 본 핸들러가 동일 center로 재로드.
+ *  - `_lastArgs`(직전 center)로 동일 center를 유지한 채 fetchFlow 재호출.
+ *  - 중복 등록 가드(`_rangeHandlerBound`)로 단일 인스턴스 보장.
+ */
+function ensureRangeHandler() {
+  if (_rangeHandlerBound) return;
+  _rangeHandlerBound = true;
+  document.addEventListener('cs:active-range-changed', () => {
+    if (!_lastArgs) return;
+    const container = document.getElementById(CONTAINER_ID);
+    if (!container) return;
+    // 직전 center를 그대로 사용 — range만 바뀌었으므로 카탈로그 선택은 유지.
+    loadFlowDiagram(_lastArgs);
+  });
 }
 
 // ============================================================================
@@ -215,6 +284,12 @@ async function fetchFlow({ centerType, centerName, project }) {
   if (project) params.set('project', project);
   params.set('center_type', centerType);
   params.set('center_name', centerName);
+  // 글로벌 active-range를 fromTs/toTs로 전달 (ADR-001).
+  //   빈 객체({})면 fromTs/toTs를 보내지 않아 백엔드 기본 windowDays=7으로 떨어진다 —
+  //   '전체' 상태와 '7일 기본' 의미를 분리하지 않는 단순화 정책.
+  const dr = getDateRange();
+  if (dr.from !== undefined) params.set('fromTs', String(dr.from));
+  if (dr.to   !== undefined) params.set('toTs',   String(dr.to));
   const url = '/api/meta-docs/flow?' + params.toString();
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -228,6 +303,10 @@ function cloneNode(n) {
     id: n.id, kind: n.kind, title: n.title, sub: n.sub, icon: n.icon,
     x: n.x, y: n.y, w: n.w, h: n.h,
     variant: n.variant, pills: Array.isArray(n.pills) ? n.pills.slice() : undefined,
+    depth: n.depth, timeline: n.timeline,
+    // mcp server 그룹 카드의 sub-row 리스트 (meta-docs-flow-mcp-grouping 2026-05-21).
+    // 클라이언트는 변경하지 않고 렌더에만 사용하지만, 일관성을 위해 얕은 복사.
+    subRows: Array.isArray(n.subRows) ? n.subRows.map(r => ({ ...r })) : undefined,
   };
 }
 
@@ -247,17 +326,33 @@ function shellHtml(meta) {
   const days = meta?.windowDays ?? 7;
   const turns = meta?.centerTurns ?? 0;
   const total = meta?.totalTurns ?? 0;
+  // calls = COUNT(*) (메타 카드 invocations 컬럼과 동일 단위). turns ≠ calls 인 경우에만
+  // toolbar 에 별도 칩으로 노출 — "11 calls / 10 turns" 차이를 명시적으로 시각화.
+  const calls = meta?.centerInvocations ?? 0;
+  const callsScopeHtml = calls > turns
+    ? `<span class="flow-scope">${t('ui.meta-docs-view.flow.scope-calls', { calls })}</span>`
+    : '';
+  // ⓘ 툴팁(meta-docs-flow-call-graph ADR-003): 집계 기준 — 실선=직접 호출 / 점선=공출현.
+  // 브라우저 네이티브 title 속성을 사용하므로 JS 의존 0, 접근성 자동 처리.
+  const infoTooltip = t('ui.meta-docs-view.flow.info-tooltip', { days });
+  const infoAria = t('ui.meta-docs-view.flow.info-aria');
+  // meta-tabs-shared-date-filter rev 2026-05-21:
+  //   기간 드롭다운/라벨은 metaTabBar 우측의 공유 date-filter가 SSoT를 가져갔다.
+  //   flow toolbar에는 center/turns scope만 노출 — 한 페이지에 같은 필터를 두 번
+  //   표시하지 않는다.
 
   return `
     <div class="flow-toolbar">
-      <span class="flow-scope">${t('ui.meta-docs-view.flow.scope-center')}: <b>${centerLabel}</b></span>
-      <span class="flow-scope">${t('ui.meta-docs-view.flow.scope-window', { days })}</span>
+      <span class="flow-scope">${t('ui.meta-docs-view.flow.scope-center')}: <b>${centerLabel}</b><button type="button" class="flow-info-btn" aria-label="${infoAria}" title="${infoTooltip}">ⓘ</button></span>
       <span class="flow-scope">${t('ui.meta-docs-view.flow.scope-turns', { turns, total })}</span>
+      ${callsScopeHtml}
       <div class="flow-spacer"></div>
       <span class="flow-legend">
         <span><span class="flow-sw" style="background:var(--accent)"></span>${t('ui.meta-docs-view.flow.legend-main')}</span>
-        <span><span class="flow-sw" style="background:var(--border-strong)"></span>${t('ui.meta-docs-view.flow.legend-normal')}</span>
-        <span><span class="flow-sw flow-sw-dashed"></span>${t('ui.meta-docs-view.flow.legend-spoke')}</span>
+        <span><span class="flow-sw flow-sw-strength-strong"></span>${t('ui.meta-docs-view.flow.legend-strength-strong')}</span>
+        <span><span class="flow-sw flow-sw-strength-medium"></span>${t('ui.meta-docs-view.flow.legend-strength-medium')}</span>
+        <span><span class="flow-sw flow-sw-strength-weak"></span>${t('ui.meta-docs-view.flow.legend-strength-weak')}</span>
+        <span><span class="flow-sw flow-sw-strength-sparse"></span>${t('ui.meta-docs-view.flow.legend-strength-sparse')}</span>
       </span>
       <span class="flow-zoom-group">
         <button class="flow-zoom-btn" data-flow-zoom="out" title="${t('ui.meta-docs-view.flow.zoom-out-title')}" aria-label="${t('ui.meta-docs-view.flow.zoom-out-title')}">−</button>
@@ -277,7 +372,6 @@ function shellHtml(meta) {
         </defs>
         <g id="flowSectionLabels"></g>
         <g id="flowEdgesLayer"></g>
-        <g id="flowLabelsLayer"></g>
         <g id="flowNodesLayer"></g>
       </svg>
     </div>
@@ -387,6 +481,26 @@ function makeNodeFO(node) {
     sub.className = 'sub';
     sub.innerHTML = node.sub; // sub는 서버에서 안전한 숫자+i18n 조합 — innerHTML 의도적.
     body.appendChild(sub);
+  }
+
+  // mcp server 그룹 카드 — sub-row 리스트(각 도구의 turns·%).
+  //   - row 별 풀네임을 data-tool-name 에 보관 → 클릭 시 해당 mcp 도구를 center 로 재로드.
+  //   - 텍스트는 escHtml 로 사전 escape (toolName 은 서버 응답이지만 방어적).
+  // meta-docs-flow-mcp-grouping (2026-05-21).
+  if (Array.isArray(node.subRows) && node.subRows.length > 0) {
+    const list = document.createElementNS(HTMLNS, 'div');
+    list.className = 'sub-list';
+    for (const r of node.subRows) {
+      const row = document.createElementNS(HTMLNS, 'div');
+      row.className = 'sub-row';
+      row.dataset.toolName = r.fullName;
+      row.innerHTML = `
+        <span class="sub-row-name">${escHtml(r.toolName)}</span>
+        <span class="sub-row-stats"><b>${r.count}</b> · ${r.pct}%</span>
+      `;
+      list.appendChild(row);
+    }
+    body.appendChild(list);
   }
   card.appendChild(body);
 
@@ -516,66 +630,32 @@ function bezierFor(fromNode, toNode, anchorFrom, anchorTo) {
   };
 }
 
-function makeEdge(edge, edgesLayer, labelsLayer, edgeIndex) {
+function makeEdge(edge, edgesLayer, edgeIndex) {
   const from = _nodes.find(n => n.id === edge.from);
   const to   = _nodes.find(n => n.id === edge.to);
   if (!from || !to) return;
-  const { d, mid } = bezierFor(from, to, edge.anchorFrom, edge.anchorTo);
+  const { d } = bezierFor(from, to, edge.anchorFrom, edge.anchorTo);
 
   const path = document.createElementNS(SVGNS, 'path');
   path.classList.add('edge');
-  // ego-graph 에지 종류:
-  //   hot   : 사용률 ≥40% — accent 색 + accent 화살표
-  //   dim   : 사용률 ≤5%  — 흐릿한 borderline
-  //   spoke : center→공출현 — dashed
-  //   main  : 그 외 일반
-  if (edge.kind === 'hot')        { path.classList.add('is-hot');   path.setAttribute('marker-end', 'url(#flowArrHot)'); }
-  else if (edge.kind === 'dim')   { path.classList.add('is-dim');   path.setAttribute('marker-end', 'url(#flowArr)'); }
-  else if (edge.kind === 'spoke') { path.classList.add('is-spoke'); }
-  else                            { path.setAttribute('marker-end', 'url(#flowArr)'); }
+  // ego-graph 에지 종류 (meta-docs-flow-bidir 2026-05-21):
+  //   call      : parent_tool_use_id 호출 인과(부모↔자식 양방향). strength 4단으로 빈도 시각화.
+  //               strong (≥50%) / medium (20-50%) / weak (5-20%) / sparse (<5%).
+  //   turn-flow : 같은 turn 시간 흐름(center → after 노드). 점선 톤(`is-strength-flow`).
+  if (edge.kind === 'call') {
+    const STRENGTH = { strong: 1, medium: 1, weak: 1, sparse: 1 };
+    const s = (edge.strength && STRENGTH[edge.strength]) ? edge.strength : 'sparse';
+    path.classList.add(`is-strength-${s}`);
+  } else if (edge.kind === 'turn-flow') {
+    path.classList.add('is-strength-flow');
+  }
+  if (edge.tone === 'hot') path.classList.add('is-hot');
+  path.setAttribute('marker-end', 'url(#flowArr)');
   path.setAttribute('d', d);
   path.dataset.edgeId = edge.id;
   edgesLayer.appendChild(path);
 
-  let labelEl = null;
-  if (edge.label && (edge.label.pct !== undefined || edge.label.count !== undefined)) {
-    labelEl = makeLabel(edge, mid);
-    labelsLayer.appendChild(labelEl);
-  }
-  edgeIndex.set(edge.id, { edge, pathEl: path, labelEl });
-}
-
-function makeLabel(edge, mid) {
-  const g = document.createElementNS(SVGNS, 'g');
-  g.classList.add('edge-pct');
-  if (edge.tone === 'hot') g.classList.add('is-hot');
-
-  const hasSub = edge.label.count !== undefined;
-  const w = hasSub ? 52 : 42;
-  const h = hasSub ? 24 : 18;
-
-  const rect = document.createElementNS(SVGNS, 'rect');
-  rect.setAttribute('x', -w / 2);
-  rect.setAttribute('y', -h / 2);
-  rect.setAttribute('width',  w);
-  rect.setAttribute('height', h);
-  g.appendChild(rect);
-
-  const pct = document.createElementNS(SVGNS, 'text');
-  pct.setAttribute('y', hasSub ? -2 : 0);
-  pct.textContent = `${edge.label.pct ?? 0}%`;
-  g.appendChild(pct);
-
-  if (hasSub) {
-    const sub = document.createElementNS(SVGNS, 'text');
-    sub.setAttribute('y', 8);
-    sub.classList.add('sub');
-    sub.textContent = `${edge.label.count}회`;
-    g.appendChild(sub);
-  }
-
-  g.setAttribute('transform', `translate(${mid.x},${mid.y})`);
-  return g;
+  edgeIndex.set(edge.id, { edge, pathEl: path });
 }
 
 function refreshEdge(edge, edgeIndex) {
@@ -584,9 +664,8 @@ function refreshEdge(edge, edgeIndex) {
   const from = _nodes.find(n => n.id === edge.from);
   const to   = _nodes.find(n => n.id === edge.to);
   if (!from || !to) return;
-  const { d, mid } = bezierFor(from, to, edge.anchorFrom, edge.anchorTo);
+  const { d } = bezierFor(from, to, edge.anchorFrom, edge.anchorTo);
   ref.pathEl.setAttribute('d', d);
-  if (ref.labelEl) ref.labelEl.setAttribute('transform', `translate(${mid.x},${mid.y})`);
 }
 
 function refreshEdgesOf(nodeId, edgeIndex) {
@@ -656,16 +735,16 @@ function bindDrag(svgEl, nodesLayer, nodeIndex, edgeIndex) {
 // 자연 폭 확장 후 생길 수 있는 컬럼 침범을 해소한다.
 // ============================================================================
 
-/** 노드 → 컬럼 ID 매핑. variant + kind 조합으로 결정. */
-const COL_TRIGGER = 'left-trigger';
-const COL_CENTER  = 'center';
-const COL_SKILL   = 'right-skill';
-const COL_AGENT   = 'right-agent';
-const COL_TOOL    = 'right-tool';
-const COL_MCP     = 'right-mcp';
-
-/** 컬럼 순서 — 좌→우 배치 순서. */
-const COL_ORDER = [COL_TRIGGER, COL_CENTER, COL_SKILL, COL_AGENT, COL_TOOL, COL_MCP];
+/**
+ * 노드 → 컬럼 ID 매핑.
+ * variant + BFS depth + timeline 으로 결정 (meta-docs-flow-bidir 2026-05-21).
+ *   parent BFS columns: -3 / -2 / -1 (좌측)
+ *   center             : 0 (중앙)
+ *   child BFS columns  : +1 / +2 / +3 (우측)
+ *   turn-after column  : timeline='after' (최우측, 시간 흐름)
+ */
+const COL_CENTER     = 'center';
+const COL_TURN_AFTER = 'right-turn-after';
 
 /** 컬럼 간 수평 여백(px, viewBox 단위). */
 const RESET_GAP = 60;
@@ -674,21 +753,53 @@ const RESET_GAP = 60;
 const RESET_LEFT_MARGIN = 30;
 
 /**
- * 노드의 variant + kind로부터 컬럼 ID를 반환.
+ * 노드의 variant + depth로부터 컬럼 ID를 반환.
  * 알 수 없는 노드는 null 반환 → 위치 갱신 대상에서 제외.
  *
- * @param {{ variant?: string, kind: string }} node
+ * meta-docs-flow-dynamic-columns (2026-05-21):
+ *   depth는 가변 정수 — `col-depth-${depth}` 동적 ID 생성.
+ *   storage 안전 상한 32-홉까지 모든 depth를 수용.
+ *
+ * @param {{ variant?: string, depth?: number, kind: string, timeline?: string }} node
  * @returns {string|null}
  */
 function nodeToColId(node) {
-  if (node.variant === 'center')  return COL_CENTER;
-  if (node.variant === 'trigger') return COL_TRIGGER;
-  // spoke: kind로 우측 4컬럼 세분화
-  if (node.kind === 'skill') return COL_SKILL;
-  if (node.kind === 'agent') return COL_AGENT;
-  if (node.kind === 'tool')  return COL_TOOL;
-  if (node.kind === 'mcp')   return COL_MCP;
+  if (node.variant === 'center') return COL_CENTER;
+  if (node.timeline === 'after') return COL_TURN_AFTER;
+  if (typeof node.depth === 'number' && Number.isFinite(node.depth) && node.depth !== 0) {
+    return `col-depth-${node.depth}`;
+  }
   return null;
+}
+
+/**
+ * 등장한 노드 집합에서 동적으로 컬럼 순서를 생성한다.
+ *   parent depth(음수, 절댓값 큰 순) → center → child depth(양수, 작은 순) → turn-after
+ *
+ * @param {Iterable<{node:{variant?:string,depth?:number,timeline?:string}}>} nodeRefs
+ * @returns {string[]} 좌→우 컬럼 ID 배열
+ */
+function buildColOrder(nodeRefs) {
+  const parentDepths = new Set();
+  const childDepths  = new Set();
+  let hasAfter = false;
+  for (const ref of nodeRefs) {
+    const n = ref.node;
+    if (n.variant === 'center')   continue;
+    if (n.timeline === 'after')   { hasAfter = true; continue; }
+    if (typeof n.depth === 'number' && Number.isFinite(n.depth)) {
+      if (n.depth < 0) parentDepths.add(n.depth);
+      else if (n.depth > 0) childDepths.add(n.depth);
+    }
+  }
+  const order = [];
+  // parent: 절댓값 큰 순(가장 먼 부모가 가장 왼쪽) → -1
+  [...parentDepths].sort((a, b) => a - b).forEach((d) => order.push(`col-depth-${d}`));
+  order.push(COL_CENTER);
+  // child: 1 → 가장 먼 자식
+  [...childDepths].sort((a, b) => a - b).forEach((d) => order.push(`col-depth-${d}`));
+  if (hasAfter) order.push(COL_TURN_AFTER);
+  return order;
 }
 
 /**
@@ -706,12 +817,15 @@ function nodeToColId(node) {
  * @param {SVGSVGElement} svgEl
  */
 function computeRelaxedLayout(nodeIndex, edgeIndex, svgEl) {
+  // 동적 컬럼 순서 — 현재 노드 집합에서 등장한 depth만으로 좌→우 배치.
+  const colOrder = buildColOrder(nodeIndex.values());
+
   // 1. 컬럼별 노드 수집
   /** @type {Map<string, Array>} */
-  const colNodes = new Map(COL_ORDER.map(id => [id, []]));
+  const colNodes = new Map(colOrder.map(id => [id, []]));
   for (const ref of nodeIndex.values()) {
     const colId = nodeToColId(ref.node);
-    if (colId) colNodes.get(colId).push(ref);
+    if (colId && colNodes.has(colId)) colNodes.get(colId).push(ref);
   }
 
   // 컬럼별 최대 폭 (데이터 없는 컬럼은 maxW=0 → 건너뜀)
@@ -725,7 +839,7 @@ function computeRelaxedLayout(nodeIndex, edgeIndex, svgEl) {
   /** @type {Map<string, number>} */
   const colX = new Map();
   let curX = RESET_LEFT_MARGIN;
-  for (const colId of COL_ORDER) {
+  for (const colId of colOrder) {
     const maxW = colMaxW.get(colId) ?? 0;
     if (maxW > 0) {
       colX.set(colId, curX);
@@ -836,6 +950,43 @@ function bindPan(svgEl, canvasEl) {
   svgEl.addEventListener('mousedown', onDown);
   window.addEventListener('mousemove', onMove);
   window.addEventListener('mouseup',   onUp);
+}
+
+// ============================================================================
+// sub-row 클릭 — mcp server 그룹 카드 내부 도구 항목을 클릭하면 그 도구를 center 로
+// 재로드 (meta-docs-flow-mcp-grouping 2026-05-21).
+//   - bindDrag 와의 충돌 방지: mousedown 위치 기록 → mouseup 시점에 4px 이상 이동했으면
+//     드래그로 간주해 클릭을 무시한다. is-dragging 클래스는 mousedown 시 즉시 붙으므로
+//     본 핸들러는 클릭 직전(=mouseup 직후) 시점에 검사한다.
+//   - SVG 의 click 이벤트는 foreignObject 안 HTML 요소까지 정상 버블링.
+// ============================================================================
+function bindSubRowClick(svgEl) {
+  let downX = 0, downY = 0, moved = false;
+  const DRAG_THRESHOLD = 4;
+
+  svgEl.addEventListener('mousedown', (e) => {
+    downX = e.clientX; downY = e.clientY; moved = false;
+  });
+  svgEl.addEventListener('mousemove', (e) => {
+    if (!moved) {
+      const dx = Math.abs(e.clientX - downX);
+      const dy = Math.abs(e.clientY - downY);
+      if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) moved = true;
+    }
+  });
+  svgEl.addEventListener('click', (e) => {
+    if (moved) return; // 드래그로 판정 — 클릭 무시.
+    const row = e.target.closest?.('.sub-row');
+    if (!row) return;
+    const fullName = row.dataset.toolName;
+    if (!fullName) return;
+    // 직전 호출 인자의 project 만 유지하고 center 만 교체.
+    loadFlowDiagram({
+      centerType: 'mcp',
+      centerName: fullName,
+      project: _lastArgs?.project ?? null,
+    });
+  });
 }
 
 /**

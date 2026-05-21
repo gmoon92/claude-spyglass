@@ -58,6 +58,12 @@
   --flow-edge-dim:   rgba(110, 118, 129, 0.45);
   --flow-pct-bg:     #1d1d22;
   --flow-pct-border: var(--border-strong);
+
+  /* meta-docs-flow-strength 로컬 스코프 토큰 — design-tokens.css의 4단 텍스트 위계
+     (--text-1 ~ --text-4)를 SSoT로 유지하고, sparse 강도용 더 옅은 stroke 톤만
+     이 영역에 한정해 정의한다. --flow-edge-dim과 동일 패턴.
+     #6E7681 (=--text-4) 보다 더 옅은 회색을 alpha로 합성해 stroke 채널에서만 노출. */
+  --flow-edge-sparse: rgba(110, 118, 129, 0.55);
 }
 
 /* ============================================================================
@@ -79,10 +85,24 @@
   background: var(--surface-alt);
 }
 .meta-docs-flow-region .flow-toolbar .flow-scope b { color: var(--text-2); font-weight: 600; }
+
+/* meta-tabs-shared-date-filter:
+   기존 .flow-scope-range / .flow-scope-label / .flow-scope-current / .flow-date-range
+   룰은 flow toolbar 내부 자체 date-range 드롭다운(#metaFlowDateRange) 제거와 함께 삭제.
+   기간 필터는 이제 metaTabBar 우측 공유 슬롯(.meta-tabs-actions)에서 mount된다.
+   center/turns 정보용 .flow-scope 베이스 룰은 그대로 유지. */
 .meta-docs-flow-region .flow-toolbar .flow-spacer { flex: 1; }
 .meta-docs-flow-region .flow-toolbar .flow-legend {
-  display: inline-flex; gap: 14px; align-items: center;
+  /* meta-docs-flow-strength (ADR-006): 5건(main + strength 4단)을 가로 한 줄에 배치.
+     gap 14→10px로 축소해 좁은 화면에서도 한 줄 유지 시도. wrap은 toolbar의
+     flex-wrap에 의해 자연 줄바꿈된다. */
+  display: inline-flex; gap: 10px; align-items: center;
+  flex-wrap: wrap;
   font-size: var(--text-meta); color: var(--text-3);
+}
+.meta-docs-flow-region .flow-toolbar .flow-legend > span {
+  display: inline-flex; align-items: center;
+  white-space: nowrap;
 }
 .meta-docs-flow-region .flow-toolbar .flow-legend .flow-sw {
   display: inline-block; width: 18px; height: 2px;
@@ -92,8 +112,40 @@
 .meta-docs-flow-region .flow-toolbar .flow-legend .flow-sw-dashed {
   height: 0; border-top: 1px dashed var(--text-4); width: 18px;
 }
+/* call 범례 표지(meta-docs-flow-call-graph ADR-005) — 실선 막대, --text-3 톤.
+   기존 .flow-sw 인라인 style 패턴과 의도 동일하지만 시맨틱 클래스로 가독성 확보. */
+.meta-docs-flow-region .flow-toolbar .flow-legend .flow-sw-solid {
+  background: var(--text-3);
+}
+
+/* meta-docs-flow-strength (ADR-006) — 범례 표지 4단.
+   각 표지는 실제 edge의 stroke 톤/패턴을 미니어처로 재현해 시각 위계를
+   범례에서도 즉시 식별 가능하게 한다. width/dash는 stroke와 동일 패턴.
+   .flow-sw 베이스(18×2px)를 상속하되, 점선(weak/sparse)은 height:0 + border-top로
+   미니 dash를 표현해 실제 edge와 같은 톤 매핑을 유지. */
+.meta-docs-flow-region .flow-toolbar .flow-legend .flow-sw-strength-strong {
+  background: var(--text-2);
+  height: 3px;
+}
+.meta-docs-flow-region .flow-toolbar .flow-legend .flow-sw-strength-medium {
+  background: var(--text-3);
+  height: 2px;
+}
+.meta-docs-flow-region .flow-toolbar .flow-legend .flow-sw-strength-weak {
+  background: transparent;
+  height: 0;
+  border-top: 2px dashed var(--text-4);
+  border-radius: 0;
+}
+.meta-docs-flow-region .flow-toolbar .flow-legend .flow-sw-strength-sparse {
+  background: transparent;
+  height: 0;
+  border-top: 1px dotted var(--flow-edge-sparse);
+  border-radius: 0;
+}
 .meta-docs-flow-region .flow-toolbar .flow-reset-btn,
-.meta-docs-flow-region .flow-toolbar .flow-zoom-btn {
+.meta-docs-flow-region .flow-toolbar .flow-zoom-btn,
+.meta-docs-flow-region .flow-toolbar .flow-info-btn {
   height: 26px; padding: 0 10px;
   font: inherit; font-size: var(--text-meta);
   color: var(--text-2); background: var(--surface-alt);
@@ -102,7 +154,8 @@
   cursor: pointer;
 }
 .meta-docs-flow-region .flow-toolbar .flow-reset-btn:hover,
-.meta-docs-flow-region .flow-toolbar .flow-zoom-btn:hover {
+.meta-docs-flow-region .flow-toolbar .flow-zoom-btn:hover,
+.meta-docs-flow-region .flow-toolbar .flow-info-btn:hover {
   background: var(--raised); color: var(--text-1);
 }
 /* zoom 버튼: +/- 단일 글자 — 정사각형 비주얼로 reset 버튼과 시각 위계 구분. */
@@ -113,6 +166,21 @@
 }
 .meta-docs-flow-region .flow-toolbar .flow-zoom-group {
   display: inline-flex; gap: 4px;
+}
+/* ⓘ 정보 버튼(meta-docs-flow-call-graph ADR-003) — scope 그룹 내 인라인 배치.
+   클릭 액션이 아닌 hover 정보임을 cursor: help 로 정직하게 표시(Interaction Honesty).
+   브라우저 네이티브 title 툴팁을 그대로 사용 — JS 의존 0, 접근성 자동 처리. */
+.meta-docs-flow-region .flow-toolbar .flow-info-btn {
+  min-width: 22px; height: 22px; padding: 0;
+  margin-left: 6px;
+  font-family: var(--font-data); font-weight: 700; line-height: 1;
+  font-size: var(--text-meta);
+  color: var(--text-3);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  cursor: help;
+  vertical-align: middle;
 }
 
 /* ============================================================================
@@ -147,40 +215,61 @@
 }
 
 /* ============================================================================
-   Edges — ego-graph 4종 (hot / dim / spoke / default-main)
+   Edges — meta-docs-flow-strength (ADR-001/004/005/008)
+     kind 2종으로 단순화: 'main' (trigger→center) / 'call' (center→자식).
+     'call' edge는 빈도 강도(strength) 4단 클래스 .is-strength-* 으로 시각화한다.
+     모든 strength는 동일 크기 화살표(url(#flowArr))를 부여 (ADR-004) —
+     빈도는 stroke 색/굵기/dasharray 채널로만 표현해 시각 노이즈를 줄인다.
+     기존 .edge.is-hot / .is-dim / .is-spoke / .is-call 룰은 ADR-008로 제거됨.
    ============================================================================ */
 .meta-docs-flow-region .edge {
   fill: none;
   stroke: var(--flow-edge); stroke-width: 1.6;
   transition: stroke var(--dur-fast) var(--ease);
 }
-/* hot: 사용률 ≥40% — accent. */
-.meta-docs-flow-region .edge.is-hot   { stroke: var(--flow-edge-hi); stroke-width: 2.2; }
-/* dim: 사용률 ≤5% — 흐릿한 borderline. */
-.meta-docs-flow-region .edge.is-dim   { stroke: var(--flow-edge-dim); stroke-dasharray: 4 4; }
-/* spoke: center→공출현 — 점선. 화살표 없음(상호 공출현이므로 방향성 약함). */
-.meta-docs-flow-region .edge.is-spoke { stroke: var(--text-4); stroke-dasharray: 2 3; stroke-width: 1.2; }
 
-.meta-docs-flow-region .edge-pct rect {
-  fill: var(--flow-pct-bg);
-  stroke: var(--flow-pct-border); stroke-width: 1;
-  rx: 4;
+/* meta-docs-flow-strength (ADR-005) — 4단 시각 매핑.
+   strong/medium: 실선(--text-2/--text-3). 자주 호출되는 항목을 또렷한 명도로 강조.
+   weak/sparse:   점선(--text-4/--flow-edge-sparse). dasharray는 (4 2)→(2 3)로
+                  점선 간격 축소 + width 점진 감소(1.3→1.0)로 누적적 위계.
+   토큰 0건 하드코딩(ADR-003). */
+.meta-docs-flow-region .edge.is-strength-strong {
+  stroke: var(--text-2);
+  stroke-width: 2.0;
 }
-.meta-docs-flow-region .edge-pct text {
-  fill: var(--text-2);
-  font-family: var(--font-data);
-  font-size: 10px; font-weight: 600;
-  dominant-baseline: middle; text-anchor: middle;
+.meta-docs-flow-region .edge.is-strength-medium {
+  stroke: var(--text-3);
+  stroke-width: 1.6;
 }
-.meta-docs-flow-region .edge-pct text.sub {
-  fill: var(--text-4);
-  font-size: 9px; font-weight: 400;
+.meta-docs-flow-region .edge.is-strength-weak {
+  stroke: var(--text-4);
+  stroke-dasharray: 4 2;
+  stroke-width: 1.3;
 }
-.meta-docs-flow-region .edge-pct.is-hot rect           { stroke: var(--accent); }
-.meta-docs-flow-region .edge-pct.is-hot text:not(.sub) { fill: var(--accent); }
+.meta-docs-flow-region .edge.is-strength-sparse {
+  stroke: var(--flow-edge-sparse);
+  stroke-dasharray: 2 3;
+  stroke-width: 1.0;
+}
+
+/* meta-docs-flow-bidir (2026-05-21) — turn-flow 엣지(같은 turn 시간 흐름).
+   center → after 노드. 호출 인과(call)와 구분되는 옅은 점선 톤. */
+.meta-docs-flow-region .edge.is-strength-flow {
+  stroke: var(--text-4);
+  stroke-width: 1.1;
+  stroke-dasharray: 3 4;
+  opacity: 0.7;
+}
+
+/* hot 톤 엣지(trigger의 최상위 케이스) — stroke 자체를 accent로 끌어올린다.
+   meta-docs-flow-tree (2026-05-21): edge-pct 라벨 박스를 폐기하면서 hot 강조는
+   엣지 stroke에 직접 부여한다. */
+.meta-docs-flow-region .edge.is-hot {
+  stroke: var(--accent);
+}
 
 /* ============================================================================
-   Section label — 우측 4 컬럼(SKILL / AGENT / TOOL / MCP) 헤더
+   Section label — 우측 depth 컬럼(1=직접 / 2=전이 / 3=심층) 헤더
    ============================================================================ */
 .meta-docs-flow-region .slot-label {
   fill: var(--text-4);
@@ -314,4 +403,49 @@
 }
 .meta-docs-flow-region .flow-empty-title {
   color: var(--text-2); font-size: var(--text-h3); font-weight: 600;
+}
+
+/* ============================================================================
+   MCP server 그룹 카드 — sub-row 리스트
+   (meta-docs-flow-mcp-grouping 2026-05-21)
+   같은 server 의 mcp 도구 N개를 카드 1개로 묶고, 카드 내부에 각 도구의 turns·% 를
+   세로 리스트로 노출. 각 row 는 클릭 가능하며 클릭 시 해당 풀네임을 center 로 재로드.
+   ============================================================================ */
+.meta-docs-flow-region .node .body .sub-list {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.meta-docs-flow-region .node .body .sub-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  font-size: 10px;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.meta-docs-flow-region .node .body .sub-row:hover {
+  background: var(--raised);
+  color: var(--text-2);
+}
+.meta-docs-flow-region .node .body .sub-row .sub-row-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.meta-docs-flow-region .node .body .sub-row .sub-row-stats {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.meta-docs-flow-region .node .body .sub-row .sub-row-stats b {
+  color: var(--text-1);
+  font-weight: 600;
 }
