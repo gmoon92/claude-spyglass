@@ -576,7 +576,12 @@
     color var(--dur-fast) var(--ease),
     background var(--dur-fast) var(--ease);
 }
-.tool-chip[data-chip-key]:hover {
+.tool-chip[data-chip-key]:hover,
+.tool-chip[data-chip-key].is-chip-active {
+  /* is-chip-active (2026-05-22): 마지막으로 클릭/활성화된 칩의 잔상 표지.
+   * hover 색을 그대로 잔존시켜 "내가 로그를 따라오다 어느 칩에서 점프했는지"를 시각으로 추적.
+   * main.js#handleChipActivation 이 detailView 내 직전 활성 칩을 해제하고 새 칩에 부여한다.
+   * hover와 동일 룰로 묶어 둔 이유 — 사용자 결정: "호버 색 그대로 유지" (디자인 분기 회피). */
   border-color: var(--accent-border);
   color: var(--accent);
 }

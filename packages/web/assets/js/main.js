@@ -553,6 +553,7 @@ function handleChipActivation(chip) {
               || null;
   if (!target) return;
   flashChipTarget(target);
+  markChipAsActive(chip);
 
   // 모든 log-pane 행 타깃 — 점프 후 상세 메시지 자동 펼치기.
   if (target.tagName === 'TR') {
@@ -562,6 +563,36 @@ function handleChipActivation(chip) {
       togglePromptExpand(rid, target);
     }
   }
+}
+
+/**
+ * 마지막으로 클릭/활성화된 칩에 `.is-chip-active` 잔상 표지를 부여한다.
+ *
+ * 목적:
+ *  - 사용자가 로그를 스크롤하다가 "어느 칩에서 점프해 왔지?"를 시각으로 회상할 수 있게 한다.
+ *  - 표지 색은 hover 와 동일 (turn-view.css `.tool-chip[data-chip-key]:hover` 룰에 합류) —
+ *    별도 시각 어휘 추가 없이 "잔존하는 hover" 메타포만으로 충분 (사용자 결정).
+ *
+ * 동작:
+ *  - detailView 내 직전 활성 칩(`.is-chip-active`)을 모두 해제.
+ *  - 단, 새로 활성화될 칩과 동일하면 해제 생략(클래스 깜빡임 방지).
+ *  - 그 후 새 칩에 `.is-chip-active` 부여.
+ *  - 활성 턴이 바뀌어 chip-flow가 재렌더되면 클래스는 자연히 소실 — 의도된 동작
+ *    (다른 턴으로 이동했을 때 이전 잔상까지 끌고 갈 이유가 없음).
+ *
+ * 호출자:
+ *  - handleChipActivation (click / Enter / Space 모두 본 함수 경유)
+ *
+ * @param {Element} chip 새로 활성화된 `[data-chip-key]` 노드
+ */
+function markChipAsActive(chip) {
+  if (!chip) return;
+  const root = document.getElementById('detailView');
+  if (!root) return;
+  root.querySelectorAll('.tool-chip.is-chip-active').forEach(el => {
+    if (el !== chip) el.classList.remove('is-chip-active');
+  });
+  chip.classList.add('is-chip-active');
 }
 
 /**
