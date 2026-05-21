@@ -233,7 +233,15 @@
 .meta-docs-flow-region .node .body .title {
   color: var(--text-1); font-weight: 600;
   font-size: var(--text-h3);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* is-wrapped: resizeNodeToContent에서 자연 폭이 NODE_MAX_W를 초과해 폭이
+   cap된 경우 부여된다. 긴 이름(예: mcp__redmine_xxx_yyy_zzz)이 한 줄로
+   삐져나가지 않도록 wrap 허용 + 단어 내부 분리(break 지점이 없는 토큰 대응). */
+.meta-docs-flow-region .node.is-wrapped .body .title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
 }
 .meta-docs-flow-region .node .body .sub {
   color: var(--text-3); font-size: var(--text-meta);
@@ -281,9 +289,6 @@
 
 /* ── Variant: trigger (좌측 슬래시 커맨드) ───────────────────────────────
    중립 무채색 카드. 카드 자체 크기는 default와 동일. */
-.meta-docs-flow-region .node.is-trigger {
-  /* 기본 .node 스타일 그대로. 칩 없이 좌측 트리거임을 위치(좌측 컬럼)로 표현. */
-}
 
 /* ── Variant: spoke (우측 공출현 4 컬럼) ────────────────────────────────
    더 작은 카드 + 원형 아이콘. ds-chip이 종류를 표시한다. */

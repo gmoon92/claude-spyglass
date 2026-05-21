@@ -165,6 +165,37 @@ export async function loadFlowDiagram(args) {
     nodesLayer.appendChild(fo);
     nodeIndex.set(node.id, { node, foEl: fo });
   }
+  // foreignObject를 실제 콘텐츠 크기에 맞게 조정 (텍스트 잘림 방지).
+  // 측정 후 카드 우/하단이 viewBox를 벗어나면 viewBox.w/h를 늘려 노드가
+  // SVG 영역 밖으로 클리핑되지 않도록 한다. 특히 mcp 컬럼(x=1400, w=130)에
+  // 긴 이름이 들어오면 우측으로 자연스럽게 자라야 한다.
+  //
+  // 상단 트림(섹션 라벨 제거 대응): 라벨이 사라지면 y=0~cardYStart 구간이 빈 공간이 됨.
+  // 모든 노드 중 최소 y를 찾아 viewBox.y를 조정해 불필요한 상단 여백을 제거한다.
+  let maxRight  = _view.x + _view.w;
+  let maxBottom = _view.y + _view.h;
+  let minTop    = Infinity; // 최상단 노드 y — viewBox.y 트림에 사용
+  const VIEWBOX_PAD = 20;
+  for (const ref of nodeIndex.values()) {
+    resizeNodeToContent(ref);
+    maxRight  = Math.max(maxRight,  ref.node.x + ref.node.w + VIEWBOX_PAD);
+    maxBottom = Math.max(maxBottom, ref.node.y + ref.node.h + VIEWBOX_PAD);
+    minTop    = Math.min(minTop,    ref.node.y);
+  }
+  // 상단 트림: 최상단 노드 위에 VIEWBOX_PAD 만큼만 남기고 빈 공간 제거.
+  const trimmedY = Math.max(0, minTop - VIEWBOX_PAD);
+  const expandedW = maxRight  - _view.x;
+  const expandedH = maxBottom - trimmedY;
+  _view.y = trimmedY;
+  _viewInitial.y = trimmedY;
+  if (expandedW > _view.w || expandedH > _view.h || trimmedY !== 0) {
+    _view.w = expandedW;
+    _view.h = expandedH;
+    _viewInitial.w = expandedW;
+    _viewInitial.h = expandedH;
+    applyViewBox(svgEl);
+  }
+
   for (const edge of _edges) {
     makeEdge(edge, edgesLayer, labelsLayer, edgeIndex);
   }
@@ -283,22 +314,19 @@ function errorHtml(err) {
 }
 
 // ============================================================================
-// 카테고리 헤더 라벨 — 서버가 (x, y, kind)만 발행, 텍스트는 i18n으로 채운다.
+// 카테고리 헤더 라벨 — 우측 4 컬럼(SKILL/AGENT/TOOL/MCP) 상단 텍스트.
+// 현재 비활성화: 컬럼 카드에 .ds-chip이 종류를 표시하므로 라벨은 시각적 노이즈.
+// 서버가 발행하는 sectionLabels 배열 자체는 유지 (향후 재활성화 용이).
 // ============================================================================
 
-function renderSectionLabels(svgEl, list) {
-  const layer = svgEl.querySelector('#flowSectionLabels');
-  if (!layer || !Array.isArray(list)) return;
-  const t = window.I18n.t.bind(window.I18n);
-  for (const sl of list) {
-    const text = document.createElementNS(SVGNS, 'text');
-    text.setAttribute('class', 'slot-label');
-    text.setAttribute('x', String(sl.x));
-    text.setAttribute('y', String(sl.y));
-    text.setAttribute('text-anchor', 'middle');
-    text.textContent = t(`ui.meta-docs-view.flow.section-${sl.kind}`) || sl.kind.toUpperCase();
-    layer.appendChild(text);
-  }
+// eslint-disable-next-line no-unused-vars
+function renderSectionLabels(_svgEl, _list) {
+  // 의도적 noop — 섹션 라벨 텍스트를 숨겨 ego-graph를 간결하게 유지.
+  // 재활성화 시 아래 구현을 복원할 것:
+  //   const layer = _svgEl.querySelector('#flowSectionLabels');
+  //   if (!layer || !Array.isArray(_list)) return;
+  //   const t = window.I18n.t.bind(window.I18n);
+  //   for (const sl of _list) { ... layer.appendChild(text); }
 }
 
 // ============================================================================
@@ -376,6 +404,62 @@ function makeNodeFO(node) {
 
   fo.appendChild(card);
   return fo;
+}
+
+/**
+ * foreignObject의 width/height를 카드 실제 콘텐츠 크기에 맞게 조정.
+ *
+ * 측정 트릭(2026-05-21 fix): foreignObject의 width="180" 같은 고정 폭이
+ * 자식 .node 카드의 자연 폭을 제한하므로(부모 폭 = 자식 가용 폭), 측정 중
+ * 일시적으로 foreignObject를 9999로 확장하고 .node에 `max-content`를 강제로
+ * 적용해 콘텐츠의 실제 자연 폭을 얻는다. 측정 후 정확한 값으로 다시 setAttribute.
+ * 이전 구현은 width="180" 부모 안에서 width:auto만 적용해 항상 180을 측정,
+ * 결국 `mcp__redmine_xxx` 같은 긴 이름이 SVG로 잘려보이는 원인이었다.
+ *
+ * NODE_MAX_W: 자연 폭이 과도하게 큰 경우(엄청 긴 이름) 박스가 무한정 늘어나
+ * 다음 컬럼을 침범하는 것을 막기 위한 상한. 상한을 초과하면 .node에 그
+ * 폭을 고정시키고, 텍스트는 wrap된다(white-space는 .title-row 안에서만 nowrap).
+ */
+const NODE_MAX_W = 260;
+
+function resizeNodeToContent(ref) {
+  const card = ref.foEl.querySelector('.node');
+  if (!card) return;
+
+  // 측정 전: foreignObject·card의 폭 제약을 모두 해제.
+  const prevW    = card.style.width;
+  const prevH    = card.style.height;
+  const prevMaxW = card.style.maxWidth;
+  ref.foEl.setAttribute('width',  '9999');
+  ref.foEl.setAttribute('height', '9999');
+  card.style.width = 'max-content';
+  card.style.height = 'max-content';
+  card.style.maxWidth = 'none';
+
+  let w = Math.ceil(card.offsetWidth);
+  let h = Math.ceil(card.offsetHeight);
+
+  // 상한 초과 시: 폭을 NODE_MAX_W로 고정하고 .is-wrapped 클래스로 .title의
+  // white-space:nowrap을 풀어 두 줄 이상으로 wrap되게 한 뒤 높이를 재측정.
+  // 클래스는 측정 이후에도 유지되어야 실제 렌더에서도 wrap이 일어난다.
+  if (w > NODE_MAX_W) {
+    w = NODE_MAX_W;
+    card.classList.add('is-wrapped');
+    card.style.width = NODE_MAX_W + 'px';
+    card.style.maxWidth = NODE_MAX_W + 'px';
+    h = Math.ceil(card.offsetHeight);
+  } else {
+    card.classList.remove('is-wrapped');
+  }
+
+  // 원복(인라인 스타일 제거 → CSS 규칙이 다시 적용되도록).
+  card.style.width = prevW;
+  card.style.height = prevH;
+  card.style.maxWidth = prevMaxW;
+  ref.foEl.setAttribute('width',  String(w));
+  ref.foEl.setAttribute('height', String(h));
+  ref.node.w = w;
+  ref.node.h = h;
 }
 
 // ============================================================================
@@ -566,22 +650,136 @@ function bindDrag(svgEl, nodesLayer, nodeIndex, edgeIndex) {
   window.addEventListener('mouseup',   onUp);
 }
 
+// ============================================================================
+// 동적 레이아웃 재배치 — Reset 버튼에서 호출.
+// 각 노드의 측정된 폭(node.w)을 기반으로 컬럼 x를 재계산해
+// 자연 폭 확장 후 생길 수 있는 컬럼 침범을 해소한다.
+// ============================================================================
+
+/** 노드 → 컬럼 ID 매핑. variant + kind 조합으로 결정. */
+const COL_TRIGGER = 'left-trigger';
+const COL_CENTER  = 'center';
+const COL_SKILL   = 'right-skill';
+const COL_AGENT   = 'right-agent';
+const COL_TOOL    = 'right-tool';
+const COL_MCP     = 'right-mcp';
+
+/** 컬럼 순서 — 좌→우 배치 순서. */
+const COL_ORDER = [COL_TRIGGER, COL_CENTER, COL_SKILL, COL_AGENT, COL_TOOL, COL_MCP];
+
+/** 컬럼 간 수평 여백(px, viewBox 단위). */
+const RESET_GAP = 60;
+
+/** 좌측 시작 여백(px, viewBox 단위). */
+const RESET_LEFT_MARGIN = 30;
+
+/**
+ * 노드의 variant + kind로부터 컬럼 ID를 반환.
+ * 알 수 없는 노드는 null 반환 → 위치 갱신 대상에서 제외.
+ *
+ * @param {{ variant?: string, kind: string }} node
+ * @returns {string|null}
+ */
+function nodeToColId(node) {
+  if (node.variant === 'center')  return COL_CENTER;
+  if (node.variant === 'trigger') return COL_TRIGGER;
+  // spoke: kind로 우측 4컬럼 세분화
+  if (node.kind === 'skill') return COL_SKILL;
+  if (node.kind === 'agent') return COL_AGENT;
+  if (node.kind === 'tool')  return COL_TOOL;
+  if (node.kind === 'mcp')   return COL_MCP;
+  return null;
+}
+
+/**
+ * 노드 폭(node.w) 기반으로 컬럼 x를 재계산하고 모든 노드를 재배치.
+ *
+ * 동작:
+ *  1. 컬럼별 노드 수집 → 컬럼별 maxW 산출
+ *  2. 좌→우 순서로 컬럼 x를 누적 계산 (RESET_LEFT_MARGIN + 이전 컬럼 maxW + RESET_GAP)
+ *  3. 각 노드의 x를 새 컬럼 x로 갱신 (y는 _initialPositions 서버 발행값으로 복원)
+ *  4. 모든 에지 베지어 재계산
+ *  5. viewBox.x/y/w/h 재계산 → _view, _viewInitial 둘 다 갱신 (새 baseline)
+ *
+ * @param {Map<string,{node:object,foEl:SVGForeignObjectElement}>} nodeIndex
+ * @param {Map<string,{edge:object,pathEl:SVGPathElement,labelEl:SVGElement|null}>} edgeIndex
+ * @param {SVGSVGElement} svgEl
+ */
+function computeRelaxedLayout(nodeIndex, edgeIndex, svgEl) {
+  // 1. 컬럼별 노드 수집
+  /** @type {Map<string, Array>} */
+  const colNodes = new Map(COL_ORDER.map(id => [id, []]));
+  for (const ref of nodeIndex.values()) {
+    const colId = nodeToColId(ref.node);
+    if (colId) colNodes.get(colId).push(ref);
+  }
+
+  // 컬럼별 최대 폭 (데이터 없는 컬럼은 maxW=0 → 건너뜀)
+  /** @type {Map<string, number>} */
+  const colMaxW = new Map();
+  for (const [colId, refs] of colNodes) {
+    colMaxW.set(colId, refs.length > 0 ? Math.max(...refs.map(r => r.node.w)) : 0);
+  }
+
+  // 2. 컬럼 x 좌표 순차 계산 (노드가 없는 컬럼은 공간 할당 안 함)
+  /** @type {Map<string, number>} */
+  const colX = new Map();
+  let curX = RESET_LEFT_MARGIN;
+  for (const colId of COL_ORDER) {
+    const maxW = colMaxW.get(colId) ?? 0;
+    if (maxW > 0) {
+      colX.set(colId, curX);
+      curX += maxW + RESET_GAP;
+    }
+  }
+
+  // 3. 노드 위치 갱신: x=새 컬럼 x, y=서버 발행 초기값(_initialPositions)
+  const initMap = new Map(_initialPositions.map(p => [p.id, p]));
+  for (const ref of nodeIndex.values()) {
+    const colId = nodeToColId(ref.node);
+    const newX  = colX.get(colId);
+    const init  = initMap.get(ref.node.id);
+
+    if (newX !== undefined) {
+      ref.node.x = newX;
+      ref.foEl.setAttribute('x', String(newX));
+    }
+    if (init) {
+      ref.node.y = init.y;
+      ref.foEl.setAttribute('y', String(init.y));
+    }
+  }
+
+  // 4. 에지 베지어 재계산
+  for (const edge of _edges) refreshEdge(edge, edgeIndex);
+
+  // 5. viewBox 재계산: 모든 노드의 실제 경계 기준
+  let maxRight  = 0;
+  let maxBottom = 0;
+  let minTop    = Infinity;
+  for (const ref of nodeIndex.values()) {
+    maxRight  = Math.max(maxRight,  ref.node.x + ref.node.w);
+    maxBottom = Math.max(maxBottom, ref.node.y + ref.node.h);
+    minTop    = Math.min(minTop,    ref.node.y);
+  }
+  const VPAD   = 20;
+  const newY   = Math.max(0, minTop - VPAD);
+  const newW   = maxRight  + VPAD;       // x=0 기준 — 팬 상태도 초기화
+  const newH   = maxBottom - newY + VPAD;
+
+  // _view, _viewInitial 모두 갱신 → 이번 reset이 줌·팬의 새 baseline이 됨.
+  _view        = { x: 0, y: newY, w: newW, h: newH };
+  _viewInitial = { x: 0, y: newY, w: newW, h: newH };
+  applyViewBox(svgEl);
+}
+
 function bindResetButton(container, svgEl, nodeIndex, edgeIndex) {
   const btn = container.querySelector('[data-flow-reset]');
   if (!btn) return;
   btn.addEventListener('click', () => {
-    // 노드 위치 + viewBox(팬/줌)를 동시에 원복.
-    for (const init of _initialPositions) {
-      const ref = nodeIndex.get(init.id);
-      if (!ref) continue;
-      ref.node.x = init.x;
-      ref.node.y = init.y;
-      ref.foEl.setAttribute('x', init.x);
-      ref.foEl.setAttribute('y', init.y);
-    }
-    for (const edge of _edges) refreshEdge(edge, edgeIndex);
-    _view = { ..._viewInitial };
-    applyViewBox(svgEl);
+    // 노드 폭 기반 동적 재배치 + viewBox 재계산.
+    // 드래그/팬/줌으로 흐트러진 배치를 측정된 자연 폭 기준으로 정렬한다.
+    computeRelaxedLayout(nodeIndex, edgeIndex, svgEl);
   });
 }
 

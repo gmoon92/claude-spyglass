@@ -49,7 +49,7 @@ const ALLOWED_CENTER_TYPES: MetaFlowEgoCenterType[] = ['command', 'skill', 'agen
 // 좌(triggers) → 중(center) → 우(cooccurrence 4 columns: skill/agent/tool/mcp).
 // 변경 시 packages/web/assets/js/meta-docs-flow-view.js shellHtml SVG viewBox와 함께 갱신할 것.
 const EGO_LAYOUT = {
-  viewW: 1320,
+  viewW: 1560,
   viewH: 360,
 
   // 좌측 트리거(슬래시 커맨드) 4개 세로 스택.
@@ -61,11 +61,12 @@ const EGO_LAYOUT = {
 
   // 우측 4 카테고리 컬럼 — 각 카테고리는 헤더 라벨 + 카드 stack.
   // x 좌표는 컬럼 좌상단. headerY/카드 시작 y, step 등 모두 viewH(360) 안에 수렴.
+  // 카드가 콘텐츠에 맞게 가로로 늘어날 수 있도록 컬럼 간격을 넉넉히 둔다.
   rightCols: {
-    skill: { x: 790,  headerY: 20, cardYStart: 50, cardYStep: 62, w: 130, h: 56 },
-    agent: { x: 930,  headerY: 20, cardYStart: 50, cardYStep: 62, w: 130, h: 56 },
-    tool:  { x: 1070, headerY: 20, cardYStart: 50, cardYStep: 62, w: 130, h: 56 },
-    mcp:   { x: 1210, headerY: 20, cardYStart: 50, cardYStep: 62, w: 100, h: 56 },
+    skill: { x: 800,  headerY: 20, cardYStart: 50, cardYStep: 62, w: 150, h: 56 },
+    agent: { x: 1000, headerY: 20, cardYStart: 50, cardYStep: 62, w: 150, h: 56 },
+    tool:  { x: 1200, headerY: 20, cardYStart: 50, cardYStep: 62, w: 150, h: 56 },
+    mcp:   { x: 1400, headerY: 20, cardYStart: 50, cardYStep: 62, w: 130, h: 56 },
   },
   /** 각 우측 컬럼당 최대 카드 수(카테고리 cardYStep × N이 viewH-50 이하가 되도록). */
   rightTopN: 4,
