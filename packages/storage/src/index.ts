@@ -315,7 +315,9 @@ export {
   type MetaFlowEgo,
   type MetaFlowEgoFilter,
   type MetaFlowEgoCenterType,
-  type MetaFlowEgoSpoke,
+  type MetaFlowEgoNode,
+  type MetaFlowEgoNodeKind,
+  type MetaFlowEgoEdge,
 } from './queries/meta-document';
 
 // =============================================================================
