@@ -336,6 +336,10 @@
   color: var(--text-3); font-size: var(--text-meta);
   font-family: var(--font-data); margin-top: 3px;
   letter-spacing: -0.01em;
+  /* "<b>N</b> turns · M%" 가 한 줄을 유지해야 자연 폭이 정확히 측정된다.
+     resizeNodeToContent 의 max-content 측정 시 wrap 되면 sub 가 가장 짧은
+     줄 폭으로 cap 되어 "·" 뒤가 다음 줄로 떨어지는 회귀가 있었다. */
+  white-space: nowrap;
 }
 .meta-docs-flow-region .node .body .sub b { color: var(--text-2); font-weight: 600; }
 
