@@ -34,6 +34,7 @@ import {
   upsertRequestView,
   upsertTurnView,
   upsertAgentChainEdge,
+  v3SchemaAvailable,
   type EventV3Row,
 } from '@spyglass/storage';
 
@@ -211,6 +212,10 @@ export function runProjectionTick(db: Database, batchSize = DEFAULT_BATCH_SIZE):
   turn_view: number;
   agent_chain_view: number;
 } {
+  // 운영 안전망 — events_v3 테이블 부재 시 noop (다른 v3 schema 와의 충돌 회피).
+  if (!v3SchemaAvailable(db)) {
+    return { request_view: 0, turn_view: 0, agent_chain_view: 0 };
+  }
   return {
     request_view: tickOne(db, 'request_view', batchSize, projectToRequestView),
     turn_view: tickOne(db, 'turn_view', batchSize, projectToTurnView),
@@ -232,6 +237,12 @@ export function startProjectionWorker(database: SpyglassDatabase): void {
     console.log('[projection-worker] already running');
     return;
   }
+  // 운영 안전망 — events_v3 테이블 부재 시 worker 자체 시작 안 함.
+  if (!v3SchemaAvailable(database.instance)) {
+    console.log('[projection-worker] events_v3 table not found — skipping worker start (conflicting v3 schema)');
+    return;
+  }
+
   const tickMs = getTickMs();
   const batchSize = getBatchSize();
   console.log(`[projection-worker] started — tick=${tickMs}ms batch=${batchSize}`);

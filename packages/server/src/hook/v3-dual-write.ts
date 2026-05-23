@@ -21,6 +21,7 @@ import type { Database } from 'bun:sqlite';
 import {
   appendEventV3,
   enqueueOutboxEvent,
+  v3SchemaAvailable,
   type EventKind,
 } from '@spyglass/storage';
 import type { NormalizedHookPayload } from './types';
@@ -60,6 +61,10 @@ export function dualWriteToV3(
 ): boolean {
   // 운영 안전망 — 환경변수로 즉시 비활성 가능
   if (process.env.SPYGLASS_DISABLE_V3_WRITE === '1') return true;
+
+  // 운영 안전망 2 — events_v3 테이블이 존재하지 않으면 silent noop.
+  // (예: 운영 DB 가 다른 브랜치의 v3 schema 로 이미 마이그레이션된 경우.)
+  if (!v3SchemaAvailable(db)) return true;
 
   try {
     const eventKind = resolveEventKind(payload);

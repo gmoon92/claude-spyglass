@@ -33,10 +33,25 @@ import {
   getAllProjectionState,
   getMaxEventId,
   countOutboxPending,
+  v3SchemaAvailable,
 } from '@spyglass/storage';
 
 export const projectionLagRouter: RouteHandler = (_req, db, _url, path, method) => {
   if (path !== '/api/projection-lag' || method !== 'GET') return null;
+
+  // 운영 안전망 — events_v3 테이블 부재 시 빈 응답 (다른 v3 schema 와 충돌 환경).
+  if (!v3SchemaAvailable(db)) {
+    return jsonResponse({
+      success: true,
+      data: {
+        now_ms: Date.now(),
+        max_event_id: 0,
+        outbox: { available: 0, claimed: 0, total: 0 },
+        projections: [],
+        note: 'events_v3 schema not present in this database',
+      },
+    });
+  }
 
   const now = Date.now();
   const maxEventId = getMaxEventId(db);

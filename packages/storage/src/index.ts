@@ -335,6 +335,9 @@ export {
 // =============================================================================
 
 export {
+  // schema 존재 여부 가드 (다른 브랜치 v3 schema 와 충돌 회피)
+  v3SchemaAvailable,
+  resetV3SchemaCache,
   // events_v3 SoT
   appendEventV3,
   getEventsAfter,

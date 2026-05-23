@@ -5,6 +5,11 @@
  */
 
 export {
+  v3SchemaAvailable,
+  resetV3SchemaCache,
+} from './schema-guard';
+
+export {
   appendEventV3,
   getEventsAfter,
   getMaxEventId,

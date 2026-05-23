@@ -12,7 +12,12 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { Database } from 'bun:sqlite';
-import { runMigrations, countEventsBySession, countOutboxPending } from '@spyglass/storage';
+import {
+  runMigrations,
+  countEventsBySession,
+  countOutboxPending,
+  resetV3SchemaCache,
+} from '@spyglass/storage';
 import { processHookEvent } from '../processor';
 import type { NormalizedHookPayload } from '../types';
 
@@ -132,5 +137,34 @@ describe('processHookEvent dual-write to events_v3', () => {
     expect(() => {
       db.run(`UPDATE events_v3 SET payload_json = '{"x":1}' WHERE event_id = 'evt-trigger-test'`);
     }).toThrow(/append-only/i);
+  });
+});
+
+describe('processHookEvent — events_v3 schema 부재 시 silent noop', () => {
+  let db: Database;
+
+  beforeEach(() => {
+    // 운영 시나리오 흉내 — 마이그레이션 적용 후 events_v3 만 강제 DROP.
+    //   (다른 브랜치 v3 schema 가 user_version 을 우리 마이그레이션보다 높게
+    //    올려놓고 events_v3 를 만들지 않은 상태와 동일.)
+    db = new Database(':memory:');
+    runMigrations(db, false);
+    db.run('DROP TABLE IF EXISTS events_v3');
+    resetV3SchemaCache();
+    delete process.env.SPYGLASS_DISABLE_V3_WRITE;
+  });
+  afterEach(() => {
+    db.close();
+    resetV3SchemaCache();
+  });
+
+  it('events_v3 가 없어도 processHookEvent 가 legacy 만으로 성공한다', () => {
+    const result = processHookEvent(db, basePayload({ id: 'no-v3-evt' }));
+    expect(result.saved).toBe(true);
+    // legacy requests 는 INSERT 됨
+    const legacy = db
+      .query('SELECT COUNT(*) AS n FROM requests WHERE id = ?')
+      .get('no-v3-evt') as { n: number };
+    expect(legacy.n).toBe(1);
   });
 });
