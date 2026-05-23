@@ -36,6 +36,8 @@ import { enrichRowWithAnomalies } from '../domain/anomaly-enricher';
 import type { NormalizedHookPayload, HookProcessResult } from './types';
 import { ensureSession, updateSessionTotalTokens } from './session';
 import { saveRequest } from './persist';
+import { dualWriteToV3 } from './v3-dual-write';
+import { extractToolUseId } from './preview';
 
 /**
  * 정제된 hook 페이로드를 DB에 저장하고 SSE를 브로드캐스트.
@@ -73,6 +75,19 @@ export function processHookEvent(
 
   // 요청 저장 (Upsert 분기 포함)
   const { saved, wasUpsert, savedId } = saveRequest(db, payload);
+
+  // storage-redesign-v3 Phase 4 — dual-write to events_v3 + outbox.
+  //   legacy saveRequest 성공 여부와 무관하게 시도 (idempotent INSERT OR IGNORE).
+  //   실패해도 legacy 응답을 막아서는 안 된다 (R5 격리) — dualWriteToV3 가 자체 try-catch.
+  if (saved) {
+    const toolUseId = extractToolUseId(payload.payload);
+    // turn_id 는 legacy persist 가 INSERT 시 채워서 requests 테이블에 들어가 있다.
+    // v3 row 에도 같은 turn_id 를 채우기 위해 saved 레코드에서 회수.
+    const savedRow = savedId ? getRequestById(db, savedId) : getRequestById(db, payload.id);
+    const turnId = savedRow?.turn_id ?? null;
+    const parentToolUseId = savedRow?.parent_tool_use_id ?? null;
+    dualWriteToV3(db, payload, toolUseId, parentToolUseId, turnId);
+  }
 
   if (saved) {
     // 세션 토큰 누적 정책:
