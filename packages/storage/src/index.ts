@@ -329,3 +329,54 @@ export {
   getObservedMaxContextForModel,
   type ModelLimitRow,
 } from './queries/model-limits';
+
+// =============================================================================
+// storage-redesign-v3 (Migrations 040-045 — read-optimized projection)
+// =============================================================================
+
+export {
+  // events_v3 SoT
+  appendEventV3,
+  getEventsAfter,
+  getMaxEventId,
+  getEventByEventId,
+  countEventsBySession,
+  // outbox
+  enqueueOutboxEvent,
+  claimOutboxBatch,
+  markOutboxDone,
+  releaseOutboxClaim,
+  releaseStuckClaims,
+  countOutboxPending,
+  // projection_state watermark
+  getAllProjectionState,
+  getProjectionState,
+  advanceWatermark,
+  recordProjectionError,
+  // request_view
+  upsertRequestView,
+  getRequestViewBySession,
+  getRecentRequestView,
+  countRequestView,
+  // turn_view
+  upsertTurnView,
+  getTurnViewBySession,
+  countTurnView,
+  // agent_chain_view
+  upsertAgentChainEdge,
+  getDescendantsForRoot,
+  sumDescendantTokens,
+  getAncestorsForDescendant,
+  countAgentChainView,
+  // types
+  type EventV3Row,
+  type EventKind,
+  type OutboxRow,
+  type ProjectionStateRow,
+  type RequestViewRow,
+  type UpsertRequestViewParams,
+  type TurnViewRow,
+  type UpsertTurnViewParams,
+  type AgentChainRow,
+  type UpsertAgentChainEdgeParams,
+} from './queries/v3';
