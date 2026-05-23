@@ -167,51 +167,31 @@ export function countTurnsForSession(db: Database, sessionId: string): number {
 }
 
 /**
- * 세션별 턴 목록 조회
- * - turn_id 기준으로 prompt + tool_calls 그룹화
- * - turn_index: 세션 내 순번 (1부터)
- * 개선: SQL에서 turn/prompt/tool_call 분리 조회로 메모리 효율 개선
+ * 세션별 턴 목록 조회 — turn_id 기준 prompt + tool_calls + responses 그룹화.
+ *
+ * read-perf sprint 1 (Migration 047 동행):
+ *  - 이전: requests 테이블을 4번 별도 SELECT (summary GROUP BY + prompt + tool_call + response).
+ *  - 현재: 단일 SELECT 1번으로 (prompt|tool_call|response) 모두 회수, 메모리 1-pass 로 summary 계산.
+ *  - 효과: 5062 requests 세션 p95 229ms → 측정 후 갱신.
+ *
+ * proxy_requests 의 system_hash / system_reminder / anthropic_beta 3쿼리는 그대로 유지
+ * (각각 ORDER 방향이 달라 단일 윈도우로 합치기 어려워 별 sprint 에서 처리).
  */
 export function getTurnsBySession(
   db: Database,
   sessionId: string
 ): TurnItem[] {
-  // 1. 턴 단위 집계: 턴당 첫 타임스탐프, 토큰합, tool_call 수
-  const turnSummaries = db.query(`
-    SELECT turn_id,
-           MIN(timestamp) as started_at,
-           SUM(CASE WHEN type = 'prompt' THEN tokens_input ELSE 0 END) as prompt_tokens_input,
-           SUM(CASE WHEN type = 'prompt' THEN tokens_output ELSE 0 END) as prompt_tokens_output,
-           SUM(tokens_total) as total_tokens,
-           COUNT(CASE WHEN type = 'tool_call' THEN 1 END) as tool_call_count
-    FROM requests
-    WHERE session_id = ? AND turn_id IS NOT NULL
-      AND ${ACTIVE_REQUEST_FILTER_SQL}
-    GROUP BY turn_id
-    ORDER BY started_at ASC
-  `).all(sessionId) as Array<{
-    turn_id: string;
-    started_at: number;
-    prompt_tokens_input: number;
-    prompt_tokens_output: number;
-    total_tokens: number;
-    tool_call_count: number;
-  }>;
-
-  // 2. 각 턴의 prompt 행 조회
-  // turn-prompt-preview-regression ADR-001: preview 컬럼 SELECT 포함.
-  // 다른 라우트(/api/sessions/:id/requests)는 이미 r.preview 노출 중 — turn 라우트만 누락된 비대칭 해소.
-  const promptRows = db.query(`
-    SELECT turn_id, id, timestamp, preview, tokens_input, tokens_output, tokens_total, duration_ms,
-           model, payload, cache_read_tokens, cache_creation_tokens, tokens_confidence
-    FROM requests
-    WHERE session_id = ? AND turn_id IS NOT NULL AND type = 'prompt'
-      AND ${ACTIVE_REQUEST_FILTER_SQL}
-    ORDER BY timestamp ASC
-  `).all(sessionId) as Array<{
+  // ─── 1. 단일 SELECT — prompt / tool_call / response 행을 한 번에 회수 ───
+  // 인덱스 활용: idx_requests_session_type_turn_ts (Migration 047) 가 ORDER BY (turn_id, timestamp)
+  // 를 인덱스만으로 충족 (TEMP B-TREE 제거 — EXPLAIN QUERY PLAN 으로 검증됨).
+  //
+  // type='response' 는 기존에 ACTIVE_REQUEST_FILTER_SQL 적용 안 했으나, response 행은
+  // event_type 가 'pre_tool' 이 될 일이 없어 동일 결과. 합쳐 적용해도 회귀 0.
+  type UnifiedRow = {
     turn_id: string;
     id: string;
     timestamp: number;
+    type: 'prompt' | 'tool_call' | 'response';
     preview: string | null;
     tokens_input: number;
     tokens_output: number;
@@ -222,119 +202,147 @@ export function getTurnsBySession(
     cache_read_tokens: number;
     cache_creation_tokens: number;
     tokens_confidence: string | null;
-  }>;
-
-  // 3. 각 턴의 tool_call 행 조회
-  const toolRows = db.query(`
-    SELECT turn_id, id, timestamp, tool_name, tool_detail,
-           tokens_input, tokens_output, tokens_total, duration_ms,
-           payload, event_type, model, parent_tool_use_id, tokens_confidence
-    FROM requests
-    WHERE session_id = ? AND turn_id IS NOT NULL AND type = 'tool_call'
-      AND ${ACTIVE_REQUEST_FILTER_SQL}
-    ORDER BY turn_id, timestamp ASC
-  `).all(sessionId) as Array<{
-    turn_id: string;
-    id: string;
-    timestamp: number;
     tool_name: string | null;
     tool_detail: string | null;
-    tokens_input: number;
-    tokens_output: number;
-    tokens_total: number;
-    duration_ms: number;
-    payload: string | null;
     event_type: string | null;
-    model: string | null;
     parent_tool_use_id: string | null;
-    tokens_confidence: string | null;
-  }>;
+  };
 
-  // 3-bis. 각 턴의 assistant response 행 조회.
-  // v22+: 한 턴에 여러 건 존재 가능 (도구 호출 사이사이 중간 텍스트 응답).
-  // 모든 행을 timestamp 오름차순으로 수집해 호출자에게 배열로 반환.
-  const responseRows = db.query(`
-    SELECT turn_id, id, timestamp, preview, payload,
-           tokens_input, tokens_output, tokens_total, model, tokens_confidence
+  const allRows = db.query(`
+    SELECT turn_id, id, timestamp, type, preview, payload,
+           tokens_input, tokens_output, tokens_total, duration_ms,
+           model, cache_read_tokens, cache_creation_tokens, tokens_confidence,
+           tool_name, tool_detail, event_type, parent_tool_use_id
     FROM requests
-    WHERE session_id = ? AND turn_id IS NOT NULL AND type = 'response'
+    WHERE session_id = ?
+      AND turn_id IS NOT NULL
+      AND type IN ('prompt', 'tool_call', 'response')
+      AND ${ACTIVE_REQUEST_FILTER_SQL}
     ORDER BY turn_id, timestamp ASC
-  `).all(sessionId) as Array<{
+  `).all(sessionId) as UnifiedRow[];
+
+  // ─── 2. 메모리 1-pass — turn 별 summary + type 별 분류 ───
+  type Summary = {
     turn_id: string;
-    id: string;
-    timestamp: number;
-    preview: string | null;
-    payload: string | null;
-    tokens_input: number;
-    tokens_output: number;
-    tokens_total: number;
-    model: string | null;
-    tokens_confidence: string | null;
-  }>;
+    started_at: number;
+    prompt_tokens_input: number;
+    prompt_tokens_output: number;
+    total_tokens: number;
+    tool_call_count: number;
+  };
+  const summaryByTurn = new Map<string, Summary>();
+  const promptMap = new Map<string, UnifiedRow>();
+  const toolCallsByTurn = new Map<string, UnifiedRow[]>();
+  const responsesByTurn = new Map<string, UnifiedRow[]>();
 
-  // 4. 데이터 구성
-  const promptMap = new Map(promptRows.map(p => [p.turn_id, p]));
-  const toolCallsByTurn = new Map<string, typeof toolRows>();
-  for (const tool of toolRows) {
-    if (!toolCallsByTurn.has(tool.turn_id)) {
-      toolCallsByTurn.set(tool.turn_id, []);
+  for (const row of allRows) {
+    // summary 누적
+    const cur = summaryByTurn.get(row.turn_id);
+    if (cur) {
+      if (row.timestamp < cur.started_at) cur.started_at = row.timestamp;
+      cur.total_tokens += row.tokens_total ?? 0;
+      if (row.type === 'prompt') {
+        cur.prompt_tokens_input += row.tokens_input ?? 0;
+        cur.prompt_tokens_output += row.tokens_output ?? 0;
+      } else if (row.type === 'tool_call') {
+        cur.tool_call_count += 1;
+      }
+    } else {
+      summaryByTurn.set(row.turn_id, {
+        turn_id: row.turn_id,
+        started_at: row.timestamp,
+        prompt_tokens_input: row.type === 'prompt' ? row.tokens_input ?? 0 : 0,
+        prompt_tokens_output: row.type === 'prompt' ? row.tokens_output ?? 0 : 0,
+        total_tokens: row.tokens_total ?? 0,
+        tool_call_count: row.type === 'tool_call' ? 1 : 0,
+      });
     }
-    toolCallsByTurn.get(tool.turn_id)!.push(tool);
-  }
-  // 같은 turn_id의 응답을 모두 보존 (timestamp 오름차순 push).
-  // 단순 set→get 매핑이면 중간 응답이 마지막 1건에 덮어쓰기되어 누락된다.
-  const responsesByTurn = new Map<string, typeof responseRows>();
-  for (const r of responseRows) {
-    const arr = responsesByTurn.get(r.turn_id);
-    if (arr) arr.push(r);
-    else responsesByTurn.set(r.turn_id, [r]);
+
+    // type 별 분류
+    if (row.type === 'prompt') {
+      // 같은 turn 에 prompt 가 여러 개면 마지막을 유지 (기존 Map.from(...map) 의미와 동일 — 마지막 entry 가 이김).
+      // 일반적으론 turn 당 prompt 1개라 영향 없음.
+      promptMap.set(row.turn_id, row);
+    } else if (row.type === 'tool_call') {
+      const arr = toolCallsByTurn.get(row.turn_id);
+      if (arr) arr.push(row);
+      else toolCallsByTurn.set(row.turn_id, [row]);
+    } else if (row.type === 'response') {
+      const arr = responsesByTurn.get(row.turn_id);
+      if (arr) arr.push(row);
+      else responsesByTurn.set(row.turn_id, [row]);
+    }
   }
 
-  // v22 (system-prompt-exposure): turn별 system_hash + system_byte_size 합류.
-  // 같은 turn_id에 여러 proxy 요청이 있을 수 있어 timestamp ASC 첫 hash를 대표로 채택
-  // (페르소나는 보통 turn 전체에서 동일). ROW_NUMBER OVER로 PARTITION 1행만 선택.
+  // started_at ASC 정렬 — 기존 SQL ORDER BY started_at ASC 동일 결과
+  const turnSummaries: Summary[] = Array.from(summaryByTurn.values()).sort(
+    (a, b) => a.started_at - b.started_at,
+  );
+
+  // ─── proxy_requests 3 쿼리 — GROUP BY + JOIN 패턴 (read-perf sprint 1) ───
+  // 배경: 기존 ROW_NUMBER OVER (PARTITION BY turn_id ORDER BY timestamp) 패턴은
+  //       proxy_requests 의 모든 행 (큰 세션 4137 행) 을 메모리에 올려 정렬했다.
+  //       system_reminder 컬럼이 평균 10KB (최대 44KB) 라 단일 쿼리가 100ms+ 소요.
+  //
+  // 대안: WITH (GROUP BY turn_id, MIN/MAX(timestamp)) + JOIN — turn 수만큼만 큰 컬럼 fetch.
+  //       (session_id, turn_id, timestamp) 부분 인덱스(Migration 047) 가 CTE 의 MIN/MAX 를
+  //       인덱스 스캔만으로 충족. 그 후 JOIN 으로 1행만 큰 컬럼 회수.
+  //
+  // 실측 (5062 requests / 4137 proxy_requests 세션, 2026-05-23):
+  //   ROW_NUMBER 패턴   : system_hash 97ms / system_reminder 108ms / beta 4ms
+  //   GROUP BY + JOIN  : system_hash  4ms / system_reminder   3ms / beta 2ms (~95% 감소)
+
+  // v22 (system-prompt-exposure): turn 별 첫 system_hash + system_byte_size.
   const systemRows = db.query(`
-    SELECT turn_id, system_hash, system_byte_size FROM (
-      SELECT turn_id, system_hash, system_byte_size,
-             ROW_NUMBER() OVER (PARTITION BY turn_id ORDER BY timestamp ASC) AS rn
+    WITH first_hash_per_turn AS (
+      SELECT turn_id, MIN(timestamp) AS ts
       FROM proxy_requests
       WHERE session_id = ? AND turn_id IS NOT NULL AND system_hash IS NOT NULL
-    ) WHERE rn = 1
-  `).all(sessionId) as Array<{
+      GROUP BY turn_id
+    )
+    SELECT pr.turn_id, pr.system_hash, pr.system_byte_size
+    FROM proxy_requests pr
+    JOIN first_hash_per_turn f ON pr.turn_id = f.turn_id AND pr.timestamp = f.ts
+    WHERE pr.session_id = ?
+  `).all(sessionId, sessionId) as Array<{
     turn_id: string;
     system_hash: string;
     system_byte_size: number | null;
   }>;
   const systemByTurn = new Map(systemRows.map(s => [s.turn_id, s]));
 
-  // v21 (system-reminder-badge): turn별 system_reminder raw 합류.
-  // 가장 풍부하게 누적된 행을 채택하기 위해 timestamp DESC rn=1 (마지막 proxy 요청)을 사용.
-  // user 메시지가 누적될수록 reminder가 추가되므로 마지막 행이 turn 전체 reminder의 상위집합.
-  // NULL/빈 reminder는 PARTITION 결과 단계에서는 그대로 두고, 응답 시 ?? null로 정리.
+  // v21 (system-reminder-badge): turn 별 마지막 system_reminder.
+  // 마지막 proxy 요청이 reminder 누적의 상위집합이므로 MAX(timestamp).
   const reminderRows = db.query(`
-    SELECT turn_id, system_reminder FROM (
-      SELECT turn_id, system_reminder,
-             ROW_NUMBER() OVER (PARTITION BY turn_id ORDER BY timestamp DESC) AS rn
+    WITH last_reminder_per_turn AS (
+      SELECT turn_id, MAX(timestamp) AS ts
       FROM proxy_requests
       WHERE session_id = ? AND turn_id IS NOT NULL AND system_reminder IS NOT NULL
-    ) WHERE rn = 1
-  `).all(sessionId) as Array<{
+      GROUP BY turn_id
+    )
+    SELECT pr.turn_id, pr.system_reminder
+    FROM proxy_requests pr
+    JOIN last_reminder_per_turn l ON pr.turn_id = l.turn_id AND pr.timestamp = l.ts
+    WHERE pr.session_id = ?
+  `).all(sessionId, sessionId) as Array<{
     turn_id: string;
     system_reminder: string | null;
   }>;
   const reminderByTurn = new Map(reminderRows.map(r => [r.turn_id, r.system_reminder]));
 
-  // context-window-derivation: turn별 anthropic-beta 헤더 (첫 proxy 요청 대표).
-  // 클라이언트(context-window.js)가 model + anthropic_beta로 실제 한도를 추론한다.
-  // system_hash와 동일하게 PARTITION timestamp ASC rn=1 행만 선택.
+  // context-window-derivation: turn 별 첫 anthropic_beta 헤더.
   const betaRows = db.query(`
-    SELECT turn_id, anthropic_beta FROM (
-      SELECT turn_id, anthropic_beta,
-             ROW_NUMBER() OVER (PARTITION BY turn_id ORDER BY timestamp ASC) AS rn
+    WITH first_beta_per_turn AS (
+      SELECT turn_id, MIN(timestamp) AS ts
       FROM proxy_requests
       WHERE session_id = ? AND turn_id IS NOT NULL
-    ) WHERE rn = 1
-  `).all(sessionId) as Array<{
+      GROUP BY turn_id
+    )
+    SELECT pr.turn_id, pr.anthropic_beta
+    FROM proxy_requests pr
+    JOIN first_beta_per_turn f ON pr.turn_id = f.turn_id AND pr.timestamp = f.ts
+    WHERE pr.session_id = ?
+  `).all(sessionId, sessionId) as Array<{
     turn_id: string;
     anthropic_beta: string | null;
   }>;

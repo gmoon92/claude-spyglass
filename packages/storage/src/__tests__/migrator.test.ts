@@ -41,6 +41,9 @@ function listMigrationFiles(): Array<{ version: number; file: string }> {
 
 const ALL_MIGRATIONS = listMigrationFiles();
 const MAX_VERSION = ALL_MIGRATIONS[ALL_MIGRATIONS.length - 1]?.version ?? 0;
+// 디렉토리에 존재하는 마이그레이션 파일 수.
+// MAX_VERSION 과 다를 수 있음 — version 번호 사이에 gap 이 있을 때 (예: 040~046 미존재).
+const APPLIED_FILE_COUNT = ALL_MIGRATIONS.length;
 
 /** 메모리 DB 생성 — 운영 DB와 분리, 테스트 종료 시 자동 정리. */
 function createMemoryDb(): Database {
@@ -94,12 +97,15 @@ describe('Migrator — 시나리오 1: 빈 DB → max 일괄 점프', () => {
     expect(names).toContain('_migrations');
   });
 
-  it('_migrations 행 수가 max 버전과 일치한다 (legacy 백필 + v35 신규 INSERT)', () => {
+  it('_migrations 행 수 = legacy(v1~v34) + 적용된 v35+ 파일 수', () => {
     runMigrations(db, false);
 
-    // 빈 DB → v35 적용 시점에는 v1..v34가 legacy로 백필되고 v35는 신규 INSERT 됨.
-    // v36+ 마이그레이션이 있을 경우 v35 이후는 모두 신규 INSERT.
-    expect(countMigrationRows(db)).toBe(MAX_VERSION);
+    // 빈 DB → v35 적용 시점에 PRAGMA user_version=34 까지의 정수만 legacy 백필,
+    // v35 부터는 디렉토리에 실제 존재하는 파일만 INSERT (gap 무관).
+    const META_TABLE_VERSION = 35;
+    const LEGACY_BACKFILL_COUNT = META_TABLE_VERSION - 1;                 // v1~v34
+    const NEW_INSERT_COUNT = ALL_MIGRATIONS.filter(m => m.version >= META_TABLE_VERSION).length;
+    expect(countMigrationRows(db)).toBe(LEGACY_BACKFILL_COUNT + NEW_INSERT_COUNT);
   });
 
   it('v35 자기 자신 행은 filename = "035-add-migrations-meta-table.sql"로 기록된다', () => {
@@ -120,13 +126,14 @@ describe('Migrator — 시나리오 1: 빈 DB → max 일괄 점프', () => {
     expect(row?.filename).toBe('(legacy)');
   });
 
-  it('lastRunResult.from=0, to=max, files.length=max', () => {
+  it('lastRunResult.from=0, to=max, files.length=실제 파일 수', () => {
     runMigrations(db, false);
     const result = getLastMigrationRun();
 
     expect(result.from).toBe(0);
     expect(result.to).toBe(MAX_VERSION);
-    expect(result.files.length).toBe(MAX_VERSION);
+    // 디렉토리 파일 수 — gap 가능 (예: 040~046 미존재 시 APPLIED_FILE_COUNT < MAX_VERSION).
+    expect(result.files.length).toBe(APPLIED_FILE_COUNT);
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
   });
 });
@@ -152,12 +159,12 @@ describe('Migrator — 시나리오 2: 매 버전 (N-1) → N 단일 점프', ()
     const expectedFiles = ALL_MIGRATIONS.map(m => m.file);
     expect(result.files).toEqual(expectedFiles);
 
-    // 적용 파일 prefix(version 번호)가 순차 증가 — 1, 2, 3, ..., MAX
+    // 적용 파일 prefix(version 번호)가 단조 증가 (gap 허용 — 예: 039 → 047).
     const versions = result.files
       .map(f => parseMigrationVersion(f))
       .filter((v): v is number => v !== null);
     for (let i = 1; i < versions.length; i++) {
-      expect(versions[i] - versions[i - 1]).toBe(1);
+      expect(versions[i] - versions[i - 1]).toBeGreaterThanOrEqual(1);
     }
     expect(versions[versions.length - 1]).toBe(MAX_VERSION);
   });
@@ -165,7 +172,7 @@ describe('Migrator — 시나리오 2: 매 버전 (N-1) → N 단일 점프', ()
   it('이미 max까지 적용된 DB에 재호출 시 0건 적용 — no-op 멱등', () => {
     runMigrations(db, false);
     const firstResult = getLastMigrationRun();
-    expect(firstResult.files.length).toBe(MAX_VERSION);
+    expect(firstResult.files.length).toBe(APPLIED_FILE_COUNT);
 
     // 재호출 — 마이그레이션 적용 0건, user_version 동일
     runMigrations(db, false);
