@@ -913,6 +913,9 @@ export function getMetaFlowEgo(db: Database, filter: MetaFlowEgoFilter): MetaFlo
     };
     const childRows: ChildRow[] = [];
     // chunk 단위로 IN(...) 바인딩 — 한 BFS 단계당 최대 수백~수천 행이라 비용 미미.
+    //   ORDER BY (structured-coalescing-feather P0-P1): SQLite 의 행 반환 순서에
+    //   의존하지 않도록 명시적 tie-break. 같은 (timestamp) 에서는 pre/post 머지된
+    //   'tool' 행을 우선, 그 다음 tool_use_id / id PK fallback 으로 결정성 보장.
     for (let i = 0; i < frontierArr.length; i += BFS_FRONTIER_CHUNK) {
       const chunk = frontierArr.slice(i, i + BFS_FRONTIER_CHUNK);
       const placeholders = chunk.map(() => '?').join(',');
@@ -924,6 +927,16 @@ export function getMetaFlowEgo(db: Database, filter: MetaFlowEgoFilter): MetaFlo
           AND (event_type IS NULL OR event_type != 'pre_tool')
           AND timestamp >= ? AND timestamp <= ?
           ${projectClause}
+        ORDER BY
+          timestamp ASC,
+          CASE event_type
+            WHEN 'tool'      THEN 0
+            WHEN 'post_tool' THEN 1
+            WHEN 'pre_tool'  THEN 2
+            ELSE 3
+          END ASC,
+          tool_use_id ASC,
+          id ASC
       `).all(...chunk, fromTs, toTs, ...projectParam) as ChildRow[];
       childRows.push(...rows);
     }
@@ -1026,6 +1039,9 @@ export function getMetaFlowEgo(db: Database, filter: MetaFlowEgoFilter): MetaFlo
       //   1) WHERE tool_use_id IN (child.parent_tool_use_id) 로 부모 행 매칭
       //   2) child_tool_use_id 는 어느 자식이 이 부모를 가리켰는지 식별 (엣지용)
       //   3) c.turn_id 는 이 부모→자식 호출이 일어난 turn — 자식 BFS의 row.turn_id 와 대칭.
+      //   ORDER BY (structured-coalescing-feather P0-P1): 부모 행 기준 tie-break.
+      //   같은 (p.timestamp) 에서는 'tool'(머지 완료) > 'post_tool' > 'pre_tool' 순서로
+      //   부모 후보 우선순위 부여. tool_use_id, p.id 로 PK fallback 결정성 보장.
       const rows = db.query(`
         SELECT
           p.tool_use_id        AS tool_use_id,
@@ -1043,6 +1059,16 @@ export function getMetaFlowEgo(db: Database, filter: MetaFlowEgoFilter): MetaFlo
           AND (p.event_type IS NULL OR p.event_type != 'pre_tool')
           ${filter.project ? 'AND c.session_id IN (SELECT id FROM sessions WHERE project_name = ?)' : ''}
           ${filter.project ? 'AND p.session_id IN (SELECT id FROM sessions WHERE project_name = ?)' : ''}
+        ORDER BY
+          p.timestamp ASC,
+          CASE p.event_type
+            WHEN 'tool'      THEN 0
+            WHEN 'post_tool' THEN 1
+            WHEN 'pre_tool'  THEN 2
+            ELSE 3
+          END ASC,
+          p.tool_use_id ASC,
+          p.id ASC
       `).all(
         ...chunk, fromTs, toTs, fromTs, toTs,
         ...projectParam, ...projectParam,
@@ -1149,7 +1175,16 @@ export function getMetaFlowEgo(db: Database, filter: MetaFlowEgoFilter): MetaFlo
         OR (r.slash_command IS NOT NULL AND r.slash_command != '')
       )
       ${filter.project ? 'AND r.session_id IN (SELECT id FROM sessions WHERE project_name = ?)' : ''}
-    ORDER BY r.turn_id, r.timestamp ASC
+    ORDER BY
+      r.turn_id ASC,
+      r.timestamp ASC,
+      CASE r.event_type
+        WHEN 'tool'      THEN 0
+        WHEN 'post_tool' THEN 1
+        WHEN 'pre_tool'  THEN 2
+        ELSE 3
+      END ASC,
+      r.id ASC
   `).all(...centerParams, fromTs, toTs, ...projectParam, ...projectParam) as AfterRow[];
 
   // turn 별로 (kind,name) 카운트 — 같은 턴 중복은 1회로 처리(distinct turn 수).

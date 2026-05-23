@@ -397,15 +397,6 @@ function buildColumnEntities(list: MetaFlowEgoNode[]): ColumnEntity[] {
   return out;
 }
 
-/** strength rank — dedupe 시 더 강한 값을 채택하기 위한 비교용. */
-const STRENGTH_RANK: Record<FlowEdgeStrength, number> = {
-  strong: 4,
-  medium: 3,
-  weak: 2,
-  sparse: 1,
-  flow: 0, // turn-flow 전용 — call 과 같은 페어에서 충돌하지 않음.
-};
-
 /** SVG 텍스트로 그릴 컬럼 헤더 라벨. 텍스트는 프론트가 i18n으로 채움. */
 type SectionLabel = {
   /** 컬럼 중앙 x (텍스트 anchor='middle' 기준). */
@@ -770,27 +761,27 @@ export function buildEgoFlowGraph(
   //
   // mcp server 그룹핑 후에는 동일 (from,to,kind) 페어가 N개 생성될 수 있다
   // (예: center → mcp__redmine__getIssue, center → mcp__redmine__updateIssue 가 모두 center → 'redmine' 그룹).
-  // dedup 시 strength 는 STRENGTH_RANK 기준 더 강한 쪽을 채택해
-  // 시각적으로 가장 진한 호출 빈도를 보존한다. count 합산 후 재계산하는 방식도 고려했으나
-  // (from,to) 1쌍의 strength 가 결정되는 입력 데이터 분포상 차이가 미미해 단순 max 채택.
+  //
+  // strength 정책 (structured-coalescing-feather P0-P3):
+  //   call edge dedup 시 count 를 합산한 뒤 합산 ratio 로 strength 를 재계산한다.
+  //   기존의 STRENGTH_RANK max 정책은 단일 도구 호출이 50% 임계를 못 넘어도
+  //   그룹 합계로 충분히 강한 빈도를 가질 때 strength 가 과소표현되는 결함이 있다.
+  //   turn-flow 는 strength='flow' 고정이라 dedup 시 변경 없음.
   const edgePairs = new Map<string, FlowEdge>();
+  const callAccumCount = new Map<string, number>();
   for (const e of ego.callTree.edges) {
     let fromId: string | undefined;
     let toId: string | undefined;
     let edgeKind: FlowEdge['kind'];
-    let strength: FlowEdgeStrength;
 
     if (e.relation === 'turn-flow') {
       fromId = idByKindName.get(`${e.fromKind}:${e.fromName}`);
       toId   = idByKindName.get(`after:${e.toKind}:${e.toName}`);
       edgeKind = 'turn-flow';
-      strength = 'flow';
     } else {
       fromId = idByKindName.get(`${e.fromKind}:${e.fromName}`);
       toId   = idByKindName.get(`${e.toKind}:${e.toName}`);
       edgeKind = 'call';
-      const ratio = pctOf(e.count, denom);
-      strength = pctToStrength(ratio);
     }
     if (!fromId || !toId) continue;
     // self-loop 제거 — 그룹핑 결과 같은 group 안의 도구끼리 호출 관계가 있었을 때 발생.
@@ -798,18 +789,34 @@ export function buildEgoFlowGraph(
 
     const key = `${fromId}|${toId}|${edgeKind}`;
     const prev = edgePairs.get(key);
-    if (!prev) {
-      edgePairs.set(key, {
-        // id 는 dedup 후 일괄 재발번.
-        id: '',
-        from: fromId, to: toId,
-        kind: edgeKind,
-        strength,
-        anchorFrom: 'right',
-        anchorTo: 'left',
-      });
-    } else if (STRENGTH_RANK[strength] > STRENGTH_RANK[prev.strength ?? 'sparse']) {
-      prev.strength = strength;
+
+    if (edgeKind === 'call') {
+      const accum = (callAccumCount.get(key) ?? 0) + e.count;
+      callAccumCount.set(key, accum);
+      const newStrength = pctToStrength(pctOf(accum, denom));
+      if (!prev) {
+        edgePairs.set(key, {
+          id: '',
+          from: fromId, to: toId,
+          kind: edgeKind,
+          strength: newStrength,
+          anchorFrom: 'right',
+          anchorTo: 'left',
+        });
+      } else {
+        prev.strength = newStrength;
+      }
+    } else {
+      if (!prev) {
+        edgePairs.set(key, {
+          id: '',
+          from: fromId, to: toId,
+          kind: edgeKind,
+          strength: 'flow',
+          anchorFrom: 'right',
+          anchorTo: 'left',
+        });
+      }
     }
   }
   // 최종 id 발번 — call → flow 순서로 정렬해 안정적인 id 순서 보장(테스트/디버그 편의).
