@@ -32,7 +32,6 @@ import { proxyRouter } from './routes/proxy';
 import { systemPromptsRouter } from './routes/system-prompts';
 import { metaDocsRouter } from './routes/meta-docs';
 import { versionRouter } from './routes/version';
-import { projectionLagRouter } from './routes/projection-lag';
 
 // 외부 호환: invalidateDashboardCache는 dashboard 라우터로 이전됐으나
 // 기존 import 경로(`./api`)를 보존하기 위해 re-export.
@@ -59,8 +58,6 @@ const SYNC_ROUTERS = [
   proxyRouter,
   systemPromptsRouter,
   versionRouter,
-  // storage-redesign-v3 Phase 6 — /api/projection-lag (UI freshnessIndicator polling)
-  projectionLagRouter,
 ];
 
 /**
