@@ -1,0 +1,78 @@
+name: test
+on:
+  push: { branches: [main] }
+  pull_request: { branches: [main] }
+permissions: { contents: read }
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: unit (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [storage, server, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: '1.2.x' }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun test packages/${{ matrix.package }} --bail
+        env:
+          TMPDIR: /tmp/spyglass-ci-${{ matrix.package }}-${{ github.run_id }}
+
+  contract:
+    name: read-endpoint contract
+    runs-on: ubuntu-latest
+    needs: [unit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: '1.2.x' }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - run: bun test packages/server/src/__tests__/read-endpoint-contract.test.ts
+
+  flow-patterns:
+    name: flow pattern (shard ${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    needs: [unit]
+    strategy:
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: '1.2.x' }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - run: bun test packages/storage/src/__tests__/meta-document-flow-patterns.test.ts
+
+  isolation-grep:
+    name: isolation gate (grep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: PR diff must not touch ACTIVE_REQUEST_FILTER_SQL
+        run: |
+          git diff origin/main...HEAD -- packages/storage/src/queries/request/read.ts | \
+            grep -q 'ACTIVE_REQUEST_FILTER_SQL' && exit 1 || exit 0
+      - name: PR diff must not touch shared MetaFlowEgo types
+        run: |
+          git diff origin/main...HEAD -- packages/storage/src/queries/meta-document.ts | \
+            grep -E '^[+-].*export (interface|type) MetaFlowEgo(Edge|Node)' && exit 1 || exit 0
