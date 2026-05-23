@@ -24,6 +24,9 @@ import { getSessionSystemContextMeta } from '@spyglass/storage';
 import {
   computeRowAnomalies,
   detectAgentSpike,
+  detectAgentSpikeBatch,
+  buildAgentSpikeFromBatch,
+  isAgentSpikeParentCandidate,
   detectBloatedSys,
   detectContextSaturation,
   toAgentSpikeField,
@@ -86,6 +89,22 @@ export function enrichWithAnomalies(
     })),
   );
 
+  // ── agent_spike 배치 fetch (read-perf sprint 1) ──
+  //   기존: Agent/Skill/Task 행마다 detectAgentSpike(db, ...) — N+1 패턴 (N회 depth-3 WITH RECURSIVE).
+  //   현재: 페이지 안 모든 root tool_use_id 를 모아 단일 WITH RECURSIVE 로 1회 fetch.
+  //         이후 application 에서 부모별 threshold 계산만.
+  const spikeRootIds: string[] = [];
+  for (const r of rows) {
+    if (
+      r.type === 'tool_call' &&
+      r.tool_use_id &&
+      isAgentSpikeParentCandidate(r.tool_name ?? null)
+    ) {
+      spikeRootIds.push(r.tool_use_id);
+    }
+  }
+  const spikeChildAgg = detectAgentSpikeBatch(db, spikeRootIds);
+
   return rows.map((r) => {
     const next: NormalizedRequest = {
       ...r,
@@ -120,25 +139,21 @@ export function enrichWithAnomalies(
     }
 
     // ── agent_spike: Agent/Skill/Task 부모 tool_call 행에 부여 ──
-    if (r.type === 'tool_call' && r.tool_use_id) {
-      const tn = r.tool_name ?? null;
-      if (
-        tn === 'Agent' ||
-        tn === 'Skill' ||
-        tn === 'Task' ||
-        (tn && (tn.startsWith('Agent') || tn.startsWith('Skill') || tn.startsWith('Task')))
-      ) {
-        const meta = r.session_id ? getSessionMeta(r.session_id) : null;
-        const result = detectAgentSpike(db, {
+    if (r.type === 'tool_call' && r.tool_use_id && isAgentSpikeParentCandidate(r.tool_name ?? null)) {
+      const meta = r.session_id ? getSessionMeta(r.session_id) : null;
+      const result = buildAgentSpikeFromBatch(
+        db,
+        {
           tool_use_id: r.tool_use_id,
-          tool_name: tn,
+          tool_name: r.tool_name ?? null,
           tokens_total: r.tokens_total,
           model: r.model ?? meta?.model ?? null,
           anthropic_beta: meta?.anthropic_beta ?? null,
           project_id: meta?.project_name ?? null,
-        });
-        next.agent_spike = toAgentSpikeField(result);
-      }
+        },
+        spikeChildAgg.get(r.tool_use_id),
+      );
+      next.agent_spike = toAgentSpikeField(result);
     }
 
     return next;

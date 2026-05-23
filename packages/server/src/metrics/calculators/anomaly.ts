@@ -385,10 +385,139 @@ export function detectAgentSpike(
 }
 
 /**
+ * agent-spike 배치 검출 (read-perf sprint 1) — 페이지의 모든 부모 후보를 단일 쿼리로 처리.
+ *
+ * 배경:
+ *   기존 detectAgentSpike 는 부모 한 명에 대해 WITH RECURSIVE 깊이 3 호출.
+ *   /api/requests 페이지 안에 Agent/Skill/Task 행이 N개면 N회 재귀 쿼리 — N+1 패턴.
+ *
+ * 알고리즘:
+ *   단일 WITH RECURSIVE 가 모든 root_id 의 자손을 한 번에 펼친다.
+ *   `parent_tool_use_id IN (?, ?, ...)` 으로 시작점 한정.
+ *   결과 GROUP BY root_id 로 부모별 (child_count, child_token_sum) 회수.
+ *
+ * 후속 단계 (application):
+ *   - 각 부모별 model / anthropic_beta / project_id 로 threshold 계산 (메모이즈 가능)
+ *   - 자식 합산은 본 batch 결과 사용 → 재귀 쿼리 0번
+ *
+ * @param db
+ * @param rootIds — 부모 tool_use_id 목록 (중복 제거 권장)
+ * @returns Map<root_id, {child_count, child_token_sum}>
+ */
+export function detectAgentSpikeBatch(
+  db: Database,
+  rootIds: string[],
+): Map<string, AgentSpikeChildRow> {
+  const out = new Map<string, AgentSpikeChildRow>();
+  if (rootIds.length === 0) return out;
+  // 중복 제거
+  const unique = Array.from(new Set(rootIds));
+  const placeholders = unique.map(() => '?').join(',');
+
+  let rows: Array<{ root_id: string; child_count: number; child_token_sum: number }>;
+  try {
+    rows = db
+      .query(
+        `WITH RECURSIVE tree(root_id, tool_use_id, tokens_total, depth) AS (
+           SELECT parent_tool_use_id AS root_id, tool_use_id, tokens_total, 1
+             FROM requests
+            WHERE parent_tool_use_id IN (${placeholders})
+              AND (event_type IS NULL OR event_type = 'tool')
+           UNION ALL
+           SELECT tree.root_id, r.tool_use_id, r.tokens_total, tree.depth + 1
+             FROM requests r
+             JOIN tree ON r.parent_tool_use_id = tree.tool_use_id
+            WHERE tree.depth < 3
+              AND (r.event_type IS NULL OR r.event_type = 'tool')
+         )
+         SELECT root_id,
+                COUNT(*)                       AS child_count,
+                COALESCE(SUM(tokens_total), 0) AS child_token_sum
+           FROM tree
+          GROUP BY root_id`,
+      )
+      .all(...unique) as Array<{ root_id: string; child_count: number; child_token_sum: number }>;
+  } catch {
+    // 인덱스/스키마 비정상 → 빈 결과 (호출자가 baseEmpty 처리 동일).
+    return out;
+  }
+
+  for (const row of rows) {
+    out.set(row.root_id, {
+      child_count: row.child_count ?? 0,
+      child_token_sum: row.child_token_sum ?? 0,
+    });
+  }
+  return out;
+}
+
+/**
+ * 배치 fetch 한 자식 합산을 활용해 agent_spike 결과 구성 — detectAgentSpike 와 동일 출력.
+ *
+ * detectAgentSpike 가 DB 조회까지 한 번에 하는 반면, 본 함수는 미리 페이지 단위 fetch 한
+ * 자식 합산을 입력으로 받아 threshold 계산만 수행한다.
+ */
+export function buildAgentSpikeFromBatch(
+  db: Database,
+  parent: {
+    tool_use_id: string | null | undefined;
+    tool_name: string | null | undefined;
+    tokens_total: number | null | undefined;
+    model?: string | null | undefined;
+    anthropic_beta?: string | null | undefined;
+    project_id?: string | null | undefined;
+  },
+  child: AgentSpikeChildRow | undefined,
+): AgentSpikeResult {
+  const thresholds = getAnomalyThresholds(
+    db,
+    parent.project_id ?? null,
+    parent.model ?? null,
+  );
+  const warnFrac = thresholds.warnPct / 100;
+  const parentToken = parent.tokens_total ?? 0;
+  const baseEmpty = (): AgentSpikeResult => ({
+    stage: null,
+    multiplier: 0,
+    child_token_sum: 0,
+    child_count: 0,
+    parent_token: parentToken,
+    pct_of_window: 0,
+    threshold_warn: warnFrac,
+    threshold_multiplier: AGENT_SPIKE_MULTIPLIER_THRESHOLD,
+  });
+
+  if (!parent.tool_use_id) return baseEmpty();
+  if (!isAgentSpikeParentCandidate(parent.tool_name ?? null)) return baseEmpty();
+
+  const childSum = child?.child_token_sum ?? 0;
+  const childCount = child?.child_count ?? 0;
+
+  const windowMax = getModelMaxTokens(db, parent.model ?? null, parent.anthropic_beta ?? null);
+  const pctOfWindow = windowMax > 0 ? childSum / windowMax : 0;
+  const multiplier = parentToken > 0 ? childSum / parentToken : 0;
+
+  const conditionWindow = pctOfWindow >= warnFrac;
+  const conditionMultiplier = multiplier >= AGENT_SPIKE_MULTIPLIER_THRESHOLD;
+  const stage: AgentSpikeStage = conditionWindow && conditionMultiplier ? 'spike' : null;
+
+  return {
+    stage,
+    multiplier,
+    child_token_sum: childSum,
+    child_count: childCount,
+    parent_token: parentToken,
+    pct_of_window: pctOfWindow,
+    threshold_warn: warnFrac,
+    threshold_multiplier: AGENT_SPIKE_MULTIPLIER_THRESHOLD,
+  };
+}
+
+/**
  * agent-spike 부모 후보 판별 — tool_name이 Agent/Skill/Task 계열인지.
  * `LIKE 'Agent%'` 등에 대응되는 JS 측 판정.
  */
-function isAgentSpikeParentCandidate(toolName: string | null): boolean {
+export function isAgentSpikeParentCandidate(toolName: string | null): boolean {
   if (!toolName) return false;
   return (
     toolName === 'Agent' ||
