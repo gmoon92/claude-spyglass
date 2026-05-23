@@ -141,7 +141,13 @@
    *   hue 결정 (다크 #0a0a0b 대비 AA+ 검증):
    *     MCP   = cyan    #22D3EE — 외부 서버 연결, 정보 흐름 톤             (5.8:1  AA)
    *     Agent = warm    #FF9B6E — brand accent 변형, 서브에이전트 위임      (6.0:1  AA)
-   *     Skill = lime    #A3E635 — violet(opus)/orange(sonnet)와 hue 분리   (11.5:1 AAA)
+   *     Skill = gold    #FACC15 — Agent(18°)/Task(30°)와 같은 warm family. (13.5:1 AAA)
+   *                              hue 50° 황금톤. 2026-05-24 lime #A3E635 → gold 전환:
+   *                              라임은 tool_call/success 녹색 뱃지(120°)와 채도·명도가
+   *                              너무 가까워 같은 행에서 분류 칩과 상태 뱃지의 위계가 흐려졌다.
+   *                              warm family 안에서 Agent·Task와 hue 20° 이상 분리하면서
+   *                              success 녹색과는 70° 차이로 떨어진다. "지식/통찰" 뉘앙스도
+   *                              Skill 의미와 부합.
    *     Task  = pumpkin #F77F00 — 메타 작업. 사용자 요청(ADR-007 R4, 2026-05-12)에
    *                              따라 magenta(#D946EF)→burnt-orange로 재선정.
    *                              hue 31° + 채도 100% + 명도 52% 의 깊은 주황 — Agent warm
@@ -160,11 +166,11 @@
   --sub-type-agent-bg-active:     linear-gradient(135deg, rgba(255,155,110,0.26) 0%, rgba(255,155,110,0.10) 100%);
   --sub-type-agent-border-active: rgba(255, 155, 110, 0.50);
 
-  --sub-type-skill-color:         #A3E635;
-  --sub-type-skill-bg:            rgba(163, 230, 53, 0.13);
-  --sub-type-skill-border:        rgba(163, 230, 53, 0.32);
-  --sub-type-skill-bg-active:     linear-gradient(135deg, rgba(163,230,53,0.26) 0%, rgba(163,230,53,0.10) 100%);
-  --sub-type-skill-border-active: rgba(163, 230, 53, 0.50);
+  --sub-type-skill-color:         #FACC15;
+  --sub-type-skill-bg:            rgba(250, 204, 21, 0.13);
+  --sub-type-skill-border:        rgba(250, 204, 21, 0.32);
+  --sub-type-skill-bg-active:     linear-gradient(135deg, rgba(250,204,21,0.26) 0%, rgba(250,204,21,0.10) 100%);
+  --sub-type-skill-border-active: rgba(250, 204, 21, 0.50);
 
   --sub-type-task-color:          #F77F00;
   --sub-type-task-bg:             rgba(247, 127, 0, 0.13);

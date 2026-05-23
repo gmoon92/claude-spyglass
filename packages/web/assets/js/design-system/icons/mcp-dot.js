@@ -12,7 +12,7 @@
  *  - fish-eye(외곽 링 + 채워진 점, skill-dot) = "사용자 의도가 응축된 단일 호출" — Skill.
  *  - plug/socket(사방 점 + 중앙 원) = "외부 시스템과의 접속 포인트" — MCP.
  *  - 색상 토큰 `--sub-type-mcp-color` (#22D3EE cyan)와 글리프의 이중 신호로
- *    Agent(살구) / Skill(라임)과 한 번 더 분리.
+ *    Agent(살구) / Skill(황금)과 한 번 더 분리.
  *
  * 흡수:
  *  - render/badges.js#toolIconHtml — `startsWith('mcp__')` 분기에서 호출.

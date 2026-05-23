@@ -399,12 +399,13 @@ tr.row-bloated-critical > td:first-child,
   color: var(--accent);
   filter: drop-shadow(0 0 4px rgba(255, 122, 69, 0.5));
 }
-/* skill-icon-color (2026-05-22): Agent와 동일 광학 위계로 라임 톤 적용.
- * sub-type-skill-color (#A3E635)와 drop-shadow 글로우를 매칭해 turn-spine 칩에서
- * Agent(살구)와 Skill(라임)이 글리프+색의 이중 신호로 분간되도록 한다. */
+/* skill-icon-color (2026-05-24): Agent와 동일 광학 위계로 황금 노랑 톤 적용.
+ * sub-type-skill-color (#FACC15)와 drop-shadow 글로우를 매칭해 turn-spine 칩에서
+ * Agent(살구)와 Skill(황금)이 글리프+색의 이중 신호로 분간되도록 한다.
+ * 이전 라임(#A3E635)은 tool_call 뱃지 success 녹색과 혼동돼 황금톤으로 교체. */
 .tool-icon-skill {
   color: var(--sub-type-skill-color);
-  filter: drop-shadow(0 0 4px rgba(163, 230, 53, 0.5));
+  filter: drop-shadow(0 0 4px rgba(250, 204, 21, 0.5));
 }
 /* mcp-icon-color (2026-05-24): MCP는 외부 서버 접속 뉘앙스의 plug 글리프와
  * sub-type-mcp-color (#22D3EE cyan)로 분리. turn-spine·flat-view·tool-stats에서

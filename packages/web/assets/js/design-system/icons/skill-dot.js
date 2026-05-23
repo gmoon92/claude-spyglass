@@ -13,7 +13,7 @@
  *  - fish-eye(외곽 링 + 채워진 점)는 "사용자 의도가 응축된 단일 호출" 뉘앙스 — Skill에 배정.
  *  - 일반 도구(svgToolDot, Bash/Read/Edit 등)도 fish-eye를 쓰지만 turn-spine 칩에서는
  *    아이콘 자체를 부착하지 않기에 시각 충돌이 없다 — Skill만 turn-spine에서 fish-eye를 노출.
- *  - 색상 토큰 `--sub-type-skill-color` (#A3E635, design-tokens.css:163)로 Agent(#FF9B6E)와
+ *  - 색상 토큰 `--sub-type-skill-color` (#FACC15, design-tokens.css:163)로 Agent(#FF9B6E)와
  *    한 번 더 분리. 글리프 + 색의 이중 신호.
  *
  * 흡수:

@@ -14,7 +14,7 @@
  *  - fish-eye(외곽 링 + 채워진 점) = "실행되는 단일 호출" 뉘앙스.
  *  - 같은 글리프를 [[skill-dot]]도 사용하지만 용도가 다름:
  *      · tool-dot: 일반 도구 (turn-spine에선 아이콘 미부착, flat-view·cells에서 부착)
- *      · skill-dot: Skill 전용 (turn-spine 칩에 부착, 색상은 라임 #A3E635)
+ *      · skill-dot: Skill 전용 (turn-spine 칩에 부착, 색상은 황금 #FACC15)
  *  - turn-spine에서 시각 충돌이 없는 이유 — tool-dot은 그곳에서 호출되지 않음.
  *
  * 의존:

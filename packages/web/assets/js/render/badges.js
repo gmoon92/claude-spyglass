@@ -23,7 +23,7 @@ export function typeBadge(type) {
  * 도구 아이콘 라우팅 SSoT — 도구 이름과 이벤트 타입으로 SVG 글리프와 톤 클래스를 결정.
  *
  * 디자인 어휘 (2026-05-24 4종 분리):
- *  - Skill / SlashCommand → svgSkillDot (fish-eye: 외곽 링 + 채워진 점), tone="skill" (#A3E635 라임)
+ *  - Skill / SlashCommand → svgSkillDot (fish-eye: 외곽 링 + 채워진 점), tone="skill" (#FACC15 황금)
  *  - MCP (mcp__*)         → svgMcpDot   (plug/socket: 사방 점 + 중앙 원),  tone="mcp"   (#22D3EE cyan)
  *  - Task family          → svgAgentDot (bullseye: 이중 stroke 링),       tone="task"  (#F77F00 오렌지)
  *  - Agent                → svgAgentDot (bullseye: 이중 stroke 링),       tone="agent" (#FF9B6E 살구)

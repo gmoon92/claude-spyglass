@@ -679,7 +679,7 @@
 .agent-chip .tool-icon-skill,
 .agent-chip .tool-icon-mcp,
 .agent-chip .tool-icon-task {
-  /* chip은 자체 tone(살구/라임/cyan/오렌지)으로 색을 결정하므로 아이콘은 currentColor로 상속.
+  /* chip은 자체 tone(살구/황금/cyan/오렌지)으로 색을 결정하므로 아이콘은 currentColor로 상속.
    * drop-shadow 글로우도 칩 안에서는 비활성 — 외부 단독 노출(flat-view·tool-stats)에서만 적용된다. */
   color: currentColor;
   filter: none;
