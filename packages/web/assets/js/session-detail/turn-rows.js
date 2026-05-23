@@ -37,8 +37,15 @@ import { subTypeOf, isAnchorTool } from '../request-types.js';
 /**
  * 연속된 동일 도구 호출을 그룹화한다 (SSoT — chip 렌더링에서 재사용).
  *
- * Agent/Skill/Task 계열은 `tool_detail`(agent sub-name) 까지 압축 키에 포함해
- * 서로 다른 에이전트를 구분 — 동일 라벨로 인접해야 카운트가 증가한다.
+ * Agent / Skill / Task family는 `tool_detail`(agent sub-name) 까지 압축 키에 포함해
+ * 서로 다른 에이전트를 구분 — 동일 라벨로 인접해야 카운트가 증가한다. MCP는 도구 이름 자체가
+ * 이미 식별자이므로(`tool_name`이 detail 역할) detail은 합치지 않는다.
+ *
+ * 필드 `isAgent`의 의미 (2026-05-24 일반화):
+ *   "이 칩이 turn-spine에서 아이콘 + 이름 패턴(agent-chip)으로 렌더되어야 하는가?"
+ *   원래는 Agent/Skill/Task 정규식 묶음이었으나, MCP·SlashCommand 등 1급 분류 확장에 맞춰
+ *   `subTypeOf` 기반으로 일반화. 외부 호환을 위해 필드명은 그대로 유지한다 (chip 렌더러는
+ *   agent-chip 분기에 들어가야 할지만 본다). 향후 PR에서 `isNamedTool` 등으로 리네임 권장.
  *
  * @param {Array<object>} toolCalls 도구 호출 요청 배열 (시간순)
  * @returns {Array<{key:string,name:string,count:number,isAgent:boolean,agentName:string,items:object[]}>}
@@ -47,8 +54,13 @@ export function compressContinuousTools(toolCalls) {
   const compressed = [];
   for (const tc of toolCalls) {
     const name      = tc.tool_name || '?';
-    const isAgent   = /^(Agent|Skill|Task)/.test(name);
-    const agentName = isAgent ? (tc.tool_detail || '') : '';
+    const sub       = subTypeOf(tc);
+    // agent-chip 패턴(아이콘 + 이름)을 받을 named-tool 분류 — Agent/Skill/Task/MCP.
+    // (필드명 isAgent는 외부 호환 보존 — 의미만 확장.)
+    const isAgent   = sub === 'agent' || sub === 'skill' || sub === 'task' || sub === 'mcp';
+    // detail 키 — MCP는 tool_name 자체가 식별자라 detail을 합치지 않는다.
+    //   Agent/Skill/Task family는 tool_detail(agent sub-name·task subject 등)까지 키에 포함.
+    const agentName = (sub === 'agent' || sub === 'skill' || sub === 'task') ? (tc.tool_detail || '') : '';
     const key       = name + '|' + agentName;
     const last      = compressed[compressed.length - 1];
     if (compressed.length && last.key === key) {

@@ -406,6 +406,20 @@ tr.row-bloated-critical > td:first-child,
   color: var(--sub-type-skill-color);
   filter: drop-shadow(0 0 4px rgba(163, 230, 53, 0.5));
 }
+/* mcp-icon-color (2026-05-24): MCP는 외부 서버 접속 뉘앙스의 plug 글리프와
+ * sub-type-mcp-color (#22D3EE cyan)로 분리. turn-spine·flat-view·tool-stats에서
+ * Agent/Skill/Task와 글리프+색의 이중 신호로 분간된다. */
+.tool-icon-mcp {
+  color: var(--sub-type-mcp-color);
+  filter: drop-shadow(0 0 4px rgba(34, 211, 238, 0.5));
+}
+/* task-icon-color (2026-05-24): TaskCreate/Update/Get/List/Output/Stop family.
+ * Agent와 동일 bullseye 글리프지만 sub-type-task-color (#F77F00 오렌지)로 분리.
+ * subTypeOf가 'task'를 반환하도록 확장되어 chip 색상이 자동 일관되게 적용된다. */
+.tool-icon-task {
+  color: var(--sub-type-task-color);
+  filter: drop-shadow(0 0 4px rgba(247, 127, 0, 0.5));
+}
 
 /* ── TARGET ROLE BADGE (prompt/system row) — legacy 보존 ─────────────────── */
 .target-role-badge {

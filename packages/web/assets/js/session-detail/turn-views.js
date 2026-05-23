@@ -168,7 +168,20 @@ function chipHtml(item, respSeq) {
     const fullLabel   = agentName + (countSuffix ? ` ${countSuffix}` : '');
     const aria        = `${agentName}${countSuffix ? ' ' + countSuffix : ''}`;
     const a11yAttrs   = chipAccessibilityAttrs(key, aria);
-    return `<span class="tool-chip agent-chip${subCls} ds-chip" data-tone="${tone}" title="${escHtml(fullLabel)}" ${a11yAttrs}>${toolIconHtml(baseName)}<span class="agent-chip-name">${escHtml(agentName)}</span>${countSuffix ? `<span class="turn-group-count"> ${escHtml(countSuffix)}</span>` : ''}</span>`;
+    // toolIconHtml에 전체 도구 이름(name)을 넘긴다 — Task family는 startsWith('Task') 분기 매칭이
+    //   tool-icon-task(오렌지)로 라우팅된다. baseName('Task')을 넘기면 정확 매칭 실패 시
+    //   기본 분기로 빠질 위험 — 안전을 위해 name 전체를 전달.
+    return `<span class="tool-chip agent-chip${subCls} ds-chip" data-tone="${tone}" title="${escHtml(fullLabel)}" ${a11yAttrs}>${toolIconHtml(name)}<span class="agent-chip-name">${escHtml(agentName)}</span>${countSuffix ? `<span class="turn-group-count"> ${escHtml(countSuffix)}</span>` : ''}</span>`;
+  }
+
+  // MCP 칩 (2026-05-24): tool_name 자체가 식별자이므로 detail(agentName)이 비어 있다.
+  //   agent-chip 패턴(아이콘 + 짧은 이름)을 부여하되 짧은 이름은 baseName(서버명 splittail).
+  //   title에는 mcp__server__method 전체를 보존해 hover로 정체성을 확인할 수 있게 한다.
+  if (sub === 'mcp') {
+    const countSuffix = count > 1 ? `×${count}` : '';
+    const fullLabel   = name + (countSuffix ? ` ${countSuffix}` : '');
+    const a11yAttrs   = chipAccessibilityAttrs(key, fullLabel);
+    return `<span class="tool-chip agent-chip${subCls} ds-chip" data-tone="${tone}" title="${escHtml(name)}" ${a11yAttrs}>${toolIconHtml(name)}<span class="agent-chip-name">${escHtml(baseName)}</span>${countSuffix ? `<span class="turn-group-count"> ${escHtml(countSuffix)}</span>` : ''}</span>`;
   }
 
   const aria = count > 1 ? `${baseName} ×${count}` : baseName;

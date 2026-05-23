@@ -4,18 +4,28 @@
 export const AGENT_TOOL_NAME = 'Agent';
 export const SKILL_TOOL_NAME = 'Skill';
 export const MCP_TOOL_PREFIX = 'mcp__';
+export const TASK_TOOL_PREFIX = 'Task';
 
 /** 클라이언트 전용 서브 타입 목록 — 서버 DB의 type 컬럼과 무관 */
-export const SUB_TYPES = ['agent', 'skill', 'mcp'];
+export const SUB_TYPES = ['agent', 'skill', 'mcp', 'task'];
 
 /**
- * 요청의 서브 타입을 반환 — 'agent' | 'skill' | 'mcp' | ''
- * renderers.js의 data-sub-type 속성 값과 동일하게 사용됨
+ * 요청의 서브 타입을 반환 — 'agent' | 'skill' | 'mcp' | 'task' | ''
+ *
+ * 분류 (2026-05-24 task 추가):
+ *  - 'agent' : tool_name === 'Agent'
+ *  - 'skill' : tool_name === 'Skill'  (SlashCommand 향후 등장 시도 동일 분기로 매핑 가능)
+ *  - 'mcp'   : tool_name.startsWith('mcp__')
+ *  - 'task'  : tool_name.startsWith('Task')  (TaskCreate/Update/Get/List/Output/Stop)
+ *
+ * 디자인 토큰 매핑 SSoT는 design-tokens.css의 --sub-type-{kind}-{color,bg,border,...}.
+ * renderers.js의 data-sub-type 속성 값과 동일하게 사용됨.
  */
 export function subTypeOf(r) {
   if (r.tool_name === AGENT_TOOL_NAME) return 'agent';
   if (r.tool_name === SKILL_TOOL_NAME) return 'skill';
   if (r.tool_name?.startsWith(MCP_TOOL_PREFIX)) return 'mcp';
+  if (r.tool_name?.startsWith(TASK_TOOL_PREFIX)) return 'task';
   return '';
 }
 

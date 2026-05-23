@@ -8,7 +8,7 @@
 
 import { escHtml } from '../formatters.js';
 import { subTypeOf } from '../request-types.js';
-import { svgToolDot, svgAgentDot, svgSkillDot } from '../design-system/icons/_index.js';
+import { svgToolDot, svgAgentDot, svgSkillDot, svgMcpDot } from '../design-system/icons/_index.js';
 
 export function typeBadge(type) {
   const known = ['prompt', 'tool_call', 'system', 'response'];
@@ -22,17 +22,27 @@ export function typeBadge(type) {
 /**
  * 도구 아이콘 라우팅 SSoT — 도구 이름과 이벤트 타입으로 SVG 글리프와 톤 클래스를 결정.
  *
- * 디자인 어휘 (2026-05-22 분리):
- *  - Skill           → svgSkillDot (fish-eye: 외곽 링 + 채워진 점), tone="skill" (#A3E635 라임)
- *  - Agent / Task    → svgAgentDot (bullseye: 이중 stroke 링),       tone="agent" (#FF9B6E 살구)
- *  - 그 외 일반 도구  → svgToolDot  (fish-eye: tool-dot.js),          tone="tool"  (무채색)
+ * 디자인 어휘 (2026-05-24 4종 분리):
+ *  - Skill / SlashCommand → svgSkillDot (fish-eye: 외곽 링 + 채워진 점), tone="skill" (#A3E635 라임)
+ *  - MCP (mcp__*)         → svgMcpDot   (plug/socket: 사방 점 + 중앙 원),  tone="mcp"   (#22D3EE cyan)
+ *  - Task family          → svgAgentDot (bullseye: 이중 stroke 링),       tone="task"  (#F77F00 오렌지)
+ *  - Agent                → svgAgentDot (bullseye: 이중 stroke 링),       tone="agent" (#FF9B6E 살구)
+ *  - 그 외 일반 도구       → svgToolDot  (fish-eye: tool-dot.js),          tone="tool"  (녹색)
  *
- * 왜 Skill을 Agent에서 분리했나:
- *  - 사용자 요구: turn-spine 칩에서 Skill / Agent 가 시각적으로 식별되어야 함.
- *  - 이전엔 isAgent 정규식 `/^(Agent|Skill|Task)/` 으로 셋 다 동일 bullseye를 받아
- *    turn-spine·flat-view·tool-stats 모두에서 Skill과 Agent를 분간할 수 없었음.
- *  - 색상 토큰 `--sub-type-skill-color` vs `--sub-type-agent-color`는 이미 분리되어 있었으나
- *    글리프가 동일해 신호가 약했다 — 글리프+색의 이중 신호로 강화.
+ * 왜 4종을 모두 분리했나:
+ *  - 사용자 요구: turn-spine 칩에서 Skill / Agent / Task / MCP가 모두 시각적으로 식별되어야 함.
+ *  - 이전엔 isAgent 정규식 `/^(Agent|Skill|Task)/` 으로 셋 다 동일 bullseye를 받았고,
+ *    MCP는 아이콘 자체가 없어 칩 텍스트만 노출됐다.
+ *  - 디자인 토큰(--sub-type-{agent|skill|mcp|task}-color)은 이미 분리되어 있었으나
+ *    글리프가 동일/부재해 신호가 약했다 — 글리프+색의 이중 신호로 강화.
+ *  - SlashCommand(향후)는 Skill과 동일 분기로 처리 — 사용자 결정.
+ *
+ * 분기 우선순위 (mcp__·Task·Skill 접두사 충돌 없음 — 순서 무관하지만 가독성 위해 명시):
+ *   1) Skill (정확 매칭 / 접두사) → SlashCommand도 여기로
+ *   2) mcp__ 접두사               → MCP plug 글리프
+ *   3) Task 접두사                → Task family (TaskCreate/Update/Get/List/Output/Stop)
+ *   4) Agent (정확 매칭 / 접두사)  → Agent
+ *   5) 그 외                       → 일반 도구
  *
  * 호출자(전 적용 면):
  *  - session-detail/turn-views.js#chipHtml  : turn-spine inline-flow 칩
@@ -41,20 +51,30 @@ export function typeBadge(type) {
  *  - meta-docs-view.js#metaDocTypeBadge     : 'Agent' 하드코딩으로 호출 (Behavior Definitions
  *    카탈로그는 의도적으로 동일 톤 — 변경 영향 없음)
  *
- * @param {string|null|undefined} toolName  도구 식별자 (예: 'Skill', 'Agent', 'Bash')
+ * @param {string|null|undefined} toolName  도구 식별자 (예: 'Skill', 'Agent', 'mcp__redmine__getIssue', 'TaskCreate', 'Bash')
  * @param {string|null} [eventType=null]    'pre_tool'이면 실행 중 pulse 애니메이션 클래스 부착
  * @returns {string} 아이콘 SVG를 감싼 `<span>` HTML
  */
 export function toolIconHtml(toolName, eventType = null) {
-  const isSkill = toolName === 'Skill' || (typeof toolName === 'string' && toolName.startsWith('Skill'));
-  const isAgent = !isSkill && toolName && /^(Agent|Task)/.test(toolName);
+  const name    = typeof toolName === 'string' ? toolName : '';
+  const isSkill = name === 'Skill' || name.startsWith('Skill');
+  const isMcp   = !isSkill && name.startsWith('mcp__');
+  const isTask  = !isSkill && !isMcp && name.startsWith('Task');
+  const isAgent = !isSkill && !isMcp && !isTask && (name === 'Agent' || name.startsWith('Agent'));
   const runCls  = eventType === 'pre_tool' ? ' tool-icon-running' : '';
   if (isSkill) {
     return `<span class="tool-icon tool-icon-skill${runCls} ds-icon">${svgSkillDot({ size: 12 })}</span>`;
   }
-  return isAgent
-    ? `<span class="tool-icon tool-icon-agent${runCls} ds-icon">${svgAgentDot({ size: 12 })}</span>`
-    : `<span class="tool-icon tool-icon-tool${runCls} ds-icon">${svgToolDot({ size: 12 })}</span>`;
+  if (isMcp) {
+    return `<span class="tool-icon tool-icon-mcp${runCls} ds-icon">${svgMcpDot({ size: 12 })}</span>`;
+  }
+  if (isTask) {
+    return `<span class="tool-icon tool-icon-task${runCls} ds-icon">${svgAgentDot({ size: 12 })}</span>`;
+  }
+  if (isAgent) {
+    return `<span class="tool-icon tool-icon-agent${runCls} ds-icon">${svgAgentDot({ size: 12 })}</span>`;
+  }
+  return `<span class="tool-icon tool-icon-tool${runCls} ds-icon">${svgToolDot({ size: 12 })}</span>`;
 }
 
 // payload에서 tool_response 추출
