@@ -278,7 +278,96 @@ describe('buildEgoFlowGraph — MCP server 단위 그룹핑', () => {
     const redmine = g.nodes.find((n) => n.title === 'redmine')!;
     const toRedmine = g.edges.filter((e) => e.from === 'center' && e.to === redmine.id);
     expect(toRedmine.length).toBe(1);
-    // strength 는 입력 3개(strong/medium/weak) 중 최강 = 'strong'.
+    // P0-P3: strength 는 count 합산(6+2+1=9, denom=10) → pct=90% → strong.
     expect(toRedmine[0].strength).toBe('strong');
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// F-7 — Edge strength count 합산 정책 회귀 (P0-P3)
+//
+// 변경 이전: 같은 (from,to) dedup 시 STRENGTH_RANK 최댓값 채택 (예: max(weak, weak, weak) = weak).
+// 변경 이후: count 합산 후 pctToStrength 재계산 (예: weak 3개 합산이 medium 임계 넘으면 medium).
+// 정합성: 동일 server mcp 도구가 각자 단일로는 임계 미달이라도 그룹 합산은 시각적
+//         "이 server 와의 상호작용이 강하다" 를 정확히 반영해야 한다.
+// ──────────────────────────────────────────────────────────────────────────
+describe('buildEgoFlowGraph — F-7 edge strength 합산 정책', () => {
+  test('3개 weak (각 10%) → 합산 30% = medium (구 max 정책은 weak)', () => {
+    const nodes: MetaFlowEgo['callTree']['nodes'] = [
+      { kind: 'mcp', name: 'mcp__svc__a', depth: 1, timeline: null, count: 1, pct: 0.1 },
+      { kind: 'mcp', name: 'mcp__svc__b', depth: 1, timeline: null, count: 1, pct: 0.1 },
+      { kind: 'mcp', name: 'mcp__svc__c', depth: 1, timeline: null, count: 1, pct: 0.1 },
+    ];
+    const edges: MetaFlowEgo['callTree']['edges'] = [
+      { fromKind: 'skill', fromName: 'commit', toKind: 'mcp', toName: 'mcp__svc__a', relation: 'call', count: 1 },
+      { fromKind: 'skill', fromName: 'commit', toKind: 'mcp', toName: 'mcp__svc__b', relation: 'call', count: 1 },
+      { fromKind: 'skill', fromName: 'commit', toKind: 'mcp', toName: 'mcp__svc__c', relation: 'call', count: 1 },
+    ];
+    const ego = makeEgo({ centerTurns: 10, nodes, edges });
+    const g = buildEgoFlowGraph(ego, null, 14);
+
+    const svc = g.nodes.find((n) => n.title === 'svc')!;
+    const e = g.edges.find((e) => e.from === 'center' && e.to === svc.id)!;
+    expect(e.strength).toBe('medium');
+  });
+
+  test('5개 sparse (각 2%) → 합산 10% = weak (구 max 정책은 sparse)', () => {
+    const tools = ['a', 'b', 'c', 'd', 'e'];
+    const nodes: MetaFlowEgo['callTree']['nodes'] = tools.map((t) => ({
+      kind: 'mcp' as const,
+      name: `mcp__svc__${t}`,
+      depth: 1, timeline: null as 'after' | null,
+      count: 1, pct: 0.02,
+    }));
+    const edges: MetaFlowEgo['callTree']['edges'] = tools.map((t) => ({
+      fromKind: 'skill' as const,
+      fromName: 'commit',
+      toKind: 'mcp' as const,
+      toName: `mcp__svc__${t}`,
+      relation: 'call' as const,
+      count: 1,
+    }));
+    const ego = makeEgo({ centerTurns: 50, nodes, edges });
+    const g = buildEgoFlowGraph(ego, null, 14);
+
+    const svc = g.nodes.find((n) => n.title === 'svc')!;
+    const e = g.edges.find((e) => e.from === 'center' && e.to === svc.id)!;
+    expect(e.strength).toBe('weak');
+  });
+
+  test('합산이 100% 초과해도 strong 유지 (cap 안전)', () => {
+    // 같은 turn 안 다중 호출 등 합산이 분모 초과 가능.
+    const nodes: MetaFlowEgo['callTree']['nodes'] = [
+      { kind: 'mcp', name: 'mcp__svc__a', depth: 1, timeline: null, count: 8, pct: 0.8 },
+      { kind: 'mcp', name: 'mcp__svc__b', depth: 1, timeline: null, count: 5, pct: 0.5 },
+    ];
+    const edges: MetaFlowEgo['callTree']['edges'] = [
+      { fromKind: 'skill', fromName: 'commit', toKind: 'mcp', toName: 'mcp__svc__a', relation: 'call', count: 8 },
+      { fromKind: 'skill', fromName: 'commit', toKind: 'mcp', toName: 'mcp__svc__b', relation: 'call', count: 5 },
+    ];
+    const ego = makeEgo({ centerTurns: 10, nodes, edges });
+    const g = buildEgoFlowGraph(ego, null, 14);
+
+    const svc = g.nodes.find((n) => n.title === 'svc')!;
+    const e = g.edges.find((e) => e.from === 'center' && e.to === svc.id)!;
+    // 합산 13, denom 10 → pct=130%, pctToStrength 임계 >=50 → strong.
+    expect(e.strength).toBe('strong');
+  });
+
+  test('turn-flow edge 는 합산 정책 영향 없음 (strength="flow" 고정)', () => {
+    // turn-after 노드 1개 + center → after edge.
+    const nodes: MetaFlowEgo['callTree']['nodes'] = [
+      { kind: 'agent', name: 'reviewer', depth: 0, timeline: 'after', count: 3, pct: 0.3 },
+    ];
+    const edges: MetaFlowEgo['callTree']['edges'] = [
+      { fromKind: 'skill', fromName: 'commit', toKind: 'agent', toName: 'reviewer', relation: 'turn-flow', count: 3 },
+    ];
+    const ego = makeEgo({ centerTurns: 10, nodes, edges });
+    const g = buildEgoFlowGraph(ego, null, 14);
+    const turnFlowEdges = g.edges.filter((e) => e.kind === 'turn-flow');
+    expect(turnFlowEdges.length).toBeGreaterThan(0);
+    for (const e of turnFlowEdges) {
+      expect(e.strength).toBe('flow');
+    }
   });
 });
