@@ -43,6 +43,10 @@ import {
   startVersionCheckSchedule,
   stopVersionCheckSchedule,
 } from '../version-checker';
+import {
+  startProjectionWorker,
+  stopProjectionWorker,
+} from './projection-worker';
 
 /** 서버 인스턴스 */
 let server: ReturnType<typeof Bun.serve> | null = null;
@@ -86,6 +90,12 @@ export function startServer(options: {
 
   // 버전 체크 스케줄 시작 (시작 시 즉시 + 1시간 인터벌, updateAvailable === false일 때만 호출)
   startVersionCheckSchedule();
+
+  // storage-redesign-v3 Phase 5 — projection materializer 백그라운드 시작.
+  // events_v3 → request_view / turn_view / agent_chain_view 멱등 upsert.
+  // 실패는 격리(R5) — projection 한 종류가 실패해도 다른 projection 과 핵심 read API 가
+  // 영향을 받지 않는다. SPYGLASS_DISABLE_V3_WORKER=1 로 즉시 비활성 가능 (운영 안전망).
+  startProjectionWorker(db);
 
   // v24: Behavior Definitions 카탈로그 부팅 동기화 — 글로벌(`~/.claude`) 1회 스캔.
   //  실패해도 부팅은 성공해야 하므로 try/catch로 격리. project chain은 SessionStart에서 lazy 동기화.
@@ -157,6 +167,7 @@ export async function stopServer(): Promise<void> {
   // 1. 스케줄러 정리
   stopMaintenanceSchedule();
   stopVersionCheckSchedule();
+  stopProjectionWorker();
 
   // 2. SSE 종료 신호 + 짧은 grace
   try {
