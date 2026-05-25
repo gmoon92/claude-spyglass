@@ -1,6 +1,6 @@
 {
   "name": "@spyglass/desktop",
-  "version": "2.10.0",
+  "version": "2.11.0",
   "description": "Electron desktop shell for spyglass — wraps the local Bun server + web dashboard into a macOS-native app",
   "author": "spyglass",
   "type": "module",
