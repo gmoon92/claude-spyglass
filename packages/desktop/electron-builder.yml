@@ -1,0 +1,104 @@
+# electron-builder 설정 — macOS DMG 전용.
+#
+# 책임:
+#   - packages/desktop을 Electron 데스크톱 앱(DMG)으로 패키징한다.
+#   - Bun spyglass 서버를 `bun build --compile`로 만든 standalone executable 로 동봉한다 (Bun 런타임 불필요).
+#   - 동적 fs 접근이 필요한 자원 파일만 추가 동봉한다.
+#   - LadybugDB native binding (`.node`) 을 asar 밖으로 unpack 한다 — dlopen 호환성.
+#
+# 의존성:
+#   - packages/desktop/build/icon.png            — macOS .icns 자동 생성 소스 (1024x1024)
+#   - packages/desktop/build/bin/spyglass-server — bun build --compile 산출물 (build:server-bin 스크립트)
+#   - packages/web/                              — 정적 자원 (server 가 fs로 서빙)
+#   - packages/storage/migrations/*.sql          — DB 마이그레이션 (migrator.ts 가 readdir)
+#   - packages/storage-graph/node_modules/@ladybugdb — Graph projection native binding (런타임 lazy import)
+#
+# 호출 흐름:
+#   bun run desktop:build:mac  →  build:server-bin (Bun 컴파일)
+#                              →  electron-builder --mac dmg --config electron-builder.yml
+#     →  app.asar (src/main + src/preload)
+#     →  Resources/bin/spyglass-server           (standalone bin, child 로 spawn)
+#     →  Resources/app/web/                      (SPYGLASS_WEB_ROOT 로 주입)
+#     →  Resources/app/storage/migrations/*.sql  (SPYGLASS_MIGRATIONS_ROOT 로 주입)
+#     →  Resources/app/storage-graph/native/     (Graph 모드 활성 시 storage-graph 가 dlopen)
+#
+# 비범위:
+#   - 코드 서명 / notarization 은 이번 작업 범위 밖. 미적용 시 macOS Gatekeeper 경고가 발생할 수 있다.
+#   - 본 dmg 빌드에서 Graph 모드는 SPYGLASS_GRAPH_MODE=off 가 안전한 기본. native 호환 검증 전엔
+#     회로 차단기가 자동 SQLite 폴백을 보장하므로 사용자 영향 0.
+
+appId: com.spyglass.desktop
+productName: Claude Spyglass
+copyright: Copyright © 2026 Spyglass
+
+directories:
+  output: ../../dist/desktop
+  buildResources: build
+
+# packages/desktop 내부에서 패키징되는 파일들.
+files:
+  - src/**/*
+  - package.json
+
+# Electron 앱 바깥에 동봉되는 런타임 자원 — server-process.js 가 process.resourcesPath 로 접근.
+# server / storage(src) / types 소스 코드는 standalone bin 안에 embed 되므로 동봉하지 않는다.
+extraResources:
+  # Bun standalone executable — `bun build --compile` 산출물. child 로 spawn 됨.
+  - from: build/bin/spyglass-server
+    to: bin/spyglass-server
+  # web 정적 자원 — dispatch.ts 가 SPYGLASS_WEB_ROOT 로 접근.
+  - from: ../web
+    to: app/web
+    filter:
+      - "**/*"
+      - "!**/__tests__/**"
+      - "!**/*.test.ts"
+  # DB 마이그레이션 SQL — migrator.ts 가 SPYGLASS_MIGRATIONS_ROOT 로 readdir.
+  - from: ../storage/migrations
+    to: app/storage/migrations
+    filter:
+      - "**/*.sql"
+  # Graph projection native binding — @ladybugdb/core 의 platform 별 prebuilt .node 파일.
+  #   standalone bin 이 require 할 때 process.resourcesPath 로 접근. .node 는 dlopen 대상이라
+  #   asar 안에 두면 실패하므로 별도 디렉토리(extraResources) 로 unpack.
+  - from: ../storage-graph/node_modules/@ladybugdb
+    to: app/storage-graph/native/@ladybugdb
+    filter:
+      - "**/*.node"
+      - "**/package.json"
+      - "!**/*.{md,ts,map}"
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  icon: build/icon.png
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  # 코드 서명 미적용 — 배포 시 `xattr -cr /Applications/Claude\ Spyglass.app` 안내 필요.
+  identity: null
+
+dmg:
+  title: Claude Spyglass ${version}
+  icon: build/icon.png
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# asar 활성화 — Electron 표준 (성능 + 코드 보호). extraResources 는 asar 바깥이라 영향 없음.
+asar: true
+
+# asar 내부에 .node 가 남으면 dlopen 이 실패한다 (asar 가상 파일시스템에서는 mmap 불가).
+#   현재 src/ 트리에는 native 가 없어 사실상 no-op 이지만, 향후 desktop/dependencies 로
+#   native 가 들어올 경우를 대비해 표준 룰을 명시.
+#   LadybugDB native 는 extraResources 로 별도 unpack 되므로 asarUnpack 패턴과 무관.
+asarUnpack:
+  - "**/*.node"
+  - "**/@ladybugdb/**"

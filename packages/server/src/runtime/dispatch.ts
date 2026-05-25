@@ -5,12 +5,32 @@
  * 한 곳만 수정.
  */
 
+import { fileURLToPath } from 'node:url';
+import { join as pathJoin } from 'node:path';
 import { handleHookHttpRequest } from '../hook';
 import { eventsCollectHandler } from '../events';
 import { apiRouter, invalidateDashboardCache } from '../api';
 import { sseRouter } from '../sse';
 import { handleProxy } from '../proxy';
 import type { SpyglassDatabase } from '@spyglass/storage';
+
+/**
+ * web 정적 파일 루트 — packaged(Electron desktop) 환경에서는 `SPYGLASS_WEB_ROOT`
+ * env 가 절대 경로를 주입한다. 미설정(dev)이면 `import.meta.url` 기반 워크스페이스
+ * 상대 경로(`packages/web`)로 fallback.
+ *
+ * 변경 이유: Bun standalone executable에서 `import.meta.url`이 가상 파일시스템
+ * 경로(`/$bunfs/root/...`)를 반환해 실제 파일에 도달 불가. Electron 메인이 동봉
+ * 위치(`process.resourcesPath/app/web`)를 env 로 주입한다.
+ */
+const WEB_ROOT: string = process.env.SPYGLASS_WEB_ROOT
+  ? process.env.SPYGLASS_WEB_ROOT
+  : fileURLToPath(new URL('../../../web/', import.meta.url));
+
+/** web 디렉토리 안 파일을 Bun.file 로 반환. subPath 는 '/' 로 시작하는 URL path. */
+function webFile(subPath: string) {
+  return Bun.file(pathJoin(WEB_ROOT, subPath.replace(/^\//, '')));
+}
 
 /**
  * 메인 요청 핸들러
@@ -99,8 +119,7 @@ export async function handleRequest(req: Request, db: SpyglassDatabase): Promise
           { headers: { 'Content-Type': 'application/json' } }
         );
       }
-      const webDir = new URL('../../../web/index.html', import.meta.url);
-      const file = Bun.file(webDir);
+      const file = webFile('/index.html');
       if (await file.exists()) {
         return new Response(file, {
           headers: { 'Content-Type': 'text/html; charset=utf-8' },
@@ -115,8 +134,7 @@ export async function handleRequest(req: Request, db: SpyglassDatabase): Promise
     // 정적 자산 서빙 (/assets/ prefix → packages/web/assets/)
     if (path.startsWith('/assets/')) {
       const safePath = path.split('?')[0].replace(/\.\./g, '');
-      const staticFile = new URL(`../../../web${safePath}`, import.meta.url);
-      const file = Bun.file(staticFile);
+      const file = webFile(safePath);
       if (await file.exists()) {
         const ext = safePath.split('.').pop() ?? '';
         const mimeMap: Record<string, string> = {
@@ -134,8 +152,7 @@ export async function handleRequest(req: Request, db: SpyglassDatabase): Promise
     // i18n 로케일 서빙 (/locales/ prefix → packages/web/locales/)
     if (path.startsWith('/locales/')) {
       const safePath = path.split('?')[0].replace(/\.\./g, '');
-      const staticFile = new URL(`../../../web${safePath}`, import.meta.url);
-      const file = Bun.file(staticFile);
+      const file = webFile(safePath);
       if (await file.exists()) {
         return new Response(file, {
           headers: {
@@ -149,8 +166,7 @@ export async function handleRequest(req: Request, db: SpyglassDatabase): Promise
     // favicon 서빙 (하위 호환)
     if (/^\/(favicon\.svg|favicon\.ico)/.test(path)) {
       const fileName = path.split('?')[0].slice(1);
-      const staticFile = new URL(`../../../web/${fileName}`, import.meta.url);
-      const file = Bun.file(staticFile);
+      const file = webFile('/' + fileName);
       if (await file.exists()) {
         const ext = fileName.split('.').pop();
         const mime = ext === 'svg' ? 'image/svg+xml' : 'image/x-icon';

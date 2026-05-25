@@ -17,20 +17,23 @@
     "prepare": "git config core.hooksPath .githooks",
     "backfill:system-prompts": "bun run packages/server/scripts/backfill-system-prompts.ts",
     "rebuild-stats": "bun run packages/storage/src/scripts/rebuild-stats.ts",
-    "rebuild-stats-proxy": "bun run packages/storage/src/scripts/rebuild-stats-proxy.ts"
+    "rebuild-stats-proxy": "bun run packages/storage/src/scripts/rebuild-stats-proxy.ts",
+    "desktop:dev": "bun run --cwd packages/desktop start",
+    "desktop:build:mac": "bun run --cwd packages/desktop build:mac",
+    "desktop:pack:mac": "bun run --cwd packages/desktop pack:mac"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "latest",
+    "electron": "^42.2.0",
+    "electron-builder": "^26.8.1",
     "typescript": "^5.0.0"
   },
   "engines": {
     "bun": ">=1.2.0"
   },
   "dependencies": {
-    "2": "^3.0.0",
     "@anthropic-ai/sdk": "^0.96.0",
-    "dev": "^0.1.3",
     "eventsource": "^4.1.0",
     "react-devtools-core": "^7.0.1"
   }

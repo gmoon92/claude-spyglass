@@ -7,6 +7,9 @@ dist/
 **/dist/
 *.tsbuildinfo
 **/*.tsbuildinfo
+# Release / desktop binaries — produced by scripts/build-release-tarball.sh and packages/desktop build
+packages/desktop/build/bin/
+dist/release/
 
 # Environment variables
 .env

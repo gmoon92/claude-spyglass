@@ -357,6 +357,18 @@ async function refreshBadge() {
     }
     cache = json.data;
 
+    // 'git' 이외의 채널(brew / packaged)에서는 자체 git pull 기반 in-place 업데이트가
+    // 무의미하므로 배지·모달을 숨긴다.
+    //   - brew    : `brew upgrade spyglass` 가 canonical. 추후 banner UI 별도 결정.
+    //   - packaged: Electron 메인의 auto-updater.js 가 별도로 알림 처리.
+    // shallow warning 도 git 의존이라 함께 비활성.
+    if (cache.updateChannel && cache.updateChannel !== 'git') {
+      if (els.badge) els.badge.hidden = true;
+      if (els.modal) els.modal.hidden = true;
+      if (els.shallowWarn) els.shallowWarn.hidden = true;
+      return;
+    }
+
     // ADR-001: 서버 updateAvailable=true 라도 정규화된 currentVersion === latestTag 면
     // 같은 버전 → latest로 처리. 무의미한 모달 노출 방지.
     const sameVersion = isSameVersion(cache.currentVersion, cache.latestTag);

@@ -32,7 +32,14 @@ import { readdirSync, readFileSync, appendFileSync, openSync, fsyncSync, closeSy
 import { join } from 'path';
 import type { Database } from 'bun:sqlite';
 
-const MIGRATIONS_DIR = join(import.meta.dir, '..', 'migrations');
+// 마이그레이션 SQL 디렉토리 — packaged 환경(Electron desktop)에서는
+// `import.meta.dir`이 standalone executable 가상 경로(`/$bunfs/root/...`)를 반환해
+// 실제 파일에 도달하지 못한다. 그래서 `SPYGLASS_MIGRATIONS_ROOT` env 가 설정돼 있으면
+// 그 절대 경로를 사용한다 (Electron 메인 프로세스가 동봉 위치를 주입).
+// dev 모드에서는 env 미설정 → 기존 동작 그대로.
+const MIGRATIONS_DIR = process.env.SPYGLASS_MIGRATIONS_ROOT
+  ? process.env.SPYGLASS_MIGRATIONS_ROOT
+  : join(import.meta.dir, '..', 'migrations');
 
 // =============================================================================
 // ADR-002: 마이그레이션 번호 한도 (001~999, 3자리 padding)

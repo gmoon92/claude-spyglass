@@ -1,23 +1,34 @@
 /**
- * 데몬 명령 — start/stop/restart/status (PID 파일 기반 싱글톤).
+ * 데몬 명령 — serve/start/stop/restart/status (PID 파일 기반 싱글톤).
  *
  * 책임:
- *  - CLI 명령 디스패치 (start/stop/restart/status/foreground default).
+ *  - CLI 명령 디스패치.
+ *    - `serve`  : foreground blocking. launchd / brew services / docker 친화.
+ *                 PID 파일 안 만들고 stdout/stderr 그대로 유지.
+ *    - `start`  : background daemonize. 자기 자신을 `serve` 모드로 detached spawn 후
+ *                 PID 기록하고 부모 즉시 종료. 사용자 편의 wrapper.
+ *    - `stop`   : LISTEN PID에 SIGTERM (manual·serve·launchd 모드 무관).
+ *    - `restart`: stop + start (PID 파일 모드 기준).
+ *    - `status` : 동작 모드(managed daemon / serve / unknown) 표시.
+ *    - `doctor` / `analyze` : @see cli/doctor, cli/analyze 위임.
  *  - graceful shutdown 신호 핸들링: SIGTERM/SIGINT → stopServer → process.exit.
- *  - restart 시 LISTEN 중인 기존 서버를 SIGTERM으로 drain하고 새 서버 기동.
  *
  * 의존성:
  *  - runtime/config: PORT/HOST
  *  - runtime/port: isPortAvailable / findProcessesByPort / waitForProcessExit / waitForPortRelease
  *  - runtime/lifecycle: startServer / stopServer
+ *  - cli/doctor, cli/analyze: standalone binary 에서도 호출 가능하도록 통합 (`spyglass doctor` 등).
  *
  * 변경 이유:
  *  - 명령어 추가/제거, PID 파일 위치/포맷 변경, 시그널 처리 정책 변경 시 한 곳만 수정.
  *  - graceful shutdown deadline/진행도 표시 정책도 여기에 모은다 (단일 SSoT).
+ *  - brew lifecycle 충돌 방지 — `serve` 는 launchd 직접 호출용, `start` 는 사용자 편의.
  *
  * 환경 변수:
- *  - SPYGLASS_PID_FILE        — PID 파일 경로 오버라이드 (기본 ~/.spyglass/server.pid)
- *  - SPYGLASS_SHUTDOWN_TIMEOUT_MS — graceful shutdown deadline (기본 10000)
+ *  - SPYGLASS_PID_FILE             — PID 파일 경로 오버라이드 (기본 ~/.spyglass/server.pid)
+ *  - SPYGLASS_SHUTDOWN_TIMEOUT_MS  — graceful shutdown deadline (기본 10000)
+ *  - SPYGLASS_DAEMON_LOG           — `start` 의 detached child stdout/stderr 리다이렉트 경로
+ *                                    (기본 ~/.spyglass/server.log)
  *
  * 종료 코드:
  *  - 0: 정상
@@ -34,6 +45,9 @@ import {
 } from './port';
 import { startServer, stopServer } from './lifecycle';
 import { getInFlightCount } from './in-flight';
+import { doctor } from '../cli/doctor';
+import { analyze } from '../cli/analyze';
+import { openCommand } from '../cli/open';
 
 /** double-signal 보호 플래그 — 두 번째 신호는 force-quit로 해석 */
 let shuttingDown = false;
@@ -99,17 +113,37 @@ function installShutdownHandlers(pidFile: string | null): void {
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM', pidFile));
 }
 
-function writePidFile(pidFile: string): void {
+function writePidFile(pidFile: string, pid?: string | number): void {
   try {
     const fs = require('fs');
     const path = require('path');
     fs.mkdirSync(path.dirname(pidFile), { recursive: true });
-    fs.writeFileSync(pidFile, process.pid.toString());
+    fs.writeFileSync(pidFile, String(pid ?? process.pid));
   } catch {}
+}
+
+/**
+ * `start` 가 자기 자신을 `serve` 모드로 detached spawn 하기 위한 명령 구성.
+ *
+ * process.argv 형태:
+ *   - standalone bin       : [binPath, command, ...rest]                 → entry 가 .ts/.js 아님
+ *   - bun + .ts entry (dev): [bunPath, scriptPath, command, ...rest]     → argv[1] 이 .ts/.js
+ *
+ * 두 경우 모두 command 자리를 'serve' 로 교체해 child 가 동일 entry 로 foreground 실행되게 한다.
+ */
+function buildRespawnCommand(): { cmd: string; args: string[] } {
+  const entry = process.argv[1];
+  const isScriptEntry = !!entry && /\.[mc]?[jt]s$/i.test(entry);
+  if (isScriptEntry) {
+    return { cmd: process.execPath, args: [entry, 'serve'] };
+  }
+  return { cmd: process.execPath, args: ['serve'] };
 }
 
 async function commandStart(pidFile: string): Promise<void> {
   const fs = require('fs');
+  const path = require('path');
+  const { spawn: nodeSpawn } = require('node:child_process');
 
   // 1. PORT를 LISTEN 중인 spyglass server가 이미 있는지 확인.
   //    findProcessesByPort는 -sTCP:LISTEN 필터 → proxy 클라이언트(클로드 코드) 안 잡힘.
@@ -129,14 +163,34 @@ async function commandStart(pidFile: string): Promise<void> {
   // 3. 포트 가용성 확인 — LISTEN은 없지만 TIME_WAIT 등으로 막힐 수 있음.
   if (!(await isPortAvailable(PORT))) {
     console.error(`[Server] Port ${PORT} is unavailable (likely TIME_WAIT)`);
-    console.error(`[Server] Run 'bun run dev' to restart with auto-cleanup`);
+    console.error(`[Server] Run 'spyglass restart' to retry with cleanup`);
     process.exit(1);
   }
 
-  // 4. 서버 시작
-  startServer();
-  writePidFile(pidFile);
-  installShutdownHandlers(pidFile);
+  // 4. 자기 자신을 `serve` 모드로 detached spawn 한다.
+  //    child 의 stdout/stderr 는 ~/.spyglass/server.log 로 append.
+  //    `SPYGLASS_DAEMON_LOG` env 로 override 가능.
+  const logDir = path.join(process.env.HOME || '', '.spyglass');
+  fs.mkdirSync(logDir, { recursive: true });
+  const logPath = process.env.SPYGLASS_DAEMON_LOG || path.join(logDir, 'server.log');
+  const logFd = fs.openSync(logPath, 'a');
+
+  const { cmd, args } = buildRespawnCommand();
+  const child = nodeSpawn(cmd, args, {
+    stdio: ['ignore', logFd, logFd],
+    detached: true,
+    env: process.env,
+  });
+  child.unref();
+
+  // 5. child PID 기록 + 부모 즉시 종료. child 는 `serve` 모드라 PID 파일을 만들지 않으므로
+  //    여기서만 한 번 기록한다. stop/status 는 LISTEN PID 가 SSoT 이므로 PID 파일은 힌트일 뿐.
+  writePidFile(pidFile, child.pid);
+  console.log(`[Server] Started (PID: ${child.pid}) — manual mode`);
+  console.log(`[Server] Endpoint: http://${HOST}:${PORT}`);
+  console.log(`[Server] Logs: ${logPath}`);
+  console.log('Tip: `brew services start spyglass` for auto-start at login');
+  process.exit(0);
 }
 
 function commandStop(pidFile: string): void {
@@ -167,6 +221,8 @@ function commandStop(pidFile: string): void {
   if (fs.existsSync(pidFile)) {
     try { fs.unlinkSync(pidFile); } catch {}
   }
+
+  console.log('Note: brew services users — also run `brew services stop spyglass`');
 }
 
 async function commandRestart(pidFile: string): Promise<void> {
@@ -246,26 +302,36 @@ function commandStatus(pidFile: string): void {
   }
 
   if (fs.existsSync(pidFile)) {
-    console.log('[Server] Not running (stale PID file)');
+    console.log('[Server] Not running (stale PID file — cleaned up)');
     try { fs.unlinkSync(pidFile); } catch {}
   } else {
     console.log('[Server] Not running');
   }
 }
 
-function commandForeground(): void {
+/**
+ * foreground blocking 실행. launchd / brew services / docker 가 직접 호출하는 명령.
+ * PID 파일을 만들지 않고 stdout/stderr 를 그대로 유지한다 — 호스트 supervisor 가 로그/생명주기 책임.
+ */
+function commandServe(): void {
   startServer();
-  // foreground 모드는 PID 파일을 사용하지 않으므로 정리 단계 없음 (null 전달).
   installShutdownHandlers(null);
 }
 
 /**
  * CLI 명령 디스패처. import.meta.main 진입점에서 호출.
+ *
+ * @param args  `process.argv.slice(2)` — command + 옵션들.
  */
-export async function dispatchDaemonCommand(command: string | undefined): Promise<void> {
+export async function dispatchDaemonCommand(args: string[]): Promise<void> {
+  const command = args[0];
+  const rest = args.slice(1);
   const pidFile = getPidFile();
 
   switch (command) {
+    case 'serve':
+      commandServe();
+      break;
     case 'start':
       await commandStart(pidFile);
       break;
@@ -278,8 +344,22 @@ export async function dispatchDaemonCommand(command: string | undefined): Promis
     case 'status':
       commandStatus(pidFile);
       break;
+    case 'doctor':
+      await doctor(rest.includes('--fix'));
+      break;
+    case 'analyze':
+      await analyze(rest);
+      break;
+    case 'open':
+      await openCommand();
+      break;
+    case undefined:
+      // 인자 없이 호출 — `serve` 와 동일. brew services 가 `run [opt_bin/"spyglass"]` 만 적어도 동작.
+      commandServe();
+      break;
     default:
-      // 기본: 포그라운드 실행
-      commandForeground();
+      console.error(`[Server] Unknown command: ${command}`);
+      console.error('Usage: spyglass <serve|start|stop|restart|status|open|doctor|analyze>');
+      process.exit(1);
   }
 }

@@ -53,6 +53,16 @@ function isShallowRepository(): boolean {
   return isShallowCache;
 }
 
+/**
+ * `SPYGLASS_UPDATE_CHANNEL` env 를 그대로 echo. 유효 값이 아니면 'git' fallback.
+ * Formula 의 write_env_script / Electron desktop 의 server-process.js 가 주입한다.
+ */
+function resolveUpdateChannel(): 'git' | 'brew' | 'packaged' {
+  const v = process.env.SPYGLASS_UPDATE_CHANNEL;
+  if (v === 'brew' || v === 'packaged') return v;
+  return 'git';
+}
+
 // =============================================================================
 // /api/version 응답 contract — TypeScript 타입 SSoT (ADR-004, ADR-005, ADR-007)
 // =============================================================================
@@ -67,6 +77,15 @@ export interface VersionResponseData {
   latestMigrationFile?: string | null;
   /** ADR-007: shallow clone 환경 감지 — true면 dashboard warning 노출. */
   isShallowRepository?: boolean;
+  /**
+   * 배포 채널 표지 — `SPYGLASS_UPDATE_CHANNEL` env 값을 그대로 echo.
+   *   - 'git'      : git clone 기반 dev 환경. 기본값. web 의 git pull 기반 update 배지 활성.
+   *   - 'brew'     : Homebrew Formula 설치. `brew upgrade spyglass` 가 canonical. 배지 hide.
+   *   - 'packaged' : Electron DMG. 자체 auto-updater 가 처리. 배지 hide.
+   *
+   * web 클라이언트는 'git' 이외의 채널에서 자체 update 배지/모달을 숨긴다.
+   */
+  updateChannel?: 'git' | 'brew' | 'packaged';
   /** ADR-006: 마이그레이션 lag 감지 — 비정상 부팅으로 user_version < 최신 파일일 때. */
   migrationLag?: {
     current: number;
@@ -132,6 +151,7 @@ function handleGetVersion(db: Database): Response {
     dbUserVersion,
     latestMigrationFile,
     isShallowRepository: isShallowRepository(),
+    updateChannel: resolveUpdateChannel(),
   };
   if (migrationLag) {
     data.migrationLag = migrationLag;

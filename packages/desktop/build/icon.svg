@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Claude Spyglass</title>
+  <!--
+    favicon.svg(32×32) 디자인 언어를 1024 viewBox 로 스케일·재해석한 macOS 앱 아이콘.
+    원본 좌표 1:32 = 본 좌표 1:1024.
+    추가 요소:
+      - 외곽 라운드 사각: 안티에일리어싱이 부드러운 r=180 (macOS HIG 시각 안전 영역 안쪽).
+      - 미세 인너 그라데이션: 단색 #1a1a1a 만 쓰면 1024 크기에서 평면적으로 보임.
+      - 렌즈 글린트(상단 좌측 호): 광택 한 줄로 "렌즈" 메타포를 살림.
+      - 크로스헤어와 중앙 도트 비례는 favicon 과 동일하게 r=2.5/32 = 80/1024.
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#1f1f1f"/>
+      <stop offset="100%" stop-color="#0d0d0d"/>
+    </linearGradient>
+    <radialGradient id="lens-fill" cx="0.5" cy="0.5" r="0.55">
+      <stop offset="0%"   stop-color="#d97757" stop-opacity="0.08"/>
+      <stop offset="70%"  stop-color="#d97757" stop-opacity="0.00"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#e88a6a"/>
+      <stop offset="100%" stop-color="#c4633f"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 배경 라운드 사각 (macOS HIG 자율 마스크) -->
+  <rect width="1024" height="1024" rx="180" ry="180" fill="url(#bg)"/>
+
+  <!-- 외곽 렌즈 링 (r=352 = 11/32 * 1024) -->
+  <circle cx="512" cy="512" r="352" fill="url(#lens-fill)" stroke="url(#ring)" stroke-width="40"/>
+
+  <!-- 내곽 렌즈 링 — 깊이감 (r=224 = 7/32 * 1024) -->
+  <circle cx="512" cy="512" r="224" fill="none" stroke="#d97757" stroke-width="22" opacity="0.4"/>
+
+  <!-- 크로스헤어 — 중앙 공백으로 내곽 링을 통과시킴 -->
+  <g stroke="#d97757" stroke-width="32" stroke-linecap="round">
+    <line x1="96"  y1="512" x2="352" y2="512"/>
+    <line x1="672" y1="512" x2="928" y2="512"/>
+    <line x1="512" y1="96"  x2="512" y2="352"/>
+    <line x1="512" y1="672" x2="512" y2="928"/>
+  </g>
+
+  <!-- 중앙 포커스 도트 (r=80 = 2.5/32 * 1024) -->
+  <circle cx="512" cy="512" r="80" fill="#d97757"/>
+
+  <!-- 렌즈 글린트 — 1024px 크기에서만 보이는 광택. 좌상단 호 -->
+  <path
+    d="M 240 380 A 320 320 0 0 1 460 200"
+    fill="none"
+    stroke="#ffffff"
+    stroke-opacity="0.18"
+    stroke-width="14"
+    stroke-linecap="round"/>
+</svg>

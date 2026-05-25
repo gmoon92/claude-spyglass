@@ -13,6 +13,55 @@ Unlike most Claude tooling focused on productivity, `claude-spyglass` focuses on
 
 ---
 
+## Install
+
+Spyglass supports two deployment modes — both fully supported and share `~/.spyglass/` state.
+
+### 1. Headless mode — Homebrew Formula (recommended)
+
+Bun standalone server + CLI + browser dashboard.
+
+```bash
+brew tap gmoon92/spyglass
+brew install spyglass
+
+# Persistent (auto-start at login):
+brew services start spyglass
+spyglass open
+
+# Or manual mode (current session only):
+spyglass start
+spyglass open
+
+# Update:
+brew upgrade spyglass
+```
+
+The bundled binary embeds the Bun runtime — **no system Bun required**.
+
+### 2. Local agent mode — Electron app
+
+Same backend wrapped in a dock-aware shell. Use when dock visibility and OS
+integration matter (daily on-machine use). Download the DMG from GitHub Releases.
+
+### Uninstall
+
+```bash
+brew uninstall spyglass
+rm -rf ~/.spyglass    # optional — wipe local data
+```
+
+### From source (contributors)
+
+```bash
+git clone https://github.com/gmoon92/claude-spyglass.git
+cd claude-spyglass
+bun install
+bun run dev
+```
+
+---
+
 ## Why this exists
 
 One day, a non-engineer on our team suddenly started hitting 80% context usage with a single prompt.

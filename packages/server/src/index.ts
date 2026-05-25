@@ -14,5 +14,5 @@ import { dispatchDaemonCommand } from './runtime/daemon';
 export { startServer, stopServer, isServerRunning } from './runtime/lifecycle';
 
 if (import.meta.main) {
-  await dispatchDaemonCommand(process.argv[2]);
+  await dispatchDaemonCommand(process.argv.slice(2));
 }
