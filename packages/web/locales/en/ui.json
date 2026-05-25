@@ -192,7 +192,17 @@
       "section-parent-2": "Caller (-2)",
       "section-parent-1": "Caller (-1)",
       "section-turn-after": "Turn follow-up",
-      "legend-flow": "Turn follow-up"
+      "legend-flow": "Turn follow-up",
+      "mode-toggle-aria": "Flow visualization mode",
+      "mode-ego-label": "Dependency view",
+      "mode-sequential-label": "Causal sequence",
+      "scope-depth": "depth",
+      "scope-seeds": "seeds",
+      "scope-layers": "layers",
+      "legend-call": "Direct call",
+      "legend-after": "Turn follow-up",
+      "node-expand-title": "Expand subtree",
+      "node-collapse-title": "Collapse subtree"
     },
     "col-type": "Type",
     "col-name": "Name",

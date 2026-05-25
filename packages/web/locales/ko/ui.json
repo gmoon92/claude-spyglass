@@ -192,7 +192,17 @@
       "section-parent-2": "호출 인과 (-2)",
       "section-parent-1": "호출 인과 (-1)",
       "section-turn-after": "같은 턴 후속",
-      "legend-flow": "같은 턴 후속"
+      "legend-flow": "같은 턴 후속",
+      "mode-toggle-aria": "플로우 시각화 모드",
+      "mode-ego-label": "의존성 조망",
+      "mode-sequential-label": "인과 순서도",
+      "scope-depth": "깊이",
+      "scope-seeds": "시작점",
+      "scope-layers": "레이어",
+      "legend-call": "직접 호출",
+      "legend-after": "턴 후속",
+      "node-expand-title": "하위 펼치기",
+      "node-collapse-title": "하위 접기"
     },
     "col-type": "타입",
     "col-name": "이름",

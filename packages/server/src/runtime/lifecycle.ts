@@ -27,6 +27,7 @@
  */
 
 import { SpyglassDatabase, getDatabase, closeDatabase } from '@spyglass/storage';
+import { startGraphSyncWorker, stopGraphSyncWorker } from '@spyglass/storage-graph';
 import { clearDiagLogs, getDiagLogDir, logDiagStatus } from '../diag-log';
 import { PORT, HOST, DB_PATH, SHUTDOWN_TIMEOUT_MS } from './config';
 import { startMaintenanceSchedule, stopMaintenanceSchedule } from './maintenance';
@@ -80,6 +81,15 @@ export function startServer(options: {
   // 데이터베이스 연결
   db = getDatabase({ dbPath });
   console.log(`[Server] Database connected: ${dbPath}`);
+
+  // Graph projection sync worker — SPYGLASS_GRAPH_MODE 가 'off' 이면 즉시 no-op.
+  //   - native binding 의 lazy import 까지 모두 본 호출 안에서 일어남.
+  //   - 실패해도 main loop 영향 없음 — try/catch 흡수 + 회로 OPEN.
+  try {
+    startGraphSyncWorker();
+  } catch (e) {
+    console.error('[Server] graph sync worker failed to start (continuing without graph):', e);
+  }
 
   // 일별 유지보수 스케줄 시작 (시작 시 즉시 + 1시간 인터벌로 날짜 변경 감지)
   startMaintenanceSchedule(db);
@@ -157,6 +167,13 @@ export async function stopServer(): Promise<void> {
   // 1. 스케줄러 정리
   stopMaintenanceSchedule();
   stopVersionCheckSchedule();
+  // Graph sync worker — DB close 전에 setInterval/Ladybug connection 정리.
+  //   timer 가 살아있으면 DB close 후에도 tick 이 발화해 nullDB 참조 위험.
+  try {
+    stopGraphSyncWorker();
+  } catch (e) {
+    console.warn('[Server] graph sync worker stop error:', e);
+  }
 
   // 2. SSE 종료 신호 + 짧은 grace
   try {

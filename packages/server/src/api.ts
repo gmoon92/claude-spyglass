@@ -32,6 +32,7 @@ import { proxyRouter } from './routes/proxy';
 import { systemPromptsRouter } from './routes/system-prompts';
 import { metaDocsRouter } from './routes/meta-docs';
 import { versionRouter } from './routes/version';
+import { graphRouter } from './routes/graph';
 
 // 외부 호환: invalidateDashboardCache는 dashboard 라우터로 이전됐으나
 // 기존 import 경로(`./api`)를 보존하기 위해 re-export.
@@ -75,6 +76,11 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
   // /api/meta-docs/* — 비동기 라우터 (POST refresh 본문 파싱이 async)
   const metaDocsResponse = await metaDocsRouter(req, db);
   if (metaDocsResponse) return metaDocsResponse;
+
+  // /api/graph/* — 비동기 라우터 (LadybugClient.query 가 async). 기존 SQLite 라우트와
+  //   완전히 분리된 prefix 라 우선순위는 상대적이지 않다.
+  const graphResponse = await graphRouter(req, db);
+  if (graphResponse) return graphResponse;
 
   for (const handler of SYNC_ROUTERS) {
     const res = handler(req, db, url, path, method);

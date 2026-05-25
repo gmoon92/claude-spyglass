@@ -131,6 +131,22 @@ bun install
 
 bun 워크스페이스(`packages/*`)가 한 번에 설치됩니다.
 
+> **v2.10+ Graph DB(LadybugDB) 안내**
+>
+> v2.10 이상에서는 그래프 프로젝션 레이어 (`@spyglass/storage-graph`) 가 추가되었고,
+> `bun install` 시 `@ladybugdb/core` 의 platform 별 native binding 이 자동으로 설치됩니다.
+> macOS arm64/x64 + Linux arm64/x64 + Windows x64 prebuilt 가 npm 에서 다운로드되므로
+> 사용자 머신에서 별도 컴파일 단계는 없습니다. 다음 디렉토리에서 확인할 수 있습니다:
+>
+> ```bash
+> ls packages/storage-graph/node_modules/@ladybugdb/
+> ```
+>
+> 만약 prebuilt 가 다운로드되지 않으면 (네트워크/방화벽 등) `cmake>=3.15` + `python>=3.9` +
+> `clang(C++20)` 으로 소스 컴파일이 trigger 됩니다. 본 경로는 권장하지 않으며 대신
+> `SPYGLASS_GRAPH_MODE=off` 로 graph 기능 자체를 dormant 상태로 비활성화해 사용할 수
+> 있습니다 (§5.2 운영 모드 참조).
+
 ### 3.3 서버 기동
 
 ```bash
@@ -603,8 +619,152 @@ cp "$(ls -1t ${HOME}/.claude/settings.json.bak-* 2>/dev/null | head -1)" "${HOME
 
 ---
 
+## 5. 데이터 디렉토리 (`~/.spyglass/`) 와 그래프 DB
+
+spyglass 가 사용하는 모든 로컬 데이터는 `~/.spyglass/` 하위에 격리됩니다.
+
+### 5.1 디렉토리 구조
+
+```
+~/.spyglass/
+├── spyglass.db                 # 메인 SQLite DB (source of truth, 영구 보존)
+├── spyglass.db-wal             # SQLite Write-Ahead Log
+├── spyglass.db-shm             # SQLite shared memory
+├── spyglass.db.backup-*        # 마이그레이션 사전 자동 백업
+├── server.pid                  # 현재 서버 프로세스 PID
+├── pricing.json                # 모델 단가 캐시
+├── logs/                       # 모든 로그 파일
+│   ├── collect.log             # collect 명령 출력
+│   ├── server.log              # 서버 stdout/stderr 미러
+│   └── hook-raw.jsonl          # hook 원본 페이로드 (DIAG 모드)
+└── graph/                      # v2.10+ LadybugDB 그래프 프로젝션 (throw-away cache)
+    ├── KUZU_README.txt         # "이 폴더는 throw-away cache" 안내
+    ├── spyglass.lbug           # Ladybug DB 파일 (자동 생성)
+    └── sync_state.json         # sync worker cursor 메타
+```
+
+### 5.2 그래프 DB 운영 모드 (v2.10+)
+
+환경변수 `SPYGLASS_GRAPH_MODE` 로 제어합니다.
+
+| 모드 | 사용자 영향 | Ladybug native 로드 | 권장 시나리오 |
+|---|---|---|---|
+| `off` | SQLite 100% (변경 없음) | 안 함 (완전 dormant) | 그래프 기능 비활성, 안전 폴백 |
+| `shadow` (기본) | SQLite 100% | 백그라운드 sync + 비교 로그만 | 신규 설치, 정확성 검증 |
+| `primary` | Ladybug 응답 (실패 시 자동 SQLite fallback) | 활성 | 본격 graph 시각화 |
+
+```bash
+# 기본 shadow 모드 (사용자 영향 0, 백그라운드 sync 만)
+bun run dev
+
+# 모든 그래프 기능 끄기 — 이전 버전과 동일 동작
+SPYGLASS_GRAPH_MODE=off bun run dev
+
+# Ladybug 응답 우선 사용 (실패 시 SQLite 자동 폴백)
+SPYGLASS_GRAPH_MODE=primary bun run dev
+```
+
+운영 상태 확인:
+
+```bash
+curl http://localhost:9999/api/graph/status | jq
+# {
+#   "mode": "shadow",
+#   "circuit": { "state": "CLOSED", "consecutiveFailures": 0, "fallbackRate": 0 },
+#   "sync":    { "running": true, "totalProcessed": 1234, "cursor": 5678, "circuitState": "CLOSED" }
+# }
+```
+
+### 5.3 그래프 폴더 안전성 (throw-away cache)
+
+`~/.spyglass/graph/` 는 **언제든 삭제 가능한 캐시** 입니다:
+
+```bash
+# 안전한 초기화 — 다음 서버 부팅 시 SQLite로부터 자동 재구축
+rm -rf ~/.spyglass/graph
+```
+
+**SQLite (`spyglass.db`) 만 source of truth** 입니다. 백업 시 `spyglass.db` 한 파일만 복사하면 충분하며,
+그래프 폴더는 복사할 필요 없습니다.
+
+### 5.4 그래프 DB 로그 위치
+
+별도 로그 파일을 만들지 않습니다. 모든 그래프 관련 로그는 **표준 출력 → `~/.spyglass/logs/server.log`** 로
+미러링됩니다.
+
+```bash
+# 모드 / 회로 / 워커 로그 실시간 모니터
+tail -f ~/.spyglass/logs/server.log | grep -E '\[graph-(circuit|sync|shadow|route|flag)\]'
+
+# 예시 출력:
+# [graph-flag] cached mode=shadow (SPYGLASS_GRAPH_MODE=shadow)
+# [graph-sync] worker starting (mode=shadow, tick=200ms)
+# [graph-sync] tick batch=42 processed=42 cursor=12345
+# [graph-circuit] state: CLOSED → OPEN (consecutive_failures=3 ...)
+# [graph-shadow] result nodes=12 edges=8
+```
+
+### 5.5 다운그레이드 시나리오 (v2.10+ → v2.9 이하)
+
+v2.10 이상에서 v2.9 이하로 다운그레이드 시:
+
+1. **SQLite 는 무영향** — `spyglass.db` 의 049 마이그레이션 (outbox table + trigger) 은 이전 버전이
+   무시합니다. 추가 컬럼/테이블만 있고 기존 스키마 변경은 없으므로 호환됩니다.
+2. **`~/.spyglass/graph/` 는 무시됨** — 이전 버전은 본 폴더를 읽지 않으므로 그대로 두거나 삭제해도
+   무관합니다.
+3. **단, 049 trigger 가 살아있어 outbox 가 누적됩니다** — 디스크 부담이 우려되면 다운그레이드 전
+   다음 명령으로 trigger 를 제거하세요:
+
+   ```bash
+   sqlite3 ~/.spyglass/spyglass.db <<'SQL'
+   DROP TRIGGER IF EXISTS trg_requests_to_kuzu_outbox;
+   DROP TRIGGER IF EXISTS trg_sessions_to_kuzu_outbox;
+   DELETE FROM kuzu_outbox;
+   SQL
+   ```
+
+---
+
+## 6. 그래프 DB 자주 묻는 질문
+
+### Q1. 그래프 DB 를 별도로 설치해야 하나요?
+
+**아니요**. `bun install` 한 번이면 `@ladybugdb/core` 의 platform prebuilt binary 가 자동 다운로드됩니다.
+시스템에 별도 패키지 설치 (brew/apt 등) 가 필요하지 않습니다.
+
+### Q2. 그래프 DB 로그가 별도 파일로 나오나요?
+
+**아니요**. 모든 그래프 관련 로그(`[graph-circuit]`, `[graph-sync]`, `[graph-shadow]`, `[graph-route]`,
+`[graph-flag]`)는 spyglass 서버의 표준 출력으로 통합되어 `~/.spyglass/logs/server.log` 에 기록됩니다.
+
+### Q3. 그래프 DB 가 죽으면 spyglass 가 멈추나요?
+
+**아니요**. 3-strike 회로 차단기가 자동으로 OPEN 으로 전이해 SQLite path 로 자동 폴백합니다. 사용자에게
+보이는 화면은 변하지 않습니다. 1시간 후 자동 HALF_OPEN 시도, 성공 시 CLOSED 복귀.
+
+### Q4. 디스크 사용량이 늘어나나요?
+
+`~/.spyglass/graph/` 에 데이터 규모의 30% 정도가 추가됩니다 *(추정)*. payload BLOB 은 복제하지 않고
+포인터만 보관하므로 절대값은 크지 않습니다. 디스크가 부담되면 `SPYGLASS_GRAPH_MODE=off` 로 graph
+폴더 자체를 비워둘 수 있습니다.
+
+### Q5. 그래프 DB 가 망가지면 데이터 손실 위험이 있나요?
+
+**없습니다**. SQLite 가 영구 source of truth 이고, Ladybug 폴더는 throw-away cache 입니다. `rm -rf
+~/.spyglass/graph` 한 줄로 모두 초기화하면 다음 부팅에서 자동 재구축됩니다. 사용자 데이터는 모두
+`spyglass.db` 안에 있습니다.
+
+### Q6. 이전 버전 (v2.9 이하) 으로 돌아갈 때 안전한가요?
+
+**예**. §5.5 참조 — SQLite 스키마는 호환되며, 그래프 폴더는 이전 버전이 무시합니다. 단 049 trigger 가
+누적시키는 outbox 가 부담되면 다운그레이드 전 trigger 제거 SQL 을 실행하세요.
+
+---
+
 ## 참고
 
 - [README.md](../README.md) — 프로젝트 개요와 기능 설명
 - [examples/settings.hooks.minimal.json](./examples/settings.hooks.minimal.json) — 최소 훅 프로파일
 - [examples/settings.hooks.full.json](./examples/settings.hooks.full.json) — 권장(전체) 훅 프로파일
+- [개발 작업 문서 — Sequential Flowchart 풀스택 구현](./development/sequential-flow-implementation.md)
+- [Graph DB 마스터 플랜 — 06 Sequential Flowchart](../.claude/.tmp/plans/spyglass/graph-db-research/06-sequential-flowchart.md)

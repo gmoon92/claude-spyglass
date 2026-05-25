@@ -453,3 +453,107 @@
   color: var(--text-1);
   font-weight: 600;
 }
+
+/* =============================================================================
+ * Sequential Flowchart 모드 — 신규 그래프 네이티브 UI (06 §3.5 / feedback_chip_color_semantics)
+ *
+ * 책임:
+ *   - 시각화 모드 토글 버튼 (.flow-mode-toggle / .flow-mode-btn)
+ *   - 순서도 모드의 노드/엣지 시그니처 (.node-seq, .edge-call, .edge-after)
+ *   - 엣지 hover 인과 경로 강조 — 색상=시그널, 무채색=노이즈.
+ *
+ * 색상 어휘:
+ *   - --accent           = Anthropic 주황 #d97757 (center, CALL 엣지, 강조).
+ *   - 무채색 톤다운       = opacity 0.25 + blur 0.5px (비강조 노드/엣지).
+ *
+ * 호출자: meta-docs-flow-view.js (토글 버튼) + meta-docs-flow-sequential.js (노드/엣지).
+ * ========================================================================== */
+
+/* ── 모드 토글 ───────────────────────────────────────────────────────────── */
+.flow-mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.flow-mode-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.flow-mode-btn:hover {
+  background: var(--raised);
+  color: var(--text-2);
+}
+.flow-mode-btn.is-active {
+  background: var(--accent);
+  color: #fff;
+}
+.flow-mode-btn.is-active:hover {
+  background: var(--accent);
+  color: #fff;
+  filter: brightness(1.05);
+}
+
+/* ── Sequential 모드 — 노드 카드 차별화 ───────────────────────────────────
+ *
+ * Sequential 카드 마크업은 ego 카드와 동일 구조(.icon/.body/.title-row/.title/.sub/.ds-chip/
+ * .sub-list/.sub-row/.meta-pills/.pill-hot)를 그대로 재사용한다. 카드 자체 룰은 base
+ * `.meta-docs-flow-region .node …` SSoT (위쪽 lines 285-455) 로 통일 — 본 섹션은
+ * sequential 모드에서만 다른 *시그너처* 만 정의.
+ *
+ *   - `.is-hot`     : depth=1 자식(직속 호출). border 강조는 base 의 `.is-center` 만으로
+ *                     충분하므로 본 룰은 비워둠 — 호환성 자리만 유지.
+ *   - `.is-after`   : 점선 보더 (turn-after 노드, 인과 약함).
+ *   - `.is-expanding`: 노드가 신규 fetch 로 펼쳐질 때 슬라이드/페이드 인.
+ *
+ * 과거 `.node-seq .node-icon/.node-body/.node-title/.node-sub` 룰은 JS 가 ego 마크업
+ * (.icon/.body/.title/.sub) 으로 교체된 이후 매칭 0건이라 제거(meta-docs-flow-card-parity).
+ */
+.node-seq.is-after {
+  border-style: dashed;
+}
+.node-seq.is-expanding {
+  animation: nodeSeqReveal 280ms ease-out both;
+}
+@keyframes nodeSeqReveal {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Sequential 모드 — 엣지 (SVG path) ───────────────────────────────────── */
+.edge {
+  transition: stroke-opacity var(--dur-fast) ease, stroke-width var(--dur-fast) ease;
+}
+.edge-call  { stroke: var(--accent); stroke-width: 1.8; }
+.edge-after { stroke: var(--border-strong); stroke-width: 1.2; stroke-dasharray: 4 4; }
+
+/* ── 엣지 hover 인과 경로 강조 (highlight.js) ───────────────────────────── */
+.flow-svg.is-hovering foreignObject:not(.is-highlighted) .node {
+  opacity: 0.25;
+  filter: blur(0.5px);
+}
+.flow-svg.is-hovering .edge:not(.is-highlighted) {
+  stroke-opacity: 0.15;
+}
+.flow-svg foreignObject.is-highlighted .node {
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(217, 119, 87, 0.25);
+}
+.flow-svg .edge.is-highlighted {
+  stroke: var(--accent);
+  stroke-width: 2.2;
+  stroke-opacity: 1;
+}
+
+/* ── Sequential 모드 toolbar 변종 (ego 모드와 동일 룰 재활용 + 미세 보정) ── */
+.flow-toolbar-sequential .flow-legend .flow-sw {
+  /* 순서도 모드는 strength 4단계 대신 CALL/AFTER 2단계만. */
+}

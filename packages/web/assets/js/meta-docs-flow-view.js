@@ -45,6 +45,9 @@
 
 import { escHtml } from './formatters.js';
 import { getDateRange } from './api.js';
+// 신규 그래프 네이티브 모듈 — 모드 토글 시 본 모듈로 위임.
+//   feedback_avoid_spaghetti: 모드별 렌더링 책임이 한 파일에 섞이지 않도록 격리.
+import { loadSequentialFlow } from './meta-docs-flow-sequential.js';
 
 // ============================================================================
 // 아이콘 (SVG, currentColor) — 노드 카드의 좌측 박스에 들어간다.
@@ -114,6 +117,28 @@ let _lastArgs = null;
 let _rangeHandlerBound = false;
 
 // ============================================================================
+// 시각화 모드 토글 — 'ego'(기존 통계형 방사형) | 'sequential'(신규 인과 순서도)
+//
+// 기본값은 'ego' — 기존 사용자 경험을 파괴하지 않는다. localStorage 키
+// 'meta-docs-flow-mode' 로 사용자 선택을 영속화. 본 모듈은 토글 버튼을 toolbar 에만
+// 그리고, sequential 모드 진입 시 즉시 meta-docs-flow-sequential.js 로 위임한다.
+// ============================================================================
+const FLOW_MODE_KEY = 'meta-docs-flow-mode';
+let _currentMode = readPersistedMode();
+
+function readPersistedMode() {
+  try {
+    const v = window.localStorage?.getItem(FLOW_MODE_KEY);
+    if (v === 'sequential' || v === 'ego') return v;
+  } catch { /* localStorage 차단 환경 — ego 기본 */ }
+  return 'ego';
+}
+
+function persistMode(m) {
+  try { window.localStorage?.setItem(FLOW_MODE_KEY, m); } catch { /* noop */ }
+}
+
+// ============================================================================
 // 진입점 — meta-docs-view.js loadMetaDocsLibrary / 행 클릭에서 호출
 // ============================================================================
 
@@ -140,6 +165,19 @@ export async function loadFlowDiagram(args) {
 
   // 글로벌 active-range 이벤트 1회만 구독 (옵션 A: 메인 페이지 #dateFilter와 동기).
   ensureRangeHandler();
+
+  // ── 시각화 모드 분기 ──────────────────────────────────────────────────
+  //   sequential: 신규 인과 순서도(Sequential Flowchart) — 별도 모듈로 위임.
+  //   ego(기본):  기존 ego-graph 통계형 — 본 모듈의 아래 로직 그대로 유지.
+  //   centerType -> centerKind 매핑 — 두 모듈의 파라미터 표면이 다르므로 변환.
+  if (_currentMode === 'sequential') {
+    return loadSequentialFlow({
+      centerKind: centerType,
+      centerName,
+      project,
+      depth: 3,
+    });
+  }
 
   // 중심 미지정 — 카탈로그가 비어 있거나 모두 orphan인 케이스. 안내만 노출.
   if (!centerType || !centerName) {
@@ -249,6 +287,32 @@ export async function loadFlowDiagram(args) {
   bindPan(svgEl, canvasEl);
   bindZoom(container, svgEl);
   bindSubRowClick(svgEl);
+  bindModeToggle(container);
+}
+
+/**
+ * 시각화 모드 토글 바인딩 — toolbar 의 .flow-mode-btn 클릭 시 모드 전환.
+ *
+ * 흐름:
+ *   1) 사용자가 다른 모드 버튼 클릭 → _currentMode 갱신 + localStorage 영속화.
+ *   2) loadFlowDiagram(_lastArgs) 재호출 — 새 모드의 진입점이 자동 분기.
+ *
+ * 기존 ego-graph 의 노드 위치/줌 상태는 모드 전환과 함께 폐기된다 — 두 모드의
+ * viewBox/노드 좌표 표면이 직접 호환 안 됨. 사용자는 모드 전환을 명시적 액션으로 인지.
+ */
+function bindModeToggle(container) {
+  const btns = container.querySelectorAll('[data-flow-mode]');
+  for (const btn of btns) {
+    btn.addEventListener('click', () => {
+      const next = btn.dataset.flowMode;
+      if (next !== 'ego' && next !== 'sequential') return;
+      if (next === _currentMode) return;
+      _currentMode = next;
+      persistMode(next);
+      // 같은 center 로 재로드 — _lastArgs 가 직전 인자를 보관.
+      if (_lastArgs) loadFlowDiagram(_lastArgs);
+    });
+  }
 }
 
 // ============================================================================
@@ -341,8 +405,26 @@ function shellHtml(meta) {
   //   flow toolbar에는 center/turns scope만 노출 — 한 페이지에 같은 필터를 두 번
   //   표시하지 않는다.
 
+  // 시각화 모드 토글 — 'ego'(기존) ↔ 'sequential'(신규 인과 순서도).
+  //   기존 코드 보존 원칙 — toolbar 한 행에 자리만 추가, 기존 chips 의 위치는 그대로.
+  const modeEgoActive = _currentMode === 'ego' ? ' is-active' : '';
+  const modeSeqActive = _currentMode === 'sequential' ? ' is-active' : '';
+  const modeToggleHtml = `
+    <span class="flow-mode-toggle" role="radiogroup" aria-label="${t('ui.meta-docs-view.flow.mode-toggle-aria') || 'Flow visualization mode'}">
+      <button type="button" class="flow-mode-btn${modeEgoActive}" data-flow-mode="ego"
+              role="radio" aria-checked="${_currentMode === 'ego'}">
+        ${t('ui.meta-docs-view.flow.mode-ego-label') || 'Dependency view'}
+      </button>
+      <button type="button" class="flow-mode-btn${modeSeqActive}" data-flow-mode="sequential"
+              role="radio" aria-checked="${_currentMode === 'sequential'}">
+        ${t('ui.meta-docs-view.flow.mode-sequential-label') || 'Causal sequence'}
+      </button>
+    </span>
+  `;
+
   return `
     <div class="flow-toolbar">
+      ${modeToggleHtml}
       <span class="flow-scope">${t('ui.meta-docs-view.flow.scope-center')}: <b>${centerLabel}</b><button type="button" class="flow-info-btn" aria-label="${infoAria}" title="${infoTooltip}">ⓘ</button></span>
       <span class="flow-scope">${t('ui.meta-docs-view.flow.scope-turns', { turns, total })}</span>
       ${callsScopeHtml}

@@ -1,0 +1,27 @@
+{
+  "name": "@spyglass/storage-graph",
+  "version": "0.1.0",
+  "description": "LadybugDB (Kuzu fork) graph projection layer — read-only CQRS view on top of SQLite SSoT. SQLite remains the source of truth; this package builds a throw-away graph cache from it.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./runtime": "./src/runtime/flag.ts",
+    "./schema": "./src/schema/ddl.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "dependencies": {
+    "@spyglass/storage": "workspace:*",
+    "@spyglass/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@ladybugdb/core": "^0.16.1",
+    "@types/bun": "latest"
+  },
+  "scripts": {
+    "test": "bun test src/__tests__"
+  }
+}

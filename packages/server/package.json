@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@spyglass/storage": "workspace:*",
+    "@spyglass/storage-graph": "workspace:*",
     "@spyglass/types": "workspace:*",
     "i18next": "^26.2.0"
   },

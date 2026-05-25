@@ -192,7 +192,17 @@
       "section-parent-2": "呼出元 (-2)",
       "section-parent-1": "呼出元 (-1)",
       "section-turn-after": "同ターン後続",
-      "legend-flow": "同ターン後続"
+      "legend-flow": "同ターン後続",
+      "mode-toggle-aria": "フロー可視化モード",
+      "mode-ego-label": "依存関係ビュー",
+      "mode-sequential-label": "因果順序図",
+      "scope-depth": "深さ",
+      "scope-seeds": "起点",
+      "scope-layers": "レイヤー",
+      "legend-call": "直接呼出",
+      "legend-after": "ターン後続",
+      "node-expand-title": "サブツリーを展開",
+      "node-collapse-title": "サブツリーを折りたたむ"
     },
     "col-type": "タイプ",
     "col-name": "名前",

@@ -349,11 +349,23 @@ export function pctToStrength(pct: number): Exclude<FlowEdgeStrength, 'flow'> {
  *  - 동일 server 의 mcp 도구가 1개뿐 → single (무의미한 wrap 방지).
  *  - 그룹 위치는 입력 리스트에서 그 server 가 처음 등장한 위치를 유지한다(정렬은 호출 측에서 끝났음).
  */
-type ColumnEntity =
+export type ColumnEntity =
   | { type: 'single'; node: MetaFlowEgoNode }
   | { type: 'group'; server: string; nodes: MetaFlowEgoNode[]; totalCount: number };
 
-function buildColumnEntities(list: MetaFlowEgoNode[]): ColumnEntity[] {
+/**
+ * 한 컬럼/레이어의 MetaFlowEgoNode 리스트를 표시 엔티티(single|group)로 변환.
+ *
+ * SSoT — ego 모드(본 라우터)와 sequential 모드(`routes/graph.ts::adaptEgoToSequential`)
+ * 가 동일 정책을 공유하기 위해 export. 외부 import 측은 ColumnEntity 타입도 함께 사용.
+ *
+ * 정책 요약:
+ *   - mcp 이외의 kind: 항상 single 카드.
+ *   - 같은 server 의 mcp 도구가 1개뿐: single (불필요한 group wrap 방지).
+ *   - 같은 server 의 mcp 도구가 2개+: group 카드 1개로 묶고 totalCount 합산.
+ *   - 그룹 위치는 첫 등장 server 의 위치 보존(정렬은 호출 측 책임).
+ */
+export function buildColumnEntities(list: MetaFlowEgoNode[]): ColumnEntity[] {
   const out: ColumnEntity[] = [];
   /** server → out[] 내 placeholder index. 등장한 server 의 첫 위치를 보존. */
   const serverSlot = new Map<string, number>();

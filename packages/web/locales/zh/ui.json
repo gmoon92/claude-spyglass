@@ -192,7 +192,17 @@
       "section-parent-2": "调用方 (-2)",
       "section-parent-1": "调用方 (-1)",
       "section-turn-after": "同回合后续",
-      "legend-flow": "同回合后续"
+      "legend-flow": "同回合后续",
+      "mode-toggle-aria": "流程可视化模式",
+      "mode-ego-label": "依赖关系视图",
+      "mode-sequential-label": "因果顺序图",
+      "scope-depth": "深度",
+      "scope-seeds": "起点",
+      "scope-layers": "层级",
+      "legend-call": "直接调用",
+      "legend-after": "回合后续",
+      "node-expand-title": "展开子树",
+      "node-collapse-title": "收起子树"
     },
     "col-type": "类型",
     "col-name": "名称",
