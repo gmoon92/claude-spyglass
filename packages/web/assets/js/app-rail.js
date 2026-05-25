@@ -34,11 +34,12 @@ export function initAppRail(applyAppMode) {
   if (!rail) return;
 
   // 클릭 위임 — 버튼 자체에 data-app-mode 속성 부여
+  //   settings-page (2026-05-26): 'settings' 모드도 동등하게 위임.
   rail.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-app-mode]');
     if (!btn || !rail.contains(btn)) return;
     const mode = btn.dataset.appMode;
-    if (mode !== 'browse' && mode !== 'metadocs') return;
+    if (mode !== 'browse' && mode !== 'metadocs' && mode !== 'settings') return;
     applyAppMode(mode);
   });
 

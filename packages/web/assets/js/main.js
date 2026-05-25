@@ -17,6 +17,7 @@ import { initAppRail, setRailActive } from './app-rail.js';
 // `openMetaDocViaDeepLink` import 제거. 사용자가 메타 모드로 진입하는 동선은 좌측 rail의
 // `enterMetaDocsMode` 단일 경로로 통합. 메타 모드 내부 검색은 사이드바에서 직접 입력.
 import { enterMetaDocsMode, exitMetaDocsMode, setMetaSubTab, refreshMetaActiveSubTab, initMetaDocsLeftNav, setMetaScopeMode, initMetaSubTabs } from './meta-docs-view.js';
+import { enterSettingsMode, exitSettingsMode } from './settings-view.js';
 import {
   setDetailFilter, applyDetailFilter, setDetailView, toggleTurn,
   refreshDetailSession, initDetailSearch,
@@ -66,10 +67,10 @@ const STORAGE_KEY = 'spyglass:lastProject';
  * 책임: 단일 진입점 — rail 클릭 / sessionStorage 복원 / 딥링크 / ESC 복귀 모두 이 함수 호출.
  * 가시성 결정은 view 자체가 아니라 body[data-app-mode] CSS 룰로 처리 (선언적, 재진입 안전).
  *
- * @param {'browse' | 'metadocs'} mode
+ * @param {'browse' | 'metadocs' | 'settings'} mode
  */
 function applyAppMode(mode) {
-  if (mode !== 'browse' && mode !== 'metadocs') return;
+  if (mode !== 'browse' && mode !== 'metadocs' && mode !== 'settings') return;
 
   // browse 복귀 — meta-docs feedback ADR (2026-05-14):
   //   가상 'user (global)' 선택은 metadocs 전용이므로 mode 전환 BEFORE에 즉시 실제 프로젝트로 복원.
@@ -94,14 +95,22 @@ function applyAppMode(mode) {
   document.body.dataset.appMode = mode;
   setRailActive(mode);
 
+  // 모드 전환 시 다른 모드의 mount 헬퍼들도 항상 cleanup — 중첩 진입 방지.
   if (mode === 'metadocs') {
+    exitSettingsMode();
     enterMetaDocsMode();
+    return;
+  }
+  if (mode === 'settings') {
+    exitMetaDocsMode();
+    enterSettingsMode();
     return;
   }
 
   // browse 복귀 — 메타 모드에서 metaTabBar 우측 슬롯으로 이동했던 .lang-switcher-wrap을
   // chart-actions 원위치로 복귀시켜야 .right-panel(chart) 안에서 다시 노출된다.
   exitMetaDocsMode();
+  exitSettingsMode();
 
   // 항상 즉시 좌측 패널을 재렌더 — 메타 모드의 tbody 잔존(가상 행 / 항목수 컬럼)을 무조건 비움.
   //   selectProject는 fetchSessionsByProject 등 부수 흐름이 있어 GLOBAL 복원 케이스에서만 사용.
@@ -117,7 +126,8 @@ function applyAppMode(mode) {
  * 이미 metadocs인 상태에서 재진입 시는 snapshot 덮어쓰지 않음 (사용자 직전 browse 상태 보존).
  */
 function snapshotBrowseState() {
-  if (getAppMode() === 'metadocs' && getPrevState() != null) return;
+  // metadocs / settings 모드에서 이미 snapshot 이 있으면 덮어쓰지 않는다 — 사용자 직전 browse 보존.
+  if ((getAppMode() === 'metadocs' || getAppMode() === 'settings') && getPrevState() != null) return;
   setPrevState({
     rightView: getRightView(),
     detailTab: getDetailTab(),
@@ -728,7 +738,8 @@ function initEventDelegation() {
   // 직전 browse 상태가 detail이었으면 그대로 detail에 머무는 것이 사용자 기대.
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    if (getAppMode() !== 'metadocs') return;
+    // settings-page (2026-05-26): settings 모드 ESC 도 동일하게 browse 복귀.
+    if (getAppMode() !== 'metadocs' && getAppMode() !== 'settings') return;
     const ae = document.activeElement;
     const tag = ae?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || ae?.isContentEditable) return;
@@ -871,9 +882,12 @@ async function init() {
   // applyAppMode를 콜백으로 주입 — rail 모듈은 모드 값만 전달, view 조작은 main 책임.
   applyAppMode(getAppMode());
   initAppRail((mode) => {
-    // rail 클릭으로 metadocs 진입 시 직전 browse 상태 snapshot — ESC 복귀용
-    if (mode === 'metadocs' && getAppMode() === 'browse') snapshotBrowseState();
-    if (mode === 'browse' && getAppMode() === 'metadocs') {
+    // rail 클릭으로 metadocs/settings 진입 시 직전 browse 상태 snapshot — ESC 복귀용.
+    //   settings-page (2026-05-26): settings 모드도 동일하게 snapshot 대상.
+    if ((mode === 'metadocs' || mode === 'settings') && getAppMode() === 'browse') {
+      snapshotBrowseState();
+    }
+    if (mode === 'browse' && (getAppMode() === 'metadocs' || getAppMode() === 'settings')) {
       // rail에서 직접 browse로 — prevState가 있으면 그대로 복원, 없으면 단순 전환
       restorePrevState();
       return;

@@ -1,0 +1,1044 @@
+/**
+ * settings-view.css — 설정 패널 시각 (2026-05-26 settings-page)
+ *
+ * 책임:
+ *   `#settingsView` 컨테이너 + 좌측 sub-tab 네비 + 우측 본문 카드/액션/토스트의 시각.
+ *   본 패널은 body[data-app-mode="settings"] 일 때만 노출 — 토글 룰은 본 파일 끝에 정의.
+ *
+ * 디자인 시스템 호환:
+ *   - 색상 토큰: --surface / --surface-alt / --border-soft / --border-strong / --accent / --text-1..4
+ *   - spacing 토큰: --space-2 / --space-3 / --space-4 — design-tokens.css SSoT 그대로 차용.
+ *   - 상태 칩 ✓⚠✕ : --accent(주황, OK 강조 대신 정상은 옅은 회색) / --warn-amber / --danger-red.
+ *     본 프로젝트는 별도 success-green 토큰이 없어 ✓ 는 옅은 텍스트색으로, ⚠ 는 accent 로 강조.
+ */
+
+/* =============================================================================
+ * 컨테이너 + body 토글
+ * ========================================================================== */
+
+/**
+ * settingsView 는 main-layout grid 의 3번째 컬럼(우측 1fr)에 명시적으로 배치된다.
+ *
+ *   metaDocsRoot 와 동일 패턴 — grid-column 명시가 없으면 auto-place 가 row 2 또는 column 1 의
+ *   다음 위치로 흘러가 우측 메인 영역이 비어 보이는 회귀가 발생한다 (meta-docs.css:654 참조).
+ *
+ *   가시성 토글은 body[data-app-mode] CSS 룰 + HTML `hidden` 속성 동시 사용:
+ *     - 기본: 작성자 룰 `display: none` + HTML hidden 으로 이중 방어
+ *     - settings 모드 진입: body[data-app-mode="settings"] 룰이 display: flex 로 덮어씀.
+ *       JS 의 `view.hidden = false` 가 [hidden] UA 룰을 해제하므로 CSS display: flex 가 활성화.
+ *
+ *   !important 사용 이유: settingsView 가 grid 의 3rd column row 1 에 *반드시* 위치해야
+ *   main-layout 의 transition 이나 다른 모드 잔여 룰에 흔들리지 않는다.
+ */
+#settingsView.settings-view {
+  display: none;
+  grid-column: 3 / 4;
+  grid-row: 1;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface);
+  color: var(--text-1);
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid var(--border-soft);
+}
+body[data-app-mode="settings"] #settingsView.settings-view {
+  display: flex !important;
+}
+
+/* settings 모드일 때 다른 view + 사이드바 관련 위젯 모두 숨김.
+ *
+ *   .left-panel              : 좌측 패널 본체 (padding/border 가 잔여 frame 으로 보임 → 완전 숨김)
+ *   .right-panel             : 기본 browse 모드의 차트 영역
+ *   #metaDocsRoot            : Behavior Definitions 카탈로그
+ *   .sidebar-edge-toggle     : 좌측 사이드바 접기/펴기 토글 (settings 에선 무의미)
+ *   .panel-resize-handle     : left-panel 우측 모서리 resize 핸들
+ *
+ *   !important 로 main.js 의 동적 토글이 settings 모드를 override 하지 못하도록 보장.
+ *   (settings 모드는 좌측 패널 자체가 무의미하므로 user resize / collapse 상태 모두 무시) */
+body[data-app-mode="settings"] .left-panel,
+body[data-app-mode="settings"] .right-panel,
+body[data-app-mode="settings"] #metaDocsRoot,
+body[data-app-mode="settings"] .sidebar-edge-toggle,
+body[data-app-mode="settings"] .panel-resize-handle {
+  display: none !important;
+}
+
+/* settings 모드의 메인 grid — app-rail + (gap 0) + settingsView 1fr.
+ *
+ *   left-panel 컬럼은 0px 로 collapse — display:none 위 룰과 함께 적용해 폭/마진/border
+ *   모두 0 으로 만들어 app-rail 과 settingsView 사이의 잔여 영역을 제거. */
+body[data-app-mode="settings"] .main-layout {
+  grid-template-columns: var(--app-rail-width) 0 1fr !important;
+  gap: 0 !important;
+}
+
+/* =============================================================================
+ * 헤더
+ * ========================================================================== */
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-soft);
+  flex-shrink: 0;
+}
+.settings-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-1);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.settings-title-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.settings-refresh-btn {
+  appearance: none;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-alt);
+  color: var(--text-2);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease;
+}
+.settings-refresh-btn:hover {
+  background: var(--raised);
+  border-color: var(--border-strong);
+  color: var(--text-1);
+}
+
+/* =============================================================================
+ * 본문 2-column grid (좌 nav + 우 content)
+ * ========================================================================== */
+
+.settings-body {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 좌측 네비 */
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 8px;
+  border-right: 1px solid var(--border-soft);
+  background: var(--surface);
+  overflow-y: auto;
+}
+.settings-nav-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.settings-nav-btn:hover {
+  background: var(--surface-alt);
+  color: var(--text-2);
+}
+.settings-nav-btn.is-active {
+  background: var(--surface-alt);
+  color: var(--text-1);
+  font-weight: 600;
+  border-left: 3px solid var(--accent);
+  padding-left: 9px; /* 3px border 만큼 보정 */
+}
+
+/* 우측 컨텐츠 */
+.settings-content {
+  padding: 20px 28px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-section-title {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-1);
+  letter-spacing: -0.01em;
+}
+
+/* =============================================================================
+ * 카드
+ * ========================================================================== */
+
+.settings-card {
+  background: var(--surface-alt);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.settings-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+  margin-bottom: 4px;
+}
+.settings-card-sub {
+  font-size: 12px;
+  color: var(--text-3);
+  font-family: var(--font-data);
+  letter-spacing: -0.01em;
+}
+.settings-card-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+/* =============================================================================
+ * 진단 row — ✓ Label  value  tail
+ * ========================================================================== */
+
+.settings-row {
+  display: grid;
+  grid-template-columns: 18px minmax(120px, 200px) 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 12px;
+  border-bottom: 1px dashed var(--border-soft);
+}
+.settings-row:last-child { border-bottom: none; }
+.settings-row-icon { font-weight: 700; text-align: center; font-size: 13px; }
+.settings-row-ok .settings-row-icon  { color: var(--text-2); }
+.settings-row-warn .settings-row-icon { color: var(--accent); }
+.settings-row-fail .settings-row-icon { color: var(--danger-red, #e0413e); }
+.settings-row-label { color: var(--text-2); font-weight: 500; }
+.settings-row-value {
+  color: var(--text-1);
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+.settings-row-tail {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-meta {
+  color: var(--text-3);
+  font-size: 11px;
+  font-family: var(--font-data);
+  letter-spacing: -0.01em;
+}
+
+.settings-cmd {
+  background: var(--raised);
+  color: var(--text-2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: var(--font-data);
+}
+
+/* jump 버튼 — 진단 row 우측 */
+.settings-jump-btn {
+  appearance: none;
+  border: 1px solid var(--border-soft);
+  background: transparent;
+  color: var(--accent);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background var(--dur-fast) ease;
+}
+.settings-jump-btn:hover {
+  background: var(--surface-alt);
+}
+
+/* =============================================================================
+ * 액션 버튼 (Hook apply / Graph reset 등)
+ * ========================================================================== */
+
+.settings-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.settings-action-btn {
+  appearance: none;
+  border: 1px solid var(--border-soft);
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease, transform var(--dur-fast) ease;
+}
+.settings-action-primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.settings-action-primary:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+.settings-action-secondary {
+  background: var(--surface-alt);
+  color: var(--text-1);
+}
+.settings-action-secondary:hover {
+  background: var(--raised);
+  border-color: var(--border-strong);
+}
+
+/* =============================================================================
+ * 결과 영역 (preview / apply diff / mode 전환 등)
+ * ========================================================================== */
+
+.settings-result {
+  margin-top: 8px;
+}
+.settings-loading {
+  padding: 12px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.settings-error {
+  padding: 10px 12px;
+  background: rgba(224, 65, 62, 0.08);
+  border: 1px solid var(--danger-red, #e0413e);
+  border-radius: 6px;
+  color: var(--danger-red, #e0413e);
+  font-size: 12px;
+}
+
+.settings-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.settings-diff-title {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-1);
+  margin-bottom: 4px;
+}
+.settings-diff-row {
+  font-size: 11px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-family: var(--font-data);
+}
+.settings-diff-row b { font-weight: 600; color: var(--text-2); }
+.settings-diff-add  { color: var(--accent); }
+.settings-diff-mod  { color: var(--text-1); }
+.settings-diff-keep { color: var(--text-3); }
+.settings-diff-info { color: var(--text-2); }
+.settings-diff-row code {
+  background: var(--raised);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+/* =============================================================================
+ * Graph mode segmented control
+ * ========================================================================== */
+
+.settings-mode-group {
+  display: inline-flex;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.settings-mode-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.settings-mode-btn:hover { background: var(--surface-alt); color: var(--text-2); }
+.settings-mode-btn.is-active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* =============================================================================
+ * Graph mode source 배지 + env override 경고
+ * (PR 1 — server-config.json 영속화)
+ * ========================================================================== */
+
+.settings-source-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  color: var(--text-3);
+  font-family: var(--font-data);
+}
+.settings-source-badge.is-env {
+  /* env override — 강조: GUI 변경이 즉시 반영 안 됨 */
+  background: rgba(224, 65, 62, 0.12);
+  color: var(--danger-red, #e0413e);
+  border-color: var(--danger-red, #e0413e);
+}
+.settings-source-badge.is-saved {
+  /* 파일 영속화됨 — accent 주황 */
+  background: var(--color-accent-soft, rgba(217, 119, 87, 0.18));
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.settings-source-badge.is-default {
+  /* 아직 한 번도 토글 안 됨 — 중립 */
+  color: var(--text-3);
+}
+
+.settings-warn-banner {
+  background: rgba(224, 65, 62, 0.10);
+  border: 1px solid var(--danger-red, #e0413e);
+  color: var(--danger-red, #e0413e);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+/* =============================================================================
+ * Sticky Alert — Hook/Graph 변경 후 강조 안내 (PR 2)
+ *
+ * settings-header 와 settings-body 사이에 끼워 넣어 sub-tab 전환에도 *유지*. 사용자가
+ * 명시적으로 [×] 닫기 전까지 다음 단계 (예: Claude Code 재시작) 를 화면 상단에 노출.
+ * ========================================================================== */
+
+.settings-sticky-alert-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 24px;
+  flex-shrink: 0;
+}
+.settings-sticky-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  background: var(--color-accent-soft, rgba(217, 119, 87, 0.16));
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  animation: stickyAlertFade 220ms ease-out both;
+}
+.settings-sticky-alert-restart {
+  /* 재시작 안내 — accent 주황(중요) */
+  background: var(--color-accent-soft, rgba(217, 119, 87, 0.16));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.settings-sticky-alert-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.settings-sticky-alert-text {
+  flex: 1;
+  color: var(--text-1);
+}
+.settings-sticky-alert-close {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--text-3);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.settings-sticky-alert-close:hover {
+  color: var(--text-1);
+}
+@keyframes stickyAlertFade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* =============================================================================
+ * Inline copy 아이콘 — 외부 도구 명령 1-click 복사 (PR 2)
+ * ========================================================================== */
+
+.settings-inline-copy {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-3);
+  padding: 3px 5px;
+  margin-left: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.settings-inline-copy:hover {
+  background: var(--surface-alt);
+  border-color: var(--border-soft);
+  color: var(--text-1);
+}
+.settings-inline-copy .settings-copy-icon {
+  width: 12px;
+  height: 12px;
+}
+
+/* =============================================================================
+ * details/summary — Proxy preview 폴드 (PR 2)
+ *
+ * 메인 흐름은 [프록시 자동 등록] 버튼 1번. snippet 미리보기는 *details* 로 접어 둠.
+ * ========================================================================== */
+
+.settings-details {
+  margin-top: 8px;
+  border-top: 1px dashed var(--border-soft);
+  padding-top: 8px;
+}
+.settings-details > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-3);
+  padding: 4px 0;
+  user-select: none;
+  list-style: none;
+}
+.settings-details > summary::-webkit-details-marker { display: none; }
+.settings-details > summary::before {
+  content: '▸ ';
+  display: inline-block;
+  transition: transform var(--dur-fast) ease;
+}
+.settings-details[open] > summary::before {
+  transform: rotate(90deg);
+}
+.settings-details > summary:hover {
+  color: var(--text-1);
+}
+
+/* =============================================================================
+ * 알약 토글 스위치 — On/Off CSS-only 컴포넌트 (PR 2 명세)
+ *
+ * 마크업 권장 (settings-view.js 가 사용할 헬퍼는 향후 PR):
+ *   <label class="switch-container">
+ *     <input type="checkbox" class="switch-input">
+ *     <span class="switch-slider"></span>
+ *   </label>
+ *
+ * On 상태 = checkbox.checked → 트랙 색이 --accent 주황으로 활성화.
+ * ========================================================================== */
+
+.switch-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 38px;
+  height: 22px;
+  cursor: pointer;
+  user-select: none;
+}
+.switch-input {
+  appearance: none;
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+  z-index: 1;
+  opacity: 0;
+}
+.switch-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--border-strong);
+  border-radius: 999px;
+  transition: background var(--dur-fast) ease;
+}
+.switch-slider::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--dur-fast) ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.switch-input:checked + .switch-slider {
+  background: var(--accent);
+}
+.switch-input:checked + .switch-slider::before {
+  transform: translateX(16px);
+}
+.switch-input:focus-visible + .switch-slider {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.switch-input:disabled + .switch-slider {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* =============================================================================
+ * 옵션 카드 (Graph mode 선택) + 툴팁 — UX 대개혁 (PR 2 마감)
+ *
+ * off/shadow/primary 같은 정체불명 알약 버튼을 *큰 카드* 로 교체.
+ * 각 카드에 한글 라벨 + 1줄 설명 + 우상단 ⓘ 호버 툴팁.
+ * ========================================================================== */
+
+.settings-option-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 4px;
+}
+.settings-option-card {
+  appearance: none;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease,
+              transform var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+  color: var(--text-1);
+  font-family: inherit;
+}
+.settings-option-card:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-alt);
+  transform: translateY(-1px);
+}
+.settings-option-card.is-active {
+  border-color: var(--accent);
+  background: var(--color-accent-soft, rgba(217, 119, 87, 0.10));
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.settings-option-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.settings-option-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.settings-option-card-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.settings-option-card.is-active .settings-option-card-label {
+  color: var(--accent);
+}
+.settings-option-card-desc {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+
+/* ── 툴팁 컴포넌트 — 호버/포커스 노출 ─────────────────────────────────── */
+.settings-tooltip-host {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: help;
+  outline: none;
+}
+.settings-tooltip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--surface-alt);
+  border: 1px solid var(--border-soft);
+  color: var(--text-3);
+  font-size: 10px;
+  font-weight: 600;
+  font-style: normal;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.settings-tooltip-host:hover .settings-tooltip-icon,
+.settings-tooltip-host:focus-visible .settings-tooltip-icon {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.settings-tooltip-bubble {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  /* 자연 폭 + 합리적인 cap — 짧은 문장은 작게, 긴 문장은 360px 안에서 줄바꿈. */
+  width: max-content;
+  min-width: 180px;
+  max-width: 360px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #1a1a1c;
+  color: #e8e8ea;
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  font-size: 11px;
+  line-height: 1.55;
+  font-weight: 400;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity var(--dur-fast) ease, transform var(--dur-fast) ease;
+  /* 긴 슬래시 토큰 (`Pre/Post/SessionStart/...`) 도 줄바꿈 허용 + 한국어는 어절 단위로 자연 줄바꿈. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+.settings-tooltip-bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: 4px;
+  border: 6px solid transparent;
+  border-top-color: #1a1a1c;
+}
+.settings-tooltip-host:hover .settings-tooltip-bubble,
+.settings-tooltip-host:focus-visible .settings-tooltip-bubble,
+.settings-tooltip-host:focus .settings-tooltip-bubble {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* =============================================================================
+ * 통합 상태 배지 — ✓ / ⚠ / ⏸ 단일 노출 (디버그 지표는 details 내부로 격리)
+ * ========================================================================== */
+
+.settings-health-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.settings-health-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+}
+.settings-health-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+.settings-health-text {
+  letter-spacing: -0.005em;
+}
+.settings-health-badge.is-ok {
+  background: var(--color-accent-soft, rgba(217, 119, 87, 0.12));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.settings-health-badge.is-warn {
+  background: rgba(224, 65, 62, 0.10);
+  border-color: var(--danger-red, #e0413e);
+  color: var(--danger-red, #e0413e);
+}
+.settings-health-badge.is-off {
+  background: var(--surface-alt);
+  border-color: var(--border-strong);
+  color: var(--text-3);
+}
+
+/* ── 통합 배지 아래 *검사 대상 파일 경로* 한 줄 — 사용자가 "왜 미설치인지" 즉시 진단 가능. ── */
+.settings-health-target {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-3);
+  font-family: var(--font-data);
+}
+.settings-health-target code {
+  background: var(--raised);
+  color: var(--text-2);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+/* ── 액션 버튼 아래 *클릭 안내문* — 카드 선택과 실제 설치를 명확히 구분. ── */
+.settings-action-help {
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+
+/* =============================================================================
+ * Engineering details — 회로/Sync/캐시 절대경로 격리
+ * ========================================================================== */
+
+.settings-engineering {
+  margin-top: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  padding: 8px 16px;
+}
+.settings-engineering > summary {
+  color: var(--text-3);
+  font-size: 11px;
+  font-family: var(--font-data);
+  letter-spacing: 0.02em;
+}
+.settings-engineering[open] {
+  padding-bottom: 12px;
+}
+.settings-engineering[open] > summary {
+  color: var(--text-2);
+  margin-bottom: 6px;
+  border-bottom: 1px dashed var(--border-soft);
+  padding-bottom: 6px;
+}
+
+/* settings-diff-success — graph 캐시 재구축 등 단순 성공 박스 */
+.settings-diff-success {
+  background: var(--color-accent-soft, rgba(217, 119, 87, 0.10));
+  border-color: var(--accent);
+}
+.settings-diff-success .settings-diff-title {
+  color: var(--accent);
+}
+
+/* =============================================================================
+ * Hook 프로필 radio
+ * ========================================================================== */
+
+.settings-radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+  padding: 4px 0;
+  cursor: pointer;
+}
+.settings-radio:hover { color: var(--text-1); }
+.settings-radio b { color: var(--text-1); }
+
+/* =============================================================================
+ * Proxy 스니펫 + 코드 블록
+ * ========================================================================== */
+
+.settings-select {
+  appearance: none;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  color: var(--text-1);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: var(--font-data);
+}
+
+.settings-code {
+  background: #0d0d0e;
+  color: #d4d4d4;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-size: 11px;
+  line-height: 1.55;
+  font-family: var(--font-data);
+  overflow-x: auto;
+  margin: 0;
+  white-space: pre;
+}
+
+/* =============================================================================
+ * 코드 박스 우상단 복사 버튼 — 사용자 요청 2026-05-26
+ *
+ * `<pre class="settings-code">` 를 `<div class="settings-code-wrap">` 로 감싸고
+ * 복사 버튼을 absolute 로 우상단에 부착. 외부 액션 영역 분리 X — 시각 정돈.
+ * ========================================================================== */
+
+.settings-code-wrap {
+  position: relative;
+}
+.settings-code-wrap .settings-code {
+  /* 우상단 버튼 자리 확보 — 첫 줄에 텍스트가 버튼 아래로 숨지 않도록 padding-right 보강. */
+  padding-right: 64px;
+}
+.settings-code-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #d4d4d4;
+  font-size: 11px;
+  padding: 4px 9px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--font-data);
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease;
+  z-index: 1;
+}
+.settings-code-copy:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #fff;
+}
+.settings-code-copy-label {
+  font-weight: 500;
+}
+/* SVG 복사 아이콘 — 3곳 공통 (코드박스 우상단 / 외부 도구 inline) */
+.settings-copy-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* =============================================================================
+ * 카드 제목 옆 ⓘ 툴팁 정렬 — 진단 정보 카드 등에서 inline 노출
+ * ========================================================================== */
+
+.settings-card-title .settings-tooltip-host {
+  margin-left: 6px;
+  vertical-align: middle;
+}
+/* 마커 격리 설명 박스 (구) — 본문에서 제거됨. 잔여 클래스 cleanup. */
+.settings-marker-explain,
+.settings-marker-explain-title,
+.settings-marker-explain-body,
+.settings-marker-explain-snippet {
+  display: none !important;
+}
+
+/* =============================================================================
+ * 로그 리스트
+ * ========================================================================== */
+
+.settings-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.settings-log-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.settings-log-row:hover { background: var(--raised); }
+.settings-log-name {
+  background: var(--raised);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+/* =============================================================================
+ * 토스트
+ * ========================================================================== */
+
+.settings-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  background: var(--surface-alt);
+  border: 1px solid var(--border-strong);
+  color: var(--text-1);
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transition: opacity var(--dur-fast) ease, transform var(--dur-fast) ease;
+  z-index: 9999;
+  pointer-events: none;
+}
+.settings-toast.is-show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* =============================================================================
+ * 빈 상태 / 폴백
+ * ========================================================================== */
+
+.settings-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 12px;
+}

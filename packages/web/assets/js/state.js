@@ -1,10 +1,11 @@
 // state.js — 라우팅/뷰 상태 SSoT (ADR-003 라우팅 로직 단순화 + ADR-003 left-rail-meta-docs)
 //
-// 앱 모드 (ADR-003 left-rail-meta-docs):
+// 앱 모드 (ADR-003 left-rail-meta-docs + settings-page 2026-05-26):
 //   - 'browse'   : 기본. 좌측 패널(프로젝트/세션/obs) + 우측 default/detail-view 정상 동작.
 //   - 'metadocs' : 메인 영역 전체가 Behavior Definitions 카탈로그. 좌측은 축약 패널(프로젝트 + 요약 카드).
+//   - 'settings' : 메인 영역 전체가 진단/Hook/Graph DB/Proxy 설정 패널. 좌측은 sub-tab 메뉴.
 //   - sessionStorage('spyglass.appMode') 영속화 — 새로고침 시 마지막 모드 복원.
-//   - _prevState: 'metadocs' 진입 직전의 browse 스냅샷(view/tab/sessionId). ESC 복귀용. in-memory only.
+//   - _prevState: 'metadocs'/'settings' 진입 직전의 browse 스냅샷(view/tab/sessionId). ESC 복귀용.
 
 const SS_APP_MODE     = 'spyglass.appMode';
 const SS_META_SUB_TAB = 'spyglass.metaSubTab'; // ADR-004 meta-docs-tool-stats
@@ -27,15 +28,15 @@ let _detailFilterBar  = null;
 // sessionStorage 복원 — 모듈 로드 시 1회. 실패 시(접근 거부 등) 기본값 유지.
 try {
   const saved = sessionStorage.getItem(SS_APP_MODE);
-  if (saved === 'browse' || saved === 'metadocs') _appMode = saved;
+  if (saved === 'browse' || saved === 'metadocs' || saved === 'settings') _appMode = saved;
   const savedSub = sessionStorage.getItem(SS_META_SUB_TAB);
   if (savedSub === 'docs' || savedSub === 'tools') _metaSubTab = savedSub;
 } catch { /* sessionStorage 미지원/거부 시 silent fallback */ }
 
-// ── appMode (ADR-003) ──
+// ── appMode (ADR-003 + settings-page) ──
 export function getAppMode()          { return _appMode; }
 export function setAppMode(m) {
-  if (m !== 'browse' && m !== 'metadocs') return;
+  if (m !== 'browse' && m !== 'metadocs' && m !== 'settings') return;
   _appMode = m;
   try { sessionStorage.setItem(SS_APP_MODE, m); } catch { /* silent */ }
 }

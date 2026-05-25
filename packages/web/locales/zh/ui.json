@@ -9,7 +9,13 @@
       "browse-aria": "浏览（会话与请求）",
       "browse-title": "浏览",
       "metadocs-aria": "Behavior Definitions 目录",
-      "metadocs-title": "Behavior Definitions"
+      "metadocs-title": "Behavior Definitions",
+      "settings-aria": "设置 — 诊断、Hook、Graph DB",
+      "settings-title": "设置"
+    },
+    "settings": {
+      "root-aria": "设置面板",
+      "nav-aria": "设置子标签"
     },
     "left-panel": {
       "resize-title": "拖动调整宽度 · 双击适应内容宽度",
@@ -523,5 +529,196 @@
   "detail-view": {
     "total-tokens": "共 {tokens} 个token",
     "ended-at": "结束: {time}"
+  },
+  "settings-view": {
+    "title": "设置",
+    "refresh": "重新运行诊断",
+    "refresh-title": "强制刷新当前标签的诊断",
+    "loading": "正在加载诊断信息…",
+    "tab-diag": "系统诊断",
+    "tab-hooks": "Hook 设置",
+    "tab-graph": "Graph DB",
+    "tab-proxy": "Proxy 指南",
+    "tab-server": "服务器 / 日志",
+    "diag": {
+      "title": "系统诊断",
+      "missing": "未安装",
+      "hook-label": "Hook 注册",
+      "hook-registered": "{n}/{total} 已注册",
+      "hook-broken": "JSON 损坏",
+      "hook-missing": "设置文件不存在",
+      "jump-hooks": "Hook 设置 →",
+      "jump-graph": "Graph DB →",
+      "port": "端口",
+      "logs-dir": "日志目录"
+    },
+    "hooks": {
+      "title": "Hook 设置",
+      "registered": "已注册",
+      "unregistered": "未注册",
+      "spyglass-dir-missing": "env.SPYGLASS_DIR 未设置",
+      "profile-title": "选择配置",
+      "profile-sub": "选择一个配置并点击 [自动安装] 一次即可。变更前会自动备份，可随时通过 [恢复为先前设置] 还原。",
+      "profile-full": "推荐 (Full)",
+      "profile-full-desc": "Pre/Post/SessionStart/Stop 等核心事件全部",
+      "profile-minimal": "最小 (Minimal)",
+      "profile-minimal-desc": "仅 6 个核心事件 — 性能优先",
+      "engineering-summary": "查看高级工程诊断信息 ▼",
+      "engineering-title": "高级诊断信息",
+      "profiles": {
+        "full": {
+          "label": "推荐 (Full)",
+          "desc": "跟踪 Claude Code 所有生命周期事件，获得最丰富的可视化与统计。",
+          "tooltip": "注册 Pre/Post/SessionStart/Stop/SubagentStart/SubagentStop/PreCompact/PostCompact 等全部 27 个事件。推荐给需要最精细分析的一般用户。"
+        },
+        "minimal": {
+          "label": "最小 (Minimal)",
+          "desc": "仅注册必需的 6 个核心事件，把性能和磁盘负担降到最低。",
+          "tooltip": "仅注册 UserPromptSubmit/PreToolUse/PostToolUse/SessionStart/SessionEnd/Stop 6 个。对 Claude Code 响应速度和磁盘使用影响最小的轻量配置。"
+        }
+      },
+      "health": {
+        "ok": "Hook 状态: 全部已注册",
+        "warn": "Hook 状态: 已注册 {n}/{total} — 建议自动安装",
+        "missing": "Hook 状态: 未找到 ~/.claude/settings.json — 自动安装会创建该文件",
+        "broken": "Hook 状态: settings.json 已损坏 — 请先手动备份后再自动安装"
+      },
+      "preview": "预览 (diff)",
+      "apply": "自动安装",
+      "applying": "正在合并…",
+      "apply-success": "✓ Hook 设置已应用",
+      "preview-result": "合并预览",
+      "backup-saved": "已备份",
+      "diff-applied": "新增",
+      "diff-modified": "修改",
+      "diff-preserved": "保留",
+      "undo": "恢复为先前设置",
+      "restoring": "正在恢复…",
+      "restore-success": "✓ 已恢复为先前设置",
+      "restored-from": "恢复源",
+      "pre-restore-backup": "恢复前的备份",
+      "restart-required-banner": "✓ 已应用。要激活更改，请退出正在运行的 Claude Code 终端会话并重新启动。"
+    },
+    "graph": {
+      "title": "Graph DB",
+      "mode": "当前模式",
+      "mode-hint": "仅运行时 — 下次启动以 SPYGLASS_GRAPH_MODE 为准",
+      "mode-pick-title": "图形引擎运行方式",
+      "mode-pick-sub": "选择后立即保存。重启 Claude Code 后新模式才会激活。",
+      "circuit": "断路器",
+      "sync-worker": "Sync Worker",
+      "cache": "缓存大小",
+      "reset-title": "重建缓存",
+      "reset-hint": "删除 ~/.spyglass/graph/ — sync worker 将自动重建。v2.10.0 升级后建议执行。",
+      "reset-btn": "重建缓存",
+      "reset-success": "✓ 缓存重建完成",
+      "reset-cleaned": "已清理",
+      "engineering-summary": "系统工程信息 ▼",
+      "engineering-title": "系统工程信息",
+      "toast-saved": "✓ 设置已保存",
+      "toast-env-override": "⚠ 环境变量优先 — 当前会话不会生效",
+      "options": {
+        "off": {
+          "label": "禁用 (稳定性优先)",
+          "desc": "关闭图形引擎，以传统标准模式安全运行。",
+          "tooltip": "完全禁用 Kuzu 图形引擎。仅使用 SQLite — 最稳定、资源占用最少。流程图可视化不可用。"
+        },
+        "shadow": {
+          "label": "后台测试 (推荐)",
+          "desc": "以标准模式安全渲染画面，同时在后台测试引擎兼容性。",
+          "tooltip": "向用户返回 SQLite 结果，后台对比记录 Kuzu。受断路器保护，对用户影响为零。新环境的最安全选择。"
+        },
+        "primary": {
+          "label": "实时图形启用 (性能最大化)",
+          "desc": "打开高速图形引擎，流畅地可视化 Claude Code 的复杂跟踪流程。",
+          "tooltip": "使用 Kuzu 图形引擎作为主要响应源。复杂的 BFS / 顺序查询比 SQLite 快 10~100 倍。引擎失败时自动回退到 SQLite。"
+        }
+      },
+      "health": {
+        "ok": "图形引擎: 正常运行中",
+        "warn": "优化准备中",
+        "off": "图形引擎已禁用"
+      },
+      "config-file": "配置文件",
+      "persisted-to": "持久化路径",
+      "env-override-warning": "shell 环境变量 SPYGLASS_GRAPH_MODE 已设置，仪表盘更改在当前会话中不会生效。要永久应用，请从 shell 配置中移除 export 声明。",
+      "source": {
+        "env": "env",
+        "saved": "saved",
+        "default": "default"
+      }
+    },
+    "proxy": {
+      "title": "Proxy 自动注册",
+      "intro": "在 shell 配置中自动注册仅当 spyglass LISTEN 时注入 ANTHROPIC_BASE_URL 的条件函数。",
+      "shell": "Shell",
+      "copy": "复制",
+      "copied": "✓ 已复制到剪贴板",
+      "outro": "如需手动安装，将上方代码片段追加到 shell 配置 (如 ~/.zshrc) 末尾后在新 shell 中使用。",
+      "install": "自动注册代理",
+      "installing": "正在注册到 shell 配置…",
+      "installed": "代理注册完成",
+      "installed-to": "已修改的文件",
+      "replaced": "替换",
+      "appended": "追加",
+      "cleaned-graph-exports": "已注释的 SPYGLASS_GRAPH_MODE export",
+      "undo": "恢复先前 shell 配置",
+      "restoring": "正在恢复…",
+      "restored": "✓ shell 配置已恢复",
+      "preview-summary": "代码片段预览 / 手动安装",
+      "shell-pick-title": "选择 shell",
+      "engineering-summary": "查看高级工程诊断信息 ▼",
+      "engineering-title": "诊断信息",
+      "action-help": "需要点击上方的 [自动注册代理] 按钮才会真正修改 shell 配置。仅选择卡片不会执行注册。",
+      "health-target": "检查的文件: {path}",
+      "detected-shell": "检测到的 shell",
+      "profile-path": "配置文件路径",
+      "profile-exists": "存在",
+      "profile-not-found": "不存在 — 自动创建",
+      "marker-open": "标记 OPEN",
+      "marker-close": "标记 CLOSE",
+      "marker-open-label": "Proxy 起始行",
+      "marker-close-label": "Proxy 结束行",
+      "marker-found": "shell 配置中存在",
+      "marker-not-found": "shell 配置中不存在",
+      "marker-explain-title": "什么是标记隔离?",
+      "marker-explain-body": "spyglass 在 ~/.zshrc 等 shell 配置中用两行注释标记自己的区域 (开始/结束)。仅这两行之间的内容由 spyglass 管理，其他用户代码 (export PATH、alias 等) 绝不会被修改。nvm/conda 等工具使用相同方式。点击 [自动注册代理] 按钮即可自动注入这两行。",
+      "shells": {
+        "auto": {
+          "label": "自动检测 (推荐)",
+          "desc": "通过 SHELL 环境变量和家目录自动探测，注册到最合适的 shell 配置。",
+          "tooltip": "检测优先级: process.env.SHELL → ~/.zshrc → ~/.bashrc → ~/.config/fish/config.fish。推荐给大多数用户。"
+        },
+        "zsh": {
+          "label": "zsh (~/.zshrc)",
+          "desc": "macOS 默认 shell。直接写入 ~/.zshrc。",
+          "tooltip": "macOS Catalina 以来的默认 shell。~/.zshrc 不存在时自动创建。"
+        },
+        "bash": {
+          "label": "bash (~/.bashrc)",
+          "desc": "Linux 默认 shell。直接写入 ~/.bashrc。",
+          "tooltip": "推荐给 Linux / WSL 用户。macOS 上可能还需 source ~/.bash_profile。"
+        },
+        "fish": {
+          "label": "fish (~/.config/fish/config.fish)",
+          "desc": "面向 fish shell 用户。使用 function ... end 语法注册。",
+          "tooltip": "fish 与 sh/bash 的函数语法不同，所以有独立分支处理。~/.config/fish/config.fish 不存在时自动创建。"
+        }
+      },
+      "health": {
+        "ok": "Proxy 状态: 已在 {shell} 中正常安装",
+        "warn": "Proxy 状态: 尚未安装 — 点击一次 [自动注册代理] 即可完成",
+        "broken": "Proxy 状态: 标记块已损坏 — 请手动修正 shell 配置",
+        "missing": "Proxy 状态: shell 配置文件不存在 — 自动注册时会新建"
+      }
+    },
+    "server": {
+      "title": "服务器 / 日志",
+      "uptime": "运行时长",
+      "port-change-title": "更改端口",
+      "port-change-hint": "设置环境变量后重启服务器。",
+      "logs-title": "日志文件",
+      "no-logs": "日志目录为空或不存在。"
+    }
   }
 }

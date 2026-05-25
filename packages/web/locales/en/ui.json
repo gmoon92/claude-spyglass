@@ -9,7 +9,13 @@
       "browse-aria": "Browse (sessions & requests)",
       "browse-title": "Browse",
       "metadocs-aria": "Behavior Definitions catalog",
-      "metadocs-title": "Behavior Definitions"
+      "metadocs-title": "Behavior Definitions",
+      "settings-aria": "Settings — Diagnostics, Hook, Graph DB",
+      "settings-title": "Settings"
+    },
+    "settings": {
+      "root-aria": "Settings panel",
+      "nav-aria": "Settings sub-tabs"
     },
     "left-panel": {
       "resize-title": "Drag to resize · Double-click to fit content",
@@ -523,5 +529,196 @@
   "detail-view": {
     "total-tokens": "Total {tokens} tokens",
     "ended-at": "Ended: {time}"
+  },
+  "settings-view": {
+    "title": "Settings",
+    "refresh": "Re-run diagnostics",
+    "refresh-title": "Force refresh diagnostics for the current tab",
+    "loading": "Loading diagnostics…",
+    "tab-diag": "Diagnostics",
+    "tab-hooks": "Hook Setup",
+    "tab-graph": "Graph DB",
+    "tab-proxy": "Proxy Guide",
+    "tab-server": "Server / Logs",
+    "diag": {
+      "title": "System Diagnostics",
+      "missing": "not installed",
+      "hook-label": "Hook Registration",
+      "hook-registered": "{n}/{total} registered",
+      "hook-broken": "JSON corrupted",
+      "hook-missing": "settings file not found",
+      "jump-hooks": "Hook Setup →",
+      "jump-graph": "Graph DB →",
+      "port": "Port",
+      "logs-dir": "Logs dir"
+    },
+    "hooks": {
+      "title": "Hook Setup",
+      "registered": "registered",
+      "unregistered": "missing",
+      "spyglass-dir-missing": "env.SPYGLASS_DIR not set",
+      "profile-title": "Select profile",
+      "profile-sub": "Pick a profile and click [Apply now] once. Your file is backed up first and can be restored anytime via [Restore previous settings].",
+      "profile-full": "Recommended (Full)",
+      "profile-full-desc": "Core events Pre/Post/SessionStart/Stop and more",
+      "profile-minimal": "Minimal",
+      "profile-minimal-desc": "6 core events only — performance first",
+      "engineering-summary": "Advanced engineering details ▼",
+      "engineering-title": "Advanced diagnostics",
+      "profiles": {
+        "full": {
+          "label": "Recommended (Full)",
+          "desc": "Track every Claude Code lifecycle event for the richest visualizations and analytics.",
+          "tooltip": "Registers all 27 events: Pre/Post/SessionStart/Stop/SubagentStart/SubagentStop/PreCompact/PostCompact, etc. Best for users who want maximum analysis fidelity."
+        },
+        "minimal": {
+          "label": "Minimal",
+          "desc": "Register only 6 core events for minimum performance and disk overhead.",
+          "tooltip": "Registers only UserPromptSubmit/PreToolUse/PostToolUse/SessionStart/SessionEnd/Stop. Lightest impact on Claude Code responsiveness and disk usage."
+        }
+      },
+      "health": {
+        "ok": "Hook status: all events registered",
+        "warn": "Hook status: {n}/{total} registered — auto-install recommended",
+        "missing": "Hook status: ~/.claude/settings.json not found — auto-install will create it",
+        "broken": "Hook status: settings.json is corrupted — back up manually before auto-install"
+      },
+      "preview": "Preview (diff)",
+      "apply": "Apply now",
+      "applying": "Merging…",
+      "apply-success": "✓ Hook setup applied",
+      "preview-result": "Merge preview",
+      "backup-saved": "Backup saved",
+      "diff-applied": "added",
+      "diff-modified": "modified",
+      "diff-preserved": "preserved",
+      "undo": "Restore previous settings",
+      "restoring": "Restoring…",
+      "restore-success": "✓ Restored to previous settings",
+      "restored-from": "Restored from",
+      "pre-restore-backup": "Pre-restore backup",
+      "restart-required-banner": "✓ Applied. To activate the changes, exit your running Claude Code terminal session and restart."
+    },
+    "graph": {
+      "title": "Graph DB",
+      "mode": "Current mode",
+      "mode-hint": "Runtime only — next start prefers SPYGLASS_GRAPH_MODE env var",
+      "mode-pick-title": "Graph engine behavior",
+      "mode-pick-sub": "Click to save instantly. Restart Claude Code to activate the new mode.",
+      "circuit": "Circuit breaker",
+      "sync-worker": "Sync worker",
+      "cache": "Cache size",
+      "reset-title": "Rebuild cache",
+      "reset-hint": "Delete ~/.spyglass/graph/ — sync worker will regenerate. Recommended after v2.10.0 upgrade.",
+      "reset-btn": "Rebuild cache",
+      "reset-success": "✓ Cache rebuilt",
+      "reset-cleaned": "cleaned",
+      "engineering-summary": "System engineering details ▼",
+      "engineering-title": "System engineering details",
+      "toast-saved": "✓ Settings saved",
+      "toast-env-override": "⚠ Env var overrides — change not active this session",
+      "options": {
+        "off": {
+          "label": "Disabled (safest)",
+          "desc": "Turn off the graph engine and run in classic SQLite mode for maximum stability.",
+          "tooltip": "Disables the Kuzu graph engine entirely. SQLite-only — most stable, lowest resource usage. Flow visualizations are unavailable."
+        },
+        "shadow": {
+          "label": "Background test (recommended)",
+          "desc": "Render with classic mode while quietly testing engine compatibility in the background.",
+          "tooltip": "Serves SQLite results to the user while comparing against Kuzu in the background. Protected by a circuit breaker — zero user impact. Safest choice for new environments."
+        },
+        "primary": {
+          "label": "Live graph (max performance)",
+          "desc": "Turn on the high-speed graph engine to visualize Claude Code's complex traces in real time.",
+          "tooltip": "Uses Kuzu graph engine as the primary response source. Complex BFS/sequential queries run 10~100x faster than SQLite. Auto-falls back to SQLite on engine failure."
+        }
+      },
+      "health": {
+        "ok": "Graph engine: running normally",
+        "warn": "Optimizing",
+        "off": "Graph engine disabled"
+      },
+      "config-file": "Config file",
+      "persisted-to": "Persisted to",
+      "env-override-warning": "Shell env SPYGLASS_GRAPH_MODE is set — dashboard changes are saved but do not take effect this session. To make GUI changes permanent, remove the export from your shell profile.",
+      "source": {
+        "env": "env",
+        "saved": "saved",
+        "default": "default"
+      }
+    },
+    "proxy": {
+      "title": "Auto-register proxy",
+      "intro": "Auto-install a conditional function in your shell profile that routes through spyglass only when it is LISTENING.",
+      "shell": "Shell",
+      "copy": "Copy",
+      "copied": "✓ Copied to clipboard",
+      "outro": "Manual install: paste the snippet above into your shell profile (e.g. ~/.zshrc) and open a new shell.",
+      "install": "Auto-install proxy",
+      "installing": "Installing into shell profile…",
+      "installed": "Proxy installed",
+      "installed-to": "Modified file",
+      "replaced": "replaced",
+      "appended": "appended",
+      "cleaned-graph-exports": "SPYGLASS_GRAPH_MODE exports commented out",
+      "undo": "Restore previous shell config",
+      "restoring": "Restoring…",
+      "restored": "✓ Shell config restored",
+      "preview-summary": "Preview snippet / manual install",
+      "shell-pick-title": "Select shell",
+      "engineering-summary": "Advanced engineering details ▼",
+      "engineering-title": "Diagnostics",
+      "action-help": "Click [Auto-install proxy] above to actually modify the shell profile. Selecting a card alone does not install anything.",
+      "health-target": "Inspected file: {path}",
+      "detected-shell": "Detected shell",
+      "profile-path": "Profile path",
+      "profile-exists": "exists",
+      "profile-not-found": "missing — will be created",
+      "marker-open": "Marker OPEN",
+      "marker-close": "Marker CLOSE",
+      "marker-open-label": "Proxy start line",
+      "marker-close-label": "Proxy end line",
+      "marker-found": "present in shell profile",
+      "marker-not-found": "not in shell profile",
+      "marker-explain-title": "What is the marker pair?",
+      "marker-explain-body": "spyglass demarcates *its own region* inside your shell profile (e.g. ~/.zshrc) with two comment lines. Only the content between these two lines is managed by spyglass — your other code (export PATH, aliases, etc.) is never touched. nvm/conda use the same pattern. Click [Auto-install proxy] to inject the two lines automatically.",
+      "shells": {
+        "auto": {
+          "label": "Auto-detect (recommended)",
+          "desc": "Probe SHELL env and your home directory to pick the most appropriate shell profile.",
+          "tooltip": "Detection priority: process.env.SHELL → ~/.zshrc → ~/.bashrc → ~/.config/fish/config.fish. Recommended for most users."
+        },
+        "zsh": {
+          "label": "zsh (~/.zshrc)",
+          "desc": "macOS default shell. Writes directly to ~/.zshrc.",
+          "tooltip": "Default shell since macOS Catalina. ~/.zshrc is created if missing."
+        },
+        "bash": {
+          "label": "bash (~/.bashrc)",
+          "desc": "Linux default shell. Writes directly to ~/.bashrc.",
+          "tooltip": "Recommended for Linux / WSL. On macOS you may also need to source ~/.bash_profile."
+        },
+        "fish": {
+          "label": "fish (~/.config/fish/config.fish)",
+          "desc": "For fish shell users. Uses function ... end syntax.",
+          "tooltip": "fish syntax differs from sh/bash, so it gets a dedicated branch. ~/.config/fish/config.fish is created if missing."
+        }
+      },
+      "health": {
+        "ok": "Proxy status: installed in {shell}",
+        "warn": "Proxy status: not installed yet — one click of [Auto-install proxy] is enough",
+        "broken": "Proxy status: marker block is corrupted — please fix the shell profile manually",
+        "missing": "Proxy status: shell profile file does not exist — auto-install will create it"
+      }
+    },
+    "server": {
+      "title": "Server / Logs",
+      "uptime": "Uptime",
+      "port-change-title": "Change port",
+      "port-change-hint": "Set env var and restart the server.",
+      "logs-title": "Log files",
+      "no-logs": "Log directory is empty or missing."
+    }
   }
 }

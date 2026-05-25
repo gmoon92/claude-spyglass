@@ -9,7 +9,13 @@
       "browse-aria": "ブラウズ（セッション・リクエスト表示）",
       "browse-title": "ブラウズ",
       "metadocs-aria": "Behavior Definitions カタログ",
-      "metadocs-title": "Behavior Definitions"
+      "metadocs-title": "Behavior Definitions",
+      "settings-aria": "設定 — 診断、Hook、Graph DB",
+      "settings-title": "設定"
+    },
+    "settings": {
+      "root-aria": "設定パネル",
+      "nav-aria": "設定サブタブ"
     },
     "left-panel": {
       "resize-title": "ドラッグで幅調整 · ダブルクリックでコンテンツ幅に合わせる",
@@ -523,5 +529,196 @@
   "detail-view": {
     "total-tokens": "合計 {tokens} トークン",
     "ended-at": "終了: {time}"
+  },
+  "settings-view": {
+    "title": "設定",
+    "refresh": "診断を再実行",
+    "refresh-title": "現在の設定タブの診断を再取得",
+    "loading": "診断情報を読み込み中…",
+    "tab-diag": "システム診断",
+    "tab-hooks": "Hook 設定",
+    "tab-graph": "Graph DB",
+    "tab-proxy": "Proxy ガイド",
+    "tab-server": "サーバー / ログ",
+    "diag": {
+      "title": "システム診断",
+      "missing": "未インストール",
+      "hook-label": "Hook 登録",
+      "hook-registered": "{n}/{total} 登録済",
+      "hook-broken": "JSON 破損",
+      "hook-missing": "設定ファイルなし",
+      "jump-hooks": "Hook 設定 →",
+      "jump-graph": "Graph DB →",
+      "port": "ポート",
+      "logs-dir": "ログディレクトリ"
+    },
+    "hooks": {
+      "title": "Hook 設定",
+      "registered": "登録済",
+      "unregistered": "未登録",
+      "spyglass-dir-missing": "env.SPYGLASS_DIR 未設定",
+      "profile-title": "プロファイル選択",
+      "profile-sub": "プロファイルを選んで [自動インストール] を 1 度クリックするだけです。事前に自動バックアップされ、[以前の設定に戻す] でいつでも復元できます。",
+      "profile-full": "推奨 (Full)",
+      "profile-full-desc": "Pre/Post/SessionStart/Stop など主要イベント全て",
+      "profile-minimal": "最小 (Minimal)",
+      "profile-minimal-desc": "6 つのコアイベントのみ — 性能優先",
+      "engineering-summary": "高度なエンジニアリング診断情報を表示 ▼",
+      "engineering-title": "高度な診断情報",
+      "profiles": {
+        "full": {
+          "label": "推奨 (Full)",
+          "desc": "Claude Code のすべてのライフサイクルイベントを追跡し、最も豊富な可視化・統計を得られます。",
+          "tooltip": "Pre/Post/SessionStart/Stop/SubagentStart/SubagentStop/PreCompact/PostCompact など 27 イベントすべてを登録。最も精密な分析が必要な一般ユーザーに推奨。"
+        },
+        "minimal": {
+          "label": "最小 (Minimal)",
+          "desc": "必須の 6 つのコアイベントのみ登録し、性能とディスク負荷を最小化します。",
+          "tooltip": "UserPromptSubmit/PreToolUse/PostToolUse/SessionStart/SessionEnd/Stop の 6 つのみ登録。Claude Code の応答速度とディスク使用量への影響が最も少ない軽量プロファイル。"
+        }
+      },
+      "health": {
+        "ok": "Hook 状態: すべて登録済み",
+        "warn": "Hook 状態: {n}/{total} 登録 — 自動インストールを推奨",
+        "missing": "Hook 状態: ~/.claude/settings.json がありません — 自動インストールで作成されます",
+        "broken": "Hook 状態: settings.json が破損しています — 手動でバックアップ後、自動インストール"
+      },
+      "preview": "プレビュー (diff)",
+      "apply": "自動インストール",
+      "applying": "マージ中…",
+      "apply-success": "✓ Hook 設定を適用しました",
+      "preview-result": "マージプレビュー",
+      "backup-saved": "バックアップ保存",
+      "diff-applied": "追加",
+      "diff-modified": "変更",
+      "diff-preserved": "保持",
+      "undo": "以前の設定に戻す",
+      "restoring": "復元中…",
+      "restore-success": "✓ 以前の設定に復元しました",
+      "restored-from": "復元元",
+      "pre-restore-backup": "復元直前のバックアップ",
+      "restart-required-banner": "✓ 適用されました。変更を有効にするには、実行中の Claude Code ターミナルセッションを終了して再起動してください。"
+    },
+    "graph": {
+      "title": "Graph DB",
+      "mode": "現在のモード",
+      "mode-hint": "ランタイムのみ — 次回起動は SPYGLASS_GRAPH_MODE が優先",
+      "mode-pick-title": "グラフエンジンの動作方式",
+      "mode-pick-sub": "選択すると即座に保存されます。新しいモードを有効にするには Claude Code を再起動してください。",
+      "circuit": "サーキットブレーカー",
+      "sync-worker": "Sync Worker",
+      "cache": "キャッシュサイズ",
+      "reset-title": "キャッシュ再構築",
+      "reset-hint": "~/.spyglass/graph/ を削除して sync worker が自動再生成します。v2.10.0 への更新後は推奨。",
+      "reset-btn": "キャッシュ再構築",
+      "reset-success": "✓ キャッシュ再構築完了",
+      "reset-cleaned": "削除済",
+      "engineering-summary": "システムエンジニアリング情報 ▼",
+      "engineering-title": "システムエンジニアリング情報",
+      "toast-saved": "✓ 設定を保存しました",
+      "toast-env-override": "⚠ 環境変数が優先され、現在のセッションには反映されません",
+      "options": {
+        "off": {
+          "label": "使用しない（安定性優先）",
+          "desc": "グラフエンジンを切って、従来の標準モードで安全に動作させます。",
+          "tooltip": "Kuzu グラフエンジン自体を無効化します。SQLite のみ使用 — 最も安定でリソース消費が少ない。フロー可視化は使用できません。"
+        },
+        "shadow": {
+          "label": "バックグラウンドテスト（推奨）",
+          "desc": "標準モードで安全に画面を描画しながら、裏でエンジンの互換性をテストします。",
+          "tooltip": "ユーザーには SQLite の結果を返し、バックグラウンドで Kuzu を比較ログのみ実行。サーキットブレーカーで保護され、ユーザー影響ゼロ。新環境で最も安全な選択。"
+        },
+        "primary": {
+          "label": "リアルタイムグラフ有効化（性能最大化）",
+          "desc": "高速グラフエンジンをオンにして、Claude Code の複雑な追跡フローをラグなく華麗に可視化します。",
+          "tooltip": "Kuzu グラフエンジンをメイン応答に使用。複雑な BFS / シーケンスクエリが SQLite より 10〜100 倍高速。エンジン失敗時は自動で SQLite フォールバック。"
+        }
+      },
+      "health": {
+        "ok": "グラフエンジン: 正常稼働中",
+        "warn": "最適化準備中",
+        "off": "グラフエンジン無効"
+      },
+      "config-file": "設定ファイル",
+      "persisted-to": "永続化先",
+      "env-override-warning": "シェル環境変数 SPYGLASS_GRAPH_MODE が設定されているため、ダッシュボードの変更は現在のセッションに反映されません。永続的に適用するにはシェルプロファイルから export 宣言を削除してください。",
+      "source": {
+        "env": "env",
+        "saved": "saved",
+        "default": "default"
+      }
+    },
+    "proxy": {
+      "title": "Proxy 自動登録",
+      "intro": "spyglass が LISTEN 中のみ ANTHROPIC_BASE_URL を注入する条件付き関数をシェルプロファイルに自動登録します。",
+      "shell": "シェル",
+      "copy": "コピー",
+      "copied": "✓ クリップボードにコピーしました",
+      "outro": "手動編集を希望する場合は上記スニペットを ~/.zshrc などシェルプロファイル末尾に貼り付け、新しいシェルで使用してください。",
+      "install": "プロキシ自動登録",
+      "installing": "シェルプロファイルに登録中…",
+      "installed": "プロキシ自動登録完了",
+      "installed-to": "変更されたファイル",
+      "replaced": "置換",
+      "appended": "追加",
+      "cleaned-graph-exports": "コメントアウトされた SPYGLASS_GRAPH_MODE export",
+      "undo": "以前のシェル設定に戻す",
+      "restoring": "復元中…",
+      "restored": "✓ シェル設定を復元しました",
+      "preview-summary": "スニペットプレビュー / 手動インストール",
+      "shell-pick-title": "シェル選択",
+      "engineering-summary": "高度なエンジニアリング診断情報を表示 ▼",
+      "engineering-title": "診断情報",
+      "action-help": "上の [プロキシ自動登録] ボタンを押すと実際にシェルプロファイルが変更されます。カード選択だけでは登録されません。",
+      "health-target": "検査対象ファイル: {path}",
+      "detected-shell": "検出されたシェル",
+      "profile-path": "プロファイルパス",
+      "profile-exists": "存在",
+      "profile-not-found": "なし — 自動生成",
+      "marker-open": "マーカー OPEN",
+      "marker-close": "マーカー CLOSE",
+      "marker-open-label": "プロキシ開始行",
+      "marker-close-label": "プロキシ終了行",
+      "marker-found": "シェルプロファイルに存在",
+      "marker-not-found": "シェルプロファイルにありません",
+      "marker-explain-title": "マーカー隔離とは?",
+      "marker-explain-body": "spyglass は ~/.zshrc などのシェルプロファイル内で *自分の領域の開始と終了* を 2 行のコメントで示します。この 2 行の間のみ spyglass が管理し、それ以外のユーザーコード (export PATH、alias など) は絶対に触りません。nvm/conda 等も同じ方式。[プロキシ自動登録] ボタンを押すと 2 行が自動的に注入されます。",
+      "shells": {
+        "auto": {
+          "label": "自動検出 (推奨)",
+          "desc": "SHELL 環境変数とホームディレクトリを自動探索し、最適なシェルプロファイルに登録します。",
+          "tooltip": "process.env.SHELL → ~/.zshrc → ~/.bashrc → ~/.config/fish/config.fish の優先順位で検出。ほとんどのユーザーに推奨。"
+        },
+        "zsh": {
+          "label": "zsh (~/.zshrc)",
+          "desc": "macOS デフォルトシェル。~/.zshrc に直接登録します。",
+          "tooltip": "macOS Catalina 以降のデフォルトシェル。~/.zshrc がない場合は自動作成されます。"
+        },
+        "bash": {
+          "label": "bash (~/.bashrc)",
+          "desc": "Linux デフォルトシェル。~/.bashrc に直接登録します。",
+          "tooltip": "Linux / WSL ユーザーに推奨。macOS の場合は ~/.bash_profile も source する必要がある場合があります。"
+        },
+        "fish": {
+          "label": "fish (~/.config/fish/config.fish)",
+          "desc": "fish シェル用。関数構文 (function ... end) で登録します。",
+          "tooltip": "fish は sh/bash と関数構文が異なるため別分岐で処理されます。~/.config/fish/config.fish がない場合は自動作成。"
+        }
+      },
+      "health": {
+        "ok": "Proxy 状態: {shell} に正常にインストール済み",
+        "warn": "Proxy 状態: まだインストールされていません — [プロキシ自動登録] 1回で完了",
+        "broken": "Proxy 状態: マーカーブロックが破損しています — シェルプロファイルを手動で修正してください",
+        "missing": "Proxy 状態: シェルプロファイルファイルがありません — 自動登録で新規作成されます"
+      }
+    },
+    "server": {
+      "title": "サーバー / ログ",
+      "uptime": "稼働時間",
+      "port-change-title": "ポート変更",
+      "port-change-hint": "環境変数を設定してサーバーを再起動してください。",
+      "logs-title": "ログファイル",
+      "no-logs": "ログディレクトリは空または存在しません。"
+    }
   }
 }

@@ -109,6 +109,7 @@
   <link rel="stylesheet" href="/assets/css/flow-diagram.css">
   <link rel="stylesheet" href="/assets/css/obs-panel.css">
   <link rel="stylesheet" href="/assets/css/app-rail.css">
+  <link rel="stylesheet" href="/assets/css/settings-view.css">
   <link rel="stylesheet" href="assets/css/design-system/_index.css">
 </head>
 <body>
@@ -148,6 +149,17 @@
           <path d="M21 4.5C21 3.7 20.3 3 19.5 3H13V20H19.5C20.3 20 21 19.3 21 18.5V4.5Z" stroke-linejoin="round"/>
           <line x1="11" y1="3"  x2="11" y2="20"/>
           <line x1="13" y1="3"  x2="13" y2="20"/>
+        </svg>
+      </button>
+      <!-- settings-page (2026-05-26): 진단 + Hook 자동 병합 + Graph DB + Proxy 가이드. -->
+      <button type="button" class="app-rail-btn" data-app-mode="settings"
+              aria-label="Settings — Diagnostics, Hook, Graph DB" title="Settings"
+              data-i18n-attr-aria-label="ui.html.app-rail.settings-aria"
+              data-i18n-attr-title="ui.html.app-rail.settings-title">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <!-- Lucide-style gear: 8 톱니 + 중앙 원. 통상 settings 어휘 -->
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1A2 2 0 1 1 4.4 17l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" stroke-linejoin="round"/>
         </svg>
       </button>
     </aside>
@@ -795,6 +807,45 @@
       <!-- ADR-004 meta-docs-tool-stats: 프로젝트 단위 도구 통계 매트릭스 — 기본 hidden.
            tool-stats.js의 loadProjectToolStats(projectName)이 매트릭스(.ts-mx)를 inject. -->
       <div id="metaToolStatsBody" class="meta-tool-stats-body" role="tabpanel" aria-labelledby="metaTabToolStats" aria-label="Project tool stats" hidden data-i18n-attr-aria-label="ui.html.meta-docs.tool-stats-aria"></div>
+    </section>
+
+    <!-- settings-page (2026-05-26): 설정 패널 — 진단/Hook/Graph DB/Proxy/서버 5개 sub-tab.
+         body[data-app-mode="settings"] 일 때만 노출. settings-view.js 의 enterSettingsMode 가 mount. -->
+    <section id="settingsView" class="settings-view" aria-label="Settings panel"
+             data-i18n-attr-aria-label="ui.html.settings.root-aria" hidden>
+      <header class="settings-header">
+        <h2 class="settings-title">
+          <svg class="settings-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1A2 2 0 1 1 4.4 17l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
+          </svg>
+          <span data-i18n="ui.settings-view.title">설정</span>
+        </h2>
+        <button type="button" class="settings-refresh-btn" id="settingsRefreshBtn"
+                data-i18n="ui.settings-view.refresh"
+                data-i18n-attr-title="ui.settings-view.refresh-title">전체 진단 다시 실행</button>
+      </header>
+      <div class="settings-body">
+        <!-- 좌측 sub-tab 메뉴 — 진단/Hook/Graph DB/Proxy/서버. settings-view.js 가 active 토글. -->
+        <nav class="settings-nav" role="tablist" aria-label="Settings sub-tabs"
+             data-i18n-attr-aria-label="ui.html.settings.nav-aria">
+          <button type="button" class="settings-nav-btn is-active" data-settings-tab="diag"
+                  role="tab" data-i18n="ui.settings-view.tab-diag">시스템 진단</button>
+          <button type="button" class="settings-nav-btn" data-settings-tab="hooks"
+                  role="tab" data-i18n="ui.settings-view.tab-hooks">Hook 설정</button>
+          <button type="button" class="settings-nav-btn" data-settings-tab="graph"
+                  role="tab" data-i18n="ui.settings-view.tab-graph">Graph DB</button>
+          <button type="button" class="settings-nav-btn" data-settings-tab="proxy"
+                  role="tab" data-i18n="ui.settings-view.tab-proxy">Proxy 가이드</button>
+          <button type="button" class="settings-nav-btn" data-settings-tab="server"
+                  role="tab" data-i18n="ui.settings-view.tab-server">서버 / 로그</button>
+        </nav>
+        <!-- 우측 본문 — settings-view.js 가 현재 sub-tab 의 컨텐츠를 채운다. -->
+        <div class="settings-content" id="settingsContent" role="tabpanel">
+          <div class="settings-empty" data-i18n="ui.settings-view.loading">진단 정보를 불러오는 중…</div>
+        </div>
+      </div>
     </section>
   </div>
 

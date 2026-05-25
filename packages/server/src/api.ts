@@ -33,6 +33,7 @@ import { systemPromptsRouter } from './routes/system-prompts';
 import { metaDocsRouter } from './routes/meta-docs';
 import { versionRouter } from './routes/version';
 import { graphRouter } from './routes/graph';
+import { settingsRouter } from './routes/settings';
 
 // 외부 호환: invalidateDashboardCache는 dashboard 라우터로 이전됐으나
 // 기존 import 경로(`./api`)를 보존하기 위해 re-export.
@@ -81,6 +82,11 @@ export async function apiRouter(req: Request, db: Database): Promise<Response> {
   //   완전히 분리된 prefix 라 우선순위는 상대적이지 않다.
   const graphResponse = await graphRouter(req, db);
   if (graphResponse) return graphResponse;
+
+  // /api/settings/* — 설정 패널 라우터 (비동기 — Hook 파일 IO + Bun.spawn 진단).
+  //   다른 prefix 와 완전히 분리되어 우선순위는 상대적이지 않다.
+  const settingsResponse = await settingsRouter(req, db);
+  if (settingsResponse) return settingsResponse;
 
   for (const handler of SYNC_ROUTERS) {
     const res = handler(req, db, url, path, method);

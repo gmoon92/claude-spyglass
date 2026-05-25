@@ -264,7 +264,7 @@ async function handleSequentialFlow(url: URL, db: Database): Promise<Response> {
         nodes: [],
         edges: [],
         layers: [],
-        meta: { note: 'center_kind 와 center_name 이 필요합니다.' },
+        meta: { note: 'center_kind and center_name are required' },
       },
     });
   }
