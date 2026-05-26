@@ -928,6 +928,15 @@ function bindDrag(svgEl, nodesLayer) {
  *   stopImmediatePropagation). 향후 추가될 click 리스너에도 동일 정책이 자동 적용.
  */
 const PAN_CLICK_SUPPRESS_THRESHOLD = 4;
+/**
+ * 드래그 팬 민감도 배율.
+ *
+ *   기본 1.0 은 "마우스 1px 이동 = 시점 1px 이동"의 정확한 1:1 매칭 (Figma/Google Maps 표준).
+ *   본 캔버스는 SVG viewBox 가 화면보다 큰 영역(상위/하위 ancestor 컬럼)을 포함해 1:1 매칭이
+ *   "너무 느리게" 느껴진다는 사용자 피드백을 반영해 2.0 으로 상향.
+ *   값을 키울수록 마우스보다 시점이 앞서가는 가속 감 — 1.5~2.5 권장 범위.
+ */
+const PAN_DRAG_SENSITIVITY = 2.0;
 function bindPan(svgEl, canvasEl) {
   if (!canvasEl) return;
   let active = null;
@@ -956,8 +965,8 @@ function bindPan(svgEl, canvasEl) {
     const dx = e.clientX - active.startX;
     const dy = e.clientY - active.startY;
     lastMovedDist = Math.max(Math.abs(dx), Math.abs(dy));
-    _seqView.x = active.viewStartX - dx * active.scale;
-    _seqView.y = active.viewStartY - dy * active.scale;
+    _seqView.x = active.viewStartX - dx * active.scale * PAN_DRAG_SENSITIVITY;
+    _seqView.y = active.viewStartY - dy * active.scale * PAN_DRAG_SENSITIVITY;
     applyViewBox(svgEl);
   }
   function onUp() {
