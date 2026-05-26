@@ -1,6 +1,6 @@
 {
   "name": "spyglass",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Claude Code execution monitoring tool - token usage visualization",
   "workspaces": [
     "packages/*"
@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit",
     "prepare": "git config core.hooksPath .githooks",
     "backfill:system-prompts": "bun run packages/server/scripts/backfill-system-prompts.ts",
+    "backfill:subagent-parents": "bun run packages/server/scripts/backfill-subagent-parents.ts",
     "rebuild-stats": "bun run packages/storage/src/scripts/rebuild-stats.ts",
     "rebuild-stats-proxy": "bun run packages/storage/src/scripts/rebuild-stats-proxy.ts",
     "desktop:dev": "bun run --cwd packages/desktop start",
