@@ -660,6 +660,7 @@
         "install-npm": "通过 npm 安装",
         "no-package-manager": "未找到 brew 或 npm 命令。请先安装 Homebrew 或 Node.js。",
         "installing": "安装中...",
+        "running": "安装进行中...",
         "install-success": "安装完成",
         "install-failed": "安装失败",
         "restart-required": "请重启 Claude Code 以使更改生效。"

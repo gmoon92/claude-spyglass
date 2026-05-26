@@ -660,6 +660,7 @@
         "install-npm": "npmでインストール",
         "no-package-manager": "brewまたはnpmコマンドが見つかりません。HomebrewまたはNode.jsを先にインストールしてください。",
         "installing": "インストール中...",
+        "running": "インストールを実行中...",
         "install-success": "インストール完了",
         "install-failed": "インストール失敗",
         "restart-required": "Claude Codeを再起動すると変更が反映されます。"

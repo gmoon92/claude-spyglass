@@ -447,6 +447,79 @@ body[data-app-mode="settings"] .main-layout {
 }
 
 /* =============================================================================
+ * Ladybug 설치 실시간 로그 스트림 — terminal-like 박스 + 진행 깜박임
+ *
+ * 구성:
+ *   .install-cmd       — 실행된 명령 한 줄 (`$ brew install ladybug` 형태).
+ *   .install-stream    — stdout/stderr 라인이 누적되는 모노스페이스 박스.
+ *   .stream-stderr     — stderr 라인 강조 (warn 컬러).
+ *   .install-running   — "설치 진행 중..." 라이브 표시 (pulse 애니메이션).
+ *   .install-summary   — 종료 후 헤드라인/재시작 배너/hint 영역.
+ *   .install-hint-list — npm 실패 시 진단 hint 목록.
+ * ========================================================================== */
+
+.install-cmd {
+  font-family: var(--font-data, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px 6px 0 0;
+  padding: 6px 10px;
+  margin-bottom: -1px; /* stream 박스 상단 보더와 겹치게 */
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.install-stream {
+  font-family: var(--font-data, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 0 0 6px 6px;
+  padding: 8px 10px;
+  margin: 0 0 8px 0;
+  max-height: 320px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.install-stream:empty { display: none; }
+.install-stream .stream-stderr { color: var(--warn-amber, #d97757); }
+
+.install-running {
+  font-size: 12px;
+  color: var(--text-3);
+  padding: 6px 10px;
+  animation: installRunningPulse 1.4s ease-in-out infinite;
+}
+@keyframes installRunningPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.install-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.install-summary:empty { display: none; }
+
+.install-hint-list {
+  margin: 0;
+  padding: 8px 12px 8px 28px;
+  background: rgba(217, 119, 87, 0.08);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.install-hint-list li + li { margin-top: 4px; }
+
+/* =============================================================================
  * Sticky Alert — Hook/Graph 변경 후 강조 안내 (PR 2)
  *
  * settings-header 와 settings-body 사이에 끼워 넣어 sub-tab 전환에도 *유지*. 사용자가

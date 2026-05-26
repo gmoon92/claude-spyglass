@@ -874,42 +874,113 @@ function buildLadybugCardHtml(ladybug) {
 }
 
 /**
- * Ladybug 자동 설치 — POST /api/settings/graph-db/install
- *   클릭 시 버튼 disable + "설치 중..." 표시 → 응답 → 결과 + 재시작 필요 sticky alert.
+ * Ladybug 자동 설치 — POST /api/settings/graph-db/install (SSE 스트리밍).
+ *
+ * 흐름:
+ *   1) 버튼 disable + 결과 영역 초기화 (스트림 + 진행 라인 + 깜박임 애니메이션).
+ *   2) fetch 로 SSE 시작 → body.getReader() 루프 → \n\n 단위 메시지 분할 → JSON.parse.
+ *   3) start 이벤트: `$ <cmd>` 라인 prepend.
+ *   4) stdout/stderr 이벤트: <pre> 에 라인 append (stderr 는 warn 컬러).
+ *   5) done 이벤트: 진행 라인 제거 → 헤드라인 + restart 배너 + hint 표시.
  */
 async function onLadybugInstall(strategy) {
   const resultEl = document.getElementById('ladybugInstallResult');
-  if (resultEl) resultEl.innerHTML = `<div class="settings-meta">${t('ui.settings-view.graph.ladybug.installing')}</div>`;
-  // 모든 install 버튼 비활성.
+  if (!resultEl) return;
+  resultEl.innerHTML = `
+    <div class="install-cmd" data-role="cmd" hidden></div>
+    <pre class="install-stream" data-role="stream"></pre>
+    <div class="install-running" data-role="running">${t('ui.settings-view.graph.ladybug.running') || t('ui.settings-view.graph.ladybug.installing')}</div>
+    <div class="install-summary" data-role="summary"></div>
+  `;
+  const cmdEl = resultEl.querySelector('[data-role="cmd"]');
+  const streamEl = resultEl.querySelector('[data-role="stream"]');
+  const runningEl = resultEl.querySelector('[data-role="running"]');
+  const summaryEl = resultEl.querySelector('[data-role="summary"]');
+
   document.querySelectorAll('[data-ladybug-install]').forEach((b) => { b.disabled = true; });
+
+  const appendLine = (line, kind) => {
+    const span = document.createElement('span');
+    if (kind === 'stderr') span.className = 'stream-stderr';
+    span.textContent = (line || '') + '\n';
+    streamEl.appendChild(span);
+    streamEl.scrollTop = streamEl.scrollHeight;
+  };
+
+  let finalResult = null;
+  let aborted = false;
 
   try {
     const res = await fetch('/api/settings/graph-db/install', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        accept: 'text/event-stream',
+      },
       body: JSON.stringify({ strategy }),
     });
-    const json = await res.json();
-    const data = json?.data ?? {};
-    const log = (data.log || '').slice(-2048);
-    const ok = json.success && data.status !== 'failed';
-    const restart = !!data.restartRequired;
-
-    if (resultEl) {
-      const headline = ok
-        ? `<div class="settings-success">${t('ui.settings-view.graph.ladybug.install-success')}${data.version ? ` v${data.version}` : ''}</div>`
-        : `<div class="settings-error">${t('ui.settings-view.graph.ladybug.install-failed')}: ${escHtml(data.error || '')}</div>`;
-      const restartHint = restart
-        ? `<div class="settings-warn-banner">⚠ ${t('ui.settings-view.graph.ladybug.restart-required')}</div>`
-        : '';
-      resultEl.innerHTML = `${headline}${restartHint}<pre class="settings-log">${escHtml(log)}</pre>`;
+    if (!res.ok || !res.body) {
+      throw new Error(`HTTP ${res.status}`);
     }
-    // 진단 카드 재로드 (성공 시 상태가 'installed' 로 갱신되도록).
-    if (ok) renderGraphSection();
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    // SSE 메시지는 빈 줄(\n\n) 로 구분. 부분 메시지는 다음 chunk 와 합쳐 처리.
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let sepIdx;
+      while ((sepIdx = buf.indexOf('\n\n')) !== -1) {
+        const raw = buf.slice(0, sepIdx);
+        buf = buf.slice(sepIdx + 2);
+        // 라인이 `data: ` 로 시작하지 않으면 (`: ping` 같은 comment) 무시.
+        const lines = raw.split('\n');
+        const dataLines = lines.filter((l) => l.startsWith('data:'));
+        if (!dataLines.length) continue;
+        const json = dataLines.map((l) => l.slice(5).trimStart()).join('\n');
+        let evt;
+        try { evt = JSON.parse(json); } catch { continue; }
+        if (evt.type === 'start') {
+          cmdEl.hidden = false;
+          const cmdText = (evt.cmd || []).join(' ');
+          cmdEl.textContent = `$ ${cmdText}` + (evt.cwd ? `  (cwd: ${evt.cwd})` : '');
+        } else if (evt.type === 'stdout' || evt.type === 'stderr') {
+          appendLine(evt.line, evt.type);
+        } else if (evt.type === 'done') {
+          finalResult = evt.result;
+        }
+      }
+    }
   } catch (err) {
-    if (resultEl) resultEl.innerHTML = `<div class="settings-error">${escHtml(err.message || String(err))}</div>`;
+    if (err && err.name === 'AbortError') {
+      aborted = true;
+    } else {
+      summaryEl.innerHTML = `<div class="settings-error">${escHtml((err && err.message) || String(err))}</div>`;
+    }
   } finally {
+    if (runningEl) runningEl.remove();
     document.querySelectorAll('[data-ladybug-install]').forEach((b) => { b.disabled = false; });
+  }
+
+  if (aborted) return;
+
+  // 최종 요약 — headline + restart 배너 + (npm 실패 시) hint 라인.
+  if (finalResult) {
+    const ok = finalResult.status === 'installed' || finalResult.status === 'already-installed';
+    const restart = !!finalResult.restartRequired;
+    const headline = ok
+      ? `<div class="settings-success">${t('ui.settings-view.graph.ladybug.install-success')}${finalResult.version ? ` v${finalResult.version}` : ''}</div>`
+      : `<div class="settings-error">${t('ui.settings-view.graph.ladybug.install-failed')}: ${escHtml(finalResult.error || '')}</div>`;
+    const restartHint = restart
+      ? `<div class="settings-warn-banner">⚠ ${t('ui.settings-view.graph.ladybug.restart-required')}</div>`
+      : '';
+    const hintList = Array.isArray(finalResult.hints) && finalResult.hints.length
+      ? `<ul class="install-hint-list">${finalResult.hints.map((h) => `<li>${escHtml(h)}</li>`).join('')}</ul>`
+      : '';
+    summaryEl.innerHTML = `${headline}${restartHint}${hintList}`;
+    if (ok) renderGraphSection();
   }
 }
 

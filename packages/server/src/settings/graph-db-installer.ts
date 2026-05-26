@@ -3,12 +3,10 @@
  *
  * 책임:
  *   1) `detectLadybugInstall()` — 현재 시스템에 Ladybug 가 설치돼 있는지 감지.
- *      - brew: `brew list ladybug` (macOS/Linux brew 환경)
- *      - npm:  `node -e require.resolve('@ladybugdb/core')` (Node 의존)
- *      - 둘 다 미설치 → method='none'
- *   2) `installLadybug(strategy)` — brew 또는 npm 자동 설치 실행.
- *      - stdout/stderr 를 in-memory 로 수집해 한 번에 반환 (SSE 는 추후 PR).
- *      - 180s timeout (네트워크 다운로드 고려).
+ *   2) `installLadybugStreaming(strategy, emit)` — 라인 단위 stdout/stderr 를 emit 콜백으로
+ *      즉시 발행하며 설치 실행. 종료 시 InstallResult 반환.
+ *   3) `installLadybug(strategy)` — (2) 위의 얇은 wrapper. 기존 호출부 (또는 SSE 미사용)
+ *      와의 호환을 위해 유지. 내부적으로 emit 을 no-op 으로 넘기고 결과만 반환.
  *
  * 의존성:
  *   - Bun.spawn — version-probe.ts 와 동일 패턴.
@@ -22,6 +20,8 @@
  *     사용자에게 안내할 수 있게.
  *   - 설치 후에는 *서버 재시작 필요* — Node 모듈 캐시는 import 시점 스냅샷.
  *     `restartRequired: true` 로 노출, UI 가 sticky alert 로 안내.
+ *   - 스트리밍: stdout/stderr 를 TextDecoder + 라인 split 로 즉시 emit. 부분 라인은
+ *     다음 chunk 와 합쳐 처리, 종료 시 잔여 부분 라인도 flush.
  */
 
 import { existsSync } from 'fs';
@@ -59,7 +59,23 @@ export interface InstallResult {
   /** 설치 후에는 서버 재시작이 필요한지. brew 는 PATH 갱신만, npm 은 모듈 캐시 재로드 필요. */
   restartRequired: boolean;
   error?: string;
+  /** 실패 시 사용자에게 안내할 진단 hint (npm 권한/타임아웃/네트워크 등). */
+  hints?: string[];
 }
+
+/**
+ * 설치 진행 이벤트 — SSE 로 클라이언트에 전달.
+ *   - start: 어떤 명령어가 실행되는지 한 줄 노출
+ *   - stdout/stderr: 외부 명령의 라인 단위 출력
+ *   - done: 최종 결과 (log 는 누적분, hints 는 분석된 안내)
+ */
+export type InstallEvent =
+  | { type: 'start'; cmd: string[]; cwd?: string }
+  | { type: 'stdout'; line: string }
+  | { type: 'stderr'; line: string }
+  | { type: 'done'; result: InstallResult };
+
+export type InstallEmit = (event: InstallEvent) => void;
 
 // =============================================================================
 // 상수
@@ -226,37 +242,45 @@ async function isCommandAvailable(cmd: string): Promise<boolean> {
 // =============================================================================
 
 /**
- * brew 또는 npm 으로 Ladybug 자동 설치.
+ * brew 또는 npm 으로 Ladybug 자동 설치 (스트리밍).
  *
  * strategy:
  *   - 'brew' : `brew install ladybug`
- *   - 'npm'  : `npm install @ladybugdb/core` (workspace root cwd)
+ *   - 'npm'  : workspace root 에서 `npm install` (lockfile 재설치)
  *   - 'auto' : brew 가능 → brew, 아니면 npm
  *
- * 종료 후 재감지하여 결과 응답. *서버 재시작이 필요*하다는 정보를 함께 노출.
+ * 동작:
+ *   - start 이벤트로 실행 명령을 사용자에게 노출.
+ *   - 외부 명령의 stdout/stderr 를 라인 단위로 즉시 emit.
+ *   - 종료 후 done 이벤트와 함께 InstallResult 반환 (동일 결과를 함수 반환값으로도 노출).
+ *
+ * 사전 검증 분기 (이미 설치됨 / 패키지 매니저 부재 등) 는 외부 명령을 실행하지 않으므로
+ * start/stdout 이벤트는 발생하지 않고 done 만 발행.
  */
-export async function installLadybug(strategy: InstallStrategy): Promise<InstallResult> {
+export async function installLadybugStreaming(
+  strategy: InstallStrategy,
+  emit: InstallEmit,
+): Promise<InstallResult> {
   const existing = await detectLadybugInstall();
   if (existing.installed) {
-    return {
+    const result: InstallResult = {
       status: 'already-installed',
       method: existing.method,
       version: existing.version,
       log: `already installed via ${existing.method} (version ${existing.version ?? 'unknown'})`,
       restartRequired: false,
     };
+    emit({ type: 'done', result });
+    return result;
   }
 
-  // strategy 결정.
   let chosen: InstallMethod;
   if (strategy === 'brew') chosen = 'brew';
   else if (strategy === 'npm') chosen = 'npm';
-  else {
-    chosen = existing.brewAvailable ? 'brew' : existing.npmAvailable ? 'npm' : 'none';
-  }
+  else chosen = existing.brewAvailable ? 'brew' : existing.npmAvailable ? 'npm' : 'none';
 
   if (chosen === 'none') {
-    return {
+    const result: InstallResult = {
       status: 'failed',
       method: 'none',
       version: null,
@@ -264,11 +288,13 @@ export async function installLadybug(strategy: InstallStrategy): Promise<Install
       restartRequired: false,
       error: 'no-package-manager',
     };
+    emit({ type: 'done', result });
+    return result;
   }
 
   if (chosen === 'brew') {
     if (!existing.brewAvailable) {
-      return {
+      const result: InstallResult = {
         status: 'failed',
         method: 'brew',
         version: null,
@@ -276,13 +302,14 @@ export async function installLadybug(strategy: InstallStrategy): Promise<Install
         restartRequired: false,
         error: 'brew-not-available',
       };
+      emit({ type: 'done', result });
+      return result;
     }
-    return runBrewInstall();
+    return runBrewInstallStreaming(emit);
   }
 
-  // npm.
   if (!existing.npmAvailable) {
-    return {
+    const result: InstallResult = {
       status: 'failed',
       method: 'npm',
       version: null,
@@ -290,86 +317,110 @@ export async function installLadybug(strategy: InstallStrategy): Promise<Install
       restartRequired: false,
       error: 'npm-not-available',
     };
+    emit({ type: 'done', result });
+    return result;
   }
-  return runNpmInstall();
+  return runNpmInstallStreaming(emit);
 }
 
-async function runBrewInstall(): Promise<InstallResult> {
-  const result = await spawnWithTimeout(['brew', 'install', 'ladybug'], SPAWN_INSTALL_TIMEOUT_MS);
+/**
+ * `installLadybug(strategy)` — 비-스트리밍 호환 wrapper.
+ *
+ * emit 콜백을 no-op 으로 넘기고 결과만 반환. 기존 호출자 (또는 SSE 미지원 클라이언트)
+ * 가 동일한 InstallResult 를 받을 수 있도록 유지.
+ */
+export async function installLadybug(strategy: InstallStrategy): Promise<InstallResult> {
+  return installLadybugStreaming(strategy, () => { /* no-op */ });
+}
+
+async function runBrewInstallStreaming(emit: InstallEmit): Promise<InstallResult> {
+  const cmd = ['brew', 'install', 'ladybug'];
+  emit({ type: 'start', cmd });
+  const result = await spawnStreaming(cmd, SPAWN_INSTALL_TIMEOUT_MS, undefined, emit);
   const log = combineLog(result.stdout, result.stderr);
 
   if (result.exitCode !== 0) {
-    return {
+    const installResult: InstallResult = {
       status: 'failed',
       method: 'brew',
       version: null,
       log,
       restartRequired: false,
-      error: `brew install exited ${result.exitCode}`,
+      error: result.timedOut
+        ? `brew install timed out after ${SPAWN_INSTALL_TIMEOUT_MS / 1000}s`
+        : `brew install exited ${result.exitCode}`,
     };
+    emit({ type: 'done', result: installResult });
+    return installResult;
   }
 
-  // 설치 직후 재감지 — 버전 노출.
   const after = await detectLadybugInstall();
-  return {
+  const installResult: InstallResult = {
     status: 'installed',
     method: 'brew',
     version: after.version,
     log,
     restartRequired: true,
   };
+  emit({ type: 'done', result: installResult });
+  return installResult;
 }
 
-async function runNpmInstall(): Promise<InstallResult> {
+async function runNpmInstallStreaming(emit: InstallEmit): Promise<InstallResult> {
   // 정책: storage-graph 패키지의 dependency 로 @ladybugdb/core 가 이미 선언돼 있으므로
   //   *모노레포 루트에서* `npm install` (인자 없이) 만 호출해 lockfile 기반 재설치.
-  //   `npm install @ladybugdb/core` 형태로 인자 전달 시 root package.json 에 *중복 추가*
-  //   되거나 workspace 충돌이 발생할 수 있어 회피.
   const cwd = findMonorepoRoot();
-  const result = await spawnWithTimeout(
-    ['npm', 'install'],
-    SPAWN_INSTALL_TIMEOUT_MS,
-    cwd,
-  );
+  const cmd = ['npm', 'install'];
+  emit({ type: 'start', cmd, cwd });
+  const result = await spawnStreaming(cmd, SPAWN_INSTALL_TIMEOUT_MS, cwd, emit);
   const log = combineLog(result.stdout, result.stderr);
 
   if (result.exitCode !== 0) {
-    // 실패 원인 진단을 사용자에게 명확히 노출.
-    //   - EACCES/EPERM : 권한 부족 (brew/system 영역에 spyglass 설치된 경우 흔함)
-    //   - ENOENT       : monorepo root 또는 package.json 누락
-    //   - ETIMEDOUT    : 네트워크 미연결 / 프록시 문제
-    //   사용자 환경에 brew 가 가능하면 brew 권장 안내 동봉.
-    const hints: string[] = [];
-    if (/EACCES|EPERM|permission denied/i.test(log)) {
-      hints.push('권한 부족으로 보입니다. Spyglass 설치 경로(`' + cwd + '`)에 쓰기 권한이 필요합니다.');
-    }
-    if (/ENOENT.*package\.json/i.test(log)) {
-      hints.push('package.json 을 찾지 못했습니다. monorepo root 가 감지되지 않은 환경일 수 있습니다.');
-    }
-    if (/ETIMEDOUT|ENOTFOUND|getaddrinfo/i.test(log)) {
-      hints.push('네트워크 연결이 안 되거나 npm registry 접근이 차단됐습니다.');
-    }
-    if (!hints.length) {
-      hints.push('자세한 원인은 아래 로그를 확인하세요. Homebrew 설치(brew install ladybug) 가 가능하면 그쪽이 더 안전합니다.');
-    }
-    return {
+    // 실패 원인 진단 — EACCES/EPERM/ENOENT/ETIMEDOUT 패턴 매칭.
+    const hints = analyzeNpmFailure(log, cwd);
+    const installResult: InstallResult = {
       status: 'failed',
       method: 'npm',
       version: null,
-      log: hints.join('\n') + '\n\n' + log,
+      log,
       restartRequired: false,
-      error: `npm install exited ${result.exitCode}`,
+      error: result.timedOut
+        ? `npm install timed out after ${SPAWN_INSTALL_TIMEOUT_MS / 1000}s`
+        : `npm install exited ${result.exitCode}`,
+      hints,
     };
+    emit({ type: 'done', result: installResult });
+    return installResult;
   }
 
   const after = await detectLadybugInstall();
-  return {
+  const installResult: InstallResult = {
     status: 'installed',
     method: 'npm',
     version: after.version,
     log,
     restartRequired: true,
   };
+  emit({ type: 'done', result: installResult });
+  return installResult;
+}
+
+/** npm 실패 로그에서 사용자 안내 hint 를 추출. 빈 배열이 아니면 UI 가 강조 표시. */
+function analyzeNpmFailure(log: string, cwd: string): string[] {
+  const hints: string[] = [];
+  if (/EACCES|EPERM|permission denied/i.test(log)) {
+    hints.push('권한 부족으로 보입니다. Spyglass 설치 경로(`' + cwd + '`)에 쓰기 권한이 필요합니다.');
+  }
+  if (/ENOENT.*package\.json/i.test(log)) {
+    hints.push('package.json 을 찾지 못했습니다. monorepo root 가 감지되지 않은 환경일 수 있습니다.');
+  }
+  if (/ETIMEDOUT|ENOTFOUND|getaddrinfo/i.test(log)) {
+    hints.push('네트워크 연결이 안 되거나 npm registry 접근이 차단됐습니다.');
+  }
+  if (!hints.length) {
+    hints.push('자세한 원인은 위 로그를 확인하세요. Homebrew 설치(brew install ladybug) 가 가능하면 그쪽이 더 안전합니다.');
+  }
+  return hints;
 }
 
 // =============================================================================
@@ -409,6 +460,101 @@ async function spawnWithTimeout(
     const stderr = await new Response(proc.stderr).text();
     return { exitCode: exited, stdout, stderr, timedOut: false };
   } catch (err) {
+    return {
+      exitCode: -2,
+      stdout: '',
+      stderr: err instanceof Error ? err.message : String(err),
+      timedOut: false,
+    };
+  }
+}
+
+/**
+ * 외부 명령을 실행하면서 stdout/stderr 를 라인 단위로 emit.
+ *
+ * 동작:
+ *   - Bun.spawn 의 ReadableStream<Uint8Array> 를 getReader() 로 즉시 읽음.
+ *   - TextDecoder 로 디코드, 라인 버퍼에 누적, \n 으로 split → 즉시 emit.
+ *   - 부분 라인(\n 없는 마지막 조각) 은 다음 chunk 와 합쳐 처리.
+ *   - 종료 시 잔여 부분 라인도 flush.
+ *   - timeout 시 proc.kill().
+ *
+ * 반환값은 spawnWithTimeout 과 동일한 SpawnResult (전체 누적 stdout/stderr + exitCode).
+ * 호출 측이 combineLog/InstallResult 구성에 그대로 사용 가능.
+ */
+async function spawnStreaming(
+  cmd: string[],
+  timeoutMs: number,
+  cwd: string | undefined,
+  emit: InstallEmit,
+): Promise<SpawnResult> {
+  let proc: ReturnType<typeof Bun.spawn> | null = null;
+  try {
+    proc = Bun.spawn(cmd, {
+      stdout: 'pipe',
+      stderr: 'pipe',
+      cwd,
+    });
+
+    let timedOut = false;
+    const timeoutHandle = setTimeout(() => {
+      timedOut = true;
+      try { proc?.kill(); } catch { /* already dead */ }
+    }, timeoutMs);
+
+    const collected = { stdout: '', stderr: '' };
+    const streamReader = async (
+      stream: ReadableStream<Uint8Array>,
+      kind: 'stdout' | 'stderr',
+    ): Promise<void> => {
+      const reader = stream.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          const text = decoder.decode(value, { stream: true });
+          buffer += text;
+          collected[kind] += text;
+          // 마지막 \n 위치까지 라인 단위로 flush. 그 뒤 잔여는 다음 chunk 까지 보존.
+          let nlIdx = buffer.indexOf('\n');
+          while (nlIdx !== -1) {
+            const line = buffer.slice(0, nlIdx).replace(/\r$/, '');
+            emit({ type: kind, line });
+            buffer = buffer.slice(nlIdx + 1);
+            nlIdx = buffer.indexOf('\n');
+          }
+        }
+        // 종료 시 잔여 부분 라인이 있으면 flush (\n 없이 끝났을 때).
+        const flushed = decoder.decode();
+        if (flushed) {
+          buffer += flushed;
+          collected[kind] += flushed;
+        }
+        if (buffer.length > 0) {
+          emit({ type: kind, line: buffer.replace(/\r$/, '') });
+        }
+      } finally {
+        try { reader.releaseLock(); } catch { /* ignore */ }
+      }
+    };
+
+    await Promise.all([
+      streamReader(proc.stdout as ReadableStream<Uint8Array>, 'stdout'),
+      streamReader(proc.stderr as ReadableStream<Uint8Array>, 'stderr'),
+    ]);
+    const exitCode = await proc.exited;
+    clearTimeout(timeoutHandle);
+
+    return {
+      exitCode: timedOut ? -1 : exitCode,
+      stdout: collected.stdout,
+      stderr: collected.stderr,
+      timedOut,
+    };
+  } catch (err) {
+    try { proc?.kill(); } catch { /* ignore */ }
     return {
       exitCode: -2,
       stdout: '',

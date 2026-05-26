@@ -660,6 +660,7 @@
         "install-npm": "Install via npm",
         "no-package-manager": "Neither brew nor npm is available. Install Homebrew or Node.js first.",
         "installing": "Installing...",
+        "running": "Installation in progress...",
         "install-success": "Installation complete",
         "install-failed": "Installation failed",
         "restart-required": "Restart Claude Code for the changes to take effect."

@@ -49,7 +49,9 @@ import { detectHookStatus } from '../settings/hook-detect';
 import {
   detectLadybugInstall,
   installLadybug,
+  installLadybugStreaming,
   type InstallStrategy,
+  type InstallEvent,
 } from '../settings/graph-db-installer';
 import {
   previewHookApply,
@@ -543,7 +545,11 @@ async function handleGraphDbStatus(): Promise<Response> {
  * Body: { strategy?: 'brew' | 'npm' | 'auto' }
  *   - 'auto' (기본): brew 가능 시 brew, 아니면 npm.
  *
- * 응답: { success, data: { status, method, version, log, restartRequired, error? } }
+ * 응답 모드:
+ *   1) Accept: text/event-stream → SSE 스트리밍 (라인 단위 stdout/stderr + 종료 시 요약)
+ *      각 메시지는 `data: ${JSON.stringify(InstallEvent)}\n\n`. 15s 마다 `: ping` heartbeat.
+ *      클라이언트 abort 시 child process 종료.
+ *   2) 그 외 (legacy/JSON) → 설치 종료까지 대기 후 `{ success, data: InstallResult }`.
  *
  * 설치 자체는 최대 180s. 완료 후 sticky alert "Claude Code 재시작 필요" 안내.
  */
@@ -557,11 +563,79 @@ async function handleGraphDbInstall(req: Request): Promise<Response> {
     return jsonResponse({ success: false, error: 'Invalid JSON body' }, 400);
   }
   const strategy = body.strategy ?? 'auto';
-  const result = await installLadybug(strategy);
-  // diag 캐시 무효화 — ladybug.installed / version 이 변경되었을 수 있음. 실패해도 부분 상태가
-  // 바뀌었을 가능성이 있어 동일하게 무효화 (보수적).
-  invalidateDiagCacheNow();
-  return jsonResponse({ success: result.status !== 'failed', data: result });
+  const wantsSSE = (req.headers.get('accept') ?? '').includes('text/event-stream');
+
+  if (!wantsSSE) {
+    // 비-스트리밍 호환 경로 — 기존 응답 포맷 유지.
+    const result = await installLadybug(strategy);
+    invalidateDiagCacheNow();
+    return jsonResponse({ success: result.status !== 'failed', data: result });
+  }
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      let closed = false;
+      const enqueue = (chunk: string) => {
+        if (closed) return;
+        try { controller.enqueue(encoder.encode(chunk)); }
+        catch { closed = true; }
+      };
+      const emit = (event: InstallEvent) => {
+        enqueue(`data: ${JSON.stringify(event)}\n\n`);
+      };
+
+      // 긴 다운로드 침묵 구간 대비 — 15s heartbeat (proxy/keepalive 차단 방지).
+      const heartbeat = setInterval(() => enqueue(`: ping\n\n`), 15_000);
+
+      // 클라이언트 abort (페이지 이탈/새로고침) 감지.
+      let aborted = false;
+      const onAbort = () => {
+        aborted = true;
+        // 설치 자체는 installLadybugStreaming 내부의 spawn timeout 까지 진행될 수 있지만
+        // 응답 스트림은 즉시 닫음. SSE close 가 spawn 까지 즉시 죽이지는 않으므로
+        // 사용자가 다시 시도해도 brew/npm 이 중복 락에 막힐 수는 있음 (드물어 수용).
+        closed = true;
+        clearInterval(heartbeat);
+        try { controller.close(); } catch { /* ignore */ }
+      };
+      req.signal.addEventListener('abort', onAbort, { once: true });
+
+      installLadybugStreaming(strategy, emit)
+        .catch((err) => {
+          if (aborted) return;
+          emit({
+            type: 'done',
+            result: {
+              status: 'failed',
+              method: 'none',
+              version: null,
+              log: err instanceof Error ? err.message : String(err),
+              restartRequired: false,
+              error: 'unexpected-exception',
+            },
+          });
+        })
+        .finally(() => {
+          clearInterval(heartbeat);
+          req.signal.removeEventListener('abort', onAbort);
+          invalidateDiagCacheNow();
+          if (!closed) {
+            closed = true;
+            try { controller.close(); } catch { /* ignore */ }
+          }
+        });
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no', // nginx/proxy buffering 비활성화 힌트
+    },
+  });
 }
 
 // =============================================================================
