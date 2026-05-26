@@ -37,9 +37,9 @@ import { initMetaDocsFlowResize } from './left-panel-vertical-resize.js';
 import { setMetaDocsCounts } from './left-panel.js';
 // ADR-004 meta-docs-tool-stats: 프로젝트 단위 도구 통계 진입점.
 import { loadProjectToolStats } from './tool-stats.js';
-// meta-docs-flow ego-graph (2026-05-21 rev): 선택 메타 문서 중심 ego-graph 렌더 진입점.
-//   별도 'flow' 탭이 아니라 'docs' 탭 상단 영역(#metaDocsFlowRegion)에 그린다.
-import { loadFlowDiagram } from './meta-docs-flow-view.js';
+// migration-plan §C: 통합 Flow 단일 모듈 — ego + sequential 토글 폐기.
+//   `#metaDocsFlowRegion` 영역에 unified flow (좌 ancestor + center + 우 descendant) 렌더.
+import { loadFlow } from './meta-docs-flow.js';
 // meta-tabs-shared-date-filter (view-mode-reentry-filter-button-regression 2026-05-21):
 //   chart-actions의 #dateFilter element를 metaTabsDateRange 슬롯으로 DOM 이동시켜
 //   메타 모드에서도 노출. mountDateRangeDropdown은 main.js initDateFilter()가 1회 호출
@@ -543,17 +543,19 @@ export async function loadMetaDocsLibrary() {
 /**
  * meta-docs-flow ego-graph (2026-05-21 rev): 상단 흐름 영역 자동 로드 진입점.
  *
- *  - 정렬된 카탈로그의 첫 "초점이 될 만한" 행을 골라 loadFlowDiagram(...)을 호출한다.
+ *  - 정렬된 카탈로그의 첫 "초점이 될 만한" 행을 골라 loadFlow(...)을 호출한다.
  *  - 우선순위: 발견 가능한(id != null) + 호출 수 > 0 인 첫 행. 없으면 첫 id != null 행.
  *  - rows가 비었거나 모두 orphan이면 흐름 영역에 안내(빈 상태)를 그리도록 centerName=null.
- *  - loadFlowDiagram은 자체 컨테이너(#metaDocsFlowRegion)를 찾지 못하면 no-op이므로 가드 불필요.
+ *  - loadFlow은 자체 컨테이너(#metaDocsFlowRegion)를 찾지 못하면 no-op이므로 가드 불필요.
  */
 function autoLoadFirstRowFlow(rows, project) {
   let pick = rows.find(r => r.id != null && (r.invocations ?? 0) > 0);
   if (!pick) pick = rows.find(r => r.id != null);
-  const centerType = pick?.type ?? null;
+  // meta-docs-flow.js::loadFlow 시그니처는 `centerKind` 를 요구. 카탈로그의 `type`
+  // 컬럼 값('agent'|'skill'|'command')이 그대로 MetaDocKind 와 호환.
+  const centerKind = pick?.type ?? null;
   const centerName = pick?.name ?? null;
-  loadFlowDiagram({ centerType, centerName, project });
+  loadFlow({ centerKind, centerName, project });
 }
 
 /**
@@ -609,9 +611,9 @@ function findSourceRootByProject(rows, projectName) {
 function renderHtml(rows, ctx = {}) {
   const filters = renderFilters();
   // meta-docs-flow ego-graph (2026-05-21 rev): 상단 ego-graph 영역.
-  //   - meta-docs-flow-view.js loadFlowDiagram이 본 영역에 toolbar+SVG를 inject한다.
+  //   - meta-docs-flow-view.js loadFlow이 본 영역에 toolbar+SVG를 inject한다.
   //   - 사용자 요청: "메타 문서 탭 상단에 흐름 영역을 만들어두고 하단에 기존 메타문서 테이블을 재배치".
-  //   - rows가 비어도 노출 — 빈 상태 안내를 loadFlowDiagram이 직접 그린다(빈 자리 깜빡임 방지).
+  //   - rows가 비어도 노출 — 빈 상태 안내를 loadFlow이 직접 그린다(빈 자리 깜빡임 방지).
   // split-scroll (2026-05-21): 시각화 영역과 카탈로그 영역의 스크롤을 분리한다.
   //   - .meta-docs-body는 overflow:hidden flex column.
   //   - .meta-docs-flow-region는 자기 고정 높이(CSS 변수 --meta-docs-flow-height) — 함께 스크롤되지 않음.
@@ -905,14 +907,14 @@ async function onMetaContainerClick(e) {
   // 3) 카탈로그 행 클릭 — 상단 ego-flow 영역을 클릭된 행 중심으로 재렌더.
   //    meta-docs-flow ego-graph (2026-05-21 rev): orphan 행(id 없음)은 흐름 추적 불가 → 무시.
   //    re-render 비용을 줄이기 위해 loadMetaDocsLibrary 전체를 다시 부르지 않고
-  //    상단 영역만 loadFlowDiagram으로 교체. 활성 행 시각 표시는 [data-flow-active] 토글.
+  //    상단 영역만 loadFlow으로 교체. 활성 행 시각 표시는 [data-flow-active] 토글.
   const row = e.target.closest('.meta-doc-row[data-name]');
   if (row) {
     if (!row.dataset.type || row.classList.contains('meta-doc-orphan')) return;
     const project = state.scopeMode === 'selected' ? (getSelectedProject() || null) : null;
     setActiveFlowRow(row);
-    loadFlowDiagram({
-      centerType: row.dataset.type,
+    loadFlow({
+      centerKind: row.dataset.type,
       centerName: row.dataset.name,
       project,
     });

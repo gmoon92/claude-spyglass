@@ -115,10 +115,12 @@ const CONTRACTS: Contract[] = [
     shape: 'object',
     required: ['summary', 'sessions', 'requests', 'projects', 'tools', 'types', 'active'],
   },
+  // migration-plan §B: /api/meta-docs/flow 는 폐기, /api/graph/unified-flow 가 대체.
+  // 응답 셰이프가 변경되었으므로 본 contract 도 갱신.
   {
-    path: `/api/meta-docs/flow?center_type=skill&center_name=reviewer&project=${SEED_PROJECT}&windowDays=7`,
+    path: `/api/graph/unified-flow?center_kind=skill&center_name=reviewer`,
     shape: 'object',
-    required: ['nodes', 'edges', 'sectionLabels', 'meta'],
+    required: ['nodes', 'edges', 'columns', 'meta'],
   },
 ];
 

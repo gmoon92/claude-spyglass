@@ -1,11 +1,14 @@
 /**
  * Flow DAG Types — 5개 패턴 압축용 신규 타입 (P2 이후 사용)
  *
- * 현재(P1) 사용: 없음 (MetaFlowEgo* 타입과 호환)
- * P2 이후: Bypass / Conditional Branching / Shared Critic / Retry / Fan-out 압축
+ * 현재(P1) 사용: 없음. P2 이후: Bypass / Conditional Branching / Shared Critic / Retry / Fan-out.
+ *
+ * 변경 이력 (migration-plan §B): MetaFlowEgoNodeKind 의존성을 제거하고 로컬 alias 로 대체.
+ *   Ladybug 통합 unified-flow 쪽에는 MetaDocKind 가 SSoT (storage-graph 패키지 export).
  */
 
-import type { MetaFlowEgoNodeKind } from '../meta-document';
+/** 메타 문서 노드 카테고리 — storage-graph 의 MetaDocKind 와 동일 어휘. */
+type MetaFlowEgoNodeKind = 'command' | 'skill' | 'agent' | 'tool' | 'mcp';
 
 /** 노드 정체성 — 고유한 (kind, name) 쌍. */
 export type NodeKey = `${MetaFlowEgoNodeKind}:${string}`;

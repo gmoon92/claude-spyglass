@@ -23,7 +23,7 @@
  *
  * 디자인 결정 (06 §3.3):
  *   - Cypher 4쿼리로 분리 — 각 함수가 1쿼리만 발행하고 결과를 정규화. SRP 원칙.
- *   - 가변 깊이 `*1..$depth` 는 walk semantic 사용 — upper bound 명시 필수 (Kuzu/Ladybug).
+ *   - 가변 깊이 `*1..$depth` 는 walk semantic 사용 — upper bound 명시 필수 (Ladybug).
  *   - self-loop 격하: center 와 동일한 (kind,name) 메타 문서는 결과에서 제외.
  *   - 응답 셰이프 `{nodes, edges, layers, meta}` — 03 보고서 (`{nodes, edges}` 표준)
  *     의 확장. layers 는 메타 정보로만 추가, 프론트는 layer index → y 좌표 매핑.

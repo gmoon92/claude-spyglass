@@ -20,8 +20,8 @@ describe('SPYGLASS_GRAPH_MODE flag', () => {
     resetGraphModeCache();
   });
 
-  test('환경변수 없으면 기본값 shadow', () => {
-    expect(getGraphMode()).toBe('shadow');
+  test('환경변수 없으면 기본값 primary', () => {
+    expect(getGraphMode()).toBe('primary');
     expect(isGraphEnabled()).toBe(true);
   });
 
@@ -45,10 +45,10 @@ describe('SPYGLASS_GRAPH_MODE flag', () => {
     expect(getGraphMode()).toBe('off');
   });
 
-  test('미지원 값은 shadow 폴백', () => {
+  test('미지원 값은 primary 폴백', () => {
     process.env.SPYGLASS_GRAPH_MODE = 'nonsense';
     resetGraphModeCache();
-    expect(getGraphMode()).toBe('shadow');
+    expect(getGraphMode()).toBe('primary');
   });
 
   test('값은 1회만 파싱되고 캐시됨', () => {

@@ -17,7 +17,7 @@
  * 디자인 결정:
  *   - 모든 노드는 PRIMARY KEY 기준 MERGE — 같은 row 가 두 번 들어와도 idempotent.
  *   - 노드 속성은 MERGE 시 SET (덮어쓰기) — 가장 최근 enrich 결과가 승리.
- *   - 엣지는 fork 의 MATCH ... CREATE ... 패턴 (Kuzu/Ladybug 는 REL 에 MERGE 가 없을 수
+ *   - 엣지는 fork 의 MATCH ... CREATE ... 패턴 (Ladybug 는 REL 에 MERGE 가 없을 수
  *     있어 MATCH + 존재 체크 패턴). 단순화를 위해 우선 CREATE 시도 + duplicate 에러
  *     무시 폴백.
  *   - 본 모듈은 *문자열 빌더 + dispatcher* — 실제 native 호출은 LadybugClient.query 에
@@ -28,7 +28,7 @@
  */
 
 import type { LadybugClient } from '../client';
-import type { GraphOp, RelOp } from './enrich';
+import type { GraphOp, RelOp, MetaDocumentProps } from './enrich';
 
 /**
  * GraphOp 배열을 순서대로 MERGE. 호출자(worker)가 본 함수를 transaction 으로 감싸야
@@ -51,6 +51,9 @@ export async function mergeOps(client: LadybugClient, ops: GraphOp[]): Promise<v
         break;
       case 'event':
         await mergeEvent(client, op.props);
+        break;
+      case 'meta_doc':
+        await mergeMetaDocument(client, op.props);
         break;
       case 'rel':
         await mergeRel(client, op.rel);
@@ -130,7 +133,27 @@ async function mergeEvent(client: LadybugClient, p: { id: string; event_type: st
 }
 
 /**
- * 엣지 MERGE — Kuzu/Ladybug 는 REL 에 직접 MERGE 가 제한적이라 MATCH 두 노드 + CREATE
+ * MetaDocument 노드 idempotent MERGE. PK = 합성 STRING `${kind}::${name}`.
+ *
+ *   동일 (kind, name) 의 ToolCall 이 N 번 들어와도 노드는 1개로 유지된다.
+ *   read query 들은 `MATCH (md:MetaDocument {kind, name})` 로 property 매칭하므로
+ *   PK 형태는 무관 — 단지 MERGE 의 idempotency 만 보장하면 충분.
+ */
+async function mergeMetaDocument(client: LadybugClient, p: MetaDocumentProps): Promise<void> {
+  // `MetaDocumentProps` 는 명명 인터페이스라 Record<string, unknown> 와 구조적 호환은
+  // 되지만 TS index-signature 검사를 통과 못해 spread 로 plain object 만들어 전달.
+  await client.query(
+    `MERGE (m:MetaDocument {id: $id})
+     SET m.kind        = $kind,
+         m.name        = $name,
+         m.source      = $source,
+         m.source_root = $source_root`,
+    { ...p },
+  );
+}
+
+/**
+ * 엣지 MERGE — Ladybug 는 REL 에 직접 MERGE 가 제한적이라 MATCH 두 노드 + CREATE
  * REL 패턴 + duplicate 에러 흡수. 노드가 아직 없으면(드물게 enrich 순서 어긋남) MATCH
  * 가 0 row 라 그냥 no-op — 다음 tick 에서 재시도.
  */

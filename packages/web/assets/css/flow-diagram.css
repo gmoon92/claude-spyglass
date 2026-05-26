@@ -455,52 +455,30 @@
 }
 
 /* =============================================================================
- * Sequential Flowchart 모드 — 신규 그래프 네이티브 UI (06 §3.5 / feedback_chip_color_semantics)
+ * Unified Flow 시각화 (migration-plan §C) — ego + sequential 통합 단일 SoT
  *
  * 책임:
- *   - 시각화 모드 토글 버튼 (.flow-mode-toggle / .flow-mode-btn)
- *   - 순서도 모드의 노드/엣지 시그니처 (.node-seq, .edge-call, .edge-after)
+ *   - 단일 시각화 모듈 (.node-seq, .edge-call, .edge-after)
+ *   - 시간 layer 색조 그라데이션 (`--card-tone-layer` 0..4)
  *   - 엣지 hover 인과 경로 강조 — 색상=시그널, 무채색=노이즈.
  *
  * 색상 어휘:
  *   - --accent           = Anthropic 주황 #d97757 (center, CALL 엣지, 강조).
+ *   - --card-tone-layer-N = 시간 그라데이션 5단계 (0=가장 이른, 4=가장 늦은).
  *   - 무채색 톤다운       = opacity 0.25 + blur 0.5px (비강조 노드/엣지).
  *
- * 호출자: meta-docs-flow-view.js (토글 버튼) + meta-docs-flow-sequential.js (노드/엣지).
+ * 호출자: meta-docs-flow.js (단일 모듈 — 토글 폐기, migration-plan §C).
  * ========================================================================== */
 
-/* ── 모드 토글 ───────────────────────────────────────────────────────────── */
-.flow-mode-toggle {
-  display: inline-flex;
-  border: 1px solid var(--border-soft);
-  border-radius: 999px;
-  overflow: hidden;
-  background: var(--surface);
-}
-.flow-mode-btn {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--text-3);
-  padding: 4px 12px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
-}
-.flow-mode-btn:hover {
-  background: var(--raised);
-  color: var(--text-2);
-}
-.flow-mode-btn.is-active {
-  background: var(--accent);
-  color: #fff;
-}
-.flow-mode-btn.is-active:hover {
-  background: var(--accent);
-  color: #fff;
-  filter: brightness(1.05);
-}
+/* ── 시간 layer 색조 5단계 (CSS variable) ────────────────────────────────── */
+/* .node-seq { --card-tone-layer: N } 가 JS 에서 부여되면 box-shadow 강도/saturation
+ * 으로 시간 흐름을 표현. 가장 이른 layer(0) 은 약하고 가장 늦은 layer(4) 는 진하다.
+ * 본 룰은 시각 노이즈 최소화를 위해 box-shadow 만 사용 (border 색은 유지). */
+.node-seq[style*="--card-tone-layer: 0"] { box-shadow: inset 3px 0 0 rgba(217, 119, 87, 0.10); }
+.node-seq[style*="--card-tone-layer: 1"] { box-shadow: inset 3px 0 0 rgba(217, 119, 87, 0.25); }
+.node-seq[style*="--card-tone-layer: 2"] { box-shadow: inset 3px 0 0 rgba(217, 119, 87, 0.45); }
+.node-seq[style*="--card-tone-layer: 3"] { box-shadow: inset 3px 0 0 rgba(217, 119, 87, 0.65); }
+.node-seq[style*="--card-tone-layer: 4"] { box-shadow: inset 3px 0 0 rgba(217, 119, 87, 0.85); }
 
 /* ── Sequential 모드 — 노드 카드 차별화 ───────────────────────────────────
  *
@@ -532,10 +510,15 @@
 .edge {
   transition: stroke-opacity var(--dur-fast) ease, stroke-width var(--dur-fast) ease;
 }
-.edge-call  { stroke: var(--accent); stroke-width: 1.8; }
+/* 기본 상태 — CALL 실선 / AFTER 점선 모두 무채색.
+   사용자 명세 (2026-05-26): "기본 점선과 같은 무채색으로, 호버나 클릭 시 주황색".
+   CALL 과 AFTER 의 차이는 *패턴* (실선 vs 점선) 으로만 표현 — 색상은 동일.
+   강조 시 .is-highlighted 룰이 stroke=var(--accent) 로 덮어쓴다.
+   marker(화살표 머리) 는 fill="context-stroke" 라 stroke 색을 자동 상속. */
+.edge-call  { stroke: var(--border-strong); stroke-width: 1.5; }
 .edge-after { stroke: var(--border-strong); stroke-width: 1.2; stroke-dasharray: 4 4; }
 
-/* ── 엣지 hover 인과 경로 강조 (highlight.js) ───────────────────────────── */
+/* ── 엣지 hover 임시 강조 (highlight.js 의 hover 채널) ───────────────────── */
 .flow-svg.is-hovering foreignObject:not(.is-highlighted) .node {
   opacity: 0.25;
   filter: blur(0.5px);
@@ -543,6 +526,21 @@
 .flow-svg.is-hovering .edge:not(.is-highlighted) {
   stroke-opacity: 0.15;
 }
+
+/* ── 카드 click persistent 선택 강조 (highlight.js 의 click 채널) ──────────
+   사용자 명세 (2026-05-26):
+     - 클릭한 카드의 모든 조상/자손 path 지속 강조 (배경 click / 같은 카드 재click 으로 해제).
+     - 비강조 요소는 opacity 0.2 로 톤다운 — 중심 흐름을 부각.
+     - 강조 엣지는 stroke-dashoffset 이동 애니메이션으로 데이터 *흐름 방향성* 시각화. */
+.flow-svg.has-selection foreignObject:not(.is-highlighted) .node {
+  opacity: 0.2;
+  filter: blur(0.3px);
+}
+.flow-svg.has-selection .edge:not(.is-highlighted) {
+  stroke-opacity: 0.2;
+}
+
+/* 강조 요소 공통 — hover / click 두 채널 모두 동일 시각 어휘. */
 .flow-svg foreignObject.is-highlighted .node {
   border-color: var(--accent);
   box-shadow: 0 2px 8px rgba(217, 119, 87, 0.25);
@@ -551,6 +549,25 @@
   stroke: var(--accent);
   stroke-width: 2.2;
   stroke-opacity: 1;
+}
+
+/* ── 흐름 애니메이션 (.is-flowing) ──────────────────────────────────────────
+   click 채널에서만 부여. stroke-dasharray 를 강제로 6 4 로 둬서 AFTER 엣지의
+   기본 4 4 점선과 통일 → CALL 실선도 동일한 패턴으로 흐름 효과를 받는다.
+   dashoffset 을 -20 까지 음수로 이동시켜 *데이터가 source → target 방향으로
+   흘러가는* 시각 효과 (양수 방향 이동은 반대로 보이므로 음수). 0.8s linear infinite.
+
+   prefers-reduced-motion: reduce 환경에선 애니메이션 자동 차단 (접근성). */
+.flow-svg .edge.is-flowing {
+  stroke-dasharray: 6 4;
+  animation: flow-edge-dash 0.8s linear infinite;
+}
+@keyframes flow-edge-dash {
+  from { stroke-dashoffset: 0; }
+  to   { stroke-dashoffset: -20; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flow-svg .edge.is-flowing { animation: none; }
 }
 
 /* ── Sequential 모드 toolbar 변종 (ego 모드와 동일 룰 재활용 + 미세 보정) ── */

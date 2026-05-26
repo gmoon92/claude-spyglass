@@ -47,6 +47,9 @@ export interface AllVersionsResult {
   git: VersionProbeResult;
   curl: VersionProbeResult;
   jq: VersionProbeResult;
+  // sqlite3 CLI 는 SQLite 탭 전용으로 분리 — probeSqlite3() 가 책임.
+  //   분리 이유: /api/settings/diag 가 5개 탭에서 중복 호출되는데 sqlite3 결과는 SQLite 탭만 사용.
+  //   불필요한 6번째 spawn 을 모든 diag 응답에서 절감 (방안 B).
 }
 
 // =============================================================================
@@ -108,6 +111,24 @@ const TOOL_DEFS: ReadonlyArray<{
   },
 ];
 
+/**
+ * sqlite3 CLI 전용 정의 — TOOL_DEFS 와 분리.
+ *
+ *   Spyglass 자체는 Bun 내장 SQLite 만 사용. 본 항목은 *디버깅용* 외부 CLI
+ *   (`sqlite3 ~/.spyglass/spyglass.db "SELECT ..."`) 의 설치 여부 진단.
+ *   미설치여도 Spyglass 동작에는 영향 없음 → installHint 도 #-prefix 주석 형식.
+ *
+ *   `key` 는 AllVersionsResult 와 시그니처를 맞추기 위해 string 으로 두되, 본 def 는
+ *   AllVersionsResult 에 들어가지 않는다 (probeSqlite3 이 별도 반환).
+ */
+const SQLITE3_TOOL_DEF = {
+  key: 'sqlite3' as const,
+  bin: 'sqlite3',
+  args: ['--version'],
+  re: /(\d+\.\d+(?:\.\d+)?)/,
+  installHint: '# 선택: brew install sqlite (DB 직접 조회용 CLI)',
+};
+
 // =============================================================================
 // 메인 진입점
 // =============================================================================
@@ -127,6 +148,19 @@ export async function probeAllVersions(): Promise<AllVersionsResult> {
   return out;
 }
 
+/**
+ * sqlite3 CLI 단독 조회 — SQLite 탭 전용 진입점.
+ *
+ * 방안 B (분석 보고서 2026-05-26): /api/settings/diag 가 5개 탭에서 중복 호출되는데
+ * sqlite3 결과는 SQLite 탭만 사용. probeAllVersions 에서 sqlite3 를 빼내 SQLite 탭의
+ * /api/settings/sqlite/info 응답에 직접 포함시킴으로써 diag 호출 자체를 제거 가능.
+ *
+ * 반환: VersionProbeResult — handleDiag 의 versions 와 동일한 형식.
+ */
+export async function probeSqlite3(): Promise<VersionProbeResult> {
+  return probeOne(SQLITE3_TOOL_DEF);
+}
+
 // =============================================================================
 // 단일 도구 조회 — 예외를 던지지 않는다
 // =============================================================================
@@ -141,7 +175,14 @@ export async function probeAllVersions(): Promise<AllVersionsResult> {
  *
  * stdout/stderr 모두 캡쳐 후 *어느 쪽이든* SemVer 가 매칭되면 채택 — 일부 도구는 stderr 로 버전 출력.
  */
-async function probeOne(def: typeof TOOL_DEFS[number]): Promise<VersionProbeResult> {
+async function probeOne(def: {
+  // key 는 외부 매핑용일 뿐 probeOne 자체는 사용하지 않음 — 시그니처에서 제외해 TOOL_DEFS 외의
+  // 단일 도구 def(SQLITE3_TOOL_DEF 등) 도 그대로 전달 가능하게 한다.
+  bin: string;
+  args: string[];
+  re: RegExp;
+  installHint: string;
+}): Promise<VersionProbeResult> {
   const base: VersionProbeResult = {
     name: def.bin,
     available: false,

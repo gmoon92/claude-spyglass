@@ -72,7 +72,7 @@ const MAX_DEPTH = 5;
 
 /**
  * center turn 에서 NEXT 체인 양방향으로 depth hop 까지 turn 들을 모은다.
- * Kuzu walk semantic 상 `*1..k` 는 upper bound 명시 필수.
+ * Ladybug walk semantic 상 `*1..k` 는 upper bound 명시 필수.
  *
  * Cypher:
  *   - 양방향: `MATCH (center)-[:NEXT*1..k]-(other)` (방향 없는 매치)

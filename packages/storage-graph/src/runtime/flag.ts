@@ -53,12 +53,13 @@ export type GraphMode = 'off' | 'shadow' | 'primary';
 const ALL_MODES: readonly GraphMode[] = ['off', 'shadow', 'primary'] as const;
 
 /**
- * 기본 모드. P1 Single Query Pilot 권고에 따라 shadow 로 시작:
- *  - 사용자에게 보이는 응답은 SQLite (영향 0)
- *  - Ladybug 결과는 백그라운드 비교 로그로만 활용
- *  - 회로 차단기가 자동 fallback 보장
+ * 기본 모드. migration-plan §F: SQLite ego flow 제거로 인해 'primary' 로 cutover.
+ *  - 사용자 응답은 Ladybug. 회로 OPEN / Ladybug 미설치 시 빈 응답 + 안내.
+ *  - SQLite fallback 0 (이전 fallback 자산은 §B 에서 제거됨).
+ *  - 'shadow' 는 호환성을 위해 enum 에 유지하되 실제 응답 동작은 'primary' 와 동일.
+ *  - 설치 확인 + 자동 설치 UI 는 설정 페이지의 "Ladybug 의존성" 카드가 책임.
  */
-const DEFAULT_MODE: GraphMode = 'shadow';
+const DEFAULT_MODE: GraphMode = 'primary';
 
 // =============================================================================
 // 타입 — 출처 추적

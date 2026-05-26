@@ -109,6 +109,12 @@ export class MockLadybugClient {
       return { rows, durationMs: Date.now() - started };
     }
 
+    // unified-flow: ancestor chain — (ancestor)-[:PARENT_OF*1..N]->(seed). seedIds 쪽이 target.
+    if (this.isAncestorChainPattern(text)) {
+      const rows = this.runAncestorChain(text, params);
+      return { rows, durationMs: Date.now() - started };
+    }
+
     // P2 — chain traversal (가변 깊이 *1..N).
     if (this.isChainTraversalPattern(text)) {
       const rows = this.runChainTraversal(text, params);
@@ -222,6 +228,14 @@ export class MockLadybugClient {
     return /-\[:PARENT_OF\*0\.\.\d+]->\(any/.test(text);
   }
 
+  /** unified-flow: (ancestor)-[:PARENT_OF*1..N]->(seed) 패턴 — chain 의 *target* 이 seedIds. */
+  private isAncestorChainPattern(text: string): boolean {
+    return (
+      /MATCH path = \(ancestor:ToolCall\) -\[:PARENT_OF\*1\.\.\d+]->\(seed:ToolCall\)/.test(text) &&
+      /MATCH \(ancestor\)-\[:USES]->\(metadoc:MetaDocument\)/.test(text)
+    );
+  }
+
   // ───────────────────────────────────────────────────────────────────────
   // 패턴별 실행 — in-memory traversal.
   // ───────────────────────────────────────────────────────────────────────
@@ -329,6 +343,93 @@ export class MockLadybugClient {
     return out
       .sort((a, b) => {
         if (a._sort_started !== b._sort_started) return a._sort_started - b._sort_started;
+        return a.depth - b.depth;
+      })
+      .map((r) => ({
+        kind: r.kind,
+        name: r.name,
+        tool_use_id: r.tool_use_id,
+        started_at: r.started_at,
+        depth: r.depth,
+        chain: r.chain,
+      }));
+  }
+
+  /**
+   * unified-flow: ancestor chain.
+   * (ancestor:ToolCall) -[:PARENT_OF*1..N]-> (seed:ToolCall), ancestor-USES->metadoc.
+   * seedIds 가 traversal 의 *target* 측 — 부모 traversal 결과 반환.
+   *
+   *   chain 약속: chain[0] = ancestor 자기 자신, chain[-1] = seed.
+   */
+  private runAncestorChain(text: string, params: Record<string, unknown>): Record<string, unknown>[] {
+    const depthMatch = text.match(/PARENT_OF\*1\.\.(\d+)/);
+    const maxDepth = depthMatch ? parseInt(depthMatch[1], 10) : 1;
+    const seedIds = Array.isArray(params.seedIds) ? (params.seedIds as string[]) : [];
+    const centerKind = String(params.centerKind);
+    const centerName = String(params.centerName);
+
+    type RowOut = {
+      tool_use_id: string;
+      kind: string;
+      name: string;
+      started_at: number;
+      depth: number;
+      chain: string[];
+    };
+    const out: RowOut[] = [];
+
+    // 각 seed 에서 PARENT_OF 의 *역방향* (=ancestor 방향) BFS.
+    for (const seedId of seedIds) {
+      const queue: Array<{ id: string; depth: number; chain: string[] }> = [
+        { id: seedId, depth: 0, chain: [seedId] },
+      ];
+      while (queue.length > 0) {
+        const cur = queue.shift()!;
+        if (cur.depth >= maxDepth) continue;
+        // 부모(ancestor) — to_key === cur.id 인 PARENT_OF 엣지의 from_key.
+        const parentEdges = this.edges.filter(
+          (e) => e.type === 'PARENT_OF' && e.to_label === 'ToolCall' && e.to_key === cur.id,
+        );
+        for (const pe of parentEdges) {
+          const ancestorId = pe.from_key;
+          const ancestorNode = this._findNode('ToolCall', 'tool_use_id', ancestorId);
+          if (!ancestorNode) continue;
+          const newChain = [ancestorId, ...cur.chain];
+          const newDepth = cur.depth + 1;
+
+          const usesEdge = this.edges.find(
+            (e) => e.type === 'USES' && e.from_label === 'ToolCall' && e.from_key === ancestorId,
+          );
+          if (usesEdge) {
+            const md = this.nodes.find(
+              (n) =>
+                n.label === 'MetaDocument' &&
+                n.props.id === (this.findMetaDocPkFromEdge(usesEdge) as unknown),
+            );
+            const mdProps = md?.props ?? {};
+            const mdKind = String(mdProps.kind ?? '');
+            const mdName = String(mdProps.name ?? '');
+            const isSelf = mdKind === centerKind && mdName === centerName;
+            if (!isSelf && mdKind && mdName) {
+              out.push({
+                tool_use_id: ancestorId,
+                kind: mdKind,
+                name: mdName,
+                started_at: Number(ancestorNode.props.started_at),
+                depth: newDepth,
+                chain: newChain,
+              });
+            }
+          }
+          queue.push({ id: ancestorId, depth: newDepth, chain: newChain });
+        }
+      }
+    }
+
+    return out
+      .sort((a, b) => {
+        if (a.started_at !== b.started_at) return a.started_at - b.started_at;
         return a.depth - b.depth;
       })
       .map((r) => ({

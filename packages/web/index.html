@@ -827,17 +827,19 @@
                 data-i18n-attr-title="ui.settings-view.refresh-title">전체 진단 다시 실행</button>
       </header>
       <div class="settings-body">
-        <!-- 좌측 sub-tab 메뉴 — 진단/Hook/Graph DB/Proxy/서버. settings-view.js 가 active 토글. -->
+        <!-- 좌측 sub-tab 메뉴 — 진단/Proxy/Hook/SQLite/Graph DB/서버. settings-view.js 가 active 토글. -->
         <nav class="settings-nav" role="tablist" aria-label="Settings sub-tabs"
              data-i18n-attr-aria-label="ui.html.settings.nav-aria">
           <button type="button" class="settings-nav-btn is-active" data-settings-tab="diag"
                   role="tab" data-i18n="ui.settings-view.tab-diag">시스템 진단</button>
+          <button type="button" class="settings-nav-btn" data-settings-tab="proxy"
+                  role="tab" data-i18n="ui.settings-view.tab-proxy">Proxy 설정</button>
           <button type="button" class="settings-nav-btn" data-settings-tab="hooks"
                   role="tab" data-i18n="ui.settings-view.tab-hooks">Hook 설정</button>
+          <button type="button" class="settings-nav-btn" data-settings-tab="sqlite"
+                  role="tab" data-i18n="ui.settings-view.tab-sqlite">SQLite</button>
           <button type="button" class="settings-nav-btn" data-settings-tab="graph"
                   role="tab" data-i18n="ui.settings-view.tab-graph">Graph DB</button>
-          <button type="button" class="settings-nav-btn" data-settings-tab="proxy"
-                  role="tab" data-i18n="ui.settings-view.tab-proxy">Proxy 가이드</button>
           <button type="button" class="settings-nav-btn" data-settings-tab="server"
                   role="tab" data-i18n="ui.settings-view.tab-server">서버 / 로그</button>
         </nav>

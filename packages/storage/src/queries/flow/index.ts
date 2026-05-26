@@ -17,14 +17,9 @@
  *  - ACTIVE_REQUEST_FILTER_SQL (../request/read.ts): flow/ 코드 미수정
  */
 
-// 타입 재내보내기 (메인 API와 호환성)
+// migration-plan §B: MetaFlowEgo* 타입은 폐기 (Ladybug unified-flow 로 대체).
+// MetaFlowAggregate / MetaFlowFilter 는 별도 집계 SQL 함수이므로 유지.
 export type {
-  MetaFlowEgoCenterType,
-  MetaFlowEgoNodeKind,
-  MetaFlowEgoFilter,
-  MetaFlowEgoNode,
-  MetaFlowEgoEdge,
-  MetaFlowEgo,
   MetaFlowAggregate,
   MetaFlowFilter,
 } from '../meta-document';

@@ -159,9 +159,9 @@ describe('saveServerConfig — atomic write', () => {
 // =============================================================================
 
 describe('flag.ts 우선순위 (env > file > default)', () => {
-  it('env / file 모두 없으면 default = shadow / source = default', async () => {
+  it('env / file 모두 없으면 default = primary / source = default', async () => {
     await refreshGraphModeFromFile();
-    expect(getGraphMode()).toBe('shadow');
+    expect(getGraphMode()).toBe('primary');
     expect(getGraphModeSource()).toBe('default');
   });
 
@@ -187,7 +187,7 @@ describe('flag.ts 우선순위 (env > file > default)', () => {
     process.env.SPYGLASS_GRAPH_MODE = 'garbage';
     resetGraphModeCache();
     await refreshGraphModeFromFile();
-    expect(getGraphMode()).toBe('shadow');
+    expect(getGraphMode()).toBe('shadow'); // file 의 값 그대로 반영 — DEFAULT 와 무관
     expect(getGraphModeSource()).toBe('file');
   });
 
@@ -200,14 +200,14 @@ describe('flag.ts 우선순위 (env > file > default)', () => {
     );
     resetGraphModeCache();
     await refreshGraphModeFromFile();
-    expect(getGraphMode()).toBe('shadow');
+    expect(getGraphMode()).toBe('primary');
     expect(getGraphModeSource()).toBe('default');
   });
 
   it('초기 getGraphMode() 동기 호출은 env 만 평가 + file 미반영', () => {
     // refreshGraphModeFromFile 호출 *전* 의 동기 분기 검증.
     // env 없음 → default.
-    expect(getGraphMode()).toBe('shadow');
+    expect(getGraphMode()).toBe('primary');
     expect(getGraphModeSource()).toBe('default');
   });
 

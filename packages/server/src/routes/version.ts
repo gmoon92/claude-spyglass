@@ -114,6 +114,17 @@ export interface UpdateResponseData {
    * 후 재기동되므로 측정 불가.)
    */
   migrationsApplied?: MigrationRunResult;
+  /**
+   * git pull 결과 package.json / bun.lock / packages/*\/package.json 변경이 감지되어
+   * `bun install` 을 동기 실행했는지 여부.
+   *
+   * 변경 이유:
+   *   pull 만 적용하고 install 을 건너뛰면 신규 워크스페이스 패키지나 의존성을 자식 부팅
+   *   시점에 찾지 못해 (예: `Cannot find module '@spyglass/storage-graph'`) 자기 자신
+   *   restart 가 모듈 로드 실패로 즉시 죽는다. 본 필드는 클라이언트가 install 발생 여부와
+   *   소요 영향을 파악할 수 있도록 노출.
+   */
+  dependenciesUpdated?: boolean;
 }
 
 // =============================================================================
@@ -186,7 +197,11 @@ function handlePostUpdate(): Response {
     );
   }
 
-  // 2. git pull --ff-only
+  // 2. pull 전 HEAD SHA 캡처 — pull 후 diff 로 의존성 매니페스트 변경을 감지하기 위함.
+  //    실패 시 'unknown' 으로 두면 후속 diff 가 빈 결과를 반환해 install 을 건너뛴다.
+  const beforeSha = readHeadSha(cwd);
+
+  // 3. git pull --ff-only
   const pullProc = Bun.spawnSync(['git', 'pull', '--ff-only'], { cwd });
   if (pullProc.exitCode !== 0) {
     const err = pullProc.stderr.toString().trim() || pullProc.stdout.toString().trim();
@@ -199,7 +214,34 @@ function handlePostUpdate(): Response {
   // git fetch가 unshallow를 자동 처리했을 수도 있으니 캐시 재산출.
   refreshShallowFlag();
 
-  // 3. 캐시 갱신 — package.json을 다시 읽어 currentVersion 업데이트
+  // 4. 의존성 매니페스트 변경 감지 + 조건부 `bun install`.
+  //    매번 install 하면 cold cache 시 20s+ 소요되므로 변경 시에만 실행.
+  //    install 실패 시 self-restart 를 차단해 옛 코드로라도 서비스 유지.
+  const afterSha = readHeadSha(cwd);
+  const depsChanged = beforeSha && afterSha && beforeSha !== afterSha
+    ? hasDependencyManifestChange(cwd, beforeSha, afterSha)
+    : false;
+
+  let dependenciesUpdated = false;
+  if (depsChanged) {
+    const installProc = Bun.spawnSync(['bun', 'install'], { cwd });
+    if (installProc.exitCode !== 0) {
+      const err = installProc.stderr.toString().trim() || installProc.stdout.toString().trim();
+      console.error('[VersionRoute] bun install failed after git pull:', err);
+      return jsonResponse(
+        {
+          success: false,
+          error: 'install_failed',
+          data: err,
+        },
+        500
+      );
+    }
+    dependenciesUpdated = true;
+    console.log('[VersionRoute] Dependencies reinstalled after pull (package manifest changed).');
+  }
+
+  // 5. 캐시 갱신 — package.json을 다시 읽어 currentVersion 업데이트
   refreshAfterUpdate();
   const cache = getVersionCache();
 
@@ -208,7 +250,7 @@ function handlePostUpdate(): Response {
   // 본 부팅에서는 적용된 게 없음. 진짜 신규 적용 결과는 클라이언트가 재기동 직후 /api/version 폴링으로 회수.
   const migrationsApplied = getLastMigrationRun();
 
-  // 4. 응답 전송 후 비동기 자기 자신 재시작 — bun run dev (restart) 를
+  // 6. 응답 전송 후 비동기 자기 자신 재시작 — bun run dev (restart) 를
   //    detached child로 띄우면 commandRestart가 부모를 SIGTERM으로 종료시키고
   //    새 서버가 같은 PORT를 잡는다. 클라이언트는 polling으로 부활 감지.
   scheduleSelfRestart(cwd);
@@ -219,11 +261,55 @@ function handlePostUpdate(): Response {
     updateAvailable: cache.updateAvailable,
     restarting: true,
     migrationsApplied,
+    dependenciesUpdated,
   };
   return jsonResponse({
     success: true,
     data,
   });
+}
+
+/** HEAD SHA 조회. 실패 시 빈 문자열 — 호출자가 install 분기를 건너뛰도록. */
+function readHeadSha(cwd: string): string {
+  const proc = Bun.spawnSync(['git', 'rev-parse', 'HEAD'], { cwd });
+  if (proc.exitCode !== 0) return '';
+  return proc.stdout.toString().trim();
+}
+
+/**
+ * pull 전후 SHA 범위의 변경 파일 중 의존성 매니페스트가 포함되어 있는지 검사.
+ *
+ * 매니페스트로 간주하는 파일:
+ *  - `package.json` (루트)
+ *  - `bun.lock`, `bun.lockb`
+ *  - `packages/*\/package.json` (워크스페이스 멤버 — 신규 워크스페이스 추가/제거 시 install 필요)
+ *
+ * 검사 실패 시 보수적으로 true 반환 — install 을 추가 1회 실행하는 비용이 누락보다 낫다.
+ */
+function hasDependencyManifestChange(
+  cwd: string,
+  beforeSha: string,
+  afterSha: string,
+): boolean {
+  const diffProc = Bun.spawnSync(
+    ['git', 'diff', '--name-only', `${beforeSha}..${afterSha}`],
+    { cwd },
+  );
+  if (diffProc.exitCode !== 0) {
+    // diff 실패는 드물지만, 새 매니페스트를 놓치고 부팅하는 것이 더 큰 비용이라 보수적으로 install.
+    console.warn('[VersionRoute] git diff failed; assuming dependency change to be safe.');
+    return true;
+  }
+  const files = diffProc.stdout.toString().split('\n').map((s) => s.trim()).filter(Boolean);
+  return files.some((f) => isDependencyManifest(f));
+}
+
+function isDependencyManifest(path: string): boolean {
+  if (path === 'package.json') return true;
+  if (path === 'bun.lock' || path === 'bun.lockb') return true;
+  // packages/<name>/package.json — 워크스페이스 멤버.
+  if (/^packages\/[^/]+\/package\.json$/.test(path)) return true;
+  return false;
 }
 
 /**
