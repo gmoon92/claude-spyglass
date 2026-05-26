@@ -1,7 +1,7 @@
 {
   "name": "@spyglass/storage-graph",
-  "version": "0.1.0",
-  "description": "LadybugDB (Kuzu fork) graph projection layer — read-only CQRS view on top of SQLite SSoT. SQLite remains the source of truth; this package builds a throw-away graph cache from it.",
+  "version": "3.0.0",
+  "description": "LadybugDB graph projection — meta-document flow 의 단일 SoT (migration-plan §F). SQLite ego BFS 는 제거되고 Ladybug unified-flow 가 모든 시각화 데이터를 책임.",
   "type": "module",
   "main": "./src/index.ts",
   "exports": {
@@ -14,11 +14,11 @@
     "src"
   ],
   "dependencies": {
+    "@ladybugdb/core": "^0.16.1",
     "@spyglass/storage": "workspace:*",
     "@spyglass/types": "workspace:*"
   },
   "devDependencies": {
-    "@ladybugdb/core": "^0.16.1",
     "@types/bun": "latest"
   },
   "scripts": {

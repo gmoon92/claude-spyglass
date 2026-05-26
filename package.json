@@ -1,6 +1,6 @@
 {
   "name": "spyglass",
-  "version": "2.11.0",
+  "version": "3.0.0",
   "description": "Claude Code execution monitoring tool - token usage visualization",
   "workspaces": [
     "packages/*"
@@ -36,5 +36,8 @@
     "@anthropic-ai/sdk": "^0.96.0",
     "eventsource": "^4.1.0",
     "react-devtools-core": "^7.0.1"
-  }
+  },
+  "trustedDependencies": [
+    "@ladybugdb/core"
+  ]
 }
