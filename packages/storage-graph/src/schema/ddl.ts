@@ -2,7 +2,7 @@
  * ddl.ts — LadybugDB 그래프 스키마 SSoT
  *
  * 책임:
- *   Spyglass 도메인의 그래프 모델 (7 노드 × 8 엣지) 을 openCypher / Kuzu DDL
+ *   Spyglass 도메인의 그래프 모델 (7 노드 × 8 엣지) 을 openCypher / Ladybug DDL
  *   문법으로 정의한다. 컬럼 의미·SQLite 대응 관계는 통합 보고서를 단일 진실로
  *   참조 (`doc-source-ref` 룰).
  *
@@ -23,7 +23,7 @@
  *     SQLite 행을 가리킬 뿐 (보고서 §3.3 원칙).
  *
  * @see ${CLAUDE_PROJECT_DIR}/.claude/.tmp/plans/spyglass/graph-db-research/01-database-architecture.md
- *   §3.1 노드 / §3.2 엣지 / §3.3 SQLite ↔ Kuzu 매핑 (SSoT).
+ *   §3.1 노드 / §3.2 엣지 / §3.3 SQLite ↔ Ladybug 매핑 (SSoT).
  */
 
 // =============================================================================
@@ -32,10 +32,14 @@
 
 /**
  * 본 모듈의 DDL 합 (노드/엣지/타입) 이 바뀔 때마다 1씩 증가시킨다. apply.ts 가 LadybugDB
- * 안의 `_SchemaMeta.version` 과 본 상수를 비교하여 mismatch면 폴더 rename 후 처음부터
- * 재빌드 — SQLite SSoT 가 있으므로 데이터 손실 0.
+ * 안의 `_SchemaMeta.version` 과 본 상수를 비교하여 mismatch면 graph 를 이번 세션 동안
+ * 비활성화한다 (데이터는 그대로 보존; 운영자가 마이그레이션 가이드에 따라 처리).
  */
-export const SCHEMA_VERSION = 1;
+// v1 → v2: MetaDocument 컬럼명 `type` → `kind` 정규화 + PK 를 INT64 → STRING(`${kind}::${name}`)
+//          합성 ID 로 변경. 모든 read query 가 `{kind, name}` 으로 매칭하므로 이름 통일.
+//          하위 호환 없음 — apply.ts 가 SchemaMismatchError 를 throw 하면 client.connect 가
+//          데이터 보존 + circuit OPEN 분기로 진입.
+export const SCHEMA_VERSION = 2;
 
 // =============================================================================
 // 노드 7개 — 보고서 §3.1 그대로
@@ -106,10 +110,20 @@ export const NODE_TABLES: readonly string[] = [
      PRIMARY KEY (id)
    )`,
 
-  // 6. MetaDocument — agent / skill / command 카탈로그. meta_documents 테이블.
+  // 6. MetaDocument — Spyglass 가 관찰한 모든 (kind, name) 쌍.
+  //
+  //    `kind` 는 'command' | 'skill' | 'agent' | 'mcp' | 'tool' 중 하나로
+  //    SQLite `requests` row 의 (slash_command / tool_name / tool_detail) 에서 도출된다
+  //    (storage/queries/meta-document.ts §listFlowAggregates 의 분기 규칙과 일치).
+  //
+  //    PK 는 합성 STRING `${kind}::${name}` — MERGE 가 idempotent 하게 동일 노드를 보장.
+  //    `source` / `source_root` 는 카탈로그 동기화가 채울 수 있는 메타데이터로 nullable.
+  //
+  //    read query 들 (queries/{unified-flow,sequential-flow}.ts) 은 항상 `{kind, name}`
+  //    으로 MATCH 한다 — PK 매칭이 아닌 property 매칭이므로 id 인덱스와 무관.
   `CREATE NODE TABLE IF NOT EXISTS MetaDocument (
-     id              INT64,
-     type            STRING,
+     id              STRING,
+     kind            STRING,
      name            STRING,
      source          STRING,
      source_root     STRING,
@@ -139,7 +153,7 @@ export const NODE_TABLES: readonly string[] = [
 // =============================================================================
 
 /**
- * CREATE REL TABLE DDL. Kuzu/Ladybug 는 walk semantic 이므로 `*1..k` 사용 시 upper
+ * CREATE REL TABLE DDL. Ladybug 는 walk semantic 이므로 `*1..k` 사용 시 upper
  * bound 명시 필수. 본 DDL 자체는 무방향/방향성만 지정하고 traversal 시 limit 부여.
  */
 export const REL_TABLES: readonly string[] = [

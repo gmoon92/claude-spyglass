@@ -29,12 +29,12 @@
  *   - `closeLadybugClient()` 는 멱등 — server shutdown hook 에서 안전하게 호출 가능.
  *
  * @see ${CLAUDE_PROJECT_DIR}/.claude/.tmp/plans/spyglass/graph-db-research/02-electron-runtime.md
- *   §2 Bun ↔ Kuzu 호환성 — exit segfault 등 잠재 위험은 회로 차단기로 격리.
+ *   §2 Bun ↔ Ladybug 호환성 — exit segfault 등 잠재 위험은 회로 차단기로 격리.
  */
 
 import { getGraphDir, getGraphDbPath } from './runtime/paths';
 import { getCircuitBreaker } from './runtime/circuit-breaker';
-import { applySchema } from './schema/apply';
+import { applySchema, SchemaMismatchError } from './schema/apply';
 
 // =============================================================================
 // 타입 — Ladybug native 결과를 좁은 표면적으로 추상화
@@ -99,11 +99,11 @@ export class LadybugClient {
       const mod = await import(/* @vite-ignore */ '@ladybugdb/core' as string);
       this.native = (mod as any).default ?? mod;
 
-      // Database open — Kuzu/Ladybug API는 보통 `new Database(path)` + `new Connection(db)`.
-      // 정확한 클래스 이름이 fork에 따라 다를 수 있어 두 패턴 모두 시도.
+      // Database open — Ladybug API는 보통 `new Database(path)` + `new Connection(db)`.
+      // 일부 빌드에서 클래스가 namespace 안에 export 될 수 있어 `Ladybug.*` fallback 도 시도.
       const dbPath = getGraphDbPath();
-      const DatabaseCtor = this.native.Database ?? this.native.Kuzu?.Database;
-      const ConnectionCtor = this.native.Connection ?? this.native.Kuzu?.Connection;
+      const DatabaseCtor = this.native.Database ?? this.native.Ladybug?.Database;
+      const ConnectionCtor = this.native.Connection ?? this.native.Ladybug?.Connection;
       if (!DatabaseCtor || !ConnectionCtor) {
         throw new LadybugUnavailableError(
           `@ladybugdb/core does not expose expected Database/Connection constructors. ` +
@@ -114,8 +114,32 @@ export class LadybugClient {
       this.dbHandle = new DatabaseCtor(dbPath);
       this.connHandle = new ConnectionCtor(this.dbHandle);
 
-      // 스키마 idempotent 적용 (DDL × 7 + REL × 8 + _SchemaMeta 갱신).
-      await applySchema(this);
+      // 스키마 idempotent 적용. SCHEMA_VERSION 이 어긋나면 SchemaMismatchError 가 throw 되며
+      // 본 분기는 *기존 데이터를 보존* 한 채 graph DB 를 이번 세션 동안 비활성화한다.
+      //
+      // 정책 (사용자 명시): graph DB 의 데이터는 RDB retention 과 동일 cutoff 로만 정리되며,
+      // 폴더 자체를 자동/수동으로 삭제하는 경로는 본 시스템에 존재하지 않는다. 따라서 schema
+      // mismatch 발생 시 자동 throw-away 는 하지 않는다 — 운영자가 마이그레이션 가이드를 따라
+      // 명시적으로 처리하도록 한다.
+      //
+      // 결과: 본 세션에서는 graph 사용 불가 → circuit OPEN → `/api/graph/*` 빈 응답.
+      // SQLite 측은 정상 동작. 데이터는 `~/.spyglass/graph/` 에 보존.
+      try {
+        await applySchema(this);
+      } catch (err) {
+        if (err instanceof SchemaMismatchError) {
+          console.warn(
+            `[graph-client] ${err.message} — graph DB disabled this session ` +
+              `(data preserved at ${getGraphDir()}). Run the migration guide to upgrade.`,
+          );
+          try { this.connHandle?.close?.(); } catch { /* ignore */ }
+          try { this.dbHandle?.close?.(); } catch { /* ignore */ }
+          this.connHandle = null;
+          this.dbHandle = null;
+          throw err; // 아래 outer catch 가 LadybugUnavailableError 로 변환 + 회로 보고.
+        }
+        throw err;
+      }
 
       this.state = 'ready';
     } catch (err) {
@@ -137,15 +161,36 @@ export class LadybugClient {
    * 실패는 LadybugUnavailableError 로 표준화되어 회로가 OPEN 결정할 수 있게 한다.
    */
   async query(cypher: string, params: Record<string, unknown> = {}): Promise<LadybugQueryResult> {
-    if (this.state !== 'ready') {
-      throw new LadybugUnavailableError(`client not ready (state=${this.state})`, this.lastError);
+    // 'ready' 외에 connect() 가 *아직 진행 중*인 케이스도 허용해야 한다 — applySchema 가
+    //   DDL 적용을 위해 본 메서드를 호출하는 시점에는 state 가 여전히 'idle' 이고
+    //   connHandle 만 만들어진 상태이기 때문. 'idle' + connHandle 보유 = 유효한 부트스트랩.
+    //   반면 'failed' / 'closed' 는 명시적 거부, connHandle 미존재는 회복 불가 상태.
+    if (this.state === 'failed' || this.state === 'closed') {
+      throw new LadybugUnavailableError(
+        `client previously failed to initialize (state=${this.state})`,
+        this.lastError,
+      );
+    }
+    if (!this.connHandle) {
+      throw new LadybugUnavailableError(`connection not established (state=${this.state})`, this.lastError);
     }
     const started = Date.now();
     try {
-      // Kuzu/Ladybug API는 fork마다 `connection.query(cypher, params)` 가 row[] 반환 또는
-      // `QueryResult` 객체 반환. 두 패턴 모두 흡수.
-      const raw = await this.connHandle.query(cypher, params);
-      const rows = this.normalizeResult(raw);
+      // Ladybug 0.16.x API:
+      //   connection.query(cypher, ?progressCallback)        — 무파라미터 전용
+      //   connection.prepare(cypher) → execute(stmt, params) — 파라미터화 쿼리
+      //
+      // 두 번째 인자를 객체로 넘기면 "progressCallback must be a function" 으로 throw 됨.
+      // 따라서 params 가 비어 있으면 query, 있으면 prepare+execute 분기.
+      const hasParams = params !== null && typeof params === 'object' && Object.keys(params).length > 0;
+      let raw: unknown;
+      if (hasParams) {
+        const stmt = await this.connHandle.prepare(cypher);
+        raw = await this.connHandle.execute(stmt, params);
+      } else {
+        raw = await this.connHandle.query(cypher);
+      }
+      const rows = await this.normalizeResult(raw);
       return { rows, durationMs: Date.now() - started };
     } catch (err) {
       getCircuitBreaker().recordFailure(err);
@@ -164,24 +209,14 @@ export class LadybugClient {
     if (this.state !== 'ready') {
       throw new LadybugUnavailableError(`client not ready (state=${this.state})`, this.lastError);
     }
-    // 우선 fork 의 네이티브 transaction 호출 시도.
+    // Ladybug 0.16.x 는 transaction API 가 없고 Cypher `BEGIN TRANSACTION` 도 비표준이라
+    // 폴백 시도 자체가 실패한다. MERGE / CREATE 가 idempotent 라 batch 단위 atomicity 없이도
+    // 데이터 정합성은 유지 — sync worker 의 batch 중 일부가 실패하면 다음 tick 에서 재시도해
+    // 누락분만 다시 적용된다. 따라서 work() 직접 실행이 가장 안전한 fallback.
     if (typeof this.connHandle.transaction === 'function') {
       return this.connHandle.transaction(work);
     }
-    // 폴백 — Cypher BEGIN/COMMIT/ROLLBACK.
-    await this.connHandle.query('BEGIN TRANSACTION');
-    try {
-      const result = await work();
-      await this.connHandle.query('COMMIT');
-      return result;
-    } catch (err) {
-      try {
-        await this.connHandle.query('ROLLBACK');
-      } catch {
-        // rollback 실패는 무시 — 원본 에러를 throw.
-      }
-      throw err;
-    }
+    return work();
   }
 
   /** 연결 종료 — 멱등. server shutdown hook 에서 호출. */
@@ -212,13 +247,13 @@ export class LadybugClient {
    * native query 결과를 Record<string, unknown>[] 로 정규화. fork 마다 형태가 다르므로
    * 알려진 3가지 패턴(배열 직반환 / { rows } / { records }) 을 모두 수용.
    */
-  private normalizeResult(raw: any): Record<string, unknown>[] {
+  private async normalizeResult(raw: any): Promise<Record<string, unknown>[]> {
     if (Array.isArray(raw)) return raw as Record<string, unknown>[];
     if (raw && Array.isArray(raw.rows)) return raw.rows;
     if (raw && Array.isArray(raw.records)) return raw.records;
     if (raw && typeof raw.getAll === 'function') {
-      // Kuzu Node API의 QueryResult.getAll() 패턴.
-      const all = raw.getAll();
+      // Ladybug QueryResult.getAll() 은 Promise<Record<string, LbugValue>[]> — async 로 받아야 함.
+      const all = await raw.getAll();
       if (Array.isArray(all)) return all;
     }
     return [];

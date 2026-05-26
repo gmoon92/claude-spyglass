@@ -1,39 +1,33 @@
 /**
- * apply.ts — Ladybug 스키마 적용 + 버전 mismatch 시 throw-away rebuild
+ * apply.ts — Ladybug 스키마 idempotent 적용 + 버전 mismatch 감지
  *
  * 책임:
  *   - 첫 connect 직후 NODE_TABLES × 7 + REL_TABLES × 8 을 idempotent 하게 실행.
  *   - `_SchemaMeta.version` 과 코드 상수 `SCHEMA_VERSION` 비교 → mismatch면
- *     데이터 폴더를 rename(`graph.bad.<ts>/`) 하고 새 폴더에 처음부터 다시 빌드.
+ *     `SchemaMismatchError` throw. **본 모듈은 데이터 폴더를 삭제/rename 하지 않는다.**
+ *     호출자(client.connect) 가 에러를 잡고 *데이터를 보존한 채* graph 를 비활성화한다.
  *
  * 의존성:
  *   - client.ts (LadybugClient.query)
  *   - schema/ddl.ts (NODE_TABLES, REL_TABLES, SCHEMA_VERSION)
- *   - runtime/paths.ts (getGraphDir — rename 대상 식별)
  *
  * 호출 흐름:
  *   LadybugClient.connect()
  *     → applySchema(client)
  *         → readCurrentVersion()
- *         → if mismatch: throwAwayAndRebuild()
+ *         → if mismatch: throw SchemaMismatchError (데이터 보존, 호출자 게이팅)
  *         → 그렇지 않으면 DDL idempotent 실행 → _SchemaMeta upsert
  *
  * 디자인 결정:
- *   - rebuild 는 *클라이언트를 닫고 폴더를 옮긴 뒤 호출자에게 재실행을 요청* 하는
- *     형태. 그래프 데이터는 SQLite SSoT 로부터 sync worker 가 다시 채울 것이므로
- *     본 모듈은 데이터 복구를 책임지지 않는다.
+ *   - 정책 (사용자 명시): graph DB 데이터는 RDB retention 과 동일 cutoff 로만 정리되며,
+ *     폴더 자체를 자동/수동 삭제하는 경로는 본 시스템에 없다. schema mismatch 가 발생하면
+ *     데이터를 보존한 채 graph 를 이번 세션 동안 비활성화한다 (마이그레이션은 운영자 책임).
  *   - 모든 DDL 은 `CREATE ... IF NOT EXISTS` 로 작성됐지만, fork에 따라 미지원일 수
  *     있어 try/catch 로 흡수.
- *
- * @see ${CLAUDE_PROJECT_DIR}/.claude/.tmp/plans/spyglass/graph-db-research/05-migration-strategy.md
- *   §3.1 Kuzu DB Corruption — rename → rebuild 단순화 원칙.
  */
 
-import { existsSync, renameSync } from 'node:fs';
-import { join } from 'node:path';
 import type { LadybugClient } from '../client';
 import { NODE_TABLES, REL_TABLES, SCHEMA_VERSION } from './ddl';
-import { getGraphDir } from '../runtime/paths';
 
 // =============================================================================
 // 메인 진입점
@@ -43,8 +37,8 @@ import { getGraphDir } from '../runtime/paths';
  * 스키마 idempotent 적용. 다음 순서:
  *   1) `_SchemaMeta` 테이블이 없을 수 있으므로 우선 CREATE 부터.
  *   2) 현재 저장된 version 조회.
- *   3) mismatch면 throw-away rebuild 요청 (LadybugUnavailableError throw → 호출자가
- *      `throwAwayAndRebuild()` 실행 후 재시도).
+ *   3) mismatch면 `SchemaMismatchError` throw. **데이터는 그대로 보존** — 호출자가 graph 를
+ *      비활성화하고 운영자에게 마이그레이션을 안내한다.
  *   4) DDL × 15 idempotent 실행.
  *   5) `_SchemaMeta.version = SCHEMA_VERSION` upsert.
  */
@@ -56,7 +50,7 @@ export async function applySchema(client: LadybugClient): Promise<void> {
 
   const current = await readCurrentVersion(client);
   if (current !== null && current !== SCHEMA_VERSION) {
-    // 호출자(client.connect) 가 본 에러를 잡고 throwAwayAndRebuild() 후 재시도하도록 신호.
+    // 호출자(client.connect) 가 본 에러를 잡고 데이터 보존 + circuit OPEN 분기로 진입.
     throw new SchemaMismatchError(current, SCHEMA_VERSION);
   }
 
@@ -67,44 +61,16 @@ export async function applySchema(client: LadybugClient): Promise<void> {
   await upsertSchemaVersion(client, SCHEMA_VERSION);
 }
 
-/**
- * 스키마 mismatch 시 호출 — graph 폴더를 안전한 이름으로 rename 한다. 호출 후 sync
- * worker 가 다시 cold start 빌드를 수행하면 자연스럽게 새 폴더가 생성됨.
- *
- * 안전성:
- *   - 항상 rename 만 한다 (`rm` 하지 않음) — 사용자가 디버깅을 위해 보존 가능.
- *   - 같은 이름의 backup 이 이미 있으면 timestamp 추가하여 충돌 회피.
- *   - 모든 실패는 console.warn 로만 보고하고 throw 하지 않는다 — 회로가 OPEN 되더라도
- *     서버는 살아있어야 한다.
- */
-export function throwAwayAndRebuild(): void {
-  try {
-    const dir = getGraphDir();
-    if (!existsSync(dir)) return;
-    const parent = dir.substring(0, dir.lastIndexOf('/'));
-    const ts = new Date().toISOString().replace(/[:.]/g, '-');
-    let target = join(parent, `graph.bad.${ts}`);
-    // 충돌 회피 — 매우 드물지만 동시 호출 대비.
-    let suffix = 0;
-    while (existsSync(target)) {
-      suffix++;
-      target = join(parent, `graph.bad.${ts}.${suffix}`);
-    }
-    renameSync(dir, target);
-    console.warn(
-      `[graph-schema] throw-away rebuild — old data moved to ${target}. ` +
-        `Sync worker will rebuild from SQLite on next tick.`,
-    );
-  } catch (err) {
-    console.warn(`[graph-schema] failed to rename graph dir during rebuild: ${err}`);
-  }
-}
-
 // =============================================================================
 // 내부 헬퍼
 // =============================================================================
 
-class SchemaMismatchError extends Error {
+/**
+ * 스키마 버전 mismatch — client.ts::connect 가 본 에러를 잡고 *데이터를 보존* 한 채
+ * graph DB 를 이번 세션 동안 비활성화한다. instanceof 매칭과 `err.name ===
+ * 'SchemaMismatchError'` 둘 다 안전하게 동작하도록 name 도 명시.
+ */
+export class SchemaMismatchError extends Error {
   constructor(
     public readonly currentVersion: number,
     public readonly expectedVersion: number,
@@ -136,7 +102,7 @@ async function readCurrentVersion(client: LadybugClient): Promise<number | null>
 async function upsertSchemaVersion(client: LadybugClient, version: number): Promise<void> {
   const appliedAt = Date.now();
   try {
-    // 우선 MERGE 시도 (Kuzu/Ladybug 표준).
+    // 우선 MERGE 시도 (Ladybug 표준).
     await client.query(
       `MERGE (m:_SchemaMeta {key: 'main'})
        SET m.version = $version, m.applied_at = $appliedAt`,
