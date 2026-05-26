@@ -23,7 +23,8 @@
  *   - tmpfile + rename 패턴으로 원자 쓰기 — 부분 쓰기로 인한 corrupt 방지.
  */
 
-import { existsSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { getSyncStatePath } from '../runtime/paths';
 
 interface SyncStateFile {
@@ -110,9 +111,19 @@ export class SyncCursor {
   // private
   // ---------------------------------------------------------------------------
 
-  /** tmpfile + rename 으로 원자 쓰기. 실패는 console.warn — worker 는 계속 동작. */
+  /**
+   * tmpfile + rename 으로 원자 쓰기. 실패는 console.warn — worker 는 계속 동작.
+   *
+   * graph 디렉토리 wipe 회복 (2026-05-26 사용자 보고):
+   *   사용자가 cold rebuild 를 위해 `rm -rf ~/.spyglass/graph` 한 직후 ladybug 가
+   *   디렉토리를 다시 만들기 전 worker 의 첫 advance() 호출이 발생하면
+   *   `ENOENT: ...sync_state.json.tmp` 에러가 stdout 에 흘러나왔다. 본 함수가
+   *   직접 디렉토리 존재 보장 — mkdirSync recursive 는 idempotent (이미 있으면 no-op).
+   */
   private flush(): void {
     try {
+      const dir = dirname(this.path);
+      mkdirSync(dir, { recursive: true });
       const tmp = `${this.path}.tmp`;
       writeFileSync(tmp, JSON.stringify(this.state, null, 2), 'utf8');
       renameSync(tmp, this.path);
