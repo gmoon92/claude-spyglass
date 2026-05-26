@@ -1,6 +1,6 @@
 {
   "name": "@spyglass/storage-graph",
-  "version": "3.0.3",
+  "version": "3.0.4",
   "description": "LadybugDB graph projection — meta-document flow 의 단일 SoT (migration-plan §F). SQLite ego BFS 는 제거되고 Ladybug unified-flow 가 모든 시각화 데이터를 책임.",
   "type": "module",
   "main": "./src/index.ts",
