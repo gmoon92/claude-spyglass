@@ -547,10 +547,12 @@ async function onHookApply() {
  * 화면 상단 고정 알림 — Hook/Graph 변경 후 사용자가 *반드시* 인지해야 할 다음 단계 안내.
  *
  *   - `#settingsStickyAlertSlot` 컨테이너를 settingsHeader 아래에 동적으로 끼워넣고 메시지 표시.
- *   - 같은 종류(kind) 알림이 이미 있으면 메시지만 갱신 (중복 노출 X).
- *   - 사용자가 [×] 닫기 버튼으로 직접 닫을 수 있음.
- *   - sub-tab 전환 후에도 *유지* — 사용자가 변경 후 다른 탭을 들렀다 와도 안내가 사라지지 않음.
+ *   - 같은 종류(kind) 알림이 이미 있으면 메시지만 갱신 + 타이머 리셋 (중복 노출 X).
+ *   - 4초 후 fade-out 자동 사라짐 — 닫기 버튼 폐지 (2026-05-26 사용자 요청).
+ *   - sub-tab 전환 후에도 타이머 만료 전까진 유지.
  */
+const STICKY_ALERT_DURATION_MS = 4000;
+const STICKY_ALERT_FADE_MS = 320;
 function showStickyAlert(message, kind = 'info') {
   const view = document.querySelector(VIEW_SELECTOR);
   if (!view) return;
@@ -564,22 +566,27 @@ function showStickyAlert(message, kind = 'info') {
     if (body) view.insertBefore(slot, body);
     else view.appendChild(slot);
   }
-  // 동일 kind 이미 있으면 메시지만 갱신.
+  // 동일 kind 이미 있으면 메시지만 갱신 + 기존 타이머 무효화.
   let alert = slot.querySelector(`.settings-sticky-alert[data-alert-kind="${kind}"]`);
   if (!alert) {
     alert = document.createElement('div');
     alert.className = `settings-sticky-alert settings-sticky-alert-${kind}`;
     alert.dataset.alertKind = kind;
     slot.appendChild(alert);
+  } else {
+    // 재호출 시 fade-out 중이었다면 되돌리고 타이머 재시작.
+    alert.classList.remove('is-fading-out');
+    if (alert._dismissTimer) clearTimeout(alert._dismissTimer);
+    if (alert._removeTimer) clearTimeout(alert._removeTimer);
   }
   alert.innerHTML = `
     <span class="settings-sticky-alert-icon">⚠</span>
     <span class="settings-sticky-alert-text">${escHtml(message)}</span>
-    <button class="settings-sticky-alert-close" aria-label="dismiss">×</button>
   `;
-  alert.querySelector('.settings-sticky-alert-close')?.addEventListener('click', () => {
-    alert.remove();
-  });
+  alert._dismissTimer = setTimeout(() => {
+    alert.classList.add('is-fading-out');
+    alert._removeTimer = setTimeout(() => alert.remove(), STICKY_ALERT_FADE_MS);
+  }, STICKY_ALERT_DURATION_MS);
 }
 
 /**

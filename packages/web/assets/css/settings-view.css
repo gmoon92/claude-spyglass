@@ -520,10 +520,10 @@ body[data-app-mode="settings"] .main-layout {
 .install-hint-list li + li { margin-top: 4px; }
 
 /* =============================================================================
- * Sticky Alert — Hook/Graph 변경 후 강조 안내 (PR 2)
+ * Sticky Alert — Hook/Graph 변경 후 강조 안내
  *
- * settings-header 와 settings-body 사이에 끼워 넣어 sub-tab 전환에도 *유지*. 사용자가
- * 명시적으로 [×] 닫기 전까지 다음 단계 (예: Claude Code 재시작) 를 화면 상단에 노출.
+ * settings-header 와 settings-body 사이에 끼워 넣어 sub-tab 전환에도 유지. 4초 후
+ * is-fading-out 클래스가 부여되어 opacity 320ms transition 후 DOM 에서 제거.
  * ========================================================================== */
 
 .settings-sticky-alert-slot {
@@ -546,6 +546,15 @@ body[data-app-mode="settings"] .main-layout {
   border: 1px solid var(--accent);
   color: var(--accent);
   animation: stickyAlertFade 220ms ease-out both;
+  transition: opacity 320ms ease-out, transform 320ms ease-out;
+}
+.settings-sticky-alert.is-fading-out {
+  /* fade-in animation 의 `both` fill-mode 가 opacity:1 을 잡고 있어
+     transition 이 덮어쓰지 못함 — animation 자체를 해제해 transition 이 동작하도록. */
+  animation: none;
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
 }
 .settings-sticky-alert-restart {
   /* 재시작 안내 — accent 주황(중요) */
@@ -559,19 +568,6 @@ body[data-app-mode="settings"] .main-layout {
 }
 .settings-sticky-alert-text {
   flex: 1;
-  color: var(--text-1);
-}
-.settings-sticky-alert-close {
-  appearance: none;
-  background: transparent;
-  border: none;
-  color: var(--text-3);
-  font-size: 16px;
-  cursor: pointer;
-  padding: 0 4px;
-  line-height: 1;
-}
-.settings-sticky-alert-close:hover {
   color: var(--text-1);
 }
 @keyframes stickyAlertFade {
