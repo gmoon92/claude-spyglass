@@ -199,9 +199,6 @@
       "section-parent-1": "呼出元 (-1)",
       "section-turn-after": "同ターン後続",
       "legend-flow": "同ターン後続",
-      "mode-toggle-aria": "フロー可視化モード",
-      "mode-ego-label": "依存関係ビュー",
-      "mode-sequential-label": "因果順序図",
       "scope-depth": "深さ",
       "scope-seeds": "起点",
       "scope-layers": "レイヤー",
@@ -538,19 +535,30 @@
     "tab-diag": "システム診断",
     "tab-hooks": "Hook 設定",
     "tab-graph": "Graph DB",
-    "tab-proxy": "Proxy ガイド",
+    "tab-proxy": "Proxy 設定",
     "tab-server": "サーバー / ログ",
     "diag": {
       "title": "システム診断",
       "missing": "未インストール",
-      "hook-label": "Hook 登録",
+      "hook-label": "Hook 設定",
+      "proxy-label": "Proxy 設定",
       "hook-registered": "{n}/{total} 登録済",
       "hook-broken": "JSON 破損",
       "hook-missing": "設定ファイルなし",
       "jump-hooks": "Hook 設定 →",
       "jump-graph": "Graph DB →",
       "port": "ポート",
-      "logs-dir": "ログディレクトリ"
+      "logs-dir": "ログディレクトリ",
+      "jump-proxy": "Proxy ガイド →",
+      "proxy-installed": "設定済み",
+      "proxy-corrupted": "破損 (markerの不一致)",
+      "proxy-no-profile": "シェルプロファイルなし",
+      "installed": "インストール済み",
+      "configured": "設定済み",
+      "graph-off": "無効",
+      "graph-circuit-open": "サーキット遮断",
+      "hook-partial": "部分登録",
+      "jump-sqlite": "SQLite →"
     },
     "hooks": {
       "title": "Hook 設定",
@@ -608,11 +616,6 @@
       "circuit": "サーキットブレーカー",
       "sync-worker": "Sync Worker",
       "cache": "キャッシュサイズ",
-      "reset-title": "キャッシュ再構築",
-      "reset-hint": "~/.spyglass/graph/ を削除して sync worker が自動再生成します。v2.10.0 への更新後は推奨。",
-      "reset-btn": "キャッシュ再構築",
-      "reset-success": "✓ キャッシュ再構築完了",
-      "reset-cleaned": "削除済",
       "engineering-summary": "システムエンジニアリング情報 ▼",
       "engineering-title": "システムエンジニアリング情報",
       "toast-saved": "✓ 設定を保存しました",
@@ -621,17 +624,17 @@
         "off": {
           "label": "使用しない（安定性優先）",
           "desc": "グラフエンジンを切って、従来の標準モードで安全に動作させます。",
-          "tooltip": "Kuzu グラフエンジン自体を無効化します。SQLite のみ使用 — 最も安定でリソース消費が少ない。フロー可視化は使用できません。"
+          "tooltip": "Ladybug グラフエンジン自体を無効化します。フロー可視化は使用できません。"
         },
         "shadow": {
           "label": "バックグラウンドテスト（推奨）",
           "desc": "標準モードで安全に画面を描画しながら、裏でエンジンの互換性をテストします。",
-          "tooltip": "ユーザーには SQLite の結果を返し、バックグラウンドで Kuzu を比較ログのみ実行。サーキットブレーカーで保護され、ユーザー影響ゼロ。新環境で最も安全な選択。"
+          "tooltip": "バックグラウンドで Ladybug を比較ログのみ実行。サーキットブレーカーで保護され、ユーザー影響ゼロ。"
         },
         "primary": {
           "label": "リアルタイムグラフ有効化（性能最大化）",
           "desc": "高速グラフエンジンをオンにして、Claude Code の複雑な追跡フローをラグなく華麗に可視化します。",
-          "tooltip": "Kuzu グラフエンジンをメイン応答に使用。複雑な BFS / シーケンスクエリが SQLite より 10〜100 倍高速。エンジン失敗時は自動で SQLite フォールバック。"
+          "tooltip": "Ladybug グラフエンジンをメイン応答に使用。複雑な BFS / シーケンスクエリが高速。"
         }
       },
       "health": {
@@ -646,6 +649,20 @@
         "env": "env",
         "saved": "saved",
         "default": "default"
+      },
+      "ladybug": {
+        "title": "Ladybug 依存関係",
+        "status-label": "ステータス",
+        "installed": "インストール済み",
+        "missing": "未インストール",
+        "missing-hint": "グラフエンジンを使用するには依存関係をインストールしてください。下から自動インストールを実行できます。",
+        "install-brew": "Homebrewでインストール",
+        "install-npm": "npmでインストール",
+        "no-package-manager": "brewまたはnpmコマンドが見つかりません。HomebrewまたはNode.jsを先にインストールしてください。",
+        "installing": "インストール中...",
+        "install-success": "インストール完了",
+        "install-failed": "インストール失敗",
+        "restart-required": "Claude Codeを再起動すると変更が反映されます。"
       }
     },
     "proxy": {
@@ -719,6 +736,20 @@
       "port-change-hint": "環境変数を設定してサーバーを再起動してください。",
       "logs-title": "ログファイル",
       "no-logs": "ログディレクトリは空または存在しません。"
+    },
+    "tab-sqlite": "SQLite",
+    "sqlite": {
+      "title": "SQLite",
+      "health-ok": "SQLite は正常に動作中",
+      "health-hint": "Bun ランタイムに内蔵された SQLite ライブラリを使用します。別途インストールは不要です。",
+      "db-file-title": "データベースファイル",
+      "path-label": "パス",
+      "size-label": "サイズ",
+      "migration-title": "マイグレーション",
+      "migration-version-label": "最新バージョン",
+      "cli-title": "sqlite3 CLI (オプション)",
+      "cli-hint": "コマンドラインから DB を直接照会するための外部ツール。Spyglass の動作には影響しません。",
+      "cli-label": "ステータス"
     }
   }
 }

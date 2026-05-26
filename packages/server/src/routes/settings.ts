@@ -10,7 +10,7 @@
  *   - settings/version-probe   (bun/claude/git/curl/jq 버전 조회)
  *   - settings/hook-detect     (현재 ~/.claude/settings.json 의 spyglass hook 등록 상태)
  *   - settings/claude-hooks    (Hook 자동 병합 — 백업/병합/atomic write)
- *   - @spyglass/storage-graph  (graph mode/circuit/sync 상태, throw-away rebuild)
+ *   - @spyglass/storage-graph  (graph mode/circuit/sync 상태)
  *   - node:fs (graph 캐시 디렉토리 크기, 로그 디렉토리 스캔)
  *
  * 호출 흐름:
@@ -20,28 +20,37 @@
  *   GET  /api/settings/diag                  — 전체 진단 (binary versions + hooks + graph + ports)
  *   GET  /api/settings/hooks/preview?profile — 미리보기 (diff + merged 결과, 파일 미수정)
  *   POST /api/settings/hooks/apply           — 백업 + 병합 + atomic write
- *   POST /api/settings/graph/reset-cache     — ~/.spyglass/graph/ 비우고 sync worker 가 재생성
  *   POST /api/settings/graph/mode            — 런타임 모드 전환 (영속화 X)
  *   GET  /api/settings/proxy/snippet?shell   — claude() 조건부 프록시 함수 스니펫
  *   GET  /api/settings/logs                  — ~/.spyglass/logs/ 디렉토리 스캔
+ *
+ * 정책 (사용자 명시):
+ *   - graph DB 데이터는 RDB retention 과 동일 cutoff 로만 정리되며, 폴더 자체를 자동/수동
+ *     삭제하는 API/UI 는 본 모듈에 존재하지 않는다 (이전 `/graph/reset-cache` 엔드포인트는
+ *     제거됨).
  *
  * 디자인 결정:
  *   - 모든 응답은 `{success, data}` 표준 (jsonResponse SSoT 재사용).
  *   - 실패는 throw 하지 않고 `{success:false, error}` 4xx/5xx 응답 — UI 가 토스트로 안내.
  *   - graph mode 전환은 *런타임만* — 영속화는 사용자가 셸 export 로. 보안 + 단순성.
- *   - 캐시 재구축은 `throwAwayAndRebuild` 가 sync worker 와 안전하게 코디네이션 (storage-graph 책임).
  *
  * 비범위:
  *   - 서버 자체 재시작 / 포트 동적 변경 — 본 PR 범위 밖 (보안/UX 검토 필요). 명령어 복사만.
  */
 
 import type { Database } from 'bun:sqlite';
-import { readdir, stat, rm, mkdir } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { getLatestMigrationFile } from '@spyglass/storage';
 import { jsonResponse } from './_shared';
-import { probeAllVersions } from '../settings/version-probe';
+import { probeAllVersions, probeSqlite3, type VersionProbeResult } from '../settings/version-probe';
 import { detectHookStatus } from '../settings/hook-detect';
+import {
+  detectLadybugInstall,
+  installLadybug,
+  type InstallStrategy,
+} from '../settings/graph-db-installer';
 import {
   previewHookApply,
   applyHookProfile,
@@ -61,8 +70,6 @@ import {
   getCircuitBreaker,
   getSyncWorkerStatus,
   getGraphDir,
-  startGraphSyncWorker,
-  stopGraphSyncWorker,
   saveServerConfig,
   getServerConfigPath,
   type GraphMode,
@@ -70,12 +77,44 @@ import {
 import { PORT } from '../runtime/config';
 
 // =============================================================================
+// 모듈 스코프 캐시 — /api/settings/diag 응답 (방안 A, dashboard.ts 패턴 복제)
+// =============================================================================
+//
+// 배경 (분석 보고서 2026-05-26):
+//   /api/settings/diag 는 5개 탭(diag/hooks/graph/sqlite/server)에서 동일 호출되며 한 번의
+//   호출 비용이 외부 binary spawn × 5 + Hook 파일 IO + Graph 디렉토리 재귀 stat + Ladybug
+//   탐지로 누적 ~100-300ms. 캐시 없음 → 매 탭 클릭마다 비용 반복.
+//
+// 정책:
+//   - TTL 30초 — 사용자가 설정 페이지 안에서 탭을 왔다갔다 하는 일반 시나리오에서 ~1회 fetch
+//   - 캐시 키 없음 — diag 는 사용자/쿼리 의존 없는 *전역 시스템 상태* 라 단일 슬롯
+//   - mutation 직후 즉시 무효화 — invalidateDiagCacheNow() 호출 (debounce 없음)
+//
+// dashboard.ts 와 달리 hook 폭풍에 노출되지 않으므로(설정 페이지 명시적 액션에 한정)
+// debounce 패턴 없이 단순 invalidateNow 만 제공.
+
+const DIAG_CACHE_TTL = 30_000;
+
+let _diagCache: { data: unknown; ts: number } | null = null;
+
+/**
+ * /api/settings/diag 응답 캐시 무효화 — 즉시.
+ *
+ * 호출자: 7개 mutation 핸들러 (hooks apply/restore, graph reset-cache/mode,
+ *   graph-db install, proxy install/restore). 다음 GET /api/settings/diag 요청이
+ *   fresh 데이터를 받도록 보장.
+ */
+function invalidateDiagCacheNow(): void {
+  _diagCache = null;
+}
+
+// =============================================================================
 // 라우터 본체
 // =============================================================================
 
 export async function settingsRouter(
   req: Request,
-  _db: Database,
+  db: Database,
 ): Promise<Response | null> {
   const url = new URL(req.url);
   const path = url.pathname;
@@ -85,7 +124,7 @@ export async function settingsRouter(
 
   try {
     if (path === '/api/settings/diag' && method === 'GET') {
-      return await handleDiag();
+      return await handleDiag(db);
     }
     if (path === '/api/settings/hooks/preview' && method === 'GET') {
       return await handleHooksPreview(url);
@@ -96,11 +135,17 @@ export async function settingsRouter(
     if (path === '/api/settings/hooks/restore' && method === 'POST') {
       return await handleHooksRestore(req);
     }
-    if (path === '/api/settings/graph/reset-cache' && method === 'POST') {
-      return await handleGraphResetCache();
-    }
     if (path === '/api/settings/graph/mode' && method === 'POST') {
       return await handleGraphMode(req);
+    }
+    if (path === '/api/settings/graph-db/status' && method === 'GET') {
+      return await handleGraphDbStatus();
+    }
+    if (path === '/api/settings/graph-db/install' && method === 'POST') {
+      return await handleGraphDbInstall(req);
+    }
+    if (path === '/api/settings/sqlite/info' && method === 'GET') {
+      return jsonResponse({ success: true, data: await collectSqliteInfo(db) });
     }
     if (path === '/api/settings/proxy/snippet' && method === 'GET') {
       return handleProxySnippet(url);
@@ -135,10 +180,37 @@ export async function settingsRouter(
  *   - 각 컴포넌트의 실패는 *부분 실패 허용* — 다른 컴포넌트 결과는 정상 반환.
  *   - 응답 셰이프는 settings-view.js 의 진단 카드 렌더 입력과 1:1 대응.
  */
-async function handleDiag(): Promise<Response> {
-  const [versions, hooks] = await Promise.all([
+async function handleDiag(db: Database): Promise<Response> {
+  // 캐시 hit — TTL 안이면 즉시 반환 (방안 A).
+  //   5개 탭이 같은 응답을 공유하므로 한 사용자 세션의 탭 순회 비용을 1회로 압축.
+  const now = Date.now();
+  if (_diagCache && now - _diagCache.ts < DIAG_CACHE_TTL) {
+    return jsonResponse({ success: true, data: _diagCache.data });
+  }
+
+  // probeAllVersions / detectHookStatus / detectLadybugInstall / checkProxyInstalled 병렬.
+  // proxy 는 사용자 shell 자동 감지 ('auto') — 진단 카드 통합 상태 배지로 노출.
+  const [versions, hooks, ladybug, proxy] = await Promise.all([
     probeAllVersions(),
     detectHookStatus(),
+    detectLadybugInstall().catch((err) => ({
+      method: 'none' as const,
+      installed: false,
+      version: null,
+      brewAvailable: false,
+      npmAvailable: false,
+      error: err instanceof Error ? err.message : String(err),
+    })),
+    checkProxyInstalled('auto').catch((err) => ({
+      shell: 'zsh' as const,
+      profilePath: '',
+      profileExisted: false,
+      installed: false,
+      corrupted: false,
+      hasMarkerOpen: false,
+      hasMarkerClose: false,
+      error: err instanceof Error ? err.message : String(err),
+    })),
   ]);
 
   // graph 상태 — storage-graph 의 기존 헬퍼 재사용 (/api/graph/status 와 동일 데이터).
@@ -195,10 +267,60 @@ async function handleDiag(): Promise<Response> {
     cwd: process.cwd(),
   };
 
-  return jsonResponse({
-    success: true,
-    data: { versions, hooks, graph, server },
-  });
+  // SQLite 진단 — DB 파일 + 마이그레이션 메타. Bun 내장 SQLite 라 별도 binary 진단 불필요.
+  //   - dbPath          : ~/.spyglass/spyglass.db
+  //   - dbSizeBytes     : 파일 크기
+  //   - migration.version / filename : `_migrations` 최신 row
+  const sqlite = await collectSqliteInfo(db);
+
+  const data = { versions, hooks, graph, server, ladybug, proxy, sqlite };
+  _diagCache = { data, ts: now };
+  return jsonResponse({ success: true, data });
+}
+
+/**
+ * SQLite DB 메타 정보 수집 — `/api/settings/diag` 및 `/api/settings/sqlite/info` SSoT.
+ *
+ *   - dbPath        : 환경변수 또는 기본 ~/.spyglass/spyglass.db
+ *   - dbSizeBytes   : 파일 stat. 실패 시 null.
+ *   - migration     : `_migrations` 최신 row → { version, filename }
+ *   - cliVersion    : 외부 `sqlite3` CLI 의 VersionProbeResult (방안 B, 2026-05-26 분리).
+ *                     SQLite 탭이 diag 응답을 추가로 fetch 하지 않고도 CLI 상태를 표시할 수
+ *                     있도록 본 응답에 포함. diag 응답의 versions 에서는 제거됨.
+ *
+ * 실패는 부분 폴백 — 한 필드만 null 로 두고 나머지 정상 반환.
+ */
+async function collectSqliteInfo(db: Database): Promise<{
+  dbPath: string;
+  dbSizeBytes: number | null;
+  migration: { version: number | null; filename: string | null };
+  cliVersion: VersionProbeResult;
+}> {
+  const dbPath = process.env.SPYGLASS_DB_PATH
+    || `${process.env.HOME || process.env.USERPROFILE}/.spyglass/spyglass.db`;
+
+  // dbSize stat 과 sqlite3 CLI 프로브는 서로 독립이므로 Promise.all 로 fan-out — 직렬 대기 회피.
+  const [dbStatResult, cliVersion] = await Promise.all([
+    import('node:fs/promises')
+      .then((m) => m.stat(dbPath))
+      .then((st) => ({ ok: true as const, size: st.size }))
+      .catch(() => ({ ok: false as const })),
+    probeSqlite3(),
+  ]);
+  const dbSizeBytes = dbStatResult.ok ? dbStatResult.size : null;
+
+  let migration: { version: number | null; filename: string | null } = { version: null, filename: null };
+  try {
+    const fn = getLatestMigrationFile(db);
+    if (fn) {
+      const match = /^(\d+)/.exec(fn);
+      migration = { filename: fn, version: match ? parseInt(match[1], 10) : null };
+    }
+  } catch (err) {
+    console.warn('[settings-route] getLatestMigrationFile failed:', err);
+  }
+
+  return { dbPath, dbSizeBytes, migration, cliVersion };
 }
 
 // =============================================================================
@@ -245,6 +367,8 @@ async function handleHooksApply(req: Request): Promise<Response> {
     );
   }
   const result = await applyHookProfile(profile);
+  // diag 캐시 무효화 — hooks 상태가 변경되었으므로 다음 GET /api/settings/diag 가 fresh 조회.
+  invalidateDiagCacheNow();
   // PR 2 — Claude Code 재시작 안내를 응답에 명시 (UI 가 sticky banner 로 노출).
   //   사용자가 *이미 실행 중인* Claude Code 세션은 새 hook 을 자동으로 로드하지 않음.
   //   완전 종료 + 재시작이 필요한 사실이 그 동안 UI 에서 누락됐던 가장 큰 friction.
@@ -290,81 +414,13 @@ async function handleHooksRestore(req: Request): Promise<Response> {
   }
   try {
     const result = await restoreFromBackup(body.backupPath);
+    // diag 캐시 무효화 — hooks 상태가 복원되었으므로 다음 GET 이 fresh 조회.
+    invalidateDiagCacheNow();
     return jsonResponse({ success: true, data: result });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return jsonResponse({ success: false, error: msg }, 400);
   }
-}
-
-// =============================================================================
-// /api/settings/graph/reset-cache — ~/.spyglass/graph/ 비우기
-// =============================================================================
-
-/**
- * graph 캐시 디렉토리를 통째로 삭제 — sync worker 가 다음 폴링에서 자동 재생성.
- *
- *   처리 순서 (hardening #3 — File Lock race 방지):
- *     1) stopGraphSyncWorker()    — 워커가 진행 중이던 쓰기 완료 후 idle.
- *     2) 디렉토리 크기 측정 (응답 메타용)
- *     3) rm -rf 후 빈 디렉토리 재생성
- *     4) startGraphSyncWorker()   — mode='off' 면 자동 no-op.
- *
- *   sync worker 가 graph DB 핸들/파일 락을 잡고 있는 동안 rm 을 시도하면 macOS/Linux 는
- *   대부분 성공하지만 Kuzu 의 내부 fd 가 stale 해진다. Windows 에선 EBUSY 로 실패할 수도.
- *   따라서 워커를 잠시 멈추고 cleanup 후 재시작 — 사용자 영향 최소화 (재시작은 즉시).
- *
- *   try/catch 로 *각 단계를* 감싸 어떤 단계 실패도 critical 회귀로 번지지 않게 한다:
- *     - worker stop 실패 → 진행 시도 + 로그
- *     - rm/mkdir 실패 → 부분 정리 상태 응답 (cleanupError 메시지로 명시)
- *     - worker restart 실패 → 사용자에게 hint (수동 재시작 안내)
- */
-async function handleGraphResetCache(): Promise<Response> {
-  const dir = getGraphDir();
-  let workerStopped = false;
-  let workerRestarted = false;
-  let before = 0;
-  let cleanupError: string | null = null;
-
-  // 1) Sync worker 정지 — 진행 중 쓰기 완료 후 idle.
-  try {
-    stopGraphSyncWorker();
-    workerStopped = true;
-  } catch (err) {
-    console.warn('[settings-route] stopGraphSyncWorker failed (continuing):', err);
-  }
-
-  // 2-3) 크기 측정 + 정리. 어느 단계가 실패해도 cleanupError 로 흡수.
-  try {
-    before = await dirSizeBytes(dir).catch(() => 0);
-    await rm(dir, { recursive: true, force: true });
-    await mkdir(dir, { recursive: true });
-  } catch (err) {
-    cleanupError = err instanceof Error ? err.message : String(err);
-    console.warn('[settings-route] graph cache cleanup failed:', err);
-  }
-
-  // 4) Sync worker 재시작 — mode='off' 면 자동 no-op.
-  try {
-    startGraphSyncWorker();
-    workerRestarted = true;
-  } catch (err) {
-    console.warn('[settings-route] startGraphSyncWorker failed:', err);
-  }
-
-  return jsonResponse({
-    success: cleanupError === null,
-    data: {
-      deletedBytes: before,
-      dir,
-      workerStopped,
-      workerRestarted,
-      cleanupError,
-      hint: cleanupError === null
-        ? 'sync worker will regenerate the projection on next poll'
-        : 'cleanup partially failed — check server logs and consider restarting the server',
-    },
-  });
 }
 
 // =============================================================================
@@ -408,6 +464,9 @@ async function handleGraphMode(req: Request): Promise<Response> {
 
   // 1) 런타임 캐시 갱신 (즉시 적용 — env override 가 있어도 setGraphMode 가 캐시 자체는 갱신).
   setGraphMode(next);
+  // diag 캐시 무효화 — graph.mode / graph.source 변경. 영속화 실패 경로도 런타임은 바뀌었으므로
+  // 영속화 try/catch 이전에 호출해 모든 경로에서 일관 무효화.
+  invalidateDiagCacheNow();
 
   // 2) 영속화 (옵션).
   let persistedTo: string | null = null;
@@ -459,6 +518,50 @@ async function handleGraphMode(req: Request): Promise<Response> {
       hint,
     },
   });
+}
+
+// =============================================================================
+// /api/settings/graph-db/* — Ladybug 의존성 자동 설치 (migration-plan §D)
+// =============================================================================
+
+/**
+ * GET /api/settings/graph-db/status — 현재 시스템의 Ladybug 설치 상태.
+ *
+ * 응답: { success, data: { method, installed, version, path?, brewAvailable, npmAvailable } }
+ *
+ * 설정 페이지의 "Ladybug 의존성" 카드가 진단 시 호출. 회로 OPEN 여부와 무관 —
+ * 설치 자체는 그래프 DB 의 상태와 별개로 평가.
+ */
+async function handleGraphDbStatus(): Promise<Response> {
+  const status = await detectLadybugInstall();
+  return jsonResponse({ success: true, data: status });
+}
+
+/**
+ * POST /api/settings/graph-db/install — 자동 설치 실행.
+ *
+ * Body: { strategy?: 'brew' | 'npm' | 'auto' }
+ *   - 'auto' (기본): brew 가능 시 brew, 아니면 npm.
+ *
+ * 응답: { success, data: { status, method, version, log, restartRequired, error? } }
+ *
+ * 설치 자체는 최대 180s. 완료 후 sticky alert "Claude Code 재시작 필요" 안내.
+ */
+async function handleGraphDbInstall(req: Request): Promise<Response> {
+  let body: { strategy?: InstallStrategy } = {};
+  try {
+    if (req.headers.get('content-type')?.includes('application/json')) {
+      body = await req.json();
+    }
+  } catch {
+    return jsonResponse({ success: false, error: 'Invalid JSON body' }, 400);
+  }
+  const strategy = body.strategy ?? 'auto';
+  const result = await installLadybug(strategy);
+  // diag 캐시 무효화 — ladybug.installed / version 이 변경되었을 수 있음. 실패해도 부분 상태가
+  // 바뀌었을 가능성이 있어 동일하게 무효화 (보수적).
+  invalidateDiagCacheNow();
+  return jsonResponse({ success: result.status !== 'failed', data: result });
 }
 
 // =============================================================================
@@ -543,6 +646,8 @@ async function handleProxyInstall(req: Request): Promise<Response> {
   const shell = parseShellSelector(body.shell);
   try {
     const result = await installProxyHook({ shell, port: PORT });
+    // diag 캐시 무효화 — proxy.installed / profilePath 가 변경.
+    invalidateDiagCacheNow();
     return jsonResponse({ success: true, data: result });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -571,6 +676,8 @@ async function handleProxyRestore(req: Request): Promise<Response> {
   const shell = parseShellSelector(body.shell);
   try {
     const result = await restoreProxyHook({ backupPath: body.backupPath, shell });
+    // diag 캐시 무효화 — proxy.installed 가 변경.
+    invalidateDiagCacheNow();
     return jsonResponse({ success: true, data: result });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

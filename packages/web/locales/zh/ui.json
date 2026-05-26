@@ -199,9 +199,6 @@
       "section-parent-1": "调用方 (-1)",
       "section-turn-after": "同回合后续",
       "legend-flow": "同回合后续",
-      "mode-toggle-aria": "流程可视化模式",
-      "mode-ego-label": "依赖关系视图",
-      "mode-sequential-label": "因果顺序图",
       "scope-depth": "深度",
       "scope-seeds": "起点",
       "scope-layers": "层级",
@@ -538,19 +535,30 @@
     "tab-diag": "系统诊断",
     "tab-hooks": "Hook 设置",
     "tab-graph": "Graph DB",
-    "tab-proxy": "Proxy 指南",
+    "tab-proxy": "Proxy 设置",
     "tab-server": "服务器 / 日志",
     "diag": {
       "title": "系统诊断",
       "missing": "未安装",
-      "hook-label": "Hook 注册",
+      "hook-label": "Hook 设置",
+      "proxy-label": "Proxy 设置",
       "hook-registered": "{n}/{total} 已注册",
       "hook-broken": "JSON 损坏",
       "hook-missing": "设置文件不存在",
       "jump-hooks": "Hook 设置 →",
       "jump-graph": "Graph DB →",
       "port": "端口",
-      "logs-dir": "日志目录"
+      "logs-dir": "日志目录",
+      "jump-proxy": "Proxy 指南 →",
+      "proxy-installed": "已配置",
+      "proxy-corrupted": "已损坏 (marker 不匹配)",
+      "proxy-no-profile": "无 shell 配置文件",
+      "installed": "已安装",
+      "configured": "已配置",
+      "graph-off": "已禁用",
+      "graph-circuit-open": "断路器开启",
+      "hook-partial": "部分注册",
+      "jump-sqlite": "SQLite →"
     },
     "hooks": {
       "title": "Hook 设置",
@@ -608,11 +616,6 @@
       "circuit": "断路器",
       "sync-worker": "Sync Worker",
       "cache": "缓存大小",
-      "reset-title": "重建缓存",
-      "reset-hint": "删除 ~/.spyglass/graph/ — sync worker 将自动重建。v2.10.0 升级后建议执行。",
-      "reset-btn": "重建缓存",
-      "reset-success": "✓ 缓存重建完成",
-      "reset-cleaned": "已清理",
       "engineering-summary": "系统工程信息 ▼",
       "engineering-title": "系统工程信息",
       "toast-saved": "✓ 设置已保存",
@@ -621,17 +624,17 @@
         "off": {
           "label": "禁用 (稳定性优先)",
           "desc": "关闭图形引擎，以传统标准模式安全运行。",
-          "tooltip": "完全禁用 Kuzu 图形引擎。仅使用 SQLite — 最稳定、资源占用最少。流程图可视化不可用。"
+          "tooltip": "完全禁用 Ladybug 图形引擎。流程图可视化不可用。"
         },
         "shadow": {
           "label": "后台测试 (推荐)",
           "desc": "以标准模式安全渲染画面，同时在后台测试引擎兼容性。",
-          "tooltip": "向用户返回 SQLite 结果，后台对比记录 Kuzu。受断路器保护，对用户影响为零。新环境的最安全选择。"
+          "tooltip": "后台对比记录 Ladybug。受断路器保护，对用户影响为零。"
         },
         "primary": {
           "label": "实时图形启用 (性能最大化)",
           "desc": "打开高速图形引擎，流畅地可视化 Claude Code 的复杂跟踪流程。",
-          "tooltip": "使用 Kuzu 图形引擎作为主要响应源。复杂的 BFS / 顺序查询比 SQLite 快 10~100 倍。引擎失败时自动回退到 SQLite。"
+          "tooltip": "使用 Ladybug 图形引擎作为主要响应源。复杂的 BFS / 顺序查询快速处理。"
         }
       },
       "health": {
@@ -646,6 +649,20 @@
         "env": "env",
         "saved": "saved",
         "default": "default"
+      },
+      "ladybug": {
+        "title": "Ladybug 依赖",
+        "status-label": "状态",
+        "installed": "已安装",
+        "missing": "未安装",
+        "missing-hint": "使用图引擎需要先安装依赖。在下方点击自动安装。",
+        "install-brew": "通过 Homebrew 安装",
+        "install-npm": "通过 npm 安装",
+        "no-package-manager": "未找到 brew 或 npm 命令。请先安装 Homebrew 或 Node.js。",
+        "installing": "安装中...",
+        "install-success": "安装完成",
+        "install-failed": "安装失败",
+        "restart-required": "请重启 Claude Code 以使更改生效。"
       }
     },
     "proxy": {
@@ -719,6 +736,20 @@
       "port-change-hint": "设置环境变量后重启服务器。",
       "logs-title": "日志文件",
       "no-logs": "日志目录为空或不存在。"
+    },
+    "tab-sqlite": "SQLite",
+    "sqlite": {
+      "title": "SQLite",
+      "health-ok": "SQLite 正常运行中",
+      "health-hint": "使用 Bun 运行时内置的 SQLite 库。无需单独安装。",
+      "db-file-title": "数据库文件",
+      "path-label": "路径",
+      "size-label": "大小",
+      "migration-title": "迁移",
+      "migration-version-label": "最新版本",
+      "cli-title": "sqlite3 CLI (可选)",
+      "cli-hint": "用于从命令行直接查询 DB 的外部工具。不影响 Spyglass 运行。",
+      "cli-label": "状态"
     }
   }
 }

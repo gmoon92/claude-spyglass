@@ -199,9 +199,6 @@
       "section-parent-1": "Caller (-1)",
       "section-turn-after": "Turn follow-up",
       "legend-flow": "Turn follow-up",
-      "mode-toggle-aria": "Flow visualization mode",
-      "mode-ego-label": "Dependency view",
-      "mode-sequential-label": "Causal sequence",
       "scope-depth": "depth",
       "scope-seeds": "seeds",
       "scope-layers": "layers",
@@ -538,19 +535,30 @@
     "tab-diag": "Diagnostics",
     "tab-hooks": "Hook Setup",
     "tab-graph": "Graph DB",
-    "tab-proxy": "Proxy Guide",
+    "tab-proxy": "Proxy Setup",
     "tab-server": "Server / Logs",
     "diag": {
       "title": "System Diagnostics",
       "missing": "not installed",
-      "hook-label": "Hook Registration",
+      "hook-label": "Hook Setup",
+      "proxy-label": "Proxy Setup",
       "hook-registered": "{n}/{total} registered",
       "hook-broken": "JSON corrupted",
       "hook-missing": "settings file not found",
       "jump-hooks": "Hook Setup →",
       "jump-graph": "Graph DB →",
       "port": "Port",
-      "logs-dir": "Logs dir"
+      "logs-dir": "Logs dir",
+      "jump-proxy": "Proxy Guide →",
+      "proxy-installed": "Configured",
+      "proxy-corrupted": "Corrupted (marker mismatch)",
+      "proxy-no-profile": "No shell profile",
+      "installed": "Installed",
+      "configured": "Configured",
+      "graph-off": "Disabled",
+      "graph-circuit-open": "Circuit open",
+      "hook-partial": "Partial",
+      "jump-sqlite": "SQLite →"
     },
     "hooks": {
       "title": "Hook Setup",
@@ -608,11 +616,6 @@
       "circuit": "Circuit breaker",
       "sync-worker": "Sync worker",
       "cache": "Cache size",
-      "reset-title": "Rebuild cache",
-      "reset-hint": "Delete ~/.spyglass/graph/ — sync worker will regenerate. Recommended after v2.10.0 upgrade.",
-      "reset-btn": "Rebuild cache",
-      "reset-success": "✓ Cache rebuilt",
-      "reset-cleaned": "cleaned",
       "engineering-summary": "System engineering details ▼",
       "engineering-title": "System engineering details",
       "toast-saved": "✓ Settings saved",
@@ -621,17 +624,17 @@
         "off": {
           "label": "Disabled (safest)",
           "desc": "Turn off the graph engine and run in classic SQLite mode for maximum stability.",
-          "tooltip": "Disables the Kuzu graph engine entirely. SQLite-only — most stable, lowest resource usage. Flow visualizations are unavailable."
+          "tooltip": "Disables the Ladybug graph engine entirely. Flow visualizations are unavailable."
         },
         "shadow": {
           "label": "Background test (recommended)",
           "desc": "Render with classic mode while quietly testing engine compatibility in the background.",
-          "tooltip": "Serves SQLite results to the user while comparing against Kuzu in the background. Protected by a circuit breaker — zero user impact. Safest choice for new environments."
+          "tooltip": "Background-only mode: Ladybug runs in the background for comparison logging. Circuit breaker protected — zero user impact."
         },
         "primary": {
           "label": "Live graph (max performance)",
           "desc": "Turn on the high-speed graph engine to visualize Claude Code's complex traces in real time.",
-          "tooltip": "Uses Kuzu graph engine as the primary response source. Complex BFS/sequential queries run 10~100x faster than SQLite. Auto-falls back to SQLite on engine failure."
+          "tooltip": "Uses the Ladybug graph engine as the primary response source. Complex BFS/sequential queries run fast."
         }
       },
       "health": {
@@ -646,6 +649,20 @@
         "env": "env",
         "saved": "saved",
         "default": "default"
+      },
+      "ladybug": {
+        "title": "Ladybug Dependency",
+        "status-label": "Status",
+        "installed": "Installed",
+        "missing": "Not installed",
+        "missing-hint": "Install the dependency to use the graph engine. Use auto-install below.",
+        "install-brew": "Install via Homebrew",
+        "install-npm": "Install via npm",
+        "no-package-manager": "Neither brew nor npm is available. Install Homebrew or Node.js first.",
+        "installing": "Installing...",
+        "install-success": "Installation complete",
+        "install-failed": "Installation failed",
+        "restart-required": "Restart Claude Code for the changes to take effect."
       }
     },
     "proxy": {
@@ -719,6 +736,20 @@
       "port-change-hint": "Set env var and restart the server.",
       "logs-title": "Log files",
       "no-logs": "Log directory is empty or missing."
+    },
+    "tab-sqlite": "SQLite",
+    "sqlite": {
+      "title": "SQLite",
+      "health-ok": "SQLite is operating normally",
+      "health-hint": "Uses the SQLite library bundled with Bun. No separate installation needed.",
+      "db-file-title": "Database file",
+      "path-label": "Path",
+      "size-label": "Size",
+      "migration-title": "Migration",
+      "migration-version-label": "Latest version",
+      "cli-title": "sqlite3 CLI (optional)",
+      "cli-hint": "Optional external tool for querying the DB from the command line. Does not affect Spyglass.",
+      "cli-label": "Status"
     }
   }
 }

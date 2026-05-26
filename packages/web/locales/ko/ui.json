@@ -199,9 +199,6 @@
       "section-parent-1": "호출 인과 (-1)",
       "section-turn-after": "같은 턴 후속",
       "legend-flow": "같은 턴 후속",
-      "mode-toggle-aria": "플로우 시각화 모드",
-      "mode-ego-label": "의존성 조망",
-      "mode-sequential-label": "인과 순서도",
       "scope-depth": "깊이",
       "scope-seeds": "시작점",
       "scope-layers": "레이어",
@@ -538,19 +535,30 @@
     "tab-diag": "시스템 진단",
     "tab-hooks": "Hook 설정",
     "tab-graph": "Graph DB",
-    "tab-proxy": "Proxy 가이드",
+    "tab-proxy": "Proxy 설정",
     "tab-server": "서버 / 로그",
     "diag": {
       "title": "시스템 진단",
       "missing": "미설치",
-      "hook-label": "Hook 등록",
+      "hook-label": "Hook 설정",
+      "proxy-label": "Proxy 설정",
       "hook-registered": "{n}/{total} 등록",
       "hook-broken": "JSON 손상",
       "hook-missing": "설정 파일 없음",
       "jump-hooks": "Hook 설정 →",
       "jump-graph": "Graph DB →",
       "port": "포트",
-      "logs-dir": "로그 디렉토리"
+      "logs-dir": "로그 디렉토리",
+      "jump-proxy": "Proxy 가이드 →",
+      "proxy-installed": "설정됨",
+      "proxy-corrupted": "손상됨 (marker 비대칭)",
+      "proxy-no-profile": "셸 프로파일 없음",
+      "installed": "설치됨",
+      "configured": "설정됨",
+      "graph-off": "비활성",
+      "graph-circuit-open": "회로 차단",
+      "hook-partial": "부분 등록",
+      "jump-sqlite": "SQLite →"
     },
     "hooks": {
       "title": "Hook 설정",
@@ -608,11 +616,6 @@
       "circuit": "회로 차단기",
       "sync-worker": "Sync Worker",
       "cache": "캐시 크기",
-      "reset-title": "캐시 재구축",
-      "reset-hint": "~/.spyglass/graph/ 를 삭제 후 sync worker 가 자동 재생성. v2.10.0 이전에서 업데이트했다면 권장.",
-      "reset-btn": "캐시 재구축",
-      "reset-success": "✓ 캐시 재구축 완료",
-      "reset-cleaned": "정리됨",
       "engineering-summary": "시스템 엔지니어링 정보 보기 ▼",
       "engineering-title": "시스템 엔지니어링 정보",
       "toast-saved": "✓ 설정이 저장되었습니다",
@@ -621,17 +624,17 @@
         "off": {
           "label": "사용 안 함 (안정성 최우선)",
           "desc": "그래프 엔진을 끄고 기존 표준 모드로 안전하게 구동합니다.",
-          "tooltip": "Kuzu 그래프 엔진 자체를 비활성화합니다. SQLite 만 사용하여 가장 안정적이며 리소스 사용량이 적습니다. 추적 흐름도/시각화는 사용할 수 없습니다."
+          "tooltip": "Ladybug 그래프 엔진 자체를 비활성화합니다. 그래프 시각화는 사용할 수 없습니다."
         },
         "shadow": {
           "label": "백그라운드 테스트 (권장)",
           "desc": "안전하게 표준 모드로 화면을 그리면서, 뒤에서 엔진 호환성을 테스트합니다.",
-          "tooltip": "사용자에게는 SQLite 결과를 응답하고, 백그라운드에서 Kuzu 결과를 비교 로깅만 합니다. 회로 차단기로 보호되어 사용자 영향 0. 새 환경에서 가장 안전한 선택."
+          "tooltip": "사용자 응답은 제한적이고 백그라운드에서 Ladybug 결과를 비교 로깅합니다. 회로 차단기로 보호되어 사용자 영향 0."
         },
         "primary": {
           "label": "실시간 그래프 활성화 (성능 극대화)",
           "desc": "초고속 그래프 엔진을 켜서 Claude Code 의 복잡한 추적 흐름도를 렉 없이 화려하게 시각화합니다.",
-          "tooltip": "Kuzu 그래프 엔진을 메인 응답에 사용합니다. 복잡한 BFS/순서도 쿼리가 SQLite 보다 10~100배 빠릅니다. 엔진 실패 시 자동으로 SQLite 폴백."
+          "tooltip": "Ladybug 그래프 엔진을 메인 응답에 사용합니다. 복잡한 BFS/순서도 쿼리가 빠르게 처리됩니다."
         }
       },
       "health": {
@@ -646,6 +649,20 @@
         "env": "env",
         "saved": "saved",
         "default": "default"
+      },
+      "ladybug": {
+        "title": "Ladybug 의존성",
+        "status-label": "상태",
+        "installed": "설치됨",
+        "missing": "미설치",
+        "missing-hint": "그래프 엔진을 사용하려면 의존성을 설치해야 합니다. 아래에서 자동 설치하세요.",
+        "install-brew": "Homebrew로 설치",
+        "install-npm": "npm으로 설치",
+        "no-package-manager": "brew 또는 npm 명령어를 찾을 수 없습니다. Homebrew 또는 Node.js를 먼저 설치하세요.",
+        "installing": "설치 중...",
+        "install-success": "설치 완료",
+        "install-failed": "설치 실패",
+        "restart-required": "Claude Code를 재시작해야 변경 사항이 적용됩니다."
       }
     },
     "proxy": {
@@ -719,6 +736,20 @@
       "port-change-hint": "환경변수로 설정 후 서버 재시작이 필요합니다.",
       "logs-title": "로그 파일",
       "no-logs": "로그 디렉토리가 비어 있거나 존재하지 않습니다."
+    },
+    "tab-sqlite": "SQLite",
+    "sqlite": {
+      "title": "SQLite",
+      "health-ok": "SQLite 정상 동작 중",
+      "health-hint": "Bun 런타임에 내장된 SQLite 라이브러리를 사용합니다. 별도 설치가 필요 없습니다.",
+      "db-file-title": "데이터베이스 파일",
+      "path-label": "경로",
+      "size-label": "크기",
+      "migration-title": "마이그레이션",
+      "migration-version-label": "최신 버전",
+      "cli-title": "sqlite3 CLI (선택 사항)",
+      "cli-hint": "명령줄에서 DB를 직접 조회할 때 사용하는 외부 도구입니다. Spyglass 동작에는 영향이 없습니다.",
+      "cli-label": "상태"
     }
   }
 }

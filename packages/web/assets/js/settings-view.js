@@ -137,6 +137,7 @@ function renderActiveTab() {
     case 'diag':   return renderDiagSection();
     case 'hooks':  return renderHooksSection();
     case 'graph':  return renderGraphSection();
+    case 'sqlite': return renderSqliteSection();
     case 'proxy':  return renderProxySection();
     case 'server': return renderServerSection();
     default:       return renderDiagSection();
@@ -217,20 +218,87 @@ async function renderDiagSection() {
         : 'warn'
       : 'fail'
     : 'warn';
+  //   값 텍스트는 "설정됨" 으로 통일 (등록 수치는 tail 메타로). 부분 등록은 별도 라벨.
   const hookValue = hooks.exists
     ? hooks.parsed
-      ? t('ui.settings-view.diag.hook-registered', { n: hooks.registeredCount, total: hooks.expectedCount })
+      ? hooks.registeredCount === hooks.expectedCount
+        ? t('ui.settings-view.diag.configured')
+        : hooks.registeredCount === 0
+        ? t('ui.settings-view.diag.hook-missing')
+        : t('ui.settings-view.diag.hook-partial')
       : t('ui.settings-view.diag.hook-broken')
     : t('ui.settings-view.diag.hook-missing');
+  const hookTail = hooks.exists && hooks.parsed
+    ? `<span class="settings-meta">${hooks.registeredCount}/${hooks.expectedCount}</span>`
+    : '';
 
-  // graph 상태 — mode 별 색상 + 출처 배지.
-  const graphStatus = graph.mode === 'off' ? 'warn' : graph.circuit.state === 'CLOSED' ? 'ok' : 'warn';
+  // Proxy 진단 row — 셸 프로파일에 spyglass proxy 함수가 설치돼 있는지.
+  //   상태:
+  //     - 설치됨        : profile 에 marker open+close 모두 존재 → ✓
+  //     - 손상         : open / close 비대칭 → ✕ (수동 복구 필요)
+  //     - 미설치 + 프로파일 있음 : 아직 적용 안 함 → ⚠ + Proxy 탭 jump
+  //     - 셸 프로파일 부재   : 사용자 셸 자체가 감지 안 됨 → ⏸ (drop-in 없음)
+  const proxyRowHtml = (p) => {
+    // 행 라벨은 좌측 sub-tab 의 "Proxy 설정" 과 일관되도록 i18n 키(proxy-label) 로 통일.
+    const proxyLabel = t('ui.settings-view.diag.proxy-label');
+    if (!p) {
+      return rowHtml(proxyLabel, 'warn', t('ui.settings-view.diag.missing'),
+        `<button class="settings-jump-btn" data-settings-jump="proxy">${t('ui.settings-view.diag.jump-proxy')}</button>`);
+    }
+    if (p.corrupted) {
+      return rowHtml(proxyLabel, 'fail', t('ui.settings-view.diag.proxy-corrupted'),
+        `<button class="settings-jump-btn" data-settings-jump="proxy">${t('ui.settings-view.diag.jump-proxy')}</button>`);
+    }
+    if (p.installed) {
+      const tail =
+        `<span class="settings-meta">${escHtml(p.shell)}</span>` +
+        (p.profilePath ? `<code class="settings-meta">${escHtml(p.profilePath)}</code>` : '');
+      return rowHtml(proxyLabel, 'ok', t('ui.settings-view.diag.proxy-installed'), tail);
+    }
+    if (!p.profileExisted) {
+      return rowHtml(proxyLabel, 'warn', t('ui.settings-view.diag.proxy-no-profile'),
+        `<button class="settings-jump-btn" data-settings-jump="proxy">${t('ui.settings-view.diag.jump-proxy')}</button>`);
+    }
+    return rowHtml(proxyLabel, 'warn', t('ui.settings-view.diag.missing'),
+      `<button class="settings-jump-btn" data-settings-jump="proxy">${t('ui.settings-view.diag.jump-proxy')}</button>`);
+  };
+
+  // Graph DB 통합 진단 row — *의존성 설치 여부 + 동작 모드* 를 한 행에 합쳐 표시.
+  //   사용자 정책: 내부 DB 이름(Ladybug 등) 은 노출하지 않음. UI 상에는 "Graph DB" 하나만.
+  //
+  //   상태 결정:
+  //     - 의존성 미설치           → ⚠ 미설치 (모드 정보는 보조 메타로만)
+  //     - 의존성 설치 + mode=off  → ⚠ 비활성
+  //     - 의존성 설치 + 회로 OPEN → ⚠ 회로 차단
+  //     - 의존성 설치 + 정상      → ✓ <mode>
+  //
+  //   tail: 모드 출처 배지(default/file/env) + 모드 텍스트. 자동 설치/모드 변경은 점프 버튼.
+  //   값 텍스트는 *상태 라벨*만 노출 — 실제 모드(primary/shadow/off) 는 tail 의 메타 배지로.
+  //   사용자 정책: 진단 카드는 "설치됨/미설치" 같은 일관된 상태 라벨로 통일.
+  const ladybugInstalled = !!(data.ladybug && data.ladybug.installed);
+  let graphStatus;
+  let graphValueText;
+  if (!ladybugInstalled) {
+    graphStatus = 'warn';
+    graphValueText = t('ui.settings-view.diag.missing');
+  } else if (graph.mode === 'off') {
+    graphStatus = 'warn';
+    graphValueText = t('ui.settings-view.diag.graph-off');
+  } else if (graph.circuit?.state !== 'CLOSED') {
+    graphStatus = 'warn';
+    graphValueText = t('ui.settings-view.diag.graph-circuit-open');
+  } else {
+    graphStatus = 'ok';
+    graphValueText = t('ui.settings-view.diag.installed');
+  }
   const graphSource = graph.source || 'default';
   const graphSourceClass = graphSource === 'env' ? 'is-env' : graphSource === 'file' ? 'is-saved' : 'is-default';
   const graphSourceLabel = t(`ui.settings-view.graph.source.${graphSource === 'file' ? 'saved' : graphSource}`);
-  const graphTail =
-    `<span class="settings-source-badge ${graphSourceClass}" title="${escHtml(graph.configFile || '')}">${escHtml(graphSourceLabel)}</span>` +
-    `<span class="settings-meta">${escHtml(graph.mode)}</span>`;
+  // 설치된 경우에만 출처 배지 + 모드를 tail 메타로. 미설치는 점프 버튼만.
+  const graphTail = ladybugInstalled
+    ? `<span class="settings-source-badge ${graphSourceClass}" title="${escHtml(graph.configFile || '')}">${escHtml(graphSourceLabel)}</span>` +
+      `<span class="settings-meta">${escHtml(graph.mode)}</span>`
+    : '';
 
   el.innerHTML = `
     <h3 class="settings-section-title">${t('ui.settings-view.diag.title')}</h3>
@@ -242,20 +310,32 @@ async function renderDiagSection() {
       ${versionRow('jq', 'jq')}
     </div>
     <div class="settings-card">
+      <!-- 행 순서는 좌측 sub-tab 메뉴 순서와 일치 — Proxy → Hook → SQLite → Graph DB.
+           메뉴와 진단 카드의 시선 흐름을 같은 방향으로 정렬해 점프 버튼 → 해당 탭의 매핑을
+           직관적으로 만든다. -->
+      ${proxyRowHtml(data.proxy)}
       ${rowHtml(t('ui.settings-view.diag.hook-label'), hookStatus, hookValue,
-        `<button class="settings-jump-btn" data-settings-jump="hooks">${t('ui.settings-view.diag.jump-hooks')}</button>`)}
-      ${rowHtml('SQLite migration',
-        'ok',
-        `v${escHtml(String(server?.pid != null ? '—' : '—'))}`,
-        '<span class="settings-meta">/api/version</span>')}
+        `<button class="settings-jump-btn" data-settings-jump="hooks">${t('ui.settings-view.diag.jump-hooks')}</button>${hookTail}`)}
+      ${(() => {
+        // SQLite 통합 진단 — Graph DB 스타일.
+        //   값 텍스트: 항상 "설치됨" (Bun 내장 SQLite 라 서버가 응답 중이면 정상 보장).
+        //   tail: 마이그레이션 버전 + 파일명 + SQLite 탭 점프 버튼.
+        const mig = data.sqlite?.migration ?? null;
+        const sqliteTail =
+          (mig?.version != null ? `<span class="settings-meta">v${mig.version}</span>` : '') +
+          (mig?.filename ? `<code class="settings-meta">${escHtml(mig.filename)}</code>` : '');
+        return rowHtml('SQLite',
+          'ok',
+          t('ui.settings-view.diag.installed'),
+          `<button class="settings-jump-btn" data-settings-jump="sqlite">${t('ui.settings-view.diag.jump-sqlite')}</button>${sqliteTail}`);
+      })()}
       ${rowHtml('Graph DB', graphStatus,
-        graph.mode,
+        graphValueText,
         `<button class="settings-jump-btn" data-settings-jump="graph">${t('ui.settings-view.diag.jump-graph')}</button>${graphTail}`)}
     </div>
     <div class="settings-card">
       ${rowHtml(t('ui.settings-view.diag.port'), 'ok', String(server.port), '')}
       ${rowHtml('PID', 'ok', String(server.pid), `<span class="settings-meta">uptime ${formatUptime(server.uptimeSec)}</span>`)}
-      ${rowHtml('Bun', 'ok', server.bunVersion || '?', '')}
       ${rowHtml(t('ui.settings-view.diag.logs-dir'), 'ok', escHtml(server.logsDir), '')}
     </div>
   `;
@@ -596,11 +676,18 @@ async function renderGraphSection() {
   const gen = _generation;
   renderLoading();
   let data;
+  let ladybug;
   try {
-    const res = await fetch('/api/settings/diag');
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error || 'diag failed');
-    data = json.data;
+    // diag + graph-db/status 병렬 — Ladybug 의존성 카드도 같이 그림.
+    const [diagRes, ladybugRes] = await Promise.all([
+      fetch('/api/settings/diag'),
+      fetch('/api/settings/graph-db/status'),
+    ]);
+    const diagJson = await diagRes.json();
+    const ladybugJson = await ladybugRes.json();
+    if (!diagJson.success) throw new Error(diagJson.error || 'diag failed');
+    data = diagJson.data;
+    ladybug = ladybugJson.success ? ladybugJson.data : null;
   } catch (err) {
     if (gen !== _generation) return;
     renderError(err);
@@ -675,6 +762,11 @@ async function renderGraphSection() {
     </div>
   `;
 
+  // ── Ladybug 의존성 카드 (migration-plan §D) ───────────────────────────
+  //   설치 상태: ✓ 설치됨 (brew, v0.16.1) / ⚠ 미설치 / ⏳ 설치 중
+  //   자동 설치 버튼 + brew/npm 선택. 완료 후 sticky alert "재시작 필요" 안내.
+  const ladybugCardHtml = buildLadybugCardHtml(ladybug);
+
   el.innerHTML = `
     <h3 class="settings-section-title">${t('ui.settings-view.graph.title')}</h3>
     ${envWarnHtml}
@@ -688,6 +780,8 @@ async function renderGraphSection() {
       </div>
     </div>
 
+    ${ladybugCardHtml}
+
     <div class="settings-card">
       <div class="settings-card-title">${t('ui.settings-view.graph.mode-pick-title')}</div>
       <div class="settings-card-sub">${t('ui.settings-view.graph.mode-pick-sub')}</div>
@@ -697,15 +791,6 @@ async function renderGraphSection() {
       <div class="settings-result" id="graphResult"></div>
     </div>
 
-    <div class="settings-card">
-      <div class="settings-card-title">${t('ui.settings-view.graph.reset-title')}</div>
-      <div class="settings-card-sub">${t('ui.settings-view.graph.reset-hint')}</div>
-      <div class="settings-actions">
-        <button class="settings-action-btn settings-action-secondary" id="graphResetBtn">${t('ui.settings-view.graph.reset-btn')}</button>
-      </div>
-      <div class="settings-result" id="graphResetResult"></div>
-    </div>
-
     ${engineeringHtml}
   `;
 
@@ -713,7 +798,119 @@ async function renderGraphSection() {
   el.querySelectorAll('[data-graph-mode]').forEach((btn) => {
     btn.addEventListener('click', () => onGraphMode(btn.dataset.graphMode));
   });
-  el.querySelector('#graphResetBtn')?.addEventListener('click', () => onGraphReset());
+
+  // Ladybug 의존성 — 자동 설치 버튼.
+  el.querySelectorAll('[data-ladybug-install]').forEach((btn) => {
+    btn.addEventListener('click', () => onLadybugInstall(btn.dataset.ladybugInstall));
+  });
+}
+
+/**
+ * Ladybug 의존성 카드 마크업 — 설치 상태에 따라 분기.
+ *
+ *   - 설치됨: 체크 아이콘 + 방식(brew/npm) + 버전 + 경로
+ *   - 미설치: 경고 아이콘 + 자동 설치 버튼 (brew 우선, npm 폴백)
+ *   - 둘 다 미가용: 수동 설치 안내 (brew/npm 둘 다 PATH 에 없음)
+ */
+function buildLadybugCardHtml(ladybug) {
+  if (!ladybug) {
+    // graph-db/status 응답 실패 시 카드 생략.
+    return '';
+  }
+  const installed = !!ladybug.installed;
+  const method = ladybug.method || 'none';
+  const version = ladybug.version || '';
+  const path = ladybug.path || '';
+
+  if (installed) {
+    const versionText = version ? ` v${version}` : '';
+    const methodLabel = method === 'brew' ? 'Homebrew' : method === 'npm' ? 'npm' : method;
+    return `
+      <div class="settings-card">
+        <div class="settings-card-title">${t('ui.settings-view.graph.ladybug.title')}</div>
+        ${rowHtml(
+          t('ui.settings-view.graph.ladybug.status-label'),
+          'ok',
+          `${t('ui.settings-view.graph.ladybug.installed')} (${methodLabel}${versionText})`,
+          path ? `<code class="settings-meta">${escHtml(path)}</code>` : '',
+        )}
+      </div>
+    `;
+  }
+
+  // 미설치 — 자동 설치 옵션.
+  const brewAvail = !!ladybug.brewAvailable;
+  const npmAvail = !!ladybug.npmAvailable;
+
+  let actionsHtml = '';
+  if (brewAvail || npmAvail) {
+    const buttons = [];
+    if (brewAvail) {
+      buttons.push(`<button class="settings-action-btn" data-ladybug-install="brew">${t('ui.settings-view.graph.ladybug.install-brew')}</button>`);
+    }
+    if (npmAvail) {
+      const cls = brewAvail ? 'settings-action-btn settings-action-secondary' : 'settings-action-btn';
+      buttons.push(`<button class="${cls}" data-ladybug-install="npm">${t('ui.settings-view.graph.ladybug.install-npm')}</button>`);
+    }
+    actionsHtml = `<div class="settings-actions">${buttons.join('')}</div>`;
+  } else {
+    actionsHtml = `<div class="settings-card-sub">${t('ui.settings-view.graph.ladybug.no-package-manager')}</div>`;
+  }
+
+  return `
+    <div class="settings-card">
+      <div class="settings-card-title">${t('ui.settings-view.graph.ladybug.title')}</div>
+      ${rowHtml(
+        t('ui.settings-view.graph.ladybug.status-label'),
+        'warn',
+        t('ui.settings-view.graph.ladybug.missing'),
+        '',
+      )}
+      <div class="settings-card-sub">${t('ui.settings-view.graph.ladybug.missing-hint')}</div>
+      ${actionsHtml}
+      <div class="settings-result" id="ladybugInstallResult"></div>
+    </div>
+  `;
+}
+
+/**
+ * Ladybug 자동 설치 — POST /api/settings/graph-db/install
+ *   클릭 시 버튼 disable + "설치 중..." 표시 → 응답 → 결과 + 재시작 필요 sticky alert.
+ */
+async function onLadybugInstall(strategy) {
+  const resultEl = document.getElementById('ladybugInstallResult');
+  if (resultEl) resultEl.innerHTML = `<div class="settings-meta">${t('ui.settings-view.graph.ladybug.installing')}</div>`;
+  // 모든 install 버튼 비활성.
+  document.querySelectorAll('[data-ladybug-install]').forEach((b) => { b.disabled = true; });
+
+  try {
+    const res = await fetch('/api/settings/graph-db/install', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ strategy }),
+    });
+    const json = await res.json();
+    const data = json?.data ?? {};
+    const log = (data.log || '').slice(-2048);
+    const ok = json.success && data.status !== 'failed';
+    const restart = !!data.restartRequired;
+
+    if (resultEl) {
+      const headline = ok
+        ? `<div class="settings-success">${t('ui.settings-view.graph.ladybug.install-success')}${data.version ? ` v${data.version}` : ''}</div>`
+        : `<div class="settings-error">${t('ui.settings-view.graph.ladybug.install-failed')}: ${escHtml(data.error || '')}</div>`;
+      const restartHint = restart
+        ? `<div class="settings-warn-banner">⚠ ${t('ui.settings-view.graph.ladybug.restart-required')}</div>`
+        : '';
+      resultEl.innerHTML = `${headline}${restartHint}<pre class="settings-log">${escHtml(log)}</pre>`;
+    }
+    // 진단 카드 재로드 (성공 시 상태가 'installed' 로 갱신되도록).
+    if (ok) renderGraphSection();
+  } catch (err) {
+    if (resultEl) resultEl.innerHTML = `<div class="settings-error">${escHtml(err.message || String(err))}</div>`;
+  } finally {
+    document.querySelectorAll('[data-ladybug-install]').forEach((b) => { b.disabled = false; });
+  }
 }
 
 /**
@@ -761,27 +958,110 @@ async function onGraphMode(mode) {
   }
 }
 
-async function onGraphReset() {
-  const out = document.getElementById('graphResetResult');
-  if (!out) return;
-  out.innerHTML = `<div class="settings-loading">${t('ui.settings-view.loading')}</div>`;
+// =============================================================================
+// 섹션 — SQLite (DB 파일 + 마이그레이션 + 외부 CLI 안내)
+// =============================================================================
+
+/**
+ * SQLite 섹션 본문 렌더 — Graph DB 섹션과 동일 디자인 패턴.
+ *
+ *   1) 통합 상태 배지 — Bun 내장이라 항상 ✓ 정상 작동.
+ *   2) DB 파일 카드 — 경로 + 파일 크기.
+ *   3) 마이그레이션 카드 — 최신 version + filename.
+ *   4) 외부 CLI 카드 — sqlite3 명령줄 도구 (선택 사항, 디버깅용).
+ */
+async function renderSqliteSection() {
+  const gen = _generation;
+  renderLoading();
+
+  let info;
   try {
-    const res = await fetch('/api/settings/graph/reset-cache', { method: 'POST' });
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error || 'reset failed');
-    const deleted = formatBytes(json.data.deletedBytes ?? 0);
-    out.innerHTML = `
-      <div class="settings-diff settings-diff-success">
-        <div class="settings-diff-title">${t('ui.settings-view.graph.reset-success')}</div>
-        <div class="settings-diff-row settings-diff-info">
-          <span class="settings-meta">${deleted} ${t('ui.settings-view.graph.reset-cleaned')}</span>
-        </div>
-      </div>
-    `;
-    toast(t('ui.settings-view.graph.reset-success'));
+    // 방안 B (분석 2026-05-26): 기존엔 sqlite/info + diag 를 Promise.all 로 동시 fetch 했으나,
+    // diag 응답에서 본 탭이 실제로 사용하던 필드는 versions.sqlite3 한 개뿐. 백엔드에서
+    // sqlite/info 응답에 cliVersion 을 직접 포함시키도록 이관해 diag 호출을 완전히 제거.
+    // → 외부 binary spawn 5개 + Hook IO + Graph 디렉토리 stat 비용을 본 탭에서는 0으로.
+    const r1 = await fetch('/api/settings/sqlite/info').then((r) => r.json());
+    if (!r1.success) throw new Error(r1.error || 'sqlite info failed');
+    info = r1.data;
   } catch (err) {
-    out.innerHTML = `<div class="settings-error">⚠ ${escHtml(err instanceof Error ? err.message : String(err))}</div>`;
+    if (gen !== _generation) return;
+    renderError(err);
+    return;
   }
+  if (gen !== _generation) return;
+
+  const el = contentEl();
+  if (!el) return;
+
+  const sizeText = info.dbSizeBytes != null ? formatBytes(info.dbSizeBytes) : '—';
+  const migVersion = info.migration?.version;
+  const migFilename = info.migration?.filename || '—';
+
+  // sqlite3 CLI — 이제 sqlite/info 응답의 cliVersion 필드를 직접 사용 (방안 B).
+  const cli = info.cliVersion;
+  let cliHtml = '';
+  if (cli) {
+    if (cli.available) {
+      cliHtml = rowHtml(
+        t('ui.settings-view.sqlite.cli-label'),
+        'ok',
+        cli.version || cli.raw || '?',
+        `<code class="settings-meta">sqlite3</code>`,
+      );
+    } else {
+      cliHtml = rowHtml(
+        t('ui.settings-view.sqlite.cli-label'),
+        'warn',
+        t('ui.settings-view.diag.missing'),
+        `<code class="settings-cmd">brew install sqlite</code>` +
+          `<button class="settings-inline-copy" data-copy-text="brew install sqlite" title="${t('ui.settings-view.proxy.copy')}" aria-label="copy">${ICON_COPY}</button>`,
+      );
+    }
+  }
+
+  el.innerHTML = `
+    <h3 class="settings-section-title">${t('ui.settings-view.sqlite.title')}</h3>
+
+    <div class="settings-card">
+      <div class="settings-health-row">
+        <span class="settings-health-badge is-ok">
+          <span class="settings-health-icon" aria-hidden="true">✓</span>
+          <span class="settings-health-text">${t('ui.settings-view.sqlite.health-ok')}</span>
+        </span>
+      </div>
+      <div class="settings-card-sub">${t('ui.settings-view.sqlite.health-hint')}</div>
+    </div>
+
+    <div class="settings-card">
+      <div class="settings-card-title">${t('ui.settings-view.sqlite.db-file-title')}</div>
+      ${rowHtml(t('ui.settings-view.sqlite.path-label'), 'ok', '', `<code class="settings-meta">${escHtml(info.dbPath || '')}</code>`)}
+      ${rowHtml(t('ui.settings-view.sqlite.size-label'), 'ok', sizeText, '')}
+    </div>
+
+    <div class="settings-card">
+      <div class="settings-card-title">${t('ui.settings-view.sqlite.migration-title')}</div>
+      ${rowHtml(t('ui.settings-view.sqlite.migration-version-label'),
+        migVersion != null ? 'ok' : 'warn',
+        migVersion != null ? `v${migVersion}` : '—',
+        `<code class="settings-meta">${escHtml(migFilename)}</code>`)}
+    </div>
+
+    ${cli ? `
+      <div class="settings-card">
+        <div class="settings-card-title">${t('ui.settings-view.sqlite.cli-title')}</div>
+        <div class="settings-card-sub">${t('ui.settings-view.sqlite.cli-hint')}</div>
+        ${cliHtml}
+      </div>
+    ` : ''}
+  `;
+
+  // 복사 아이콘 위임.
+  el.querySelectorAll('[data-copy-text]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const txt = btn.getAttribute('data-copy-text') || '';
+      copyToClipboard(txt, t('ui.settings-view.proxy.copied'));
+    });
+  });
 }
 
 // =============================================================================
@@ -937,11 +1217,17 @@ async function renderProxySection() {
       <div class="settings-option-grid" role="radiogroup" aria-label="${t('ui.settings-view.proxy.shell-pick-title')}">
         ${shellCardsHtml}
       </div>
-      <!-- 메인 액션 강조 — [프록시 자동 등록] 클릭이 *실제 설치* 의 트리거임을 명확히. -->
-      <div class="settings-actions">
-        <button class="settings-action-btn settings-action-primary" id="proxyInstallBtn">${t('ui.settings-view.proxy.install')}</button>
-      </div>
-      <div class="settings-card-sub settings-action-help">${t('ui.settings-view.proxy.action-help')}</div>
+      <!-- 메인 액션 — [프록시 자동 등록] 클릭이 *실제 설치* 의 트리거.
+           healthState === 'ok' (이미 설치됨) 인 경우 버튼·도움말 모두 숨김. 상단 통합 배지가
+           이미 "✓ 설치됨" 을 알려주므로 중복 액션을 노출하지 않는다. 다른 셸에 추가 등록하려면
+           위의 셸 카드를 선택 → status 가 미설치로 갱신되면 버튼이 다시 노출됨. -->
+      ${healthState === 'ok' ? '' : `
+        <div class="settings-actions">
+          <button class="settings-action-btn settings-action-primary" id="proxyInstallBtn">${t('ui.settings-view.proxy.install')}</button>
+        </div>
+        <div class="settings-card-sub settings-action-help">${t('ui.settings-view.proxy.action-help')}</div>
+      `}
+      <!-- result 영역은 설치/복구 직후 0.6s 동안 결과 메시지를 표시하는 임시 슬롯 — 항상 렌더. -->
       <div class="settings-result" id="proxyResult"></div>
     </div>
 
