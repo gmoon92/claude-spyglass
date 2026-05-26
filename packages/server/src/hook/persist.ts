@@ -286,24 +286,66 @@ export function saveRequest(
  *   ⇒ Agent → Skill → Tool 깊이 2~3 트리가 정확히 구성되어
  *     metrics/calculators/anomaly.ts 의 WITH RECURSIVE(깊이 3) 가 작동.
  * - source='subagent-transcript', event_type='tool'
- * - 중복 방지: 동일 tool_use_id가 이미 존재하면 skip (재실행 안전성)
+ * - 중복 방지: 동일 tool_use_id가 이미 존재하면 *NULL parent 백필 후* skip.
+ *
+ * Race 방어 (2026-05-26 사용자 명세, 작업 A):
+ *   Claude Code 는 서브에이전트 *내부* 의 도구 호출도 메인 세션 PreToolUse/PostToolUse hook
+ *   으로 발사한다 (source='claude-code-hook'). 그 hook payload 에는 agent_id/agent_type
+ *   라벨만 있고 parent_tool_use_id 는 *없다* — 그래서 메인 hook 경로로 들어온 행은
+ *   parent_tool_use_id=NULL 상태로 SQLite 에 적재된다.
+ *
+ *   나중에 Agent('pm') PostToolUse 시점에 본 함수가 transcript 파싱 결과로 같은 child
+ *   를 다시 INSERT 하려 하지만 *이미 존재* 하므로 단순 skip 하면 parent NULL 이 영원히
+ *   잔존 → 그래프 PARENT_OF 엣지 미생성 → flow chart 의 ancestor 단절.
+ *
+ *   해결: exists 체크 시 *parent_tool_use_id 가 NULL/empty* 이고 우리에게 resolved 가
+ *   있으면 UPDATE 로 채워준다. UPDATE 직후 kuzu_outbox 에 op='update' row 를 직접 발행
+ *   해 그래프 sync 워커가 재동기. (Migration 051 트리거는 event_type 변경에만 발동하므로
+ *   parent_tool_use_id 만 채우는 UPDATE 는 본 함수가 명시적으로 outbox INSERT 한다.)
  *
  * 호출 시점: handlers/post-tool-use.handler.ts의 PostToolUse + tool_name='Agent' 처리 끝 직후.
  *
- * @returns 실제로 INSERT된 행 수
+ * @returns { inserted, backfilled } — 신규 INSERT 수 + 기존 행 parent 백필 수
  */
 export function persistSubagentChildren(
   db: Database,
   children: SubagentChildToolCall[],
   context: { parentToolUseId: string; sessionId: string; turnId?: string },
-): number {
+): { inserted: number; backfilled: number } {
   let inserted = 0;
+  let backfilled = 0;
   for (const child of children) {
-    // 이미 동일 tool_use_id가 존재하면 skip (재실행 안전성)
-    const exists = db.query(
-      'SELECT 1 FROM requests WHERE tool_use_id = ? LIMIT 1',
-    ).get(child.toolUseId) as { 1: number } | null;
-    if (exists) continue;
+    // 직속 부모 우선, 없으면 Agent 폴백 (T-07 정책).
+    const resolvedParentToolUseId = child.parentToolUseId ?? context.parentToolUseId;
+
+    // 이미 동일 tool_use_id가 존재하면 — *NULL parent 만 백필* 후 skip.
+    const existing = db.query(
+      'SELECT id, parent_tool_use_id FROM requests WHERE tool_use_id = ? LIMIT 1',
+    ).get(child.toolUseId) as { id: string; parent_tool_use_id: string | null } | null;
+    if (existing) {
+      const existingParent = existing.parent_tool_use_id;
+      const isEmpty = !existingParent || existingParent === '';
+      if (isEmpty && resolvedParentToolUseId) {
+        try {
+          db.run(
+            'UPDATE requests SET parent_tool_use_id = ? WHERE id = ?',
+            [resolvedParentToolUseId, existing.id],
+          );
+          // 그래프 sync 가 PARENT_OF 엣지를 새로 만들도록 outbox 에 직접 발행.
+          //   Migration 051 트리거는 event_type 'pre_tool'→'tool' 전환만 capture 하므로
+          //   parent_tool_use_id 만 채우는 UPDATE 는 트리거가 발동 안 한다 — 명시적으로
+          //   본 위치에서 INSERT 한다. enrich 단계의 idempotent MERGE 가 중복 무해.
+          db.run(
+            "INSERT INTO kuzu_outbox(source, event_id, op) VALUES ('requests', ?, 'update')",
+            [existing.id],
+          );
+          backfilled++;
+        } catch (e) {
+          console.error('[Collect] Failed to backfill parent_tool_use_id:', e);
+        }
+      }
+      continue;
+    }
 
     const tokensTotal = child.tokensInput + child.tokensOutput;
     const toolDetail = extractToolDetail(child.toolName, child.toolInput);
@@ -311,11 +353,6 @@ export function persistSubagentChildren(
     // ADR-001 P1-E (polish): subagent 자식 도구도 부모 Agent 응답에서 발행된 tool_use_id를
     // 가지므로, proxy_tool_uses에서 정확한 api_request_id 조회 가능. 미스 시 NULL 유지.
     const childApiRequestId = resolveApiRequestId(db, child.toolUseId);
-
-    // anomaly-bloated-sys T-07: child.parentToolUseId 가 있으면 Skill/Task 직속 부모로 사용,
-    // 없으면 (Skill 이전 형제거나 일반 도구가 transcript 최상위에 등장한 경우) 부모 Agent로 폴백.
-    // 이 폴백 정책이 적용되어 WITH RECURSIVE 깊이 3 (Agent → Skill → Tool) 트리가 일관됨.
-    const resolvedParentToolUseId = child.parentToolUseId ?? context.parentToolUseId;
 
     try {
       createRequest(db, {
@@ -347,7 +384,7 @@ export function persistSubagentChildren(
       console.error('[Collect] Failed to insert subagent child:', e);
     }
   }
-  return inserted;
+  return { inserted, backfilled };
 }
 
 /**
