@@ -83,7 +83,7 @@ export {
 } from './client';
 
 export { SCHEMA_VERSION, NODE_TABLES, REL_TABLES } from './schema/ddl';
-export { applySchema, throwAwayAndRebuild } from './schema/apply';
+export { applySchema, SchemaMismatchError } from './schema/apply';
 
 // =============================================================================
 // Sync Worker — 200ms outbox 폴링
@@ -96,6 +96,12 @@ export {
   type SyncWorkerStatus,
 } from './sync/worker';
 
+// graph 캐시 wipe 시 cursor singleton 도 함께 초기화하기 위한 진입점.
+//   SyncCursor.load() 가 `loaded` flag 로 idempotent 라, 단순 worker restart 만으로는
+//   메모리의 옛 cursor 값을 못 떨군다 (디스크의 sync_state.json 만 사라져도 메모리는 유지).
+//   settings.ts::handleGraphResetCache 에서 stop 직후 resetSyncCursor() 호출 필요.
+export { resetSyncCursor, getSyncCursor } from './sync/cursor';
+
 // =============================================================================
 // Queries — 첫 hook (Flow BFS) + Sequential Flow + Kahn topological sort
 // =============================================================================
@@ -106,6 +112,9 @@ export {
   type FlowBfsResult,
 } from './queries/flow-bfs';
 
+// @deprecated migration-plan §F: `getSequentialFlow` 는 `getUnifiedFlow` 로 통합됨.
+// 새 라우트(`/api/graph/unified-flow`) 는 unified-flow 만 사용. sequential-flow 의 직접
+// 사용은 향후 cleanup PR 에서 제거 예정. 본 export 는 호환성을 위해 유지.
 export {
   getSequentialFlow,
   type SequentialFlowParams,
@@ -115,6 +124,18 @@ export {
   type MetaDocKind,
 } from './queries/sequential-flow';
 
+// Unified Flow — ego(좌→우 의존성) + sequential(위→아래 인과) 통합 단일 SoT.
+//   Phase B 에서 라우트가 본 모듈만 사용하도록 전환하고, 위 sequential export 는
+//   Phase F 정리에서 제거 예정.
+export {
+  getUnifiedFlow,
+  type UnifiedFlowParams,
+  type UnifiedFlowResult,
+  type UnifiedFlowNode,
+  type UnifiedFlowEdge,
+  type UnifiedFlowColumn,
+} from './queries/unified-flow';
+
 export {
   topologicalLayers,
   type TopologicalInput,
@@ -122,3 +143,9 @@ export {
   type SortableNode,
   type SortableEdge,
 } from './queries/topological-sort';
+
+// =============================================================================
+// Retention — RDB 와 동일 cutoff 로 타임스탬프 노드만 정리. 폴더 자체 삭제 경로 없음.
+// =============================================================================
+
+export { deleteOldGraphData } from './queries/retention';

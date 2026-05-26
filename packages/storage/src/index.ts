@@ -295,6 +295,8 @@ export {
 // Meta Document Catalog (v24 — Migration 024)
 // =============================================================================
 
+// migration-plan §B: SQLite ego BFS (`getMetaFlowEgo` + MetaFlowEgo* 타입) 는
+// `@spyglass/storage-graph` 의 `getUnifiedFlow` 로 대체됨. 카탈로그 + aggregate 만 유지.
 export {
   upsertMetaDocument,
   markMissingAsDeleted,
@@ -303,7 +305,6 @@ export {
   getMetaDocByFilePath,
   countMetaDocs,
   getMetaFlowAggregate,
-  getMetaFlowEgo,
   type MetaDocType,
   type MetaDocSource,
   type MetaDocumentRow,
@@ -312,12 +313,6 @@ export {
   type ListMetaDocsFilter,
   type MetaFlowAggregate,
   type MetaFlowFilter,
-  type MetaFlowEgo,
-  type MetaFlowEgoFilter,
-  type MetaFlowEgoCenterType,
-  type MetaFlowEgoNode,
-  type MetaFlowEgoNodeKind,
-  type MetaFlowEgoEdge,
 } from './queries/meta-document';
 
 // =============================================================================
@@ -329,3 +324,13 @@ export {
   getObservedMaxContextForModel,
   type ModelLimitRow,
 } from './queries/model-limits';
+
+// =============================================================================
+// Retention 정책 (SQLite + Graph 공통 SoT — packages/storage-graph 도 본 모듈 참조)
+// =============================================================================
+
+export {
+  DEFAULT_RETENTION_DAYS,
+  getRetentionDays,
+  getRetentionCutoffTs,
+} from './runtime/retention';
