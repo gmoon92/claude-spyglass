@@ -1,6 +1,7 @@
 /**
- * retention.test.ts — `deleteOldGraphDataOnClient` 가 4개 Cypher 를 cutoff 와 함께
- * 순서대로 호출하는지, 한 단계가 실패해도 나머지가 진행되는지 검증.
+ * retention.test.ts — `deleteOldGraphDataOnClient` 가 4개 DELETE Cypher 를 cutoff 와
+ * 함께 순서대로 호출한 뒤 CHECKPOINT 를 1회 호출하는지, 한 단계가 실패해도 나머지가
+ * 진행되는지 검증.
  *
  * mode/circuit 게이팅(`deleteOldGraphData`) 은 외부 singleton 의존이 커서 본 파일에서
  * 검증하지 않는다 — 본 테스트는 *순수 cleanup 로직* 만 격리해서 본다.
@@ -10,6 +11,7 @@ import { describe, test, expect } from 'bun:test';
 import {
   deleteOldGraphDataOnClient,
   RETENTION_DELETE_STEPS,
+  RETENTION_CHECKPOINT_CYPHER,
 } from '../queries/retention';
 
 interface CallRecord {
@@ -39,27 +41,29 @@ function makeStub(throwOnLabel?: string): {
 }
 
 describe('deleteOldGraphDataOnClient', () => {
-  test('정상 경로: 4개 Cypher 를 정의된 순서대로 cutoff 와 함께 호출', async () => {
+  test('정상 경로: 4개 DELETE + CHECKPOINT 정의된 순서대로 호출', async () => {
     const stub = makeStub();
     const cutoff = 1_700_000_000_000;
     await deleteOldGraphDataOnClient(stub as never, cutoff);
-    expect(stub.calls.length).toBe(4);
-    // 순서 — Event → ToolCall → Turn → Session.
+    expect(stub.calls.length).toBe(5);
+    // 순서 — Event → ToolCall → Turn → Session → CHECKPOINT.
     expect(stub.calls[0].cypher).toContain('(e:Event)');
     expect(stub.calls[1].cypher).toContain('(c:ToolCall)');
     expect(stub.calls[2].cypher).toContain('(t:Turn)');
     expect(stub.calls[3].cypher).toContain('(s:Session)');
-    // 모든 호출이 동일 cutoff 인자 사용.
-    for (const c of stub.calls) {
-      expect(c.params).toEqual({ cutoff });
+    expect(stub.calls[4].cypher).toBe(RETENTION_CHECKPOINT_CYPHER);
+    // DELETE 4개는 동일 cutoff 인자 사용, CHECKPOINT 는 빈 params.
+    for (let i = 0; i < 4; i += 1) {
+      expect(stub.calls[i].params).toEqual({ cutoff });
     }
+    expect(stub.calls[4].params).toEqual({});
   });
 
-  test('모든 단계가 DETACH DELETE 사용', async () => {
+  test('모든 DELETE 단계가 DETACH DELETE 사용', async () => {
     const stub = makeStub();
     await deleteOldGraphDataOnClient(stub as never, 0);
-    for (const c of stub.calls) {
-      expect(c.cypher).toContain('DETACH DELETE');
+    for (let i = 0; i < 4; i += 1) {
+      expect(stub.calls[i].cypher).toContain('DETACH DELETE');
     }
   });
 
@@ -71,17 +75,36 @@ describe('deleteOldGraphDataOnClient', () => {
     expect(all).not.toContain(':Agent');
   });
 
-  test('중간 단계 실패해도 다음 단계 진행 (부분 실패 흡수)', async () => {
+  test('중간 단계 실패해도 다음 단계 + CHECKPOINT 진행 (부분 실패 흡수)', async () => {
     const stub = makeStub('ToolCall');
     await deleteOldGraphDataOnClient(stub as never, 0);
-    // ToolCall 에서 throw 됐지만 Turn / Session 도 호출됨 = 총 4개 호출.
-    expect(stub.calls.length).toBe(4);
+    // ToolCall 에서 throw 됐지만 Turn / Session + CHECKPOINT 도 호출됨 = 총 5개 호출.
+    expect(stub.calls.length).toBe(5);
+    expect(stub.calls[4].cypher).toBe(RETENTION_CHECKPOINT_CYPHER);
+  });
+
+  test('CHECKPOINT 실패는 전체를 실패시키지 않음 (non-fatal)', async () => {
+    // CHECKPOINT 가 throw 해도 deleteOldGraphDataOnClient 는 정상 종료.
+    const calls: CallRecord[] = [];
+    const stub = {
+      calls,
+      query: async (cypher: string, params: Record<string, unknown>) => {
+        calls.push({ cypher, params });
+        if (cypher === RETENTION_CHECKPOINT_CYPHER) {
+          throw new Error('checkpoint failed');
+        }
+        return { rows: [] as [], durationMs: 0 as 0 };
+      },
+    };
+    await deleteOldGraphDataOnClient(stub as never, 0);
+    expect(calls.length).toBe(5);
   });
 
   test('cutoff=0 도 정상 처리 (호출자 책임 — 검증 없이 전달)', async () => {
     const stub = makeStub();
     await deleteOldGraphDataOnClient(stub as never, 0);
-    expect(stub.calls.every((c) => c.params.cutoff === 0)).toBe(true);
+    // DELETE 4개의 cutoff 만 검증 (CHECKPOINT 는 cutoff 비사용).
+    expect(stub.calls.slice(0, 4).every((c) => c.params.cutoff === 0)).toBe(true);
   });
 });
 
@@ -92,9 +115,14 @@ describe('RETENTION_DELETE_STEPS SoT', () => {
     expect(labels).toEqual(['Event', 'ToolCall', 'Turn', 'Session']);
   });
 
-  test('모든 단계가 $cutoff 파라미터를 참조', () => {
+  test('모든 DELETE 단계가 $cutoff 파라미터를 참조', () => {
     for (const step of RETENTION_DELETE_STEPS) {
       expect(step.cypher).toContain('$cutoff');
     }
+  });
+
+  test('CHECKPOINT 는 별도 상수 — $cutoff 비참조 (별도 분리 이유)', () => {
+    expect(RETENTION_CHECKPOINT_CYPHER).toBe('CHECKPOINT');
+    expect(RETENTION_CHECKPOINT_CYPHER).not.toContain('$cutoff');
   });
 });

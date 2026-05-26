@@ -6,15 +6,19 @@
  *   삭제한다. SQLite 의 retention 일수는 `@spyglass/storage` 의 `getRetentionCutoffTs()` 가
  *   SSoT 이며, 호출자(`server/runtime/maintenance.ts`)가 동일 cutoff 를 본 모듈로 전달.
  *
- * 정책 — 타임스탬프 노드만 삭제:
- *   - Event       (timestamp  < cutoff) → DETACH DELETE
- *   - ToolCall    (started_at < cutoff) → DETACH DELETE
- *   - Turn        (started_at < cutoff) → DETACH DELETE
- *   - Session     (started_at < cutoff) → DETACH DELETE
+ * 정책 — 타임스탬프 노드만 삭제 + 디스크 회수:
+ *   1) Event       (timestamp  < cutoff) → DETACH DELETE
+ *   2) ToolCall    (started_at < cutoff) → DETACH DELETE
+ *   3) Turn        (started_at < cutoff) → DETACH DELETE
+ *   4) Session     (started_at < cutoff) → DETACH DELETE
+ *   5) CHECKPOINT — WAL → main DB 머지로 삭제된 페이지 즉시 회수 (SQLite VACUUM 대응)
  *
  *   MetaDocument / Agent 노드는 *카탈로그성* 노드라 보존. USES/CALLED 엣지는 타임스탬프
  *   노드가 DETACH DELETE 될 때 자동으로 함께 제거된다 — dangling MetaDocument/Agent 는
  *   다음 sync tick 에서 자연스럽게 다시 USES 엣지를 얻을 수 있다.
+ *
+ *   컬럼 압축 (RLE / bit-packing / dictionary / delta) 은 Ladybug Database 생성자의
+ *   `enableCompression=true` 기본값으로 항상 활성 — 본 모듈에서 별도 처리 불필요.
  *
  * 안전성:
  *   - mode='off' / circuit OPEN / Ladybug 미설치 시 즉시 no-op 반환. 절대 throw 하지 않는다
@@ -37,6 +41,8 @@ import { getLadybugClient, LadybugUnavailableError, type LadybugClient } from '.
  *
  *   본 상수가 테스트에서 호출 인자 검증의 SoT — 테스트가 production query 와 한 글자라도
  *   어긋나지 않도록 양쪽이 같은 배열을 참조.
+ *
+ *   CHECKPOINT 는 별도 단계 — `$cutoff` 파라미터를 사용하지 않으므로 본 배열과 분리.
  */
 export const RETENTION_DELETE_STEPS: ReadonlyArray<{ label: string; cypher: string }> = [
   { label: 'Event',    cypher: `MATCH (e:Event)    WHERE e.timestamp  < $cutoff DETACH DELETE e` },
@@ -44,6 +50,14 @@ export const RETENTION_DELETE_STEPS: ReadonlyArray<{ label: string; cypher: stri
   { label: 'Turn',     cypher: `MATCH (t:Turn)     WHERE t.started_at < $cutoff DETACH DELETE t` },
   { label: 'Session',  cypher: `MATCH (s:Session)  WHERE s.started_at < $cutoff DETACH DELETE s` },
 ];
+
+/**
+ * DELETE 직후 WAL 을 main DB 로 머지해 삭제된 페이지를 즉시 회수. SQLite 의 `PRAGMA
+ * VACUUM` 과 대응. autoCheckpoint=true (Ladybug 기본값) 가 임계값에서 자동 실행해
+ * 주지만, retention 직후엔 대량 DELETE 가 발생하므로 명시적으로 한 번 더 트리거해
+ * 디스크 회수를 즉시화.
+ */
+export const RETENTION_CHECKPOINT_CYPHER = 'CHECKPOINT';
 
 /**
  * 주어진 LadybugClient 에 대해 4단계 DELETE Cypher 를 순차 실행. 본 함수는 *mode/circuit
@@ -62,6 +76,14 @@ export async function deleteOldGraphDataOnClient(
     } catch (err) {
       console.warn(`[graph-retention] ${label} cleanup failed (continuing): ${err}`);
     }
+  }
+
+  // 5단계 — CHECKPOINT. 실패해도 autoCheckpoint 가 다음 임계값에서 자동 실행하므로
+  // 흡수만 하고 진행 (non-fatal).
+  try {
+    await client.query(RETENTION_CHECKPOINT_CYPHER, {});
+  } catch (err) {
+    console.warn(`[graph-retention] CHECKPOINT failed (continuing): ${err}`);
   }
 }
 
