@@ -412,8 +412,13 @@ async function renderHooksSection() {
   });
 
   // ── 옵션 카드 2개 (Full / Minimal) ────────────────────────────────────
+  //   설정이 *정상 상태* (healthState==='ok') 면 프로필 선택 카드는 *숨김* — 사용자가
+  //   이미 한 번 설정을 끝낸 상태에서 다시 옵션을 흔들 동기가 없음. 변경이 필요한 경우는
+  //   warn/missing/broken 상태로 떨어진 뒤(또는 사용자가 .claude/settings.json 을 손본 뒤)
+  //   다시 노출. 엔지니어링 정보 카드는 항상 노출이므로 현재 상태 자체는 추적 가능.
+  const showProfilePicker = healthState !== 'ok';
   const profiles = ['full', 'minimal'];
-  const profileCardsHtml = profiles.map((p) => {
+  const profileCardsHtml = showProfilePicker ? profiles.map((p) => {
     const active = _selectedProfile === p ? ' is-active' : '';
     const label = t(`ui.settings-view.hooks.profiles.${p}.label`);
     const desc = t(`ui.settings-view.hooks.profiles.${p}.desc`);
@@ -431,7 +436,7 @@ async function renderHooksSection() {
         <span class="settings-option-card-desc">${escHtml(desc)}</span>
       </button>
     `;
-  }).join('');
+  }).join('') : '';
 
   // ── Engineering details (이벤트별 상태 + SPYGLASS_DIR + 파일 경로) ────
   const eventsHtml = hooks.events.map((ev) => {
@@ -469,6 +474,7 @@ async function renderHooksSection() {
       </div>
     </div>
 
+    ${showProfilePicker ? `
     <div class="settings-card">
       <div class="settings-card-title">${t('ui.settings-view.hooks.profile-title')}</div>
       <div class="settings-card-sub">${t('ui.settings-view.hooks.profile-sub')}</div>
@@ -480,7 +486,7 @@ async function renderHooksSection() {
         <button class="settings-action-btn settings-action-primary" id="hookApplyBtn">${t('ui.settings-view.hooks.apply')}</button>
       </div>
       <div class="settings-result" id="hookResult"></div>
-    </div>
+    </div>` : ''}
 
     ${engineeringHtml}
   `;
@@ -746,10 +752,32 @@ async function renderGraphSection() {
   // ── 진단 정보 카드 — 항상 노출 (사용자 요청 2026-05-26: 접기 폐지) ────
   //   회로 차단기, Sync Worker, 캐시 경로, source/configFile 등 *디버그성* 지표지만
   //   첫 사용자가 "왜 이 상태로 보이는지" 즉시 인지할 수 있도록 펼친 채 유지.
+  //   그래프 엔진 의존성(Ladybug) row 는 *엔지니어링 정보* 영역이라 구현체(Homebrew/npm/버전/경로) 노출 OK —
+  //   사용자 노출 카드에는 동일 정보를 노출하지 않는다 (buildLadybugCardHtml 주석 참조).
   const sourceLabelText = t(`ui.settings-view.graph.source.${source === 'file' ? 'saved' : source}`);
+  let ladybugRowHtml = '';
+  if (ladybug) {
+    const methodLabel = ladybug.method === 'brew' ? 'Homebrew'
+      : ladybug.method === 'npm' ? 'npm'
+      : ladybug.method || '—';
+    const versionText = ladybug.version ? ` v${ladybug.version}` : '';
+    const valueText = ladybug.installed
+      ? `${t('ui.settings-view.graph.ladybug.installed')} (${methodLabel}${versionText})`
+      : t('ui.settings-view.graph.ladybug.missing');
+    const tailHtml = ladybug.installed && ladybug.path
+      ? `<code class="settings-meta">${escHtml(ladybug.path)}</code>`
+      : '';
+    ladybugRowHtml = rowHtml(
+      t('ui.settings-view.graph.ladybug.engineering-label'),
+      ladybug.installed ? 'ok' : 'warn',
+      valueText,
+      tailHtml,
+    );
+  }
   const engineeringHtml = `
     <div class="settings-card">
       <div class="settings-card-title">${t('ui.settings-view.graph.engineering-title')}</div>
+      ${ladybugRowHtml}
       ${rowHtml(t('ui.settings-view.graph.circuit'),
          g.circuit?.state === 'CLOSED' ? 'ok' : 'warn',
          g.circuit?.state ?? '—',
@@ -813,56 +841,31 @@ async function renderGraphSection() {
 }
 
 /**
- * Ladybug 의존성 카드 마크업 — 설치 상태에 따라 분기.
+ * 그래프 엔진 의존성 카드 — *미설치일 때만* 노출하는 액션 카드.
  *
- *   - 설치됨: 체크 아이콘 + 방식(brew/npm) + 버전 + 경로
- *   - 미설치: 경고 아이콘 + 자동 설치 버튼 (brew 우선, npm 폴백)
- *   - 둘 다 미가용: 수동 설치 안내 (brew/npm 둘 다 PATH 에 없음)
+ *   - 설치됨: 본 카드는 *미노출*. 구현체(Homebrew/npm) / 버전 / 경로 같은 엔지니어링 정보는
+ *     하단 "시스템 엔지니어링 정보" 카드의 row 로 흡수 (renderGraphSection 의 engineeringHtml).
+ *     사용자 노출 카드 영역에는 *구현체 디테일을 노출하지 않는다* (비개발자 친화 — 2026-05-26).
+ *   - 미설치: 단일 "자동 설치" 버튼만 노출 (백엔드가 brew 우선 / npm 폴백을 알아서 선택 — strategy='auto').
+ *   - 패키지 매니저 둘 다 미가용: 안내 문구로 fallback.
  */
 function buildLadybugCardHtml(ladybug) {
   if (!ladybug) {
     // graph-db/status 응답 실패 시 카드 생략.
     return '';
   }
-  const installed = !!ladybug.installed;
-  const method = ladybug.method || 'none';
-  const version = ladybug.version || '';
-  const path = ladybug.path || '';
-
-  if (installed) {
-    const versionText = version ? ` v${version}` : '';
-    const methodLabel = method === 'brew' ? 'Homebrew' : method === 'npm' ? 'npm' : method;
-    return `
-      <div class="settings-card">
-        <div class="settings-card-title">${t('ui.settings-view.graph.ladybug.title')}</div>
-        ${rowHtml(
-          t('ui.settings-view.graph.ladybug.status-label'),
-          'ok',
-          `${t('ui.settings-view.graph.ladybug.installed')} (${methodLabel}${versionText})`,
-          path ? `<code class="settings-meta">${escHtml(path)}</code>` : '',
-        )}
-      </div>
-    `;
+  if (ladybug.installed) {
+    // 설치 완료 — 사용자 노출 카드는 미표시. 디테일은 엔지니어링 row 에서.
+    return '';
   }
 
-  // 미설치 — 자동 설치 옵션.
-  const brewAvail = !!ladybug.brewAvailable;
-  const npmAvail = !!ladybug.npmAvailable;
-
-  let actionsHtml = '';
-  if (brewAvail || npmAvail) {
-    const buttons = [];
-    if (brewAvail) {
-      buttons.push(`<button class="settings-action-btn" data-ladybug-install="brew">${t('ui.settings-view.graph.ladybug.install-brew')}</button>`);
-    }
-    if (npmAvail) {
-      const cls = brewAvail ? 'settings-action-btn settings-action-secondary' : 'settings-action-btn';
-      buttons.push(`<button class="${cls}" data-ladybug-install="npm">${t('ui.settings-view.graph.ladybug.install-npm')}</button>`);
-    }
-    actionsHtml = `<div class="settings-actions">${buttons.join('')}</div>`;
-  } else {
-    actionsHtml = `<div class="settings-card-sub">${t('ui.settings-view.graph.ladybug.no-package-manager')}</div>`;
-  }
+  // 미설치 — 자동 설치 (구현체 선택은 백엔드 strategy='auto' 가 결정).
+  const canInstall = !!ladybug.brewAvailable || !!ladybug.npmAvailable;
+  const actionsHtml = canInstall
+    ? `<div class="settings-actions">
+        <button class="settings-action-btn" data-ladybug-install="auto">${t('ui.settings-view.graph.ladybug.install')}</button>
+      </div>`
+    : `<div class="settings-card-sub">${t('ui.settings-view.graph.ladybug.no-package-manager')}</div>`;
 
   return `
     <div class="settings-card">
