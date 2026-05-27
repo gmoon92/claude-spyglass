@@ -97,6 +97,12 @@ export class MockLadybugClient {
     const started = Date.now();
     const text = cypher.replace(/\s+/g, ' ').trim();
 
+    // P5 — cohort meta timeline (unified-flow 의 신규 시퀀스 복원 쿼리).
+    if (this.isCohortTimelinePattern(text)) {
+      const rows = this.runCohortTimeline(text, params);
+      return { rows, durationMs: Date.now() - started };
+    }
+
     // V-5 self-loop count — 가장 구체적 패턴부터.
     if (this.isSelfLoopCountPattern(text)) {
       const rows = this.runSelfLoopCount(text, params);
@@ -226,6 +232,14 @@ export class MockLadybugClient {
   private isAllChainPattern(text: string): boolean {
     // V-3 — *0..N 로 center 자기 자신도 포함하여 모두 시간순 반환.
     return /-\[:PARENT_OF\*0\.\.\d+]->\(any/.test(text);
+  }
+
+  /** P5 — cohort meta timeline: (tc:ToolCall)-[:USES]->(md) WHERE tc.turn_id IN $turnIds. */
+  private isCohortTimelinePattern(text: string): boolean {
+    return (
+      /MATCH \(tc:ToolCall\)-\[:USES]->\(md:MetaDocument\)/.test(text) &&
+      /tc\.turn_id IN \$turnIds/.test(text)
+    );
   }
 
   /** unified-flow: (ancestor)-[:PARENT_OF*1..N]->(seed) 패턴 — chain 의 *target* 이 seedIds. */
@@ -510,6 +524,54 @@ export class MockLadybugClient {
       .sort((a, b) => a.started_at - b.started_at)
       .slice(0, limit)
       .map((r) => ({ ...r }));
+  }
+
+  /**
+   * P5 — cohort meta timeline.
+   * 주어진 turnIds 안에서 USES→MetaDocument 가 있는 ToolCall 만 started_at 순 반환.
+   */
+  private runCohortTimeline(
+    _text: string,
+    params: Record<string, unknown>,
+  ): Record<string, unknown>[] {
+    const turnIds = new Set(
+      (Array.isArray(params.turnIds) ? (params.turnIds as unknown[]) : []).map((t) => String(t)),
+    );
+    type RowOut = {
+      session_id: string;
+      turn_id: string;
+      tool_use_id: string;
+      started_at: number;
+      kind: string;
+      name: string;
+    };
+    const out: RowOut[] = [];
+    for (const n of this.nodes) {
+      if (n.label !== 'ToolCall') continue;
+      const turnId = String(n.props.turn_id ?? '');
+      if (!turnIds.has(turnId)) continue;
+      const tcId = String(n.props.tool_use_id);
+      const usesEdge = this.edges.find(
+        (e) => e.type === 'USES' && e.from_label === 'ToolCall' && e.from_key === tcId,
+      );
+      if (!usesEdge) continue; // USES 없는 generic 도구는 제외 (경로 압축).
+      const md = this.nodes.find(
+        (m) => m.label === 'MetaDocument' && String(m.props.id) === String(usesEdge.to_key),
+      );
+      if (!md) continue;
+      const mdKind = String(md.props.kind ?? '');
+      const mdName = String(md.props.name ?? '');
+      if (!mdKind || !mdName) continue;
+      out.push({
+        session_id: String(n.props.session_id ?? ''),
+        turn_id: turnId,
+        tool_use_id: tcId,
+        started_at: Number(n.props.started_at),
+        kind: mdKind,
+        name: mdName,
+      });
+    }
+    return out.sort((a, b) => a.started_at - b.started_at);
   }
 
   /** V-1 — depth=1 direct PARENT_OF child meta docs. */

@@ -428,7 +428,9 @@ function makeNodeFO(node) {
   if (node.type === 'center') card.classList.add('is-center');
   else card.classList.add('is-spoke');
   if (node.depth === 1) card.classList.add('is-hot');
-  else if (node.timeline === 'after' || node.depth === -1) card.classList.add('is-after');
+  // is-after(점선)는 timeline='after' 명시 노드에만. 코호트 타임라인 모델에서 depth 음수는
+  // center 직전(ancestor) 시퀀스를 뜻하므로 depth===-1 을 'after'로 오분류하지 않는다.
+  else if (node.timeline === 'after') card.classList.add('is-after');
   // center 가 아닌 노드는 클릭 가능 — 데이터에 표시 + 커서 변경 (CSS 가 .is-spoke 처리).
   if (node.type !== 'center') card.dataset.clickable = '1';
 

@@ -56,14 +56,6 @@ import { parseMcpToolName } from '../mcp-tool-name';
 /** centerTurns / totalTurns ≥ 0.4 → 'hot' pill 부착. */
 const HOT_PILL_THRESHOLD = 0.4;
 
-/** pct → strength 임계값 (이전 pctToStrength 정책 그대로). */
-function pctToStrength(pct: number): 'strong' | 'medium' | 'weak' | 'sparse' {
-  if (pct >= 0.5) return 'strong';
-  if (pct >= 0.2) return 'medium';
-  if (pct >= 0.05) return 'weak';
-  return 'sparse';
-}
-
 // =============================================================================
 // 라우터 본체
 // =============================================================================
@@ -307,8 +299,8 @@ async function enrichUnifiedFlow(
       : n,
   );
 
-  // ── 6) 엣지 재라우팅 + dedup + strength ──────────────────────────────────
-  const finalEdges = reroutedEdges(raw.edges, synth.memberToCardId, grouped.memberToGroupId, finalNodes);
+  // ── 6) 엣지 재라우팅 + dedup (strength 는 unified-flow 의 인접쌍 빈도 보존) ───
+  const finalEdges = reroutedEdges(raw.edges, synth.memberToCardId, grouped.memberToGroupId);
 
   return {
     nodes: finalNodes,
@@ -662,50 +654,45 @@ function applyMcpGrouping(
 }
 
 /**
- * 엣지 재라우팅 + dedup + strength.
- *   - raw 엣지의 source/target (ToolCall id) → (kind,name) 카드 id → (있다면) group id
+ * 엣지 재라우팅 + dedup. strength 는 unified-flow 가 부여한 *인접쌍 빈도* 를 보존한다
+ * ("X 다음 Y" 가 cohort turn 들에서 얼마나 자주 관찰됐는지). 노드 pct 로 재계산하지
+ * 않는다 — 그래야 시퀀스 빈도 의미가 소거되지 않는다.
+ *   - raw 엣지의 source/target ((kind,name) 카드 id) → (있다면) MCP group id 로 remap
  *   - source == target (self-loop) 제거
- *   - 동일 (source, target, type) 중복 제거
- *   - strength: target 카드의 pct 기반 (pctToStrength)
+ *   - 동일 (source, target, type) 중복 시 *더 강한* strength 유지 (MCP 그룹핑 병합 대비)
  */
 function reroutedEdges(
   rawEdges: UnifiedFlowEdge[],
   memberToCardId: Map<string, string>,
   memberToGroupId: Map<string, string>,
-  finalNodes: UnifiedFlowNode[],
 ): UnifiedFlowEdge[] {
-  const cardById = new Map(finalNodes.map((n) => [n.id, n]));
   const remap = (id: string): string => {
     const cardId = memberToCardId.get(id) ?? id;
     return memberToGroupId.get(cardId) ?? cardId;
   };
+  const rank: Record<string, number> = { sparse: 0, weak: 1, medium: 2, strong: 3 };
 
-  const seen = new Set<string>();
-  const out: UnifiedFlowEdge[] = [];
+  const seen = new Map<string, UnifiedFlowEdge>();
   for (const e of rawEdges) {
     const source = remap(e.source);
     const target = remap(e.target);
     if (source === target) continue;
     const key = `${source}->${target}::${e.type}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    // strength: target 카드 pct 기반. center → spoke 의 경우 spoke 의 pct 사용.
-    const targetCard = cardById.get(target);
-    const strength = e.type === 'AFTER'
-      ? 'sparse'
-      : pctToStrength(targetCard?.data.pct ?? 0);
-
-    out.push({
+    const strength = e.type === 'AFTER' ? 'sparse' : (e.strength ?? 'sparse');
+    const candidate: UnifiedFlowEdge = {
       id: `${source}->${target}`,
       source,
       target,
       type: e.type,
       strength,
       data: e.data,
-    });
+    };
+    const prev = seen.get(key);
+    if (!prev || rank[strength] > rank[prev.strength ?? 'sparse']) {
+      seen.set(key, candidate);
+    }
   }
-  return out;
+  return [...seen.values()];
 }
 
 // =============================================================================

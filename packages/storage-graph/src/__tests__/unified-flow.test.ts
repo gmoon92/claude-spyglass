@@ -119,18 +119,18 @@ describe('Unified Flow — Set A (/refactor 표준)', () => {
     expect(result.meta.seedCount).toBe(0);
   });
 
-  test('depth clamping — 입력 0/음수/8 모두 [1, 7] 안으로 정규화', async () => {
+  test('depth clamping — 입력 0/음수는 기본(30), 초과는 [1, 30] 안으로 정규화', async () => {
+    // depth 정책: 그래프 DB 이관 후 1~30 (Ladybug 가변 path 상한). 0/음수 → DEFAULT 30.
     const a = await getUnifiedFlow(client, {
       centerKind: 'command', centerName: '/refactor', depth: 0,
     });
-    expect(a.meta.depth).toBeGreaterThanOrEqual(1);
-    expect(a.meta.depth).toBeLessThanOrEqual(7);
+    expect(a.meta.depth).toBe(30);
 
     const b = await getUnifiedFlow(client, {
-      centerKind: 'command', centerName: '/refactor', depth: 8,
+      centerKind: 'command', centerName: '/refactor', depth: 99,
     });
     expect(b.meta.depth).toBeGreaterThanOrEqual(1);
-    expect(b.meta.depth).toBeLessThanOrEqual(7);
+    expect(b.meta.depth).toBeLessThanOrEqual(30);
   });
 
   test('center 카드 합성 — type=center, depth=0, layer 응답에 존재', async () => {

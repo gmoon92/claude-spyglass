@@ -26,3 +26,4 @@ export { MockLadybugClient, createMockClient } from './mock-client';
 export { seedSetA, META_DOC_IDS_A, TOOL_USE_IDS_A } from './set-a-refactor';
 export { seedSetB, META_DOC_IDS_B, TOOL_USE_IDS_B } from './set-b-deep-hierarchy';
 export { seedSetC, META_DOC_IDS_C, TOOL_USE_IDS_C } from './set-c-wide-breadth';
+export { seedSetD, seedSetDFrequency } from './set-d-sequential';
