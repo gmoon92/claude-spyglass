@@ -10,7 +10,7 @@
  * 의존성:
  *   - @spyglass/storage  — SQLite Database 인스턴스, 마이그레이션 시스템.
  *   - @spyglass/types    — 도메인 공유 타입.
- *   - @ladybugdb/core    — LadybugDB native binding (devDependency, lazy import).
+ *   - @ladybugdb/core    — LadybugDB native binding (dependency, 런타임 lazy import).
  *
  * 호출 흐름 (server 부팅 기준):
  *   1) server `runtime/lifecycle.ts`가 부팅 직후 `startGraphSyncWorker()` 호출.

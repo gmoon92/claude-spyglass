@@ -8,7 +8,7 @@
  *   전달.
  *
  * 의존성:
- *   - @ladybugdb/core           — devDependency, 본 모듈 안에서만 import.
+ *   - @ladybugdb/core           — dependency (런타임 lazy import), 본 모듈 안에서만 import.
  *   - schema/ddl, schema/apply  — 첫 connect 시 DDL 자동 적용.
  *   - runtime/paths             — 데이터 파일 위치.
  *   - runtime/circuit-breaker   — 실패 시 회로 보고.

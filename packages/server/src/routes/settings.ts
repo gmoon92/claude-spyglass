@@ -199,6 +199,7 @@ async function handleDiag(db: Database): Promise<Response> {
       method: 'none' as const,
       installed: false,
       version: null,
+      bunAvailable: false,
       brewAvailable: false,
       npmAvailable: false,
       error: err instanceof Error ? err.message : String(err),

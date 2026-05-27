@@ -24,15 +24,15 @@
  *     다음 chunk 와 합쳐 처리, 종료 시 잔여 부분 라인도 flush.
  */
 
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { resolve as resolvePath } from 'path';
 
 // =============================================================================
 // 타입
 // =============================================================================
 
-export type InstallStrategy = 'brew' | 'npm' | 'auto';
-export type InstallMethod = 'brew' | 'npm' | 'none';
+export type InstallStrategy = 'bun' | 'brew' | 'npm' | 'auto';
+export type InstallMethod = 'bun' | 'brew' | 'npm' | 'none';
 
 export interface LadybugInstallStatus {
   /** 현재 감지된 설치 방식. 'none' 이면 미설치. */
@@ -40,9 +40,11 @@ export interface LadybugInstallStatus {
   installed: boolean;
   /** 알려진 버전 문자열 (감지 가능 시). */
   version: string | null;
-  /** binary 경로 (brew 케이스) 또는 node_modules 경로 (npm 케이스). */
+  /** node_modules 경로 (모듈 감지 케이스). */
   path?: string;
-  /** brew 가 사용 가능한지 (자동 설치 UI 가 strategy 옵션 결정). */
+  /** bun 이 사용 가능한지 (자동 설치 UI 가 strategy 옵션 결정 — 레포 표준). */
+  bunAvailable: boolean;
+  /** brew 가 사용 가능한지. */
   brewAvailable: boolean;
   /** npm 이 사용 가능한지. */
   npmAvailable: boolean;
@@ -90,112 +92,54 @@ const LOG_MAX_BYTES = 8 * 1024;
 // =============================================================================
 
 /**
- * Ladybug 가 시스템에 설치돼 있는지 감지.
+ * Ladybug 가 설치돼 있는지 감지.
  *
- * 우선순위:
- *   1) brew (macOS/Linux 권장 경로) — `brew list ladybug` 로 확인.
- *   2) npm — `node -e require.resolve('@ladybugdb/core')` 로 확인.
- *   3) 둘 다 부재 → method='none'.
+ * SoT: 런타임(client.ts)은 `await import('@ladybugdb/core')` 로 **node_modules 의 JS 모듈만**
+ * 로드한다. 따라서 그래프가 동작 가능한지의 유일한 기준은 *그 모듈이 resolve 되는가* 이다.
+ * brew 포뮬러(`ladybug`) 설치 여부는 JS import 를 만족시키지 못하므로 `installed` 판정에서 제외.
+ * (과거 brew-first short-circuit 은 모듈이 없어도 installed=true 로 오보고 — false-green 버그.)
  *
- * brewAvailable / npmAvailable 은 *명령어 자체*가 PATH 에 있는지 — 자동 설치 UI 의
- * strategy 옵션 결정에 사용.
+ * bunAvailable / brewAvailable / npmAvailable 은 *명령어 자체*가 PATH 에 있는지 — 자동 설치
+ * UI 의 strategy 옵션 결정에 사용.
  */
 export async function detectLadybugInstall(): Promise<LadybugInstallStatus> {
-  const [brewAvailable, npmAvailable] = await Promise.all([
+  const [bunAvailable, brewAvailable, npmAvailable] = await Promise.all([
+    isCommandAvailable('bun'),
     isCommandAvailable('brew'),
     isCommandAvailable('npm'),
   ]);
 
-  // 1) brew 우선 — Spyglass 자체가 Homebrew Formula 로 배포되므로 brew 환경 가정.
-  if (brewAvailable) {
-    const brewInfo = await detectViaBrew();
-    if (brewInfo.installed) {
-      return { ...brewInfo, brewAvailable, npmAvailable };
-    }
-  }
-
-  // 2) npm — node_modules/@ladybugdb/core 존재 여부 + 버전 추출.
-  if (npmAvailable) {
-    const npmInfo = detectViaNpmModule();
-    if (npmInfo.installed) {
-      return { ...npmInfo, brewAvailable, npmAvailable };
-    }
+  // 유일한 진실: node_modules 의 @ladybugdb/core 모듈이 존재하는가.
+  const moduleInfo = detectViaNpmModule();
+  if (moduleInfo.installed) {
+    return { ...moduleInfo, bunAvailable, brewAvailable, npmAvailable };
   }
 
   return {
     method: 'none',
     installed: false,
     version: null,
+    bunAvailable,
     brewAvailable,
     npmAvailable,
   };
 }
 
 /**
- * `brew list --versions ladybug` 의 *출력*으로 실제 설치 여부 판단.
+ * `@ladybugdb/core` node_modules 모듈 존재 여부 + package.json 의 version 추출.
  *
- * 함정 회피: `brew --prefix <pkg>` 는 미설치 패키지에도 *가상의 경로*("$(brew --prefix)/opt/<pkg>")
- * 를 exit code 0 으로 반환한다. exit code 만 보고 installed=true 로 판단하면 false-positive.
- *
- * 정답: `brew list --versions ladybug` 의 stdout 이 *비어있지 않고* `ladybug ` 로 시작해야
- * 실제 설치된 상태.
+ * 이것이 설치 감지의 SoT — 런타임 `import('@ladybugdb/core')` 가 resolve 하는 위치와 동일하게
+ * node_modules 를 직접 본다. method 라벨은 레포 패키지매니저(bun.lock 유무)에 맞춰 표기.
+ * (availability 플래그는 호출 측 detectLadybugInstall 에서 덮어씀.)
  */
-async function detectViaBrew(): Promise<LadybugInstallStatus> {
-  const base: LadybugInstallStatus = {
-    method: 'none',
-    installed: false,
-    version: null,
-    brewAvailable: true,
-    npmAvailable: false,
-  };
-
-  try {
-    // 핵심 검증 — `brew list --versions ladybug` 출력에 "ladybug <version>" 이 있어야.
-    const versionResult = await spawnWithTimeout(
-      ['brew', 'list', '--versions', 'ladybug'],
-      SPAWN_PROBE_TIMEOUT_MS,
-    );
-    // 미설치 시 stdout 빈 문자열 (exit code 는 1 또는 0 둘 다 가능 — brew 버전 따라 다름).
-    const versionLine = versionResult.stdout.trim();
-    if (!versionLine.startsWith('ladybug')) {
-      return base;
-    }
-    const versionMatch = /ladybug\s+(\S+)/.exec(versionLine);
-    const version = versionMatch ? versionMatch[1] : null;
-
-    // 설치 경로 — `brew --prefix ladybug`. 위에서 installed 확정됐으므로 안전.
-    let path: string | undefined;
-    try {
-      const prefixResult = await spawnWithTimeout(
-        ['brew', '--prefix', 'ladybug'],
-        SPAWN_PROBE_TIMEOUT_MS,
-      );
-      if (prefixResult.exitCode === 0) {
-        path = prefixResult.stdout.trim() || undefined;
-      }
-    } catch { /* path 는 옵션 — 실패해도 installed 여부 영향 없음 */ }
-
-    return {
-      method: 'brew',
-      installed: true,
-      version,
-      path,
-      brewAvailable: true,
-      npmAvailable: false, // 호출 측에서 덮어씀
-    };
-  } catch (err) {
-    return { ...base, error: err instanceof Error ? err.message : String(err) };
-  }
-}
-
-/** `@ladybugdb/core` node_modules 경로 + package.json 의 version 필드 추출. */
 function detectViaNpmModule(): LadybugInstallStatus {
   const base: LadybugInstallStatus = {
     method: 'none',
     installed: false,
     version: null,
+    bunAvailable: false,
     brewAvailable: false,
-    npmAvailable: true,
+    npmAvailable: false,
   };
 
   // 가능한 monorepo 경로들 — workspace 의 어디든 hoist 될 수 있어 다 검사.
@@ -208,15 +152,14 @@ function detectViaNpmModule(): LadybugInstallStatus {
     const absPath = resolvePath(process.cwd(), rel);
     if (!existsSync(absPath)) continue;
     try {
-      const pkg = JSON.parse(Bun.file(absPath).text() as unknown as string);
+      const pkg = JSON.parse(readFileSync(absPath, 'utf8'));
       const version = typeof pkg?.version === 'string' ? pkg.version : null;
       return {
-        method: 'npm',
+        ...base,
+        method: hasBunLockfile() ? 'bun' : 'npm',
         installed: true,
         version,
         path: absPath.replace(/\/package\.json$/, ''),
-        brewAvailable: false, // 호출 측에서 덮어씀
-        npmAvailable: true,
       };
     } catch {
       // 파일이 존재하지만 JSON 파싱 실패 — 빈 폴더로 간주.
@@ -275,21 +218,44 @@ export async function installLadybugStreaming(
   }
 
   let chosen: InstallMethod;
-  if (strategy === 'brew') chosen = 'brew';
+  if (strategy === 'bun') chosen = 'bun';
+  else if (strategy === 'brew') chosen = 'brew';
   else if (strategy === 'npm') chosen = 'npm';
-  else chosen = existing.brewAvailable ? 'brew' : existing.npmAvailable ? 'npm' : 'none';
+  else {
+    // auto: 레포 표준 bun 우선 (bun.lock + bun 가용) → npm 폴백 → 최후에 brew.
+    if (existing.bunAvailable && hasBunLockfile()) chosen = 'bun';
+    else if (existing.npmAvailable) chosen = 'npm';
+    else if (existing.brewAvailable) chosen = 'brew';
+    else chosen = 'none';
+  }
 
   if (chosen === 'none') {
     const result: InstallResult = {
       status: 'failed',
       method: 'none',
       version: null,
-      log: 'No package manager available. Install Homebrew or Node.js/npm first.',
+      log: 'No package manager available. Install bun (https://bun.sh) or Node.js/npm first.',
       restartRequired: false,
       error: 'no-package-manager',
     };
     emit({ type: 'done', result });
     return result;
+  }
+
+  if (chosen === 'bun') {
+    if (!existing.bunAvailable) {
+      const result: InstallResult = {
+        status: 'failed',
+        method: 'bun',
+        version: null,
+        log: 'bun is not installed. See https://bun.sh',
+        restartRequired: false,
+        error: 'bun-not-available',
+      };
+      emit({ type: 'done', result });
+      return result;
+    }
+    return runBunInstallStreaming(emit);
   }
 
   if (chosen === 'brew') {
@@ -358,6 +324,45 @@ async function runBrewInstallStreaming(emit: InstallEmit): Promise<InstallResult
   const installResult: InstallResult = {
     status: 'installed',
     method: 'brew',
+    version: after.version,
+    log,
+    restartRequired: true,
+  };
+  emit({ type: 'done', result: installResult });
+  return installResult;
+}
+
+async function runBunInstallStreaming(emit: InstallEmit): Promise<InstallResult> {
+  // 정책: storage-graph 의 dependency 로 @ladybugdb/core 가 선언돼 있으므로
+  //   *모노레포 루트에서* `bun install` (인자 없이) 만 호출해 lockfile 기반 재설치.
+  //   레포 표준 패키지매니저(engines.bun) — auto-update(version.ts) 와 동일 경로.
+  const cwd = findMonorepoRoot();
+  const cmd = ['bun', 'install'];
+  emit({ type: 'start', cmd, cwd });
+  const result = await spawnStreaming(cmd, SPAWN_INSTALL_TIMEOUT_MS, cwd, emit);
+  const log = combineLog(result.stdout, result.stderr);
+
+  if (result.exitCode !== 0) {
+    const hints = analyzeNpmFailure(log, cwd);
+    const installResult: InstallResult = {
+      status: 'failed',
+      method: 'bun',
+      version: null,
+      log,
+      restartRequired: false,
+      error: result.timedOut
+        ? `bun install timed out after ${SPAWN_INSTALL_TIMEOUT_MS / 1000}s`
+        : `bun install exited ${result.exitCode}`,
+      hints,
+    };
+    emit({ type: 'done', result: installResult });
+    return installResult;
+  }
+
+  const after = await detectLadybugInstall();
+  const installResult: InstallResult = {
+    status: 'installed',
+    method: 'bun',
     version: after.version,
     log,
     restartRequired: true,
@@ -570,6 +575,12 @@ function combineLog(stdout: string, stderr: string): string {
   return combined.slice(combined.length - LOG_MAX_BYTES); // 마지막 부분이 더 의미 있음
 }
 
+/** 레포가 bun 으로 관리되는지 — monorepo 루트에 bun.lock(b) 존재 여부. */
+function hasBunLockfile(): boolean {
+  const root = findMonorepoRoot();
+  return existsSync(resolvePath(root, 'bun.lock')) || existsSync(resolvePath(root, 'bun.lockb'));
+}
+
 /** monorepo 루트 추정 — package.json 의 workspaces 필드가 있는 디렉토리 위로 탐색. */
 function findMonorepoRoot(): string {
   let cur = process.cwd();
@@ -577,7 +588,7 @@ function findMonorepoRoot(): string {
     const pkgPath = resolvePath(cur, 'package.json');
     if (existsSync(pkgPath)) {
       try {
-        const pkg = JSON.parse(Bun.file(pkgPath).text() as unknown as string);
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
         if (pkg?.workspaces) return cur;
       } catch { /* continue */ }
     }

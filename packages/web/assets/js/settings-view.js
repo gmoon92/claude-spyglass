@@ -757,7 +757,8 @@ async function renderGraphSection() {
   const sourceLabelText = t(`ui.settings-view.graph.source.${source === 'file' ? 'saved' : source}`);
   let ladybugRowHtml = '';
   if (ladybug) {
-    const methodLabel = ladybug.method === 'brew' ? 'Homebrew'
+    const methodLabel = ladybug.method === 'bun' ? 'Bun'
+      : ladybug.method === 'brew' ? 'Homebrew'
       : ladybug.method === 'npm' ? 'npm'
       : ladybug.method || '—';
     const versionText = ladybug.version ? ` v${ladybug.version}` : '';
