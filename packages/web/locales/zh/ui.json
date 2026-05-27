@@ -220,6 +220,7 @@
     "filter-orphan": "仅孤立项",
     "include-deleted-label": "显示已删除",
     "include-deleted-title": "包含有历史调用记录但已从磁盘删除的条目",
+    "search-placeholder": "按名称搜索",
     "card-used-title": "至少被调用过一次的 Behavior Definitions",
     "card-used-label": "已使用",
     "card-unused-title": "在目录中但从未被调用",

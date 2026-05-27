@@ -220,6 +220,7 @@
     "filter-orphan": "Orphan only",
     "include-deleted-label": "Show deleted",
     "include-deleted-title": "Include items with past invocations that no longer exist on disk",
+    "search-placeholder": "Search by name",
     "card-used-title": "Behavior Definitions invoked at least once",
     "card-used-label": "Used",
     "card-unused-title": "In catalog but never invoked",

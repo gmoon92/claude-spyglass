@@ -220,6 +220,7 @@
     "filter-orphan": "孤立のみ",
     "include-deleted-label": "削除済みも表示",
     "include-deleted-title": "過去の呼び出し履歴はあるがディスクから消えた項目も含めます",
+    "search-placeholder": "名前で検索",
     "card-used-title": "1回以上呼び出された Behavior Definitions",
     "card-used-label": "使用済",
     "card-unused-title": "カタログにあるが呼び出し0件",

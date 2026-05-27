@@ -169,7 +169,6 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  margin-left: auto;            /* 필터 바 우측 끝 정렬 */
   padding: var(--space-1) var(--space-2);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -226,6 +225,43 @@
 }
 .meta-docs-include-deleted:has(input:checked) .meta-docs-include-deleted-icon {
   color: var(--accent);
+}
+
+/* ── 이름 검색 인풋 ──────────────────────────────────────────────────────────
+   필터 바 우측 끝 (includeDeleted 토글 왼쪽)에 배치.
+   타입/표시 버튼 그룹과 시각 톤을 맞추되 입력 필드임을 구분하기 위해 약간 넓게. */
+.meta-docs-search-wrap {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;            /* 필터 바 우측 밀어내기 */
+}
+.meta-docs-search-input {
+  width: 160px;
+  height: 26px;
+  padding: 2px 8px;
+  background: var(--input-bg, var(--raised, #1e1e1e));
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--text-1, #e8e8e8);
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color var(--dur-fast, 80ms), width var(--dur-fast, 80ms);
+  /* search 타입 기본 × 버튼 제거 */
+  -webkit-appearance: none;
+  appearance: none;
+}
+.meta-docs-search-input::-webkit-search-cancel-button,
+.meta-docs-search-input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.meta-docs-search-input::placeholder {
+  color: var(--text-3, #a0a0a0);
+}
+.meta-docs-search-input:focus {
+  border-color: var(--accent, #5a8dee);
+  width: 220px;
 }
 
 /* 우측 패널 동기화 힌트(cwd N개 동기화) — 'N 항목' summary 삭제로 단독 행이 됨.

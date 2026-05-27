@@ -533,6 +533,8 @@ export async function loadMetaDocsLibrary() {
     );
     // ADR-003: 좌측 요약 카드(사용/미사용/orphan) 동기 갱신
     renderLeftSummaryCards(computeRowCounts(sorted));
+    // 검색어가 남아있으면 새 DOM에 즉시 재적용 (타입/표시 필터 변경 후에도 유지).
+    applySearchFilter(container);
 
     // meta-docs-flow ego-graph (2026-05-21 rev): 상단 흐름 영역 자동 로드.
     //   사용자가 명시 요청한 동선 — "흐름 영역의 시각화 정보는 메타 문서 최종 많이 처음 노출된 행에 대한 정보를 노출".
@@ -848,11 +850,23 @@ function renderFilters() {
   `;
 
   // 정렬 컨트롤은 더 이상 상단 필터 바에 두지 않는다 — 표 헤더 클릭으로 일원화.
+  const searchHtml = `
+    <div class="meta-docs-search-wrap">
+      <input type="search"
+             class="meta-docs-search-input"
+             data-meta-search
+             placeholder="${t('ui.meta-docs-view.search-placeholder')}"
+             value="${escHtml(state.searchTerm)}"
+             aria-label="${t('ui.meta-docs-view.search-placeholder')}" />
+    </div>
+  `;
+
   return `
     <div class="meta-docs-filters">
       <div class="meta-docs-filter-group"><span class="meta-docs-filter-label">${t('ui.meta-docs-view.filter-type-label')}</span>${btn('type', types, state.type)}</div>
       <div class="meta-docs-filter-group"><span class="meta-docs-filter-label">${t('ui.meta-docs-view.filter-display-label')}</span>${btn('display', displays, state.display)}</div>
       ${includeDeletedHtml}
+      ${searchHtml}
     </div>
   `;
 }
@@ -875,6 +889,8 @@ function bindEvents(container) {
   //   - click  : 라디오/정렬/스코프/동기화 등 "값 선택" 액션
   //   - change : 체크박스 토글 등 "boolean 상태 전환" 액션
   container.addEventListener('change', onMetaContainerChange);
+  // input 이벤트 — 검색어 즉시 반영 (re-fetch 없이 DOM 행 hide/show).
+  container.addEventListener('input', onMetaContainerInput);
 }
 
 /**
@@ -941,6 +957,30 @@ function setActiveFlowRow(rowEl) {
     r.removeAttribute('data-flow-active');
   }
   rowEl.setAttribute('data-flow-active', '1');
+}
+
+/**
+ * input 이벤트 핸들러 — 검색어 즉시 반영.
+ * re-fetch 없이 DOM 행의 hidden 속성 토글로 처리 — 로컬 필터라 즉각 반응.
+ */
+function onMetaContainerInput(e) {
+  const searchInput = e.target.closest('[data-meta-search]');
+  if (!searchInput) return;
+  state.searchTerm = searchInput.value;
+  applySearchFilter(e.currentTarget);
+}
+
+/**
+ * 이름 검색 필터 DOM 적용 — state.searchTerm 기준으로 행 hidden 토글.
+ * loadMetaDocsLibrary 렌더 직후와 input 이벤트 양쪽에서 호출하여 항상 동기 상태를 유지.
+ */
+function applySearchFilter(container) {
+  const term = state.searchTerm.trim().toLowerCase();
+  const rows = container.querySelectorAll('.meta-doc-row[data-name]');
+  rows.forEach(row => {
+    const name = (row.dataset.name || '').toLowerCase();
+    row.hidden = term.length > 0 && !name.includes(term);
+  });
 }
 
 /**

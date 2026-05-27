@@ -220,6 +220,7 @@
     "filter-orphan": "호출만존재",
     "include-deleted-label": "삭제된 정의도 표시",
     "include-deleted-title": "과거 호출 이력은 있으나 디스크에서 사라진 항목까지 포함합니다",
+    "search-placeholder": "이름 검색",
     "card-used-title": "호출이 1회 이상 발생한 메타 문서",
     "card-used-label": "사용",
     "card-unused-title": "카탈로그엔 있으나 호출 0건",
