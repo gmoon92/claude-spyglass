@@ -220,8 +220,16 @@ export async function getUnifiedFlow(
   }
 
   // ── 4) Kahn 위상 정렬 ─────────────────────────────────────────────────────
+  // layering 입력은 *DAG 스냅샷* 이어야 한다. 코호트 집계는 여러 turn 의 인접쌍을 합치므로
+  // pm→Explore 와 Explore→pm 같은 양방향 엣지(cycle)가 필연적으로 생기고, cycle 이 하나라도
+  // 있으면 topologicalLayers 가 cycle 노드 전부를 단일 layer 로 덤프 → depth 0 한 열 수직 밀집.
+  //
+  // 해법: layering *계산용* 엣지를 노드 started_at 기준으로 방향 통일(이른 쪽→늦은 쪽,
+  // 동시각은 id tie-break)하고 중복 제거한다. started_at 이 strict total order 이므로
+  // cycle 이 수학적으로 차단되고, Kahn 의 longest-path layer 분산이 시간/인과 깊이대로
+  // 좌→우로 펼쳐진다. 렌더링 엣지(화살표)는 built.edges 원본을 그대로 쓰므로 의미 불변.
   const sortNodes: SortableNode[] = [...built.nodes.values()].map((n) => ({ id: n.id, started_at: n.started_at }));
-  const sortEdges: SortableEdge[] = [...built.edges.values()].map((e) => ({ from: e.from, to: e.to }));
+  const sortEdges: SortableEdge[] = buildAcyclicLayeringEdges([...built.edges.values()], built.nodes);
   const layered = topologicalLayers({ nodes: sortNodes, edges: sortEdges });
 
   return assembleResult({ params, depth, built, layered, seedCount: seeds.length, durationMs: Date.now() - started });
@@ -441,6 +449,76 @@ function buildAggregatedTimeline(
   }
 
   return { nodes, edges, seedTurnCount };
+}
+
+/**
+ * layering 전용 DAG 엣지 생성 — 렌더링 엣지(built.edges)와 분리된 *계산용* 스냅샷.
+ *
+ * **원본 엣지 방향을 보존**한 채 cycle 만 최소로 끊는다(DFS back-edge 제거). 절대 시각으로
+ * 방향을 통일하면 안 되는 이유: center 의 집계 started_at 은 시드의 *최소*(가장 이른 호출)라
+ * 거의 전역 최소가 되고, 그러면 commit→push→center 같은 ancestor 체인까지 "center 이후"로
+ * 뒤집혀 ancestor(좌측 음수 depth)가 사라진다. 인과 방향(turn 내 인접 순서)은 집계 엣지가
+ * 이미 담고 있으므로 그것을 신뢰하고, 진짜 cycle(양방향 back-reference)만 제거한다.
+ *
+ * 알고리즘: 노드를 (started_at, id) 순으로 DFS. 현재 재귀 스택(GRAY)에 있는 노드로 향하는
+ * 엣지(back-edge)만 드롭하고 나머지(tree/forward/cross)는 원본 방향 그대로 유지 → DAG 보장.
+ * 정렬 기반이라 결과 결정성 100%.
+ *
+ * @param edges  집계 엣지 (양방향/중복 가능).
+ * @param nodes  노드 맵 (결정적 정렬용 started_at 조회).
+ * @returns      원본 방향 보존·back-edge 제거된 acyclic SortableEdge 배열.
+ */
+function buildAcyclicLayeringEdges(
+  edges: AggEdge[],
+  nodes: Map<string, AggNode>,
+): SortableEdge[] {
+  const rank = (id: string): number => nodes.get(id)?.started_at ?? 0;
+
+  // 인접 리스트 (원본 방향). 결정성 위해 started_at→id 로 정렬.
+  const adj = new Map<string, string[]>();
+  for (const id of nodes.keys()) adj.set(id, []);
+  const dedup = new Set<string>();
+  for (const e of edges) {
+    if (e.from === e.to) continue;
+    if (!adj.has(e.from) || !adj.has(e.to)) continue;
+    const key = `${e.from}->${e.to}`;
+    if (dedup.has(key)) continue;
+    dedup.add(key);
+    adj.get(e.from)!.push(e.to);
+  }
+  const cmp = (a: string, b: string): number => (rank(a) !== rank(b) ? rank(a) - rank(b) : a.localeCompare(b));
+  for (const list of adj.values()) list.sort(cmp);
+  const startOrder = [...adj.keys()].sort(cmp);
+
+  const WHITE = 0, GRAY = 1, BLACK = 2;
+  const color = new Map<string, number>();
+  for (const id of adj.keys()) color.set(id, WHITE);
+
+  const kept: SortableEdge[] = [];
+  for (const root of startOrder) {
+    if (color.get(root) !== WHITE) continue;
+    // 명시 스택 DFS (깊은 체인에서 재귀 한계 회피).
+    const stack: Array<{ id: string; i: number }> = [{ id: root, i: 0 }];
+    color.set(root, GRAY);
+    while (stack.length > 0) {
+      const top = stack[stack.length - 1];
+      const neighbors = adj.get(top.id)!;
+      if (top.i < neighbors.length) {
+        const to = neighbors[top.i++];
+        const c = color.get(to);
+        if (c === GRAY) continue; // back-edge → cycle 유발 → 드롭.
+        kept.push({ from: top.id, to });
+        if (c === WHITE) {
+          color.set(to, GRAY);
+          stack.push({ id: to, i: 0 });
+        }
+      } else {
+        color.set(top.id, BLACK);
+        stack.pop();
+      }
+    }
+  }
+  return kept;
 }
 
 // =============================================================================
