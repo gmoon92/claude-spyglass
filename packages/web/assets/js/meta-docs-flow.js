@@ -35,6 +35,7 @@
 import { escHtml } from './formatters.js';
 // bindNodeClick 제거로 focusOnNodeBox 호출 지점도 사라짐 — import 제거.
 //   재중심·카메라 이동 트리거 부활 시 본 import 복원.
+import { computeFitView, animateToView } from './meta-docs-flow-camera.js';
 import { bindHighlight, clearHighlight } from './meta-docs-flow-highlight.js';
 
 // =============================================================================
@@ -84,8 +85,8 @@ const LAYOUT = {
   /** 노드 카드 폭/높이. */
   nodeW: 180,
   nodeH: 56,
-  /** 같은 layer 안 노드 간 수평 간격. */
-  colGap: 40,
+  /** 컬럼(시간/인과 깊이) 간 수평 간격 — 횡형 DAG 가 가로로 시원하게 뻗도록 넉넉히. */
+  colGap: 100,
   /** 좌측 여백. */
   leftPad: 80,
   /** 상단 여백. */
@@ -223,15 +224,21 @@ export async function loadFlow(args) {
     }
     cursorX += colMaxW + LAYOUT.colGap;
   }
-  // viewBox 확장.
+  // viewBox 확장 — 콘텐츠 경계 폴백(컨테이너 픽셀 측정 불가 시 사용).
   const expandedW = Math.max(_seqView.w, cursorX + LAYOUT.leftPad);
   const expandedH = Math.max(_seqView.h, totalMaxBottom + LAYOUT.topPad);
   _seqView.w = expandedW;
   _seqView.h = expandedH;
 
-  // viewBox baseline 보존 — Reset 시 복원용. resize 이후 시점에 캡쳐해야 정확.
-  _seqViewInitial = { ..._seqView };
   _initialPositions = _nodes.map((n) => ({ id: n.id, x: n.x, y: n.y }));
+
+  // 화면맞춤 — 콘텐츠 bbox 를 컨테이너 종횡비/스케일 한계에 맞춘 viewBox 로 시작.
+  //   세로로 긴 레이아웃에서 leftover 레터박스로 과도 축소되던 회귀를 제거한다.
+  //   measure 실패(숨김 패널 등) 시 위의 content-bounds 폴백을 그대로 유지.
+  const fit = computeFitView(svgEl, contentBBox());
+  if (fit) _seqView = fit;
+  // viewBox baseline 보존 — Reset 시 복원/줌 클램프 기준.
+  _seqViewInitial = { ..._seqView };
   svgEl.setAttribute('viewBox', viewBoxStr(_seqView));
 
   // 엣지 렌더 + 인덱싱 (bindDrag 의 refreshEdgesOf 가 사용). resize 후에 그려야
@@ -830,9 +837,9 @@ function bindToolbarButtons(container, svgEl) {
     }
     // 엣지 베지어 재계산.
     for (const e of _edges) refreshEdgePath(e);
-    // viewBox 초기 baseline 으로 복원.
-    _seqView = { ..._seqViewInitial };
-    applyViewBox(svgEl);
+    // 화면맞춤으로 부드럽게 복귀 — 컨테이너 리사이즈 반영 위해 재계산, 실패 시 baseline.
+    const fit = computeFitView(svgEl, contentBBox()) || { ..._seqViewInitial };
+    animateToView(svgEl, _seqView, fit, { durationMs: 600 });
   });
 }
 
@@ -1104,6 +1111,28 @@ function refreshEdgePath(edge) {
 
 function viewBoxStr(v) {
   return `${v.x} ${v.y} ${v.w} ${v.h}`;
+}
+
+/**
+ * 현재 _nodes 의 최종 x/y/w/h 로 콘텐츠 경계(SVG 좌표)를 계산.
+ *
+ * getBBox(foreignObject) 대신 노드 geometry 를 직접 합치는 이유:
+ *   노드 위치/크기는 레이아웃 단계에서 이미 정확히 확정(SSoT)되어 있고,
+ *   foreignObject 의 getBBox 는 브라우저별 편차가 있어 불안정하다.
+ *
+ * @returns {{x:number,y:number,width:number,height:number}|null} 노드 없으면 null.
+ */
+function contentBBox() {
+  if (!_nodes.length) return null;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const n of _nodes) {
+    if (n.x < minX) minX = n.x;
+    if (n.y < minY) minY = n.y;
+    if (n.x + n.w > maxX) maxX = n.x + n.w;
+    if (n.y + n.h > maxY) maxY = n.y + n.h;
+  }
+  if (!Number.isFinite(minX)) return null;
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }
 
 // findNodeAncestor: bindNodeClick 제거와 함께 호출 지점이 사라져 제거.

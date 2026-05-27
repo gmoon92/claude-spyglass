@@ -34,6 +34,17 @@ const MIN_DURATION_MS = 120; // 너무 짧으면 사용자가 인지 불가.
 const MAX_DURATION_MS = 1500; // 너무 길면 답답함.
 
 // =============================================================================
+// 화면맞춤(zoom-to-fit) 정책 SSoT
+// =============================================================================
+
+/** 콘텐츠가 뷰포트에서 차지할 목표 비율 — 사방 여백 확보용 (0.8 = 80%). */
+const FIT_PADDING_RATIO = 0.8;
+/** 노드가 많아도 형태 인지 가능한 하한. */
+const FIT_MIN_SCALE = 0.25;
+/** 노드가 1~2개일 때 카드가 화면을 찢지 않도록 상한. */
+const FIT_MAX_SCALE = 1.2;
+
+// =============================================================================
 // 이징 함수 — cubic ease-in-out (06 §5.1 권고)
 // =============================================================================
 
@@ -120,6 +131,101 @@ export function focusOnNodeBox(svgEl, viewState, nodeBox, opts) {
   const cx = nodeBox.x + nodeBox.w / 2;
   const cy = nodeBox.y + nodeBox.h / 2;
   focusOnNode(svgEl, viewState, { ...(opts || {}), cx, cy });
+}
+
+/**
+ * 콘텐츠 bbox + 컨테이너 픽셀 크기로 화면맞춤(zoom-to-fit) viewBox 를 계산.
+ *
+ * viewBox 모델 적용 메모:
+ *   SVG 가 preserveAspectRatio="xMidYMid meet" 이므로 실제 렌더 scale = min(cW/vbW, cH/vbH).
+ *   transform/scale 그룹과 달리 scale 을 직접 set 할 수 없어, 역으로
+ *     vbW = cW / scale, vbH = cH / scale
+ *   로 두면 meet scale 이 정확히 우리가 고른 scale 이 되고, viewBox 종횡비가 컨테이너와
+ *   일치해 레터박스 여백이 사라진다(과도 축소·여백 낭비의 근본 원인 제거). 중심은 bbox 중심에 맞춘다.
+ *
+ * @param {SVGSVGElement} svgEl  SVG 루트 — getBoundingClientRect 로 컨테이너 픽셀 크기 측정.
+ * @param {{x:number,y:number,width:number,height:number}} bbox  콘텐츠의 SVG 좌표 경계.
+ * @param {object} [opts]
+ * @param {number} [opts.padRatio] 콘텐츠 목표 점유율 (기본 0.8).
+ * @param {number} [opts.minScale] scale 하한 (기본 0.25).
+ * @param {number} [opts.maxScale] scale 상한 (기본 1.2).
+ * @returns {{x:number,y:number,w:number,h:number}|null}
+ *   적용 가능한 viewBox. 컨테이너/콘텐츠 측정 불가(숨김 패널 등) 시 null — 호출자가 폴백.
+ */
+export function computeFitView(svgEl, bbox, opts) {
+  if (!svgEl || !bbox) return null;
+  if (!(bbox.width > 0) || !(bbox.height > 0)) return null;
+  const rect = svgEl.getBoundingClientRect();
+  const cW = rect.width;
+  const cH = rect.height;
+  if (!(cW > 0) || !(cH > 0)) return null;
+
+  const padRatio = opts?.padRatio ?? FIT_PADDING_RATIO;
+  const minScale = opts?.minScale ?? FIT_MIN_SCALE;
+  const maxScale = opts?.maxScale ?? FIT_MAX_SCALE;
+
+  // 가로/세로 중 더 빡빡한 쪽을 기준으로 fit, 그 뒤 scale 한계로 가둔다.
+  const scaleX = (cW * padRatio) / bbox.width;
+  const scaleY = (cH * padRatio) / bbox.height;
+  let scale = Math.min(scaleX, scaleY);
+  scale = Math.max(minScale, Math.min(maxScale, scale));
+
+  const vbW = cW / scale;
+  const vbH = cH / scale;
+  const cx = bbox.x + bbox.width / 2;
+  const cy = bbox.y + bbox.height / 2;
+  return { x: cx - vbW / 2, y: cy - vbH / 2, w: vbW, h: vbH };
+}
+
+/**
+ * viewState 를 target viewBox 로 전환 — 즉시 또는 ease-in-out 애니메이션.
+ *
+ * focusOnNode 와 동일한 rAF/이징을 쓰되, 절대 viewBox 를 직접 받는다(fit 결과 적용용).
+ *
+ * @param {SVGSVGElement} svgEl
+ * @param {{x:number,y:number,w:number,h:number}} viewState  *in-place* 갱신.
+ * @param {{x:number,y:number,w:number,h:number}} target
+ * @param {object} [opts]
+ * @param {boolean} [opts.immediate] true 면 트윈 없이 즉시 적용 (초기 로드용).
+ * @param {number} [opts.durationMs] 600ms 기본.
+ * @param {() => void} [opts.onDone]
+ */
+export function animateToView(svgEl, viewState, target, opts) {
+  if (!svgEl || !viewState || !target) return;
+  const { immediate = false, durationMs = DEFAULT_DURATION_MS, onDone = null } = opts || {};
+
+  if (immediate || durationMs <= 0) {
+    viewState.x = target.x;
+    viewState.y = target.y;
+    viewState.w = target.w;
+    viewState.h = target.h;
+    applyViewBox(svgEl, viewState);
+    if (typeof onDone === 'function') onDone();
+    return;
+  }
+
+  const dur = clamp(durationMs, MIN_DURATION_MS, MAX_DURATION_MS);
+  const fromX = viewState.x;
+  const fromY = viewState.y;
+  const fromW = viewState.w;
+  const fromH = viewState.h;
+
+  const t0 = performance.now();
+  function step(now) {
+    const t = Math.min(1, (now - t0) / dur);
+    const e = easeInOutCubic(t);
+    viewState.x = fromX + (target.x - fromX) * e;
+    viewState.y = fromY + (target.y - fromY) * e;
+    viewState.w = fromW + (target.w - fromW) * e;
+    viewState.h = fromH + (target.h - fromH) * e;
+    applyViewBox(svgEl, viewState);
+    if (t < 1) {
+      requestAnimationFrame(step);
+    } else if (typeof onDone === 'function') {
+      onDone();
+    }
+  }
+  requestAnimationFrame(step);
 }
 
 // =============================================================================
