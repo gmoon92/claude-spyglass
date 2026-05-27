@@ -19,12 +19,11 @@ export function getContextText(r) {
       try {
         const p  = typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
         const ti = p?.tool_input || {};
-        // Skill payload는 실측상 tool_input={skill:"<name>"} 단일 필드만 오는 경우가 잦아
-        // args 단독 폴백이면 빈 칸이 된다. 서버 tool-detail.ts:78-83이 보증하는
-        // r.tool_detail(= skill 이름)을 신뢰해 폴백한다.
+        // Skill은 args(실제 요청 내용)를 우선 노출 — TARGET 컬럼이 이미 skill 이름을 보여주므로
+        // MESSAGE에 이름을 반복하지 않는다. args 없을 때만 tool_detail(=skill 이름)으로 폴백.
         const text = r.tool_name === 'Agent'
           ? (ti.description || ti.prompt || r.tool_detail)
-          : (ti.skill || r.tool_detail || ti.args);
+          : (ti.args || r.tool_detail || ti.skill);
         return text || null;
       } catch {}
       return r.tool_detail || null;
@@ -65,8 +64,8 @@ function getDetailText(r) {
         return ti.prompt || ti.description || r.tool_detail || null;
       }
       if (r.tool_name === 'Skill') {
-        // preview(getContextText)와 동일 우선순위 — 서버 tool-detail.ts의 'skill 우선' SSoT에 정렬.
-        return ti.skill || r.tool_detail || ti.args || null;
+        // preview(getContextText)와 동일 우선순위 — args(실제 요청 내용) 우선, 없으면 skill 이름 폴백.
+        return ti.args || r.tool_detail || ti.skill || null;
       }
       if (r.tool_name === 'Bash') {
         return ti.command || r.tool_detail || null;
