@@ -33,6 +33,7 @@
  */
 
 import { escHtml } from './formatters.js';
+import { getDateRange } from './api.js';
 // bindNodeClick 제거로 focusOnNodeBox 호출 지점도 사라짐 — import 제거.
 //   재중심·카메라 이동 트리거 부활 시 본 import 복원.
 import { computeFitView, animateToView } from './meta-docs-flow-camera.js';
@@ -284,6 +285,12 @@ async function fetchUnifiedFlow(args) {
   params.set('center_kind', args.centerKind);
   params.set('center_name', args.centerName);
   if (typeof args.depth === 'number') params.set('depth', String(args.depth));
+  // 글로벌 active-range(api.js _activeRange)를 카탈로그(meta-docs-view.js)와 동일하게
+  //   흐름 API 에도 적용. getDateRange() 가 빈 객체({})면 '전체' 상태라 파라미터 미부착
+  //   → 서버는 전체 기간 폴백. 백엔드 handleUnifiedFlow 가 fromTs/toTs 를 seed 필터로 사용.
+  const dr = getDateRange();
+  if (dr.from !== undefined) params.set('fromTs', String(dr.from));
+  if (dr.to   !== undefined) params.set('toTs',   String(dr.to));
   const url = '/api/graph/unified-flow?' + params.toString();
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

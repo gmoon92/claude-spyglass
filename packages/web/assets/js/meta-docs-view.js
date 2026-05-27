@@ -39,7 +39,7 @@ import { setMetaDocsCounts } from './left-panel.js';
 import { loadProjectToolStats } from './tool-stats.js';
 // migration-plan §C: 통합 Flow 단일 모듈 — ego + sequential 토글 폐기.
 //   `#metaDocsFlowRegion` 영역에 unified flow (좌 ancestor + center + 우 descendant) 렌더.
-import { loadFlow } from './meta-docs-flow.js';
+import { loadFlow, reloadLast } from './meta-docs-flow.js';
 // meta-tabs-shared-date-filter (view-mode-reentry-filter-button-regression 2026-05-21):
 //   chart-actions의 #dateFilter element를 metaTabsDateRange 슬롯으로 DOM 이동시켜
 //   메타 모드에서도 노출. mountDateRangeDropdown은 main.js initDateFilter()가 1회 호출
@@ -259,6 +259,9 @@ function ensureMetaDocsRangeHandler() {
     // 'docs' 서브 탭에서만 카탈로그 fetch 의미가 있다. 'tools' 탭은 별도 모듈이 처리.
     if (getMetaSubTab() !== 'docs') return;
     loadMetaDocsLibrary();
+    // 흐름 차트도 동일 range 로 재렌더 — fetchUnifiedFlow 가 getDateRange() 를 읽으므로
+    //   마지막 center 인자(_lastArgs)로 재호출하면 새 fromTs/toTs 가 자동 반영된다.
+    reloadLast();
   });
 }
 
