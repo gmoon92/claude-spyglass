@@ -168,6 +168,40 @@ export function markMissingAsDeleted(
   return Number(result.changes ?? 0);
 }
 
+/**
+ * 특정 source_root 아래 모든 활성 항목을 즉시 soft-delete.
+ *
+ * markMissingAsDeleted는 last_seen_at < before 조건으로 "이번 스캔에 없는 것만" 지우지만,
+ * 이 함수는 source_root 디렉토리 자체가 사라진 경우처럼 "전체를 무조건 삭제"해야 할 때 사용.
+ * source 를 지정하지 않으면 해당 source_root를 가진 모든 source의 항목이 삭제된다.
+ *
+ * @returns 삭제된 행 수
+ */
+export function softDeleteBySourceRoot(
+  db: Database,
+  source_root: string,
+  source?: MetaDocSource,
+): number {
+  const now = Date.now();
+  if (source) {
+    const result = db.query(
+      `UPDATE meta_documents
+         SET deleted_at = ?
+       WHERE source_root = ?
+         AND source = ?
+         AND deleted_at IS NULL`,
+    ).run(now, source_root, source);
+    return Number(result.changes ?? 0);
+  }
+  const result = db.query(
+    `UPDATE meta_documents
+       SET deleted_at = ?
+     WHERE source_root = ?
+       AND deleted_at IS NULL`,
+  ).run(now, source_root);
+  return Number(result.changes ?? 0);
+}
+
 // =============================================================================
 // CRUD — 해소 매핑
 // =============================================================================

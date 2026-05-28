@@ -300,6 +300,7 @@ export {
 export {
   upsertMetaDocument,
   markMissingAsDeleted,
+  softDeleteBySourceRoot,
   replaceResolutionsForCwd,
   listMetaDocsWithUsage,
   getMetaDocByFilePath,

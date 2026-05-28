@@ -24,10 +24,12 @@
  * 의존성: storage 카탈로그 함수, scanner, resolver.
  */
 
+import { existsSync } from 'node:fs';
 import type { Database } from 'bun:sqlite';
 import {
   upsertMetaDocument,
   markMissingAsDeleted,
+  softDeleteBySourceRoot,
   replaceResolutionsForCwd,
   type MetaDocSource,
   type MetaDocType,
@@ -179,12 +181,52 @@ export function syncGlobalOnce(db: Database, options: { force?: boolean } = {}):
 }
 
 /**
+ * DB에 남아있는 source_root 중 디렉토리가 실제로 존재하지 않는 것을 soft-delete.
+ *
+ * 발생 원인:
+ *  - 프로젝트 디렉토리를 이동/삭제/이름 변경 후 새 경로로만 Claude Code를 실행하면
+ *    옛 경로 항목이 스캐너에 의해 갱신되지 않아 DB에 ghost로 남는다.
+ *  - ghost 항목은 basename이 실제 경로와 같아 프로젝트 매칭 시 잘못 선택될 수 있다.
+ *
+ * 처리 방식:
+ *  - active(deleted_at IS NULL)인 projectSettings 항목의 distinct source_root를 전수 검사.
+ *  - existsSync로 디렉토리 미존재 확인 후 softDeleteBySourceRoot 호출.
+ *
+ * @returns 삭제된 source_root 목록
+ */
+export function pruneDeadSourceRoots(db: Database): string[] {
+  const rows = db.query(
+    `SELECT DISTINCT source_root
+       FROM meta_documents
+      WHERE source = 'projectSettings'
+        AND source_root IS NOT NULL
+        AND deleted_at IS NULL`,
+  ).all() as Array<{ source_root: string }>;
+
+  const pruned: string[] = [];
+  for (const { source_root } of rows) {
+    if (!existsSync(source_root)) {
+      softDeleteBySourceRoot(db, source_root, 'projectSettings');
+      pruned.push(source_root);
+      console.log(`[meta-docs] pruned dead source_root: ${source_root}`);
+    }
+  }
+  return pruned;
+}
+
+/**
  * 데몬 부팅 시 호출되는 진입점.
+ *  - ghost source_root 정리 (pruneDeadSourceRoots) 먼저 실행.
  *  - 글로벌 1회 동기화.
  *  - (옵션) 추가 cwd들이 주어지면 best-effort로 syncCwd 호출 — 실패해도 부팅은 성공해야 함.
  *    부팅 시 알려진 cwd는 throttle 우회(force=true)로 즉시 동기화.
  */
 export function bootstrapSync(db: Database, options: { activeCwds?: string[] } = {}): void {
+  try {
+    pruneDeadSourceRoots(db);
+  } catch (e) {
+    console.error('[meta-docs] bootstrap prune dead source roots failed:', e);
+  }
   try {
     syncGlobalOnce(db, { force: true });
   } catch (e) {

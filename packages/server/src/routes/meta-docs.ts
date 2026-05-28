@@ -31,10 +31,22 @@
  * 의존성: storage 카탈로그 함수, meta-docs/synchronizer.
  */
 
+import { existsSync } from 'node:fs';
 import type { Database } from 'bun:sqlite';
 import { listMetaDocsWithUsage, type MetaDocType } from '@spyglass/storage';
 import { jsonResponse } from './_shared';
-import { syncCwd, syncGlobalOnce, syncAllKnownCwds } from '../meta-docs';
+import { syncCwd, syncGlobalOnce, syncAllKnownCwds, pruneDeadSourceRoots } from '../meta-docs';
+
+/** source_root 경로 존재 여부 캐시 — 같은 요청 안에서 반복 stat 호출 방지. */
+function buildSourceRootExistsCache(rows: { source_root?: string | null }[]): Map<string, boolean> {
+  const cache = new Map<string, boolean>();
+  for (const r of rows) {
+    const root = r.source_root;
+    if (!root || cache.has(root)) continue;
+    cache.set(root, existsSync(root));
+  }
+  return cache;
+}
 
 const ALLOWED_TYPES: MetaDocType[] = ['agent', 'skill', 'command'];
 
@@ -77,7 +89,16 @@ export async function metaDocsRouter(req: Request, db: Database): Promise<Respon
       projectParam && projectParam !== '' && projectParam !== 'null' ? projectParam : undefined;
 
     const data = listMetaDocsWithUsage(db, { type, source_root, includeDeleted, fromTs, toTs, project });
-    return jsonResponse({ success: true, data, meta: { total: data.length } });
+
+    // source_root_exists: 클라이언트가 ghost 경로와 실제 경로를 구분해
+    // 프로젝트 매칭 시 실제 존재하는 경로를 우선 선택할 수 있도록 제공.
+    const existsCache = buildSourceRootExistsCache(data);
+    const dataWithExists = data.map(r => ({
+      ...r,
+      source_root_exists: r.source_root != null ? (existsCache.get(r.source_root) ?? false) : null,
+    }));
+
+    return jsonResponse({ success: true, data: dataWithExists, meta: { total: dataWithExists.length } });
   }
 
   // POST /api/meta-docs/refresh
@@ -108,6 +129,10 @@ async function refreshHandler(req: Request, db: Database): Promise<Response> {
   const includeKnownCwds = body.includeKnownCwds === true;
 
   const result: Record<string, unknown> = {};
+
+  // refresh 시마다 ghost source_root 정리 — 이동/삭제된 프로젝트 경로가
+  // 프로젝트 매칭에서 우선 선택되는 문제를 해소.
+  result.prunedSourceRoots = pruneDeadSourceRoots(db);
 
   if (scope === 'global' || scope === 'all') {
     result.global = syncGlobalOnce(db, { force });

@@ -14,7 +14,7 @@
     "src"
   ],
   "dependencies": {
-    "@ladybugdb/core": "^0.16.1",
+    "@ladybugdb/core": "0.16.1",
     "@spyglass/storage": "workspace:*",
     "@spyglass/types": "workspace:*"
   },

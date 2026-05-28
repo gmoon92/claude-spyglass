@@ -22,6 +22,7 @@ export {
   syncGlobalOnce,
   bootstrapSync,
   syncAllKnownCwds,
+  pruneDeadSourceRoots,
   type SyncResult,
   type SyncAllKnownCwdsResult,
 } from './synchronizer';

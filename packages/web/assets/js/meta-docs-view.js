@@ -593,20 +593,47 @@ function pushLeftCounts(rows) {
 }
 
 /**
- * distinct source_root 중 basename이 project_name과 일치하는 첫 항목 반환.
- * 단일 책임 — 호출 측은 raw rows + project name만 전달.
+ * distinct source_root 중 basename이 project_name과 일치하는 항목 반환.
+ *
+ * 우선순위:
+ *  1) source_root_exists === true 인 항목 (실제 존재하는 경로)
+ *  2) source_root_exists가 없거나 null인 항목 (구버전 API 호환)
+ *  3) source_root_exists === false 인 항목 (ghost 경로 — 최후 수단)
+ *
+ * ghost 경로(프로젝트 이동/삭제 후 남은 DB 잔여 항목)가 실제 경로보다
+ * invocations가 높아 먼저 등장하더라도 실제 존재하는 경로를 선택하도록 보장.
  */
 function findSourceRootByProject(rows, projectName) {
   if (!rows || !projectName) return null;
-  const seen = new Set();
+
+  let fallbackUnknown = null; // source_root_exists 필드 없는 경우 (구버전 API)
+  let fallbackGhost = null;   // source_root_exists === false (ghost 경로)
+  const seenExists = new Set();
+  const seenAll = new Set();
+
   for (const r of rows) {
     const root = r?.source_root;
-    if (!root || seen.has(root)) continue;
-    seen.add(root);
+    if (!root || seenAll.has(root)) continue;
+    seenAll.add(root);
+
     const base = String(root).split('/').filter(Boolean).pop();
-    if (base === projectName) return root;
+    if (base !== projectName) continue;
+
+    const exists = r?.source_root_exists;
+    if (exists === true) {
+      // 존재하는 경로를 즉시 반환 (중복 있으면 첫 번째)
+      if (!seenExists.has(root)) {
+        seenExists.add(root);
+        return root;
+      }
+    } else if (exists == null && !fallbackUnknown) {
+      fallbackUnknown = root;
+    } else if (exists === false && !fallbackGhost) {
+      fallbackGhost = root;
+    }
   }
-  return null;
+
+  return fallbackUnknown ?? fallbackGhost ?? null;
 }
 
 // =============================================================================
