@@ -7,6 +7,7 @@
 * context inflation
 * runtime anomalies (spike · loop · slow)
 * session structure and tool activity
+* context flow graph (turn → tool → meta-document relationships)
 * API token usage, cost, and latency
 
 Unlike most Claude tooling focused on productivity, `claude-spyglass` focuses on visibility.
@@ -109,6 +110,14 @@ Proxy path (opt-in) — inspect:
 * tokens per second (TPS) and time to first token (TTFT)
 * system prompt content and hash
 
+### Context flow graph
+
+See how a session actually unfolds as a graph of relationships, not just a flat log.
+Turn → tool call → meta-document edges are streamed from SQLite into a local
+embedded Ladybug graph by a background sync worker, so the dashboard can show
+ancestor/descendant flows, hot paths, and which rules or agents a given tool
+call pulled in.
+
 ### Behavior definition catalog
 
 Understand which agents, skills, and commands are active in a session.
@@ -160,14 +169,21 @@ The hook script pushes raw payloads to the local server, which normalizes and st
 **Proxy path** (opt-in): When `ANTHROPIC_BASE_URL` is pointed at the local server,
 all API traffic is intercepted. This unlocks full request/response capture, TPS, and TTFT.
 
-Both paths write to the same local SQLite database and stream updates to clients via SSE.
+Both paths write to the same local SQLite database. Updates stream to clients via SSE
+(`GET /events`), and a background sync worker projects the data into the Ladybug graph.
 
 ```text
-── Hook Path ─────────────────────────────────────────
-Claude Code CLI  →  spyglass-collect.sh  →  /collect
-                                         →  /events
-── Proxy Path ────────────────────────────────────────
+── Hook Path (always on) ──────────────────────────────
+Claude Code CLI
+  →  spyglass-collect.sh
+        →  POST /collect   (UserPromptSubmit · Pre/PostToolUse)
+        →  POST /events    (SessionStart · Stop · SessionEnd · …)
+── Proxy Path (opt-in) ────────────────────────────────
 Claude Code CLI  →  Spyglass Server :9999/v1/*  →  Anthropic API
+── Storage & streaming ────────────────────────────────
+both paths  →  ~/.spyglass/spyglass.db (SQLite)
+            →  SSE  GET /events                (live dashboard push)
+            →  graph sync worker  →  Ladybug context-flow graph
 ```
 
 This enables:

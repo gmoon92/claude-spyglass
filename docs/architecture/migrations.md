@@ -4,13 +4,16 @@
 > 본 문서는 마이그레이션 시스템의 **단일 진실 소스(SSoT)** 이며, 신규 마이그레이션
 > 파일을 추가할 때 반드시 본 문서의 규칙을 따라야 한다.
 >
-> 관련 ADR — `.claude/docs/plans/auto-update-migration-hardening/adr.md`
+> 관련 문서: [database.md](database.md) · [api-http.md](api-http.md) · [data-flow.md](data-flow.md)
+>
+> 코드·테스트 주석에 등장하는 ADR 라벨 (설계 결정 앵커):
 > - ADR-001: `_migrations` 메타테이블 (히스토리·감사 SSoT)
-> - ADR-002: 마이그레이션 번호 999 한도
-> - ADR-003: 회귀 테스트 시나리오 1/2/3
+> - ADR-002: 마이그레이션 번호 999 한도 (`MIGRATION_VERSION_LIMIT`)
+> - ADR-003: 회귀 테스트 시나리오 1/2/3 (`migrator.test.ts`)
 > - ADR-004: `/api/update` 응답 `migrationsApplied`
 > - ADR-005: `/api/version` `dbUserVersion` + `latestMigrationFile`
 > - ADR-006: 부팅 panic 로그 fsync + lag 감지
+> - ADR-007: shallow clone 부팅 감지 (`isShallowRepository`)
 
 ---
 
@@ -22,20 +25,48 @@
 packages/storage/migrations/NNN-description.sql
 ```
 
-- `NNN`: 3자리 zero-padded 버전 번호 (`001`, `002`, …, `034`, `035`, ...)
+- `NNN`: 3자리 zero-padded 버전 번호 (`001`, `002`, …, `052`, `053`, ...)
 - `description`: kebab-case 짧은 설명 (`add-tool-detail`, `add-claude-events`)
 - 파일명에서 앞 3자리가 `PRAGMA user_version` 값에 1:1 매핑된다.
+- 디렉토리 번호에 gap이 있어도 (예: 040 다음 047) 동작에 영향 없음 — migrator는 정렬된
+  파일을 순차 적용하며 `version <= currentVersion`만 스킵한다.
 
 ### 적용 흐름 (`packages/storage/src/migrator.ts`)
 
 1. 서버 부팅 시 `runMigrations(db)` 호출
 2. 현재 `PRAGMA user_version` 조회
-3. `migrations/` 디렉토리 `.sql` 파일을 sort
+3. `migrations/` 디렉토리 `.sql` 파일을 파일명 기준 sort
 4. 각 파일에 대해:
-   - 파일명 앞 3자리에서 버전 파싱 — **999 초과 시 즉시 throw (ADR-002)**
+   - `parseMigrationVersion(file)`로 앞 숫자 prefix 파싱 — **4자리 이상이면 즉시 throw (ADR-002)**, 숫자 prefix 없으면 null 반환 후 스킵
    - 현재 버전 이하면 스킵
-   - **하나의 트랜잭션 안에서** DDL 실행 → `PRAGMA user_version = N` → `_migrations` INSERT
+   - **하나의 트랜잭션 안에서** 비-PRAGMA DDL/DML 실행 → `PRAGMA user_version = N` → (메타테이블 존재 시) `_migrations` INSERT OR REPLACE
+   - 파일에 명시된 `PRAGMA` statement는 트랜잭션 **밖**에서 별도 실행
 5. 모든 파일 처리 완료 후 `getLastMigrationRun()`이 `/api/update` 응답으로 회수됨
+
+```mermaid
+flowchart TD
+  boot["서버 부팅"] --> run["runMigrations(db)"]
+  run --> cur["PRAGMA user_version 조회"]
+  cur --> sort["migrations/ .sql 파일 sort"]
+  sort --> loop{"각 파일 순회"}
+  loop -->|"다음 파일"| parse["parseMigrationVersion(file)<br/>숫자 prefix → 버전"]
+  parse -->|"4자리+ prefix"| throw["throw (ADR-002)"]
+  parse -->|"null (숫자 prefix 없음)"| skip1["continue (스킵)"]
+  parse -->|"버전 반환"| vcheck{"version ≤ current?"}
+  vcheck -->|"예"| skip2["continue (스킵)"]
+  vcheck -->|"아니오"| tx["db.transaction()"]
+  skip1 --> loop
+  skip2 --> loop
+  tx --> ddl["비-PRAGMA statement 실행<br/>(duplicate column / already exists 가드)"]
+  ddl --> uv["PRAGMA user_version = N"]
+  uv --> meta{"version ≥ 35<br/>&& _migrations 존재?"}
+  meta -->|yes| ins["INSERT OR REPLACE _migrations"]
+  meta -->|no| pragma
+  ins --> pragma["트랜잭션 밖 PRAGMA 실행"]
+  pragma --> loop
+  loop -->|완료| result["getLastMigrationRun()<br/>→ /api/update 응답"]
+  ddl -->|"가드 외 에러"| panic["flushPanicLog + throw (fail-fast)"]
+```
 
 ### 적용 판단 — 듀얼 SSoT
 
@@ -92,7 +123,7 @@ INSERT INTO foo VALUES (1, 'bar');
 패턴으로 보일 듯 멱등하지만, 다음 조건에서 깨진다:
 
 - migrator가 user_version을 강제 후퇴시킨 상태에서 재실행 (테스트 환경)
-- 028이 정의한 PRIMARY KEY/UNIQUE 제약과 ON CONFLICT 절의 컬럼 조합 불일치
+- 027이 정의한 `UNIQUE(hour_ts, model, type)` 제약과 ON CONFLICT 절의 컬럼 조합 불일치
 
 **교훈**: ON CONFLICT 절의 컬럼은 반드시 해당 테이블의 **PRIMARY KEY 또는 UNIQUE 제약**과 일치해야 한다.
 신규 backfill 작성 시:
@@ -109,11 +140,12 @@ migrator는 각 파일을 다음 형태로 감싼다:
 
 ```typescript
 db.transaction(() => {
-  // 파일 내 모든 statement 실행
-  for (const stmt of stmts) db.prepare(stmt).run();
+  // 파일 내 비-PRAGMA statement 실행 (duplicate column / already exists 는 가드로 통과)
+  for (const stmt of nonPragmaStmts) db.prepare(stmt).run();
   db.prepare(`PRAGMA user_version = ${version}`).run();
-  // _migrations INSERT (v35 이후)
+  // version >= 35 && _migrations 존재 시 INSERT OR REPLACE
 })();
+// PRAGMA statement 는 트랜잭션 밖에서 별도 실행
 ```
 
 파일 내부에서 BEGIN을 호출하면 nested transaction이 되어 SQLite가 에러를 던지거나
@@ -150,11 +182,12 @@ try {
 
 ### 2.4 999 한도 (ADR-002)
 
-`packages/storage/src/migrator.ts`의 `file.slice(0, 3)` 컨벤션 — **001~999만 허용**.
+`packages/storage/src/migrator.ts`의 `parseMigrationVersion()` — 파일명 앞 숫자 prefix를
+`/^(\d+)/`로 떼낸 뒤 3자리로 자른다. `MIGRATION_VERSION_LIMIT = 999` — **001~999만 허용**.
 
 - `999-final.sql`까지 정상 동작
-- `1000-xxx.sql` 이상이면 `parseMigrationVersion()`이 명확한 에러로 throw
-- 999 도달 시점에 4자리 padding 확장을 별도 ADR로 결정 (yagni — 현재 35번)
+- 앞 숫자 prefix가 4자리 이상(`1000-xxx.sql` 등)이면 `parseMigrationVersion()`이 명확한 에러로 throw
+- 999 도달 시점에 4자리 padding 확장을 별도 ADR로 결정 (yagni — 현재 053번)
 
 ```typescript
 // ❌ 금지 — silent overflow 차단됨
@@ -172,18 +205,19 @@ try {
 ```bash
 # 1. 현재 최신 버전 확인
 ls packages/storage/migrations/ | tail -3
-# → 034-anomaly-backfill-columns.sql
-# → 035-add-migrations-meta-table.sql
+# → 051-kuzu-outbox-update-trigger.sql
+# → 052-backfill-subagent-parent-tool-use-id.sql
+# → 053-kuzu-outbox-trigger-hardening.sql
 
 # 2. 새 파일 생성 — 다음 번호 사용
-touch packages/storage/migrations/036-your-feature.sql
+touch packages/storage/migrations/054-your-feature.sql
 ```
 
 ### 3.2 SQL 작성 템플릿
 
 ```sql
 -- =============================================================================
--- 036 — <기능명> (관련 feature/ADR 참조)
+-- 054 — <기능명> (관련 feature/ADR 참조)
 -- =============================================================================
 -- 배경:
 --   <왜 이 마이그레이션이 필요한가>
@@ -194,8 +228,7 @@ touch packages/storage/migrations/036-your-feature.sql
 -- 트랜잭션:
 --   본 파일은 migrator.transaction() 안에서 실행됨 — 파일 내부 BEGIN/COMMIT 금지.
 --
--- @see <관련 코드 파일>
--- @see <관련 ADR 또는 plan.md>
+-- @see <관련 코드 파일 — 예: packages/storage/src/queries/...ts>
 -- =============================================================================
 
 -- 멱등 DDL 예시
@@ -227,9 +260,9 @@ INSERT OR IGNORE INTO foo (id, name) VALUES (1, 'default');
 마이그레이션을 추가했다면 다음을 확인:
 
 - [ ] `bun test packages/storage/src/__tests__/migrator.test.ts` 통과
-- [ ] 시나리오 1 (빈 DB → max 일괄): 새 파일도 자동 적용
-- [ ] 시나리오 2 (no-op 멱등): 재실행 시 0건 적용
-- [ ] 시나리오 3 (PRAGMA 후퇴 복구): 중간 단계에서 강제 후퇴 후 재실행 안전
+- [ ] 시나리오 1 (빈 DB → max 일괄 점프): 새 파일도 자동 적용, `_migrations` 행 수 = legacy + 적용된 v35+ 파일 수
+- [ ] 시나리오 2 (매 버전 N-1 → N 단일 점프): 적용 파일 순서가 디렉토리 sort와 일치, 재호출 시 no-op 멱등
+- [ ] 시나리오 3 (비정상 종료 시뮬레이션): PRAGMA 강제 후퇴 후 재실행 시 duplicate column/already exists 가드로 안전 복구
 
 도메인 별 추가 회귀가 필요한 경우 별도 `*.test.ts`를 작성한다 (예: `rebuild-stats.test.ts`).
 
@@ -286,7 +319,7 @@ curl -X POST http://localhost:8765/api/update
 
 # 재기동 대기 (1.5s) 후 검증
 sleep 2 && curl http://localhost:8765/api/version
-# → dbUserVersion: 35, latestMigrationFile: "035-add-migrations-meta-table.sql"
+# → dbUserVersion: 53, latestMigrationFile: "053-kuzu-outbox-trigger-hardening.sql"
 ```
 
 ### 5.2 마이그레이션 lag 감지
@@ -294,14 +327,17 @@ sleep 2 && curl http://localhost:8765/api/version
 부팅 마이그레이션이 panic으로 종료된 경우, 후속 부팅에서 `/api/version`이
 다음을 반환한다:
 
+`migrationLag`는 `dbUserVersion`이 디렉토리 최신 파일 번호보다 작을 때만 포함되며,
+`current`(현재 적용 버전)와 `latestFile`(디렉토리 최신 파일명) 두 필드를 갖는다.
+
 ```json
 {
   "data": {
-    "dbUserVersion": 32,
-    "latestMigrationFile": "032-add-stats-proxy-hourly.sql",
+    "dbUserVersion": 50,
+    "latestMigrationFile": "050-kuzu-outbox-backfill.sql",
     "migrationLag": {
-      "current": 32,
-      "latestFile": "035-add-migrations-meta-table.sql"
+      "current": 50,
+      "latestFile": "053-kuzu-outbox-trigger-hardening.sql"
     }
   }
 }
@@ -362,17 +398,41 @@ CREATE INDEX IF NOT EXISTS idx_proxy_null_size
 
 ### Q. 트리거는 어떻게 작성하나요?
 
-`BEGIN ... END;` 블록 — migrator의 `splitSqlStatements()`가 트리거 내부 세미콜론을 보존한다.
+`BEGIN ... END;` 블록 — migrator의 `splitSqlStatements()`가 `BEGIN…END` 블록을
+placeholder로 치환해 트리거 내부 세미콜론을 보존한 뒤 split하고 복원한다.
+
+실제 사용 예 — `031-stats-duration-avg-fix.sql`의 `trg_stats_after_insert` (requests INSERT 시
+`stats_hourly` 버킷 UPSERT). `WHEN` 절로 `pre_tool` 행을 제외하고,
+`ON CONFLICT(hour_ts, model, type, event_type)` DO UPDATE로 누적한다:
 
 ```sql
-CREATE TRIGGER IF NOT EXISTS trg_update_session_tokens
+CREATE TRIGGER IF NOT EXISTS trg_stats_after_insert
 AFTER INSERT ON requests
+WHEN NEW.type IS NOT NULL
+  AND (NEW.event_type IS NULL OR NEW.event_type != 'pre_tool')
 BEGIN
-  UPDATE sessions
-  SET total_tokens = total_tokens + NEW.tokens_total
-  WHERE id = NEW.session_id;
+  INSERT INTO stats_hourly (
+    hour_ts, model, type, event_type, request_count,
+    duration_ms_sum, duration_ms_count, ...
+  ) VALUES (
+    (NEW.timestamp / 1000 / 3600) * 3600, COALESCE(NEW.model, ''), NEW.type,
+    COALESCE(NEW.event_type, ''), 1,
+    CASE WHEN NEW.duration_ms IS NOT NULL THEN NEW.duration_ms ELSE 0 END,
+    CASE WHEN NEW.duration_ms IS NOT NULL THEN 1 ELSE 0 END, ...
+  )
+  ON CONFLICT(hour_ts, model, type, event_type) DO UPDATE SET
+    request_count = request_count + 1,
+    ...;
 END;
 ```
+
+현재 활성 트리거 (각 트리거의 최종 정의 파일):
+
+| 트리거 | 정의 파일 | 대상 |
+|--------|-----------|------|
+| `trg_stats_after_insert` / `trg_stats_after_update` | `031-stats-duration-avg-fix.sql` | `requests` → `stats_hourly` 집계 |
+| `trg_proxy_stats_after_insert` | `032-add-stats-proxy-hourly.sql` | `proxy_requests` → `stats_proxy_hourly` 집계 |
+| `trg_requests_to_kuzu_outbox` / `trg_sessions_to_kuzu_outbox` / `trg_requests_pre_to_tool_outbox` | `053-kuzu-outbox-trigger-hardening.sql` | `requests`·`sessions` → `kuzu_outbox` (INSERT OR IGNORE + `NEW.id IS NOT NULL` 가드) |
 
 ### Q. WAL 모드 PRAGMA를 파일에 넣어도 되나요?
 
@@ -388,6 +448,6 @@ END;
 - 스키마 전체 구조: `packages/storage/src/schema.ts`
 - 마이그레이션 실행 로직: `packages/storage/src/migrator.ts`
 - 회귀 테스트: `packages/storage/src/__tests__/migrator.test.ts`
-- ADR: `.claude/docs/plans/auto-update-migration-hardening/adr.md`
-- API 응답 스펙: `docs/api-http.md`
-- DB 일반: `docs/database.md`
+- API 응답 스펙: [api-http.md](api-http.md)
+- DB 일반: [database.md](database.md)
+- 데이터 흐름: [data-flow.md](data-flow.md)

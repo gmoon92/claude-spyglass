@@ -15,6 +15,15 @@
 
 본 문서는 **사용자 가이드**입니다. 내부 구현(JS 모듈, 핵심 함수)은 5~6장에 코드 경로와 함께 정리되어 있습니다.
 
+### 연관 문서
+
+| 문서 | 내용 |
+|------|------|
+| [HTTP API & SSE 레퍼런스](./api-http.md) | 대시보드가 호출하는 `/api/*` 엔드포인트·SSE 채널 명세 (서버 측 SoT) |
+| [데이터 흐름](./data-flow.md) | 훅 이벤트 1건이 DB → SSE → 화면까지 도달하는 전체 경로 |
+| [메트릭/분석](./metrics-analytics.md) | burn-rate·cache·도구 통계 등 위젯 산식 SoT |
+| [TUI 가이드](./tui.md) | 동일 데이터를 노출하는 터미널 UI |
+
 ---
 
 ## 1. 개요
@@ -38,7 +47,7 @@
 
 ## 2. 화면 레이아웃
 
-대시보드는 **3-컬럼 + 헤더/푸터** 구조입니다. 좌측 56px 폭의 **앱 모드 rail**, 그 옆 **좌측 패널**(프로젝트/세션/옵저빌리티), 가운데~우측 **메인 영역**으로 구성됩니다. `<body data-app-mode>` 속성으로 두 가지 모드(browse / metadocs)가 전환됩니다.
+대시보드는 **3-컬럼 + 헤더/푸터** 구조입니다. 좌측 **앱 모드 rail**, 그 옆 **좌측 패널**(프로젝트/세션/옵저빌리티), 가운데~우측 **메인 영역**으로 구성됩니다. `<body data-app-mode>` 속성으로 세 가지 모드(browse / metadocs / settings)가 전환됩니다(rail 버튼: 🚥 browse · 📚 metadocs · ⚙ settings).
 
 ### 2.1 browse 모드 (기본, rail 🚥)
 
@@ -57,10 +66,10 @@
 | 🚥 | |  SessionsB.)| | +--------------------------------------------+ |
 |    | +-- handle ---+ | +--- content-switcher -----------------------+ |
 | 📚 | | obs panel   | | |  #defaultView: 최근 요청 피드 (#feedBody)  | |
-|    | | 4 cards     | | |    +- 검색 / 필터 -----------------------+ | |
+|    | | 3 cards     | | |    +- 검색 / 필터 -----------------------+ | |
 |    | | (#obsPanel) | | |    +- <table> Time Action Target Model -+ | |
 |    | +-------------+ | |  #detailView : 세션 상세                   | |
-|    | [Update Badge]  | |                (turn/flat/llm/syslib 탭)   | |
+|    | [Update Badge]  | |                (log/llm/syslib 탭)         | |
 |    |                 | +--------------------------------------------+ |
 +----+-----------------+------------------------------------------------+
 | footer · Claude Spyglass — real-time Claude Code monitor       [?]   |
@@ -90,10 +99,12 @@
 
 | 항목 | 값 |
 |------|----|
-| 전환 방법 | 좌측 rail 버튼 클릭, 또는 `Esc`(metadocs → browse) |
-| 마커 | `<body data-app-mode="browse \| metadocs">` |
-| 영속화 | `sessionStorage('spyglass.appMode')` |
+| 전환 방법 | 좌측 rail 버튼 클릭(`app-rail.js` 클릭 위임), 또는 `Esc`(metadocs → browse) |
+| 마커 | `<body data-app-mode="browse \| metadocs \| settings">` |
+| 영속화 | `sessionStorage('spyglass.appMode')` (`state.js`) |
 | Esc 복귀 대상 | 진입 직전 view/탭/sessionId 그대로 복원 |
+
+세 번째 모드 **settings**(⚙)는 `settings-view.js`의 `enterSettingsMode()` / `exitSettingsMode()`가 진입·복귀를 담당하며, 시스템 진단 · Proxy · Hook · SQLite · Graph DB · 서버/로그 서브 탭을 메인 영역 전체에 노출합니다.
 
 ---
 
@@ -105,19 +116,19 @@
 | 3.2 | 좌측 패널 | `.left-panel` | 프로젝트·세션·옵저빌리티 |
 | 3.3 | 메인 차트 | `#chartSection` | timeline·donut·cache-panel |
 | 3.4 | 로그 피드 | `#defaultView #feedBody` | 실시간 요청 표 |
-| 3.5 | 세션 상세 | `#detailView` | turn/flat/llm/syslib 탭 |
+| 3.5 | 세션 상세 | `#detailView` | log / llm / syslib 탭 |
 | 3.6 | Behavior Definitions | `#metaDocsRoot` | metadocs 모드 카탈로그 |
 | 3.7 | 오버레이 | 단축키·업데이트·툴팁 | 보조 UI |
 
 ### 3.1 헤더 영역 (차트 섹션 헤더로 통합)
 
-기존 브랜드 strip은 제거되고(`brand-strip-cleanup` ADR-001) 컨트롤은 `#chartSection`의 `.view-section-header`로 이전됐습니다. SSE 끊김 등 에러는 상단 부유 `#errorBanner`로 표시됩니다.
+헤더 컨트롤(언어·날짜·차트 토글)은 `#chartSection`의 `.view-section-header`에 위치합니다. SSE 끊김 등 에러는 상단 부유 `#errorBanner`로 표시됩니다.
 
 | 컨트롤 | ID | 동작 |
 |--------|----|------|
 | 언어 스위처 | `#lang-switcher` | `ko / en / ja / zh` native name 표시 |
-| 날짜 필터 | `#dateFilter` | `전체 / 오늘 / 이번주`. `main.js`의 `initDateFilter()`가 동적 생성. 클릭 시 `setActiveRange()` → `fetchDashboard/Requests/CacheStats/AllSessions` |
-| 차트 접기 토글 | `#btnToggleChart` | chevron 회전. collapse 상태 localStorage 영속화 |
+| 날짜 필터 | `#dateFilter` | `전체 / 오늘 / 이번주 / 사용자 지정` 드롭다운(`date-range-dropdown.js`). 선택 시 `setActiveRange()`가 `cs:active-range-changed` 이벤트를 발행하고, `main.js` 리스너가 `applyRangeLabels` + `fetchDashboard/Requests/CacheStats/AllSessions`를 일괄 트리거 |
+| 차트 접기 토글 | `#btnToggleChart` | chevron 회전. collapse 상태 `localStorage('spyglass:chart-collapsed')` 영속화 |
 
 ### 3.2 좌측 패널 (`.left-panel`)
 
@@ -133,12 +144,13 @@
 │     라이브 상태 ● live / ◐ stale / ○ ended
 │     행 = 세션 ID(앞 8자) · 토큰 · 발화 preview
 ├── <handle> #panelVerticalHandleBottom
-└── Observability (#obsPanel)  — 4 카드
-      #cardBurnRate        Burn Rate (24h 누적 토큰)
+└── Observability (#obsPanel)  — 3 카드
+      #cardBurnRate        Burn Rate (누적 토큰)
       #cardCacheHealth     Cache Health
       #cardLivePulse       활성 세션 수 + 마지막 활동 시각
-      #cardToolCategories  도구 카테고리 (또는 Behavior Definitions Top 5)
 ```
+
+> 도구 카테고리 카드(`#cardToolCategories`)는 `#obsPanel` 밖, **metadocs 모드 전용 좌측 요약 영역**으로 분리되어 있습니다. `body[data-app-mode="metadocs"]`일 때만 노출됩니다.
 
 | 항목 | 동작 |
 |------|------|
@@ -179,20 +191,23 @@
 
 ### 3.5 세션 상세 (`#detailView`)
 
-세션 행을 클릭하면 우측이 detail 모드로 전환됩니다. 차트 헤더는 `chart-detail-meta`(세션 ID · 프로젝트 · 토큰 · 종료 시각)로 교체됩니다(`chart-mode=detail`).
+세션 행을 클릭하면 우측이 detail 모드로 전환됩니다. 차트 헤더는 `chart-detail-meta`(세션 ID · 프로젝트 · 토큰 · 종료 시각)로 교체됩니다(`chart-mode=detail`). 탭 바(`#viewTabGroup`)는 `turn-views.js`의 `initDetailTabBar()`가 **3개 view-tab(log / llm / syslib)** 을 동적 생성합니다.
 
-| 탭 | DOM | 설명 |
-|----|-----|------|
-| 턴 (turn) | `#turnUnifiedBody` | 사용자 발화 단위 카드. 카드 펼침 + 내부 도구 호출 펼침 2단. `[data-payload-ts]` 액션은 해당 턴의 API 페이로드 뷰로 점프 |
-| 평면 (flat) | `#detailRequestsBody` | 평면 표. 컬럼은 피드와 동일하되 Session 컬럼 제외 |
-| API 페이로드 (llm) | `llm-input-view.js` | system blocks + user messages 합본 렌더링 |
-| System 라이브러리 (syslib) | `system-prompt-library.js` | distinct `system_hash` 카탈로그 카드 |
+| 탭 | value | DOM 컨테이너 | 설명 |
+|----|-------|--------------|------|
+| 로그 (log, 기본) | `log` | `#detailTurnView` (`#turnUnifiedBody`) | 통합 로그 뷰 — 상단 turn-spine(모든 턴을 한 줄 inline-flow + flow-head) + 하단 log-pane(활성 턴 요청 행 표). 턴 칩 클릭 시 활성 턴 전환 |
+| API 페이로드 (llm) | `llm` | `#detailLlmInputView` (`llm-input-view.js`) | system blocks + user messages 합본 렌더링 |
+| System 라이브러리 (syslib) | `syslib` | `#sysLibBody` (`system-prompt-library.js`) | distinct `system_hash` 카탈로그 카드 |
+
+탭 전환은 `setDetailView(tab)`가 처리하고 활성 탭은 `state.js`의 `getDetailTab()` / `setDetailTab()`(기본 `'log'`)에 보관됩니다. 로그 탭 하단 표의 9컬럼 행은 `turn-rows.js#makeTurnLogRows`가 `render/rows.js#makeRequestRow`를 위임 호출하여 피드와 동일한 빌더를 재사용합니다. 칩↔행은 `data-chip-key`로 1:1 매핑됩니다. `[data-payload-ts]` 액션은 `openLlmInputForTurn()`으로 llm 탭의 해당 페이로드로 점프합니다.
 
 ### 3.6 Behavior Definitions 카탈로그 (`#metaDocsRoot`)
 
-좌측 rail에서 📚 클릭 시 메인 영역 전체가 교체됩니다. 서브 탭은 `[Behavior Definitions]`(`#metaDocsBody`)과 `[도구 통계]`(`#metaToolStatsBody`) 두 가지이며, `sessionStorage('spyglass.metaSubTab')`에 영속화됩니다.
+좌측 rail에서 📚 클릭 시 메인 영역 전체가 `#metaDocsRoot`로 교체됩니다. 서브 탭은 `meta-docs-view.js`의 `setMetaSubTab()`이 관리하며 `docs`(`[Behavior Definitions]`, `#metaDocsBody`)와 `tools`(`[도구 통계]`, `#metaToolStatsBody`) 두 가지, `sessionStorage('spyglass.metaSubTab')`에 영속화됩니다.
 
 좌측 프로젝트 thead가 `[프로젝트 | 항목 | 동기화]`로 바뀌고, `data-project="__global__"` 가상 행이 "전체 범위" 토글로 동작합니다. `Esc`를 누르면 진입 직전 browse 상태(view/탭/sessionId)로 복귀합니다.
+
+Behavior Definition(Agent/Skill/Command) 카드는 **통합 Flow 그래프**로 펼칠 수 있습니다. `meta-docs-flow.js`의 `loadFlow({centerKind, centerName, project})`가 `/api/graph/unified-flow`(Ladybug 그래프 기반)를 호출해 좌 ancestor + center + 우 descendant + turn-after 컬럼을 SVG로 렌더하며, 카드 더블클릭으로 center를 재중심합니다.
 
 ### 3.7 오버레이 / 모달
 
@@ -319,7 +334,7 @@ graph TD
 | `fetchAllSessions()` | `/api/sessions` | 좌측 세션 목록 |
 | `fetchCacheStats()` | `/api/stats/cache` | cache-panel |
 | `fetchSessionsByProject(p)` | `/api/projects/:p/sessions` | 프로젝트 선택 |
-| `fetchObservability()` | `/api/metrics/{burn-rate,cache-trend,tool-categories}` + `/api/sessions/active` | obs-panel 4 카드 |
+| `fetchObservability()` | `/api/metrics/{burn-rate,cache-trend,tool-categories}` + `/api/sessions/active` | obs-panel 3 카드(burn/cache/pulse) + metadocs 전용 tool-categories 카드 |
 | `fetchProxyRequests/Stats` | `/api/proxy-requests*` | 프록시 (UI 미노출) |
 | `buildQuery(base, extra)` | — | `from/to` 자동 합성 |
 | `setActiveRange(r)` | — | `'all' / 'today' / 'week'` 상태 SSoT |
@@ -329,12 +344,13 @@ graph TD
 `init()` 부트스트랩 순서:
 
 1. `window.I18n.init()` 대기
-2. `applyAppMode(getAppMode())` — sessionStorage에서 모드 복원
-3. `initTypeColors()` / `initBuckets()` / `drawTimeline()` / `setChartMode('default')`
-4. 초기 데이터 — `fetchRequests`, `fetchCacheStats`, `Promise.all([fetchDashboard, fetchAllSessions])`
-5. `startSSE()` — `/events` 구독
-6. 패널 resize / 툴팁 / 탭 / 단축키 초기화
-7. `setInterval(advanceBuckets, 60_000)` + `setInterval(fetchAllSessions, 30_000)`
+2. `initMetaSubTabs()` / `initDateFilter()` — applyAppMode 이전에 슬롯·원본 element 준비(메타 모드 silent fail 방지)
+3. `applyAppMode(getAppMode())` — sessionStorage에서 모드 복원
+4. `initTypeColors()` / `initBuckets()` / `drawTimeline()` / `setChartMode('default')`
+5. 초기 데이터 — `fetchRequests`, `fetchCacheStats`, `Promise.all([fetchDashboard, fetchAllSessions]).then(autoActivateProject)`
+6. `startSSE()` — `/events` 구독
+7. 패널 resize / 툴팁 / `initDetailTabBar()` + `setDetailView('log')` / 단축키 초기화
+8. `setInterval(() => { advanceBuckets(); drawTimeline(); }, 60_000)` + `setInterval(fetchAllSessions, 30_000)`
 
 SSE 채널 및 클라이언트 구독 흐름:
 
@@ -351,10 +367,11 @@ flowchart TD
   onNewProxyRequest["onNewProxyRequest(e)"]
   onSessionUpdate["onSessionUpdate(e)"]
 
-  recordRequest["recordRequest()"]
-  drawTimeline["drawTimeline()"]
+  recordRequest["recordRequest()\n→ drawTimeline()"]
   prependRequest["prependRequest(req)"]
-  refreshDetail["refreshDetailSession(...)"]
+  detailSel{"선택 세션 ==\nreq.session_id ?"}
+  patchTurn["patchActiveTurnFromSSE(req)"]
+  refreshDetail["refreshDetailSession(id)\n(패치 실패 시 폴백)"]
   scheduleRefresh["scheduleDashboardRefresh()\ndebounce 1s · maxWait 3s"]
 
   EventSource --> new_request
@@ -367,13 +384,14 @@ flowchart TD
   session_update --> onSessionUpdate
 
   onNewRequest --> recordRequest
-  recordRequest --> drawTimeline
   onNewRequest --> prependRequest
-  prependRequest --> refreshDetail
+  onNewRequest --> detailSel
+  detailSel -->|yes| patchTurn
+  patchTurn -->|false| refreshDetail
   onNewRequest --> scheduleRefresh
 
   onSessionUpdate --> sidebarUpdate["세션 캐시 갱신\n+ 사이드바 재렌더"]
-  onNewProxyRequest --> proxyFeed["프록시 피드 갱신\n(UI 미노출 경로)"]
+  onNewProxyRequest --> proxyFeed["spyglass:proxy-request\n커스텀 이벤트 디스패치\n(UI 미노출 경로) + scheduleRefresh"]
 ```
 
 > `sse.js`는 `onNewProxyRequest`·`onSessionUpdate`가 콜백으로 전달된 경우에만 해당 채널을 등록합니다(후방 호환).
@@ -385,13 +403,13 @@ flowchart TD
 
 | 모듈 | 책임 |
 |------|------|
-| `render/badges.js` | `typeBadge`, `toolIconHtml`, `toolStatusBadge`, `toolResponseHint` |
+| `render/badges.js` | `typeBadge`, `toolIconHtml`, `toolStatusBadge`, `toolResponseHint`, `anomalyBadgesHtml`, `subTypeBadgeHtml` 등 배지 |
 | `render/icons.js` | 디자인 시스템 아이콘 호환 shim. `design-system/icons/*` 개별 SVG를 하나의 import 경로로 re-export |
-| `render/model.js` | 모델 라벨 / 짧은 이름 / 컬러 매핑 |
-| `render/cells.js` | `makeActionCell`, `makeTargetCell`, `makeModelCell`, `makeCacheCell` |
+| `render/model.js` | `modelChipHtml`, `makeModelCell`, `trustOf`, `rowTrustClass` — 모델 라벨 / 짧은 이름 / 컬러·신뢰 매핑 |
+| `render/cells.js` | `makeActionCell`, `makeTargetCell`, `makeCacheCell`, `makeSkeletonRows` |
 | `render/extract.js` | payload에서 preview / role / tool_response 추출 |
 | `render/expand.js` | `togglePromptExpand`, `resolveExpandTarget` |
-| `render/rows.js` | `makeRequestRow`, `makeSessionRow`, `makeTurnRow` |
+| `render/rows.js` | `makeRequestRow`(9컬럼 행 SSoT), `makeSessionRow`, `renderRequests`, `appendRequests` |
 | `render/skeleton.js` | skeleton row 정책 |
 
 ### 5.4-b `views/default/` — DefaultView 서브모듈
@@ -410,15 +428,15 @@ flowchart TD
 
 ### 5.4-c `session-detail/` — 세션 상세 서브모듈
 
-`session-detail.js`(루트)는 facade로, 실 구현은 아래 4개 파일로 분리되어 있습니다.
+`session-detail.js`(루트)는 facade로, 실 구현은 아래 7개 파일로 분리되어 있습니다.
 
 | 모듈 | 책임 |
 |------|------|
 | `session-detail/index.js` | facade — 데이터 로드(`loadSessionDetail`, `refreshDetailSession`), 검색 박스 초기화(`initDetailSearch`), 외부 호출자 인터페이스 re-export |
-| `session-detail/state.js` | 모듈 수준 상태 단일 캡슐화 (필터 / 요청·턴 목록 / 검색어 / 펼침 ID / 필터 결과) |
-| `session-detail/flat-view.js` | 평면 요청 표 렌더(`renderDetailRequests`) + 필터·검색 처리(`applyDetailFilter`). `DETAIL_FILTER_CHANGED` 이벤트로 차트·뷰 디커플링 |
-| `session-detail/turn-views.js` | 턴 카드 뷰(`renderTurnCards`) / 레거시 테이블 뷰(`renderTurnView`) + 탭 전환·카드 펼침 |
-| `session-detail/turn-rows.js` | 단일 turn 내부 행 빌더 — prompt / tool_call / response 인터리빙 HTML 조립 |
+| `session-detail/state.js` | 모듈 수준 상태 단일 캡슐화 (필터 / prologue / 턴 목록 / 검색어 / 펼침 ID / anomaly map) |
+| `session-detail/flat-view.js` | 필터·검색 처리(`applyDetailFilter`) — 활성 턴 로그 표에 검색·타입 필터를 적용하고 차트·뷰 디커플링 |
+| `session-detail/turn-views.js` | 통합 "로그" 탭 렌더 SSoT — turn-spine(`renderSpine`/`turnLineHtml`/`updateFlowHead`) + log-pane(`renderLogPane`) + 활성 턴 상태(`setActiveTurnId`/`getActiveTurnId`) + 탭 바(`initDetailTabBar`/`setDetailView`) |
+| `session-detail/turn-rows.js` | 활성 턴 내부 행 빌더 — `makeTurnLogRows`(prompt / tool_call / response 인터리빙, `makeRequestRow` 위임) + 칩 키(`chipKey`/`chipFromRequest`) + `data-chip-key` 주입 |
 | `session-detail/system-reminder.js` | `<system-reminder>` 블록 추출 + dedup / diff SSoT |
 | `session-detail/system-reminder-popover.js` | system-reminder 칩 ↔ 팝오버 인터랙션 (토글·위치·포커스 복귀) |
 
@@ -467,10 +485,10 @@ flowchart TD
 
 | 함수 | 위치 | 시그니처 | 주요 사용처 |
 |------|------|----------|-------------|
-| `toolIconHtml` | `packages/web/assets/js/render/badges.js:23` | `(toolName, eventType) → string` | `makeTargetCell`, 턴 뷰, 도구 통계 카드 |
-| `makeTargetCell` | `packages/web/assets/js/render/cells.js:54` | `(r) → <td>` | `makeRequestRow`, `makeTurnRow` |
-| `makeRequestRow` | `packages/web/assets/js/render/rows.js:50` | `(r, opts) → <tr>` | 피드(`default-view`), 평면 표(`detail-view`) |
-| `prependRequest` | `packages/web/assets/js/views/default/feed-live.js:30` | `(r) → void` | SSE `onNewRequest` 콜백 (`main.js`) |
+| `toolIconHtml` | `packages/web/assets/js/render/badges.js:58` | `(toolName, eventType = null) → string` | `makeTargetCell`, 턴 로그, 도구 통계 카드 |
+| `makeTargetCell` | `packages/web/assets/js/render/cells.js:73` | `(r) → <td>` | `makeRequestRow` |
+| `makeRequestRow` | `packages/web/assets/js/render/rows.js:51` | `(r, opts) → <tr>` | 피드(`default-view`), 로그 탭(`turn-rows.js#makeTurnLogRows`) |
+| `prependRequest` | `packages/web/assets/js/views/default/feed-live.js:31` | `(r) → void` | SSE `onNewRequest` 콜백 (`main.js`) |
 
 ### 6.1 `toolIconHtml(toolName, eventType)`
 
@@ -520,9 +538,9 @@ SSE `new_request` 도착 시 피드 최상단에 새 행을 추가합니다. 동
 
 ### 7.2 검색 / 필터
 
-- `/` — 검색 포커스, `Esc` — 닫기. 매칭은 `data-search-haystack`(lower-case 직렬화) 기반.
+- `/` 또는 `Cmd/Ctrl + F` — 검색 포커스, `Esc` — 닫기. 매칭은 `data-search-haystack`(lower-case 직렬화) 기반.
 - 필터링은 CSS `display:none`이라 DOM이 보존됩니다.
-- 숫자 `1~7` — All / prompt / system / tool_call / Agent / Skill / MCP
+- 숫자 `1~7` — All / prompt / system / tool_call / Agent / Skill / MCP (`keyboard.js`의 `triggerFilterByIndex`)
 
 ### 7.3 행 확장
 
@@ -599,14 +617,14 @@ window.I18n.t('ui.html.error-banner.msg');
 | `--border` | `#26262b` | 일반 경계 |
 | `--border-strong` | `#3a3a40` | 강조 경계 |
 
-### 9.2 Text 4-Level (모두 AA 4.5:1 이상)
+### 9.2 Text 4-Level
 
-| 토큰 | 값 | 용도 |
-|------|----|----|
-| `--text-1` | `#F0F6FC` | 헤더 / 강조 |
-| `--text-2` | `#C9D1D9` | 본문 |
-| `--text-3` | `#8B949E` | 보조 텍스트 |
-| `--text-4` | `#6E7681` | 비활성 |
+| 토큰 | 값 | 대비 | 용도 |
+|------|----|----|----|
+| `--text-1` | `#F0F6FC` | 16.1:1 (AAA) | 헤더 / 강조 |
+| `--text-2` | `#C9D1D9` | 12.4:1 (AAA) | 본문 |
+| `--text-3` | `#8B949E` | 5.5:1 (AA) | 보조 텍스트 |
+| `--text-4` | `#6E7681` | 3.8:1 (AA Large only) | 비활성 / 장식 |
 
 호환 alias: `--text` / `--text-muted` / `--text-dim`.
 
@@ -651,7 +669,8 @@ design-tokens.css
   → layout → header → left-panel
   → default-view → detail-view → table → badges → skeleton
   → cache-panel → turn-view → llm-input → syslib → meta-docs
-  → context-chart → tool-stats → obs-panel → app-rail
+  → context-chart → tool-stats → flow-diagram → obs-panel
+  → app-rail → settings-view
   → design-system/_index.css
 ```
 
@@ -667,7 +686,7 @@ design-tokens.css
 | 4 | 스타일이 깨져 보인다 | DevTools Network에서 CSS 404 여부 확인 | `Cmd+Shift+R` 강제 새로고침 |
 | 5 | 도넛이 갱신되지 않는다 | 현재 모드 확인 — detail 진입 시 자동 `cache`, close 시 `model` | `model` 모드는 `fetchModelUsage()` 응답에 의존하므로 데이터가 없으면 정상 동작 |
 | 6 | timeline 막대가 0에서 멈춤 | 탭이 백그라운드 상태인가? | `setInterval(advanceBuckets, 60_000)`이 throttle됨. 탭으로 돌아오면 따라잡음 |
-| 7 | 좌측 패널을 너무 좁혀서 못 편다 | 현재 폭이 `localStorage('spyglass:panelWidth')`에 저장됨 | `Cmd/Ctrl + B`로 접었다 펴기 또는 핸들 더블클릭(콘텐츠 폭 자동). 완전 초기화는 `localStorage.removeItem('spyglass:panelWidth')` 후 새로고침 (다른 키도 `spyglass:` / `spyglass.` prefix) |
+| 7 | 좌측 패널을 너무 좁혀서 못 편다 | 현재 폭이 `localStorage('spyglass:panel-width')`에 저장됨 | `Cmd/Ctrl + B`로 접었다 펴기 또는 핸들 더블클릭(콘텐츠 폭 자동). 완전 초기화는 `localStorage.removeItem('spyglass:panel-width')` 후 새로고침 (다른 키도 `spyglass:` / `spyglass.` prefix) |
 | 8 | 언어 전환이 반영되지 않는다 / `Esc`로 metadocs에서 못 빠져나옴 | 동적 모달은 `I18n.onChange` 등록 필요. 브라우저 자동 번역이 켜져 있는가? 입력창에 포커스가 있는가? | 동적 모달은 `window.I18n.onChange(() => render...)`로 재렌더 등록. 브라우저 자동 번역은 끄기(텍스트 노드 교체로 i18n과 충돌). 입력 포커스가 있으면 `Esc`는 입력 취소로 동작하므로 본문 클릭 후 다시 `Esc` |
 
 ---

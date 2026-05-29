@@ -2,6 +2,8 @@
 
 claude-spyglass의 모든 설정 옵션을 다룹니다. 환경 변수, `.env` 파일, `~/.claude/settings.json` 훅 등록, 데이터·로그 경로, 언어 설정까지 단일 문서에 정리합니다.
 
+> 관련 문서: [훅 통합](./hooks-integration.md) · [데이터 흐름](./data-flow.md) · [CLI](./cli.md) · [데이터베이스](./database.md) · [배포](./deployment.md) · [트러블슈팅](./troubleshooting.md)
+
 > [!WARNING]
 > **`SPGLASS_*` vs `SPYGLASS_*` 표기에 주의하세요.**
 > 일부 키(`SPGLASS_PORT`, `SPGLASS_HOST`, `SPGLASS_DB_PATH`)는 의도적으로 `Y`가 빠진 표기입니다. 코드 상수와 일치시키기 위해 표기 그대로 사용해야 하며, 오타로 인식해 `SPYGLASS_PORT`로 적으면 무시됩니다. 나머지 키는 모두 `SPYGLASS_` 접두사를 사용합니다.
@@ -45,7 +47,7 @@ flowchart TD
 | `SPGLASS_DB_PATH` | string | `$HOME/.spyglass/spyglass.db` | SQLite 파일 절대 경로 | `packages/server/src/runtime/config.ts` |
 | `SPYGLASS_PID_FILE` | string | `$HOME/.spyglass/server.pid` | 서버 데몬 PID 파일 경로 | `packages/server/src/runtime/daemon.ts` |
 | `SPYGLASS_SERVER_LOG` | string | `$HOME/.spyglass/logs/server.log` | 서버 stdout/stderr 미러링 파일 | `packages/server/src/runtime/stdio-mirror.ts` |
-| `SPYGLASS_RETENTION_DAYS` | number | `30` | 일별 cleanup에서 보존할 세션 일수 | `packages/server/src/runtime/maintenance.ts` |
+| `SPYGLASS_RETENTION_DAYS` | number | `30` | 일별 cleanup에서 보존할 세션 일수. `0`·음수·비숫자는 기본값 30으로 폴백 | `packages/storage/src/runtime/retention.ts` |
 | `SPYGLASS_SHUTDOWN_TIMEOUT_MS` | number | `10000` | graceful shutdown 최대 대기 시간(ms). SIGTERM/SIGINT 핸들러 guard timer 및 in-flight 요청 완료 대기에 사용 | `packages/server/src/runtime/config.ts` |
 | `SPYGLASS_APP_VERSION` | string | (미설정 — `package.json` 버전 자동 읽기) | DB 마이그레이션 기록(`_migrations.app_version`)에 주입할 버전 문자열. 테스트·CI에서 명시적으로 주입할 때 사용 | `packages/storage/src/migrator.ts` |
 
@@ -112,6 +114,15 @@ DEFAULT_LANG    = 'ko'
 | `USERPROFILE` | string | (시스템) | Windows 환경에서 `HOME` fallback | `packages/server/src/runtime/config.ts` |
 | `ANTHROPIC_API_KEY` | string | (미설정) | i18n 자동 번역 스크립트 전용. 런타임과 무관 | `scripts/i18n-translate.ts` |
 
+### 패키징 (Electron 데스크톱)
+
+직접 설정하지 않습니다. Electron 메인(`packages/desktop/src/main/server-process.js`)이 서버 child 프로세스에 절대 경로를 주입합니다 — standalone 번들에서 `import.meta.url`이 가상 파일시스템 경로를 반환해 실제 파일에 도달하지 못하기 때문입니다.
+
+| 이름 | 타입 | 기본값 | 설명 | 사용처 |
+|------|------|--------|------|--------|
+| `SPYGLASS_WEB_ROOT` | string | (미설정 — 워크스페이스 `packages/web` 상대 경로) | web 정적 자원 루트 | `packages/server/src/runtime/dispatch.ts` |
+| `SPYGLASS_MIGRATIONS_ROOT` | string | (미설정 — 워크스페이스 `packages/storage/migrations` 상대 경로) | 마이그레이션 SQL 디렉토리 | `packages/storage/src/migrator.ts` |
+
 ---
 
 ## 포트 및 네트워크
@@ -151,7 +162,7 @@ SPGLASS_HOST=0.0.0.0 bun run dev
 
 ## 데이터 경로
 
-`$HOME/.spyglass/`가 단일 데이터 루트입니다. 디렉토리 권한 `700`, DB 파일 권한 `600`이 서버 시작 시 자동 강제됩니다 (`packages/storage/src/connection.ts`).
+`$HOME/.spyglass/`가 단일 데이터 루트입니다. DB 디렉토리 권한 `700`, DB 파일 권한 `600`이 서버 시작 시(DB 연결 시점) 자동 강제됩니다 (`packages/storage/src/connection.ts`, `chmodSync(dbDir, 0o700)` · `chmodSync(dbPath, 0o600)`).
 
 ```
 $HOME/.spyglass/
@@ -163,7 +174,7 @@ $HOME/.spyglass/
 │   ├── server.log       # 서버 stdout/stderr/FATAL 미러
 │   ├── collect.log      # 훅 스크립트 INFO/ERROR
 │   └── hook-raw.jsonl   # 훅이 받은 모든 raw payload (원장)
-└── timing/              # (예약: 타이밍 분석 파일)
+└── timing/              # install.sh가 생성하지만 비어 있음 — tool 실행 timing은 인메모리 Map으로 추적
 ```
 
 | 대상 | 오버라이드 환경 변수 | 기본값 |
@@ -173,17 +184,17 @@ $HOME/.spyglass/
 | 서버 로그 | `SPYGLASS_SERVER_LOG` | `$HOME/.spyglass/logs/server.log` |
 | 진단 로그 | `SPYGLASS_DIAG_LOG_DIR` | `<cwd>/.claude/.tmp/logs/` |
 
-외부 도구로 권한이 변경되면 `bun run doctor --fix`로 일괄 복구할 수 있습니다 — DB는 `600`, 데이터 디렉토리는 `700`, 훅 스크립트는 `+x`로 강제됩니다. 또한 중복 response·mismatched turn_id 같은 데이터 정합성 문제도 함께 보정합니다 (`packages/server/src/cli/fix.ts`).
+외부 도구로 권한이 변경되면 `bun run doctor --fix`로 복구할 수 있습니다 — DB 파일은 `600`, 훅 스크립트는 `+x`로 강제됩니다 (`applyFixes()`, `packages/server/src/cli/fix.ts`). 데이터 디렉토리 `700`은 `--fix`가 아니라 DB 연결 시점(`connection.ts`)에 강제됩니다. `--fix`는 또한 중복 response 제거·mismatched/orphan turn_id 재매핑 같은 데이터 정합성 문제도 함께 보정합니다.
 
 ---
 
 ## 언어 및 로케일
 
-CLI(서버)와 TUI 모두 `i18next` 기반으로 4개 언어를 지원합니다 — `ko`(기본), `en`, `ja`, `zh`. 감지 우선순위(`packages/server/src/i18n.ts`):
+CLI(서버)와 TUI 모두 `i18next` 기반으로 4개 언어를 지원합니다 — `ko`(기본), `en`, `ja`, `zh`. `detectLang()`의 감지 우선순위(`packages/server/src/i18n.ts`):
 
-1. `SPYGLASS_LANG` (BCP-47 허용, `ko-KR` → `ko`)
-2. `LC_ALL`
-3. `LANG`
+1. `--lang ko` / `--lang=ko` CLI 플래그
+2. `SPYGLASS_LANG` (BCP-47 허용, `ko-KR` → `ko`)
+3. `LC_ALL` → `LANG`
 4. `DEFAULT_LANG` (`ko`)
 
 ```bash
@@ -199,14 +210,16 @@ Locale 파일: 서버는 `packages/server/locales/{ko,en,ja,zh}.json`, TUI는 `p
 
 claude-spyglass는 Claude Code의 hook 메커니즘으로 데이터를 수집합니다. `~/.claude/settings.json`에 6개 훅을 등록해야 합니다.
 
-| 훅 키 | 시점 | 수집 대상 |
-|-------|------|----------|
-| `UserPromptSubmit` | 사용자 메시지 제출 | prompt 원본 |
-| `PreToolUse` | 도구 실행 직전 | tool_use payload (pre_tool 레코드) |
-| `PostToolUse` | 도구 실행 종료 | tool result + duration |
-| `SessionStart` | 세션 시작 | 세션 메타 |
-| `SessionEnd` | 세션 정상 종료 | 종료 통계 |
-| `Stop` | LLM turn 종료 | turn 완료 마커 |
+| 훅 키 | 시점 | 수집 대상 | 엔드포인트 |
+|-------|------|----------|-----------|
+| `UserPromptSubmit` | 사용자 메시지 제출 | prompt 원본 | `/collect` |
+| `PreToolUse` | 도구 실행 직전 | tool_use payload (pre_tool 레코드) | `/collect` |
+| `PostToolUse` | 도구 실행 종료 | tool result + duration | `/collect` |
+| `SessionStart` | 세션 시작 | 세션 메타 | `/events` |
+| `SessionEnd` | 세션 정상 종료 | 종료 통계 | `/events` |
+| `Stop` | LLM turn 종료 | turn 완료 마커 | `/events` |
+
+`spyglass-collect.sh`는 stdin payload의 `hook_event_name`을 읽어 위 표대로 엔드포인트를 분기합니다. `/collect`는 hook 정제·`requests` upsert 경로, `/events`는 raw 이벤트(`claude_events`) 수집 경로입니다 (`packages/server/src/runtime/dispatch.ts`).
 
 ### 자동 설치
 
@@ -299,16 +312,28 @@ find ~/.spyglass/logs/hook-raw.jsonl -size +100M -exec truncate -s 0 {} \;
 
 ## 데이터 보존
 
-`packages/server/src/runtime/maintenance.ts`가 매 시간 조건을 체크하고 하루 1회 cleanup을 실행합니다. cutoff는 `now - SPYGLASS_RETENTION_DAYS일`로 계산되며, 그 이전 세션을 삭제한 뒤 `PRAGMA VACUUM`을 돌립니다.
+보존 기간(일수)의 단일 SSoT는 `packages/storage/src/runtime/retention.ts`입니다 — RDB와 그래프 DB가 같은 cutoff를 보도록 한 곳에서 결정합니다. `getRetentionDays()`가 `SPYGLASS_RETENTION_DAYS`를 읽고, `getRetentionCutoffTs()`가 `now - days*24h`를 반환합니다.
 
-하루 1회 실행 멱등성은 metadata 키 `last_cleanup_date`로 보장됩니다.
+`packages/server/src/runtime/maintenance.ts`가 매 시간(`MAINTENANCE_INTERVAL_MS = 1시간`) 조건을 체크하고 하루 1회 cleanup을 실행합니다. cleanup은 두 단계로 진행됩니다.
+
+```mermaid
+flowchart TD
+    BOOT["서버 부팅 / 1시간 인터벌"] --> CHECK{"last_cleanup_date<br/>== 오늘?"}
+    CHECK -->|예| SKIP["no-op"]
+    CHECK -->|아니오| CUT["getRetentionCutoffTs()<br/>(retention.ts SSoT)"]
+    CUT --> RDB["deleteOldData(cutoff)<br/>+ PRAGMA VACUUM"]
+    RDB --> GRAPH["deleteOldGraphData(cutoff)<br/>(실패 흡수, graph 미가용 시 no-op)"]
+    GRAPH --> MARK["setMetadata(last_cleanup_date=오늘)"]
+```
+
+하루 1회 실행 멱등성은 metadata 키 `last_cleanup_date`(형식 `YYYY-MM-DD`)로 보장됩니다. RDB와 그래프 정리는 동일 cutoff를 사용하므로 두 저장소의 데이터가 항상 일치합니다.
 
 ```bash
 SPYGLASS_RETENTION_DAYS=7    bun run dev   # 7일 보관
 SPYGLASS_RETENTION_DAYS=3650 bun run dev   # 약 10년 보관
 ```
 
-> `0` 또는 음수 지정 시 부팅 즉시 모든 데이터가 삭제될 수 있으니 주의하세요.
+> `0`·음수·비숫자 값은 `getRetentionDays()`가 무시하고 기본값 `DEFAULT_RETENTION_DAYS`(30일)로 폴백합니다 — 잘못된 값으로 인한 전체 데이터 즉시 삭제 사고를 방지하기 위함입니다.
 
 ---
 
@@ -368,7 +393,7 @@ MOONSHOT_UPSTREAM_URL=https://api.moonshot.ai/anthropic  # kimi-* 모델 전용
 # CUSTOM_UPSTREAMS=claude-internal-=https://internal.example.com  # 사내 prefix 매핑
 
 # ─── 데이터 보존 ─────────────────────────────────────────────
-SPYGLASS_RETENTION_DAYS=30                          # 0/음수 금지 (부팅 즉시 데이터 삭제 위험)
+SPYGLASS_RETENTION_DAYS=30                          # 0/음수/비숫자는 30일로 폴백
 
 # ─── 진단 (디버깅 시에만 1로 켜기, 운영 OFF 권장) ─────────────
 # SPYGLASS_DIAG_ENABLED=1                            # raw payload jsonl 기록
@@ -390,7 +415,7 @@ SPYGLASS_RETENTION_DAYS=30                          # 0/음수 금지 (부팅 �
 | 한국어 외 언어로 표시되지 않음 | `SPYGLASS_LANG` / `LC_ALL` / `LANG` | `SPYGLASS_LANG=en` 명시 (가장 높은 우선순위) |
 | 진단 jsonl이 쌓이지 않음 | `SPYGLASS_DIAG_ENABLED` | `1`로 설정 후 **서버 재시작 필수** (부팅 시 1회만 읽음) |
 | forward 헤더 디버그 로그가 보이지 않음 | `SPYGLASS_PROXY_DEBUG` | `1`로 설정 후 재시작 — 운영에서는 인증 헤더 노출되므로 끄기 |
-| 데이터가 부팅 직후 사라짐 | `SPYGLASS_RETENTION_DAYS` | `0` 또는 음수가 아닌 양수로 재설정 |
+| 보존 기간이 적용되지 않음 | `SPYGLASS_RETENTION_DAYS` | `0`·음수·비숫자는 30일로 폴백됨 — 의도한 양수 일수로 명시 후 재시작 |
 
 ---
 
@@ -406,3 +431,5 @@ SPYGLASS_RETENTION_DAYS=30                          # 0/음수 금지 (부팅 �
 - 진단 로깅: `packages/server/src/diag-log.ts`
 - 일별 유지보수: `packages/server/src/runtime/maintenance.ts`
 - 업스트림 라우팅: `packages/server/src/proxy/upstream.ts`
+- 보존 기간 SSoT: `packages/storage/src/runtime/retention.ts`
+- HTTP 디스패처(`/collect`·`/events` 분기): `packages/server/src/runtime/dispatch.ts`

@@ -1,5 +1,7 @@
 # proxy_requests / proxy_tool_uses 테이블
 
+> 연관 문서: [스키마 인덱스](README.md) · [requests](requests.md) · [sessions](sessions.md) · [system-prompts](system-prompts.md) · [마이그레이션](../migrations.md)
+
 HTTP 프록시 레이어에서 수집한 Anthropic API 호출 메트릭과 도구 호출 매핑을 저장하는 테이블 쌍입니다.
 
 ---
@@ -13,6 +15,23 @@ HTTP 프록시 레이어에서 수집한 Anthropic API 호출 메트릭과 도�
 | 목적 | HTTP 프록시에서 수집한 LLM API 요청/응답 메트릭 저장 |
 | 주요 쿼리 파일 | `packages/storage/src/queries/proxy.ts` |
 | 주요 퍼시스트 파일 | `packages/server/src/proxy/handler/persist.ts` |
+
+### 쓰기 경로
+
+`persistProxyRequest`(`persist.ts`)가 stream / non-stream 두 경로 공통으로 `db.transaction` 단일 클로저 안에서 `proxy_requests` INSERT·`proxy_tool_uses` INSERT·`requests` backfill을 원자 처리합니다. 트랜잭션 내부 throw 시 자동 롤백되어 부분 일관 상태를 차단하고, SSE 브로드캐스트는 commit 후 별도 `broadcast.ts`에서 수행됩니다.
+
+```mermaid
+flowchart TD
+    A["persistProxyRequest<br/>(db.transaction 단일 클로저)"] --> B["maybeUpsertSystemPrompt<br/>system_prompts UPSERT"]
+    B --> C["createProxyRequest<br/>proxy_requests INSERT"]
+    C --> D{"apiRequestId &amp;&amp;<br/>toolUses.length &gt; 0?"}
+    D -->|예| E["persistProxyToolUses<br/>proxy_tool_uses INSERT OR IGNORE"]
+    E --> F["backfillRequestApiRequestIdByToolUse<br/>requests.api_request_id COALESCE UPDATE<br/>(tool_use_id 별)"]
+    D -->|아니오| G["backfillRequestFromProxy<br/>requests 미완성 행 토큰·모델 채움"]
+    F --> G
+    G --> H["commit<br/>→ backfilledIds 반환"]
+    H -.->|commit 후| I["broadcast.ts<br/>SSE 'updated' 재송출"]
+```
 
 ### 컬럼 정의
 
@@ -112,12 +131,15 @@ HTTP 프록시 레이어에서 수집한 Anthropic API 호출 메트릭과 도�
 | `idx_proxy_requests_anthropic_org` | `anthropic_org_id` | `anthropic_org_id IS NOT NULL` | 조직 단위 사용량 분석 |
 | `idx_proxy_requests_anthropic_req_id` | `anthropic_request_id` | `anthropic_request_id IS NOT NULL` | 운영 req_xxx 역참조 |
 | `idx_proxy_requests_system_hash` | `system_hash` | — | system prompt 재사용 드릴다운 |
+| `idx_proxy_requests_system_byte_null` | `timestamp DESC` | `system_byte_size IS NULL` | `system_byte_size` 백필 SELECT 가속 (NULL 행만 인덱싱) |
+| `idx_proxy_requests_session_turn_ts` | `session_id, turn_id, timestamp` | `turn_id IS NOT NULL` | 세션·턴 단위 시간순 조회 |
+| `idx_proxy_requests_session_sysbytes` | `session_id, system_byte_size DESC, timestamp DESC` | `system_byte_size IS NOT NULL` | 세션 내 비대 system 본문 anomaly 조회 |
 
 ### 외래키
 
 공식 FOREIGN KEY 제약은 없음. `session_id → sessions.id`, `system_hash → system_prompts.hash`는 인덱스만으로 관리.
 
-- `session_id`: NULL 허용 행(구 데이터, 헤더 미수신) 보존을 위해 강제 FK 미적용
+- `session_id`: 헤더 미수신으로 NULL인 행 보존을 위해 강제 FK 미적용
 - `system_hash`: backfill 옵션 운용 및 `system_prompts` 테이블이 삭제되지 않는 정책 하에 CASCADE 불필요
 
 ### 관계
@@ -160,7 +182,7 @@ erDiagram
 | 항목 | 내용 |
 |------|------|
 | 목적 | proxy SSE에서 추출한 tool_use 블록의 `tool_use_id ↔ api_request_id` 매핑 보존 |
-| 등장 배경 | hook PostToolUse가 `tool_use_id`로 정확한 `api_request_id`를 역조회하도록 — timestamp 윈도우 휴리스틱 제거 |
+| 역할 | hook PostToolUse가 `tool_use_id`로 정확한 `api_request_id`를 역조회하는 lookup 테이블 |
 
 ### 컬럼 정의
 
@@ -201,23 +223,34 @@ erDiagram
 
 ## correlated_requests VIEW
 
-`proxy_requests`와 `requests`(hook 데이터)를 타임스탬프 근사값으로 연결하는 뷰입니다.
+`proxy_requests`와 `requests`(hook 데이터)를 타임스탬프 근사값으로 연결하는 뷰입니다. 정의 SoT는 마이그레이션 `018-cleanup-and-correlation.sql`.
 
 | 항목 | 내용 |
 |------|------|
-| 목적 | proxy ↔ hook 매칭 (session_id 직접 연결 불가한 구 데이터 대상) |
-| 매칭 조건 | proxy timestamp ±5초 이내의 `type='prompt'` hook 이벤트 LEFT JOIN |
+| 목적 | proxy ↔ hook 매칭 (`session_id` 헤더가 없어 직접 연결 불가한 행 대상) |
+| 1차 매칭 | proxy timestamp `−5000ms ~ +2000ms` 윈도우의 `type='prompt'` hook 행 — `ROW_NUMBER()` 로 가장 가까운 1건 선택 |
+| 2차 매칭(fallback) | 1차 미매칭 시 proxy timestamp `−10000ms ~ +5000ms` 윈도우의 `type='tool_call'` hook 행 — 가장 가까운 1건 |
+| `correlation_kind` | 어느 경로로 매칭됐는지 표시: `prompt` / `tool_call` / `NULL`(미매칭) |
 | 정렬 | `proxy_requests.timestamp DESC` |
 
-주요 노출 컬럼: proxy 측 전체 메트릭(`proxy_id`, `proxy_ts`, `model`, 토큰, 성능 지표) + hook 측 (`hook_id`, `session_id`, `turn_id`, `hook_prompt_preview`, `correlation_diff_ms`).
+주요 노출 컬럼: proxy 측 전체 메트릭(`proxy_id`, `proxy_ts`, `proxy_model`, 토큰, 성능 지표) + `COALESCE`로 합성한 hook 측 (`session_id`, `turn_id`, `hook_model`, `hook_prompt_preview`, `correlation_kind`, `correlation_diff_ms`).
+
+> 이 VIEW 자체는 현재 서버 런타임 코드에서 SELECT 되지 않는다. 목록 조회의 실제 세션 매칭은 `getRecentProxyRequests`(`proxy.ts`)가 `SQL_FIND_PROMPT_SESSION`/`SQL_FIND_TOOL_SESSION`을 JS에서 후처리하는 방식으로 수행한다 — `session_id` 가 모두 채워진 행만 있으면 매칭 자체를 건너뛴다.
 
 ---
 
 ## 참고사항
 
-- `cost_usd` 컬럼은 schema 호환을 위해 유지되지만 현재 항상 NULL — 가격 플랜을 알 수 없어 신뢰도가 낮은 추정치를 저장하지 않음
-- `system_reminder`(v21)와 `system_hash`(v22)는 직교 책임: 전자는 user 메시지 내 reminder 원문, 후자는 `body.system` 본문 참조
-- `payload` BLOB은 `/api/proxy-requests/:id/messages` 단건 조회(`getProxyRequestById`)에서만 디코드, 목록 조회에서는 명시 컬럼만 SELECT하여 MB 단위 직렬화 비용 차단
-- v19 이후(헤더 직접 저장) 데이터는 `session_id`가 NULL이 아니므로 `correlated_requests` VIEW 휴리스틱 불필요
-- `proxy_tool_uses` INSERT는 `INSERT OR IGNORE` — 같은 응답이 중복 처리되어도 멱등 보장
-- proxy commit 트랜잭션 마지막에 `backfillRequestApiRequestIdByToolUse`를 호출하여, hook PostToolUse와의 race condition으로 발생한 `api_request_id` NULL 행을 즉시 보정
+- `cost_usd` 컬럼은 INSERT 매핑(`SQL_CREATE`)에서 제외되어 항상 NULL — 정확한 가격 플랜을 알 수 없어 신뢰도 낮은 추정치를 저장하지 않음. 컬럼 자체는 schema 호환을 위해 유지.
+- `system_reminder`와 `system_hash`는 직교 책임: 전자는 user 메시지 내 system-reminder 원문, 후자는 `body.system` 본문의 `system_prompts.hash` 참조.
+- `payload` BLOB은 `/api/proxy-requests/:id/messages` 단건 조회(`getProxyRequestById`, `SELECT *`)에서만 디코드한다. 목록(`getRecentProxyRequests`)·세션(`getProxyRequestsBySession`)·드릴다운(`getProxyRequestsBySystemHash`) 조회는 명시 컬럼만 SELECT하여 zstd Uint8Array의 JSON 직렬화 폭증(행당 수 MB) 비용을 차단.
+- `session_id`는 `x-claude-code-session-id` 헤더에서 직접 채워지므로, 헤더가 수신된 행은 `correlated_requests` 타임스탬프 휴리스틱 없이 바로 join 가능하다.
+- `proxy_tool_uses` INSERT는 `INSERT OR IGNORE`(`persistProxyToolUses`) — 같은 응답이 중복 처리돼도 멱등. `api_request_id`가 빈 문자열이면 skip.
+- proxy commit 트랜잭션(`persistProxyRequest`) 마지막에 `backfillRequestApiRequestIdByToolUse`를 호출하여, hook PostToolUse와의 race condition으로 `api_request_id`가 NULL로 INSERT된 `requests` 행을 같은 `tool_use_id` 기준 `COALESCE` UPDATE로 즉시 보정.
+
+## 관련 문서
+
+- [requests 테이블](./requests.md) — hook 기반 요청·도구 호출 메인 SoT (`tool_use_id`, `api_request_id`로 cross-link)
+- [sessions 테이블](./sessions.md) — `session_id` 참조 대상
+- [system_prompts 테이블](./system-prompts.md) — `system_hash` 참조 대상 (content-addressable dedup)
+- [마이그레이션](../migrations.md) — `proxy_requests`/`proxy_tool_uses` DDL 변경 이력

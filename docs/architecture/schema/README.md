@@ -2,13 +2,19 @@
 
 Claude Spyglass SQLite 데이터베이스 스키마 설명서입니다.
 
+> 연관 문서: [데이터베이스 가이드](../database.md) · [마이그레이션 가이드](../migrations.md) · [데이터 흐름](../data-flow.md)
+
 ## 개요
 
 | 항목 | 내용 |
 |------|------|
-| DB 파일 | `~/.spyglass/spyglass.db` |
-| 엔진 | SQLite (WAL 모드) |
-| 테이블 수 | 14개 |
+| DB 파일 | `~/.spyglass/spyglass.db` (`SPYGLASS_DB_PATH` 로 재정의 가능) |
+| 엔진 | SQLite (WAL 모드, Bun `bun:sqlite`) |
+| 스키마 출처 | `packages/storage/migrations/NNN-*.sql` (마이그레이터가 파일명 순으로 적용) |
+| 테이블 수 | 15개 |
+| 뷰 수 | 3개 |
+
+> DDL 의 단일 출처는 `packages/storage/migrations/` 디렉토리다. `migrator.ts` 가 `.sql` 파일을 파일명 순으로 스캔·적용하고 `_migrations` 메타테이블에 기록한다. `packages/storage/src/schema.ts` 는 런타임 타입(`Session`, `Request`)과 `WAL_MODE_PRAGMAS` 만 제공한다.
 
 ## 테이블 목록
 
@@ -17,123 +23,139 @@ Claude Spyglass SQLite 데이터베이스 스키마 설명서입니다.
 | `sessions` | 세션 단위 정보 | [sessions.md](sessions.md) |
 | `requests` | 훅 기반 요청/도구 호출 (PreToolUse, PostToolUse, UserPromptSubmit, Stop) | [requests.md](requests.md) |
 | `claude_events` | 원시 훅 이벤트 (SessionStart/Stop/SessionEnd 등) | [claude-events.md](claude-events.md) |
-| `proxy_requests` | API 프록시 캡처 (/v1/* 인터셉트) | [proxy-requests.md](proxy-requests.md) |
+| `proxy_requests` | API 프록시 캡처 (`/v1/*` 인터셉트) | [proxy-requests.md](proxy-requests.md) |
 | `proxy_tool_uses` | proxy SSE에서 추출한 tool_use_id ↔ api_request_id 매핑 | [proxy-requests.md](proxy-requests.md) |
 | `system_prompts` | 시스템 프롬프트 정규화 dedup | [system-prompts.md](system-prompts.md) |
-| `meta_documents` | agents/skills/commands/CLAUDE.md 카탈로그 | [meta-documents.md](meta-documents.md) |
-| `meta_doc_resolutions` | cwd별 (type, name) → meta_document_id 매핑 | [meta-documents.md](meta-documents.md) |
-| `model_limits` | Claude 모델별 context/output limit | [model-limits.md](model-limits.md) |
+| `meta_documents` | agent/skill/command 카탈로그 | [meta-documents.md](meta-documents.md) |
+| `meta_doc_resolutions` | (cwd, type, name) → meta_document_id 매핑 | [meta-documents.md](meta-documents.md) |
+| `model_limits` | 모델 패턴별 max_tokens limit | [model-limits.md](model-limits.md) |
 | `metadata` | 서버 운영용 key-value 저장소 | — |
-| `stats_hourly` | hook 요청 사전 집계 (시간 단위) | — |
+| `stats_hourly` | hook 요청 사전 집계 (시간 + event_type 차원) | — |
 | `stats_proxy_hourly` | proxy 요청 사전 집계 (시간 단위) | — |
-| `anomaly_thresholds` | bloated-sys / agent-spike 임계값 SSoT (project_id, model_id) 기준 warn_pct / critical_pct | — |
-| `_migrations` | 마이그레이션 적용 히스토리 시스템 메타 (filename, applied_at, app_version, duration_ms) | — |
+| `anomaly_thresholds` | bloated-sys / agent-spike 임계값 SSoT — (project_id, model_id) 기준 warn_pct / critical_pct | — |
+| `kuzu_outbox` | 그래프(Ladybug) sync 대기열 — requests/sessions 변경을 트리거로 적재 | — |
+| `_migrations` | 마이그레이션 적용 히스토리 (version, filename, applied_at, app_version, duration_ms) | — |
+
+## 뷰 목록
+
+| 뷰명 | 정의 마이그레이션 | 설명 |
+|------|------------------|------|
+| `correlated_requests` | `018-cleanup-and-correlation.sql` | requests 의 prompt ↔ tool_call 상관 매칭 뷰 |
+| `v_meta_doc_usage` | `024-meta-documents.sql` | meta_documents 사용량 집계 뷰 |
+| `v_flow_active_rows` | `040-flow-active-rows-view.sql` | flow 차트용 활성 행 뷰 |
 
 ## ERD
+
+> ERD 는 핵심 컬럼과 관계만 표현한 단순화 다이어그램이다. 전체 컬럼은 각 테이블 문서 및 마이그레이션 SQL 을 참조한다.
 
 ```mermaid
 erDiagram
     sessions {
         TEXT id PK
-        string project_name
-        datetime started_at
-        datetime ended_at
-        int total_tokens
+        TEXT project_name
+        INTEGER started_at
+        INTEGER ended_at
+        INTEGER total_tokens
     }
     requests {
         TEXT id PK
         TEXT session_id FK
-        string type
-        string tool_name
-        string api_request_id
-        string tool_use_id
-        int tokens_input
-        int tokens_output
-        int tokens_total
-        int duration_ms
+        TEXT type "CHECK prompt|tool_call|system|response"
+        TEXT tool_name
+        TEXT turn_id
+        TEXT api_request_id
+        TEXT tool_use_id
+        INTEGER tokens_total
+        INTEGER duration_ms
     }
     claude_events {
-        int id PK
-        string event_id
-        string event_type
-        int session_id FK
-        datetime timestamp
-        json payload
+        INTEGER id PK
+        TEXT event_type
+        TEXT session_id FK
+        INTEGER timestamp
+        TEXT payload
     }
     proxy_requests {
-        string id PK
-        int session_id FK
-        string system_hash FK
-        int tokens_input
-        int tokens_output
-        int duration_ms
+        TEXT id PK
+        TEXT session_id FK
+        TEXT system_hash FK
+        INTEGER tokens_input
+        INTEGER tokens_output
+        INTEGER response_time_ms
     }
     proxy_tool_uses {
-        int id PK
-        string api_request_id FK
-        string tool_use_id
+        TEXT tool_use_id PK
+        TEXT api_request_id FK
+        TEXT tool_name
+        INTEGER block_index
     }
     system_prompts {
-        string system_hash PK
-        text content
-        int byte_size
-        int ref_count
+        TEXT hash PK
+        TEXT content
+        INTEGER byte_size
+        INTEGER ref_count
     }
     meta_documents {
-        int id PK
-        string type
-        string name
-        string content_hash
-        string file_path
+        INTEGER id PK
+        TEXT type
+        TEXT name
+        TEXT source
+        TEXT file_path
     }
     meta_doc_resolutions {
-        int id PK
-        int meta_document_id FK
-        string cwd
-        string type
-        string name
+        TEXT cwd PK
+        TEXT type PK
+        TEXT name PK
+        INTEGER meta_document_id FK
     }
     model_limits {
         TEXT pattern PK
-        int max_tokens
-        string notes
+        INTEGER max_tokens
+        TEXT notes
     }
     anomaly_thresholds {
         TEXT project_id PK
         TEXT model_id PK
-        int warn_pct
-        int critical_pct
-        int updated_at
+        INTEGER warn_pct
+        INTEGER critical_pct
+        INTEGER updated_at
+    }
+    kuzu_outbox {
+        INTEGER id PK
+        TEXT source "CHECK requests|sessions"
+        TEXT event_id
+        TEXT op "CHECK insert|update|delete"
+        INTEGER ts
     }
     _migrations {
-        int version PK
-        text filename
-        int applied_at
-        text app_version
-        int duration_ms
+        INTEGER version PK
+        TEXT filename
+        INTEGER applied_at
+        TEXT app_version
+        INTEGER duration_ms
     }
 
     sessions ||--o{ requests : "session_id"
     sessions ||--o{ claude_events : "session_id"
     sessions ||--o{ proxy_requests : "session_id"
-    requests }o--o| proxy_requests : "api_request_id"
-    proxy_requests ||--o{ proxy_tool_uses : "api_request_id"
-    proxy_requests }o--o| system_prompts : "system_hash"
+    requests }o--o| proxy_requests : "api_request_id ↔ id"
+    proxy_requests ||--o{ proxy_tool_uses : "id ↔ api_request_id"
+    proxy_requests }o--o| system_prompts : "system_hash ↔ hash"
     meta_documents ||--o{ meta_doc_resolutions : "meta_document_id"
 ```
 
 ## 설정 (PRAGMA)
 
-→ 실제 값은 `packages/storage/src/schema.ts: WAL_MODE_PRAGMAS` 참조
+→ SSoT 는 `packages/storage/src/schema.ts: WAL_MODE_PRAGMAS` (`connection.ts` 에서 연결 시 적용)
 
 ```sql
 PRAGMA journal_mode = WAL;
 PRAGMA busy_timeout = 5000;
 PRAGMA synchronous = NORMAL;
-PRAGMA cache_size = -64000;       -- 64MB
+PRAGMA cache_size = -64000;             -- 64MB
 PRAGMA foreign_keys = ON;
 PRAGMA journal_size_limit = 104857600;  -- 100MB WAL size limit
-PRAGMA wal_autocheckpoint = 200;  -- 약 800KB마다 checkpoint
+PRAGMA wal_autocheckpoint = 200;        -- 약 800KB마다 checkpoint
 ```
 
 ## 주요 쿼리 패턴
@@ -184,13 +206,13 @@ ORDER BY turn_id;
 ### 시스템 프롬프트별 API 요청 수
 ```sql
 SELECT
-  sp.system_hash,
+  sp.hash,
   sp.byte_size,
   sp.ref_count,
   COUNT(pr.id) AS request_count
 FROM system_prompts sp
-LEFT JOIN proxy_requests pr ON sp.system_hash = pr.system_hash
-GROUP BY sp.system_hash
+LEFT JOIN proxy_requests pr ON sp.hash = pr.system_hash
+GROUP BY sp.hash
 ORDER BY request_count DESC;
 ```
 
@@ -202,7 +224,7 @@ SELECT
   pr.id      AS proxy_request_id,
   pr.tokens_input,
   pr.tokens_output,
-  pr.duration_ms
+  pr.response_time_ms
 FROM requests r
 JOIN proxy_requests pr ON r.api_request_id = pr.id
 WHERE r.session_id = ?;
@@ -210,6 +232,8 @@ WHERE r.session_id = ?;
 
 ## 파일 위치
 
-- 스키마 정의: `packages/storage/src/schema.ts`
+- 스키마 DDL (SSoT): `packages/storage/migrations/NNN-*.sql`
+- 마이그레이터: `packages/storage/src/migrator.ts`
+- 런타임 타입 + PRAGMA: `packages/storage/src/schema.ts`
 - 연결 관리: `packages/storage/src/connection.ts`
 - 쿼리 함수: `packages/storage/src/queries/*.ts`

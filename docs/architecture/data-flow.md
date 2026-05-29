@@ -2,6 +2,8 @@
 
 > 문서 범위: Claude Code 훅에서 발생한 1건의 이벤트가 사용자 화면(웹 대시보드/TUI)에 표시되기까지 거치는 모든 단계.
 > 참조 코드: `packages/server`, `packages/storage`, `packages/web`, `packages/tui`, `hooks/spyglass-collect.sh`.
+>
+> 연관 문서: [아키텍처 개요](architecture.md) · [데이터베이스 스키마](database.md) · [훅 통합](hooks-integration.md) · [API & HTTP](api-http.md) · [웹 대시보드](web-dashboard.md) · [TUI](tui.md) · [지표·분석](metrics-analytics.md) · [마이그레이션](migrations.md)
 
 ## 데이터 흐름 한눈 보기
 
@@ -9,7 +11,7 @@
 flowchart LR
   A["① 수집\nClaude Code hook\nstdin JSON"] --> B["② 운반\nbash script\ncurl POST(백그라운드)"]
   B --> C["③ 저장\n/collect /events\nINSERT/UPDATE SQLite"]
-  C --> D["④ 집계\nstats_hourly\nAFTER INSERT 트리거(028)"]
+  C --> D["④ 집계\nrequests AFTER INSERT/UPDATE 트리거(028)\n→ stats_hourly upsert"]
   D --> E["⑤ 전달\nSSE / REST API\nnew_request\nnew_proxy_request\nsession_update"]
   E --> F["웹 대시보드\nEventSource\nprependReq…"]
   E --> G["TUI (Ink CLI)\neventsource\nfeedStore"]
@@ -59,7 +61,7 @@ Claude Code는 사용자가 `~/.claude/settings.json` 또는 프로젝트 `.clau
 
 ### 2.2 STDIN JSON 페이로드 포맷
 
-Claude Code가 stdin으로 흘리는 raw JSON 표준은 `packages/server/src/hook/types.ts:33`의 `ClaudeHookPayload` 인터페이스. hook 종류마다 채워지는 필드가 다르다.
+`/collect`로 가는 도구·프롬프트 훅의 raw JSON 형상은 `packages/server/src/hook/types.ts:33-49`의 `ClaudeHookPayload` 인터페이스. hook 종류마다 채워지는 필드가 다르다.
 
 ```jsonc
 {
@@ -68,27 +70,27 @@ Claude Code가 stdin으로 흘리는 raw JSON 표준은 `packages/server/src/hoo
   "session_id": "abc-123",
   "transcript_path": "~/.claude/...",
   "cwd": "/Users/.../project",          // → project_name 추출
-  "permission_mode": "default",         // 감사 메타 (v20)
+  "permission_mode": "default",         // v20 감사 메타
   // Pre/PostToolUse
   "tool_name": "Bash", "tool_input": { "command": "ls" },
   "tool_use_id": "toolu_01XYZ",         // Upsert 매칭 키
   "tool_response": { ... },             // PostToolUse만
-  "duration_ms": 134,                   // PostToolUse만 (신버전)
-  // 서브에이전트
+  "duration_ms": 134,                   // PostToolUse: Claude Code 실측 도구 실행 시간(ms)
+  // 서브에이전트 내부 hook
   "agent_id": "subagent-uuid", "agent_type": "general-purpose",
   // UserPromptSubmit
-  "prompt": "fix the bug...",
-  // Stop
-  "last_assistant_message": "응답 본문…"
+  "prompt": "fix the bug..."
 }
 ```
 
+세션 라이프사이클(SessionStart/Stop/SessionEnd) 훅은 `/events`로 가며 `packages/server/src/events.ts:30-40`의 `RawHookPayload` 형상을 따른다. Stop 훅의 `last_assistant_message`(마지막 응답 본문)는 이 쪽에만 존재한다.
+
 ### 2.3 `hooks/spyglass-collect.sh` 동작
 
-`hooks/spyglass-collect.sh:99-133`은 다음 순서로 동작한다.
+`hooks/spyglass-collect.sh:101-133`은 다음 순서로 동작한다.
 
 1. **TTY가 아닐 때만 동작**(`[[ ! -t 0 ]]`) — Claude Code의 자동 호출인지 확인.
-2. **원장 우선 기록**: `payload`를 `~/.spyglass/logs/hook-raw.jsonl`에 한 줄 append (서버 전송 전에).
+2. **원장 우선 기록**: `payload`를 `~/.spyglass/logs/hook-raw.jsonl`에 한 줄 append (서버 전송 전에, `spyglass-collect.sh:106`).
 3. **`hook_event_name` 추출**: python3 한 줄 인라인 스크립트로 파싱.
 4. **case 분기 라우팅**:
    - `UserPromptSubmit | PreToolUse | PostToolUse` → `/collect`
@@ -104,12 +106,17 @@ Claude Code가 stdin으로 흘리는 raw JSON 표준은 `packages/server/src/hoo
 
 ### 2.4 환경 변수
 
-| 변수 | 기본값 | 역할 |
-| --- | --- | --- |
-| `SPYGLASS_HOST` | `localhost` | 서버 호스트 |
-| `SPYGLASS_PORT` | `9999` | 서버 포트 |
-| `SPYGLASS_TIMEOUT` | `1` (초) | curl 타임아웃 |
-| `SPYGLASS_LOG_DIR` | `~/.spyglass/logs` | 로그 디렉토리 |
+오버라이드 가능한 환경 변수는 `${VAR:-default}` 패턴을 쓰는 다음 3종이다.
+
+| 변수 | 위치 | 기본값 | 역할 |
+| --- | --- | --- | --- |
+| `SPYGLASS_HOST` | `spyglass-collect.sh:18` | `localhost` | 서버 호스트 |
+| `SPYGLASS_PORT` | `spyglass-collect.sh:19` | `9999` | 서버 포트 |
+| `SPYGLASS_TIMEOUT` | `spyglass-collect.sh:22` | `1` (초) | curl 타임아웃 |
+
+`spyglass-collect.sh:20-21`의 `SPYGLASS_COLLECT_ENDPOINT`·`SPYGLASS_EVENTS_ENDPOINT`는 위 HOST/PORT에서 파생된 URL 상수로, `${VAR:-default}` 오버라이드 패턴이 없어 직접 주입할 수 없다.
+
+로그 디렉토리는 `spyglass-collect.sh:25`에서 `SPYGLASS_LOG_DIR="${HOME}/.spyglass/logs"`로 **하드코딩**되어 있어 환경 변수로 주입할 수 없다(오버라이드 패턴 없음).
 
 ---
 
@@ -125,9 +132,10 @@ spyglass-collect.sh
    └─ SessionStart / Stop / SessionEnd / Notification → POST /events
 ```
 
-서버 최상위 디스패처 `packages/server/src/runtime/dispatch.ts:41-54`가 이 두 경로를 받아 도메인 핸들러에 위임한다.
+서버 최상위 디스패처 `packages/server/src/runtime/dispatch.ts`의 `handleRequest`(38-201)가 이 두 경로를 받아 도메인 핸들러에 위임한다.
 
 ```ts
+// dispatch.ts:61-74
 if (path === '/collect') {
   const result = await handleHookHttpRequest(req, db);
   if (result.status === 200) invalidateDashboardCache();
@@ -159,7 +167,7 @@ if (path === '/events') {
 
 ### 4.2 Strategy 디스패치
 
-`packages/server/src/hook/dispatcher.ts:42-65`는 hook event를 핸들러로 라우팅한다.
+`packages/server/src/hook/dispatcher.ts:42-65`는 hook event를 핸들러로 라우팅한다. fallback `SystemEventHandler`의 `eventType`은 빈 문자열(`''`)이라 REGISTRY 매칭 키와 충돌하지 않고 별도 변수로 분리된다.
 
 ```ts
 const HANDLERS: HookEventHandler[] = [
@@ -191,14 +199,14 @@ export function dispatchHookEvent(raw, ctx) {
 
 ---
 
-## 5. 이벤트 모델 — `pre_tool` / `tool` / `post_tool` 처리 규칙
+## 5. 이벤트 모델 — `event_type` 처리 규칙
 
-> **CLAUDE.md 핵심 규칙**
+> **CLAUDE.md 핵심 규칙** — 도구 호출은 PreToolUse에서 `pre_tool`로 INSERT 후 PostToolUse에서 `tool`로 UPDATE(Upsert)된다. 별도의 `post_tool` event_type은 저장되지 않는다.
 >
 > - `event_type='pre_tool'`: 도구 실행 시작. DB INSERT만, SSE 브로드캐스트 **안 함**.
 > - `event_type='tool'`: 도구 실행 완료. 같은 `tool_use_id`의 pre_tool 행을 UPDATE(Upsert). SSE 송출 시 **DB 실제 id(`pre-…`)** 그대로 사용.
-> - 일반 조회 필터: `event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent'`.
-> - 통계 조회 필터: `event_type IS NULL OR event_type = 'tool'` (`post_tool` 아님).
+> - 일반 조회 필터: `event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent'` (`request/read.ts:30`).
+> - 통계 조회 필터: `event_type IS NULL OR event_type = 'tool'` — stats_hourly에서는 NULL→'' 정규화로 `event_type IN ('tool','')`로 재현.
 
 각 이벤트 타입의 동작은 다음 표로 정리된다.
 
@@ -209,9 +217,9 @@ export function dispatchHookEvent(raw, ctx) {
 | `assistant_response` | Stop 훅 + transcript backfill | INSERT (id=`resp-…` / `resp-msg-<msgid>`) | 함 |
 | `prompt` | UserPromptSubmit | INSERT + 새 `turn_id` 채번 | 함 |
 
-### 5.1 Upsert 로직 (`persist.ts:62-95`)
+### 5.1 Upsert 로직 (`saveRequest`, `persist.ts:123-277`)
 
-PostToolUse가 도착하면 같은 `session_id` + `tool_use_id` + `event_type='pre_tool'`인 행을 찾는다. 매칭에 성공하면 한 번의 UPDATE로 병합한다.
+PostToolUse가 도착하면 `findPreToolRecord`(`persist.ts:43-51`)가 같은 `session_id` + `tool_use_id` + `event_type='pre_tool'`인 행을 찾는다. 매칭에 성공하면 `mergePostToolIntoPreTool`(`persist.ts:62-95`)이 한 번의 UPDATE로 병합한다.
 
 병합되는 컬럼은 다음과 같다.
 
@@ -219,7 +227,7 @@ PostToolUse가 도착하면 같은 `session_id` + `tool_use_id` + `event_type='p
 - `model` — `COALESCE(?, model)`로 기존 값을 보존한다.
 - `api_request_id` — `COALESCE(api_request_id, ?)`로 동시 backfill 충돌을 회피한다.
 
-UPDATE 성공 시 `wasUpsert=true, savedId=<pre-xxx>`를 반환한다. 호출자(`processor.ts:74-103`)는 `savedId`로 다시 SELECT해 NormalizedRequest를 송출하므로 **SSE의 id가 fetchRequests의 id와 완전히 일치**한다.
+UPDATE 성공 시 `wasUpsert=true, savedId=<pre-xxx>`를 반환한다. 호출자(`processHookEvent`, `processor.ts:47-114`)는 `savedId ?? payload.id`로 `getRequestById` 재조회 후 `normalizeRequest`+`enrichRowWithAnomalies`로 정규화해 송출하므로 **SSE의 id가 fetchRequests의 id와 완전히 일치**한다.
 
 ### 5.2 조회 쿼리 기본 필터
 
@@ -235,7 +243,7 @@ WHERE event_type IS NULL
 WHERE event_type IS NULL OR event_type = 'tool'
 ```
 
-`stats_hourly` 사전 집계 트리거(028)는 INSERT 시점에 이미 `pre_tool`을 제외하고 누적하므로, `stats_hourly`를 SELECT하는 쿼리는 별도 필터가 필요 없다(`aggregate-cache.ts:53`, `aggregate-general.ts:50`).
+`stats_hourly` 사전 집계 트리거(028)는 INSERT 시점에 이미 `pre_tool`을 제외하고 누적하므로, `stats_hourly`를 SELECT하는 쿼리는 별도 필터가 필요 없다(`aggregate-cache.ts:49` 주석 "pre_tool은 028 트리거가 이미 제외", `aggregate-general.ts:51-53`).
 
 ### 5.3 `tool_use_id` 매핑
 
@@ -251,16 +259,16 @@ WHERE event_type IS NULL OR event_type = 'tool'
 
 > 세션 라이프사이클(SessionStart/Stop/SessionEnd) 훅을 받아 `claude_events`에 원장 INSERT 후, 이벤트 타입별 후속 처리(세션 활성화, 응답 본문 저장, 세션 종료)를 수행한다.
 
-`packages/server/src/events.ts:41-133`의 `eventsCollectHandler`가 처리한다. 흐름:
+`packages/server/src/events.ts:42-134`의 `eventsCollectHandler`가 처리한다. 흐름:
 
-1. raw JSON 파싱 → `claude_events` 테이블에 한 행 INSERT (`createEvent`, `packages/storage/src/queries/event.ts:25-53`)
+1. raw JSON 파싱 → `claude_events` 테이블에 한 행 INSERT (`createEvent`)
 2. 이벤트 타입별 후속 처리:
 
 | event_type | 추가 작업 |
 | ---------- | --------- |
-| `SessionStart` | `reactivateSession`으로 `ended_at`을 NULL로 클리어 (compact/resume 시 동일 session_id 재사용). `broadcastSessionUpdate({action:'started'})`. cwd로 `syncMetaDocsCwd` 실행(Behavior Definitions 카탈로그 동기화). |
+| `SessionStart` | `reactivateSession`으로 `ended_at`을 NULL로 클리어 (compact/resume 시 동일 session_id 재사용). `broadcastSessionUpdate({action:'started'})`. cwd가 있으면 `syncMetaDocsCwd`를 try/catch로 격리 실행(Behavior Definitions 카탈로그 동기화 — 실패해도 200 유지). |
 | `SessionEnd` | `endSession`으로 `ended_at`을 timestamp로 채움. `broadcastSessionUpdate({action:'ended'})`. |
-| `Stop` | `saveAssistantResponse` (`events.ts:144-301`) — 사용자가 본 마지막 응답 본문을 `requests`에 `type='response'`, `event_type='assistant_response'`로 INSERT. transcript의 모든 assistant text도 함께 backfill. `broadcastNewRequest` 송출. |
+| `Stop` | `saveAssistantResponse` (`events.ts:145-303`) — 사용자가 본 마지막 응답 본문을 `requests`에 `type='response'`, `event_type='assistant_response'`로 INSERT. transcript의 모든 assistant text도 함께 backfill. `broadcastNewRequest` 송출. |
 
 ### 6.1 `Stop` 처리의 정밀도
 
@@ -298,7 +306,7 @@ WHERE event_type IS NULL OR event_type = 'tool'
 전체 컬럼 정의는 `packages/storage/src/queries/request/write.ts:60-69`의 `SQL_CREATE_REQUEST` 참조. 핵심 컬럼 의미:
 
 - `type` (스키마 CHECK): `'prompt' | 'tool_call' | 'system' | 'response'` 4가지만 허용.
-- `event_type`: 더 세분된 운영 상태 — `'pre_tool'`, `'tool'`, `'prompt'`, `'assistant_response'`, `'sessionstart'` 등.
+- `event_type`: 더 세분된 운영 상태 — `'pre_tool'`, `'tool'`, `'prompt'`, `'assistant_response'`. (SystemEventHandler fallback은 미등록 이벤트명을 소문자로 보존하지만, 세션 라이프사이클 훅은 `/events`로 가므로 실무상 `/collect`에서 fallback이 발동하는 경우는 없다.)
 - `turn_id`: `<session_id>-T<n>` (1-based). prompt 행이 채번, tool_call/response는 직전 prompt 값 재사용(`hook/turn.ts`).
 - `tokens_confidence`: `'high' | 'low' | 'error'` — transcript 파싱 신뢰도. `stats_hourly`는 high 행만 별도 컬럼에 누적.
 - `tokens_source`: `'transcript' | 'proxy' | 'unavailable'`.
@@ -307,7 +315,7 @@ WHERE event_type IS NULL OR event_type = 'tool'
 
 ### 7.3 토큰 누적 정책
 
-`processor.ts:81-86` + `session.ts:74-81`이 다음 규칙으로 `sessions.total_tokens`를 누적한다.
+`processor.ts:82-86` + `session.ts`의 `updateSessionTotalTokens`가 다음 규칙으로 `sessions.total_tokens`를 누적한다.
 
 - Upsert merge(pre_tool → tool): pre_tool은 tokens=0이므로 post 토큰만 누적.
 - 일반 INSERT 중 `event_type != 'pre_tool'`: 정상 누적.
@@ -321,9 +329,9 @@ WHERE event_type IS NULL OR event_type = 'tool'
 
 ## 8. 집계 단계 — aggregate-cache / aggregate-general / aggregate-strip
 
-> 단일 책임 원칙에 따라 집계 모듈을 세 파일로 분리했다. 각 모듈은 변경 이유(캐시 지표 / 헤더 카드 / Command Center Strip)가 서로 다르다.
+> 단일 책임 원칙에 따라 집계 모듈은 세 파일로 나뉘며, 각 모듈은 변경 이유(캐시 지표 / 헤더 카드 / Command Center Strip)가 서로 다르다.
 
-세 파일은 각자 다른 UI 영역의 KPI를 담당한다. `srp-redesign Phase 10`에서 `aggregate.ts(453줄)`를 변경 이유별로 분해한 결과다.
+세 파일은 각자 다른 UI 영역의 KPI를 담당한다.
 
 ### 8.1 역할 비교
 
@@ -344,9 +352,9 @@ savingsRate        = cache_read / totalBillableInput
 
 `cache_creation`을 분모에 포함해야 "전체 토큰 비용 중 캐시 처리 비율"의 옵저빌리티 의미가 정확하다(주석 `aggregate-cache.ts:42-46`).
 
-### 8.3 `aggregate-general.ts` 핵심 (`aggregate-general.ts:50-82`)
+### 8.3 `aggregate-general.ts` 핵심 (`getRequestStats`, `aggregate-general.ts:50-82`)
 
-원본 필터 `event_type IS NULL OR event_type='tool'`를 stats_hourly의 NULL→'' 정규화 컨벤션에 맞춰 `event_type IN ('tool','')`로 재현. 토큰 합계는 `tokens_*_high_sum` 컬럼 사용(`tokens_confidence='high'`만), avg_duration_ms는 전체 평균 — 기존 SQL 의미를 그대로 재현.
+`stats_hourly`의 NULL→'' 정규화 컨벤션에 맞춰 `event_type IN ('tool','')` 필터를 적용한다(`aggregate-general.ts:53`). 토큰 합계는 `tokens_*_high_sum` 컬럼(`tokens_confidence='high'`만), avg_duration_ms는 `duration_ms_sum / duration_ms_count` 전체 평균이다(`aggregate-general.ts:72-77`).
 
 ### 8.4 `aggregate-strip.ts` 핵심 (`aggregate-strip.ts:32-86`)
 
@@ -357,8 +365,8 @@ savingsRate        = cache_read / totalBillableInput
 
 `/api/dashboard` 응답은 `routes/dashboard.ts`가 in-memory로 캐시한다. 무효화 트리거는 두 곳:
 
-- `dispatch.ts:44`: `/collect` 성공 시 `invalidateDashboardCache()`.
-- `events.ts:198, 286`: Stop 처리 후 `invalidateDashboardCache()`.
+- `dispatch.ts:64`: `/collect` 성공(status 200) 시 `invalidateDashboardCache()`.
+- `events.ts:198, 287`: Stop 처리 후(backfill 행 존재로 조기 반환하는 경로 + 신규 응답 INSERT 경로) `invalidateDashboardCache()`.
 
 SSE 브로드캐스트는 별도 채널이므로 캐시 무효화와 무관하게 즉시 송출된다.
 
@@ -366,21 +374,22 @@ SSE 브로드캐스트는 별도 채널이므로 캐시 무효화와 무관하�
 
 ## 9. SSE 브로드캐스트
 
-> 저장된 행을 다시 SELECT해 정규화한 뒤 4개 SSE 채널(`new_request`, `new_proxy_request`, `session_update`, `ping`)로 송출한다. 8초 주기 `ping`으로 Bun의 idleTimeout을 우회한다.
+> 저장된 행을 다시 SELECT해 정규화한 뒤 5개 SSE 채널(`new_request`, `new_proxy_request`, `session_update`, `ping`, `server_shutdown`)로 송출한다. 8초 주기 `ping`으로 Bun의 idleTimeout을 우회한다.
 
 ### 9.1 채널 구조
 
-`packages/server/src/sse.ts:27-33`에 정의된 SSE 이벤트 타입은 다음 6종이다.
+`packages/server/src/sse.ts:27-34`의 `SSEEventType`은 다음 7종을 정의하며, 실제로 송출되는 채널은 5종(`new_request`, `new_proxy_request`, `session_update`, `ping`, `server_shutdown`)이다.
 
 | 채널 | 발신 함수 | 데이터 | 발생 케이스 |
 | ---- | -------- | ------ | ----------- |
-| `new_request` | `broadcastNewRequest` (`sse.ts:165-170`) | `NormalizedRequest + session_total_tokens + event_phase` | hook이 prompt/tool/response를 저장하면(단, `pre_tool` 제외). Stop 응답 INSERT 시. |
-| `new_proxy_request` | `broadcastNewProxyRequest` | `ProxyBroadcastPayload + source='proxy'` | proxy_requests 신규 행. |
-| `session_update` | `broadcastSessionUpdate` | `{session_id, action: 'started'|'ended'|'token_update', ...}` | SessionStart, SessionEnd, hook 후 토큰 갱신. |
-| `ping` | 내부 `setInterval(8s)` | `{connections: N}` | 8초마다 keep-alive. Bun idleTimeout 회피. |
-| `stats_update`, `token_update` | (현재 미사용) | — | 향후 확장용. |
+| `new_request` | `broadcastNewRequest` (`sse.ts:166-171`) | `NormalizedRequest + session_total_tokens + event_phase` | hook이 prompt/tool/response를 저장하면(단, `pre_tool` 제외). Stop 응답 INSERT 시. |
+| `new_proxy_request` | `broadcastNewProxyRequest` (`sse.ts:215-220`) | `ProxyBroadcastPayload + source='proxy'` | proxy_requests 신규 행. |
+| `session_update` | `broadcastSessionUpdate` (`sse.ts:232-245`) | `{session_id, action: 'started'|'ended'|'token_update', ...}` | SessionStart, SessionEnd, hook 후 토큰 갱신. |
+| `ping` | `sseRouter` 내부 `setInterval(8s)` + 최초 연결 시 1회 | `{connections: N}` | 8초마다 keep-alive. Bun idleTimeout 회피. |
+| `server_shutdown` | `broadcastUpdate` (`lifecycle.ts:192-195`) | `{reason: 'graceful', timeoutMs}` | graceful 종료 시 1회 — SSE 클라이언트(대시보드)에 종료 신호 후 250ms grace, `closeAllConnections`. |
+| `token_update`, `stats_update` | (타입만 정의, 미발신) | — | 향후 확장용. |
 
-### 9.2 `new_request` 페이로드 (`buildNewRequestEvent`, `sse.ts:141-153`)
+### 9.2 `new_request` 페이로드 (`buildNewRequestEvent`, `sse.ts:142-154`)
 
 ```ts
 {
@@ -401,11 +410,11 @@ SSE 브로드캐스트는 별도 채널이므로 캐시 무효화와 무관하�
 
 ### 9.3 송출 ID 일관성
 
-`pre_tool → tool` Upsert가 발생하면 새로 만든 `tool-<ts>` id가 아니라 **DB의 실제 id(`pre-<ts>`)**로 송출해야 한다(`processor.ts:90-96`). 호출자는 `savedId ?? payload.id`로 `broadcastId`를 정한 뒤 `getRequestById(db, broadcastId)`로 raw row를 다시 SELECT → `normalizeRequest` → `broadcastNewRequest`. 이렇게 해야 `fetchRequests`로 받은 행과 SSE로 받은 행의 `id`가 일치하고, 웹 클라이언트가 `data-request-id` 셀렉터로 in-place 업데이트할 수 있다.
+`pre_tool → tool` Upsert가 발생하면 새로 만든 id가 아니라 **DB의 실제 id(`pre-<ts>`)**로 송출해야 한다(`processor.ts:92-104`). 호출자는 `savedId ?? payload.id`로 `broadcastId`를 정한 뒤 `getRequestById(db, broadcastId)`로 raw row를 다시 SELECT → `normalizeRequest` → `enrichRowWithAnomalies` → `broadcastNewRequest`. 이렇게 해야 `fetchRequests`로 받은 행과 SSE로 받은 행의 `id`가 일치하고, 웹 클라이언트가 `data-request-id` 셀렉터로 in-place 업데이트할 수 있다.
 
-### 9.4 SSE 라우터 (`sseRouter`, `sse.ts:253-301`)
+### 9.4 SSE 라우터 (`sseRouter`, `sse.ts:254-302`)
 
-GET `/events` 요청을 받으면 ReadableStream을 구성하고 `connections: Set<Controller>`에 등록한다. 8초 주기 ping을 통해 Bun의 `idleTimeout`(기본 10초)을 무력화한다 — 라이프사이클 시작 시 `idleTimeout: 0`도 함께 설정(`lifecycle.ts:98`).
+GET `/events` 요청을 받으면 ReadableStream을 구성하고 `connections: Set<Controller>`에 등록한다. 8초 주기 ping을 통해 Bun의 `idleTimeout`(기본 10초)을 무력화한다 — 서버 라이프사이클 시작 시 Bun 옵션에 `idleTimeout: 0`도 함께 설정(`lifecycle.ts:144`).
 
 ---
 
@@ -428,35 +437,40 @@ connectSSE({
 
 연결 실패 시 5초 후 재연결, 콜백 참조를 모듈 변수에 저장해 재연결 시 재등록.
 
-### 10.2 `onNewRequest` 처리 (`main.js:307-329`)
+### 10.2 `onNewRequest` 처리 (`main.js:358-389`)
 
 이벤트 1건당 다음 5가지가 순서대로 발생한다.
 
 1. `recordRequest() + drawTimeline()` — 차트의 1분 버킷에 1건 누적, 즉시 redraw.
-2. 세션 토큰 즉시 반영 — `getAllSessions().find(s=>s.id===req.session_id)` 후 in-place 갱신 또는 부분 DOM 업데이트(`.sess-row-tokens`). 캐시에 없으면 `fetchAllSessions()`로 전체 재요청.
+2. 세션 토큰 즉시 반영 — `getAllSessions().find(s=>s.id===req.session_id)` 후 캐시 객체 갱신 + 부분 DOM 업데이트(`.sess-row-tokens`). 행 셀이 없으면 `renderBrowserSessions()`, 캐시에 세션 자체가 없으면 `fetchAllSessions()`로 전체 재요청.
 3. `prependRequest(req)` — 로그 피드 최상단 추가(또는 in-place 갱신).
-4. `getSelectedSession() === req.session_id` 이면 `refreshDetailSession(req.session_id)`.
+4. `getSelectedSession() === req.session_id`이면 `patchActiveTurnFromSSE(req)`로 활성 turn의 turn-spine·flow-head 카운터를 in-place 패치 시도. 패치 실패(비활성 turn, 새 turn 생성 등) 시에만 `refreshDetailSession(req.session_id)` 폴백.
 5. `scheduleDashboardRefresh()` — 1초 디바운스로 통계 재요청.
 
 ### 10.3 `prependRequest`의 in-place vs prepend 분기
 
-CLAUDE.md 규칙대로 `prependRequest(r)`는 동일 `id` 행이 있으면 **인플레이스 업데이트(위치 보존)**, 없으면 prepend.
+CLAUDE.md 규칙대로 `prependRequest(r)`(`packages/web/assets/js/views/default/feed-live.js:31`)는 동일 `id` 행이 있으면 **인플레이스 갱신(위치 보존)**, 없으면 최상단 prepend. 두 경로 모두 행 HTML은 `render/rows.js`의 `makeRequestRow`로 생성된다 — in-place 경로의 `replaceRowCells`(`feed-live.js:99`)도 내부에서 `makeRequestRow`를 호출해 fresh 행을 만든 뒤 셀 단위로 swap한다(`feed-live.js:102`). `makeRequestRow`는 `makeTargetCell`을 거쳐 `render/badges.js`의 `toolIconHtml(toolName, eventType)`를 호출하므로, `toolIconHtml`은 두 경로 모두 `makeRequestRow` **내부**에서 도달한다(별도 후속 단계가 아님).
 
 ```mermaid
 flowchart TD
-  A["prependRequest(req)\n→ views/default-view.js"] --> B{"기존 tr[data-request-id] 검색"}
-  B -- "있으면" --> C["같은 tr의 innerHTML만\nmakeRequestRow(req)로 교체\n(위치 유지)"]
-  B -- "없으면" --> D["새 tr을 #feedBody\n최상단에 삽입"]
-  C --> E["chart.js toolIconHtml(r.tool_name, r.event_type) 호출"]
-  D --> E
+  A["prependRequest(req)\nviews/default/feed-live.js:31"] --> R{"활성 date range\n밖이면 skip"}
+  R -- "범위 내" --> B{"#requestsBody에\ntr[data-request-id=req.id] 존재?"}
+  B -- "있으면" --> C["replaceRowCells(existing, req)\n셀 단위 교체 (위치 유지)\n내부에서 makeRequestRow 호출"]
+  C --> C2{"event_phase\n= 'updated'?"}
+  C2 -- "예" --> C3["row-flash-update 펄스"]
+  C2 -- "아니오" --> C4["return (feed-live.js:68)"]
+  C3 --> C4
+  B -- "없으면" --> D["makeRequestRow(req)\n새 tr을 최상단 insertBefore"]
+  C -. "내부 호출" .-> E
+  D --> E["makeRequestRow\n→ makeTargetCell\n→ toolIconHtml(r.tool_name, r.event_type)"]
   E --> F{"event_type?"}
-  F -- "pre_tool" --> G["pulse 애니메이션"]
-  F -- "tool" --> H["정적 아이콘"]
+  F -- "pre_tool" --> G["pulse 애니메이션\n(.tool-icon-running)"]
+  F -- "tool / 기타" --> H["정적 아이콘"]
 ```
 
-### 10.4 통계 갱신 디바운스 (`main.js:286-304`)
+### 10.4 통계 갱신 디바운스 (`main.js:330-354`)
 
-매 SSE 이벤트 직후 `scheduleDashboardRefresh()` 호출. 단순 debounce(1초)는 활발한 세션에서 timer가 무한 reset되는 버그가 있어 `REFRESH_MAX_WAIT_MS=3000`으로 최대 대기 시간을 강제한다. 발화 시 `fetchDashboard + autoActivateProject`를 호출해 요약 카드와 차트, 사이드바를 동시 갱신.
+매 SSE 이벤트(`onNewRequest`/`onNewProxyRequest`) 직후 `scheduleDashboardRefresh()` 호출. 단순 debounce(`REFRESH_DEBOUNCE_MS=1000`)는 활발한 세션에서 timer가 무한 reset되는 버그가 있어 `REFRESH_MAX_WAIT_MS=3000`으로 최대 대기 시간을 강제한다. 발화 시 `fetchDashboard()` 후 `autoActivateProject()`를 호출해 요약 카드와 차트, 사이드바를 동시 갱신.
 
 ### 10.5 REST 보조 호출 (`api.js`)
 
@@ -465,11 +479,10 @@ SSE 도착 시 `prependRequest`로 한 행은 즉시 추가되지만, 다음 데
 | API | 호출 시점 | 책임 |
 | --- | -------- | ---- |
 | `GET /api/dashboard` | SSE debounce 1초 후 | 요약 카드 (총 세션/요청/토큰/평균 duration), p95, error_rate |
-| `GET /api/requests` | 초기 로드, 필터/페이지 변경 | 로그 피드 page 단위 (limit=200) |
-| `GET /api/sessions` (limit 500) | 30초 폴링 | 좌측 사이드바 세션 리스트 |
+| `GET /api/requests` | 초기 로드, 필터/페이지 변경 | 로그 피드 page 단위 (`REQ_PAGE`=200) |
+| `GET /api/sessions` (limit 500) | 30초 폴링 (`main.js:978`) | 좌측 사이드바 세션 리스트 |
 | `GET /api/stats/cache` | 초기 로드, 날짜 필터 변경 | Cache panel |
-| `GET /api/metrics/burn-rate`, `cache-trend`, `tool-categories` | dashboard와 함께 | 옵저빌리티 카드 4종 |
-| `GET /api/sessions/active` | dashboard와 함께 | Live Pulse 카드 |
+| `GET /api/metrics/burn-rate`, `cache-trend`, `tool-categories` + `GET /api/sessions/active` | dashboard와 함께 4개 병렬 호출 (`api.js:332-335`) | 옵저빌리티 카드 + Live Pulse |
 
 ---
 
@@ -495,13 +508,13 @@ TUI는 React + Ink로 구현되며 데이터 경로가 두 갈래로 나뉜다.
 
 ### 11.2 폴링 — Session detail은 REST
 
-`packages/tui/src/hooks/useSessionTurns.ts:172-229`는 `${apiUrl}/api/sessions/:id/turns`를 10초 폴링으로 호출한다. SSE의 `new_request`는 세션 디테일의 turn 그룹화까지는 반영하지 않으므로 — turn 단위 집계는 서버에서 매번 다시 계산해 받는다.
+`packages/tui/src/hooks/useSessionTurns.ts`는 `${apiUrl}/api/sessions/:id/turns`를 `POLL_INTERVAL_MS=10_000`(10초) 폴링으로 호출한다. SSE의 `new_request`는 세션 디테일의 turn 그룹화까지는 반영하지 않으므로 — turn 단위 집계는 서버에서 매번 다시 계산해 받는다.
 
-다른 폴링 훅도 동일 패턴:
+다른 폴링 훅도 동일 패턴(`setInterval` + mount/파라미터 변경 시 즉시 refetch):
 
-- `useStripStats.ts` — `/api/dashboard` 또는 stats 엔드포인트, 30초 폴링.
-- `useToolsAnalytics.ts` — 도구 사용 통계.
-- `useProxyRequests.ts` — proxy 데이터.
+- `useStripStats.ts` — `/api/stats/strip` · `/api/sessions/active` · `/api/stats/tools` 병렬, 기본 `intervalMs=5000`(5초).
+- `useToolsAnalytics.ts` — `/api/stats/tools` · `/api/stats/by-type` · `/api/stats/cache` 병렬, 5초 폴링.
+- `useProxyRequests.ts` — `/api/proxy-requests?limit=20`, 인터벌 폴링 + `new_proxy_request` SSE 수신 시 즉시 refetch.
 
 ### 11.3 재연결 정책
 
@@ -545,8 +558,9 @@ sequenceDiagram
   collect->>collect: normalizeRequest(row)
   collect->>SSE: broadcastNewRequest data.id='pre-…'
   SSE->>web: prependRequest (in-place 교체)
+  web->>web: scheduleDashboardRefresh (main.js:340)
   DB-->>collect: 200
-  collect->>collect: scheduleDashboardRefresh
+  collect->>collect: invalidateDashboardCache
 ```
 
 ### 12.2 SessionStart + UserPromptSubmit + Stop (turn 1건)
@@ -610,9 +624,9 @@ PreToolUse는 도착하지 않고 PostToolUse만 도착하는 경우(Claude Code
 ### 13.2 동일 id 재수신 (멱등성)
 
 - `requests.id`가 PRIMARY KEY → 두 번째 INSERT는 SQLite 단계에서 실패.
-- `persistSubagentChildren`은 같은 `tool_use_id` 행을 미리 SELECT해 skip(`persist.ts:217-220`).
+- `persistSubagentChildren`(`persist.ts:310-388`)은 같은 `tool_use_id` 행을 미리 SELECT해, 기존 행의 `parent_tool_use_id`가 비어 있으면 백필 후 skip한다(`persist.ts:321-348`).
 - `persistAssistantTextResponses`는 `INSERT OR IGNORE`로 silent skip.
-- SSE는 `event_phase: 'updated'` discriminator를 future-use로 정의했지만 현재는 전부 `'created'` — 클라가 `data-request-id` 존재 검사로 in-place vs prepend 분기.
+- SSE `event_phase` discriminator: hook 경로(`processor.ts`/`events.ts`)는 항상 `'created'`로 송출하고, proxy backfill 경로(`proxy/handler/broadcast.ts:59`)만 갱신된 행을 `'updated'`로 재브로드캐스트한다. 클라는 `data-request-id` 존재 검사로 in-place vs prepend를 분기하고, `'updated'`면 `row-flash-update` 펄스를 추가한다(`feed-live.js:60-64`).
 
 ### 13.3 서버 장애
 
@@ -625,7 +639,7 @@ PreToolUse는 도착하지 않고 PostToolUse만 도착하는 경우(Claude Code
 - 웹: `sse.js`가 5초 후 자동 재연결.
 - TUI: `useSSE.ts`가 exponential backoff (1→15초) 재연결.
 - 재연결 직후엔 새 데이터만 수신. 과거 데이터는 REST(`fetchRequests` / `/api/sessions/:id/turns`)로 부족분을 메움.
-- 웹은 재연결 성공 시 `onOpen`에서 `fetchDashboard + fetchAllSessions`를 즉시 호출(`main.js:366-371`).
+- 웹은 재연결 성공 시 `onOpen`에서 `fetchDashboard + fetchAllSessions`(이후 `autoActivateProject`)와 `fetchRequests`를 즉시 호출(`main.js:426-433`).
 
 ### 13.5 Compact / Resume
 
@@ -637,11 +651,11 @@ transcript 파일 부재/권한 부족 → `parseTranscript`가 `confidence='err
 
 ### 13.7 Stop 응답 본문 누락
 
-`events.ts:174-188`에서 3단계 폴백: ① `last_assistant_message` ② transcript의 마지막 assistant entry ③ 120s 윈도우 내 proxy 응답. 모두 미스면 응답 INSERT 생략하고 claude_events만 저장.
+`saveAssistantResponse`(`events.ts:145-303`)는 ① transcript의 모든 assistant text를 `extractAssistantTextEntries`로 먼저 idempotent backfill(`events.ts:159-172`) → ② Stop payload의 `last_assistant_message`(`events.ts:174-177`) → ③ 비면 120s 윈도우 내 proxy 응답(`getLatestProxyResponseBefore`, `events.ts:182-189`) 순으로 본문을 결정한다. 마지막 entry가 backfill로 이미 저장됐으면 자체 INSERT를 생략(SSoT로 채택). 모두 미스면 응답 INSERT 생략하고 claude_events만 저장.
 
 ### 13.8 활발한 세션의 통계 stall
 
-`scheduleDashboardRefresh`의 단순 debounce가 무한 reset되어 통계가 멈추던 버그 → `REFRESH_MAX_WAIT_MS=3000`으로 강제 발화하여 해결(`main.js:286-304`).
+`scheduleDashboardRefresh`의 단순 debounce가 무한 reset되어 통계가 멈추는 것을 `REFRESH_MAX_WAIT_MS=3000` 강제 발화로 방지한다(`main.js:330-354`).
 
 ---
 
@@ -662,4 +676,4 @@ transcript 파일 부재/권한 부족 → `parseTranscript`가 `confidence='err
 
 ---
 
-*문서 기준: schema v23 / 2026-05-17. 스키마 변경 시 §7·§8 갱신 필요.*
+*문서 기준: 활성 마이그레이션 v1~v053(중간 결번 포함). 스키마·집계 트리거 변경 시 §7·§8 갱신 필요.*

@@ -3,7 +3,7 @@
 ## Claude Code 실행을 들여다보는 로컬 망원경
 
 ![Build](https://img.shields.io/badge/build-passing-brightgreen)
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-3.0.7-blue)
 ![Runtime](https://img.shields.io/badge/bun-%E2%89%A51.2.0-f472b6)
 ![Storage](https://img.shields.io/badge/storage-SQLite-003b57)
 ![Privacy](https://img.shields.io/badge/data-local--only-success)
@@ -28,7 +28,7 @@
 
 - 호스트 머신에서만 실행 (Bun 프로세스)
 - 외부 송신·원격 백엔드·텔레메트리 없음
-- 모든 데이터는 `~/.spyglass/spyglass.db` (SQLite)에 저장
+- 모든 데이터는 `~/.spyglass/` 아래(`spyglass.db` SQLite + `graph/` Ladybug 그래프)에 로컬 저장
 - 프록시 경유 시에도 API 키는 그대로 통과시키고 spyglass는 메타만 기록
 
 ---
@@ -37,7 +37,7 @@
 
 ### 실시간 요청 추적
 
-- Claude Code 훅이 발생할 때마다 `hooks/spyglass-collect.sh` → `POST /collect`로 페이로드 전달
+- Claude Code 훅이 발생할 때마다 `hooks/spyglass-collect.sh`가 도구 이벤트(UserPromptSubmit·Pre/PostToolUse)는 `POST /collect`로, 세션 이벤트(SessionStart·Stop·SessionEnd 등)는 `POST /events`로 전달
 - 정제된 레코드를 SQLite에 적재하고 SSE(Server-Sent Events, `GET /events`)로 클라이언트에 즉시 푸시
 - `pre_tool` → `tool` 상태 전이를 동일 `tool_use_id`로 인플레이스 갱신 (피드 행이 깜빡이지 않음)
 
@@ -49,8 +49,8 @@
 
 ### 세션 통계
 
-- `sessions` 테이블이 cwd, 시작/종료 시각, 모델, 메시지 수, 누적 토큰을 보관
-- 도구 호출 카테고리(filesystem / shell / web / agent / mcp 등)별 분포 집계
+- `sessions` 테이블이 프로젝트명, 시작/종료 시각, 누적 토큰을 보관
+- 도구 호출 카테고리(Agent / Skill / MCP / Native)별 분포 집계
 - 룰·스킬·에이전트 카탈로그 스캔으로 워크스페이스별 유효 메타 문서 노출
 
 ### 런타임 이상 탐지
@@ -135,7 +135,7 @@ claude() {
 bun run doctor
 ```
 
-Bun 런타임, 서버 상태, `~/.claude/settings.json` 훅 등록, `SPYGLASS_DIR` 경로, DB 마이그레이션 버전을 한 번에 점검합니다.
+Bun 런타임, 서버 포트, `~/.claude/settings.json` 훅 등록, DB 권한·마이그레이션 스키마 버전, turn·proxy 데이터 무결성을 한 번에 점검합니다.
 
 ---
 
@@ -147,25 +147,30 @@ Bun workspaces(`packages/*`) 기반으로 구성됩니다.
 claude-spyglass/
 ├── packages/
 │   ├── server/              # HTTP 서버(Bun) — /collect, /events, /api/*, /v1/* 프록시
-│   │   └── src/
-│   │       ├── index.ts         # 데몬 디스패처 (start/stop/restart/status)
-│   │       ├── cli.ts, cli/     # doctor 진입점 + checks/
-│   │       ├── runtime/         # daemon · lifecycle · dispatch
-│   │       ├── routes/, api.ts, sse.ts
-│   │       ├── proxy/, hook/, events.ts
-│   │       ├── meta-docs/       # 룰·스킬·에이전트 카탈로그 스캔
-│   │       ├── metrics/, domain/
-│   │       └── ../scripts/      # backfill-system-prompts.ts
+│   │   ├── src/
+│   │   │   ├── index.ts         # 데몬 디스패처 (start/stop/restart/status)
+│   │   │   ├── cli.ts, cli/     # doctor 진입점 + cli/checks/
+│   │   │   ├── runtime/         # daemon · dispatch · config
+│   │   │   ├── routes/, api.ts, sse.ts, events.ts
+│   │   │   ├── proxy/, hook/    # /v1/* 프록시 · hook 수집·정제
+│   │   │   ├── meta-docs/       # 룰·스킬·에이전트 카탈로그 스캔
+│   │   │   └── metrics/, metrics.ts, domain/, settings/
+│   │   └── scripts/         # backfill-system-prompts.ts · backfill-subagent-parents.ts
 │   ├── storage/             # SQLite 스토리지 — connection · migrator · queries
-│   │   ├── migrations/          # 001-init.sql … 020-payload-audit-fields.sql
-│   │   └── src/queries/         # metrics/ · request/ · session/
-│   ├── tui/                 # Ink 기반 TUI (React) — screens/, components/
-│   ├── web/                 # 정적 웹 대시보드 — index.html + assets/{css,js}
-│   └── types/               # 워크스페이스 공유 타입
-├── hooks/spyglass-collect.sh  # Claude Code 훅 진입점 (POST /collect)
+│   │   ├── migrations/          # 001-init.sql … 053-kuzu-outbox-trigger-hardening.sql
+│   │   └── src/
+│   │       ├── queries/         # request/ · session/ · metrics/ · stats/ · flow/
+│   │       ├── runtime/         # retention · maintenance
+│   │       └── scripts/         # rebuild-stats.ts · rebuild-stats-proxy.ts · bench-*.ts
+│   ├── storage-graph/       # Ladybug 그래프 — client · queries(unified-flow/retention) · sync
+│   ├── tui/                 # Ink 기반 TUI (React) — screens/, components/, stores/
+│   ├── web/                 # 정적 웹 대시보드 — index.html + assets/{css,js} + locales/
+│   ├── desktop/             # Electron 래퍼 — main/preload
+│   └── types/               # 워크스페이스 공유 타입 (request/session/turn)
+├── hooks/spyglass-collect.sh  # Claude Code 훅 진입점 (POST /collect, raw → /events)
 ├── scripts/                 # install.sh, delete-old-data.ts, i18n-extract.ts 등
 ├── docs/                    # install-guide.md, examples/, architecture/(index.md · schema/ · images/ 포함)
-├── docker/, docker-compose.yml, Dockerfile
+├── docker-compose.yml, Dockerfile
 └── package.json             # bun workspaces 루트
 ```
 
@@ -174,7 +179,9 @@ claude-spyglass/
 | 항목 | 경로 |
 |------|------|
 | DB | `~/.spyglass/spyglass.db` (+ `-wal`, `-shm`) |
+| 그래프 | `~/.spyglass/graph/` (Ladybug) |
 | 가격표 | `~/.spyglass/pricing.json` |
+| 서버 설정 | `~/.spyglass/server-config.json` |
 | 훅 로그 | `~/.spyglass/logs/collect.log` |
 | 훅 원본 페이로드 | `~/.spyglass/logs/hook-raw.jsonl` |
 | 서버 PID | `~/.spyglass/server.pid` |
@@ -199,7 +206,7 @@ bun run status    # PID · 포트 · 헬스 한 줄 요약
 ### 환경 진단
 
 ```bash
-bun run doctor    # 5단계 자동 점검 — Bun / 서버 / 훅 / 경로 / DB
+bun run doctor    # 자동 점검 — Bun 버전 / settings.json·훅 등록 / DB 권한·스키마 / 서버 포트 / turn·proxy 무결성
 ```
 
 `bun run packages/server/src/cli.ts doctor`로 연결되며, `--fix` 플래그가 지원되는 항목은 자동 보정합니다.
@@ -220,9 +227,10 @@ bun run typecheck # tsc --noEmit
 ### 데이터 유지보수
 
 ```bash
-bun run rebuild-stats         # 모든 요청 기반 세션·통계 재계산
-bun run rebuild-stats-proxy   # proxy_requests 기반 통계 재계산
-bun run backfill:system-prompts  # 과거 요청에 시스템 프롬프트 해시 백필
+bun run rebuild-stats              # requests 기반 stats_hourly 재집계
+bun run rebuild-stats-proxy        # proxy_requests 기반 stats_proxy_hourly 재집계
+bun run backfill:system-prompts    # 과거 proxy_requests에 시스템 프롬프트 해시 백필
+bun run backfill:subagent-parents  # 서브에이전트 parent_tool_use_id 백필
 ```
 
 ### Git 훅
@@ -231,37 +239,52 @@ bun run backfill:system-prompts  # 과거 요청에 시스템 프롬프트 해�
 bun run prepare   # git config core.hooksPath .githooks (저장소 자동 실행)
 ```
 
+### 데스크톱 (Electron)
+
+```bash
+bun run desktop:dev        # Electron 개발 모드 (packages/desktop)
+bun run desktop:build:mac  # macOS 패키지 빌드
+bun run desktop:pack:mac   # macOS 디렉토리 팩(미서명)
+```
+
 ---
 
 ## 동작 채널 요약
 
-spyglass는 두 갈래로 데이터를 모읍니다. 훅 채널은 기본으로 켜져 있고, 프록시 채널은 토큰·비용 정밀도가 필요할 때 선택적으로 활성화합니다.
+spyglass는 두 갈래로 데이터를 수집합니다. 훅 채널은 기본으로 켜져 있고, 프록시 채널은 토큰·비용 정밀도가 필요할 때 선택적으로 활성화합니다. 수집된 데이터는 SQLite에 기록되고, 그래프 동기화 워커가 이를 Ladybug 그래프로 비동기 반영합니다.
 
 ```mermaid
 flowchart LR
     CC[Claude Code]
 
-    subgraph 훅채널["훅 채널 (항상 활성)"]
+    subgraph hookCh["훅 채널 (항상 활성)"]
         SH[spyglass-collect.sh]
-        PC[POST /collect]
-        PE[POST /events raw]
-        SE[SSE /events broadcast]
+        PC["POST /collect<br/>UserPromptSubmit·Pre/PostToolUse"]
+        PEV["POST /events<br/>SessionStart·Stop·SessionEnd 등 raw"]
     end
 
-    subgraph 프록시채널["프록시 채널 (선택, ANTHROPIC_BASE_URL 설정)"]
-        SP[spyglass:9999/v1/*]
-        AN[api.anthropic.com/v1/*]
-        PR[(proxy_requests)]
+    subgraph proxyCh["프록시 채널 (선택, ANTHROPIC_BASE_URL 설정)"]
+        SP["spyglass /v1/*"]
+        AN["api.anthropic.com/v1/*"]
     end
 
-    CC --> SH --> PC
-    PC --> PE
-    PC --> SE
+    DB[("~/.spyglass/spyglass.db<br/>SQLite")]
+    SSE["SSE: GET /events<br/>대시보드 실시간 푸시"]
+    GW["그래프 sync 워커<br/>kuzu_outbox 폴링 200ms"]
+    LB[("Ladybug 그래프")]
+
+    CC --> SH
+    SH --> PC
+    SH --> PEV
+    PC --> DB
+    PEV --> DB
     CC --> SP --> AN
-    SP --> PR
+    SP --> DB
+    DB --> SSE
+    DB --> GW --> LB
 ```
 
-두 채널 모두 동일한 `~/.spyglass/spyglass.db`에 기록되며, 대시보드는 SSE로 실시간 업데이트됩니다.
+훅·프록시 두 채널 모두 동일한 `~/.spyglass/spyglass.db`에 기록되며, 대시보드는 `GET /events` SSE 스트림으로 실시간 갱신됩니다. 컨텍스트 흐름 그래프는 `kuzu_outbox` 테이블을 폴링하는 동기화 워커가 Ladybug 그래프로 반영합니다.
 
 자세한 구성요소·요청 라이프사이클은 [아키텍처 문서](./architecture.md)와 [데이터 흐름](./data-flow.md)을 참고하세요.
 
@@ -287,6 +310,7 @@ flowchart LR
     [system-prompts](./schema/system-prompts.md) ·
     [meta-documents](./schema/meta-documents.md) ·
     [model-limits](./schema/model-limits.md)
+- [마이그레이션](./migrations.md) — `001` … `053` 스키마 마이그레이션 카탈로그와 적용 규칙
 
 ### 인터페이스·통합
 

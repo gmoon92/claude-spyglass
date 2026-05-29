@@ -10,6 +10,10 @@ TUI(Terminal UI, 터미널 사용자 인터페이스)는 같은 데이터를 브
 본 문서는 `packages/tui` 패키지의 실제 구성, 화면 구조, 키바인딩, 데이터 흐름을
 한 곳에 정리한 운영·개발 참고서입니다.
 
+> 연관 문서: [전체 아키텍처](./architecture.md) · [웹 대시보드](./web-dashboard.md)(자매 프런트엔드) ·
+> [HTTP API](./api-http.md)(TUI가 폴링하는 REST/SSE 엔드포인트) · [데이터 흐름](./data-flow.md)(수집 → SSE) ·
+> [설정](./configuration.md)(환경변수).
+
 
 ## 1. 개요
 
@@ -32,14 +36,15 @@ bun tui      # 루트 package.json 스크립트 → packages/tui/src/index.tsx �
 | `SPYGLASS_API_URL` | `http://127.0.0.1:9999` | TUI가 접속할 서버 (SSE / REST 모두) |
 | `SPYGLASS_PROJECT` | (없음) | 표시할 프로젝트명. 미설정 시 `basename(cwd)` |
 | `SPYGLASS_ALL_PROJECTS` | (없음) | `1`이면 프로젝트 필터 해제 |
-| `SPYGLASS_LANG` | `ko` | `ko` / `en` / `ja` / `zh`. CLI `--lang=en`도 가능 |
+| `SPYGLASS_LANG` | (없음) | `ko` / `en` / `ja` / `zh`. 미설정 시 시스템 로케일 → `ko`. CLI `--lang=en` / `--lang en`이 우선 |
 | `SPYGLASS_NO_MOTION` | (없음) | `1`이면 스피너·플래시 끔 |
 | `NO_COLOR` | (없음) | 표준. 비어 있지 않으면 16색 강제 |
 | `COLORTERM` / `TERM` / `LANG` | — | truecolor / 유니코드 / 256색 자동 감지 |
 
 언어 우선순위: CLI > `SPYGLASS_LANG` > 시스템 `LC_ALL`/`LANG` > 기본 `ko`.
-종료는 `q` / `Q` / `Ctrl+C` 입니다. 이때 `useEffect` 클린업이 SSE 연결과 타이머를 정리한
-뒤 `process.exit(0)` 으로 빠져나갑니다.
+종료는 `q` / `Q` / `Ctrl+C` 입니다. `useKeyboard`가 `onQuit`을 호출하면 `app.tsx`가
+`process.exit(0)`을 실행합니다. 엔트리(`index.tsx`)는 Ink `render`의 `waitUntilExit()`을
+대기하다 정상 종료 시 `exit(0)`, 에러 시 `exit(1)`로 빠져나갑니다.
 
 
 ## 2. 전체 레이아웃
@@ -121,6 +126,41 @@ export type ScreenId =
 
 `m` 키는 `ambient` ↔ `live` 간을 토글합니다 — 현재 화면이 `ambient`이면 `live`로, 아니면 `ambient`로 전환합니다(이전 화면 정보를 보관하지 않음). 출처: `app.tsx`의 `onAmbient` (`setView((v) => (v === 'ambient' ? 'live' : 'ambient'))`).
 
+화면 전이(`app.tsx`의 `view` state 머신).
+`1`~`4`와 `m`은 `useKeyboard`의 글로벌 키이므로 **어느 화면에서나** 해당 탭/Ambient로 직접 이동합니다.
+아래 다이어그램은 1~4 탭 간 상호 전이가 전 화면에서 가능함을 압축 표기하고, 화면 고유 전이(`Enter` 진입, `Esc`/`h` 복귀, `m` Ambient 토글)를 함께 보여줍니다.
+
+```mermaid
+stateDiagram-v2
+    [*] --> live
+
+    state "tabs (1~4)" as tabs {
+        live
+        sessions
+        tools
+        anomalies
+    }
+
+    note right of tabs
+        1~4 글로벌 키 →
+        live(1)/sessions(2)/tools(3)/anomalies(4)
+        탭 4개 간 어느 방향으로도 직접 이동
+    end note
+
+    sessions --> session_detail: Enter (선택 세션)
+    session_detail --> sessions: Esc / h
+    session_detail --> tabs: 1~4 (activeSessionId 초기화)
+
+    tabs --> ambient: m
+    session_detail --> ambient: m
+    ambient --> live: m
+    note right of ambient
+        ambient 에서 m → live.
+        ambient 에서도 1~4 글로벌 키로
+        해당 탭 직행 가능
+    end note
+```
+
 
 ## 4. 각 스크린별 상세
 
@@ -151,7 +191,8 @@ export type ScreenId =
 | `Enter` | 행 확장(DetailBox 열기) |
 | `/` | 검색 모드 진입 |
 | `Esc` | 검색 클리어 또는 펼친 행 닫기 |
-| `Space` | freeze 토글(새 SSE 일시 폐기) |
+
+> `Space`(freeze 토글)는 LiveFeed 전용이 아니라 글로벌 키입니다(§5.1). LiveFeed의 자체 `useInput`은 위 키만 처리하고, freeze 는 `useKeyboard` 라우터에서 `feedStore.setFreeze`로 직접 처리됩니다.
 
 **인터랙션**:
 - `useFollowMode`가 `following` / `paused` FSM(Finite State Machine, 유한 상태 기계)을
@@ -234,9 +275,9 @@ data-honesty-ui).
 
 **목적**: "회의실 모니터" 풀스크린 모드입니다. 빔프로젝터·대형 디스플레이용.
 
-**표시 데이터**: TabBar / Strip / Sidebar 없이 큰 타이틀 + 메타라인 + PulseWave
-(너비 `min(width − 4, 80)`)만 노출합니다. 본문 색은 600초마다 primary → info → accent로
-순환합니다.
+**표시 데이터**: TabBar / Strip / Sidebar 없이 큰 타이틀(`claude · spyglass`) +
+메타라인(시각 · sessions · tok) + PulseWave(너비 `max(20, min(width − 4, 80))`)만
+노출합니다. 본문 색은 600초마다 primary → info → accent로 순환합니다.
 
 **키바인딩**:
 
@@ -263,7 +304,10 @@ data-honesty-ui).
 | `?` | Help 모달 열기 |
 | `q` / `Q` / `Ctrl+C` | 프로그램 종료 |
 
-예약(현재 App 레벨 미연결): `r` SSE 재연결, `Ctrl+L` 강제 리드로우, `:` 명령 팔레트.
+예약(HelpOverlay cheatsheet 에는 노출되나 App 레벨에서 동작 안 함): `r` SSE 재연결,
+`Ctrl+L` 강제 리드로우, `:` 명령 팔레트. `r`/`o` 콜백은 `useKeyboard`에 정의돼 있지만
+`app.tsx`가 `onReconnect`/`onSession`을 전달하지 않고, `Ctrl+L`/`:`는 라우터에 핸들러 자체가
+없습니다.
 
 ### 5.2 스크린별
 
@@ -306,13 +350,13 @@ data-honesty-ui).
 | 컴포넌트 | 책임 |
 | --- | --- |
 | `Card` | 경계선 박스 + 옵션 타이틀 + tone(default / danger / warning / success) |
-| `BigKpi` | 5행 KPI 박스 (값 / 단위 / 델타 / 스파크라인) |
+| `BigKpi` | round 보더 박스 안 5줄: 상단 바(`▔`) / 라벨 / 값(+단위) / 델타(▲▼·)+Sparkline / 하단 바(`▁`) |
 | `ToolRow` | LiveFeed의 단일 행. 컬럼 폭 고정, ASCII 1자 글리프 정렬 보장 |
 | `TurnCard` | SessionDetail의 Turn 1개. 헤더 + 프롬프트 + 툴 + TokenTree 푸터 |
 | `TokenTree` | input / output / cache_read / cache_creation / total 트리 |
 | `Badge` / `Ticker` | tone 색 라벨 / 이벤트 도착 시 400ms ▮ ↔ ▯ 플래시 |
 | `Divider` | `── LABEL ────` 형식의 섹션 구분선 |
-| `Icon` | 툴 아이콘 단일 해석 지점. `design-tokens.ts`의 `icon.*` 토큰 → ASCII 글리프 |
+| `Icon` | 툴 아이콘 단일 해석 지점. `lib/tool-icon.ts`의 `toolIconForRecord(record)` 위임 → `tokens.icon.*` ASCII 글리프 + 색. `event_type='pre_tool'`(spinning)이면 `Spinner variant="tool"` 렌더. `StateIcon`은 ok/err/warn/info/running/idle 상태 글리프 별도 제공 |
 | `KeyValue` | 정렬된 LABEL · VALUE 행 쌍 |
 | `Timestamp` | 자체 틱(self-tick)하는 dim 색상 시각 표시 |
 
@@ -349,7 +393,7 @@ data-honesty-ui).
 | 컴포넌트 | 책임 |
 | --- | --- |
 | `Spinner` | tool / net / bg / agent variant. 100~250ms ASCII 4프레임 |
-| `RowAccent` | 새 행 좌측 1.2s 페이드 스트라이프, 선택 시 `▌` |
+| `RowAccent` | 새 행 좌측 ASCII `\|`(`tokens.icon.stripe`) 스트라이프. enter(0–80ms) primary → hold(80–500ms) info → decay(500–1200ms) muted → baseline(>1200ms) 공백으로 1.2s 페이드. 선택 행은 항상 primary 솔리드 `\|` |
 | `PanelBoundary` | 패널 단위 ErrorBoundary. 실패 시 `.spyglass-errors.log` 기록 |
 | `StalenessIndicator` | SSE 2s 무응답 시 `⚠ reconnecting`, 회복 시 `✓ live` |
 
@@ -388,6 +432,40 @@ paused 상태에서 새 행이 prepend되면 `selectedIdx += 1` 보정이 일어
 
 TUI는 `SPYGLASS_API_URL` 한 곳에서 SSE / REST 두 채널을 병행해서 사용합니다.
 
+```mermaid
+flowchart LR
+    SRV["spyglass server<br/>SPYGLASS_API_URL"]
+
+    subgraph SSE["SSE · GET /events (useSSE)"]
+        NR["new_request"] --> FS["feedStore.push()"]
+        PB["pulseBuckets / requestBuckets<br/>10s × 180 = 30분"]
+        EPS["eventsPerSec · lastEventAt"]
+    end
+
+    subgraph REST["REST 폴링"]
+        SS["useStripStats · 5s<br/>/api/stats/strip · /api/sessions/active · /api/stats/tools"]
+        TA["useToolsAnalytics · 5s<br/>/api/stats/tools · /api/stats/by-type · /api/stats/cache"]
+        AN["Anomalies · 10s<br/>/api/metrics/anomalies-timeseries"]
+        ST["useSessionTurns · 진입 시 + 10s<br/>/api/sessions/:id/turns"]
+        PR["useProxyRequests · 30s<br/>/api/proxy-requests"]
+    end
+
+    SRV --> SSE
+    SRV --> REST
+
+    FS --> LiveFeed
+    PB --> PulseWave
+    PB --> Strip
+    EPS --> StatusBar
+    SS --> Strip
+    SS --> Sidebar
+    SS --> Sessions
+    TA --> Tools
+    AN --> Anomalies
+    ST --> SessionDetail
+    PR --> LiveFeed
+```
+
 **SSE — `GET /events`** (`hooks/useSSE.ts`, `eventsource` npm 패키지 사용 — Bun에는 표준
 EventSource가 없기 때문):
 
@@ -405,12 +483,14 @@ EventSource가 없기 때문):
 | `useStripStats` | `/api/stats/strip`, `/api/sessions/active`, `/api/stats/tools` | 5s | Strip, Sidebar, Sessions |
 | `useToolsAnalytics` | `/api/stats/tools`, `/api/stats/by-type`, `/api/stats/cache` | 5s | Tools |
 | Anomalies 내부 | `/api/metrics/anomalies-timeseries?range=` | 10s | Anomalies |
-| `useSessionTurns` | 세션 Turn 조회 | 진입 시 + 갱신 | SessionDetail |
-| `useProxyRequests` | 최근 proxy 요약 | 30s | LiveFeed LatestResponseBar |
+| `useSessionTurns` | `/api/sessions/:id/turns` | 진입 시 + 10s | SessionDetail |
+| `useProxyRequests` | `/api/proxy-requests?limit=20` | 30s + `new_proxy_request` SSE 트리거 시 | LiveFeed LatestResponseBar |
 
-서버 응답이 `tool_call_count` vs `calls`처럼 필드명이 다를 수 있어 각 훅은
-"raw → ToolStat" 매핑 함수를 둡니다(`mapToolRow`). TUI 전용 타입은 `src/types.ts`에
-있고, 공유 `Session` 타입만 `@spyglass/types`에서 가져옵니다.
+서버 응답이 `call_count` / `error_count` vs TUI `ToolStat`의 `calls` / `error_rate`처럼
+필드명이 달라, `useToolsAnalytics`는 `mapToolRow(raw → ToolStat)`로, `useStripStats`는
+인라인 `call_count ?? calls` 폴백으로 정규화합니다. TUI 전용 타입은 `src/types.ts`에
+있고, 공유 `Session` 타입은 `@spyglass/types`에서 가져옵니다. 언어 코드(`Lang`) 해석
+유틸 `resolveLang`/`isLang`/`DEFAULT_LANG`도 `@spyglass/types`에서 가져옵니다.
 
 
 ## 9. 디자인 토큰
@@ -502,7 +582,10 @@ packages/tui/src/
 │   ├── useKeyboard.ts       # 글로벌 키 라우터
 │   └── useCapabilities.tsx  # 터미널 능력 context
 ├── stores/feed-store.ts     # tool_use_id 키 ring buffer (cap 500)
-├── lib/                     # capabilities, current-project, detect-lang, format,
-│                            # time-range, tool-icon, gradient
-└── locales/                 # ko/en/ja/zh × 5 namespace JSON
+└── lib/                     # capabilities, current-project, detect-lang, format,
+                             # time-range, tool-icon, gradient
+
+packages/tui/locales/        # src 형제 디렉토리 (src 내부 아님)
+                             # ko/en/ja/zh × 5 namespace(common/request/badges/session/ui) = 20 JSON
+                             # i18n.ts가 정적 import로 번들에 포함
 ```

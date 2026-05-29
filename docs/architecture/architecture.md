@@ -1,6 +1,6 @@
 # claude-spyglass 아키텍처
 
-**Version**: 2.1.0 | **Last Updated**: 2026-05-18
+**Version**: 3.0.7 | **Last Updated**: 2026-05-29
 
 > Claude Code 실행 모니터링 도구의 시스템 설계 문서.
 > 본 문서는 코드 동작과 직접 매핑된다. 파일 경로(`packages/.../foo.ts:42`)는 모두 실제 위치이며, 기능을 추가·수정할 때 참고해야 할 진입점을 알려준다.
@@ -22,9 +22,9 @@
 |---|------|------------|
 | 1 | 개요 | 목적, 한 줄 요약, 핵심 가치, 기능 분포 |
 | 2 | 시스템 다이어그램 | 데이터 흐름, HTTP 디스패처, 부팅 라이프사이클 |
-| 3 | 모노레포 구조 | 5개 패키지 의존 그래프와 책임 |
-| 4 | `packages/server` | HTTP·SSE·Hook·Proxy·Metrics·Meta-docs |
-| 5 | `packages/storage` | SQLite 스키마와 35개 마이그레이션 |
+| 3 | 모노레포 구조 | 7개 패키지 의존 그래프와 책임 |
+| 4 | `packages/server` | HTTP·SSE·Hook·Proxy·Metrics·Meta-docs·Graph·Settings |
+| 5 | `packages/storage` | SQLite 스키마와 마이그레이션 |
 | 6 | `packages/tui` | Ink 기반 터미널 UI |
 | 7 | `packages/web` | Vanilla JS 웹 대시보드 |
 | 8 | `packages/types` | 공통 타입 contract |
@@ -72,23 +72,28 @@ Claude Code hook → spyglass-collect.sh → POST /collect → SQLite → SSE �
 | **실시간 시각화** | SSE(`/events`) — 새 요청 도착 시 즉시 푸시. TUI 지연 50ms 이내. |
 | **무손실 수집** | 훅 raw 페이로드는 `~/.spyglass/logs/hook-raw.jsonl`에 원장 기록 후 서버 전달(이중 안전). |
 | **카탈로그형 분석** | Behavior Definitions(SKILL.md / agents.md / CLAUDE.md / commands) 메타 문서 카탈로그를 별도 테이블로 정규화. |
-| **사후 감사** | 35개 마이그레이션 누적으로 모든 분석 컬럼이 영속화(트랜스크립트 재파싱 비용 0). |
+| **그래프 시각화** | SQLite SSoT → `kuzu_outbox` 큐 → Ladybug 그래프 DB로 incremental sync. 메타 문서 통합 flow(`/api/graph/unified-flow`)를 별도 read-optimized 투영으로 제공. |
+| **사후 감사** | 마이그레이션 누적으로 모든 분석 컬럼이 영속화(트랜스크립트 재파싱 비용 0). |
 
 ### 1.4 기능 분포
 
 - **수집**: `hooks/spyglass-collect.sh` + `packages/server/src/hook/`
-- **영속화**: `packages/storage/` (SQLite + WAL, 35 migrations, schema_version=23)
+- **영속화**: `packages/storage/` (SQLite + WAL, `migrations/` 디렉토리 파일 번호 기반 PRAGMA user_version 관리)
 - **HTTP API**: `packages/server/src/api.ts` + `routes/*` + `metrics/router.ts`
 - **실시간**: `packages/server/src/sse.ts` (`broadcastNewRequest`, `broadcastNewProxyRequest`, `broadcastSessionUpdate`)
 - **프록시(선택)**: `packages/server/src/proxy/` — Anthropic API를 HTTP 레벨로 미러링하여 헤더·SSE까지 직접 수집(opt-in)
 - **메타 문서**: `packages/server/src/meta-docs/` — SKILL.md / agents.md / CLAUDE.md 자동 스캔·카탈로그화
-- **표시**: `packages/web/` (Vanilla JS) + `packages/tui/` (Ink/React)
+- **그래프**: `packages/storage-graph/` — Ladybug 그래프 DB + outbox 기반 sync worker + 통합 flow 쿼리. `packages/server/src/routes/graph.ts`가 노출.
+- **설정**: `packages/server/src/routes/settings.ts` + `packages/server/src/settings/` — Hook 등록·프록시 설치·Ladybug 설치·그래프 모드 전환 패널.
+- **표시**: `packages/web/` (Vanilla JS) + `packages/tui/` (Ink/React) + `packages/desktop/` (Electron 래퍼)
 
 ---
 
 ## 2. 시스템 아키텍처 다이어그램
 
-> **TL;DR** — Claude Code 훅이 bash 스크립트를 통해 spyglass 서버에 POST를 보내면, 서버는 SQLite에 저장하고 SSE로 웹·TUI에 실시간 푸시한다. 진입점은 `runtime/dispatch.ts:18`의 `handleRequest` 단일 함수다.
+> **TL;DR** — Claude Code 훅이 bash 스크립트를 통해 spyglass 서버에 POST를 보내면, 서버는 SQLite에 저장하고 SSE로 웹·TUI에 실시간 푸시한다. 진입점은 `runtime/dispatch.ts:38`의 `handleRequest` 단일 함수다.
+>
+> end-to-end 데이터 흐름의 더 깊은 트레이스는 [data-flow.md](./data-flow.md) 참조.
 
 ### 2.1 데이터 흐름 — 큰 그림
 
@@ -101,11 +106,12 @@ flowchart TD
     PROC["processor → persist"]
     CE["events.collectHandler → claude_events"]
     SSE_ROUTER["sseRouter (stream)"]
-    ROUTES["routes/ (sessions/requests/...)"]
+    ROUTES["routes/ (sessions/requests/graph/settings/...)"]
     METRICS["metrics/router (계산기)"]
     PROXY_H["proxy/handler (opt-in 미러링)"]
     WEB_STATIC["packages/web index.html / assets/*"]
-    SQLITE["SQLite (WAL)\n~/.spyglass/spyglass.db\n• sessions\n• requests\n• claude_events\n• proxy_requests\n• system_prompts\n• meta_documents\n• stats_hourly\n• model_limits"]
+    SQLITE["SQLite (WAL)\n~/.spyglass/spyglass.db\n• sessions\n• requests\n• claude_events\n• proxy_requests\n• system_prompts\n• meta_documents\n• stats_hourly / stats_proxy_hourly\n• model_limits / anomaly_thresholds\n• kuzu_outbox (그래프 sync 큐)"]
+    GRAPH["Ladybug 그래프 DB\n~/.spyglass/graph/\n(outbox sync worker)"]
     SSE_SET["in-memory SSE\nconnections Set"]
     CLIENT["Client (browser / TUI)\nEventSource\n→ new_request\n→ new_proxy_request\n→ session_update\n→ ping"]
 
@@ -126,11 +132,15 @@ flowchart TD
     PROC -->|"broadcast (SSE)"| SSE_SET
     SSE_SET --> CLIENT
     CLIENT -->|"GET /api/*"| SQLITE
+    SQLITE -->|"kuzu_outbox 트리거"| GRAPH
+    ROUTES -->|"/api/graph/* (read)"| GRAPH
 ```
+
+> **그래프 sync**: `requests`·`sessions` INSERT/UPDATE 시 트리거가 `kuzu_outbox`에 행을 쌓고(append-only), `packages/storage-graph`의 sync worker가 200ms tick으로 cursor 이후 batch를 읽어 Ladybug에 idempotent MERGE한다. `SPYGLASS_GRAPH_MODE='off'`이거나 회로 OPEN이면 outbox만 누적되고 MERGE는 no-op. 상세는 §2.4 참조.
 
 ### 2.2 진입점 — `Bun.serve` HTTP 디스패처
 
-`packages/server/src/runtime/dispatch.ts:18`의 `handleRequest`가 단일 진입점이며, **경로 prefix별**로 도메인 핸들러에 위임한다.
+`packages/server/src/runtime/dispatch.ts:38`의 `handleRequest`가 단일 진입점이며, **경로 prefix별**로 도메인 핸들러에 위임한다.
 
 ```mermaid
 flowchart TD
@@ -166,7 +176,7 @@ flowchart TD
 
 ### 2.3 라이프사이클
 
-서버는 `packages/server/src/index.ts`(19줄짜리 진입점)가 `dispatchDaemonCommand`로 위임한다. 데몬은 PID 파일(`~/.spyglass/server.pid`) 기반 싱글톤이다.
+서버는 `packages/server/src/index.ts`(18줄 진입점)가 `dispatchDaemonCommand`로 위임한다. 데몬은 PID 파일(`~/.spyglass/server.pid`) 기반 싱글톤이다.
 
 ```mermaid
 flowchart TD
@@ -177,15 +187,16 @@ flowchart TD
     CMD_STOP["commandStop\nSIGTERM 시그널 송신"]
     CMD_RESTART["commandRestart\n점유 프로세스 정리 후 재시작"]
     CMD_STATUS["commandStatus\nPID 존재 + kill(0) 체크"]
-    CMD_FG["commandForeground\n기본(인수 없음). 백그라운드 없이 동작."]
+    CMD_FG["commandServe\n'serve' case + 인수 없음(undefined). 포그라운드 동작."]
 
     S1["1) installServerStdioMirror()\nstdout/stderr → ~/.spyglass/logs/server.log"]
     S2["2) clearDiagLogs()\n진단 jsonl 디렉토리 정리"]
     S3["3) getDatabase({ dbPath })\nSQLite 연결 + WAL pragma + 마이그레이션"]
-    S4["4) startMaintenanceSchedule(db)\n일별 유지보수(이전 데이터 정리)"]
-    S5["5) startVersionCheckSchedule()\n1h 간격 npm registry 버전 체크"]
-    S6["6) bootstrapMetaDocsSync(db, ...)\nmeta-docs 글로벌 스캔 (CLAUDE/SKILL/agents)"]
-    S7["7) Bun.serve({ port, hostname, fetch: handleRequest, idleTimeout: 0 })\nidleTimeout=0 (SSE 연결 유지)"]
+    S4["4) refreshGraphModeFromFile() + startGraphSyncWorker()\noutbox 폴링 그래프 sync (mode='off'/실패 시 no-op)"]
+    S5["5) startMaintenanceSchedule(db)\n일별 유지보수(RDB + 그래프 retention 정리)"]
+    S6["6) startVersionCheckSchedule()\n1h 간격 npm registry 버전 체크"]
+    S7["7) bootstrapMetaDocsSync(db, ...)\nmeta-docs 글로벌 스캔 (CLAUDE/SKILL/agents)"]
+    S8["8) Bun.serve({ port, hostname, fetch: handleRequest, idleTimeout: 0 })\nidleTimeout=0 (SSE 연결 유지)"]
 
     START --> INDEX
     INDEX --> DAEMON
@@ -195,16 +206,43 @@ flowchart TD
     DAEMON --> CMD_STATUS
     DAEMON --> CMD_FG
     CMD_START --> S1
-    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8
 ```
+
+### 2.4 그래프 sync 채널 (SQLite SSoT → Ladybug)
+
+`packages/storage-graph`는 SQLite를 SSoT로 두고 outbox 패턴으로 그래프 투영을 incremental sync한다. 그래프가 깨지거나 미가용해도 RDB 쓰기 경로는 영향을 받지 않는다.
+
+```mermaid
+flowchart TD
+    WRITE["requests / sessions\nINSERT·UPDATE"]
+    TRG["AFTER INSERT/UPDATE 트리거\n(migration 049/051/053)"]
+    OUTBOX["kuzu_outbox 테이블\n(append-only 큐, id 단조증가)"]
+    WORKER["sync worker (200ms tick)\nstorage-graph/src/sync/worker.ts"]
+    CURSOR["sync/cursor\n마지막 처리 id 영속화"]
+    CIRCUIT["circuit-breaker\n연속 실패 시 OPEN → tick no-op"]
+    ENRICH["sync/enrich\noutbox row → GraphOp[]"]
+    LADYBUG["Ladybug 그래프 DB\nMERGE (idempotent)"]
+
+    WRITE --> TRG --> OUTBOX
+    WORKER -->|"cursor 이후 batch SELECT"| OUTBOX
+    WORKER --> CIRCUIT
+    WORKER --> ENRICH
+    ENRICH --> LADYBUG
+    WORKER --> CURSOR
+```
+
+- **모드 게이트**: `getGraphMode()`(`SPYGLASS_GRAPH_MODE` env + 영속 설정 파일)가 `'off'`면 tick은 즉시 반환하고 outbox만 누적된다.
+- **회로 차단기**: 연속 실패 시 OPEN되어 그래프 호출을 잠시 멈춘다. RDB·SSE는 무영향.
+- **retention**: `deleteOldGraphData(cutoff)`가 Event/ToolCall/Turn/Session 노드만 `DETACH DELETE`(MetaDocument/Agent 보존). 그래프 폴더 자체를 삭제하는 경로는 없다.
 
 ---
 
 ## 3. 모노레포 구조
 
-> **TL;DR** — types(타입만) → storage(DB) → server(HTTP)/web → tui 순으로 의존이 한 방향으로만 흐른다. types는 누구에게도 의존하지 않고, tui가 가장 위에 있다.
+> **TL;DR** — types(타입만) → storage(DB) → storage-graph(그래프)/server(HTTP)/web → tui 순으로 의존이 한 방향으로만 흐른다. types는 누구에게도 의존하지 않고, tui가 가장 위에 있다.
 
-bun workspaces 기반 모노레포. 루트 `package.json`의 `"workspaces": ["packages/*"]` 한 줄로 다섯 워크스페이스가 자동 연결된다.
+bun workspaces 기반 모노레포. 루트 `package.json`의 `"workspaces": ["packages/*"]` 한 줄로 일곱 워크스페이스가 자동 연결된다.
 
 ```
 claude-spyglass/
@@ -219,9 +257,11 @@ claude-spyglass/
 ├── packages/
 │   ├── types/                          — 공통 타입 정의 (런타임 0줄)
 │   ├── storage/                        — SQLite 스키마 + 쿼리 + 마이그레이션
-│   ├── server/                         — Bun HTTP 서버 (API + SSE + Hook + Proxy + Metrics)
+│   ├── storage-graph/                  — Ladybug 그래프 DB client + outbox sync worker + flow 쿼리
+│   ├── server/                         — Bun HTTP 서버 (API + SSE + Hook + Proxy + Metrics + Graph + Settings)
 │   ├── tui/                            — Ink/React 기반 터미널 UI
-│   └── web/                            — Vanilla JS 웹 대시보드
+│   ├── web/                            — Vanilla JS 웹 대시보드
+│   └── desktop/                        — Electron 데스크톱 래퍼 (main/preload)
 └── docs/                               — 운영/스키마/아키텍처 문서
 ```
 
@@ -231,29 +271,38 @@ claude-spyglass/
 flowchart TD
     TYPES["@spyglass/types\n모든 패키지가 import. 변경 이유 단일성(SRP)."]
     STORAGE["@spyglass/storage\n(SQLite SSoT)"]
-    SERVER["@spyglass/server\n(HTTP/SSE)"]
+    GRAPH["@spyglass/storage-graph\n(Ladybug 그래프)"]
+    SERVER["@spyglass/server\n(HTTP/SSE/Graph/Settings)"]
     WEB["packages/web\n(JSDoc only)"]
     TUI["@spyglass/tui\n(Ink + React)"]
+    DESKTOP["packages/desktop\n(Electron 래퍼)"]
 
     TYPES -->|"import (type-only)"| STORAGE
+    TYPES -->|"import (type-only)"| GRAPH
     TYPES -->|"import (type-only)"| SERVER
     TYPES -->|"import (type-only)"| WEB
     TYPES -->|"import (type-only)"| TUI
+    STORAGE -->|"import workspace"| GRAPH
+    STORAGE -->|"import workspace"| SERVER
+    GRAPH -->|"import workspace"| SERVER
     STORAGE -->|"import workspace"| TUI
     SERVER -->|"import workspace"| TUI
+    SERVER -.->|"런타임 spawn"| DESKTOP
 ```
 
-핵심 관찰: **상위(types)는 누구에게도 의존하지 않고**, **하위(tui)는 모든 패키지 + types에 의존**한다. 양 방향 의존성은 금지(types→storage 같은 역방향 import 없음).
+핵심 관찰: **상위(types)는 누구에게도 의존하지 않고**, 의존은 항상 한 방향(types → storage → storage-graph → server → tui)으로만 흐른다. `storage-graph`는 `storage`(outbox SELECT)와 `types`에만 의존하고, `server`는 `storage` + `storage-graph` + `types`를 모두 import한다. `desktop`은 서버 프로세스를 띄우는 Electron 래퍼다. 양 방향 의존성은 금지(types→storage 같은 역방향 import 없음).
 
 ### 3.2 패키지별 책임 한 줄
 
 | 패키지 | 책임 | 런타임 | 주요 디렉토리 |
 |--------|------|--------|---------------|
 | `@spyglass/types` | 서버/TUI/웹이 공유하는 TS 타입 contract. **런타임 0줄.** | TS 선언만 | `src/{request,session,turn,i18n}.ts` |
-| `@spyglass/storage` | SQLite 연결, 스키마, 마이그레이션, 모든 SQL 쿼리. | Bun/Node | `src/{connection,schema,migrator,queries/*}` |
-| `@spyglass/server` | HTTP 서버 + SSE + Hook 수집 + Proxy + Metrics + Meta-docs. | Bun | `src/{api,sse,hook,proxy,metrics,meta-docs,routes,runtime}` |
+| `@spyglass/storage` | SQLite 연결, 스키마, 마이그레이션, 모든 SQL 쿼리, retention SSoT. | Bun/Node | `src/{connection,schema,migrator,queries/*,runtime/retention}` |
+| `@spyglass/storage-graph` | Ladybug 그래프 client, outbox sync worker, unified-flow 쿼리, 회로 차단기, 그래프 retention. | Bun + Ladybug | `src/{client,queries/*,sync/*,runtime/*,schema/*}` |
+| `@spyglass/server` | HTTP 서버 + SSE + Hook 수집 + Proxy + Metrics + Meta-docs + Graph + Settings. | Bun | `src/{api,sse,hook,proxy,metrics,meta-docs,routes,runtime,settings}` |
 | `@spyglass/tui` | Ink 기반 터미널 UI. SSE 클라이언트, KPI strip, 사이드바, screens. | React 18 + Ink 5 | `src/{app.tsx,components,screens,hooks,stores}` |
 | `@spyglass/web` | Vanilla JS 대시보드. `index.html` + ES modules + CSS 모듈. | 브라우저 | `index.html`, `assets/{js,css}` |
+| `packages/desktop` | 서버를 띄우고 대시보드를 감싸는 Electron 래퍼. | Electron | `main/`, `preload/` |
 
 ---
 
@@ -265,14 +314,15 @@ flowchart TD
 
 ```
 packages/server/src/
-├── index.ts                       — 19줄. dispatchDaemonCommand로 위임만.
-├── api.ts                         — 86줄. routes/* fan-out 디스패처.
+├── index.ts                       — 18줄. dispatchDaemonCommand로 위임만.
+├── api.ts                         — 97줄. routes/* fan-out 디스패처.
 ├── sse.ts                         — 328줄. SSE 연결 관리 + broadcastNewRequest 등.
 ├── events.ts                      — POST /events 핸들러 (SessionStart/Stop 등).
 ├── metrics.ts                     — 메트릭 라우터 re-export (얇은 호환 shim).
 ├── model-limits.ts                — model_limits 테이블 캐시.
 ├── anomaly-thresholds.ts          — anomaly_thresholds 테이블 조회·캐시 (project/model별 warn/critical 임계값 SSoT).
 ├── tool-category.ts               — Tool 이름 → category 분류 (search/exec/...)
+├── mcp-tool-name.ts               — MCP 도구 이름(`mcp__server__tool`) 파싱·그룹핑
 ├── version-checker.ts             — npm registry 1h 폴링.
 ├── diag-log.ts                    — 진단 jsonl 기록기.
 ├── i18n.ts                        — 서버측 i18n 키 로더.
@@ -280,27 +330,37 @@ packages/server/src/
 ├── runtime/                       — 라이프사이클·디스패치·환경
 │   ├── config.ts                  — PORT/HOST/DB_PATH 등 env 파싱
 │   ├── daemon.ts                  — start/stop/restart/status PID 명령
-│   ├── lifecycle.ts               — startServer / stopServer / isServerRunning
+│   ├── lifecycle.ts               — startServer / stopServer (DB + 그래프 sync worker + 스케줄 lifecycle)
 │   ├── dispatch.ts                — handleRequest (경로 prefix 디스패처)
 │   ├── port.ts                    — 포트 점유 검사·해제 유틸
 │   ├── stdio-mirror.ts            — stdout/stderr → server.log 미러링
-│   ├── maintenance.ts             — 일별 유지보수 스케줄(오래된 데이터 정리)
+│   ├── maintenance.ts             — 일별 유지보수 스케줄(RDB + 그래프 retention 정리 + VACUUM)
 │   └── in-flight.ts               — 처리 중 요청 추적기 (graceful shutdown용 in-flight 카운터)
 │
 ├── routes/                        — REST API 라우터 (도메인별)
 │   ├── _shared.ts                 — jsonResponse, buildMeta, parseTimeWindow 등
-│   ├── sessions.ts                — /api/sessions/* (9개)
-│   ├── requests.ts                — /api/requests/* (3개)
+│   ├── sessions.ts                — /api/sessions/*
+│   ├── requests.ts                — /api/requests/*
 │   ├── stats.ts                   — /api/stats/* (sessions/requests/cache/proxy)
 │   ├── dashboard.ts               — /api/dashboard + 응답 캐시(invalidateDashboardCache)
 │   ├── events.ts                  — wildcard hook 이벤트 라우트
 │   ├── proxy.ts                   — /api/proxy/* (헤더/페이로드 조회)
-│   ├── system-prompts.ts          — /api/system-prompts/* (v22 dedup 카탈로그)
-│   ├── meta-docs.ts               — /api/meta-docs/* (v24 Behavior Definitions)
+│   ├── system-prompts.ts          — /api/system-prompts/* (system 본문 dedup 카탈로그)
+│   ├── meta-docs.ts               — /api/meta-docs/* (Behavior Definitions)
+│   ├── graph.ts                   — /api/graph/* (Ladybug unified-flow / neighbors / status)
+│   ├── settings.ts               — /api/settings/* (diag / hooks / graph / proxy / sqlite / logs)
 │   └── version.ts                 — /api/version (current + latest)
 │
+├── settings/                      — 설정 패널 실행 모듈 (routes/settings.ts가 호출)
+│   ├── claude-hooks.ts            — Claude Code settings.json hook 블록 병합·atomic write
+│   ├── hook-detect.ts             — 현재 hook 등록 상태 감지
+│   ├── proxy-installer.ts         — claude() 프록시 함수 스니펫 설치/복원
+│   ├── graph-db-installer.ts      — Ladybug 의존성 감지(detectLadybugInstall) + 설치(installLadybug)
+│   ├── version-probe.ts           — bun/node/sqlite 등 바이너리 버전 진단
+│   └── file-edit-toolkit.ts       — 백업 + diff + atomic 파일 편집 헬퍼
+│
 ├── metrics/                       — /api/metrics/* (UI Redesign Phase 2)
-│   ├── router.ts                  — 라우터 (10개 라우트)
+│   ├── router.ts                  — 라우터 (11개 라우트)
 │   ├── _shared.ts                 — 시간 윈도우 파서, meta 빌더
 │   └── calculators/               — 시계열·이상치 계산기
 │       ├── burn-rate.ts
@@ -336,7 +396,7 @@ packages/server/src/
 ├── proxy/                         — /v1/* Anthropic API 미러링 (opt-in)
 │   ├── index.ts                   — barrel
 │   ├── handler.ts                 — handleProxy shim (handler/index.ts로 위임)
-│   ├── handler/                   — 단계별 모듈 (Phase 8 분해)
+│   ├── handler/                   — 단계별 모듈 (inbound/stream/non-stream/persist/broadcast/diag)
 │   │   ├── index.ts               — handleProxy 오케스트레이션
 │   │   ├── inbound.ts             — buildInboundContext + forwardToUpstream + buildResponseHeaders
 │   │   ├── stream.ts              — SSE 응답 스트리밍 처리
@@ -364,7 +424,11 @@ packages/server/src/
 ├── domain/                        — 도메인 변환 계층
 │   └── request-normalizer.ts      — Request raw → NormalizedRequest (model 폴백·sub_type·trust)
 │
-└── cli/                           — `bun run doctor` 진단 명령
+├── cli.ts                         — CLI 진입점 (main() 디스패처)
+└── cli/                           — `bun run doctor` 등 진단·운영 명령
+    ├── doctor.ts                  — 진단 오케스트레이션
+    ├── analyze.ts                 — DB 분석 리포트
+    ├── open.ts                    — 대시보드 브라우저 열기
     ├── output.ts                  — 컬러 출력 헬퍼
     ├── fix.ts                     — 자동 복구
     └── checks/
@@ -376,7 +440,7 @@ packages/server/src/
 
 ### 4.2 라우터 fan-out (`api.ts`)
 
-`packages/server/src/api.ts:52-85`의 패턴은 **fan-out 우선순위 디스패처**다.
+`packages/server/src/api.ts`의 `apiRouter`(`api.ts:68`)는 **fan-out 우선순위 디스패처**다.
 
 ```ts
 const SYNC_ROUTERS = [
@@ -391,11 +455,15 @@ const SYNC_ROUTERS = [
 ];
 
 export async function apiRouter(req, db) {
-  // 비동기 라우터를 먼저 시도 (본문 파싱이 async)
+  // 비동기 라우터를 먼저 시도 (본문 파싱·LadybugClient.query·파일 IO가 async)
   const metricsResponse = await metricsRouter(req, db);
   if (metricsResponse) return metricsResponse;
   const metaDocsResponse = await metaDocsRouter(req, db);
   if (metaDocsResponse) return metaDocsResponse;
+  const graphResponse = await graphRouter(req, db);      // /api/graph/*
+  if (graphResponse) return graphResponse;
+  const settingsResponse = await settingsRouter(req, db); // /api/settings/*
+  if (settingsResponse) return settingsResponse;
 
   // 동기 라우터 fan-out — 첫 non-null 응답이 최종 응답
   for (const handler of SYNC_ROUTERS) {
@@ -405,6 +473,8 @@ export async function apiRouter(req, db) {
   return jsonResponse({ success: false, error: 'API endpoint not found' }, 404);
 }
 ```
+
+`metaDocs`·`graph`·`settings`는 본문 파싱·그래프 쿼리·파일 IO가 async라 fan-out보다 먼저 `await`로 시도하고, 나머지 도메인은 동기 `SYNC_ROUTERS`로 처리한다.
 
 각 라우터는 **자기 prefix가 아니면 `null`** 을 반환해 다음 라우터로 흘러가게 한다. 새 도메인을 추가하려면 `routes/<domain>.ts`를 만들고 `SYNC_ROUTERS` 배열에 한 줄만 추가한다.
 
@@ -423,8 +493,7 @@ flowchart TD
     SYS["SystemEventHandler (fallback)\nNotification/SessionStart 등"]
     PROC["hook/processor.ts (processHookEvent)\nsession upsert + turn_id 할당 + audit-meta 정제"]
     PERSIST["hook/persist.ts (saveRequest)\nDB transaction:\n1) sessions UPSERT\n2) requests INSERT or UPDATE (pre→tool 머지)\n3) persistSubagentChildren"]
-    BROADCAST["broadcastNewRequest()\nSSE event: 'new_request' { ...norm, event_phase }"]
-    SESSION_UPDATE["broadcastSessionUpdate()\nSSE event: 'session_update'"]
+    BROADCAST["broadcastNewRequest()\n(processor.ts가 persist 후 호출)\nSSE event: 'new_request' { ...norm, event_phase }\npre_tool 은 제외"]
 
     ENTRY --> HTTP
     HTTP --> DISP
@@ -437,9 +506,11 @@ flowchart TD
     UPS -->|"handle() → NormalizedHookPayload"| PROC
     SYS -->|"handle() → NormalizedHookPayload"| PROC
     PROC --> PERSIST
-    PERSIST --> BROADCAST
-    PERSIST --> SESSION_UPDATE
+    PERSIST -->|"saveRequest 반환"| PROC
+    PROC --> BROADCAST
 ```
+
+> `broadcastSessionUpdate()`(SSE `session_update`)는 이 `/collect` 흐름에 **없다**. 세션 시작/종료(`session_update`)는 별도 채널 — `POST /events` 핸들러(`events.ts`)가 `SessionStart`/`SessionEnd` 수신 시에만 송출한다(§4.9 / §9.2 참조). `/collect` 파이프라인은 `broadcastNewRequest`만 호출한다.
 
 핵심 규칙(`CLAUDE.md`에도 명시):
 
@@ -483,7 +554,7 @@ flowchart TD
 
 ### 4.5 Metrics 라우터 (`/api/metrics/*`)
 
-`packages/server/src/metrics/router.ts`의 10개 라우트(`metricsRouter`):
+`packages/server/src/metrics/router.ts`의 11개 라우트(`metricsRouter`):
 
 | 라우트 | 데이터 소스 | 가공 |
 |--------|-------------|------|
@@ -534,7 +605,36 @@ flowchart TD
 
 SessionStart 훅이 새 cwd를 감지하면 lazy 재동기화한다.
 
-### 4.7 SSE 채널
+### 4.7 Graph 라우터 (`/api/graph/*`)
+
+`packages/server/src/routes/graph.ts`는 Ladybug 그래프 DB를 read-only로 노출한다. 모든 응답은 `{ nodes, edges, ... }` 형태.
+
+| 라우트 | 동작 |
+|--------|------|
+| `GET /api/graph/status` | 그래프 운영 상태(모드, 회로 상태, cursor, 노드 수 등) |
+| `GET /api/graph/sessions/:id/initial` | 세션 초기 hydrate 서브그래프 |
+| `GET /api/graph/turns/:id/neighbors` | BFS depth hop 이웃 노드 |
+| `GET /api/graph/turns/:id/path` | 경로 placeholder |
+| `GET /api/graph/unified-flow` | 메타 문서 통합 flow (ancestor + center + descendant + turn-after) |
+
+`unified-flow`는 `getUnifiedFlow`(`packages/storage-graph/src/queries/unified-flow.ts`)가 4개 Cypher(seed + descendant + ancestor + turn-after) + Kahn 위상정렬 + 시간 layer tone을 산출하고, `enrichUnifiedFlow`(`routes/graph.ts`)가 raw ToolCall을 (kind,name) 카드 단위로 합성한다. 웹 측 단일 렌더 진입점은 `meta-docs-flow.js`의 `loadFlow()`.
+
+### 4.8 Settings 라우터 (`/api/settings/*`)
+
+`packages/server/src/routes/settings.ts`는 설정 패널을 위한 진단·설치 API다. `settings/` 모듈을 호출하고, 변경 동작 후 `diag` 응답 캐시를 무효화한다.
+
+| 라우트 | 동작 |
+|--------|------|
+| `GET /api/settings/diag` | binary versions + hooks + graph + ports 통합 진단 (캐시) |
+| `GET /api/settings/hooks/preview` | hook 병합 미리보기(diff, 파일 미수정) |
+| `POST /api/settings/hooks/apply` / `restore` | 백업 + 병합 + atomic write / 복원 |
+| `POST /api/settings/graph/mode` | 그래프 런타임 모드 전환 |
+| `GET /api/settings/graph-db/status` · `POST /api/settings/graph-db/install` | Ladybug 의존성 감지 / 설치 |
+| `GET /api/settings/sqlite/info` | SQLite 파일·스키마 정보 |
+| `GET /api/settings/proxy/snippet` · `proxy/status` · `POST proxy/install` · `proxy/restore` | 프록시 스니펫·설치·복원 |
+| `GET /api/settings/logs` | `~/.spyglass/logs/` 디렉토리 스캔 |
+
+### 4.9 SSE 채널
 
 `packages/server/src/sse.ts`의 외부 노출 함수:
 
@@ -543,6 +643,8 @@ SessionStart 훅이 새 cwd를 감지하면 lazy 재동기화한다.
 | `broadcastNewRequest(req, meta)` | `new_request` | `NormalizedRequest + session_total_tokens + event_phase` |
 | `broadcastNewProxyRequest(p)` | `new_proxy_request` | `ProxyBroadcastPayload (source='proxy')` |
 | `broadcastSessionUpdate(s)` | `session_update` | `{ session_id, action: 'started'\|'ended'\|'token_update', ... }` |
+
+`SSEEventType` 유니온은 `new_request`·`new_proxy_request`·`session_update`·`token_update`·`stats_update`·`ping`·`server_shutdown`을 정의한다. 이벤트 송출은 모두 `broadcastUpdate(event)`(`sse.ts:100`)를 거치며, `new_request` 페이로드는 pure function `buildNewRequestEvent`(`sse.ts:142`)로 빌드된다.
 
 연결 관리는 단일 `Set<ReadableStreamDefaultController<Uint8Array>>`. 8초 간격 `ping` 이벤트로 idle 연결 유지(`idleTimeout: 0`과 함께 작동). 송신 실패한 연결은 자동 정리.
 
@@ -554,13 +656,13 @@ SessionStart 훅이 새 cwd를 감지하면 lazy 재동기화한다.
 
 ## 5. `packages/storage` — SQLite 영속 계층
 
-> **TL;DR** — 35개 마이그레이션이 누적된 SQLite(WAL 모드). `index.ts` barrel이 80여 개 함수를 한 곳에서 노출하며, 시간대별 사전 집계(`stats_hourly`)로 차트 응답 시간을 5ms 수준으로 유지한다.
+> **TL;DR** — `migrations/` 디렉토리의 SQL 파일이 누적된 SQLite(WAL 모드). 적용 버전은 `PRAGMA user_version`(파일 번호 기준)으로 관리되고, v35부터는 `_migrations` 메타테이블에 히스토리도 함께 기록된다. `index.ts` barrel이 다수의 쿼리 함수를 한 곳에서 노출하며, 시간대별 사전 집계(`stats_hourly`)로 차트 응답 시간을 5ms 수준으로 유지한다.
 
 ### 5.1 디렉토리 구조
 
 ```
 packages/storage/
-├── migrations/                    — 35개 SQL 마이그레이션 (001 ~ 035)
+├── migrations/                    — SQL 마이그레이션 (001 ~ 053, 041~046 번호 결번)
 │   ├── 001-init.sql                          — sessions, requests 테이블 초기 생성
 │   ├── 002-add-tool-detail.sql               — requests.tool_detail
 │   ├── 003-add-turn-id.sql                   — requests.turn_id (인터리빙 식별)
@@ -592,14 +694,32 @@ packages/storage/
 │   ├── 029-backfill-stats-hourly.sql
 │   ├── 030-stats-event-type-dim.sql
 │   ├── 031-stats-duration-avg-fix.sql
-│   └── 032-add-stats-proxy-hourly.sql        — stats_proxy_hourly 사전 집계
+│   ├── 032-add-stats-proxy-hourly.sql        — stats_proxy_hourly 사전 집계
+│   ├── 033-anomaly-thresholds.sql            — anomaly_thresholds 정책 SSoT 테이블
+│   ├── 034-anomaly-backfill-columns.sql      — anomaly 백필 보조 인덱스
+│   ├── 035-add-migrations-meta-table.sql     — _migrations 메타테이블 (히스토리 SSoT)
+│   ├── 036-add-meta-doc-call-index.sql       — meta-doc call-edge 부모 후보 부분 인덱스
+│   ├── 037-slash-virtual-tool-use-id.sql     — slash_command 행 가상 tool_use_id 부여
+│   ├── 038-backfill-subagent-parent-tool-use-id.sql  — 서브에이전트 parent 백필
+│   ├── 039-rolling-skill-parent.sql          — 서브에이전트 rolling Skill/Task 부모 적용
+│   ├── 040-flow-active-rows-view.sql         — flow 차트 BFS 전용 active rows VIEW
+│   ├── 047-read-perf-indexes.sql             — getTurnsBySession read 가속 인덱스
+│   ├── 048-anomaly-bloated-sys-index.sql     — getSessionSystemContextMeta 가속 인덱스
+│   ├── 049-kuzu-outbox.sql                   — kuzu_outbox 큐 + AFTER INSERT 트리거 (그래프 sync)
+│   ├── 050-kuzu-outbox-backfill.sql          — 기존 세션/요청 outbox 백필
+│   ├── 051-kuzu-outbox-update-trigger.sql    — pre_tool → tool 전환 AFTER UPDATE 트리거
+│   ├── 052-backfill-subagent-parent-tool-use-id.sql  — parent 백필 + 그래프 재동기
+│   └── 053-kuzu-outbox-trigger-hardening.sql — outbox 트리거 write 경로 격리
 │
 └── src/
-    ├── index.ts                   — 304줄. 외부 노출 barrel — 함수 80여 개 re-export.
+    ├── index.ts                   — 외부 노출 barrel — 쿼리 함수·타입 re-export.
     ├── schema.ts                  — 테이블 SQL, WAL pragma, Session/Request 타입, SCHEMA_VERSION.
     ├── connection.ts              — SpyglassDatabase 클래스, 싱글톤 getDatabase, 권한 강화(chmod 600/700).
-    ├── migrator.ts                — runMigrations: NNN-*.sql 파일 스캔 + PRAGMA user_version 관리.
+    ├── migrator.ts                — runMigrations: NNN-*.sql 파일 스캔 + PRAGMA user_version + _migrations 히스토리.
     ├── pricing.ts                 — 모델별 단가 캐시.
+    │
+    ├── runtime/
+    │   └── retention.ts           — retention SSoT (getRetentionDays/getRetentionCutoffTs, SPYGLASS_RETENTION_DAYS).
     │
     ├── queries/
     │   ├── session.ts             — 호환 shim. queries/session/index로 위임.
@@ -624,6 +744,11 @@ packages/storage/
     │   │   ├── aggregate-strip.ts    — Command Center Strip (TUI)
     │   │   ├── aggregate-cache.ts    — 캐시 히트율
     │   │   └── turn.ts               — getTurnsBySession (인터리빙)
+    │   │
+    │   ├── flow/                  — flow 차트 active rows 필터 (migration 040 VIEW 연동)
+    │   │   ├── index.ts
+    │   │   ├── filters.ts
+    │   │   └── types.ts
     │   │
     │   ├── metrics/               — Observability metrics
     │   │   ├── index.ts
@@ -738,6 +863,12 @@ SKILL.md / agents.md / CLAUDE.md / commands 파일별 1행. type, source, file_p
 #### `model_limits` (v26)
 모델별 context window 한도 시드. 1M opt-in(`anthropic-beta` 헤더 반영)까지 처리.
 
+#### `anomaly_thresholds` (v33)
+project/model별 warn/critical 임계값 정책 SSoT. bloated-sys / agent-spike 같은 이상치 판정 기준을 DB에 시드한다. 서버 측 `anomaly-thresholds.ts`가 조회·캐시한다.
+
+#### `kuzu_outbox` (v49)
+SQLite → Ladybug 그래프 sync를 위한 append-only 큐. `requests`·`sessions`의 INSERT/UPDATE 트리거(v49/v51/v53)가 `(source, event_id, op)` 행을 쌓고, `storage-graph`의 sync worker가 `id` cursor 이후 batch를 읽어 MERGE한다.
+
 ### 5.3 연결 관리 (`connection.ts`)
 
 `SpyglassDatabase` 클래스(`packages/storage/src/connection.ts:61`):
@@ -759,14 +890,17 @@ runMigrations(db, debug?):
          BEGIN TRANSACTION
          splitSqlStatements(sql).forEach(stmt => db.prepare(stmt).run())
          PRAGMA user_version = NNN
+         if NNN >= 35 && _migrations 존재: INSERT 히스토리 행  (동일 트랜잭션)
          COMMIT  (or ROLLBACK on error)
 ```
 
-`splitSqlStatements`는 단순 `split(';')`가 아니라 `BEGIN ... END;` 블록(트리거 정의)을 placeholder로 보존했다가 복원한다. v28 stats 트리거를 안전하게 처리하기 위한 장치.
+적용 버전은 디렉토리 **파일 번호**(PRAGMA user_version) 기준이며, `schema.ts`의 `SCHEMA_VERSION` 상수와는 별개다. v35 이후부터는 `_migrations` 메타테이블(v35 신설)에 적용 히스토리도 같은 트랜잭션에서 INSERT한다.
+
+`splitSqlStatements`는 단순 `split(';')`가 아니라 `BEGIN ... END;` 블록(트리거 정의)을 placeholder로 보존했다가 복원한다. v28 stats 트리거·v49/v51/v53 outbox 트리거를 안전하게 처리하기 위한 장치.
 
 ### 5.5 외부 노출 모듈 — `index.ts` barrel
 
-`packages/storage/src/index.ts:21-304`는 80개 이상 함수·타입을 한 곳에서 re-export한다. 사용 패턴(`@spyglass/server`, `@spyglass/tui` 양쪽 동일):
+`packages/storage/src/index.ts`는 쿼리 함수·타입을 한 곳에서 re-export한다. 사용 패턴(`@spyglass/server`, `@spyglass/tui` 양쪽 동일):
 
 ```ts
 import { getDatabase, createSession, getRequestsBySession, broadcastNewRequest } from '@spyglass/storage';
@@ -776,7 +910,7 @@ import { getDatabase, createSession, getRequestsBySession, broadcastNewRequest }
 
 ### 5.6 사전 집계 (stats_hourly)
 
-마이그레이션 v27~v35는 **트리거 기반 사전 집계**를 도입했다.
+마이그레이션 v27(테이블) + v28(트리거) + v32(proxy 버킷)가 **트리거 기반 사전 집계**를 구성한다.
 
 ```mermaid
 flowchart TD
@@ -792,11 +926,20 @@ flowchart TD
 
 재빌드: `bun run rebuild-stats` (`packages/storage/src/scripts/rebuild-stats.ts`).
 
+### 5.7 Retention (RDB + 그래프 통일)
+
+`packages/server/src/runtime/maintenance.ts`가 일별 1회 cutoff 이전 데이터를 정리한다. cutoff SSoT는 `packages/storage/src/runtime/retention.ts`의 `getRetentionCutoffTs()`(`SPYGLASS_RETENTION_DAYS`, 기본 30일)이며 RDB·그래프가 같은 값을 본다.
+
+- **RDB**: `deleteOldData(db, cutoff)` — requests / proxy_requests / claude_events / sessions / system_prompts / stats_hourly 정리 + VACUUM.
+- **그래프**: `deleteOldGraphData(cutoff)`(`@spyglass/storage-graph`) — Event/ToolCall/Turn/Session 노드만 `DETACH DELETE`(MetaDocument/Agent 보존). 그래프 미가용 시에도 RDB 정리는 정상 동작(실패 흡수).
+
+> 더 깊은 스키마·마이그레이션 세부는 [database.md](./database.md), [migrations.md](./migrations.md) 참조.
+
 ---
 
 ## 6. `packages/tui` — Ink 기반 터미널 UI
 
-> **TL;DR** — React 18 + Ink 5 기반 터미널 UI. `useSyncExternalStore` 기반 ring buffer로 SSE 폭주를 흡수하고, microtask 배칭으로 리렌더를 합친다. 키바인딩 한 표(§6.6)로 모든 조작이 정리된다.
+> **TL;DR** — React 18 + Ink 5 기반 터미널 UI. `useSyncExternalStore` 기반 ring buffer로 SSE 폭주를 흡수하고, microtask 배칭으로 리렌더를 합친다. 키바인딩 한 표(§6.6)로 모든 조작이 정리된다. 화면별 상세는 [tui.md](./tui.md) 참조.
 
 ### 6.1 디렉토리 구조
 
@@ -804,8 +947,8 @@ flowchart TD
 packages/tui/
 ├── locales/                  — i18n JSON (ko/en/ja/zh)
 └── src/
-    ├── index.tsx             — 20줄. initI18n + ink.render(<App/>)
-    ├── app.tsx               — 294줄. 루트 컴포넌트(상태, 키보드, 뷰 라우팅)
+    ├── index.tsx             — 19줄. initI18n + ink.render(<App/>)
+    ├── app.tsx               — 293줄. 루트 컴포넌트(상태, 키보드, 뷰 라우팅)
     ├── design-tokens.ts      — 색상·간격·타이포·breakpoint 토큰
     ├── types.ts              — Request, Session, ScreenId 타입
     ├── i18n.ts               — react-i18next 초기화
@@ -881,7 +1024,7 @@ packages/tui/
 
 ### 6.2 진입점
 
-`packages/tui/src/index.tsx`(20줄):
+`packages/tui/src/index.tsx`(19줄):
 ```tsx
 import { render } from 'ink';
 import { initI18n } from './i18n';
@@ -973,13 +1116,13 @@ React 18의 `useSyncExternalStore` 컨트랙트를 구현한 ring buffer:
 
 ## 7. `packages/web` — Vanilla JS 대시보드
 
-> **TL;DR** — 빌드 도구 없이 ES Modules로 동작하는 단일 페이지. 핵심 렌더 함수 4개(`toolIconHtml`·`makeTargetCell`·`makeRequestRow`·`prependRequest`)가 SSoT이며, `CLAUDE.md`의 캡슐화 원칙을 직접 구현한다.
+> **TL;DR** — 빌드 도구 없이 ES Modules로 동작하는 단일 페이지. 핵심 렌더 함수 4개(`toolIconHtml`·`makeTargetCell`·`makeRequestRow`·`prependRequest`)가 SSoT이며, `CLAUDE.md`의 캡슐화 원칙을 직접 구현한다. 화면 구성 상세는 [web-dashboard.md](./web-dashboard.md) 참조.
 
 ### 7.1 디렉토리 구조
 
 ```
 packages/web/
-├── index.html                — 803줄. 단일 페이지 + skeleton placeholder + i18n attribute
+├── index.html                — 980줄. 단일 페이지 + skeleton placeholder + i18n attribute
 ├── favicon.svg
 ├── locales/                  — i18n JSON (ko/en/ja/zh, html · ui · domain 키)
 └── assets/
@@ -1020,6 +1163,14 @@ packages/web/
         ├── views/
         │   ├── default-view.js      — 기본 뷰(피드)
         │   ├── detail-view.js       — 세션 디테일 뷰
+        │   ├── default/             — 기본 뷰 내부 모듈
+        │   │   ├── bootstrap.js     — 기본 뷰 초기화
+        │   │   ├── chart-policy.js  — 차트 정책
+        │   │   ├── constants.js
+        │   │   ├── feed-interactions.js   — 피드 인터랙션(클릭/확장)
+        │   │   ├── feed-live.js     — prependRequest 등 실시간 피드 갱신
+        │   │   ├── keyboard.js      — 키보드 단축키
+        │   │   └── layout-persist.js      — 레이아웃 상태 영속
         │   └── _shared/
         │
         ├── session-detail/
@@ -1039,9 +1190,13 @@ packages/web/
         ├── stat-tooltip.js
         ├── cache-tooltip.js, cache-panel-tooltip.js, cache-panel.js
         │
-        ├── llm-input-view.js              — system blocks + user messages 합본 (v22)
-        ├── system-prompt-library.js       — v22 dedup 카탈로그 카드
-        ├── meta-docs-view.js              — v24 Behavior Definitions 카탈로그
+        ├── llm-input-view.js              — system blocks + user messages 합본
+        ├── system-prompt-library.js       — system 본문 dedup 카탈로그 카드
+        ├── meta-docs-view.js              — Behavior Definitions 카탈로그
+        ├── meta-docs-flow.js              — 통합 Flow 단일 렌더 진입점 (loadFlow → /api/graph/unified-flow)
+        ├── meta-docs-flow-camera.js       — flow SVG pan/zoom 카메라
+        ├── meta-docs-flow-highlight.js    — flow 노드/엣지 하이라이트
+        ├── settings-view.js               — 설정 패널 (hooks/proxy/graph/sqlite/logs 탭)
         ├── tool-colors.js, tool-stats.js  — 도구 매트릭스 통계
         │
         ├── metrics-api.js                 — /api/metrics/* 호출 모음
@@ -1062,12 +1217,14 @@ packages/web/
 
 ### 7.3 핵심 렌더 함수 (CLAUDE.md SSoT)
 
-| 함수 | 파일 | 책임 |
+| 함수 | 정의 파일 | 책임 |
 |------|------|------|
-| `toolIconHtml(toolName, eventType)` | `renderers.js` | 툴 아이콘. `eventType='pre_tool'`이면 pulse 애니메이션(`.tool-icon-running`) 자동 적용. **반드시 두 번째 인자 전달.** |
-| `makeTargetCell(r)` | `renderers.js` | Target 컬럼 전체(아이콘 + 이름 + 상태배지). |
-| `makeRequestRow(r, opts)` | `renderers.js` | 로그 피드 행 1줄. |
-| `prependRequest(r)` | `views/default-view.js` | SSE 이벤트로 수신된 레코드를 피드 최상단에 추가. 동일 `id` 행이 있으면 in-place 갱신(위치 보존). |
+| `toolIconHtml(toolName, eventType)` | `render/badges.js:58` | 툴 아이콘. `eventType='pre_tool'`이면 pulse 애니메이션(`.tool-icon-running`) 자동 적용. **반드시 두 번째 인자 전달.** |
+| `makeTargetCell(r)` | `render/cells.js` | Target 컬럼 전체(아이콘 + 이름 + 상태배지). |
+| `makeRequestRow(r, opts)` | `render/rows.js` | 로그 피드 행 1줄. |
+| `prependRequest(r)` | `views/default/feed-live.js` | SSE 이벤트로 수신된 레코드를 피드 최상단에 추가. 동일 `id` 행이 있으면 in-place 갱신(위치 보존). |
+
+`renderers.js`는 `render/*`의 badges/model/cells/extract/expand/rows/skeleton 7개 파일을 그대로 re-export하는 호환 shim이라 `import { toolIconHtml } from './renderers.js'` 경로는 계속 유효하다(`toolIconHtml`은 `render/badges.js`가 정의). `render/icons.js`는 별개 모듈로, `svgTrash`·`svgWarn` 등 SVG 아이콘만 re-export하는 shim이며 `toolIconHtml`을 포함하지 않는다. `prependRequest`도 `views/default-view.js`가 `feed-live.js`에서 re-export한다.
 
 `CLAUDE.md`의 캡슐화 원칙: **호출 측에서 `boolean`으로 재계산하지 말고, raw data를 함수에 전달하고 판단은 함수 내부에서 처리.**
 
@@ -1091,9 +1248,10 @@ es.addEventListener('new_request', (ev) => {
 
 ### 7.5 좌측 모드 rail (ADR-003)
 
-`index.html:49-73`의 `.app-rail`:
+`index.html:130`의 `.app-rail` aside:
 - **browse 모드** (기본): 프로젝트/세션 탐색.
 - **metadocs 모드**: Behavior Definitions 카탈로그(v24).
+- **settings 모드**: 설정 패널.
 
 전환은 `body[data-app-mode]` 속성만 토글 — CSS 셀렉터(`body[data-app-mode="metadocs"] .right-panel { display:none }`)가 가시성을 처리하고 JS는 부수 흐름(이전 선택 복원 등)만 담당.
 
@@ -1175,7 +1333,9 @@ export function resolveLang(input): Lang;
 
 ## 9. 통신 인터페이스
 
-> **TL;DR** — HTTP API는 도메인별 라우터로 정리되어 있고, Hook은 stdin JSON contract, SSE는 `new_request`·`new_proxy_request`·`session_update` 세 이벤트 타입을 사용한다. 클라이언트는 `event_phase` discriminator로 신규/갱신을 구분한다.
+> **TL;DR** — HTTP API는 도메인별 라우터로 정리되어 있고, Hook은 stdin JSON contract, SSE는 `new_request`·`new_proxy_request`·`session_update` 등을 푸시한다. 클라이언트는 `event_phase` discriminator로 신규/갱신을 구분한다.
+>
+> 전체 엔드포인트 레퍼런스는 [api-http.md](./api-http.md), hook 통합 세부는 [hooks-integration.md](./hooks-integration.md) 참조.
 
 ### 9.1 HTTP API 일람
 
@@ -1195,7 +1355,7 @@ export function resolveLang(input): Lang;
 #### SSE
 | 메서드 | 경로 | 응답 헤더 | 이벤트 |
 |--------|------|-----------|--------|
-| GET | `/events` | `text/event-stream` | `new_request`, `new_proxy_request`, `session_update`, `ping` |
+| GET | `/events` | `text/event-stream` | `new_request`, `new_proxy_request`, `session_update`, `token_update`, `stats_update`, `ping`, `server_shutdown` |
 
 #### REST API (`/api/*`)
 | 라우터 | 주요 라우트 |
@@ -1205,8 +1365,10 @@ export function resolveLang(input): Lang;
 | `routes/requests.ts` | `GET /api/requests/recent`, `/:id`, `/top-tokens` |
 | `routes/stats.ts` | `GET /api/stats/sessions`, `/requests`, `/cache`, `/proxy`, `/proxy/by-model` |
 | `routes/proxy.ts` | `GET /api/proxy/recent`, `/by-session/:id`, `/:id` |
-| `routes/system-prompts.ts` | `GET /api/system-prompts`, `/:hash` (v22 lazy fetch) |
-| `routes/meta-docs.ts` | `GET /api/meta-docs`, `POST /api/meta-docs/refresh` (v24) |
+| `routes/system-prompts.ts` | `GET /api/system-prompts`, `/:hash` (lazy fetch) |
+| `routes/meta-docs.ts` | `GET /api/meta-docs`, `POST /api/meta-docs/refresh` |
+| `routes/graph.ts` | `GET /api/graph/{status,unified-flow}`, `/sessions/:id/initial`, `/turns/:id/{neighbors,path}` |
+| `routes/settings.ts` | `GET /api/settings/{diag,sqlite/info,logs}`, `GET/POST /api/settings/{hooks,proxy,graph,graph-db}/*` |
 | `routes/version.ts` | `GET /api/version` (current + latest) |
 | `metrics/router.ts` | `GET /api/metrics/{model-usage,cache-matrix,context-usage,activity-heatmap,turn-distribution,agent-depth,tool-categories,anomalies-timeseries,burn-rate,cache-trend,proxy-trend}` |
 
@@ -1227,27 +1389,38 @@ export function resolveLang(input): Lang;
 Claude Code의 hook 시스템은 등록된 스크립트를 호출하면서 stdin으로 JSON을 전달한다. spyglass는 `hooks/spyglass-collect.sh`를 등록한다(`settings.json`의 hooks 항목).
 
 ```bash
-# hooks/spyglass-collect.sh:101-133
+# hooks/spyglass-collect.sh:101-133 (전체 136줄)
 if [[ ! -t 0 ]]; then
     payload=$(cat)
+    ensure_log_dir
     echo "$payload" >> "$SPYGLASS_RAW_LOG"     # 1. 원장 기록 (~/.spyglass/logs/hook-raw.jsonl)
 
-    hook_event=$(python3 -c "import sys,json; print(json.loads(sys.stdin.read()).get('hook_event_name',''))" <<< "$payload")
+    # hook_event_name 파싱 (python3, 실패 시 빈 문자열)
+    hook_event=$(python3 -c "...print(d.get('hook_event_name', ''))..." <<< "$payload" || echo "")
 
     case "$hook_event" in
       "UserPromptSubmit"|"PreToolUse"|"PostToolUse")
         send_to_spyglass "$payload" "$SPYGLASS_COLLECT_ENDPOINT"   # POST /collect
         ;;
+      "")
+        # hook_event_name 없음: 레거시 인수 방식 fallback — /collect로 전달
+        send_to_spyglass "$payload" "$SPYGLASS_COLLECT_ENDPOINT"   # POST /collect
+        ;;
       *)
+        # SessionStart/Stop/SessionEnd 등 — /events로 전달 (claude_events 저장)
         send_to_spyglass "$payload" "$SPYGLASS_EVENTS_ENDPOINT"    # POST /events
         ;;
     esac
+else
+    error "No stdin payload received"
 fi
 ```
 
+`case` 분기는 **세 갈래**다: (1) `UserPromptSubmit`/`PreToolUse`/`PostToolUse` → `/collect`, (2) `hook_event_name`이 빈 문자열(`""`, 레거시/파싱 실패 fallback) → `/collect`, (3) 그 외(`SessionStart`/`Stop`/`SessionEnd`/`Notification` 등) → `/events`. 즉 `/collect`로 가는 경로는 두 case(이름 매칭 + 빈 문자열 fallback)이고, `/events`는 나머지 전부다.
+
 이중 안전망:
-1. **원장 기록**: 서버 다운 상태에서도 `~/.spyglass/logs/hook-raw.jsonl`에 모든 페이로드 보존.
-2. **백그라운드 전송**: `( curl ... ) &`로 비동기 전송 — Claude Code의 hook 흐름을 막지 않음(`SPYGLASS_TIMEOUT=1` 기본).
+1. **원장 기록**: 서버 다운 상태에서도 `~/.spyglass/logs/hook-raw.jsonl`에 모든 페이로드 보존(`case` 분기 이전, 무조건 실행).
+2. **백그라운드 전송**: `send_to_spyglass`가 `( curl ... ) &`로 비동기 전송 — Claude Code의 hook 흐름을 막지 않음(`SPYGLASS_TIMEOUT=1` 기본).
 
 ### 9.3 SSE 페이로드 — 클라이언트가 의존하는 contract
 
@@ -1290,7 +1463,7 @@ fi
 
 `CLAUDE.md`에 명시된 원칙. 코드 곳곳의 분해 흐름이 같은 패턴을 따른다.
 
-#### 사례 1: `server.ts(556줄) → runtime/* 6파일` (srp-redesign Phase 7)
+#### 사례 1: 서버 라이프사이클 — `runtime/*` 변경 이유별 분리
 
 | 변경 이유 | 파일 |
 |-----------|------|
@@ -1301,9 +1474,9 @@ fi
 | 진단 로그 정책 변경 | `diag-log.ts` + `runtime/stdio-mirror.ts` |
 | 유지보수 스케줄 변경 | `runtime/maintenance.ts` |
 
-`packages/server/src/index.ts`는 **19줄짜리 진입점 + dispatch 위임**만 남는다.
+`packages/server/src/index.ts`는 18줄 진입점으로, `dispatchDaemonCommand` 위임만 담당한다.
 
-#### 사례 2: `api.ts(406줄) → routes/* 7파일 + metrics/* 별도` (srp-redesign Phase 2)
+#### 사례 2: API 라우팅 — `routes/*` + `metrics/*` 도메인별 분리
 
 | 도메인 | 라우터 |
 |--------|--------|
@@ -1315,16 +1488,18 @@ fi
 | 프록시 메타 | `routes/proxy.ts` |
 | 시스템 프롬프트 | `routes/system-prompts.ts` |
 | Behavior Definitions | `routes/meta-docs.ts` |
+| 그래프(Ladybug) | `routes/graph.ts` |
+| 설정 패널 | `routes/settings.ts` |
 | 메트릭(시각) | `metrics/router.ts` |
 | 버전 | `routes/version.ts` |
 
-`api.ts`는 fan-out 디스패처 86줄로 축소.
+`api.ts`는 fan-out 디스패처 역할만 담당한다(동기 라우터 fan-out + async 라우터 우선 await).
 
-#### 사례 3: `proxy/handler.ts(600줄) → handler/* 8파일` (srp-redesign Phase 8)
+#### 사례 3: Proxy 핸들러 — `proxy/handler/*` 단계별 분리
 
-inbound / stream / non-stream / persist / broadcast / diag / _shared / index. `handler.ts`는 한 줄 re-export shim.
+inbound / stream / non-stream / persist / broadcast / diag / _shared / index 8개 모듈로 구성된다. `proxy/handler.ts`는 `handler/index.ts`로 위임하는 한 줄 re-export shim.
 
-#### 사례 4: `storage/queries/request.ts(1165줄) → queries/request/* 10파일` (ADR-007)
+#### 사례 4: Request 쿼리 — `queries/request/*` 변경 이유별 분리 (ADR-007)
 
 | 변경 이유 | 파일 |
 |-----------|------|
@@ -1364,8 +1539,11 @@ const FALLBACK = new SystemEventHandler();
 | 모델 context window 한도 | `packages/storage/src/queries/model-limits.ts` + `migrations/026` |
 | 모델 단가 | `packages/storage/src/pricing.ts` |
 | 도구 카테고리 | `packages/server/src/tool-category.ts` |
+| Retention cutoff(RDB+그래프 공통) | `packages/storage/src/runtime/retention.ts:getRetentionCutoffTs` |
+| 통합 flow 쿼리 | `packages/storage-graph/src/queries/unified-flow.ts:getUnifiedFlow` |
+| anomaly 임계값 | `packages/server/src/anomaly-thresholds.ts` + `migrations/033` |
 | SSE 이벤트 payload 빌더 | `packages/server/src/sse.ts:buildNewRequestEvent` (pure function) |
-| 웹 핵심 렌더 함수 | `packages/web/assets/js/renderers.js` |
+| 웹 핵심 렌더 함수 | `packages/web/assets/js/render/*` (`renderers.js` 호환 shim 경유) |
 
 ### 10.4 캡슐화 — "raw 전달, 판단은 내부"
 
@@ -1397,10 +1575,10 @@ const html = toolIconHtml(r.tool_name, r.event_type);   // 판단은 함수 내�
 | ADR-002 (log-view-unification) | `new_request` 단일 채널 + `event_phase` discriminator | `packages/server/src/sse.ts:8` |
 | ADR-006 (srp-redesign) | `@spyglass/types` 분리 | `packages/types/src/index.ts:1` |
 | ADR-007 (srp-redesign) | `queries/request/*` 분해 | `packages/storage/src/queries/request/index.ts:1` |
-| ADR-003 (left-rail-meta-docs) | 56px 앱 모드 rail | `packages/web/index.html:46` |
+| ADR-003 (left-rail-meta-docs) | 56px 앱 모드 rail | `packages/web/index.html:127` |
 | ADR-004 (meta-docs-tool-stats) | 프로젝트 도구 통계 매트릭스 | `routes/meta-docs.ts` + `metaToolStatsBody` |
-| ADR-005 (system-prompt-exposure) | system 본문 lazy-fetch | `packages/server/src/sse.ts:208` |
-| ADR-008 (cache-donut 시리즈) | 캐시 도넛 라벨/산식 통일 | 최근 커밋 5개 (`1f45c30`...`672fc0c`) |
+| ADR-005 (system-prompt-exposure) | system 본문 lazy-fetch | `packages/server/src/sse.ts` |
+| ADR-008 (cache-donut 시리즈) | 캐시 도넛 라벨/산식 통일 | `packages/web/assets/js/cache-panel.js` |
 
 ### 10.6 모듈 경계 — `index.ts` barrel 강제
 
@@ -1418,25 +1596,31 @@ export { handleHookHttpRequest, ... } from './http-entry';
 
 ## 11. 외부 의존성
 
-> **TL;DR** — Bun 런타임 + Ink/React + 소수의 NPM 패키지로 구성되며, 외부 시스템은 Claude Code CLI(데이터 소스)와 npm registry(버전 체크), 선택적으로 Anthropic API(프록시)뿐이다.
+> **TL;DR** — Bun 런타임 + Ink/React + Ladybug 그래프 + 소수의 NPM 패키지로 구성되며, 외부 시스템은 Claude Code CLI(데이터 소스)와 npm registry(버전 체크), 선택적으로 Anthropic API(프록시)뿐이다.
 
 ### 11.1 런타임 의존성
 
-| 패키지 | 사용처 | 역할 |
-|--------|--------|------|
-| **Bun** ≥ 1.2.0 | server, storage | HTTP 서버(`Bun.serve`), SQLite 드라이버(`bun:sqlite`), 파일 API. |
-| **@anthropic-ai/sdk** ^0.96.0 | server (proxy) | Anthropic 타입 정의 사용(미러링 시 RequestMeta 추출 보조). |
-| **eventsource** ^4.1.0 | tui | Node EventSource 폴리필 (Bun에 `globalThis.EventSource` 없음). |
-| **ink** ^5.2.0 | tui | React 렌더러(터미널). |
-| **react** ^18.3.1 | tui | Ink의 호스트(`useState`, `useSyncExternalStore` 활용). |
-| **react-i18next** ^17.0.8 + **i18next** ^26.2.0 | tui, server | i18n 키 로딩(ko/en/ja/zh). |
-| **asciichart** ^1.5.25 | tui | Sparkline / BarChart ASCII 차트. |
+루트 `package.json`은 `@anthropic-ai/sdk`·`eventsource`·`react-devtools-core`만 직접 선언하고(공통 의존), `@ladybugdb/core`는 `trustedDependencies`로 등록한다. 나머지는 각 워크스페이스 패키지가 선언한다.
+
+| 패키지 | 선언 위치 | 사용처 | 역할 |
+|--------|-----------|--------|------|
+| **Bun** ≥ 1.2.0 (engines) | root | server, storage, storage-graph | HTTP 서버(`Bun.serve`), SQLite 드라이버(`bun:sqlite`), 파일 API. |
+| **@anthropic-ai/sdk** ^0.96.0 | root | server (proxy) | Anthropic 타입 정의 사용(미러링 시 RequestMeta 추출 보조). |
+| **eventsource** ^4.1.0 | root + tui | tui | Node EventSource 폴리필 (Bun에 `globalThis.EventSource` 없음). |
+| **@ladybugdb/core** ^0.16.1 | storage-graph | storage-graph | 임베디드 그래프 DB 엔진(Cypher MERGE + 컬럼 압축). |
+| **i18next** ^26.2.0 | server, tui | server, tui | 서버측 i18n 키 로더 + TUI i18n. |
+| **ink** ^5.2.0 | tui | tui | React 렌더러(터미널). |
+| **react** ^18.3.1 | tui | tui | Ink의 호스트(`useState`, `useSyncExternalStore` 활용). |
+| **react-i18next** ^17.0.8 | tui | tui | i18n 키 로딩(ko/en/ja/zh). |
+| **asciichart** ^1.5.25 | tui | tui | Sparkline / BarChart ASCII 차트. |
+| **electron** ^42.2.0 | root(dev) + desktop | desktop | 데스크톱 래퍼 셸. |
 
 ### 11.2 개발 의존성
 
-- **@types/bun**, **@types/node**, **@types/react** — TS 타입 보강.
+- **@types/bun**, **@types/node**, **@types/react**, **@types/eventsource** — TS 타입 보강.
 - **typescript** ^5.0.0 — `tsc --noEmit` typecheck 전용.
 - **ink-testing-library** ^4.0.0 — TUI 컴포넌트 단위 테스트.
+- **electron** ^42.2.0 + **electron-builder** ^26.8.1 — desktop 패키지 빌드.
 
 ### 11.3 외부 시스템
 
@@ -1451,6 +1635,7 @@ export { handleHookHttpRequest, ... } from './http-entry';
 | `~/.spyglass/spyglass.db` | SQLite DB (WAL 모드, 0o600) |
 | `~/.spyglass/spyglass.db-wal` | WAL 저널 |
 | `~/.spyglass/spyglass.db-shm` | shared memory 인덱스 |
+| `~/.spyglass/graph/` | Ladybug 그래프 투영. 데이터 단위 retention DELETE만 수행하며, 폴더 자체를 자동·수동으로 삭제하는 경로는 없다. |
 | `~/.spyglass/server.pid` | 데몬 PID 파일 |
 | `~/.spyglass/logs/server.log` | stdout/stderr 미러 |
 | `~/.spyglass/logs/collect.log` | hook 스크립트 로그 |
@@ -1472,6 +1657,8 @@ export { handleHookHttpRequest, ... } from './http-entry';
 | `SPYGLASS_TIMEOUT` | 1 | hook 스크립트 curl 타임아웃(sec) |
 | `SPYGLASS_HOOK_DIAG` | `0` | hook 진단 jsonl on/off |
 | `SPYGLASS_PROXY_DIAG` | `0` | proxy 진단 jsonl on/off |
+| `SPYGLASS_GRAPH_MODE` | `primary` | 그래프 sync 모드 (`off`\|`shadow`\|`primary`). env가 설정 파일보다 우선. |
+| `SPYGLASS_RETENTION_DAYS` | `30` | RDB·그래프 retention cutoff 일수 (0/음수/non-numeric은 default 폴백) |
 | `ANTHROPIC_BASE_URL` | (없음) | 설정 시 `/v1/*` 프록시 미러링 활성화 |
 
 ---
@@ -1492,9 +1679,14 @@ export { handleHookHttpRequest, ... } from './http-entry';
   "tui":     "bun run packages/tui/src/index.tsx",
   "test":    "bun test",
   "typecheck": "tsc --noEmit",
-  "rebuild-stats":        "bun run packages/storage/src/scripts/rebuild-stats.ts",
-  "rebuild-stats-proxy":  "bun run packages/storage/src/scripts/rebuild-stats-proxy.ts",
-  "backfill:system-prompts": "bun run packages/server/scripts/backfill-system-prompts.ts"
+  "prepare": "git config core.hooksPath .githooks",
+  "rebuild-stats":            "bun run packages/storage/src/scripts/rebuild-stats.ts",
+  "rebuild-stats-proxy":      "bun run packages/storage/src/scripts/rebuild-stats-proxy.ts",
+  "backfill:system-prompts":  "bun run packages/server/scripts/backfill-system-prompts.ts",
+  "backfill:subagent-parents": "bun run packages/server/scripts/backfill-subagent-parents.ts",
+  "desktop:dev":       "bun run --cwd packages/desktop start",
+  "desktop:build:mac": "bun run --cwd packages/desktop build:mac",
+  "desktop:pack:mac":  "bun run --cwd packages/desktop pack:mac"
 }
 ```
 
@@ -1626,7 +1818,7 @@ export { handleHookHttpRequest, ... } from './http-entry';
 
 ### 14.2 새 API 라우트 추가
 1. 기존 도메인이면 `routes/<domain>.ts`에 `if (path === '/api/...' && method === 'GET')` 추가.
-2. 새 도메인이면 `routes/<new-domain>.ts` 작성 후 `api.ts:52`의 `SYNC_ROUTERS`에 1줄 추가.
+2. 새 도메인이면 `routes/<new-domain>.ts` 작성 후 `api.ts`의 `SYNC_ROUTERS`(동기) 또는 async 라우터 `await` 체인(`metaDocs`/`graph`/`settings`처럼 본문 파싱·IO가 async인 경우)에 1줄 추가.
 
 ### 14.3 새 메트릭 추가
 1. raw 데이터: `packages/storage/src/queries/metrics/<name>.ts`에 SELECT 함수 작성.
@@ -1656,6 +1848,12 @@ export { handleHookHttpRequest, ... } from './http-entry';
 4. `app.tsx:hintsFor`에 키 hint 추가.
 5. `app.tsx:useKeyboard`의 `onView` 디스패치에 매핑 추가.
 
+### 14.7 그래프 노드/엣지 종류 추가
+1. `packages/storage-graph/src/schema/ddl.ts`에 노드/엣지 테이블 정의 추가.
+2. `packages/storage-graph/src/sync/enrich.ts`에서 outbox row → GraphOp 매핑에 새 종류 추가.
+3. (필요 시) `migrations/<NNN>-...sql`에 `kuzu_outbox` 트리거 소스를 추가하고 `BEGIN...END` 블록은 splitSqlStatements가 보존함을 확인.
+4. read: `queries/unified-flow.ts` 또는 새 쿼리 함수 작성 후 `routes/graph.ts`에 라우트 추가.
+
 ---
 
 ## 15. 참고 파일 인덱스 *(부록)*
@@ -1664,17 +1862,23 @@ export { handleHookHttpRequest, ... } from './http-entry';
 
 | 영역 | 진입 파일 |
 |------|-----------|
-| 전체 서버 부팅 | `packages/server/src/index.ts:1`, `runtime/lifecycle.ts:30` |
-| HTTP 라우팅 | `packages/server/src/runtime/dispatch.ts:18` |
-| API fan-out | `packages/server/src/api.ts:52` |
+| 전체 서버 부팅 | `packages/server/src/index.ts:1`, `runtime/lifecycle.ts:59` (startServer) |
+| HTTP 라우팅 | `packages/server/src/runtime/dispatch.ts:38` |
+| API fan-out | `packages/server/src/api.ts:68` |
 | Hook 수집 | `packages/server/src/hook/dispatcher.ts:42` |
 | Proxy | `packages/server/src/proxy/handler/index.ts:36` |
-| SSE | `packages/server/src/sse.ts:165` |
-| 메트릭 | `packages/server/src/metrics/router.ts:56` |
+| SSE | `packages/server/src/sse.ts:166` |
+| 메트릭 | `packages/server/src/metrics/router.ts` |
 | Meta-docs | `packages/server/src/meta-docs/synchronizer.ts` |
+| Graph 라우터 | `packages/server/src/routes/graph.ts:63` (graphRouter) |
+| Settings 라우터 | `packages/server/src/routes/settings.ts:117` (settingsRouter) |
+| 통합 flow 쿼리 | `packages/storage-graph/src/queries/unified-flow.ts` |
+| 그래프 sync worker | `packages/storage-graph/src/sync/worker.ts` |
+| 그래프 모드 flag | `packages/storage-graph/src/runtime/flag.ts` |
 | DB 연결 | `packages/storage/src/connection.ts:61` |
-| 스키마 | `packages/storage/src/schema.ts:104` |
-| 마이그레이션 | `packages/storage/src/migrator.ts:75` |
+| 스키마 | `packages/storage/src/schema.ts` |
+| 마이그레이션 | `packages/storage/src/migrator.ts:306` |
+| Retention SSoT | `packages/storage/src/runtime/retention.ts` |
 | Request 쿼리 | `packages/storage/src/queries/request/index.ts:1` |
 | Session 도메인 | `packages/storage/src/domain/session-status.ts` |
 | 공통 타입 | `packages/types/src/request.ts:39` |
@@ -1690,5 +1894,5 @@ export { handleHookHttpRequest, ... } from './http-entry';
 
 ---
 
-**문서 기준**: `claude-spyglass` 저장소 코드 트리 2026-05 시점 (schema_version=23, migrations 035).
+**문서 기준**: `claude-spyglass` 저장소 코드 트리 2026-05 시점 (migrations 001~053, 041~046 결번).
 **갱신 책임**: 변경 PR 작성자. 새 마이그레이션·라우트·SSE 이벤트 추가 시 §9·§11·§14 표를 함께 갱신할 것.

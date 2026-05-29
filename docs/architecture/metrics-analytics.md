@@ -3,6 +3,8 @@
 claude-spyglass가 어떤 지표를 어떤 산식으로 집계하고, 어느 계층에서 노출하는지 정리한 문서입니다.
 정의 모호성으로 인한 회귀를 막기 위해 **모든 산식의 SSoT(단일 출처)** 와 **파일 경로**를 함께 기록합니다.
 
+> 관련 문서: [데이터 흐름](./data-flow.md) · [데이터베이스 스키마](./database.md) · [HTTP API](./api-http.md) · [마이그레이션](./migrations.md) · [웹 대시보드](./web-dashboard.md)
+
 ## 목차
 
 1. **개요** — 데이터 흐름, 계층 책임, 추적 도메인
@@ -26,15 +28,20 @@ claude-spyglass가 어떤 지표를 어떤 산식으로 집계하고, 어느 계
 
 ```mermaid
 flowchart TD
-    A[Claude Code Hook] --> C[server/api.ts]
-    B[proxy 요청] --> C
-    C -->|POST| D[(SQLite\nrequests / claude_events\nsessions / proxy_requests)]
-    D --> E[stats_hourly / stats_proxy_hourly\n1h 사전 집계, 트리거 자동 갱신]
-    E --> F[queries/*\naggregate-* / metrics/* / session/*]
-    F --> G[/api/stats/*]
-    F --> H[/api/metrics/*]
-    F --> I[/api/dashboard]
-    G --> J[대시보드\nchart.js / cache-panel.js / heatmap 등]
+    A[Claude Code Hook] -->|POST /collect| C[hook/http-entry.ts]
+    B[Anthropic API 프록시] --> P[proxy/handler.ts]
+    C --> D[(SQLite<br/>requests / claude_events<br/>sessions)]
+    P --> D2[(proxy_requests)]
+    D --> E[stats_hourly<br/>1h 사전 집계, AFTER INSERT/UPDATE 트리거]
+    D2 --> E2[stats_proxy_hourly<br/>1h 사전 집계, 트리거]
+    E --> F[queries/*<br/>aggregate-* / metrics/* / session/*]
+    E2 --> F
+    D --> F
+    D2 --> F
+    F --> G["/api/stats/*"]
+    F --> H["/api/metrics/*"]
+    F --> I["/api/dashboard"]
+    G --> J[대시보드<br/>chart.js / cache-panel.js / heatmap 등]
     H --> J
     I --> J
 ```
@@ -43,7 +50,8 @@ flowchart TD
 
 | 계층 | 책임 | 대표 파일 |
 |------|------|----------|
-| 원본 수집 | hook이 PreToolUse/PostToolUse/Stop 등을 POST | `packages/server/src/api.ts` |
+| 원본 수집 | hook이 PreToolUse/PostToolUse/Stop 등을 `POST /collect` | `packages/server/src/hook/http-entry.ts` |
+| API 프록시 수집 | Anthropic API 레이어 메트릭 (`proxy_requests`) | `packages/server/src/proxy/handler.ts` |
 | 정규화 저장 | `requests` / `claude_events` / `proxy_requests` / `sessions` | `packages/storage/src/schema*.ts` |
 | 사전 집계 | `stats_hourly`, `stats_proxy_hourly` (1시간 버킷) | `packages/storage/src/queries/stats/build-aggregate.ts` |
 | 도메인 쿼리 | `aggregate-*`, `metrics/*`, `session/*` | `packages/storage/src/queries/` |
@@ -120,8 +128,6 @@ const hitRate = totalBillableInput > 0 ? totalCacheRead / totalBillableInput : 0
 - **가운데 산식**: `cache_creation / (read + creation + input)` — 신규 캐시 등록 비율
 - **범례 %**: 슬라이스와 동일한 보색 관계(합 = 100%)로 통일
 
-관련 커밋: `1f45c30` 가운데 산식 정정 → `3cc1fa4` 라벨 정정 → `8dd30b7` 슬라이스/범례 분리 → `672fc0c` 범례 색 통일.
-
 ### 2.3 도구 호출
 
 `getToolStats` (`aggregate-tool.ts`)가 `requests`에서 직접 집계합니다 (사전 집계 X — confidence 카운트가 필요해 raw 스캔 필수).
@@ -131,10 +137,10 @@ const hitRate = totalBillableInput > 0 ? totalCacheRead / totalBillableInput : 0
 | `call_count` | 도구 호출 수 (`event_type='tool'`만, pre_tool 제외) |
 | `total_tokens` | high confidence 토큰 합 |
 | `avg_duration_ms` / `max_duration_ms` | 실행 시간 평균/최대 |
-| `error_count` | `tool_detail`에 다국어 에러 문자열 OR `tokens_confidence='error'` |
-| `confidence_low_count` / `confidence_error_count` | 신뢰도 낮은 행 수 (UI 워터마크용) |
+| `error_count` | `tool_detail LIKE '%Error%' OR LIKE '%error%' OR tokens_confidence='error'` (합산) |
+| `confidence_low_count` / `confidence_error_count` | `tokens_confidence='low'` / `='error'` 행 수 (UI 워터마크용) |
 
-**다국어 에러 패턴:** `tool_detail`에 `error` (대소문자 무시), `[오류]`, `エラー`, `错误` 중 하나라도 포함되면 카운트.
+**WHERE 필터:** `type='tool_call' AND tool_name IS NOT NULL AND (event_type IS NULL OR event_type='tool')` — PostToolUse 완료 도구 호출만 집계 (pre_tool 제외).
 
 `/api/stats/tools`는 `confidence_low_count + confidence_error_count > 0`을 `has_low_confidence` boolean으로 파생 노출하여 UI 워터마크 트리거로 사용합니다.
 
@@ -205,13 +211,13 @@ const hitRate = totalBillableInput > 0 ? totalCacheRead / totalBillableInput : 0
 | `aggregate-strip.ts` | Command Center Strip | `getStripStats` | `stats_hourly` | Strip 노출 지표 변경 |
 | `aggregate-latency.ts` | 응답시간 카드 | `getAvgPromptDurationMs` / `getP95DurationMs` | `requests` | percentile 정의 변경 |
 | `aggregate-tool.ts` | Tool Performance | `getToolStats` / `getSessionToolStats` | `requests` | 도구 지표 변경 |
-| `aggregate-time.ts` | 시간대별 분포 | `getRequestStatsByHour` | `requests` | 시간 단위 변경 |
+| `aggregate-time.ts` | 시간대별 분포 | `getHourlyRequestStats` | `requests` | 시간 단위 변경 |
 
 ### 3.1 `aggregate-cache.ts` — Hit Rate / 절감 토큰
 
-- 데이터 소스: **`stats_hourly` 사전 집계** (이전 requests 풀스캔 105ms → 인덱스로 수 ms)
+- 데이터 소스: **`stats_hourly` 사전 집계** (인덱스 조회)
 - 분모: `tokens_input + cache_read_tokens + cache_creation_tokens`
-- `tokens_confidence` 필터 제거됨 (ADR-006) — stats_hourly 트리거가 pre_tool을 이미 제외해 high/low 구분 의미가 미세
+- `tokens_confidence` 필터 없음 — stats_hourly 트리거가 pre_tool을 이미 제외해 high/low 구분 의미가 미세
 - 반환: `{ hitRate, cacheReadTokens, cacheCreationTokens, savingsTokens (= cacheRead alias), savingsRate }` — 모두 4자리 반올림
 
 ### 3.2 `aggregate-general.ts` — 헤더 요약
@@ -219,13 +225,13 @@ const hitRate = totalBillableInput > 0 ? totalCacheRead / totalBillableInput : 0
 - 데이터 소스: **`stats_hourly` 사전 집계** + `event_type IN ('tool','')` 필터
 - `event_type=''`는 trigger가 NULL을 정규화한 결과 (`stats-event-type-dim` ADR-004)
 - `avg_tokens_per_request = tokens_total_high_sum / tokens_high_count` (high 필터 재현)
-- `avg_duration_ms = duration_ms_sum / duration_ms_count` (high 필터 미적용, legacy 호환)
+- `avg_duration_ms = duration_ms_sum / duration_ms_count` (duration은 high 필터를 적용하지 않음)
 
-`getRequestStatsByType`은 type별 GROUP BY로 prompt / tool_call / response 분포를 뽑습니다. pre_tool은 stats_hourly 트리거가 이미 배제하므로 잠재 버그(pre_tool이 tool_call count에 잡히던 문제)는 ADR-006에서 자연 수정되었습니다.
+`getRequestStatsByType`은 type별 GROUP BY로 prompt / tool_call / response 분포를 뽑습니다. pre_tool은 stats_hourly 트리거가 이미 배제하므로 tool_call count에 포함되지 않습니다.
 
 ### 3.3 `aggregate-strip.ts` — Command Center Strip
 
-- 노출 지표 2종만: `p95_duration_ms`, `error_rate` (비용 지표는 추정치라 제거됨)
+- 노출 지표 2종: `p95_duration_ms`, `error_rate`
 - P95는 `aggregate-latency.ts#computeP95` 헬퍼 재사용 (중복 제거)
 - `buildRangeClause` 헬퍼로 같은 timestamp 범위를 두 서브쿼리(p95, error rate)에 일관 적용
 
@@ -239,15 +245,18 @@ const hitRate = totalBillableInput > 0 ? totalCacheRead / totalBillableInput : 0
 
 ```mermaid
 flowchart LR
-    A["requests.timestamp (ms)\n1715000123456 ms"] -->|"/1000 /3600 *3600 *1000"| B["1715000400000 ms\nBurn Rate"]
-    C["stats_hourly.hour_ts (sec)\n1715000400 sec"] -->|"Math.floor(ms/1000/3600)*3600"| D["1715000400 sec\nCache Trend"]
-    D -->|"×1000"| B
+    A["requests.timestamp (ms)\n1715000123456 ms"] -->|"(CAST(timestamp/3600000 AS INT))*3600000"| B["1715000400000 ms\nBurn Rate 버킷"]
+    P["fromTs / toTs (외부 입력, ms)"] -->|"Math.floor(ms/1000/3600)*3600 (WHERE 경계 sec)"| W["hour_ts WHERE 비교값 (sec)"]
+    C["stats_hourly.hour_ts (이미 sec 저장값)"] -->|"SELECT (변환 없음)"| D["1715000400 sec\nCache Trend 버킷"]
+    W -.->|"hour_ts >= / <= ? 필터"| C
+    D -->|"×1000 (응답 시 sec→ms)"| O["외부 shape ms 통일"]
+    B --> O
 ```
 
-- **Burn Rate** (`requests` 직접): `(CAST(timestamp / 3600000 AS INTEGER) * 3600000)` — ms 정렬
-- **Cache Trend** (`stats_hourly` 사전 집계): `Math.floor(fromTs / 1000 / 3600) * 3600` — sec 정렬
+- **Burn Rate** (`requests` 직접): SQL `(CAST(timestamp / 3600000 AS INTEGER) * 3600000)` 로 ms 단위 버킷 키 생성.
+- **Cache Trend** (`stats_hourly` 사전 집계): `hour_ts`는 이미 sec 단위로 저장돼 있어 변환 없이 `GROUP BY hour_ts` 로 그대로 사용. 별도의 `Math.floor(fromTs / 1000 / 3600) * 3600` / `Math.floor(toTs / 1000 / 3600) * 3600` 은 hour_ts를 변환하는 식이 아니라, **ms 단위 외부 입력 파라미터(`fromTs`/`toTs`)를 sec 경계값으로 환산해 `WHERE hour_ts >= ? / <= ?` 비교에 쓰는 식**입니다 (`timeseries.ts` lines 71, 75).
 
-응답 단계에서 sec → ms로 다시 ×1000하여 외부 shape는 ms로 통일합니다.
+응답 단계에서 Cache Trend의 sec hour_ts를 ×1000하여 외부 shape는 ms로 통일합니다.
 
 ### 4.2 빈 버킷 처리 — `fillHourSlots`
 
@@ -266,23 +275,24 @@ raw SQL은 데이터가 있는 시간대만 반환합니다. 응답 단계에서
 
 **Burn Rate 비교** (`metrics/calculators/burn-rate.ts`): 24h 윈도우와 정확히 24h 이전 동기간을 비교해 `delta_pct = ((current - yesterday) / yesterday) * 100` 산출. 어제 0이면 `null`(UI "—").
 
-**Anomaly** (`metrics/calculators/anomaly.ts`, 임계 `anomaly-thresholds.ts`) — 5종 검출:
+**Anomaly** (`metrics/calculators/anomaly.ts`, 임계 `anomaly-thresholds.ts`) — 6종 검출:
 
-| 종류 | 판정 기준 | 데이터 소스 |
-|------|----------|------------|
-| **spike** | 세션별 prompt `tokens_input` 평균(샘플 ≥ 2)의 200% 초과 | `requests` |
-| **loop**  | `turn_id` 내 동일 `tool_name` 연속 3회 이상 | `requests` |
-| **slow**  | 전체 `tool_call duration_ms`의 P95 초과 (`idx = ceil(N * 0.95) - 1`) | `requests` |
-| **bloated-sys** | `system_byte_size / 4 / model_max_tokens ≥ warn_pct/100`; warn ≥ 15%, critical ≥ 25% (`anomaly_thresholds` 시드) | `proxy_requests` |
-| **agent-spike** | Agent/Skill/Task 부모의 자식합(WITH RECURSIVE 깊이 3): `pct_of_window ≥ warn_pct/100` AND `child_sum / parent ≥ 10×` | `requests` |
+| 종류 | 판정 기준 | 데이터 소스 | 검출 함수 |
+|------|----------|------------|----------|
+| **spike** | 세션별 prompt `tokens_input` 평균(샘플 ≥ 2)의 200% 초과 (`avg * 2`) | `requests` | `computeAnomalyTimeSeries` / `computeRowAnomalies` |
+| **loop**  | `turn_id` 내 동일 `tool_name` 연속 3회 이상 | `requests` | `computeAnomalyTimeSeries` / `computeRowAnomalies` |
+| **slow**  | 전체 `tool_call duration_ms`의 P95 초과 (`idx = ceil(N * 0.95) - 1`) | `requests` | `computeAnomalyTimeSeries` / `computeRowAnomalies` |
+| **bloated-sys** | `system_byte_size / 4 / model_max_tokens ≥ warn_pct/100`; warn ≥ 15%, critical ≥ 25% (`anomaly_thresholds` 시드) | `proxy_requests` | `detectBloatedSys` |
+| **agent-spike** | Agent/Skill/Task 부모의 자식합(WITH RECURSIVE 깊이 3): `pct_of_window ≥ warn_pct/100` AND `child_sum / parent ≥ 10×` (`AGENT_SPIKE_MULTIPLIER_THRESHOLD` 고정 상수) | `requests` | `detectAgentSpike` / `detectAgentSpikeBatch` |
+| **context-saturation** | 세션 최대 prompt context(`tokens_input + cache_read + cache_creation`) / 동적 `model_max_tokens` ≥ 0.85 → critical, ≥ 0.70 → warn (`CTX_SAT_WARN_PCT=70` / `CTX_SAT_CRITICAL_PCT=85` 코드 상수) | `proxy_requests` | `detectContextSaturation` |
 
-`bloated-sys` / `agent-spike` 임계는 `anomaly-thresholds.ts`(`anomaly_thresholds` 테이블, Migration 033)에서 `(project_id, model_id)` 우선순위로 조회하며, 시드 누락 시 코드 폴백 warnPct=15 / criticalPct=25를 사용합니다. `spike` / `loop` / `slow` 3종은 시계열 버킷 카운트(`anomalies-timeseries`)와 행 단위 stage 부여(`computeRowAnomalies`) 두 경로를 모두 지원합니다.
+`bloated-sys` / `agent-spike` 임계는 `anomaly_thresholds` 테이블(Migration 033)에서 `(project_id, model_id)` 우선순위로 조회하며, 시드 누락 시 코드 폴백 warnPct=15 / criticalPct=25를 사용합니다. `context-saturation`의 임계는 현재 코드 상수만 사용합니다. `spike` / `loop` / `slow` 3종은 시계열 버킷 카운트(`computeAnomalyTimeSeries`, `/api/metrics/anomalies-timeseries`)와 행 단위 stage 부여(`computeRowAnomalies`) 두 경로를 모두 지원합니다. `bloated-sys` / `context-saturation`는 `domain/anomaly-enricher.ts#summarizeSessionAnomalies`가 합성해 `GET /api/sessions/:id` 응답에 실립니다.
 
 ---
 
 ## 5. 도구 카테고리 — `tool-category.ts`
 
-`tool_name`을 4개 카테고리로 매핑합니다 (ADR-WDO-011: 기존 6개 → 4개 압축).
+`tool_name`을 4개 카테고리(`Agent` / `Skill` / `MCP` / `Native`)로 매핑합니다.
 
 **판정 우선순위** (높음 → 낮음):
 
@@ -310,24 +320,39 @@ export function categorizeToolName(toolName: string | null | undefined): ToolCat
 
 ## 6. 모델 한도 — `model-limits.ts`
 
-컨텍스트 사용률 계산에 쓰이는 모델별 max_tokens. **DB 시드를 SSoT로 사용**합니다 (Migration 026).
+컨텍스트 사용률 계산에 쓰이는 모델별 max_tokens. **DB 시드 + 요청 페이로드 관측치 결합을 SSoT로 사용**합니다 (시드 정의는 Migration 026). 시드는 폴백/하한선이며, `proxy_requests`에 관측된 그 모델의 최대 컨텍스트가 시드보다 크면 관측치를 채택합니다 — `한도 = max(시드, 관측치)`.
 
-**추론 우선순위** (높음 → 낮음):
+**추론 우선순위** (`getModelMaxTokens`, 높음 → 낮음):
 
 | 순위 | 조건 | max_tokens |
 |------|------|-----------|
-| 1 | 모델명에 `[1m]` suffix | `EXTENDED` (1_000_000) |
-| 2 | `anthropic-beta` 헤더에 `context-1m-2025-08-07` 포함 | `EXTENDED` (1_000_000) |
-| 3 | `model_limits` 테이블 prefix 매칭 (최장 우선) | 행의 `max_tokens` |
-| 4 | 위 모두 미매칭 | `DEFAULT` (200_000) |
+| 1 | 모델명에 `[1m]` suffix (`/\[1m\]/i`) | `EXTENDED` (1_000_000) — 즉시 단락 |
+| 2 | `anthropic-beta` 헤더에 `context-1m-2025-08-07` 포함 | `EXTENDED` (1_000_000) — 즉시 단락 |
+| 3 | `model_limits` 시드 substring 매칭 (`model.includes(row.pattern)`, 첫 매칭 채택) | 행의 `max_tokens` → `seed` (미매칭 시 `seed = DEFAULT` 200_000) |
+| 4 | `proxy_requests` 관측 최대 컨텍스트 (`getObservedMaxCached`, exact model, TTL 60s) | 최종 반환 = `Math.max(seed, observed)` |
+
+순위 1·2는 즉시 EXTENDED로 반환합니다. 순위 3에서 시드를 산출(미매칭 시 DEFAULT 폴백)한 뒤, 순위 4에서 관측치를 조회해 `Math.max(seed, observed)`로 결합한 값을 최종 반환합니다.
+
+```ts
+// model-limits.ts#getModelMaxTokens (핵심)
+if (/\[1m\]/i.test(model)) return EXTENDED_MAX_TOKENS;                       // 1
+if (anthropicBeta && anthropicBeta.includes(CONTEXT_1M_BETA)) return EXTENDED_MAX_TOKENS; // 2
+let seed = DEFAULT_MAX_TOKENS;                                              // 3
+for (const row of rows) {
+  if (model.includes(row.pattern)) { seed = row.max_tokens; break; }        // substring 매칭
+}
+const observed = getObservedMaxCached(db, model);                          // 4 (TTL 60s)
+return Math.max(seed, observed);
+```
 
 ```ts
 export const DEFAULT_MAX_TOKENS  = 200_000;
 export const EXTENDED_MAX_TOKENS = 1_000_000;
 const CONTEXT_1M_BETA = 'context-1m-2025-08-07';
+const OBSERVED_TTL_MS = 60_000;
 ```
 
-신규 모델은 마이그레이션 한 줄 또는 운영자가 `UPDATE model_limits ...` 로 추가합니다. 시드는 프로세스 라이프 동안 1회 로드 후 인메모리에 보존됩니다. SQL 직접 갱신 후 즉시 반영하려면 `invalidateModelLimitsCache()`를 호출하세요.
+관측치는 `getObservedMaxContextForModel` (`packages/storage/src/queries/model-limits.ts`)를 model별 TTL 60초 캐시로 감싸 조회합니다 (0건 모델은 0 반환). 신규 모델은 시드 행 추가(`UPDATE/INSERT model_limits ...`)로 하한선을 보정하며, 관측치가 시드를 초과하면 자동으로 관측치가 채택됩니다. 시드는 첫 호출 시 1회 로드 후 인메모리에 보존됩니다. SQL 직접 갱신 후 즉시 반영하려면 `invalidateModelLimitsCache()`를 호출해 시드·관측 캐시를 모두 비우세요.
 
 `getAllModelLimits()`는 시드 + 상수 전체를 클라이언트 UI 보조 표시용으로 노출하여, 클라이언트 mirror(`context-window.js`)와 정합성을 확인할 수 있게 합니다.
 
@@ -339,7 +364,12 @@ const CONTEXT_1M_BETA = 'context-1m-2025-08-07';
 
 ### 7.1 집계 SQL (`build-aggregate.ts`)
 
-트리거(`migrations/030-*`)와 `rebuildStatsHourly`가 공유하는 SSoT입니다. 핵심만 발췌 (전체는 `STATS_HOURLY_AGGREGATE_SELECT` 상수 참조).
+`stats_hourly` 자동 집계는 두 경로로 채워집니다.
+
+- **트리거** (`requests` AFTER INSERT/UPDATE): `trg_stats_after_insert` / `trg_stats_after_update`. 트리거 본문은 마이그레이션 SQL로 정의되며 현재 정의는 Migration 031(`031-stats-duration-avg-fix.sql`)에 있습니다.
+- **백필/재집계** (`rebuildStatsHourly`): `STATS_HOURLY_AGGREGATE_SELECT` 상수를 그대로 사용 (TS SSoT).
+
+아래 SQL은 `rebuildStatsHourly`가 사용하는 `STATS_HOURLY_AGGREGATE_SELECT` 상수의 핵심 발췌입니다. 트리거는 동일한 집계 산식을 raw SQL로 복제합니다(트리거는 SQL 파일이라 TS 상수를 import할 수 없음 — 산식 변경 시 양쪽을 함께 수정).
 
 ```sql
 SELECT
@@ -361,7 +391,7 @@ GROUP BY hour_ts, model, type, event_type
 | 버킷 산식 | `(timestamp / 1000 / 3600) * 3600` (sec 단위) |
 | WHERE 필터 | `event_type != 'pre_tool'` — PreToolUse 미완성 레코드 제외 |
 | high confidence 재현 | `tokens_*_high_sum` / `tokens_high_count` 컬럼 별도 보관 |
-| 산식 일치 | 트리거와 `rebuildStatsHourly` 모두 `STATS_HOURLY_AGGREGATE_SELECT` import (ADR-005) |
+| 산식 일치 | `rebuildStatsHourly`는 `STATS_HOURLY_AGGREGATE_SELECT` 상수 사용; 트리거(SQL)는 동일 산식을 raw SQL로 복제 (ADR-005) |
 | 멱등성 | `ON CONFLICT(hour_ts, model, type, event_type) DO NOTHING` |
 
 ---
@@ -468,7 +498,7 @@ Canvas 기반, 외부 라이브러리 의존 없음.
 
 **도넛 — 3가지 모드** (`donutMode`):
 
-- **`model`** (기본): 모델별 요청 수. `MODEL_PALETTE` 8색 hash 분배
+- **`model`** (기본): 모델별 요청 수. `modelClassOf(model)`(render/model.js)로 분류 → `--model-{haiku|sonnet|opus|external|synthetic|unknown}-color` 디자인 토큰 사용. 모델 뱃지와 도넛 슬라이스가 동일 분류·동일 색 토큰을 공유해 색이 어긋나지 않음.
 - **`cache`**: §2.2 참조. 슬라이스 합 = 분모, 가운데 % = creation/분모
 - **`type`**: prompt/tool_call/system. CSS 변수 `--type-{type}-color` 동기화
 
@@ -500,7 +530,7 @@ const denom   = input + cacheRead + cacheCreate;
 const hitRate = denom > 0 ? cacheRead / denom : 0;
 ```
 
-이전엔 `type='prompt'`만 합산해서 도구 사이클의 수십~수백 API 호출이 빠지고 `cache_read`의 약 95%가 분모에서 누락되는 회귀가 있었습니다. 모든 LLM API 호출(prompt + tool_call + response) 합산이 정답입니다.
+도구 사이클의 모든 LLM API 호출(prompt + tool_call + response)을 합산하므로 도구 호출마다 보고되는 `cache_read`가 분모/분자에 빠짐없이 반영됩니다.
 
 ---
 
@@ -513,7 +543,7 @@ const hitRate = denom > 0 ? cacheRead / denom : 0;
 | 위치 | 분자 | 분모 | 데이터 소스 |
 |------|------|------|------------|
 | 좌측 Cache Panel Hit Rate | `cache_read` | `input + cache_read + cache_creation` | `getCacheStats` |
-| 도넛 가운데 % (cache 모드) | `cache_creation` | `input + cache_read + cache_creation` | flat-view.js |
+| 도넛 가운데 % (cache 모드) | `cache_creation` | `input + cache_read + cache_creation` | `chart.js#drawDonut` |
 | 세션 단위 (`computeSessionCacheStats`) | `cache_read` | `input + cache_read + cache_creation` | 클라이언트 in-memory |
 
 ### 그룹 B — 분모에서 `creation` 제외 (시계열 진동 완화)

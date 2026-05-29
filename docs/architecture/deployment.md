@@ -30,7 +30,8 @@
 
 | 시나리오 | 언제 쓰나 | 기동 명령 | 부팅 시 자동 재시작 |
 |---------|----------|----------|------------------|
-| **① 로컬 포어그라운드** | 개발 중, 짧은 테스트 | `bun run dev` | 없음 (셸 종료해도 살아있긴 함) |
+| **① 로컬 포어그라운드** | 개발 중, 짧은 테스트 | `bun run dev` | 없음 (셸 종료 시 함께 종료) |
+| **①′ 로컬 백그라운드 데몬** | 셸 닫아도 상주 (서비스 미등록) | `bun run start` | 없음 (detached spawn, 부팅 자동 기동 X) |
 | **② 데몬 (launchd / systemd / PM2)** | 부팅 시 자동 기동, 장시간 상주 | OS 서비스 등록 | 있음 |
 | **③ Docker 컨테이너** | 시스템 격리, 호스트에 Bun 설치 불가, 팀 공용 머신 | `docker compose up -d` | `restart: unless-stopped` |
 | **④ tarball 배포** | 폐쇄망·오프라인 환경 | `docker load` → `docker run` | `--restart` 옵션 |
@@ -40,24 +41,33 @@
 
 ```mermaid
 graph TD
+    CC["Claude Code<br/>훅 스크립트 + /v1 프록시"]
+
     subgraph 호스트
-        CC["Claude Code\n훅 HTTP / v1 프록시"]
-        subgraph 로컬["로컬 (bun run dev / Daemon)"]
-            PID["PID: ~/.spyglass/server.pid"]
+        subgraph 로컬["로컬 / 데몬 (bun run start·dev)"]
+            LSRV["Bun 서버<br/>127.0.0.1:9999"]
         end
-        subgraph Docker["Docker 컨테이너"]
-            SRV["Bun 1.2 + 서버\n:9999"]
-            HC["HEALTHCHECK /health"]
-            VOL["VOLUME /data/.spyglass"]
+        subgraph DK["Docker 컨테이너 (HOME=/data)"]
+            DSRV["Bun 서버 PID 1<br/>:9999 (포트 매핑)"]
+            HC["HEALTHCHECK"]
+            VOL["VOLUME /data/.spyglass<br/>↔ 호스트 바인드 마운트"]
         end
-        DATA["~/.spyglass/\nDB · 로그 · PID"]
+        DATA["~/.spyglass/<br/>spyglass.db · WAL · 로그 · pricing.json<br/>graph/spyglass.lbug (Ladybug)"]
+        PID["~/.spyglass/server.pid"]
     end
 
-    CC -->|"훅 HTTP"| SRV
-    CC -->|"/v1 프록시"| SRV
-    로컬 --> DATA
-    Docker --> DATA
+    CC -->|"POST /collect · /events"| LSRV
+    CC -->|"POST /collect · /events"| DSRV
+    CC -.->|"/v1/* 프록시 (선택)"| LSRV
+    CC -.->|"/v1/* 프록시 (선택)"| DSRV
+    HC -.->|"GET /health 30s 폴링"| DSRV
+    LSRV --> DATA
+    LSRV --> PID
+    DSRV --> VOL
+    VOL --> DATA
 ```
+
+> 로컬·데몬·Docker 는 **동시에 하나만** 9999 포트와 `~/.spyglass/spyglass.db` 를 점유해야 합니다. 시나리오 전환 시 기존 서버를 먼저 중지하세요.
 
 ---
 
@@ -113,26 +123,32 @@ cd "${HOME}/.spyglass-src"
 # 2) 의존성 설치 (워크스페이스 packages/* 전체)
 bun install
 
-# 3) 서버 기동 — restart 동작 (기존 PID 있으면 종료 후 재기동)
+# 3) 서버 기동 — restart 동작 (포트를 점유한 기존 서버를 정리 후 포어그라운드 기동)
 bun run dev
+
+# 셸을 닫아도 살아 있어야 한다면 dev 대신 start (detached 백그라운드 데몬)
+# bun run start
 ```
 
 ### 3.3 검증
 
 ```bash
 curl -sf http://127.0.0.1:9999/health && echo OK
+# {"status":"ok","timestamp":...,"version":"0.1.0"}
 # OK
 ```
 
+> `/health` 는 plain text 가 아니라 JSON `{"status":"ok","timestamp":<ms>,"version":"0.1.0"}` 을 반환합니다 (`packages/server/src/runtime/dispatch.ts`). 이 응답에는 `Access-Control-Allow-Origin: *` 헤더가 붙습니다 — `dispatch.ts` 에서 이 헤더는 OPTIONS 프리플라이트·`/health`·404·500 네 응답에 부여됩니다.
+
 **제공되는 스크립트 한 눈에 보기:**
 
-| 스크립트 | 동작 |
+| 스크립트 | 동작 (`packages/server/src/runtime/daemon.ts`) |
 |----------|------|
-| `bun run start` | 이미 실행 중이면 종료, 아니면 백그라운드 데몬으로 기동 |
-| `bun run dev` | 강제 재시작 (restart) |
-| `bun run stop` | PID 파일 기준 SIGTERM |
-| `bun run status` | PID·포트·헬스를 한 줄로 출력 |
-| `bun run doctor` | 5단계 환경 점검 |
+| `bun run start` | 9999 포트가 이미 LISTEN 중이면 그대로 두고 종료(exit 0). 아니면 자기 자신을 `serve` 모드로 **detached spawn** 하여 백그라운드 데몬화 |
+| `bun run dev` | `restart` — 포트를 LISTEN 중인 서버를 SIGTERM(필요 시 SIGKILL)으로 정리한 뒤 **현재 프로세스(포어그라운드)** 에서 서버 기동. 개발용 |
+| `bun run stop` | LISTEN 중인 서버 PID에 SIGTERM (PID 파일은 신뢰하지 않고 포트 기준으로 식별) |
+| `bun run status` | 포트 LISTEN 기준으로 서버 식별 + 엔드포인트·in-flight 작업 수 출력 |
+| `bun run doctor` | 환경·DB·turn 무결성 종합 점검 (15개 체크) |
 
 <details>
 <summary><code>package.json</code> 발췌</summary>
@@ -146,12 +162,13 @@ curl -sf http://127.0.0.1:9999/health && echo OK
 ```
 </details>
 
-### 3.4 자동 백그라운드화
+### 3.4 백그라운드화
 
-`bun run dev`는 fork 후 자식 프로세스를 백그라운드로 떼어내고 PID를 `~/.spyglass/server.pid`에 기록합니다.
-**셸을 닫아도 서버는 계속 실행**됩니다. 별도 `nohup`·`&`·`disown`은 필요 없습니다.
+**`bun run dev`(`restart`)는 포어그라운드 실행**입니다 — 현재 셸 프로세스에서 서버가 돌고, 셸을 닫으면 함께 종료됩니다. 개발·디버깅용입니다.
 
-> 자세한 절차는 [`install-guide.md`](../install-guide.md)를 참고하세요.
+**셸을 닫아도 살아 있는 백그라운드 데몬**을 원하면 `bun run start`(`start`)를 쓰세요. 이 명령은 자기 자신을 `serve` 모드로 detached spawn 하므로 `nohup`·`&`·`disown` 없이도 백그라운드로 떨어집니다. detached 자식의 stdout/stderr 는 `~/.spyglass/server.log`(또는 `SPYGLASS_DAEMON_LOG` override)로 리다이렉트됩니다 (`packages/server/src/runtime/daemon.ts`).
+
+> 부팅 시 자동 기동·크래시 자동 재시작까지 필요하면 [§ 4 데몬화](#4-데몬화-백그라운드-상주)를 참고하세요. 자세한 설치 절차는 [`install-guide.md`](../install-guide.md)에 있습니다.
 
 ### 3.5 트러블슈팅
 
@@ -363,9 +380,13 @@ curl -sf http://127.0.0.1:9999/health && echo OK
 # syntax=docker/dockerfile:1.6
 FROM oven/bun:1.2-alpine AS builder
 WORKDIR /app
-# 의존성 먼저 설치 — 레이어 캐시 최적화
+# 의존성 먼저 설치 — 레이어 캐시 최적화 (워크스페이스 package.json 개별 복사)
 COPY package.json ./
-COPY packages/*/package.json ./packages/*/
+COPY packages/server/package.json ./packages/server/
+COPY packages/storage/package.json ./packages/storage/
+COPY packages/types/package.json ./packages/types/
+COPY packages/web/package.json ./packages/web/
+COPY packages/tui/package.json ./packages/tui/
 RUN bun install --production --no-save
 COPY packages ./packages
 COPY hooks ./hooks
@@ -383,8 +404,7 @@ RUN mkdir -p /data/.spyglass/logs /data/.spyglass/timing \
 VOLUME ["/data/.spyglass"]
 EXPOSE 9999
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD bun -e "fetch('http://localhost:${SPYGLASS_PORT:-9999}/health')\
-    .then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"
+  CMD bun -e "fetch('http://localhost:${SPYGLASS_PORT:-9999}/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"
 CMD ["bun", "run", "packages/server/src/index.ts", "start"]
 ```
 
@@ -558,19 +578,23 @@ bun run dev
 
 ### 6.4 자동 정리
 
-`packages/server/src/runtime/maintenance.ts`는 매 시간 보존 기간 초과 데이터를 정리합니다.
+`packages/server/src/runtime/maintenance.ts` 의 `runDailyMaintenanceIfNeeded()` 가 보존 기간 초과 데이터를 정리합니다. 타이머(`MAINTENANCE_INTERVAL_MS = 1시간`)는 매 시간 깨어나지만, `metadata` 테이블의 `last_cleanup_date` 키(`getMetadata`/`setMetadata`)를 보고 **하루 1회만** 실제 정리를 수행합니다 (서버 기동 직후에도 1회 즉시 검사).
+
+보존 일수는 `packages/storage/src/runtime/retention.ts` 의 `getRetentionDays()` 가 단일 진실원(SSoT)입니다. RDB(`deleteOldData`)와 그래프(`deleteOldGraphData`)가 동일한 cutoff(`getRetentionCutoffTs()`)를 공유합니다.
 
 ```ts
-const retentionDays = parseInt(process.env.SPYGLASS_RETENTION_DAYS ?? '30', 10);
+// packages/storage/src/runtime/retention.ts
+export const DEFAULT_RETENTION_DAYS = 30;
+export function getRetentionDays(): number { /* SPYGLASS_RETENTION_DAYS, 0·음수·비숫자는 30 폴백 */ }
 ```
 
-기본 **30일**. 필요 시 환경변수로 조정합니다:
+기본 **30일**. 필요 시 환경변수로 조정합니다 (`0`·음수·비숫자 값은 조용히 기본 30일로 폴백):
 
 ```bash
 SPYGLASS_RETENTION_DAYS=7 bun run dev      # 7일만 보존
 ```
 
-수동 정리는 [`install-guide.md` § 7.3](../install-guide.md#73-오래된-데이터-정리) 참조.
+RDB 측은 `requests` / `proxy_requests` / `claude_events` / `sessions`(자식 없는 세션만) / `system_prompts`(미참조 행) / `stats_hourly` 를 cutoff 기준으로 삭제합니다. 수동 정리는 [`install-guide.md` § 7.2](../install-guide.md#72-오래된-데이터-정리) 참조.
 
 ---
 
@@ -629,7 +653,7 @@ Docker의 경우 `docker-compose.yml`의 `ports: "8088:9999"` 처럼 호스트 �
 ### 7.4 CORS
 
 서버는 대시보드 정적 자원과 API를 같은 origin(`:9999`)에서 서빙하므로 CORS 설정이 별도로 필요하지 않습니다.
-외부 도메인에서 API만 호출하는 경우라면 `packages/server/src/api.ts` 등을 수정해 CORS 헤더를 추가해야 합니다 — 기본 배포 흐름에선 권장하지 않습니다.
+`dispatch.ts`(`packages/server/src/runtime/dispatch.ts`)는 `Access-Control-Allow-Origin: *` 헤더를 네 응답에 부여합니다 — OPTIONS 프리플라이트(204, `Access-Control-Allow-Methods`·`Access-Control-Allow-Headers` 동반), `/health`(200), 404 Not Found, 500 Internal Server Error. 그 외 일반 `/api/*` JSON 응답에는 CORS 헤더가 없으므로, 외부 도메인에서 API를 호출하려면 라우팅 진입점에 CORS 헤더를 추가해야 하며 — 기본 배포 흐름(loopback 전용)에선 권장하지 않습니다.
 
 ---
 
@@ -651,6 +675,7 @@ Docker의 경우 `docker-compose.yml`의 `ports: "8088:9999"` 처럼 호스트 �
 | `SPGLASS_DB_PATH` ⚠️ | `runtime/config.ts` | SQLite DB 파일 경로 | `~/.spyglass/spyglass.db` |
 | `SPYGLASS_PID_FILE` | `runtime/daemon.ts` | PID 파일 경로 | `~/.spyglass/server.pid` |
 | `SPYGLASS_SERVER_LOG` | `runtime/stdio-mirror.ts` | 서버 로그 미러 경로 | `~/.spyglass/logs/server.log` |
+| `SPYGLASS_DAEMON_LOG` | `runtime/daemon.ts` | `start` 의 detached child stdout/stderr 리다이렉트 경로 | `~/.spyglass/server.log` |
 | `SPYGLASS_RETENTION_DAYS` | `runtime/maintenance.ts` | 데이터 보존 기간(일) | `30` |
 | `SPYGLASS_SHUTDOWN_TIMEOUT_MS` | `runtime/config.ts` | graceful shutdown 최대 대기 시간(ms). SIGTERM/SIGINT 핸들러 guard timer 및 in-flight 요청 완료 대기에 사용 | `10000` |
 | `SPYGLASS_NO_MOTION` | `packages/tui/src/lib/capabilities.ts` | `1`이면 TUI 애니메이션·동적 리프레시를 비활성화 | 미설정 |
@@ -662,16 +687,17 @@ Docker의 경우 `docker-compose.yml`의 `ports: "8088:9999"` 처럼 호스트 �
 
 > ⚠️ 표시는 **오타 prefix(`SPGLASS_`)** 를 사용하는 변수입니다.
 
-### 8.2 훅 측 (Claude Code가 주입)
+### 8.2 훅 측
 
-`hooks/spyglass-collect.sh` 가 참조합니다.
+`hooks/spyglass-collect.sh` 스크립트 내부에서 직접 참조하는 변수:
 
 | 변수 | 설명 | 기본값 |
 |------|------|--------|
-| `SPYGLASS_DIR` | 클론된 저장소 절대 경로 (필수) | — |
-| `SPYGLASS_HOST` | 서버 호스트 | `localhost` |
+| `SPYGLASS_HOST` | 서버 호스트 (`/collect`·`/events` 엔드포인트 조합) | `localhost` |
 | `SPYGLASS_PORT` | 서버 포트 | `9999` |
-| `SPYGLASS_TIMEOUT` | 훅 HTTP 타임아웃(초) | `1` |
+| `SPYGLASS_TIMEOUT` | 훅 HTTP `--max-time` 타임아웃(초) | `1` |
+
+`SPYGLASS_DIR` 은 위 스크립트 **내부에서 읽지 않습니다**. 이 변수는 Claude Code `~/.claude/settings.json` 의 hooks 커맨드 문자열(`bash $SPYGLASS_DIR/hooks/spyglass-collect.sh`)에서 스크립트 경로를 조합하는 용도로만 쓰이며, `scripts/install.sh` 가 클론된 저장소 절대 경로(`~/.spyglass-src`)로 채워 넣습니다.
 
 ### 8.3 Claude Code 측 (프록시 활성화)
 
@@ -714,7 +740,9 @@ bun run status
 sqlite3 ~/.spyglass/spyglass.db ".backup '${HOME}/spyglass-pre-upgrade.db'"
 
 # 2) 새 이미지 빌드 (또는 tarball 로드)
-docker compose build --pull
+#    docker-compose.yml 에는 build: 섹션이 없고 image: spyglass:latest 만 참조하므로
+#    이미지는 docker build 로 직접 만들어 동일 태그로 덮어써야 한다.
+git pull && docker build -t spyglass:latest .
 # 또는: docker load < new-image.tar.gz
 
 # 3) 컨테이너 재생성
@@ -732,9 +760,10 @@ curl -sf http://127.0.0.1:9999/health && echo OK
 서버 기동 시 자동으로 적용됩니다 — 별도 명령 필요 없습니다.
 
 **작동 원리:**
-- `packages/storage/src/migrator.ts` 가 `packages/storage/migrations/*.sql` 파일을 스캔합니다.
-- `PRAGMA user_version` 보다 큰 버전만 순서대로 실행하고, 그때마다 `user_version` 을 갱신합니다.
-- 현재 마이그레이션은 `001-init.sql` ~ `020-payload-audit-fields.sql` 까지 누적되어 있습니다.
+- `packages/storage/src/migrator.ts` 가 `packages/storage/migrations/*.sql` 파일을 파일명 순으로 스캔합니다 (`NNN-description.sql`, NNN이 버전).
+- `PRAGMA user_version` 보다 큰 버전만 순서대로 실행하고, 각 파일 적용을 DDL·버전 갱신이 원자적인 트랜잭션으로 묶어 그때마다 `PRAGMA user_version` 을 갱신합니다.
+- 버전 35(`035-add-migrations-meta-table.sql`) 이후부터는 동일 트랜잭션에서 `_migrations` 메타테이블에도 히스토리(filename·app_version)를 INSERT 합니다 — `/api/version` 응답의 SSoT.
+- 마이그레이션은 `001-init.sql` 부터 누적되며, 최신 버전은 `packages/storage/migrations/` 디렉토리의 가장 큰 번호입니다. 상세 카탈로그는 [`migrations.md`](./migrations.md) 참조.
 
 **업그레이드 후 마이그레이션 버전 확인:**
 
@@ -742,7 +771,7 @@ curl -sf http://127.0.0.1:9999/health && echo OK
 bun -e 'const {Database}=require("bun:sqlite");
   const db = new Database(`${process.env.HOME}/.spyglass/spyglass.db`);
   console.log(db.query("PRAGMA user_version").get());'
-# { user_version: 20 }
+# { user_version: <적용된 최신 버전> }
 ```
 
 > **Warning**: 마이그레이션은 **앞으로만** 진행되며 다운그레이드는 지원되지 않습니다. 업그레이드 직전에 반드시 `.backup` 핫백업을 떠 두세요.
@@ -775,9 +804,9 @@ bun run dev
 
 | 명령 | 무엇을 점검하나 | 언제 쓰나 |
 |------|--------------|---------|
-| `curl -sf http://127.0.0.1:9999/health` | 서버·DB 응답 | 가장 빠른 1초 점검 |
+| `curl -sf http://127.0.0.1:9999/health` | 서버 프로세스 응답 (정적 liveness — DB 미조회) | 가장 빠른 1초 점검 |
 | `bun run status` | PID·포트·헬스 한 줄 요약 | 매일 사용 |
-| `bun run doctor` | 5단계 환경 종합 진단 | 설치 후·업그레이드 후·이상 시 |
+| `bun run doctor` | 환경·DB·turn 무결성 종합 진단 (15개 체크) | 설치 후·업그레이드 후·이상 시 |
 | `docker compose ps` | 컨테이너 상태(`healthy`) | Docker 배포 시 |
 | `docker inspect <name> --format='{{json .State.Health}}'` | 컨테이너 헬스 상세 이력 | 이상 진단 시 |
 
@@ -785,10 +814,10 @@ bun run dev
 
 ```bash
 curl -sf http://127.0.0.1:9999/health
-# OK
+# {"status":"ok","timestamp":1748000000000,"version":"0.1.0"}
 ```
 
-- 200 OK: 서버·DB 연결 정상
+- 200 + `{"status":"ok",...}`: 서버 응답 정상
 - 연결 실패: 서버 미기동 / 포트 충돌
 
 `Dockerfile`과 `docker-compose.yml`의 `HEALTHCHECK`도 이 엔드포인트를 30초 간격으로 폴링합니다.
@@ -797,22 +826,23 @@ curl -sf http://127.0.0.1:9999/health
 
 ```bash
 $ cd ~/.spyglass-src && bun run status
-[Server] Running (PID 12345) on 127.0.0.1:9999 — healthy
+[Server] Running (PID: 12345)
+[Server] Endpoint: http://127.0.0.1:9999
+# 미기동 시: [Server] Not running
 ```
 
-PID 파일·실제 프로세스·포트 리슨·헬스 응답을 한 줄로 요약합니다.
+포트(9999) LISTEN 여부로 서버를 식별하며 — PID 파일이 stale 하면 정리합니다. in-flight 백그라운드 작업이 있으면 그 수도 함께 출력합니다.
 
 ### 10.3 `bun run doctor`
 
-5단계 종합 진단:
+`packages/server/src/cli/doctor.ts` 가 4개 그룹 총 15개 체크를 순서대로 실행합니다:
 
-1. Bun 런타임 / 버전
-2. 서버 프로세스 / 헬스체크
-3. `~/.claude/settings.json` 훅 등록 여부 (`spyglass-collect.sh` 명령 포함 검사)
-4. `SPYGLASS_DIR` 경로 유효성
-5. DB 파일 / 마이그레이션 버전
+- **환경** (`checks/environment.ts`): Bun 버전, `~/.claude/settings.json` 존재·파싱, 훅 등록 여부, 훅 스크립트 실행 권한
+- **DB** (`checks/database.ts`): DB 파일 권한, 스키마(`PRAGMA user_version`) 버전, 최근 수집 활동
+- **서버** (`checks/server.ts`): 서버 포트 가용성
+- **turn 무결성** (`checks/integrity.ts`): orphan rows, zero-response turn, 장시간 proxy 응답, 중복 응답, turn_id 불일치, unlinked tool call, orphan proxy_tool_uses
 
-설치 직후뿐 아니라 **업그레이드 후·이상 발생 시** 매번 실행하는 습관을 권장합니다.
+`--fix` 플래그로 일부 항목 자동 교정을 지원합니다 (`bun run packages/server/src/cli.ts doctor --fix`). 설치 직후뿐 아니라 **업그레이드 후·이상 발생 시** 매번 실행하는 습관을 권장합니다.
 
 ### 10.4 외부 모니터링 (선택)
 
@@ -842,7 +872,7 @@ docker compose logs spyglass | tail -50
 |----------|------|------|
 | `EADDRINUSE :9999` | 호스트 9999 이미 사용 중 | `ports`를 다른 호스트 포트로 변경 |
 | `SQLITE_CANTOPEN` | 볼륨 권한 문제 | `chown -R $(id -u):$(id -g) ~/.spyglass` |
-| `[migrator] Fatal error` | DB 마이그레이션 충돌 | 백업 복원 후 재시도 |
+| `[migrator] PANIC during migration` | DB 마이그레이션 실패 | 백업 복원 후 재시도 |
 
 ### 11.2 볼륨 권한 (Linux)
 
@@ -894,9 +924,13 @@ docker inspect spyglass --format='{{json .State.Health}}' | jq
 ## 참고 문서
 
 - [`install-guide.md`](../install-guide.md) — 단일 사용자 설치 가이드
+- [`configuration.md`](./configuration.md) — 환경변수·설정 우선순위 레퍼런스 (`SPGLASS_*` vs `SPYGLASS_*` 구분)
+- [`migrations.md`](./migrations.md) — DB 마이그레이션 카탈로그
+- [`hooks-integration.md`](./hooks-integration.md) — 훅 수집 스크립트 동작
+- [`troubleshooting.md`](./troubleshooting.md) — 트러블슈팅 모음
 - [`examples/settings.hooks.minimal.json`](../examples/settings.hooks.minimal.json) — 최소 훅 프로파일
 - [`examples/settings.hooks.full.json`](../examples/settings.hooks.full.json) — 권장(전체) 훅 프로파일
 - 프로젝트 루트 [`README.md`](../../README.md) — 기능과 철학 개요
-- 프로젝트 루트 [`Dockerfile`](../Dockerfile), [`docker-compose.yml`](../docker-compose.yml)
-- [`scripts/build-image.sh`](../scripts/build-image.sh) — tarball 패키징 스크립트
-- [`scripts/install.sh`](../scripts/install.sh) — one-liner 설치 스크립트
+- 프로젝트 루트 [`Dockerfile`](../../Dockerfile), [`docker-compose.yml`](../../docker-compose.yml)
+- [`scripts/build-image.sh`](../../scripts/build-image.sh) — tarball 패키징 스크립트
+- [`scripts/install.sh`](../../scripts/install.sh) — one-liner 설치 스크립트

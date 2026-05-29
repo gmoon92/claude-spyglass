@@ -50,12 +50,29 @@ claude-spyglass에서 자주 발생하는 문제를 **증상 → 원인 → 해�
 | environment | spyglass 훅 등록 + `env.SPYGLASS_DIR` | 6개 훅 키 중 1개 이상 `spyglass-collect.sh` 포함 |
 | environment | 훅 스크립트 실행 권한 | `chmod +x` |
 | database | DB 파일 권한 | `0o600` 권장 |
-| database | 스키마 버전 | `PRAGMA user_version ≥ 12` |
-| server | 포트 가용성 | 9999 listen 또는 free |
-| database | 최근 5분 수집 활동 | 새 row 존재 |
-| integrity | orphan turn_id · 중복 response · mismatched turn_id | 0건 |
+| database | 스키마 버전 | `PRAGMA user_version`이 0이거나 12 미만이면 warn |
+| server | 포트 가용성 | `Bun.serve`로 3000 포트 바인딩 테스트 (`checks/server.ts:14`) |
+| database | 최근 5분 수집 활동 | `requests`에 새 row 존재 |
+| integrity | orphan turn_id · 중복 response · mismatched turn_id · unlinked tool_call · orphan proxy_tool_use | [11절](#11-데이터-정합성-경고) |
 
-출력 기호: `✓` ok / `⚠` warn / `✗` fail. `✗`가 하나라도 있으면 종료 코드 1입니다 (`doctor.ts:83`).
+출력 기호: `✓` ok / `⚠` warn / `✗` fail. `✗`(fail)가 하나라도 있으면 종료 코드 1입니다 (`doctor.ts:83`).
+
+검사는 `doctor.ts`의 `checks` 배열 순서대로 실행됩니다.
+
+```mermaid
+flowchart TD
+    A[bun run doctor] --> B[environment<br/>Bun · settings.json · 훅 등록 · 훅 권한]
+    B --> C[database<br/>DB 권한 · 스키마 버전]
+    C --> D[server<br/>포트 가용성]
+    D --> E[database<br/>최근 5분 수집 활동]
+    E --> F[integrity<br/>orphan · zero-response · long-proxy<br/>duplicate · mismatched · unlinked · orphan-proxy]
+    F --> G{fail 존재?}
+    G -->|yes| H[종료 코드 1]
+    G -->|no| I{warn 존재?}
+    I -->|yes| J[종료 코드 0 · warn 요약]
+    I -->|no| K[종료 코드 0 · all pass]
+    F -.->|--fix| L[applyFixes<br/>chmod + 데이터 정합성 보정]
+```
 
 ---
 
@@ -66,12 +83,17 @@ claude-spyglass에서 자주 발생하는 문제를 **증상 → 원인 → 해�
 **증상**
 
 ```
-[Server] Port 9999 is already in use
-[Server] Blocking process(es): PID 12345
-[Server] Run 'bun run dev' to restart with auto-cleanup
+[Server] Already running (PID: 12345)
 ```
 
-**원인**: 이전 서버 프로세스 또는 다른 프로그램이 9999 점유.
+또는 `start` 시 포트가 TIME_WAIT 등으로 막혀있을 때:
+
+```
+[Server] Port 9999 is unavailable (likely TIME_WAIT)
+[Server] Run 'spyglass restart' to retry with cleanup
+```
+
+**원인**: 이미 LISTEN 중인 spyglass 서버가 있거나, 직전 종료의 TIME_WAIT 잔여로 포트가 일시 점유.
 
 **해결**:
 
@@ -79,39 +101,42 @@ claude-spyglass에서 자주 발생하는 문제를 **증상 → 원인 → 해�
 cd "${HOME}/.spyglass-src" && bun run dev   # 자동 정리 후 재기동
 ```
 
-`bun run dev`(=`restart`)는 다음을 수행합니다 (`runtime/daemon.ts:172`).
+`bun run dev`(=`restart`, `commandRestart` `runtime/daemon.ts:228`)는 다음을 수행합니다.
 
-1. 포트 가용 검사 → 점유 시 PID 파일과 lsof `-sTCP:LISTEN` 결과 합산
-2. `SIGTERM` → 5초 대기 → 실패 시 `SIGKILL`
-3. 포트 해제까지 추가로 5초 대기
-4. `Bun.serve()` 호출
+1. `findProcessesByPort(PORT)` — lsof `-sTCP:LISTEN`으로 **LISTEN 중인 PID만** 선별 (PID 파일은 신뢰하지 않음 — stale + PID 재할당 시 클라이언트를 오인 종료할 위험)
+2. 각 PID에 `SIGTERM` → `SHUTDOWN_TIMEOUT_MS`(기본 10초, `SPYGLASS_SHUTDOWN_TIMEOUT_MS`) 동안 drain 진행도 표시하며 대기 → 미종료 시 `SIGKILL`
+3. `waitForPortRelease(PORT, 5000)` — 포트 해제까지 최대 5초 대기 (실패 시 `[Server] Failed to release port 9999. Please check manually.` 후 종료)
+4. `startServer()` → `Bun.serve()` 호출
 
 수동 정리가 필요하면:
 
 ```bash
-lsof -iTCP:9999 -sTCP:LISTEN   # PID 확인
-kill -TERM <pid>               # 5초 후에도 살아있으면 kill -KILL
+lsof -iTCP:9999 -sTCP:LISTEN   # LISTEN PID 확인
+kill -TERM <pid>               # 종료 안 되면 kill -KILL
 ```
 
-> **주의**: `lsof -ti tcp:9999`만 쓰면 연결 중인 클라이언트(Claude Code, TUI)까지 잡힙니다. 반드시 `-sTCP:LISTEN`을 함께 사용하거나 `bun run dev`(`port.ts:35`)에 맡기세요.
+> **주의**: `lsof -ti tcp:9999`만 쓰면 ESTABLISHED 연결 중인 클라이언트(Claude Code, TUI)까지 잡힙니다. 반드시 `-sTCP:LISTEN`을 함께 사용하거나 `bun run dev`(`findProcessesByPort` `port.ts:38`)에 맡기세요.
 
 **예방**: 종료는 항상 `bun run stop` 또는 Ctrl+C를 사용. 강제 종료(`kill -9`)는 PID 파일·포트 정리를 건너뛰어 다음 기동을 막습니다.
 
 ### 2.2 PID 파일 잔존 (stale)
 
-**증상**: `[Server] Already running (PID: 12345)`인데 실제 PID가 죽어있음.
+**증상**: `~/.spyglass/server.pid`에 죽은 프로세스의 PID가 남아있음.
 
-**원인**: `kill -9` 등 강제 종료 후 PID 파일이 정리되지 않음. `bun run status`는 lsof `-sTCP:LISTEN`으로 포트를 검사해 stale 파일을 자동 제거합니다 (`runtime/daemon.ts:233`).
+**원인**: `kill -9` 등 강제 종료 후 PID 파일이 정리되지 않음.
+
+> spyglass는 PID 파일을 신뢰하지 않습니다. `start`/`stop`/`restart`/`status` 모두 lsof `-sTCP:LISTEN` 결과만으로 서버를 식별하므로(`findProcessesByPort`), stale PID 파일 자체가 기동을 막지는 않습니다. `commandStart`은 진입 시 stale PID 파일을 정리하고(`daemon.ts:159`), `bun run status`(`commandStatus` `runtime/daemon.ts:289`)는 LISTEN 서버가 없으면 stale PID 파일을 제거합니다.
 
 **해결**:
 
 ```bash
+bun run status   # stale PID 파일 자동 정리
+bun run dev      # 재기동 (진입 시에도 stale PID 정리)
+# 직접 제거도 무방
 rm -f "${HOME}/.spyglass/server.pid"
-bun run dev
-# 또는 단순히 bun run status 를 한 번 호출 → 자동 정리
 ```
 
-**예방**: `kill -9` 대신 `bun run stop` 또는 Ctrl+C. SIGINT/SIGTERM 핸들러가 PID 파일을 자동 정리합니다 (`runtime/daemon.ts:97`).
+**예방**: `kill -9` 대신 `bun run stop` 또는 Ctrl+C. SIGINT/SIGTERM 핸들러(`gracefulShutdown` `runtime/daemon.ts:70`)가 graceful shutdown 후 PID 파일을 자동 정리합니다.
 
 ### 2.3 Bun 버전 미달 / 미설치
 
@@ -156,7 +181,7 @@ chmod 600 "${HOME}/.spyglass/spyglass.db" 2>/dev/null || true
 
 ### 2.5 PID 파일 경로 분리
 
-운영/임시 인스턴스를 동시에 띄우려면 `SPYGLASS_PID_FILE`로 분리 (`runtime/daemon.ts:19`): `SPYGLASS_PID_FILE=/tmp/spyglass-test.pid bun run packages/server/src/index.ts start`.
+운영/임시 인스턴스를 동시에 띄우려면 `SPYGLASS_PID_FILE`로 분리 (`getPidFile` `runtime/daemon.ts:57`): `SPYGLASS_PID_FILE=/tmp/spyglass-test.pid bun run packages/server/src/index.ts start`.
 
 ---
 
@@ -312,12 +337,23 @@ bun run dev
 
 ### 4.4 hook_event_name 분기 확인
 
-`spyglass-collect.sh`는 `hook_event_name` 필드로 라우팅합니다 (`hooks/spyglass-collect.sh:120`).
+`spyglass-collect.sh`는 stdin payload를 `hook-raw.jsonl`에 원장 기록한 뒤, `hook_event_name` 필드로 엔드포인트를 분기합니다 (`case` 문 `hooks/spyglass-collect.sh:120`).
+
+```mermaid
+flowchart TD
+    A[Claude Code 훅 호출<br/>stdin payload] --> B{"stdin 존재?<br/>[[ ! -t 0 ]]"}
+    B -->|no| Z[No stdin payload received<br/>수동 실행 시 정상]
+    B -->|yes| C[hook-raw.jsonl 원장 기록]
+    C --> D{hook_event_name}
+    D -->|UserPromptSubmit<br/>PreToolUse<br/>PostToolUse| E["POST /collect<br/>(requests 테이블)"]
+    D -->|"빈 문자열<br/>(legacy fallback)"| E
+    D -->|"그 외<br/>SessionStart · SessionEnd · Stop"| F["POST /events<br/>(claude_events 테이블)"]
+```
 
 | `hook_event_name` | 엔드포인트 |
 |---|---|
 | `UserPromptSubmit`, `PreToolUse`, `PostToolUse` | `/collect` |
-| `SessionStart`, `SessionEnd`, `Stop` (기타) | `/events` |
+| `SessionStart`, `SessionEnd`, `Stop` (기타 전부) | `/events` |
 | 비어있음 | `/collect` (legacy fallback) |
 
 훅 명령에 잘못된 인자를 추가하거나 페이로드를 가공하지 마세요. 라우팅이 깨져 `claude_events`가 비게 됩니다.
@@ -336,7 +372,7 @@ tail -f "${HOME}/.spyglass/logs/server.log"
 
 ### 5.1 마이그레이션 도중 SQL 오류
 
-**증상**: 서버 부팅 시 `[migrator] Error applying 015-proxy-requests-enrich.sql: SQLiteError: ...`. 트랜잭션이 롤백되고 throw가 발생 (`storage/migrator.ts:431`).
+**증상**: 서버 부팅 시 `[migrator] Error applying 015-proxy-requests-enrich.sql: SQLiteError: ...`. 에러 로그 후 throw로 부팅 중단 (`storage/migrator.ts:436`). 각 마이그레이션은 `db.transaction`으로 DDL과 `PRAGMA user_version` 갱신을 원자적으로 처리하므로 (`migrator.ts:390`), 실패한 파일의 부분 적용은 롤백됩니다.
 
 **원인 가능성**:
 - 비공식 도구로 스키마를 수정해 컬럼/테이블 충돌
@@ -367,7 +403,7 @@ tail -f "${HOME}/.spyglass/logs/server.log"
    sqlite3 "${HOME}/.spyglass/spyglass.db" "PRAGMA wal_checkpoint(TRUNCATE); VACUUM;"
    ```
 
-4. **migrator는 중복 컬럼/테이블을 자동 무시** — `duplicate column name`, `already exists`는 건너뛰므로 (`migrator.ts:390`) 같은 마이그레이션을 두 번 적용해도 안전합니다.
+4. **migrator는 중복 컬럼/테이블을 자동 무시** — `duplicate column name`, `already exists`는 건너뛰므로 (`migrator.ts:397`) 같은 마이그레이션을 두 번 적용해도 안전합니다.
 
 5. **재기동**
 
@@ -384,7 +420,7 @@ tail -f "${HOME}/.spyglass/logs/server.log"
 ⚠ DB 스키마 v8 (권장: v12+)
 ```
 
-**원인**: 과거 비정상 종료로 DDL은 들어갔지만 `PRAGMA user_version` 갱신 안 됨. v32 이후로는 트랜잭션 안에서 원자적으로 처리되므로 새 발생은 없습니다.
+**원인**: 비정상 종료로 DDL은 들어갔지만 `PRAGMA user_version` 갱신이 안 된 상태. migrator는 DDL과 `PRAGMA user_version`을 같은 `db.transaction` 안에서 원자적으로 처리하므로 (`migrator.ts:390`), 정상 경로에서는 이 불일치가 생기지 않습니다.
 
 **해결**: 다음 부팅에서 migrator가 누락된 마이그레이션을 다시 시도합니다(중복 컬럼은 자동 무시).
 
@@ -449,7 +485,7 @@ curl -i http://127.0.0.1:9999/health
 
 ### 6.2 SSE 연결 끊김
 
-`idleTimeout: 0`으로 명시 설정 (`runtime/lifecycle.ts:122`)되어 있으므로 정상이면 끊기지 않습니다.
+`Bun.serve`에 `idleTimeout: 0`을 명시 설정 (`runtime/lifecycle.ts:144`, Bun 기본 10초 비활성화)했으므로 정상이면 끊기지 않습니다.
 
 ```bash
 # SSE 직접 테스트
@@ -475,7 +511,7 @@ tail -n 50 "${HOME}/.spyglass/logs/server.log"
 
 ### 6.4 CORS 에러
 
-spyglass는 모든 응답에 `Access-Control-Allow-Origin: *`를 박습니다 (`runtime/dispatch.ts:27`). CORS 에러가 떴다면 응답이 spyglass에서 온 게 아니라 중간 프록시/캐시에서 가로채진 것입니다. `http://127.0.0.1:9999`로 직접 접근하는지 확인하세요.
+spyglass는 OPTIONS 프리플라이트(`runtime/dispatch.ts:43`)와 응답 경로 전반(`routes/_shared.ts`, `metrics/_shared.ts`, `events.ts`, `sse.ts`, proxy)에 `Access-Control-Allow-Origin: *`를 박습니다. CORS 에러가 떴다면 응답이 spyglass에서 온 게 아니라 중간 프록시/캐시에서 가로채진 것입니다. `http://127.0.0.1:9999`로 직접 접근하는지 확인하세요.
 
 ### 6.5 데이터는 있는데 화면이 비어있음
 
@@ -487,10 +523,11 @@ spyglass는 모든 응답에 `Access-Control-Allow-Origin: *`를 박습니다 (`
 
 ### 7.1 색이 깨지거나 빠짐
 
-`packages/tui/src/lib/capabilities.ts:16`에서:
-- `COLORTERM`이 `truecolor`/`24bit`를 포함 → truecolor
-- `TERM`이 `256` 포함 → 256색
-- `NO_COLOR`가 비어있지 않음 → 16색
+`packages/tui/src/lib/capabilities.ts`의 `detect()`(line 16)에서:
+- `NO_COLOR`가 비어있지 않음 → 16색 고정 (최우선)
+- `COLORTERM`이 `truecolor`/`24bit` 포함 → truecolor (line 21)
+- `TERM`이 `256` 포함 → 256색 (line 33)
+- `TERM === 'linux'` → 색·유니코드 비활성
 
 **확인 & 해결**:
 
@@ -520,7 +557,7 @@ export LC_ALL=en_US.UTF-8
 
 ### 7.3 사이드바가 안 보임 / 레이아웃 깨짐
 
-`ResponsiveShell`이 `md` 브레이크포인트(100 컬럼)에서 사이드바를 숨깁니다 (`design-tokens.ts:159`: `sm: 80, md: 100, lg: 140, xl: 180`).
+`ResponsiveShell`은 터미널 폭이 `md` 브레이크포인트(100 컬럼) 미만이면 사이드바를 숨깁니다 (`components/layout/ResponsiveShell.tsx:17` — `cols >= tokens.layout.breakpoint.md`). 브레이크포인트 값은 `design-tokens.ts:159`(`breakpoint: { sm: 80, md: 100, lg: 140, xl: 180 }`).
 
 ```bash
 tput cols    # 현재 폭 확인
@@ -537,7 +574,7 @@ bun run tui
 
 ### 7.5 언어 강제
 
-언어 우선순위 (`server/src/i18n.ts:34`): `SPYGLASS_LANG` > `LC_ALL`/`LANG` > 기본 `ko`.
+언어 우선순위 (`detectLang` `server/src/i18n.ts:42`): `--lang` CLI 플래그 > `SPYGLASS_LANG` > `LC_ALL`/`LANG` > 기본 `ko`(`DEFAULT_LANG`).
 
 ```bash
 export SPYGLASS_LANG=en    # ko / en / ja / zh
@@ -547,9 +584,9 @@ export SPYGLASS_LANG=en    # ko / en / ja / zh
 
 ## 8. DB 손상 · WAL · 회복
 
-spyglass는 WAL 모드를 사용합니다 (`storage/connection.ts:159`).
+spyglass는 WAL 모드를 사용합니다 (`enableWalMode` `storage/connection.ts:160`).
 
-- 정상 종료(SIGTERM)는 close 직전에 `PRAGMA wal_checkpoint(TRUNCATE)`로 WAL을 메인 DB에 머지합니다 (`connection.ts:214`).
+- 정상 종료(SIGTERM)는 `close()` 직전에 `PRAGMA wal_checkpoint(TRUNCATE)`로 WAL을 메인 DB에 머지합니다 (`connection.ts:214`).
 - SIGKILL/시스템 crash는 WAL 잔존(`*.db-wal`, `*.db-shm`)을 남깁니다.
 
 ### 8.1 .db-wal / .db-shm 잔존
@@ -601,7 +638,7 @@ ANALYZE;
 SQL
 ```
 
-`VACUUM`은 임시 파일을 만들어 교체하므로 현재 DB 크기 만큼의 여유 공간이 필요합니다. 오래된 데이터 삭제는 [설치 가이드 7.3](../install-guide.md#73-오래된-데이터-정리).
+`VACUUM`은 임시 파일을 만들어 교체하므로 현재 DB 크기 만큼의 여유 공간이 필요합니다. 오래된 데이터 삭제는 [설치 가이드 7.2](../install-guide.md#72-오래된-데이터-정리).
 
 ---
 
@@ -646,8 +683,8 @@ git pull && bun install && bun run dev
 |---|---|---|
 | `~/.spyglass/logs/server.log` | 서버 stdout/stderr 미러 (INFO/WARN/ERROR/FATAL) | `stdio-mirror.ts` |
 | `~/.spyglass/logs/collect.log` | 훅 스크립트 호출·에러 | `spyglass-collect.sh:41` |
-| `~/.spyglass/logs/hook-raw.jsonl` | 훅이 받은 raw 페이로드 1줄/이벤트 | `spyglass-collect.sh:91` |
-| `~/.spyglass/server.pid` | 데몬 PID | `runtime/daemon.ts:43` |
+| `~/.spyglass/logs/hook-raw.jsonl` | 훅이 받은 raw 페이로드 1줄/이벤트 | `spyglass-collect.sh:106` |
+| `~/.spyglass/server.pid` | 데몬 PID | `writePidFile` `runtime/daemon.ts:116` |
 | `<cwd>/.claude/.tmp/logs/*.log,*.jsonl` | 진단 로그 (DIAG ON 시) | `diag-log.ts` |
 
 ### 10.2 일반 운영 로그
@@ -752,7 +789,7 @@ bun run doctor --fix
 
 ### 11.3 long_proxy_responses 누적
 
-대부분 실제로 오래 걸린 응답입니다. v23 이후 `proxy_tool_uses` 정확 매칭을 사용하므로 누락 위험 없는 정보성 경고. 개별 확인은 `proxy_requests` 테이블의 `response_time_ms > 120000` 행을 직접 조회.
+대부분 실제로 오래 걸린 응답입니다. `proxy_tool_uses` 테이블로 `tool_use_id ↔ api_request_id`를 정확 매칭하므로 누락 위험 없는 정보성 경고. 개별 확인은 `proxy_requests` 테이블의 `response_time_ms > 120000` 행을 직접 조회.
 
 ---
 
@@ -760,10 +797,10 @@ bun run doctor --fix
 
 | 메시지 | 위치 | 가이드 |
 |---|---|---|
-| `[Server] Already running (PID: NNNN)` | start | [2.1](#21-포트가-이미-사용-중)/[2.2](#22-pid-파일-잔존-stale) |
-| `[Server] Port 9999 is already in use` | start | [2.1](#21-포트가-이미-사용-중) |
+| `[Server] Already running (PID: NNNN)` | start | [2.1](#21-포트가-이미-사용-중) |
+| `[Server] Port 9999 is unavailable (likely TIME_WAIT)` | start | [2.1](#21-포트가-이미-사용-중) |
 | `[Server] Failed to release port 9999. Please check manually.` | restart | 수동 `lsof -iTCP:9999 -sTCP:LISTEN` |
-| `[Collect] No stdin payload received` | 훅 | [3.5](#35-no-stdin-payload-received) |
+| `[ERROR] No stdin payload received` | 훅 (`collect.log`) | [3.5](#35-no-stdin-payload-received) |
 | `[migrator] Error applying NNN-xxx.sql: ...` | 마이그레이션 | [5.1](#51-마이그레이션-도중-sql-오류) |
 | `SQLiteError: disk I/O error` | DB | [8.1](#81-db-wal--db-shm-잔존) |
 | `[VersionChecker] GitHub API failed: 403` | 버전 체커 | [9.2](#92-github-api-rate-limit--네트워크-차단) — 무시 가능 |
@@ -829,7 +866,7 @@ bun run doctor --fix
 **반드시 글로벌 `~/.claude/settings.json`만.** 프로젝트 단위에 등록하면 다른 프로젝트에서 데이터 공백이 발생합니다.
 
 **Q3. 서버를 끄면 Claude Code가 느려지나?**
-훅은 비동기 백그라운드 POST(`curl &`)에 1초 타임아웃이라 거의 영향 없습니다 (`hooks/spyglass-collect.sh:73`). 단, 프록시(`ANTHROPIC_BASE_URL`)를 켜둔 상태면 서버가 꺼졌을 때 API 호출 자체가 실패하므로, 설치 가이드의 조건부 셸 함수(방법 A) 권장.
+훅은 `curl`을 `( ... ) &` 백그라운드 서브셸로 POST(`hooks/spyglass-collect.sh:65`)하고 `--max-time`(기본 1초, `SPYGLASS_TIMEOUT`)이 걸려 있어 거의 영향 없습니다. 단, 프록시(`ANTHROPIC_BASE_URL`)를 켜둔 상태면 서버가 꺼졌을 때 API 호출 자체가 실패하므로, 설치 가이드의 조건부 셸 함수(방법 A) 권장.
 
 **Q4. 외부 머신에서 대시보드를 보고 싶다.**
 spyglass는 보안상 `127.0.0.1`에만 바인딩. SSH 포워딩으로 접근하세요. `ssh -L 9999:127.0.0.1:9999 user@host`.
@@ -841,7 +878,7 @@ spyglass는 보안상 `127.0.0.1`에만 바인딩. SSH 포워딩으로 접근하
 프록시는 선택사항. `ANTHROPIC_BASE_URL`을 설정해 클라이언트가 spyglass를 경유하게 하세요. 설치 가이드 [5절](../install-guide.md#5-claude-code-프록시-설정) 참조.
 
 **Q7. 통계가 깨졌다.**
-`stats_hourly`, `stats_proxy_hourly`는 trigger로 동기 갱신됩니다(v028+). BULK DELETE 후 검증이 필요하면 `bun run rebuild-stats`, `bun run rebuild-stats-proxy`.
+`stats_hourly`, `stats_proxy_hourly`는 SQL 트리거로 동기 갱신됩니다(마이그레이션 `028-add-stats-triggers.sql`). BULK DELETE 후 재집계가 필요하면 `bun run rebuild-stats`, `bun run rebuild-stats-proxy`(`packages/storage/src/scripts/rebuild-stats*.ts`).
 
 **Q8. macOS에서 `chmod 600`이 풀린다.**
 iCloud/Dropbox 동기화 폴더에 `~/.spyglass`가 있으면 권한이 재설정됩니다. 동기화 제외 또는 `SPGLASS_DB_PATH`로 경로를 옮기세요.
@@ -881,8 +918,13 @@ ls -1t "${HOME}/.claude/settings.json.bak-"* 2>/dev/null | head -1 \
 ## 참고
 
 - [설치 가이드](../install-guide.md)
-- [doctor 검사 코드](../packages/server/src/cli/checks/)
-- [자동 수정 코드](../packages/server/src/cli/fix.ts)
-- [서버 라이프사이클](../packages/server/src/runtime/lifecycle.ts)
-- [훅 스크립트](../hooks/spyglass-collect.sh)
-- [마이그레이션 SQL](../packages/storage/migrations/)
+- [구성·환경 변수](./configuration.md)
+- [훅 통합](./hooks-integration.md)
+- [데이터베이스 스키마](./database.md)
+- [마이그레이션](./migrations.md)
+- [CLI 명령](./cli.md)
+- [doctor 검사 코드](../../packages/server/src/cli/checks/)
+- [자동 수정 코드](../../packages/server/src/cli/fix.ts)
+- [서버 라이프사이클](../../packages/server/src/runtime/lifecycle.ts)
+- [훅 스크립트](../../hooks/spyglass-collect.sh)
+- [마이그레이션 SQL](../../packages/storage/migrations/)

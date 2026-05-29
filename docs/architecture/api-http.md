@@ -1,12 +1,14 @@
 # claude-spyglass HTTP API & SSE 레퍼런스
 
-claude-spyglass 서버(`packages/server`)가 제공하는 모든 HTTP 엔드포인트와 SSE 스트림을 정리한 문서입니다. 본 문서는 실제 코드(`packages/server/src/runtime/dispatch.ts`, `routes/*`, `metrics/router.ts`, `sse.ts`, `events.ts`, `hook/http-entry.ts`, `proxy/handler/index.ts`)를 기반으로 작성되었습니다.
+claude-spyglass 서버(`packages/server`)가 제공하는 모든 HTTP 엔드포인트와 SSE 스트림을 정리한 문서입니다. 본 문서는 실제 코드(`packages/server/src/runtime/dispatch.ts`, `api.ts`, `routes/*`, `metrics/router.ts`, `sse.ts`, `events.ts`, `hook/http-entry.ts`, `proxy/handler/index.ts`)를 기반으로 작성되었습니다.
+
+> 연관 문서: [아키텍처 개요](./architecture.md) · [데이터 흐름](./data-flow.md) · [Hook 연동](./hooks-integration.md) · [메트릭/분석](./metrics-analytics.md) · [설정/환경변수](./configuration.md)
 
 ### 이 문서 읽는 법
 
 - **빠른 조회**: §2 엔드포인트 인덱스에서 카테고리별 표로 경로를 찾고, 상세 명세는 §3 이후 해당 절로 이동합니다.
-- **연동/실험**: §18에 모든 cURL 예제가 한 곳에 모여 있습니다.
-- **에러 처리**: §16에 표준 응답 envelope와 상태 코드를 정리했습니다.
+- **연동/실험**: §20에 모든 cURL 예제가 한 곳에 모여 있습니다.
+- **에러 처리**: §18에 표준 응답 envelope와 상태 코드를 정리했습니다.
 
 ### 약어
 
@@ -34,6 +36,48 @@ claude-spyglass 서버(`packages/server`)가 제공하는 모든 HTTP 엔드포�
 | 기본 DB 경로 | `~/.spyglass/spyglass.db` | `SPGLASS_DB_PATH` 환경변수로 변경 |
 | 인증 | **없음** | 로컬 데몬 가정. 모든 라우트가 인증 없이 응답 |
 | SSE 유지 | `idleTimeout: 0` | Bun 기본 10초 비활성화 |
+
+`handleRequest()`는 최상위 경로 prefix로 도메인 핸들러를 라우팅하고, `/api/*`는 `apiRouter()`가 다시 도메인별 라우터로 fan-out합니다.
+
+```mermaid
+flowchart TD
+  REQ[HTTP Request] --> OPT{method == OPTIONS?}
+  OPT -- yes --> P204[204 No Content + CORS]
+  OPT -- no --> DISP["handleRequest (runtime/dispatch.ts)"]
+  DISP --> V1{"path /v1/*"}
+  V1 -- yes --> PROXY["handleProxy (proxy/handler)"]
+  DISP --> COL{"path == /collect"}
+  COL -- yes --> HOOK["handleHookHttpRequest (hook/http-entry)"]
+  DISP --> EVT{"path == /events"}
+  EVT -- POST --> WILD["eventsCollectHandler (events.ts)"]
+  EVT -- "non-POST (GET 등)" --> SSE["sseRouter (sse.ts)"]
+  DISP --> API{"path /api/*"}
+  API -- yes --> AR["apiRouter (api.ts)"]
+  DISP --> HLT{"path == /health"}
+  HLT -- yes --> HRES["200 {status, timestamp, version}"]
+  DISP --> ROOT{"path == /"}
+  ROOT -- "Accept: application/json" --> RJSON["200 server meta JSON"]
+  ROOT -- "그 외" --> RHTML["index.html (없으면 빈 endpoints JSON)"]
+  DISP --> ASSET{"path /assets/*"}
+  ASSET -- "파일 존재" --> AFILE["정적 자산 응답 (MIME 매핑)"]
+  ASSET -- "파일 미존재 (fall-through)" --> NF
+  DISP --> LOC{"path /locales/*"}
+  LOC -- "파일 존재" --> LFILE["로케일 JSON (max-age=300)"]
+  LOC -- "파일 미존재 (fall-through)" --> NF
+  DISP --> FAV{"path /favicon.svg|.ico"}
+  FAV -- "파일 존재" --> FFILE["파비콘 응답"]
+  FAV -- "파일 미존재 (fall-through)" --> NF
+  DISP -- "위 prefix 어디에도 미매칭" --> NF["404 Not found"]
+
+  AR --> MET["metricsRouter (async)"]
+  AR --> MD["metaDocsRouter (async)"]
+  AR --> GR["graphRouter (async)"]
+  AR --> SET["settingsRouter (async)"]
+  AR --> SYNC["SYNC_ROUTERS fan-out: sessions / requests / stats / dashboard / events / proxy / system-prompts / version"]
+  SYNC --> A404["404 API endpoint not found"]
+```
+
+`apiRouter()`는 async 라우터(metrics → meta-docs → graph → settings)를 먼저 차례로 await한 뒤, 동기 `SYNC_ROUTERS` 배열(sessions, requests, stats, dashboard, events, proxy, system-prompts, version)을 fan-out하여 첫 non-null 응답을 반환합니다.
 
 ### 1.2 Base URL
 
@@ -79,7 +123,7 @@ Access-Control-Allow-Headers: Content-Type
 
 ## 2. 엔드포인트 인덱스
 
-전체 라우트를 12개 카테고리로 분류한 빠른 조회 표입니다. **모든 라우트는 인증이 없으며 로컬 루프백 가정으로 동작**하므로 인증 컬럼은 생략했습니다.
+전체 라우트를 카테고리별로 분류한 빠른 조회 표입니다. **모든 라우트는 인증이 없으며 로컬 루프백 가정으로 동작**하므로 인증 컬럼은 생략했습니다.
 
 ### 2.1 시스템 / 정적 파일
 
@@ -190,14 +234,44 @@ Access-Control-Allow-Headers: Content-Type
 | GET | `/api/metrics/cache-trend` | 24h × 1h cache hit rate |
 | GET | `/api/metrics/proxy-trend` | 24h × 1h proxy 응답시간 / 에러율 / 비용 |
 
-### 2.12 버전 / 업데이트
+### 2.12 Graph Projection (`/api/graph/*`)
+
+Ladybug 그래프 DB 단일 SoT. 모든 라우트는 GET이며 비-GET은 `405`.
+
+| Method | Path | 설명 |
+| --- | --- | --- |
+| GET | `/api/graph/status` | 그래프 운영 상태 (mode / circuit / sync worker) |
+| GET | `/api/graph/sessions/:id/initial` | 세션 초기 hydrate (`recentTurns` 쿼리) |
+| GET | `/api/graph/turns/:id/neighbors` | BFS depth hop |
+| GET | `/api/graph/turns/:id/path` | placeholder |
+| GET | `/api/graph/unified-flow` | 메타 문서 통합 flow (ancestor+center+descendant+after) |
+
+### 2.13 Settings (`/api/settings/*`)
+
+웹 대시보드 설정 패널용. 진단 / Hook 자동 병합 / Graph DB 설치·모드 / Proxy 셸 함수 설치 / 로그 조회.
+
+| Method | Path | 설명 |
+| --- | --- | --- |
+| GET | `/api/settings/diag` | 전체 진단 (binary 버전 + hooks + graph + ports) |
+| GET | `/api/settings/hooks/preview` | Hook 병합 미리보기 (diff, 파일 미수정) |
+| POST | `/api/settings/hooks/apply` | 백업 + 병합 + atomic write |
+| POST | `/api/settings/hooks/restore` | 백업에서 복원 |
+| POST | `/api/settings/graph/mode` | 그래프 모드 전환 (`persistent` 기본 true → `server-config.json` 영속 저장, `persistent:false`만 런타임-only) |
+| GET | `/api/settings/graph-db/status` | Ladybug 설치/설정 상태 |
+| POST | `/api/settings/graph-db/install` | Ladybug 의존성 설치 (auto 전략: bun.lock 존재 + bun 가용 시 bun → npm 폴백 → brew) |
+| GET | `/api/settings/sqlite/info` | sqlite3 바이너리 / 최신 마이그레이션 파일 정보 |
+| GET | `/api/settings/proxy/snippet` | claude() 조건부 프록시 함수 스니펫 (`shell` 쿼리) |
+| GET | `/api/settings/proxy/status` | 셸 프로파일의 proxy 함수 설치 여부 |
+| POST | `/api/settings/proxy/install` | proxy 함수 셸 프로파일 설치 |
+| POST | `/api/settings/proxy/restore` | proxy 함수 제거/복원 |
+| GET | `/api/settings/logs` | `~/.spyglass/logs/` 디렉토리 스캔 |
+
+### 2.14 버전 / 업데이트
 
 | Method | Path | 설명 |
 | --- | --- | --- |
 | GET | `/api/version` | 현재 / 최신 버전 + 업데이트 가용 여부 |
 | POST | `/api/update` | `git pull --ff-only` 수행 후 캐시 갱신 |
-
-총 엔드포인트 수: **약 53개** (정적 자산 / OPTIONS / 와일드카드 hook 채널 제외, `/api/*` REST 라우트 + 5개 최상위 경로 + SSE).
 
 ---
 
@@ -244,7 +318,7 @@ Access-Control-Allow-Headers: Content-Type
 
 - `/assets/<path>` → `packages/web/assets/<path>` 서빙. 확장자별 MIME: `.js` → `application/javascript`, `.css` → `text/css`, `.svg` → `image/svg+xml`, `.ico` → `image/x-icon`.
 - `/locales/<path>` → `packages/web/locales/<path>`. `Cache-Control: public, max-age=300` 헤더 동봉.
-- `/favicon.svg`, `/favicon.ico` → `packages/web/favicon.*` (하위 호환용).
+- `/favicon.svg`, `/favicon.ico` → `packages/web/favicon.*` 직접 경로로 파비콘 서빙.
 
 존재하지 않는 정적 경로는 최종 fall-through로 `404 {"error":"Not found","path":"..."}`.
 
@@ -329,7 +403,7 @@ Access-Control-Allow-Headers: Content-Type
 { "success": true, "event_id": "uuid-..." }
 ```
 
-필수 필드 누락 시 `400 {"error":"Missing required fields: hook_event_name, session_id"}`.
+JSON 파싱 실패 시 `400 {"error":"Invalid JSON"}`, 필수 필드 누락 시 `400 {"error":"Missing required fields: hook_event_name, session_id"}`, DB 저장 실패 시 `500 {"error":"Failed to save event"}`.
 
 ---
 
@@ -450,11 +524,13 @@ es.addEventListener('session_update', e => {
 
 upstream 선택은 `selectUpstreamUrl()`이 request body의 `model` 필드 prefix별로 처리합니다.
 
-| 모델 prefix | Upstream | 환경변수 |
+| 모델 prefix | Upstream (기본) | 환경변수 |
 | --- | --- | --- |
 | `kimi-*` | `https://api.moonshot.ai/anthropic` | `MOONSHOT_UPSTREAM_URL` |
-| 그 외 | `https://api.anthropic.com` | `ANTHROPIC_UPSTREAM_URL` |
-| 커스텀 prefix | `CUSTOM_UPSTREAMS="prefix=url,..."` |
+| 커스텀 prefix | `prefix1=url1,prefix2=url2` 매핑 | `CUSTOM_UPSTREAMS` |
+| 그 외 (기본) | `https://api.anthropic.com` | `ANTHROPIC_UPSTREAM_URL` |
+
+`selectUpstreamUrl(model)`은 model 이름의 prefix가 매칭되는 첫 커스텀 upstream(`kimi-` + `CUSTOM_UPSTREAMS` 항목)을 반환하고, 매칭이 없으면 기본 upstream을 사용합니다.
 
 **동작 흐름**
 
@@ -509,22 +585,18 @@ curl -X POST http://127.0.0.1:9999/v1/messages \
     "activeSessions": 2,
     "avgDurationMs": 1432,
     "p95DurationMs": 8200,
-    "errorRate": 0.012,
-    "proxyTotalRequests": 4321,
-    "proxyErrorRate": 0.001,
-    "proxyAvgResponseTimeMs": 1800,
-    "proxyAvgFirstTokenMs": 420,
-    "proxyTotalCostUsd": 12.34
+    "errorRate": 0.012
   },
   "sessions":  { /* getSessionStats */ },
   "requests":  { /* getRequestStats */ },
   "projects":  [ /* getProjectStats top 5 */ ],
   "tools":     [ /* getToolStats top 5 */ ],
   "types":     [ /* getRequestStatsByType */ ],
-  "active":    [ /* getActiveSessions */ ],
-  "proxy":     { /* getProxyHourlyStats */ }
+  "active":    [ /* getActiveSessions */ ]
 }
 ```
+
+`summary`는 `getSessionStats` / `getRequestStats` / `getStripStats` / `getAvgPromptDurationMs` / `getActiveSessions` 결과만 합성하며 proxy 관련 지표는 포함하지 않습니다. proxy hourly 집계(`getProxyHourlyStats`)는 본 엔드포인트가 아니라 `/api/stats/proxy`(§8.8)에서 제공됩니다.
 
 `activeSessions`는 `LIVE_STALE_THRESHOLD_MS`(storage 상수)를 기준으로 판정하며, 캐시 키에 `floor(now / LIVE_STALE_THRESHOLD_MS)`가 포함되어 시간 경과만으로 자연 무효화됩니다.
 
@@ -765,7 +837,7 @@ dedup된 system prompt 메타 목록과 본문 lazy-fetch를 제공합니다. �
 
 ## 13. Meta Documents (Behavior Definitions)
 
-Claude Code의 동작을 정의하는 agent / skill / command 카탈로그를 사용 집계와 함께 노출합니다. v24에서 도입되었으며 구현은 `packages/server/src/routes/meta-docs.ts` (LEFT JOIN으로 사용 카운트 결합).
+Claude Code의 동작을 정의하는 agent / skill / command 카탈로그를 사용 집계와 함께 노출합니다. 구현은 `packages/server/src/routes/meta-docs.ts`이며, `meta_documents` 카탈로그에 사용 카운트를 LEFT JOIN으로 결합합니다.
 
 ### 13.1 `GET /api/meta-docs`
 
@@ -774,8 +846,10 @@ Claude Code의 동작을 정의하는 agent / skill / command 카탈로그를 �
 | 이름 | 값 | 설명 |
 | --- | --- | --- |
 | `type` | `agent` \| `skill` \| `command` | 종류 필터 |
-| `source_root` | absolute path \| `null` | `'null'` 문자열이면 글로벌만 |
+| `source_root` | absolute path \| `null` | `'null'`/빈 문자열이면 글로벌만 |
+| `project` | string | 프로젝트(이름) 필터. `null`/빈 값이면 미적용 |
 | `includeDeleted` | `1` | soft-deleted 포함 (기본 false) |
+| `fromTs`, `toTs` | ms | 사용 집계 시간 윈도우 (옵션) |
 
 ```jsonc
 {
@@ -876,7 +950,7 @@ Claude Code의 동작을 정의하는 agent / skill / command 카탈로그를 �
 }
 ```
 
-`anthropic-beta`를 반영하여 1M opt-in 세션의 사용률을 정확히 계산합니다 (Migration 026 model_limits SSoT).
+`anthropic-beta`를 반영하여 1M opt-in 세션의 사용률을 정확히 계산하며, `model_limits` 테이블을 윈도우 분모 SSoT로 사용합니다 (`getAllModelLimits(db)`).
 
 ### 14.6 `GET /api/metrics/activity-heatmap`
 
@@ -966,7 +1040,7 @@ Claude Code의 동작을 정의하는 agent / skill / command 카탈로그를 �
 
 ### 15.2 `POST /api/update`
 
-서버 프로세스의 `cwd`에서 `git status --porcelain` → `git pull --ff-only` 실행 후 캐시를 갱신합니다.
+서버 프로세스의 `cwd`에서 `git status --porcelain` → `git pull --ff-only` → `bun install` 실행 후 캐시를 갱신하고 비동기 self-restart를 예약합니다.
 
 **실패 응답**
 
@@ -974,9 +1048,10 @@ Claude Code의 동작을 정의하는 agent / skill / command 카탈로그를 �
 | --- | --- | --- |
 | 500 | `git_status_failed` | `git status` 실행 실패 |
 | 409 | `local_changes` | 로컬에 커밋되지 않은 변경 있음 |
-| 500 | `pull_failed` | git pull 실패. `data`에 stderr/stdout |
+| 500 | `pull_failed` | `git pull --ff-only` 실패. `data`에 stderr/stdout |
+| 500 | `install_failed` | git pull 성공 후 `bun install` 실패. `data`에 stderr/stdout. self-restart 차단하여 옛 코드로 서비스 유지 |
 
-성공 시:
+성공 시 (`UpdateResponseData`):
 
 ```json
 {
@@ -984,18 +1059,76 @@ Claude Code의 동작을 정의하는 agent / skill / command 카탈로그를 �
   "data": {
     "currentVersion": "1.0.1",
     "latestTag": "v1.0.1",
-    "updateAvailable": false
+    "updateAvailable": false,
+    "restarting": true,
+    "migrationsApplied": { "from": 45, "to": 45, "files": [] }
   }
 }
 ```
 
+`restarting`은 항상 `true`이며, 응답 송신 직후 비동기 self-restart가 예약됩니다. `migrationsApplied`(ADR-004)는 본 응답 작성 시점이 재기동 *전*이므로 `from === to && files.length === 0`으로 노출됩니다 — 실제 신규 마이그레이션 적용 결과는 클라이언트가 재기동 직후 `GET /api/version`을 폴링하여 `dbUserVersion` / `latestMigrationFile`로 회수합니다.
+
 ---
 
-## 16. 에러 응답
+## 16. Graph Projection (`/api/graph/*`)
+
+Ladybug 그래프 DB를 단일 SoT로 사용하는 projection 조회 라우트입니다. 응답은 모두 `{nodes, edges, ...}` 형태로 표준화되어 프론트엔드가 백엔드 swap에 영향받지 않습니다. 구현은 `packages/server/src/routes/graph.ts`. 모든 라우트는 GET이며 비-GET은 `405`. 회로 OPEN / Ladybug 미설치 시 SQLite fallback 없이 빈 응답 + 안내를 반환합니다. 그래프 도메인 상세는 [메트릭/분석](./metrics-analytics.md)·[데이터 흐름](./data-flow.md) 문서를 참조하세요.
+
+### 16.1 `GET /api/graph/status`
+
+그래프 운영 상태 — mode / circuit breaker / sync worker 상태를 반환합니다.
+
+### 16.2 `GET /api/graph/sessions/:id/initial`
+
+**Query**: `recentTurns` (기본 10)
+
+세션의 최근 turn 그래프를 초기 hydrate용으로 반환합니다.
+
+### 16.3 `GET /api/graph/turns/:id/neighbors`
+
+지정 turn에서 BFS depth hop으로 인접 노드를 확장합니다 (`bfsTurnsNear`).
+
+### 16.4 `GET /api/graph/turns/:id/path`
+
+placeholder 라우트.
+
+### 16.5 `GET /api/graph/unified-flow`
+
+**Query**: `center_kind`, `center_name` (center 노드 지정). `project`는 파싱되지만 현재 미사용.
+
+메타 문서 통합 flow. seed + descendant + ancestor + turn-after 4개 Cypher를 합성한 좌(ancestor) + center + 우(descendant) + turn-after 컬럼 구조. `getUnifiedFlow()`(storage-graph SoT)가 raw ToolCall 단위 결과를 만들고, 라우터의 `enrichUnifiedFlow()`가 (kind, name) 카드 단위로 합성(distinct turn count, MCP 그룹핑, HOT pill, edge strength)합니다.
+
+---
+
+## 17. Settings (`/api/settings/*`)
+
+웹 대시보드 *설정 패널* 전용 라우트입니다. 사용자가 터미널 없이 진단 + Hook 자동 병합 + Graph DB 설치/모드 + Proxy 셸 함수 설치 + 로그 조회까지 클릭으로 끝낼 수 있게 합니다. 구현은 `packages/server/src/routes/settings.ts`. 모든 응답은 `{success, data}` 표준 envelope이며, 실패는 throw하지 않고 `{success:false, error}` 4xx/5xx로 응답합니다. 메서드/경로 미매칭은 `404`, 핸들러 예외는 `500`.
+
+| Method | Path | 설명 |
+| --- | --- | --- |
+| GET | `/api/settings/diag` | binary 버전(bun/claude/git/curl/jq) + hook 등록 상태 + graph 상태 + 서버 메타를 한 번에 |
+| GET | `/api/settings/hooks/preview` | `profile` 쿼리. Hook 병합 미리보기 (diff + merged, 파일 미수정) |
+| POST | `/api/settings/hooks/apply` | 백업 + 병합 + atomic write |
+| POST | `/api/settings/hooks/restore` | 가장 최근 백업에서 복원 |
+| POST | `/api/settings/graph/mode` | 그래프 모드 전환. body `{mode, persistent?}` — `persistent` 기본 true면 런타임 캐시 갱신 + `server-config.json` 영속 저장, `persistent:false`면 현재 세션 캐시만 변경 |
+| GET | `/api/settings/graph-db/status` | Ladybug 설치 감지 결과 (`detectLadybugInstall`) |
+| POST | `/api/settings/graph-db/install` | Ladybug 의존성 설치 (`installLadybugStreaming`, auto 전략: bun.lock + bun 가용 시 bun → npm 폴백 → 최후에 brew) |
+| GET | `/api/settings/sqlite/info` | sqlite3 바이너리 + 최신 마이그레이션 파일 정보 |
+| GET | `/api/settings/proxy/snippet` | `shell` 쿼리. claude() 조건부 프록시 함수 스니펫 |
+| GET | `/api/settings/proxy/status` | 셸 프로파일의 proxy 함수 설치 여부 |
+| POST | `/api/settings/proxy/install` | proxy 함수 셸 프로파일 설치 |
+| POST | `/api/settings/proxy/restore` | proxy 함수 제거/복원 |
+| GET | `/api/settings/logs` | `~/.spyglass/logs/` 디렉토리 스캔 |
+
+> 정책: 그래프 DB 데이터는 RDB retention과 동일 cutoff로만 정리되며, 폴더 자체를 자동/수동 삭제하는 API/UI는 존재하지 않습니다. graph mode 전환은 기본적으로 `server-config.json`에 영속 저장되어 다음 서버 시작에도 유지되며(`persistent` 기본 true), 현재 세션에만 적용하려면 `persistent:false`를 명시해야 합니다. 단 `SPYGLASS_GRAPH_MODE` env가 설정돼 있으면 파일에는 저장되더라도 env가 계속 우선합니다.
+
+---
+
+## 18. 에러 응답
 
 표준 응답 envelope와 HTTP 상태 코드별 발생 위치를 정리합니다.
 
-### 16.1 공통 포맷
+### 18.1 공통 포맷
 
 `/api/*` 라우트의 표준 envelope:
 
@@ -1003,26 +1136,28 @@ Claude Code의 동작을 정의하는 agent / skill / command 카탈로그를 �
 { "success": false, "error": "<message>" }
 ```
 
-`/api/dispatch` 최상위(`runtime/dispatch.ts`)에서 발생한 예기치 못한 예외:
+최상위 디스패처(`runtime/dispatch.ts`의 `handleRequest`)에서 발생한 예기치 못한 예외는 try/catch로 흡수되어 다음을 반환합니다:
 
 ```json
 { "error": "Internal server error" }
 ```
 
-### 16.2 주요 HTTP 상태 코드
+### 18.2 주요 HTTP 상태 코드
 
 | Status | 발생 위치 | 설명 |
 | --- | --- | --- |
 | 200 | 모든 정상 응답 | |
 | 204 | OPTIONS preflight | |
 | 400 | hook ingest, meta-docs/refresh, system-prompts hash 형식 | Invalid JSON / 누락 필드 / 형식 오류 |
-| 404 | dispatch fall-through, session/proxy/system-prompt 단건 미존재 | Not found |
-| 405 | `/collect`·`/events` 비-POST 요청 | Method not allowed |
+| 404 | dispatch fall-through, session/proxy/system-prompt 단건 미존재, `/api/*` 미매칭 | Not found |
+| 405 | `/collect` 비-POST 요청, `/api/graph/*` 비-GET 요청 | Method not allowed |
 | 409 | `POST /api/update` | local_changes (커밋 안 된 변경) |
 | 500 | dispatch 예외, `POST /api/update` git 실패, `/events` DB 저장 실패 | Internal server error |
 | 502 | `/v1/*` upstream 연결 실패 | `{"error":"proxy_connection_failed", "message":"..."}` |
 
-### 16.3 라우트 미매칭
+`/events`는 GET이면 SSE 스트림, POST면 wildcard 수집으로 분기하므로 405를 반환하지 않습니다.
+
+### 18.3 라우트 미매칭
 
 `/api/*` 안에서 매칭 실패 → `apiRouter()`가 `404 {"success":false,"error":"API endpoint not found"}` 반환.
 
@@ -1030,7 +1165,7 @@ Claude Code의 동작을 정의하는 agent / skill / command 카탈로그를 �
 
 ---
 
-## 17. 보안 / 운영 주의사항
+## 19. 보안 / 운영 주의사항
 
 로컬 데몬을 전제로 설계된 서버이므로 다음 제약을 반드시 지켜야 합니다.
 
@@ -1041,7 +1176,7 @@ Claude Code의 동작을 정의하는 agent / skill / command 카탈로그를 �
 
 ---
 
-## 18. cURL 예제 모음
+## 20. cURL 예제 모음
 
 자주 쓰는 호출을 한 데 모았습니다. 각 엔드포인트의 상세 명세는 본문 해당 절을 참고하세요.
 
@@ -1097,6 +1232,15 @@ curl -X POST http://127.0.0.1:9999/v1/messages \
   -H "x-api-key: $ANTHROPIC_API_KEY" \
   -d '{"model":"claude-sonnet-4-5","messages":[{"role":"user","content":"hi"}],"max_tokens":256}'
 
+# 그래프 운영 상태
+curl http://127.0.0.1:9999/api/graph/status
+
+# 메타 문서 통합 flow
+curl http://127.0.0.1:9999/api/graph/unified-flow
+
+# 설정 패널 전체 진단
+curl http://127.0.0.1:9999/api/settings/diag
+
 # 버전 확인
 curl http://127.0.0.1:9999/api/version
 
@@ -1106,7 +1250,7 @@ curl -X POST http://127.0.0.1:9999/api/update
 
 ---
 
-## 19. 참고 코드 위치
+## 21. 참고 코드 위치
 
 각 라우트·기능의 실제 구현 파일을 영역별로 매핑한 색인입니다.
 
@@ -1124,6 +1268,8 @@ curl -X POST http://127.0.0.1:9999/api/update
 | Proxy 데이터 | `packages/server/src/routes/proxy.ts` |
 | System Prompts | `packages/server/src/routes/system-prompts.ts` |
 | Meta Docs | `packages/server/src/routes/meta-docs.ts` |
+| Graph Projection | `packages/server/src/routes/graph.ts`, `packages/storage-graph/src/queries/unified-flow.ts` |
+| Settings | `packages/server/src/routes/settings.ts`, `packages/server/src/settings/*` |
 | 버전/업데이트 | `packages/server/src/routes/version.ts` |
 | Metrics | `packages/server/src/metrics/router.ts`, `metrics/_shared.ts` |
 | SSE | `packages/server/src/sse.ts` |

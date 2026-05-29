@@ -2,25 +2,29 @@
 
 claude-spyglass CLI는 모니터링 서버 데몬 제어와 환경 진단을 담당합니다. 모든 명령은 Bun 런타임으로 실행되며, 별도 설치 없이 저장소 루트에서 호출합니다.
 
+> 연관 문서: [설정 가이드](./configuration.md) · [배포 가이드](./deployment.md) · [문제 해결 가이드](./troubleshooting.md) · [데이터 흐름](./data-flow.md)
+
 ## 목차
 
 - [개요](#개요)
 - [실행 방식](#실행-방식)
 - [명령 인덱스](#명령-인덱스)
 - [명령별 상세](#명령별-상세)
-  - [`start` — 서버 기동](#start--서버-기동)
+  - [`start` — 서버 기동 (백그라운드 데몬)](#start--서버-기동-백그라운드-데몬)
+  - [`serve` — 포그라운드 실행](#serve--포그라운드-실행)
   - [`stop` — 서버 중지](#stop--서버-중지)
   - [`restart` — 서버 재기동](#restart--서버-재기동)
   - [`status` — 상태 조회](#status--상태-조회)
+  - [`open` — 대시보드 열기](#open--대시보드-열기)
   - [`doctor` — 진단](#doctor--진단)
   - [`doctor --fix` — 자동 수정](#doctor---fix--자동-수정)
   - [`analyze` — 운영자 수동 백필](#analyze--운영자-수동-백필)
-  - [foreground (default) — 포그라운드 실행](#foreground-default--포그라운드-실행)
 - [doctor 체크 상세](#doctor-체크-상세)
 - [데이터 보조 스크립트](#데이터-보조-스크립트)
   - [`rebuild-stats`](#rebuild-stats)
   - [`rebuild-stats-proxy`](#rebuild-stats-proxy)
   - [`backfill:system-prompts`](#backfillsystem-prompts)
+  - [`backfill:subagent-parents`](#backfillsubagent-parents)
 - [환경 변수](#환경-변수)
 - [종료 코드](#종료-코드)
 - [자주 쓰는 시나리오](#자주-쓰는-시나리오)
@@ -29,26 +33,54 @@ claude-spyglass CLI는 모니터링 서버 데몬 제어와 환경 진단을 담
 
 ## 개요
 
-CLI 진입점과 기본 동작을 요약합니다. 데몬은 `lsof -sTCP:LISTEN` 기반 포트 점유 확인으로 싱글톤을 보장합니다.
-
-CLI는 두 개의 진입점으로 나뉩니다.
+CLI는 두 개의 진입점으로 나뉩니다. 데몬 제어 명령은 PID 파일이 아니라 `lsof -sTCP:LISTEN` 기반 포트 LISTEN 확인을 단일 식별 기준(SSoT)으로 삼아 싱글톤을 보장합니다. PID 파일은 stale 정리용 힌트일 뿐이며, stale + PID 재할당 시 무관한 프로세스(예: 작업 중인 Claude Code CLI)를 오탐·오살하지 않도록 신뢰하지 않습니다.
 
 | 진입점 | 역할 | 파일 |
 |--------|------|------|
-| 데몬 디스패처 | `start` / `stop` / `restart` / `status` (+ 포그라운드 폴백) | `packages/server/src/index.ts` → `runtime/daemon.ts` |
-| 진단 CLI | `doctor` (옵션: `--fix`) / `analyze` | `packages/server/src/cli.ts` → `cli/doctor.ts` / `cli/analyze.ts` |
+| 데몬 디스패처 | `serve` / `start` / `stop` / `restart` / `status` / `open` / `doctor` / `analyze` | `packages/server/src/index.ts` → `runtime/daemon.ts#dispatchDaemonCommand` |
+| 진단 CLI | `doctor` (옵션: `--fix`) / `analyze` | `packages/server/src/cli.ts#main` → `cli/doctor.ts` / `cli/analyze.ts` |
+
+`doctor` / `analyze` 는 두 진입점 모두에서 호출 가능합니다. `package.json` 의 `scripts` 가 표준 엔트리입니다.
+
+```mermaid
+flowchart TD
+  PJ["package.json scripts<br/>(bun run start/dev/stop/status/doctor)"]
+  IDX["packages/server/src/index.ts<br/>import.meta.main"]
+  CLI["packages/server/src/cli.ts<br/>main()"]
+  DISP["runtime/daemon.ts<br/>dispatchDaemonCommand(argv)"]
+
+  PJ -->|start/dev/stop/status| IDX
+  PJ -->|doctor| CLI
+  IDX --> DISP
+  CLI -->|doctor| DOC
+  CLI -->|analyze| ANL
+
+  DISP -->|serve / undefined| SERVE["commandServe()"]
+  DISP -->|start| START["commandStart()<br/>detached spawn → serve"]
+  DISP -->|stop| STOP["commandStop()"]
+  DISP -->|restart| RST["commandRestart()"]
+  DISP -->|status| STAT["commandStatus()"]
+  DISP -->|open| OPEN["cli/open.ts openCommand()"]
+  DISP -->|doctor| DOC["cli/doctor.ts doctor()"]
+  DISP -->|analyze| ANL["cli/analyze.ts analyze()"]
+
+  SERVE --> LC["runtime/lifecycle.ts startServer()"]
+  START -.respawn serve.-> SERVE
+  RST --> LC
+```
 
 **기본값**
 
-| 항목 | 값 |
-|------|-----|
-| PID 파일 | `~/.spyglass/server.pid` |
-| 포트 | `9999` |
-| 호스트 | `127.0.0.1` |
-| DB 파일 | `~/.spyglass/spyglass.db` |
-| 미러 로그 | `~/.spyglass/logs/server.log` |
+| 항목 | 값 | 결정 위치 |
+|------|-----|-----------|
+| 포트 | `9999` | `runtime/config.ts#DEFAULT_PORT` |
+| 호스트 | `127.0.0.1` | `runtime/config.ts#HOST` |
+| DB 파일 | `~/.spyglass/spyglass.db` | `getDefaultDbPath()` (`@spyglass/storage`) |
+| PID 파일 | `~/.spyglass/server.pid` | `daemon.ts#getPidFile` |
+| 미러 로그 (stdio) | `~/.spyglass/logs/server.log` | `runtime/stdio-mirror.ts` |
+| 데몬 child 로그 (`start`) | `~/.spyglass/server.log` | `daemon.ts#commandStart` |
 
-서버 stdout/stderr는 미러 로그에 함께 기록되므로 비정상 종료를 사후 추적할 수 있습니다. `package.json` 의 `scripts` 가 모든 명령의 표준 엔트리입니다.
+서버 stdout/stderr는 `installServerStdioMirror()` 로 미러 로그에 함께 기록되므로 비정상 종료를 사후 추적할 수 있습니다.
 
 ## 실행 방식
 
@@ -63,7 +95,26 @@ bun run packages/server/src/index.ts start
 bun run packages/server/src/cli.ts doctor --fix
 ```
 
-데몬 명령은 비대화식이며, 서버는 호출자 셸이 종료되어도 백그라운드에서 살아남습니다. `SIGINT`(Ctrl+C)·`SIGTERM` 수신 시 graceful shutdown 시퀀스(스케줄러 → SSE 브로드캐스트 → `server.stop()` → in-flight 대기 → DB close)를 거쳐 종료하고 PID 파일을 정리합니다.
+`start` 는 자기 자신을 `serve` 모드로 detached spawn 후 부모를 즉시 종료하므로, 호출자 셸이 종료되어도 서버는 백그라운드에서 살아남습니다. 포그라운드 실행(`serve` 또는 인자 없음)은 호스트 supervisor(launchd / brew services / docker) 가 직접 생명주기를 책임지며, `SIGINT`(Ctrl+C)·`SIGTERM` 수신 시 graceful shutdown 시퀀스를 거쳐 종료합니다.
+
+```mermaid
+sequenceDiagram
+  participant U as 사용자/슈퍼바이저
+  participant D as daemon.ts
+  participant L as lifecycle.ts
+  Note over U,D: SIGINT(Ctrl+C) / SIGTERM
+  U->>D: signal
+  D->>D: gracefulShutdown()<br/>guard timer = SHUTDOWN_TIMEOUT_MS
+  D->>L: stopServer()
+  L->>L: 1. 스케줄러 정리(maintenance/version/graph-sync)
+  L->>L: 2. SSE server_shutdown broadcast + 250ms grace
+  L->>L: 3. closeAllConnections()
+  L->>L: 4. await server.stop()
+  L->>L: 5. await awaitInFlight(timeout)
+  L->>L: 6. closeDatabase()
+  D->>D: PID 파일 정리 → exit 0
+  Note over D: 동일 신호 2회 수신 → 즉시 exit 130 (force-quit)<br/>deadline 초과 → exit 1
+```
 
 ## 명령 인덱스
 
@@ -73,11 +124,12 @@ bun run packages/server/src/cli.ts doctor --fix
 
 | 명령 | 설명 | 호출 예시 |
 |------|------|-----------|
-| `start` | `lsof -sTCP:LISTEN` 로 LISTEN 확인, 포트 가용 시 서버 기동 | `bun run start` |
-| `stop` | `lsof -sTCP:LISTEN` 로 LISTEN PID 탐색 후 SIGTERM 송신 | `bun run stop` |
-| `restart` | 포트 LISTEN 프로세스를 SIGTERM 후 재기동 | `bun run dev` |
-| `status` | `lsof -sTCP:LISTEN` 로 실제 LISTEN 여부 확인 | `bun run status` |
-| (인자 없음) | 포그라운드 실행 (`Ctrl+C` 종료) | `bun run packages/server/src/index.ts` |
+| `start` | LISTEN 확인 후 자신을 `serve` 모드로 detached spawn (백그라운드 데몬) | `bun run start` |
+| `serve` / (인자 없음) | 포그라운드 blocking 실행. PID 파일 미생성 (`Ctrl+C` 종료) | `bun run packages/server/src/index.ts serve` |
+| `stop` | LISTEN PID 탐색 후 SIGTERM 송신 | `bun run stop` |
+| `restart` | LISTEN 프로세스를 SIGTERM(미종료 시 SIGKILL) 후 재기동 | `bun run dev` |
+| `status` | 실제 LISTEN 여부 확인 | `bun run status` |
+| `open` | `/health` 확인 후 시스템 브라우저로 대시보드 열기 | `bun run packages/server/src/index.ts open` |
 
 **진단**
 
@@ -85,7 +137,7 @@ bun run packages/server/src/cli.ts doctor --fix
 |------|------|-----------|
 | `doctor` | 15개 환경/DB/서버/무결성 체크 실행 | `bun run doctor` |
 | `doctor --fix` | 자동 수정 가능한 항목(권한, 데이터 정합성) 보정 | `bun run doctor --fix` |
-| `analyze --backfill <범위>` | 기간 범위 지정 운영자 수동 백필 (system_byte_size / parent_tool_use_id 진단) | `bun run packages/server/src/cli.ts analyze --backfill 2026-05-01:2026-05-18` |
+| `analyze --backfill <범위>` | 기간 범위 지정 운영자 수동 백필 (system_byte_size 백필 + parent_tool_use_id 진단) | `bun run packages/server/src/cli.ts analyze --backfill 2026-05-01:2026-05-18` |
 
 **데이터 보조 스크립트**
 
@@ -94,42 +146,44 @@ bun run packages/server/src/cli.ts doctor --fix
 | `rebuild-stats` | `stats_hourly` 집계 테이블 재구축 | `bun run rebuild-stats` |
 | `rebuild-stats-proxy` | `stats_proxy_hourly` 집계 테이블 재구축 | `bun run rebuild-stats-proxy` |
 | `backfill:system-prompts` | 누락된 시스템 프롬프트 백필 | `bun run backfill:system-prompts` |
+| `backfill:subagent-parents` | subagent transcript 의 `parent_tool_use_id` 백필 | `bun run backfill:subagent-parents` |
 
-**TUI**
+**TUI / 데스크톱**
 
 | 명령 | 설명 | 호출 예시 |
 |------|------|-----------|
-| `tui` | 별도 TUI 패키지 실행 | `bun run tui` |
+| `tui` | 별도 TUI 패키지 실행 (`packages/tui/src/index.tsx`) | `bun run tui` |
+| `desktop:dev` | Electron 데스크톱 앱 dev 실행 | `bun run desktop:dev` |
 
-> `bun run dev` 는 `restart` 의 alias입니다. 점유된 포트를 정리한 뒤 새로 띄우므로 로컬 개발 루프에서 가장 자주 쓰입니다.
+> `bun run dev` 는 `restart` 의 alias입니다(`packages/server/src/index.ts restart`). 점유된 포트를 정리한 뒤 새로 띄우므로 로컬 개발 루프에서 가장 자주 쓰입니다.
 
 ---
 
 ## 명령별 상세
 
-### `start` — 서버 기동
+### `start` — 서버 기동 (백그라운드 데몬)
 
-포트 점유 여부를 `lsof -sTCP:LISTEN` 으로 확인한 뒤 새 데몬을 띄웁니다 (`runtime/daemon.ts#commandStart`).
+LISTEN 확인 후, 자기 자신을 `serve` 모드로 detached spawn 하여 백그라운드 데몬으로 띄웁니다 (`runtime/daemon.ts#commandStart`). 사용자 편의 wrapper 이며, 실제 서버 프로세스는 child(`serve`) 입니다.
 
 **동작 순서**
 
-1. `lsof -sTCP:LISTEN` 으로 포트 9999 를 LISTEN 중인 PID 탐색.
-   - LISTEN PID 가 있으면 `Already running (PID: …)` 출력 후 `exit 0`.
-   - 없으면 stale PID 파일이 남아 있어도 제거 후 다음 단계로 진행.
-2. `isPortAvailable()` 로 포트 가용성 재확인. TIME_WAIT 등으로 불가 시 `exit 1`.
-3. `startServer()` 호출 — DB 연결, 진단 로그 디렉터리 정리, 유지보수/버전 체크 스케줄 등록, `meta-docs` 부팅 동기화, HTTP listen.
-4. PID 파일 기록 + `SIGINT`/`SIGTERM` 핸들러 설치.
+1. `findProcessesByPort(PORT)` (`lsof -sTCP:LISTEN`) 로 포트 9999 LISTEN PID 탐색.
+   - LISTEN PID 가 있으면 `[Server] Already running (PID: …)` 출력 후 `exit 0`.
+2. stale PID 파일이 남아 있으면 제거 (LISTEN 없음이 1번에서 확정).
+3. `isPortAvailable(PORT)` 로 포트 가용성 재확인. TIME_WAIT 등으로 불가 시 `exit 1`.
+4. child 로그 파일(`SPYGLASS_DAEMON_LOG` 또는 `~/.spyglass/server.log`)을 append 모드로 열고, 자기 자신을 `serve` 인자로 `detached: true` spawn 후 `unref()`.
+5. child PID 를 PID 파일에 기록하고 부모 프로세스 즉시 `exit 0`. (child 는 `serve` 모드라 PID 파일을 만들지 않으므로 여기서만 기록.)
 
 **옵션**: 없음. 동작은 [환경 변수](#환경-변수) 로 조정합니다.
 
 **예시 출력**
 
 ```text
-# 정상 기동
-[Server] Database connected: /Users/me/.spyglass/spyglass.db
-[Server] meta-docs known cwds discovered: 4
-[Server] Running on http://127.0.0.1:9999
-[Server] Health check: http://127.0.0.1:9999/health
+# 정상 기동 (부모 출력)
+[Server] Started (PID: 28341) — manual mode
+[Server] Endpoint: http://127.0.0.1:9999
+[Server] Logs: /Users/me/.spyglass/server.log
+Tip: `brew services start spyglass` for auto-start at login
 ```
 
 ```text
@@ -138,60 +192,82 @@ bun run packages/server/src/cli.ts doctor --fix
 ```
 
 ```text
-# 포트가 점유된 경우
-[Server] Port 9999 is already in use
-[Server] Blocking process(es): PID 28341
-[Server] Run 'bun run dev' to restart with auto-cleanup
+# 포트가 점유된 경우 (TIME_WAIT 등)
+[Server] Port 9999 is unavailable (likely TIME_WAIT)
+[Server] Run 'spyglass restart' to retry with cleanup
 ```
+
+서버 기동 로그(`[Server] Database connected`, `[Server] Running on …`, `[Server] Health check: …`)는 부모 stdout 이 아니라 child 의 로그 파일(`~/.spyglass/server.log`)에 기록됩니다.
 
 **종료 코드**
 
 | 코드 | 의미 |
 |------|------|
 | `0` | 정상 기동 또는 이미 실행 중 |
-| `1` | 포트 점유 |
+| `1` | 포트 점유 (TIME_WAIT 등) |
+
+---
+
+### `serve` — 포그라운드 실행
+
+`startServer()` 를 호출하고 `SIGINT`/`SIGTERM` 핸들러를 설치한 뒤 foreground blocking 으로 동작합니다 (`runtime/daemon.ts#commandServe`). launchd / brew services / docker 같은 호스트 supervisor 가 직접 호출하는 명령으로, **PID 파일을 만들지 않고 stdout/stderr 를 그대로 유지**합니다. 인자 없이 호출(`dispatchDaemonCommand` 의 `case undefined`)해도 `serve` 와 동일하게 동작합니다.
+
+```bash
+bun run packages/server/src/index.ts serve
+bun run packages/server/src/index.ts            # 동일 — 인자 없음 = serve
+```
+
+`startServer()` 부팅 절차: stdio 미러 설치 → 진단 로그 디렉터리 정리 → DB 연결 → graph sync worker 기동 → 유지보수/버전 체크 스케줄 등록 → `meta-docs` 부팅 동기화 → `Bun.serve` HTTP listen.
+
+**예시 출력**
+
+```text
+[Server] Database connected: /Users/me/.spyglass/spyglass.db
+[Server] meta-docs known cwds discovered: 4
+[Server] Running on http://127.0.0.1:9999
+[Server] Health check: http://127.0.0.1:9999/health
+```
+
+일시적 디버깅 외에는 `start` / `dev` 를 사용하세요. `package.json` 의 표준 script 에는 `serve` 가 노출되어 있지 않습니다.
 
 ---
 
 ### `stop` — 서버 중지
 
-`lsof -sTCP:LISTEN` 으로 포트 9999 를 LISTEN 중인 PID를 찾아 SIGTERM을 보냅니다 (`runtime/daemon.ts#commandStop`).
+포트 9999 를 LISTEN 중인 spyglass server PID 만 찾아 SIGTERM을 보냅니다 (`runtime/daemon.ts#commandStop`). PID 파일은 신뢰하지 않습니다 — LISTEN 결과만이 종료 대상 결정의 SSoT.
 
 **동작 순서**
 
-1. `lsof -sTCP:LISTEN` 으로 LISTEN PID 탐색. 없으면 `Not running` 출력 후 `exit 0`. 잔여 stale PID 파일도 정리.
-2. 있으면 각 PID 에 `process.kill(pid, 'SIGTERM')` 송신 후 PID 파일 삭제. 실패 시 `exit 1`.
+1. `findProcessesByPort(PORT)` 로 LISTEN PID 탐색. 없으면 `[Server] Not running` 출력, 잔여 stale PID 파일 정리 후 `exit 0`.
+2. 있으면 각 PID 에 `process.kill(pid, 'SIGTERM')` 송신. 성공 시 `[Server] Stopped (PID: …)`, 실패 시 `[Server] Failed to stop (PID: …):` 출력.
+3. PID 파일 삭제 후, brew services 사용자 안내 출력.
 
-서버 측은 `SIGTERM` 핸들러에서 유지보수/버전 체크 스케줄 정지 → SSE `server_shutdown` 브로드캐스트 → `server.stop()` → in-flight 완료 대기 → `closeDatabase()` 를 거쳐 정상 종료합니다.
+서버(`serve`) 측은 `SIGTERM` 핸들러의 `gracefulShutdown` → `stopServer()` 에서 스케줄러 정리 → SSE `server_shutdown` 브로드캐스트(+250ms grace) → `closeAllConnections()` → `server.stop()` → in-flight 완료 대기 → `closeDatabase()` 를 거쳐 정상 종료합니다.
 
 **예시 출력**
 
 ```text
 # 정상 종료
 [Server] Stopped (PID: 28341)
+Note: brew services users — also run `brew services stop spyglass`
 
 # 이미 정지 상태
 [Server] Not running
 ```
 
-**종료 코드**
-
-| 코드 | 의미 |
-|------|------|
-| `0` | 정상 종료 또는 이미 정지 |
-| `1` | SIGTERM 송신 실패 |
+**종료 코드**: 항상 `0`. (개별 PID 의 SIGTERM 실패는 stderr 로 보고하되 종료 코드를 바꾸지 않음.)
 
 ---
 
 ### `restart` — 서버 재기동
 
-기존 인스턴스 유무와 무관하게 안전하게 재기동합니다 (`runtime/daemon.ts#commandRestart`).
+기존 인스턴스 유무와 무관하게 안전하게 재기동합니다 (`runtime/daemon.ts#commandRestart`). `start` 와 달리 이 명령은 child 를 spawn 하지 않고 **자신이 직접 `startServer()` 를 호출하여 foreground 로 동작**하므로, `bun run dev` 로 띄운 셸이 살아 있는 동안 서버가 유지됩니다.
 
 **동작 순서**
 
-1. `lsof -sTCP:LISTEN` 로 LISTEN PID 탐색. 없으면 곧장 새 서버 기동.
-2. LISTEN PID 들에 `SIGTERM`. `SHUTDOWN_TIMEOUT_MS`(기본 10초) 내 종료되지 않으면 `SIGKILL`.
-3. 포트가 OS 레벨에서 해제될 때까지 최대 5초 대기 (TIME_WAIT 등). 실패 시 `exit 1`.
+1. `findProcessesByPort(PORT)` 로 LISTEN PID 탐색. 없으면 곧장 새 서버 기동.
+2. LISTEN PID 들에 `SIGTERM`. `waitForProcessExit` 로 `SPYGLASS_SHUTDOWN_TIMEOUT_MS`(기본 10초) 내 종료를 기다리며 drain 진행도를 stderr 로 표시. deadline 초과 시 `SIGKILL`.
+3. stale PID 파일 정리 후, `waitForPortRelease(PORT, 5000)` 로 OS 레벨 포트 해제를 최대 5초 대기 (TIME_WAIT 등). 실패 시 `exit 1`.
 4. `startServer()` + PID 파일 기록 + 시그널 핸들러 설치.
 
 LISTEN 필터(`-sTCP:LISTEN`)가 핵심입니다. 필터가 없으면 `9999` 포트로 ESTABLISHED 연결 중인 Claude Code/TUI 클라이언트 PID 까지 잡혀 사용자 세션이 함께 종료됩니다.
@@ -200,10 +276,18 @@ LISTEN 필터(`-sTCP:LISTEN`)가 핵심입니다. 필터가 없으면 `9999` 포
 
 ```text
 # 점유 → 정리 → 재기동
-[Server] Port 9999 is in use, attempting to free it...
+[Server] Stopping listening server(s): PID 28341
 [Server] Stopping process (PID: 28341)...
+[Server] Draining PID 28341... (10s remaining)
 [Server] Waiting for port 9999 to be released...
 [Server] Port 9999 is now available
+[Server] Running on http://127.0.0.1:9999
+[Server] Restarted (PID: 28510)
+```
+
+```text
+# 점유 없음 → 곧장 기동
+[Server] Port 9999 is available (no listening server)
 [Server] Running on http://127.0.0.1:9999
 [Server] Restarted (PID: 28510)
 ```
@@ -213,7 +297,7 @@ LISTEN 필터(`-sTCP:LISTEN`)가 핵심입니다. 필터가 없으면 `9999` 포
 | 코드 | 의미 |
 |------|------|
 | `0` | 재기동 성공 |
-| `1` | 포트 해제 실패 |
+| `1` | 5초 내 포트 해제 실패 |
 
 ---
 
@@ -223,10 +307,10 @@ LISTEN 필터(`-sTCP:LISTEN`)가 핵심입니다. 필터가 없으면 `9999` 포
 
 **동작 순서**
 
-1. `lsof -sTCP:LISTEN` 으로 LISTEN PID 탐색.
-   - LISTEN PID 가 있으면 `Running (PID: …)` + 엔드포인트 출력. in-flight 백그라운드 태스크가 있으면 건 수도 표시.
-   - 없으면 stale PID 파일이 남아 있으면 삭제하고 `Not running (stale PID file)` 출력.
-   - PID 파일도 없으면 `Not running` 출력.
+1. `findProcessesByPort(PORT)` 로 LISTEN PID 탐색.
+   - LISTEN PID 가 있으면 `[Server] Running (PID: …)` + 엔드포인트 출력. `getInFlightCount()` 가 0보다 크면 in-flight 백그라운드 태스크 건수도 표시.
+   - 없으면 stale PID 파일이 있으면 삭제하고 `[Server] Not running (stale PID file — cleaned up)` 출력.
+   - PID 파일도 없으면 `[Server] Not running` 출력.
 
 **예시 출력**
 
@@ -234,11 +318,12 @@ LISTEN 필터(`-sTCP:LISTEN`)가 핵심입니다. 필터가 없으면 `9999` 포
 # 실행 중
 [Server] Running (PID: 28510)
 [Server] Endpoint: http://127.0.0.1:9999
+[Server] In-flight background tasks: 2
 ```
 
 ```text
 # PID 파일은 있으나 프로세스가 죽음
-[Server] Not running (stale PID file)
+[Server] Not running (stale PID file — cleaned up)
 ```
 
 ```text
@@ -247,6 +332,38 @@ LISTEN 필터(`-sTCP:LISTEN`)가 핵심입니다. 필터가 없으면 `9999` 포
 ```
 
 **종료 코드**: 항상 `0`.
+
+---
+
+### `open` — 대시보드 열기
+
+로컬 데몬의 `/health` 를 확인한 뒤 시스템 브라우저로 대시보드를 엽니다 (`cli/open.ts#openCommand`). interactive prompt 없이 actionable guidance 만 출력합니다.
+
+**동작 순서**
+
+1. `waitForServer()` — `/health` 를 1초 timeout × 최대 15회(200ms 간격, 약 3초) probe. 첫 retry 직전 한 번 `[Open] Waiting for spyglass...` 출력. cold-start(첫 부팅 시 DB 생성 + 마이그레이션) buffer 용.
+2. 200 OK 면 OS 별 명령(macOS `open` / Linux `xdg-open` / Windows `cmd /c start`)으로 `http://127.0.0.1:9999` 를 detached spawn.
+   - 브라우저 실행 성공 → `[Open] Opened <url>`, `exit 0`.
+   - 브라우저 실행 실패 → `[Open] spyglass is running, but browser open failed.` + URL fallback, `exit 0`.
+3. probe 가 모두 실패하면 미실행 안내 후 `exit 1`.
+
+**예시 출력**
+
+```text
+# 서버 미실행
+[Open] spyglass is not running.
+
+To start:
+  brew services start spyglass
+  spyglass start
+```
+
+**종료 코드**
+
+| 코드 | 의미 |
+|------|------|
+| `0` | 대시보드 open (또는 URL fallback) |
+| `1` | 서버 미실행 (probe 전부 실패) |
 
 ---
 
@@ -278,8 +395,8 @@ bun run packages/server/src/cli.ts doctor
 ✓ 훅 등록됨 (SPYGLASS_DIR: /Users/me/IdeaProjects/claude-spyglass)
 ✓ 훅 스크립트 실행 권한 OK
 ✓ DB 권한: 600
-✓ DB 스키마 v23
-✓ 포트 9999 가용
+✓ DB 스키마 v53
+✓ 포트 3000 가용
 ✓ 최근 5분 내 수집 활동 있음
 ... (무결성 체크 7건 ok) ...
 
@@ -348,23 +465,31 @@ bun run packages/server/src/cli.ts analyze --backfill 2026-05-01:2026-05-18 --dr
 
 | 대상 | 설명 |
 |------|------|
-| `proxy_requests.system_byte_size` | payload(zstd) 를 복호하여 body.system 정규화 후 byte_size 채움. `system_hash IS NULL` 행만 대상 (멱등). |
-| `requests.parent_tool_use_id` | `source='subagent-transcript'` 중 `parent_tool_use_id IS NULL` 행 수 보고 (현재 라운드는 진단만; 실제 UPDATE 는 후속 패치). |
+| `proxy_requests.system_byte_size` | payload(zstd) 를 복호하여 body.system 정규화 후 `upsertSystemPrompt` + byte_size 채움. `system_hash IS NULL` 행만 대상 (멱등). 100건 단위 트랜잭션 배치 처리. |
+| `requests.parent_tool_use_id` | `source='subagent-transcript'` 중 `parent_tool_use_id IS NULL` 행 수 진단만 보고 (`applied` 항상 0). 실제 transcript 재파싱 UPDATE 는 후속 패치 TODO. |
+
+`--dry-run` 이 아닐 때만 `invalidateAnomalyThresholdsCache()` 로 anomaly 임계 캐시를 무효화합니다.
 
 **예시 출력**
 
 ```text
-analyze [DRY-RUN]  2026-05-01T00:00:00.000Z → 2026-05-18T23:59:59.999Z
+spyglass analyze --backfill [DRY-RUN]
+  range: 2026-05-01T00:00:00.000Z ~ 2026-05-18T23:59:59.999Z
 
-[proxy] system_byte_size 대상: 312건
-[proxy] 처리 완료: 312 / 312
----
-proxy_requests.system_byte_size
-  대상: 312  처리: 312  갱신: 308  디코드오류: 4  system없음: 0
-requests.parent_tool_use_id
-  후보: 0  적용: 0
+[analyze] system_byte_size 백필 대상: 312 rows
 
-dry-run 완료. 실제 적용하려면 --dry-run 없이 재실행하세요.
+=== analyze summary [DRY-RUN] ===
+system_byte_size:
+  eligible:       312
+  processed:      312
+  updated:        308
+  decode_errors:  4
+  null_system:    0
+parent_tool_use_id:
+  candidate(NULL): 0
+  applied:        0  (TODO: transcript 재파싱은 후속 패치 — 신규 수집은 T-07로 자동 정상화)
+
+actual changes were NOT written. Re-run without --dry-run to apply.
 ```
 
 **종료 코드**
@@ -373,18 +498,6 @@ dry-run 완료. 실제 적용하려면 --dry-run 없이 재실행하세요.
 |------|------|
 | `0` | 정상 완료 (도움말 출력 포함) |
 | `1` | `--backfill` 범위 누락 또는 파싱 오류 |
-
----
-
-### foreground (default) — 포그라운드 실행
-
-진입점에 서브명령을 주지 않으면 `commandForeground()` 가 호출되어 PID 파일 없이 서버를 띄웁니다. `Ctrl+C` 한 번으로 종료할 수 있어 디버깅에 유용합니다.
-
-```bash
-bun run packages/server/src/index.ts
-```
-
-`package.json` 의 표준 script에는 노출되어 있지 않습니다. 일시적 디버깅 외에는 `start` / `dev` 를 사용하세요.
 
 ---
 
@@ -419,7 +532,7 @@ DB 파일 권한, 스키마 버전, 최근 수집 활동을 검사합니다.
 
 | 함수 | 점검 내용 | 위반 시 |
 |------|-----------|---------|
-| `checkServerPort` | `127.0.0.1:9999` 에 `Bun.serve` 테스트 바인딩 가능 여부 | `warn` (서버 운영 중이면 정상이므로 `status` 와 함께 해석) |
+| `checkServerPort` | `127.0.0.1:3000` 에 `Bun.serve` 테스트 바인딩 가능 여부 (체크 전용 하드코딩 포트 — 실제 서버 포트 9999 와 무관) | `warn` |
 
 ### 4. Turn 무결성 체크 (`cli/checks/integrity.ts` · ADR-001 P1)
 
@@ -472,10 +585,20 @@ bun run rebuild-stats-proxy --since=<unix_s>
 
 ### `backfill:system-prompts`
 
-세션 prologue 의 시스템 프롬프트가 누락된 과거 행을 transcript 재스캔으로 채워 넣습니다. 이미 채워진 행은 건너뜁니다.
+`proxy_requests` 중 `system_hash IS NULL AND payload IS NOT NULL` 행을 순회하며 payload(zstd) 를 디코드 → `normalizeSystem(body.system)` → `upsertSystemPrompt` 후 `system_hash` / `system_byte_size` 를 채웁니다 (`packages/server/scripts/backfill-system-prompts.ts`). 이미 채워진 행은 재처리하지 않으며(멱등), 100건 단위 트랜잭션 배치로 처리합니다. v21 이전 payload BLOB 이 없는 행은 백필 불가(의도된 한계).
 
 ```bash
-bun run backfill:system-prompts
+bun run backfill:system-prompts            # 전체 처리 (배치 100건씩)
+bun run packages/server/scripts/backfill-system-prompts.ts --dry-run   # 변경 없이 대상 행 수만 보고
+bun run packages/server/scripts/backfill-system-prompts.ts --limit 100 # 한 번에 100건 처리
+```
+
+### `backfill:subagent-parents`
+
+메인 hook 경로(`source='claude-code-hook'`)로 적재된 서브에이전트 자식 도구 호출 중 `parent_tool_use_id IS NULL` 행을, 같은 세션의 직전 `Agent` ToolCall 을 휴리스틱으로 추적해 parent 를 복원합니다 (`packages/server/scripts/backfill-subagent-parents.ts`). UPDATE 직후 `kuzu_outbox` 에 `op='update'` row 를 발행해 그래프 sync 워커가 재동기화하여 flow chart 의 ancestor 단절을 복구합니다.
+
+```bash
+bun run backfill:subagent-parents
 ```
 
 ---
@@ -486,15 +609,19 @@ bun run backfill:system-prompts
 
 **서버 런타임**
 
+> 포트·호스트·DB 경로 변수는 `SPGLASS_` 접두사(축약형)를 씁니다. 그 외는 모두 `SPYGLASS_` 입니다. 정확히 입력하세요 (`runtime/config.ts`).
+
 | 변수 | 기본값 | 설명 |
 |------|--------|------|
 | `SPGLASS_PORT` | `9999` | HTTP 포트 |
 | `SPGLASS_HOST` | `127.0.0.1` | 바인딩 호스트 |
-| `SPGLASS_DB_PATH` | `~/.spyglass/spyglass.db` | DB 파일 경로 |
+| `SPGLASS_DB_PATH` | `getDefaultDbPath()` (`~/.spyglass/spyglass.db`) | DB 파일 경로 |
 | `SPYGLASS_PID_FILE` | `~/.spyglass/server.pid` | PID 파일 위치 (임시 인스턴스 분리용) |
-| `SPYGLASS_SERVER_LOG` | `~/.spyglass/logs/server.log` | stdout/stderr 미러 로그 |
-| `SPYGLASS_RETENTION_DAYS` | `30` | 일별 유지보수 보존 일수 |
-| `SPYGLASS_LANG` | `LANG` / `LC_ALL` / `ko` | CLI 메시지 언어 (ko/en/ja/zh) |
+| `SPYGLASS_SERVER_LOG` | `~/.spyglass/logs/server.log` | `serve`/`startServer` 의 stdout/stderr 미러 로그 (`runtime/stdio-mirror.ts`) |
+| `SPYGLASS_DAEMON_LOG` | `~/.spyglass/server.log` | `start` 가 detached spawn 한 child 의 stdout/stderr 리다이렉트 경로 (`daemon.ts#commandStart`) |
+| `SPYGLASS_SHUTDOWN_TIMEOUT_MS` | `10000` | graceful shutdown / `restart` drain deadline (`runtime/config.ts`) |
+| `SPYGLASS_RETENTION_DAYS` | `30` | 일별 유지보수 보존 일수. 0/음수/non-numeric 은 기본값 폴백 (`storage/runtime/retention.ts`) |
+| `SPYGLASS_LANG` | `--lang` → `SPYGLASS_LANG` → `LC_ALL`/`LANG` → `ko` | CLI 메시지 언어 (ko/en/ja/zh, `i18n.ts#detectLang`) |
 
 **훅 / 프록시**
 
@@ -542,11 +669,16 @@ SPYGLASS_DIAG_ENABLED=1 SPYGLASS_DIAG_RAW_SSE=1 bun run dev
 
 | 명령 | `1` 발생 조건 |
 |------|---------------|
-| `start` | 포트 점유 (사용자 개입 필요) |
-| `stop` | SIGTERM 송신 실패 |
+| `start` | 포트 점유 (TIME_WAIT 등, 사용자 개입 필요) |
 | `restart` | 5초 내 포트 해제 실패 |
+| `open` | 서버 미실행 (probe 전부 실패) |
 | `doctor` | `fail` 1건 이상 또는 알 수 없는 서브명령 |
+| `analyze` | `--backfill` 범위 누락 또는 파싱 오류 |
+| `dispatchDaemonCommand` | 알 수 없는 명령 (`Usage:` 출력 후 `exit 1`) |
+| graceful shutdown | deadline(`SPYGLASS_SHUTDOWN_TIMEOUT_MS`) 초과 시 `exit 1`, 동일 신호 2회 수신 시 `exit 130` |
 | `cli.ts` 공통 | 예외 발생 시 `오류:` prefix 와 함께 `exit 1` |
+
+> `stop` 은 항상 `0` 으로 종료합니다 — 개별 PID 의 SIGTERM 실패는 stderr 로 보고하되 종료 코드를 바꾸지 않습니다.
 
 ---
 
@@ -575,11 +707,11 @@ bun run status          # 다른 터미널에서 정상 기동 확인
 **이렇게**:
 
 ```bash
-# 포트 자동 정리 후 재기동 (가장 흔한 흐름)
+# 포트 자동 정리 후 재기동 (가장 흔한 흐름, restart alias)
 bun run dev
 
-# 로그를 실시간으로 보며 디버깅
-bun run packages/server/src/index.ts     # 포그라운드, Ctrl+C 로 종료
+# 로그를 실시간으로 보며 디버깅 (포그라운드, Ctrl+C 로 종료)
+bun run packages/server/src/index.ts serve
 ```
 
 ### 시나리오 3: 비정상 동작 디버깅
@@ -616,10 +748,18 @@ DB만 삭제해도 다음 기동 시 마이그레이션이 새로 돌지만, PID
 **이렇게**:
 
 ```bash
+# 포그라운드 — 별도 터미널에서 Ctrl+C 로 끝낼 수 있어 실험에 가장 단순
 SPGLASS_PORT=9998 \
-SPYGLASS_PID_FILE=/tmp/spyglass-tmp.pid \
 SPGLASS_DB_PATH=/tmp/spyglass-tmp.db \
+SPYGLASS_SERVER_LOG=/tmp/spyglass-tmp.log \
+bun run packages/server/src/index.ts serve
+
+# 백그라운드 데몬으로 띄우려면 — child 로그 경로까지 분리해 운영 로그와 충돌 방지
+SPGLASS_PORT=9998 \
+SPGLASS_DB_PATH=/tmp/spyglass-tmp.db \
+SPYGLASS_PID_FILE=/tmp/spyglass-tmp.pid \
+SPYGLASS_DAEMON_LOG=/tmp/spyglass-tmp.log \
 bun run packages/server/src/index.ts start
 ```
 
-PID·포트·DB를 모두 분리하면 운영 데몬과 충돌 없이 별도 인스턴스를 띄울 수 있습니다.
+포트·DB(필요 시 PID·로그)를 모두 분리하면 운영 데몬과 충돌 없이 별도 인스턴스를 띄울 수 있습니다.

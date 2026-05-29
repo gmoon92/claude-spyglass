@@ -2,6 +2,8 @@
 
 Claude Code Behavior Definitions(에이전트·스킬·슬래시 커맨드) 카탈로그와 cwd별 호출 매핑을 저장하는 두 테이블입니다.
 
+> 연관 문서: [스키마 개요(README)](README.md) · [requests 테이블](requests.md)(`tool_detail`·`slash_command` 집계 소스) · [마이그레이션 목록](../migrations.md)
+
 ---
 
 ## meta_documents 테이블
@@ -27,7 +29,7 @@ Claude Code Behavior Definitions(에이전트·스킬·슬래시 커맨드) 카�
 | `source_root` | TEXT | NULL 허용 | project면 git root realpath, user면 `~/.claude` 절대경로, built-in·bundled면 NULL |
 | `file_path` | TEXT | NULL 허용 | `.md` 파일 절대경로. built-in·bundled는 파일이 없으므로 NULL |
 | `description` | TEXT | NULL 허용 | frontmatter `description` 필드 또는 본문 첫 줄·첫 헤딩(최대 200자) |
-| `user_invocable` | INTEGER | NOT NULL, DEFAULT 0 | 사용자가 직접 호출 가능한 정의 여부. `1` = true. command는 항상 1, skill은 frontmatter `user-invocable` 값 |
+| `user_invocable` | INTEGER | NOT NULL, DEFAULT 0 | 사용자가 직접 호출 가능한 정의 여부. `1` = true. command는 항상 1, 그 외(agent·skill)는 frontmatter `user-invocable` 이 `true`/`"true"` 일 때만 1 |
 | `frontmatter_json` | TEXT | NULL 허용 | 파일 frontmatter 원본을 JSON 직렬화한 값. frontmatter가 없으면 NULL |
 | `first_seen_at` | INTEGER | NOT NULL | 최초 발견 시각 (Unix timestamp, milliseconds) |
 | `last_seen_at` | INTEGER | NOT NULL | 가장 최근 동기화에서 발견된 시각 (Unix timestamp, milliseconds) |
@@ -63,9 +65,17 @@ Claude Code Behavior Definitions(에이전트·스킬·슬래시 커맨드) 카�
 
 ### 집계 뷰 (v_meta_doc_usage)
 
-`requests` 테이블을 `tool_name IN ('Agent', 'Skill')` 및 `slash_command` 컬럼으로 집계한 뷰입니다. `listMetaDocsWithUsage` 쿼리에서 이 뷰를 `meta_documents`와 LEFT JOIN하여 호출 횟수·토큰·최근 사용 시각을 한 번에 반환합니다.
+`requests` 테이블을 세 개의 `UNION ALL` 분기로 집계하여 `(type, name, invocations, total_tokens, total_duration_ms, last_used_at, first_used_at)` 형태로 노출합니다.
 
-→ 상세 집계 로직은 `${CLAUDE_PROJECT_DIR}/packages/storage/migrations/024-meta-documents.sql` 참조
+| 분기 type | 매칭 조건 | name 소스 |
+|-----------|-----------|-----------|
+| `agent` | `tool_name = 'Agent' AND tool_detail IS NOT NULL` | `tool_detail` |
+| `skill` | `tool_name = 'Skill' AND tool_detail IS NOT NULL` | `tool_detail` |
+| `command` | `slash_command IS NOT NULL AND slash_command != ''` | `slash_command` |
+
+`listMetaDocsWithUsage`(`meta-document.ts`)가 이 뷰를 `meta_documents`와 `(type, name)` 기준 LEFT JOIN하여 호출 횟수·토큰·duration·최근 사용 시각을 한 표로 반환합니다. `fromTs`/`toTs`(date-range) 또는 `project` 필터가 주어지면 뷰 대신 동일한 컬럼 셰이프의 인라인 `GROUP BY` 서브쿼리로 전환하여 시간 윈도우·project 제약을 적용합니다.
+
+→ 뷰 정의는 `${CLAUDE_PROJECT_DIR}/packages/storage/migrations/024-meta-documents.sql`, 조회 함수는 [requests 테이블의 `tool_detail`·`slash_command` 컬럼](requests.md)을 참조
 
 ---
 
@@ -101,9 +111,11 @@ Claude Code Behavior Definitions(에이전트·스킬·슬래시 커맨드) 카�
 2. `projectSettings` — 상위 project root들 (git root 방향)
 3. `userSettings` — 글로벌 `~/.claude/`
 
-built-in·bundled·plugin은 현재 MVP에서 resolution 대상에 포함하지 않습니다.
+built-in·bundled·plugin은 resolution 대상에 포함하지 않습니다 — `computeResolutions`가 project chain과 user(`~/.claude`)만 매핑합니다.
 
-→ chain 계산 로직은 `${CLAUDE_PROJECT_DIR}/packages/server/src/meta-docs/resolver.ts` 참조
+`resolver.ts`의 `resolveProjectChain(cwd)`는 cwd를 realpath 정규화한 뒤 git root까지 거슬러 올라가며 `.claude/`가 존재하는 root 목록(deepest first)과 `~/.claude` user_root를 반환합니다. 이 chain을 받아 `(type, name)` → `meta_document_id` 우선순위 매핑을 실제로 계산하는 것은 `synchronizer.ts`의 `computeResolutions`입니다 — chain 순서대로 처음 등장한 `(type, name)`이 winning row가 되고, 마지막으로 user 카탈로그 행을 채웁니다.
+
+→ project root chain 탐색은 `${CLAUDE_PROJECT_DIR}/packages/server/src/meta-docs/resolver.ts`, 우선순위 매핑 계산은 `${CLAUDE_PROJECT_DIR}/packages/server/src/meta-docs/synchronizer.ts`(`computeResolutions`) 참조
 
 ### 인덱스
 
@@ -151,14 +163,35 @@ erDiagram
 
 - **meta_documents 1 : meta_doc_resolutions N** — 하나의 카탈로그 행이 여러 cwd에서 winning row로 선택될 수 있습니다.
 - `meta_documents` 행이 삭제되면 해당 `meta_document_id`를 참조하는 `meta_doc_resolutions` 행도 CASCADE 삭제됩니다.
-- 동기화 흐름: `scanner.ts`가 디스크 스캔 → `synchronizer.ts`가 `meta_documents` upsert + soft-delete → `resolver.ts` chain 계산 → `meta_doc_resolutions` 교체.
 
-→ 동기화 진입점 및 throttle 설정은 `${CLAUDE_PROJECT_DIR}/packages/server/src/meta-docs/synchronizer.ts` 참조
+### 동기화 흐름 (syncCwd)
+
+```mermaid
+flowchart TD
+    trigger["SessionStart hook / refresh API / lazy resolve"] --> sync["synchronizer.syncCwd(db, cwd)"]
+    sync --> throttle{"5초 내 동일 cwd<br/>재호출?<br/>(force=false)"}
+    throttle -- "yes" --> skip["skip (no-op)"]
+    throttle -- "no" --> chain["resolver.resolveProjectChain(cwd)<br/>realpath + git root까지 .claude root 수집"]
+    chain --> scan["scanner.scanRoot(root)<br/>agents/skills/commands .md 스캔"]
+    scan --> upsert["meta_documents upsert<br/>(type,name,source,source_root) ON CONFLICT"]
+    upsert --> soft["markMissingAsDeleted<br/>(이번 스캔 미등장 행 soft-delete)"]
+    soft --> compute["synchronizer.computeResolutions<br/>chain 우선순위로 (type,name)→id 매핑"]
+    compute --> replace["replaceResolutionsForCwd<br/>해당 cwd 매핑 원자적 교체"]
+```
+
+- 글로벌 `~/.claude`는 `syncGlobalOnce`(부팅 1회 + 60초 throttle)가 별도로 upsert/soft-delete합니다. resolution은 만들지 않으며, `syncCwd`의 `computeResolutions`가 cwd마다 user 카탈로그를 끌어와 매핑에 합칩니다.
+- `syncAllKnownCwds`는 `discoverKnownCwds`로 알려진 모든 cwd를 찾아 각각 `syncCwd`를 호출하며, 한 cwd 실패가 다른 cwd를 막지 않도록 격리합니다.
+
+→ 동기화 진입점·throttle은 `${CLAUDE_PROJECT_DIR}/packages/server/src/meta-docs/synchronizer.ts`, 스캔 규약은 `${CLAUDE_PROJECT_DIR}/packages/server/src/meta-docs/scanner.ts` 참조
 
 ---
 
 ## 참고사항
 
-- 스캔 대상 디렉토리 규약(agents·skills·commands 서브디렉토리 구조)은 `${CLAUDE_PROJECT_DIR}/packages/server/src/meta-docs/scanner.ts` 참조
-- `SessionStart` 이후 5초 이내 동일 cwd 재동기화는 throttle로 skip됩니다. 강제 재동기화는 수동 refresh API를 통해 가능합니다
-- `requests.slash_command` 컬럼은 이 마이그레이션에서 함께 추가되며, `<command-name>` 태그에서 추출한 슬래시 커맨드 이름을 보관합니다. `meta_documents.name`(command 타입)과 직접 매칭됩니다
+- 스캔 대상 디렉토리 규약(`scanner.ts`):
+  - agents: `<root>/.claude/agents/<name>.md` (단일 `.md` 파일)
+  - skills: `<root>/.claude/skills/<name>/SKILL.md` (`SKILL.md`를 가진 디렉토리만 인정 — 단일 파일은 무시)
+  - commands: `<root>/.claude/commands/<name>.md` (단일 `.md` 파일)
+- frontmatter는 간이 YAML 파서로 `name`/`description`/`user-invocable` 등 단순 `key: value`만 추출하고, 전체 원본은 `frontmatter_json`에 보존합니다. `description`이 frontmatter에 없으면 본문 첫 헤딩(없으면 첫 비어있지 않은 줄)을 최대 200자로 사용합니다.
+- 동일 cwd 재동기화는 5초 throttle(`RECENT_SYNC_TTL_MS`)로 skip되며, `POST /api/meta-docs/refresh`(`force: true`)로 throttle을 우회한 강제 재동기화가 가능합니다
+- `requests.slash_command` 컬럼은 마이그레이션 024에서 함께 추가되며, `<command-name>` 태그에서 추출한 슬래시 커맨드 이름(선행 `/` 제거)을 보관합니다. `meta_documents.name`(command 타입)과 직접 매칭됩니다 ([requests 테이블](requests.md) 참조)

@@ -10,6 +10,8 @@
 
 > 설치·운영의 큰 그림은 [`install-guide.md`](../install-guide.md)를 참고하세요.
 > 본 문서는 **훅 메커니즘 자체**에 집중합니다.
+>
+> 연관 문서: [데이터 흐름](./data-flow.md) · [데이터베이스 가이드](./database.md) · [마이그레이션 SSoT](./migrations.md) · [HTTP API & SSE](./api-http.md) · [문제 해결](./troubleshooting.md)
 
 ---
 
@@ -50,17 +52,19 @@ flowchart TD
     CC[Claude Code\n도구 호출 · prompt 입력 · Session 변화]
     SH[spyglass-collect.sh\nstdin: JSON]
     LOG[hook-raw.jsonl\n원장: 모든 이벤트 1줄씩 보존]
-    COLLECT[POST /collect\nPreToolUse · PostToolUse · UserPromptSubmit]
+    BRANCH{case hook_event_name}
+    COLLECT[POST /collect\nPreToolUse · PostToolUse · UserPromptSubmit · 빈 문자열]
     EVENTS[POST /events\nSession* · Stop · Notification · PreCompact · 그 외]
     DB[SQLite\nrequests · claude_events · sessions]
     SSE[SSE 브로드캐스트\n웹·TUI 실시간 갱신]
 
     CC -->|stdin JSON| SH
     SH --> LOG
-    SH -->|curl 비동기 fire-and-forget| COLLECT
-    SH -->|curl 비동기 fire-and-forget| EVENTS
-    COLLECT -->|정규화| DB
-    EVENTS -->|원장 저장| DB
+    SH --> BRANCH
+    BRANCH -->|Pre/PostToolUse · UserPromptSubmit · 추출 실패| COLLECT
+    BRANCH -->|그 외 전부| EVENTS
+    COLLECT -->|정규화 · curl 비동기 fire-and-forget| DB
+    EVENTS -->|원장 저장 · curl 비동기 fire-and-forget| DB
     DB --> SSE
 ```
 
@@ -96,8 +100,8 @@ spyglass가 지원하는 총 이벤트 수는 **27종**입니다(`/collect` 3종
 | `PostToolUse` | `PostToolUseHandler` | `requests` UPSERT (pre→post 머지) | `tool` |
 | `UserPromptSubmit` | `UserPromptSubmitHandler` | `requests` INSERT (새 `turn_id` 채번) | `prompt` |
 
-매칭 핸들러가 없으면 fallback인 **`SystemEventHandler`** 가 동작해 `request_type='system'`으로 그대로 보존합니다.
-현재는 발화 경로가 없지만 향후 호환성을 위한 안전망입니다.
+매칭 핸들러가 없으면 fallback인 **`SystemEventHandler`** 가 동작해 `request_type='system'`, `event_type=hook_event_name.toLowerCase()`로 보존합니다.
+`/collect`에는 위 3종(또는 `hook_event_name` 추출 실패 시 빈 문자열)만 도착하므로 실제 발동은 등록되지 않은 이벤트의 안전망 용도뿐입니다.
 
 ### 2.2 원장 보존 이벤트 (`/events` 라우트)
 
@@ -106,8 +110,8 @@ spyglass가 지원하는 총 이벤트 수는 **27종**입니다(`/collect` 3종
 
 | 그룹 | `hook_event_name` | 비고 / 부가 동작 |
 |------|--------------------|------------------|
-| **세션** | `SessionStart` | `sessions.ended_at = NULL`로 reactivate · SSE `session.started` 브로드캐스트 · `cwd` 기준 Behavior Definitions 카탈로그 동기화 |
-| **세션** | `SessionEnd` | `sessions.ended_at` 설정 · SSE `session.ended` 브로드캐스트 |
+| **세션** | `SessionStart` | `sessions.ended_at = NULL`로 reactivate · SSE `session_update`(`action: 'started'`) 브로드캐스트 · `cwd` 기준 Behavior Definitions 카탈로그 동기화 |
+| **세션** | `SessionEnd` | `sessions.ended_at` 설정 · SSE `session_update`(`action: 'ended'`) 브로드캐스트 |
 | **세션** | `Stop` | transcript 백필 → `last_assistant_message`를 `requests`에 `type='response'`로 INSERT · SSE 송출 |
 | **세션** | `StopFailure` | 원장만 보존 |
 | **도구** | `PostToolUseFailure` | 원장만 보존 (도구 실패 감사용) |
@@ -136,7 +140,7 @@ interface ClaudeHookPayload {
   tool_input?: Record<string, unknown>;  // Pre/PostToolUse 한정
   tool_response?: unknown;        // PostToolUse 한정
   tool_use_id?: string;           // toolu_xxx 형식의 Anthropic ID
-  duration_ms?: number;           // PostToolUse 한정 (신버전 CC가 직접 측정)
+  duration_ms?: number;           // PostToolUse 한정 (Claude Code가 측정해 전달, 없으면 서버 timing 폴백)
   permission_mode?: string;       // bypassPermissions / plan / acceptEdits / dontAsk / default
   agent_id?: string;              // 서브에이전트 내부 훅이면 채워짐
   agent_type?: string;            // Explore / general-purpose 등
@@ -155,7 +159,7 @@ interface ClaudeHookPayload {
 ## 3. 수집 스크립트 `spyglass-collect.sh`
 
 **요약**: 모든 훅이 호출하는 단일 진입점 스크립트입니다. 6단계로 동작하며 — stdin 검증, 페이로드 캡처,
-raw 원장 append, 이벤트 판별, `/collect` 또는 `/events`로 분기 전송, 백그라운드 분리 — 어떤 단계가 실패해도 Claude Code를 막지 않습니다.
+raw 원장 append, 이벤트 판별, `/collect` 또는 `/events`로 분기 전송, 백그라운드 HTTP 송출 — HTTP 전송이 서브쉘로 분리되어 서버 응답을 기다리지 않으므로 Claude Code 흐름을 막지 않습니다.
 
 전체 경로: `hooks/spyglass-collect.sh` (저장소 기준).
 실행 권한이 필요합니다(`chmod +x`). 모든 훅 등록은 이 스크립트 하나를 호출합니다.
@@ -171,9 +175,9 @@ raw 원장 append, 이벤트 판별, `/collect` 또는 `/events`로 분기 전�
 5. **분기 전송**:
    - `UserPromptSubmit` / `PreToolUse` / `PostToolUse` → `POST /collect`
    - 그 외 모든 이벤트 → `POST /events`
-   - `hook_event_name` 추출 실패 → `POST /collect` (레거시 호환)
-6. **비동기 fire-and-forget** — `( curl ... ) &` 로 백그라운드 분리.
-   서브쉘 PID만 echo 하고 부모 스크립트는 즉시 종료하므로 Claude Code 도구 호출이 차단되지 않습니다.
+   - `hook_event_name` 추출 실패(빈 문자열) → `POST /collect` 폴백
+6. **비동기 fire-and-forget** — `( curl ... ) &` 로 HTTP 전송만 백그라운드 분리.
+   부모는 서브쉘 PID(`$!`)만 echo 하고 curl 완료를 기다리지 않으므로 Claude Code 도구 호출이 차단되지 않습니다.
 
 ### 3.2 환경 변수
 
@@ -288,11 +292,12 @@ curl -s -w "\n%{http_code}" \
 ### 3.5 에러 처리
 
 - HTTP 코드가 `200 | 201 | 000`이 아닐 때만 `~/.spyglass/logs/collect.log`에 `[ERROR] ...` 라인을 남깁니다.
+  curl 실패 시 `|| echo -e "\n000"`로 폴백해 코드 `000`이 됩니다.
   - `000`은 curl이 응답을 받지 못한 경우(서버 다운/타임아웃)로, 운영상 흔하므로 의도적으로 침묵합니다.
-- 모든 동작은 백그라운드 `( ... ) &` 안에서 일어나며 부모 프로세스는 항상 정상 종료(`exit 0`)합니다.
-  훅 실패가 Claude Code 도구 실행을 막지 않도록 보장하는 장치입니다.
-- 로그 디렉토리 생성 실패 시 `set -euo pipefail`에 의해 즉시 종료되며 stdin 페이로드는 유실됩니다.
-  이 경우 권한을 점검하세요.
+- **HTTP 전송만** 서브쉘 `( curl ... ) &`로 백그라운드 분리됩니다 (`send_to_spyglass`). 부모는 서브쉘 PID(`$!`)만 echo 하고 즉시 다음으로 진행하므로 curl 응답을 기다리지 않습니다.
+  stdin 읽기·raw 원장 append·`python3` 이벤트 판별은 포그라운드에서 실행됩니다.
+- 스크립트는 `set -euo pipefail` 상태입니다 — 로그 디렉토리 생성(`mkdir -p`) 실패 등 포그라운드 단계가 실패하면 즉시 종료되며 stdin 페이로드가 유실될 수 있습니다.
+  이 경우 `~/.spyglass/logs` 권한을 점검하세요.
 
 ### 3.6 운영 산출 파일
 
@@ -301,7 +306,9 @@ curl -s -w "\n%{http_code}" \
 | `~/.spyglass/logs/hook-raw.jsonl` | 모든 훅 호출의 raw 페이로드 (1줄/이벤트, 서버 처리 성공 여부와 무관) |
 | `~/.spyglass/logs/collect.log` | 훅 스크립트 동작 로그 (`[INFO]`, `[ERROR]`) |
 
-서버 측 진단 로그(`hook-payload.jsonl`, `model-trace.log` 등)는 **별도**로 `~/.spyglass/diag/` 아래에 저장됩니다.
+서버 측 진단 로그(`hook-payload.jsonl`, `model-trace.log`, `proxy-payload.jsonl`)는 **기본 비활성(no-op)** 이며 디스크를 전혀 쓰지 않습니다.
+`SPYGLASS_DIAG_ENABLED=1`(또는 `true`)로 서버를 재시작해야 기록됩니다 (`packages/server/src/diag-log.ts`).
+저장 위치는 기본 `<cwd>/.claude/.tmp/logs/`, `SPYGLASS_DIAG_LOG_DIR`로 override 가능합니다 — 위 훅 스크립트 산출 파일(`~/.spyglass/logs/`)과는 경로가 다릅니다.
 
 ---
 
@@ -539,22 +546,22 @@ sequenceDiagram
 
     CC->>SH: PreToolUse (tool_use_id=toolu_01ABC)
     SH->>SV: POST /collect
-    SV->>DB: INSERT pre_tool 행\nevent_type=pre_tool, duration_ms=0
-    Note over DB: toolTimingMap.set(toolu_01ABC, T0)
-    Note over SSE: SSE 송출 X (미완성)
+    Note over SV: toolTimingMap.set(toolu_01ABC, now) (인메모리)
+    SV->>DB: INSERT pre_tool 행<br/>id=pre-<now>-xxxxxxxx, event_type=pre_tool, duration_ms=0
+    Note over SSE: SSE 송출 X (pre_tool 제외)
 
     CC->>SH: PostToolUse (tool_use_id=toolu_01ABC, duration_ms=412)
     SH->>SV: POST /collect
-    SV->>DB: findPreToolRecord → pre-T0-xxxxxxxx 존재
-    SV->>DB: UPDATE requests\nSET event_type=tool, duration_ms=412\ntokens/cache/model 갱신
-    SV->>SSE: broadcastNewRequest(id=pre-T0-xxxxxxxx)
+    SV->>DB: saveRequest → findPreToolRecord(session, toolu_01ABC) 매칭
+    SV->>DB: mergePostToolIntoPreTool<br/>UPDATE 동일 행 SET event_type=tool, duration_ms=412<br/>tokens/cache + model COALESCE 갱신
+    SV->>SSE: broadcastNewRequest(id=pre-<now>-xxxxxxxx)
 ```
 
 부수 효과 (`PostToolUseHandler.handle` 후반부):
 
-- **어시스턴트 텍스트 백필** — `extractAssistantTextEntries(transcript_path)`로 turn 안의 모든 어시스턴트 텍스트 응답을 `id='resp-msg-<message_id>'`로 `INSERT OR IGNORE`합니다.
-  중간 응답이 유실되지 않도록 도입된 변경입니다.
-- **서브에이전트 자식 추출** — `tool_name === 'Agent'`일 때 서브 transcript에서 자식 `tool_use`를 모두 추출해 `parent_tool_use_id=<부모 toolu>`로 일괄 INSERT합니다.
+- **어시스턴트 텍스트 백필** — `extractAssistantTextEntries(transcript_path)`로 turn 안의 모든 어시스턴트 텍스트 응답을 `persistAssistantTextResponses`가 `id='resp-msg-<message_id>'`로 `INSERT OR IGNORE`합니다.
+  `message_id`가 idempotent 키라 매 PostToolUse마다 호출해도 중복 행이 생기지 않으며, 도구 호출 사이의 중간 응답까지 보존됩니다.
+- **서브에이전트 자식 추출** — `tool_name === 'Agent'`일 때 `maybePersistSubagentChildren`가 서브 transcript에서 자식 `tool_use`를 모두 추출해 `parent_tool_use_id=<부모 Agent toolu>`로 일괄 INSERT합니다.
 
 ### 6.2 UserPromptSubmit
 
@@ -586,8 +593,8 @@ flowchart TD
 
 세 이벤트 모두 `/events` 라우트로 들어가 `claude_events`에 원장 INSERT 된 뒤 이벤트별 추가 동작이 이어집니다.
 
-- **SessionStart** — `reactivateSession(db, session_id)`(`ended_at=NULL`) + SSE `session.started` + `cwd` 기준 Behavior Definitions 카탈로그 동기화 (5초 throttle).
-- **SessionEnd** — `endSession(db, session_id, timestamp)`(`ended_at` 설정) + SSE `session.ended`.
+- **SessionStart** — `reactivateSession(db, session_id)`(`ended_at=NULL`) + `broadcastSessionUpdate({ action: 'started' })`(SSE `type='session_update'`) + `cwd` 기준 Behavior Definitions 카탈로그 동기화 (5초 throttle).
+- **SessionEnd** — `endSession(db, session_id, timestamp)`(`ended_at` 설정) + `broadcastSessionUpdate({ action: 'ended' })`(SSE `type='session_update'`).
 - **Stop** — `saveAssistantResponse(db, payload, timestamp)` 4단계 폴백 시퀀스:
   1. **transcript 백필** — `extractAssistantTextEntries(transcript_path)`로 turn 내 모든 어시스턴트 텍스트 항목을 `persistAssistantTextResponses`로 `INSERT OR IGNORE`. 마지막 항목의 `message_id`를 `lastEntryMessageId`로 보관.
   2. **메시지 소스 결정** — Stop 페이로드의 `last_assistant_message`를 1차 소스로 사용. 비어 있으면 `proxy_requests` 120초 윈도우(`getLatestProxyResponseBefore`)로 폴백. 그래도 없으면 no-op 반환.
@@ -602,13 +609,20 @@ flowchart TD
 ### 6.5 서브에이전트 흐름
 
 `tool_name='Agent'`의 PostToolUse 처리 시 `PostToolUseHandler.maybePersistSubagentChildren`가 동작합니다.
+선행 조건: `success && tool_name === 'Agent' && tool_use_id && transcript_path && session_id`가 모두 참이고,
+`raw.tool_response.agentId`(= `subAgentId`)가 존재해야 합니다. `subAgentId`가 falsy이면 함수가 즉시 early return 합니다.
 
-1. `resolveSubagentTranscriptPath(raw.transcript_path, session_id, agentId)`로 서브 transcript 경로 결정.
+1. `resolveSubagentTranscriptPath(raw.transcript_path, raw.session_id, subAgentId)`로 서브 transcript 경로 결정
+   (`<transcript dir>/<session_id>/subagents/agent-<subAgentId>.jsonl`). 세 번째 인자는 페이로드의 `agent_id` 필드가 아니라
+   `(raw.tool_response as { agentId?: string }).agentId`에서 뽑은 `subAgentId`입니다.
 2. `extractSubagentToolCalls(subPath)`로 N개의 자식 `tool_use` 추출 (각 자식의 model, usage 포함).
-3. `persistSubagentChildren(db, children, { parentToolUseId, sessionId, turnId })` 호출:
+3. `persistSubagentChildren(db, children, { parentToolUseId: raw.tool_use_id, sessionId, turnId })` 호출:
    - 각 자식을 `requests`에 `source='subagent-transcript'`, `event_type='tool'`,
-     `parent_tool_use_id=<부모 Agent toolu>`, `turn_id=<부모 Agent와 동일>`로 INSERT.
-   - `tool_use_id` 중복 시 skip — 재실행 안전.
+     `turn_id=<부모 Agent와 동일>`로 INSERT. `parent_tool_use_id`는 자식의 `parentToolUseId`(직속 Skill/Task 부모) 우선,
+     없으면 부모 Agent의 `tool_use_id`로 폴백.
+   - 동일 `tool_use_id` 행이 이미 존재하면 그 행의 `parent_tool_use_id`가 NULL/빈 값이고 resolved 부모가 있을 때
+     `UPDATE`로 백필한 뒤 `kuzu_outbox`에 `op='update'` 행을 직접 INSERT해 그래프 sync가 PARENT_OF 엣지를 만들도록 합니다.
+     parent가 이미 채워져 있으면 단순 skip. (반환값 `{ inserted, backfilled }`.)
 
 서브에이전트 내부 훅(`agent_id` 필드가 채워진 페이로드)이 별도로 도착할 수도 있습니다.
 이 경우 `PreToolUseHandler`가 서브 transcript에서 model을 추출해 채웁니다(`raw.agent_id ? subTranscriptModel : undefined`).
@@ -686,7 +700,7 @@ flowchart TD
 | 1 | 훅이 전혀 실행되지 않음 (`hook-raw.jsonl` 비어있음) | settings.json 미등록 / 경로 오류 | [8.1](#81-훅이-전혀-실행되지-않음) |
 | 2 | 훅은 실행되는데 DB가 비어있음 | 서버 다운 / 포트 차단 | [8.2](#82-훅은-실행되지만-데이터가-안-들어옴) |
 | 3 | `pre_tool` 행이 `tool`로 머지되지 않음 | PreToolUse 훅 미등록 | [8.3](#83-posttooluse가-들어오는데-pre_tool-행이-합쳐지지-않음) |
-| 4 | `duration_ms`가 0 | 구버전 CC + PreToolUse 누락 | [8.4](#84-duration_ms-가-0-또는-음수) |
+| 4 | `duration_ms`가 0 | `raw.duration_ms` 미전송 + PreToolUse 누락 | [8.4](#84-duration_ms-가-0-또는-음수) |
 | 5 | SSE에 도구 행이 중복 표시 | 클라이언트 직접 DOM 조작 | [8.5](#85-sse-에-도구-행이-두-번-나타남) |
 | 6 | 슬래시 커맨드 통계가 비어 있음 | UserPromptSubmit 훅 미등록 | [8.6](#86-슬래시-커맨드-통계가-비어-있음) |
 | 7 | 일부 이벤트가 누락됨 | 해당 키가 `hooks`에 없음 | [8.7](#87-일부-이벤트가-누락됨--수동-시뮬레이션) |
@@ -736,13 +750,14 @@ curl -sf http://127.0.0.1:9999/health && echo OK
 tail -n 50 ~/.spyglass/logs/collect.log
 # [ERROR] Failed to send data: HTTP 400 (endpoint=...)  →  payload 스키마 오류
 
-# 3) 서버 콘솔에 [RECV] 가 찍히는지 (server.log 또는 stdout)
-tail -f $(jq -r '.env.SPYGLASS_DIR' ~/.claude/settings.json)/server.log 2>/dev/null
-# [RECV] PreToolUse session=8f3c...  ← 정상 도착
+# 3) 서버 콘솔에 [RECV] 가 찍히는지 (stdout 미러: ~/.spyglass/logs/server.log)
+tail -f ~/.spyglass/logs/server.log 2>/dev/null
+# [RECV] PreToolUse session=8f3c...  ← /collect 정상 도착 (http-entry.ts)
+#   ※ /events 경로(SessionStart/Stop 등)는 [RECV] 를 찍지 않음
 
-# 4) 서버 진단 로그 (raw 도착 여부)
-ls -la ~/.spyglass/diag/
-tail -n 5 ~/.spyglass/diag/hook-payload.jsonl 2>/dev/null
+# 4) 서버 진단 로그 (raw 도착 여부) — 기본 OFF, SPYGLASS_DIAG_ENABLED=1로 재시작 시에만 기록됨
+#    기본 경로: <서버 cwd>/.claude/.tmp/logs/  (SPYGLASS_DIAG_LOG_DIR로 override 가능)
+tail -n 5 "$(jq -r '.env.SPYGLASS_DIR' ~/.claude/settings.json)/.claude/.tmp/logs/hook-payload.jsonl" 2>/dev/null
 ```
 
 서버가 살아있는데 `collect.log`에만 ERROR가 쌓이면 페이로드 자체 문제일 수 있으니 `hook-raw.jsonl` 마지막 줄을 `jq .`로 검증하세요.
@@ -773,20 +788,25 @@ ORDER BY timestamp DESC LIMIT 20;
 
 `PostToolUseHandler`의 duration 결정 로직:
 
-```
-duration_ms = raw.duration_ms ?? 0
+```ts
+let duration_ms = typeof raw.duration_ms === 'number' && raw.duration_ms >= 0
+  ? raw.duration_ms
+  : 0;
 if (duration_ms === 0 && raw.tool_use_id) {
-  startTs = toolTimingMap.get(raw.tool_use_id)
-  if (startTs) duration_ms = now - startTs
+  const startTs = toolTimingMap.get(raw.tool_use_id);
+  if (startTs !== undefined) {
+    duration_ms = now - startTs;
+    toolTimingMap.delete(raw.tool_use_id);
+  }
 }
 ```
 
 따라서 다음 경우 0이 됩니다.
 
-- 구버전 Claude Code (`raw.duration_ms` 미전송) + PreToolUse 훅 미등록.
+- `raw.duration_ms` 미전송 + PreToolUse 훅 미등록.
 - 서버가 PreToolUse 도착 후 재시작되어 `toolTimingMap`이 비워짐.
 
-**해결**: PreToolUse 훅을 반드시 함께 등록하고 신버전 Claude Code 사용을 권장합니다.
+**해결**: PreToolUse 훅을 반드시 함께 등록하세요. `raw.duration_ms`가 없을 때 `toolTimingMap`(PreToolUse 시점 기록) 폴백으로 duration이 채워집니다.
 
 ### 8.5 SSE에 도구 행이 두 번 나타남
 
@@ -825,15 +845,20 @@ sqlite3 ~/.spyglass/spyglass.db \
 
 ### 8.8 마이그레이션이 누락된 컬럼
 
-조회 쿼리가 `no such column: slash_command` 같은 오류로 실패하면 DB가 구버전입니다.
+조회 쿼리가 `no such column: slash_command` 같은 오류로 실패하면 DB에 마이그레이션이 미적용된 상태입니다.
 
 ```bash
 bun -e 'const {Database}=require("bun:sqlite");
   const db = new Database(`${process.env.HOME}/.spyglass/spyglass.db`);
   console.log(db.query("PRAGMA user_version").get());'
-# { user_version: 32 }  ← 최신 마이그레이션 번호와 일치해야 함
+# { user_version: 53 }  ← packages/storage/migrations/ 최신 파일 번호와 일치해야 함
+```
 
-# 마이그레이션은 서버 기동 시 자동 적용 — 그래도 안 되면 doctor로 진단
+`PRAGMA user_version`은 적용된 최신 마이그레이션 파일 번호(`migrator.ts`가 파일 적용 직후 자동 설정)와 같아야 합니다.
+서버 기동 시 `migrator.ts`가 `user_version`과 `packages/storage/migrations/` 최신 파일 번호를 비교해 누락분을 자동 적용합니다.
+그래도 컬럼 오류가 남으면 `doctor`로 진단하세요.
+
+```bash
 cd "$(jq -r '.env.SPYGLASS_DIR' ~/.claude/settings.json)" && bun run doctor
 ```
 

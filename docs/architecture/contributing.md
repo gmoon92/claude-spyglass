@@ -3,8 +3,11 @@
 Claude Spyglass 프로젝트에 기여해 주셔서 감사합니다. 이 문서는 코드·문서·디자인·DB 스키마 등 어떤 형태로든 기여하려는 분들을 위한 안내서입니다.
 
 Claude Spyglass 는 **Claude Code 의 훅 이벤트를 수집해 토큰 사용량과 요청 흐름을 시각화**하는 모니터링 도구입니다.
-**bun workspaces 모노레포**(`server`/`storage`/`tui`/`types`/`web`) 위에 **TypeScript + React Ink (TUI) + Vanilla JS (Web)** 스택과 **SQLite WAL** 저장소를 사용합니다.
-`.claude/` 메타 문서로 자동화된 워크플로우를 갖추고 있습니다.
+**bun workspaces 모노레포** 위에 **TypeScript + React Ink (TUI) + Vanilla JS (Web)** 스택을 사용하며, 저장소는 **SQLite WAL** 메인 DB 와 선택적 **Ladybug 그래프 DB** 로 구성됩니다.
+워크스페이스 패키지는 `server` / `storage` / `storage-graph` / `tui` / `types` / `desktop` 6개이며, `packages/web/` 은 별도 `package.json` 없는 정적 자산 디렉터리입니다.
+`.claude/` 메타 문서로 일부 워크플로우(커밋·데이터 작업)를 표준화합니다.
+
+> 상위 개요는 [`index.md`](./index.md), 전체 아키텍처는 [`architecture.md`](./architecture.md) 를 참조하세요.
 
 ---
 
@@ -32,7 +35,7 @@ bun test && bun run typecheck
 #    git commit -m "feat(scope): 설명"
 ```
 
-> **Tip** — UI/UX 변경은 반드시 `designer` 서브에이전트에 위임하세요 ([§8](#8-uiux-변경)).
+> **Tip** — UI/UX 변경은 기존 렌더링 함수를 재사용하고 디자인 토큰만 사용하세요 ([§8](#8-uiux-변경)).
 > DB 스키마 변경은 `data-analyst` 스킬을 통해 진행하세요 ([§7](#7-db-변경-마이그레이션-추가)).
 > 머지 전에 [PR 체크리스트](#12-pr-체크리스트)를 반드시 확인하세요.
 
@@ -50,7 +53,7 @@ bun test && bun run typecheck
 8. [UI/UX 변경](#8-uiux-변경)
 9. [문서 작업](#9-문서-작업)
 10. [커밋과 Pull Request](#10-커밋과-pull-request)
-11. [Claude Code 스킬·에이전트 카탈로그](#11-claude-code-스킬에이전트-카탈로그)
+11. [Claude Code 스킬·MCP](#11-claude-code-스킬mcp)
 12. [PR 체크리스트](#12-pr-체크리스트)
 
 ---
@@ -73,10 +76,9 @@ git remote add upstream https://github.com/<원본-소유자>/claude-spyglass.gi
 bun install
 ```
 
-`bun install` 직후 `package.json`의 `prepare` 스크립트가 자동 실행되어 `git config core.hooksPath .githooks` 가 적용됩니다.
+`bun install` 직후 `package.json`의 `prepare` 스크립트(`git config core.hooksPath .githooks`)가 자동 실행됩니다.
 이로써 `post-push` 훅이 등록됩니다.
-`packages/**` 또는 `hooks/**` 변경을 푸시한 직후 `claude -p` 가 호출되어 `docs/architecture/architecture.md` / `README.md` 가 자동 현행화됩니다.
-자세한 동작은 [`.githooks/post-push`](../.githooks/post-push) 를 참조하세요.
+`packages/**` 또는 `hooks/**` 변경을 푸시한 직후 `claude -p` 가 호출되어 `docs/architecture.md` 와 `README.md` 가 자동 현행화됩니다 (자세한 동작은 [§9.4](#94-자동-문서-현행화-post-push) 참조).
 
 `prepare` 가 실행되지 않은 환경에서는 `bun run prepare` 를 수동 실행하세요.
 CI 등 훅이 불필요한 곳은 `git config --unset core.hooksPath` 로 해제합니다.
@@ -103,8 +105,9 @@ bun run tui      # TUI 대시보드
 | **Bun** | `>=1.2.0` (`package.json#engines.bun`) |
 | **Node.js** | LTS 20+ (도구·에디터 호환용; 실행은 Bun 권장) |
 | **TypeScript** | `^5.0.0` (`tsc --noEmit`) |
-| **SQLite** | 시스템 기본 (`~/.spyglass/spyglass.db` WAL) |
-| **Claude Code CLI** | 최신 (post-push 자동 문서 현행화에 필요, 선택) |
+| **SQLite** | Bun 내장 (`~/.spyglass/spyglass.db` WAL) |
+| **Ladybug 그래프 DB** | `@ladybugdb/core` (선택, 런타임 lazy import — 미설치 시 SQLite 만으로 동작) |
+| **Claude Code CLI** | post-push 자동 문서 현행화에 필요 (선택) |
 
 ### 2.2 권장 IDE 설정
 
@@ -126,13 +129,13 @@ bun run tui      # TUI 대시보드
 |---------------|------|
 | `spyglass.db` (WAL) | SQLite 메인 DB |
 | `spyglass.db-wal`, `spyglass.db-shm` | WAL 모드 사이드카 파일 |
+| `graph/` | Ladybug 그래프 DB 디렉터리 (선택, 없으면 자동 재구축) |
 | `logs/server.log` | 서버 stdout/stderr 미러 |
 | `logs/collect.log` | 훅 스크립트 호출·에러 로그 |
 | `logs/hook-raw.jsonl` | 훅이 받은 raw 페이로드 (1줄/이벤트) |
 | `server.pid` | 데몬 PID |
 
-DB 를 초기화하려면 `~/.spyglass/` 를 통째로 지우세요.
-통계 테이블만 재구성하려면 `bun run rebuild-stats` 또는 `bun run rebuild-stats-proxy` 를 실행합니다.
+SQLite 만 초기화하려면 `spyglass.db*` 를, 그래프만 초기화하려면 `~/.spyglass/graph/` 를 지우면 됩니다 (그래프는 SQLite 로부터 자동 재구축). 통계 테이블만 재구성하려면 `bun run rebuild-stats` 또는 `bun run rebuild-stats-proxy` 를 실행합니다.
 
 ---
 
@@ -140,17 +143,20 @@ DB 를 초기화하려면 `~/.spyglass/` 를 통째로 지우세요.
 
 ### 3.1 워크스페이스 구조
 
-루트 `package.json` 의 `workspaces: ["packages/*"]` 설정으로 5개 패키지가 등록되어 있습니다.
+루트 `package.json` 의 `workspaces: ["packages/*"]` 설정 아래, `package.json` 을 가진 디렉터리만 워크스페이스로 등록됩니다. 현재 6개 패키지입니다.
 
 | 패키지 | 이름 | 책임 |
 |--------|------|------|
-| `packages/server` | `@spyglass/server` | HTTP API · SSE · CLI · 훅 수집 엔드포인트 |
-| `packages/storage` | `@spyglass/storage` | SQLite 스키마·마이그레이션·쿼리·통계 |
+| `packages/server` | `@spyglass/server` | HTTP API · SSE · CLI · 훅 수집/디스패치/처리 · proxy · routes · settings · meta-docs · metrics |
+| `packages/storage` | `@spyglass/storage` | SQLite 연결·마이그레이션·쿼리·통계·retention·pricing |
+| `packages/storage-graph` | `@spyglass/storage-graph` | Ladybug 그래프 client · queries(unified-flow/retention) · schema(ddl) · sync |
 | `packages/tui` | `@spyglass/tui` | React Ink 기반 터미널 대시보드 |
-| `packages/types` | `@spyglass/types` | 공용 도메인 타입 |
-| `packages/web` | (private) | Vanilla JS 웹 대시보드 자산 |
+| `packages/types` | `@spyglass/types` | 공용 도메인 타입 (request/session/turn) |
+| `packages/desktop` | `@spyglass/desktop` | Electron 셸 (main/preload) |
 
-각 패키지는 `"@spyglass/<name>": "workspace:*"` 프로토콜로 서로를 참조합니다.
+`packages/web/` 은 `package.json` 이 없는 정적 자산 디렉터리(Vanilla JS 웹 대시보드)로, 워크스페이스 패키지가 아닙니다. 서버가 정적 파일로 직접 서빙합니다.
+
+각 워크스페이스 패키지는 `"@spyglass/<name>": "workspace:*"` 프로토콜로 서로를 참조합니다.
 
 ### 3.2 패키지 추가하기
 
@@ -161,8 +167,30 @@ DB 를 초기화하려면 `~/.spyglass/` 를 통째로 지우세요.
 
 ### 3.3 패키지 간 의존성 원칙
 
-- **types → storage → server → tui/web** 단방향 의존.
-- `storage` 가 `server` 를 import 하면 안 됨 (순환 차단).
+실제 `package.json` 의존 관계:
+
+```mermaid
+graph LR
+    types[types]
+    storage[storage]
+    sgraph[storage-graph]
+    server[server]
+    tui[tui]
+    web[web<br/>정적 자산]
+
+    storage --> sgraph
+    types --> sgraph
+    storage --> server
+    sgraph --> server
+    types --> server
+    server --> tui
+    storage --> tui
+    types --> tui
+    server -.serves.-> web
+```
+
+- **단방향 의존** — 하위 패키지가 상위(`server`/`tui`)를 import 하지 않습니다. `storage` 가 `server` 를 import 하면 안 됨 (순환 차단).
+- `storage-graph` 는 `storage` · `types` 에 의존하며, `server` 가 두 저장소 패키지를 함께 사용합니다.
 - 공통 타입은 반드시 `@spyglass/types` 에 두고 양쪽에서 import.
 
 ### 3.4 공통 스크립트
@@ -171,13 +199,15 @@ DB 를 초기화하려면 `~/.spyglass/` 를 통째로 지우세요.
 
 | 명령 | 동작 |
 |------|------|
-| `start` / `dev` / `stop` / `status` | 서버 데몬 라이프사이클 |
-| `doctor` | 환경·DB·서버 무결성 점검 (CLI) |
+| `start` / `dev` / `stop` / `status` | 서버 데몬 라이프사이클 (`dev` 는 restart) |
+| `doctor` | 환경·DB·서버 무결성 점검 (`cli.ts doctor`) |
 | `tui` | TUI 실행 |
 | `test` | `bun test` (모든 패키지 테스트 일괄) |
 | `typecheck` | `tsc --noEmit` (전체 모노레포) |
 | `backfill:system-prompts` | 과거 세션 system_prompt 백필 |
+| `backfill:subagent-parents` | 서브에이전트 parent tool_use_id 백필 |
 | `rebuild-stats`, `rebuild-stats-proxy` | 집계 테이블 재계산 |
+| `desktop:dev` / `desktop:build:mac` / `desktop:pack:mac` | Electron 데스크톱 셸 개발·빌드·패키징 |
 
 ---
 
@@ -189,7 +219,7 @@ DB 를 초기화하려면 `~/.spyglass/` 를 통째로 지우세요.
 
 > 모든 디렉토리명과 파일명은 **kebab-case**로 작성하세요. — `CLAUDE.md`
 
-예: `tool-row-alignment.test.ts`, `cache-panel-tooltip.js`, `data-analyst/`. React 컴포넌트 파일도 `kebab-case.tsx` (PascalCase 컴포넌트명은 파일 내부에서만). 마이그레이션은 `NNN-<설명>.sql` (예: `021-add-thinking-mode.sql`).
+예: `tool-row-alignment.test.ts`, `cache-panel-tooltip.js`, `data-analyst/`. React 컴포넌트 파일도 `kebab-case.tsx` (PascalCase 컴포넌트명은 파일 내부에서만). 마이그레이션은 `NNN-<설명>.sql` (예: `021-proxy-payload-compression.sql`).
 
 ### 4.2 캡슐화 · 단일 책임 (Java식 사고)
 
@@ -230,12 +260,14 @@ row.appendChild(makeRequestRow(r));
 
 다음은 `CLAUDE.md` 가 "누락 방지" 함수로 지정한 것들입니다 — 모든 UI 요소는 이 함수들을 거쳐야 하며, 페이지 코드에서 `innerHTML = '<svg …>'` 같은 직접 HTML 작성은 금지입니다.
 
-| 함수 | 파일 | 책임 |
-|------|------|------|
-| `toolIconHtml(toolName, eventType)` | `packages/web/assets/js/renderers.js` | 툴 아이콘 + pulse(`pre_tool` 시 `.tool-icon-running`). **`r.event_type` 을 두 번째 인자로 반드시 전달** |
-| `makeTargetCell(r)` | `renderers.js` | Target 컬럼 전체(아이콘 + 이름 + 상태배지) |
-| `makeRequestRow(r, opts)` | `renderers.js` | 로그 피드 행 |
-| `prependRequest(r)` | `packages/web/assets/js/main.js` | SSE 수신 레코드를 피드 상단에 prepend, 동일 `id` 는 인플레이스 업데이트 |
+`render/*` 의 렌더링 함수들은 `packages/web/assets/js/renderers.js` 호환 shim 이 `export * from './render/*.js'` 로 일괄 re-export 하므로, 기존 코드는 `./renderers.js` 경로로 import 할 수 있습니다 (단, 함수 정의 자체는 아래 표의 `render/*` 파일에 있습니다). `prependRequest` 는 이 shim 에 포함되지 않으며 `views/default-view.js` 를 통해서만 re-export 됩니다.
+
+| 함수 | 정의 파일 | 책임 |
+|------|-----------|------|
+| `toolIconHtml(toolName, eventType)` | `packages/web/assets/js/render/badges.js` | 툴 아이콘 + pulse(`pre_tool` 시 `.tool-icon-running`). **`r.event_type` 을 두 번째 인자로 반드시 전달** |
+| `makeTargetCell(r)` | `packages/web/assets/js/render/cells.js` | Target 컬럼 전체(아이콘 + 이름 + 상태배지) |
+| `makeRequestRow(r, opts)` | `packages/web/assets/js/render/rows.js` | 로그 피드 행 |
+| `prependRequest(r)` | `packages/web/assets/js/views/default/feed-live.js` (main.js 는 `views/default-view.js` 경유 import 만, 정의·재수출 없음) | SSE 수신 레코드를 피드 상단에 prepend, 동일 `id` 는 인플레이스 업데이트 |
 
 ### 4.4 pre_tool / post_tool 이벤트 규칙
 
@@ -285,10 +317,11 @@ bun test --test-name-pattern="rebuild stats"
 
 모든 단위 테스트는 각 패키지의 `src/__tests__/` 디렉터리에 두며, 파일명은 `<대상>.test.ts` 형식입니다.
 
-- `packages/server/src/__tests__/` — `server.test.ts`(라이프사이클·라우터), `collect.test.ts`(훅 수집), `requests-filter.test.ts`, `sse-payload.test.ts`
-- `packages/storage/src/__tests__/` — `connection.test.ts`, `request.test.ts`, `session.test.ts`, `stats-integration.test.ts`, `*-regression.test.ts`, `proxy-stats.test.ts` 등 다수
-- `packages/tui/src/__tests__/` — `tool-row-alignment.test.ts`, `detect-lang.test.ts`
-- `packages/web/assets/js/__tests__/` — `renderers.test.ts`(스냅샷 포함), `formatters.test.ts` 등
+- `packages/server/src/__tests__/` — `server.test.ts`(라이프사이클·라우터), `collect.test.ts`(훅 수집), `requests-filter.test.ts`, `sse-payload.test.ts`, `read-endpoint-contract.test.ts`, `i18n-*.test.ts` 등
+- `packages/server/src/hook/__tests__/` — `persist-merge-race.test.ts`, `slash-command.test.ts`
+- `packages/storage/src/__tests__/` — `connection.test.ts`, `request.test.ts`, `session.test.ts`, `stats-integration.test.ts`, `stats-event-type-regression.test.ts`, `proxy-stats.test.ts`, `migrator.test.ts`, `retention-*.test.ts` 등 다수
+- `packages/tui/src/__tests__/` — `tool-row-alignment.test.ts`, `detect-lang.test.ts`, `i18n.test.ts`
+- `packages/web/assets/js/__tests__/` — `renderers.test.ts`(`__snapshots__/` 포함), `formatters.test.ts`, `sse.test.ts`, `state.test.ts` 등
 
 ### 5.3 새 테스트 추가 패턴
 
@@ -346,13 +379,15 @@ DB 스키마·쿼리·집계·훅 데이터 흐름 변경은 모두 **`data-anal
 > "데이터 분석", "테이블 추가", "컬럼 추가", "쿼리 최적화", "스키마 변경",
 > "마이그레이션 추가", "통계 개선" 등의 요청은 반드시 `data-analyst` 스킬을 사용합니다. — `CLAUDE.md`
 
+스키마 전체와 마이그레이션 목록은 [`database.md`](./database.md) · [`migrations.md`](./migrations.md) 를 참조하세요.
+
 ### 7.1 마이그레이션 번호 규칙
 
-`packages/storage/migrations/` 는 `001-init.sql`, `002-add-tool-detail.sql`, … `020-payload-audit-fields.sql` 처럼 SQL 시퀀스로 관리됩니다.
+`packages/storage/migrations/` 는 `001-init.sql` 부터 `053-kuzu-outbox-trigger-hardening.sql` 까지 SQL 파일로 관리됩니다. `migrator.ts` 가 파일명으로 정렬하고 파일명 앞 숫자 prefix 를 버전으로 사용합니다 (예: `035-add-migrations-meta-table.sql` → version 35).
 
 | 규칙 | 내용 |
 |------|------|
-| 번호 | 정확히 +1 — 건너뛰면 `data-engineer` Success Criteria 위반 |
+| 번호 | 마지막 번호 + 1 (현재 최신은 053). 정렬 기준이 숫자 prefix 라 번호가 단조 증가하기만 하면 됨 |
 | 파일명 | `NNN-<kebab-case-설명>.sql` (3자리 zero-padded) |
 | SQL | **idempotent** — `CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS` 등 |
 
@@ -365,16 +400,16 @@ DB 스키마·쿼리·집계·훅 데이터 흐름 변경은 모두 **`data-anal
 3. **회귀 테스트 추가** — 새 컬럼/테이블이 기존 통계 쿼리에 영향을 주지 않는지 검증.
 4. **로컬 검증** — `~/.spyglass/spyglass.db` 를 백업한 뒤 `bun start` → 마이그레이션 적용 확인.
 5. **집계 재계산 검증** — `bun run rebuild-stats` / `rebuild-stats-proxy` 가 깨지지 않는지 확인.
-6. **문서 동기화** — `docs/architecture/architecture.md` 의 테이블 목록은 push 시 `post-push` 훅이 자동 현행화. 훅이 없는 환경이면 `doc-spec` 스킬로 수동 갱신.
+6. **문서 동기화** — `docs/architecture.md` 의 테이블 목록은 push 시 `post-push` 훅이 자동 현행화 ([§9.4](#94-자동-문서-현행화-post-push)).
 
 ### 7.3 훅 수집 스크립트 변경
 
-훅 수집 스크립트 `hooks/spyglass-collect.sh` 와 `.claude/settings.json` 의 훅 등록은 한 세트로 묶여 있습니다.
-이벤트 종류·페이로드를 변경할 때는 아래 다섯 곳을 모두 갱신해야 합니다.
+훅 수집 스크립트 `hooks/spyglass-collect.sh` 와 사용자 `~/.claude/settings.json` 의 훅 등록(예제: `docs/examples/settings.hooks.full.json` · `settings.hooks.minimal.json`)은 한 세트로 묶여 있습니다.
+이벤트 종류·페이로드를 변경할 때는 아래 다섯 곳을 모두 갱신해야 합니다. 훅 통합 흐름 전체는 [`hooks-integration.md`](./hooks-integration.md) 를 참조하세요.
 
-1. `hooks/spyglass-collect.sh` — 수집 로직
-2. `.claude/settings.json` — 훅 등록
-3. `packages/server/src/hook/` — 수신·파싱
+1. `hooks/spyglass-collect.sh` — 수집 로직 (`/collect`, `/events` 로 POST)
+2. `docs/examples/settings.hooks.*.json` — 훅 등록 예제
+3. `packages/server/src/hook/` — 수신·디스패치·정제·영속화 (`http-entry`/`dispatcher`/`handlers`/`processor`/`persist`)
 4. `packages/storage/src/schema.ts` + 새 마이그레이션 — 저장 스키마
 5. `packages/server/src/__tests__/collect.test.ts` — 회귀 테스트
 
@@ -382,44 +417,26 @@ DB 스키마·쿼리·집계·훅 데이터 흐름 변경은 모두 **`data-anal
 
 ## 8. UI/UX 변경
 
-### 8.1 강제 규칙: `designer` 서브에이전트에 위임
+웹·TUI 화면 구조 전체는 [`web-dashboard.md`](./web-dashboard.md) · [`tui.md`](./tui.md) 를 참조하세요.
 
-> ## ⚠️ 강제 규칙
->
-> **디자인·UI/UX 작업은 반드시 `designer` 서브에이전트에 위임하세요.**
->
-> CSS, 레이아웃, 툴팁, 컴포넌트 스타일, 색상 등 **화면에 관련된 모든 작업**이 해당됩니다.
-> 메인 세션에서 직접 CSS·JSX 를 작성하지 마세요. (`CLAUDE.md`)
->
-> 사람이 직접 작업하더라도 아래 8.2 의 4단계 절차를 그대로 거쳐야 합니다.
+### 8.1 기존 렌더링 함수 재사용 원칙
 
-### 8.2 디자인 작업 표준 절차
+> 아이콘·배지·행 등 UI 요소는 기존 렌더링 함수를 거치지 않고 직접 HTML 을 작성하지 마세요. — `CLAUDE.md`
 
-`designer` 에이전트는 다음 4단계를 **순서대로** 호출합니다.
+[§4.3](#43-웹-대시보드-핵심-함수-직접-작성-금지) 의 핵심 함수(`toolIconHtml` / `makeTargetCell` / `makeRequestRow` / `prependRequest`)를 반드시 경유합니다. 페이지 코드에서 `innerHTML = '<svg …>'` 같은 직접 HTML 작성은 금지입니다.
 
-```mermaid
-flowchart LR
-    A[doc-planning\nplan.md\n목표·범위 정의] --> B[doc-adr\nadr.md\n기술 결정 기록]
-    B --> C[doc-tasks\ntasks.md\n작업 분해]
-    C --> D[ui-designer\nPhase 1~5\n실제 구현]
-```
-
-> **3개 문서(plan / adr / tasks)가 완성된 후에만** 4단계 구현을 진행합니다.
-
-### 8.3 디자인 토큰 · 변수 사용
+### 8.2 디자인 토큰 · 변수 사용
 
 - CSS 변수 외 **하드코딩 색상 금지** (`#abc123` 직접 입력 금지).
 - 토큰 위치
   - Web: `packages/web/assets/css/` (`--color-*`, `--space-*`)
   - TUI: `packages/tui/src/design-tokens.ts`
-- 화면 카탈로그는 화면 추가·변경 시 **반드시 현행화**.
-  - `packages/web/screen-inventory.md`
-  - `packages/tui/screen-inventory.md`
+- 웹 화면 카탈로그(`packages/web/screen-inventory.md`)는 화면 추가·변경 시 현행화합니다.
 
-### 8.4 TUI 작업 시 주의
+### 8.3 TUI 작업 시 주의
 
-Ink 컴포넌트는 `packages/tui/src/components/` 와 `screens/` 로 분리되어 있습니다.
-키바인딩을 변경할 때는 `HelpOverlay.tsx` 도 함께 업데이트하세요.
+Ink 컴포넌트는 `packages/tui/src/components/`(`charts`/`display`/`feedback`/`layout`/`nav`/`overlays`/`primitives`/`signature`)와 `packages/tui/src/screens/` 로 분리되어 있습니다.
+키바인딩을 변경할 때는 `packages/tui/src/components/overlays/HelpOverlay.tsx` 도 함께 업데이트하세요.
 `bun run tui` 로 직접 띄워 검증한 뒤 `ink-testing-library` 로 스냅샷 테스트를 추가합니다.
 
 ---
@@ -431,27 +448,33 @@ Ink 컴포넌트는 `packages/tui/src/components/` 와 `screens/` 로 분리되�
 ```
 docs/                              ← 사용자·외부 대상 문서
 ├── install-guide.md
-├── examples/                      ← 훅 settings.json 예제
-└── architecture/                  ← index.md, architecture.md, schema/, images/
+├── examples/                      ← 훅 settings.json 예제 (full / minimal)
+├── prototypes/ · release-notes/ · research/
+└── architecture/                  ← index.md, architecture.md, contributing.md,
+                                      database.md, migrations.md, hooks-integration.md,
+                                      data-flow.md, api-http.md, cli.md, configuration.md,
+                                      deployment.md, metrics-analytics.md, tui.md,
+                                      web-dashboard.md, troubleshooting.md, schema/, images/
 
 .claude/                           ← Claude Code 메타
-├── .tmp/
-│   └── logs/                      ← 진단 로그 (DIAG ON 시: model-trace.log, hook-payload.jsonl, proxy-payload.jsonl)
+├── .tmp/logs/                     ← 진단 로그 (DIAG ON 시: model-trace.log,
+│                                     hook-payload.jsonl, proxy-payload.jsonl)
+├── docs/
+│   ├── plans/<feature>/           ← 기능별 plan/adr/tasks
+│   └── specs/<feature>/           ← 기능별 spec
+├── skills/                        ← commit, data-analyst
 ├── worktrees/                     ← git worktree 작업 공간
+├── settings.json                  ← 프로젝트 설정
 └── settings.local.json            ← 로컬 설정 오버라이드 (git 미추적)
 ```
 
 ### 9.2 어떤 문서를 어디에 쓰는가
 
-| 문서 종류 | 위치 | 스킬 |
-|-----------|------|-----------|
-| 아키텍처(전체) | `docs/architecture/architecture.md` | `doc-spec` |
-| 기능별 plan | `.claude/docs/plans/<feature>/plan.md` | `doc-planning` |
-| 기능별 ADR | `.claude/docs/plans/<feature>/adr.md` | `doc-adr` |
-| 기능별 tasks | `.claude/docs/plans/<feature>/tasks.md` | `doc-tasks` |
-| 재사용 프롬프트 | `.claude/docs/prompts/<feature>/{tasks,agents}/<이름>.md` | (수동) |
-
-> `docs/planning/` 은 초기 개발 레거시 — **수정 금지**. 새 ADR 은 `.claude/docs/plans/<feature>/adr.md` 에 작성합니다.
+| 문서 종류 | 위치 |
+|-----------|------|
+| 아키텍처(전체) | `docs/architecture/architecture.md` (자동 현행화 대상은 `docs/architecture.md`, [§9.4](#94-자동-문서-현행화-post-push) 참조) |
+| 기능별 plan / ADR / tasks | `.claude/docs/plans/<feature>/` |
+| 기능별 spec | `.claude/docs/specs/<feature>/` |
 
 ### 9.3 작성 트리거 (`CLAUDE.md` 인용)
 
@@ -462,11 +485,25 @@ docs/                              ← 사용자·외부 대상 문서
 ### 9.4 자동 문서 현행화 (post-push)
 
 `packages/**` 또는 `hooks/**` 변경을 push 하면 `.githooks/post-push` 가 동작합니다.
-변경 diff (최대 200줄) 와 `.githooks/doc-sync-prompt.md` 를 `claude -p --dangerously-skip-permissions` 로 실행합니다.
-`docs/architecture/architecture.md` / `README.md` 가 수정되면 `[skip-doc-sync]` 마커를 포함한 커밋·푸시가 자동 수행됩니다 (재귀 차단용).
 
-> 자동화 대상은 위 두 파일로 한정됩니다.
-> 기능별 ADR / plan / tasks 는 `doc-*` 스킬로 수동 관리하세요.
+```mermaid
+flowchart TD
+    A[git push] --> B{"직전 커밋에<br/>[skip-doc-sync]?"}
+    B -->|예| Z[스킵]
+    B -->|아니오| C{packages/** 또는<br/>hooks/** 변경?}
+    C -->|아니오| Z
+    C -->|예| D{claude CLI 존재?}
+    D -->|아니오| Z
+    D -->|예| E[doc-sync-prompt.md + diff·통계·최근 커밋<br/>→ claude -p --dangerously-skip-permissions]
+    E --> F{docs/architecture.md /<br/>README.md 변경됨?}
+    F -->|예| G["커밋 docs: ... [skip-doc-sync] → push"]
+    F -->|아니오| H[변경 없음 종료]
+```
+
+- 변경 diff 는 `packages/**`·`hooks/**` 한정 최대 200줄, diff 통계는 최대 40줄까지 프롬프트에 삽입됩니다.
+- 자동 커밋·push 대상 경로는 `docs/architecture.md` 와 `README.md` 입니다. `[skip-doc-sync]` 마커로 재귀 push 를 차단합니다.
+- `doc-sync-prompt.md` 는 `docs/planning/` 하위를 절대 수정하지 말라고 명시합니다 (해당 디렉터리는 현재 리포에 존재하지 않음).
+- 기능별 ADR / plan / tasks 는 자동화 대상이 아니며 `.claude/docs/plans/<feature>/` 에서 수동 관리합니다.
 
 ---
 
@@ -516,62 +553,50 @@ feat(cache-donut): 캐시 비율 도넛에 호버 툴팁 추가
 
 ### 10.4 .githooks 동작 요약
 
-`post-push` 훅은 `git push` 직후 `packages/**` 또는 `hooks/**` 변경이 감지되면 `docs/architecture/architecture.md` · `README.md` 를 자동 현행화합니다.
+`post-push` 훅은 `git push` 직후 `packages/**` 또는 `hooks/**` 변경이 감지되면 `docs/architecture.md` · `README.md` 를 자동 현행화합니다 (상세 흐름은 [§9.4](#94-자동-문서-현행화-post-push)).
 
 - 재귀 방지 마커: `[skip-doc-sync]`
-- 일시 비활성화: `git -c core.hooksPath=/dev/null push`
+- 일시 비활성화: `git -c core.hooksPath=/dev/null push` 또는 `git config --unset core.hooksPath`
 
 ### 10.5 Pull Request 절차
 
 1. fork 의 feature 브랜치를 push.
 2. PR 생성. 제목은 한국어 커밋 메시지와 동일 톤(50자 이내).
-3. 본문에 **변경 요약(3~5줄)**, **동기/컨텍스트**, **테스트 결과**(`bun test`, `bun run typecheck`), **스크린샷/녹화**(UI 변경 시), **연관 ADR/plan 링크**(예: `.claude/docs/plans/cache-panel/adr.md`)를 포함.
+3. 본문에 **변경 요약(3~5줄)**, **동기/컨텍스트**, **테스트 결과**(`bun test`, `bun run typecheck`), **스크린샷/녹화**(UI 변경 시), **연관 plan/spec 링크**(예: `.claude/docs/plans/<feature>/plan.md`)를 포함.
 4. 본문 끝에 [PR 체크리스트](#12-pr-체크리스트)를 복사·체크.
 5. 머지 방식은 **squash merge** 권장(커밋 그래프 단순화).
 
 ---
 
-## 11. Claude Code 스킬·에이전트 카탈로그
+## 11. Claude Code 스킬·MCP
 
-이 저장소는 `.claude/skills/` 와 `.claude/agents/` 에 기여 워크플로우를 자동화하는 스킬·에이전트를 두고 있습니다. **각 요청 유형에 매핑된 스킬을 그대로 따르는 것이 권장 절차**입니다.
+이 저장소는 `.claude/skills/` 에 기여 워크플로우용 스킬을 두고 있습니다. 각 요청 유형에 매핑된 스킬을 그대로 따르는 것이 권장 절차입니다. (별도 `.claude/agents/` 서브에이전트 디렉터리는 두지 않습니다.)
 
 ### 11.1 스킬 (`.claude/skills/`)
 
-| 스킬 | 트리거 | 책임 |
+| 스킬 | 트리거 예시 | 책임 |
 |------|---------------|-----------|
-| `commit` | "커밋해줘" | Conventional Commits + Tidy First 로 자동 분리 커밋 |
-| `doc-planning` | "plan 문서" | feature 단위 `plan.md` 작성 |
-| `doc-adr` | "ADR 추가" | feature 단위 `adr.md` 작성 |
-| `doc-tasks` | "Task 완료" | feature 단위 `tasks.md` + JSON 인덱스 |
-| `doc-spec` | "아키텍처 문서" | `docs/architecture/architecture.md` 현행화 |
-| `dev-orchestrator` | "전문가 회의" | plan → ADR → tasks → 실행 전체 조율 |
-| `dev-verify` | "검증해줘" | dev-orchestrator 결과를 코드/Playwright 검증 |
-| `data-analyst` | "테이블 추가", "마이그레이션" | SQLite 스키마·집계·훅 데이터 흐름 |
-| `ui-designer` | "디자인", "UI", "화면" 등 | UI/UX 디자이너 (4단계 워크플로우 강제) |
-| `cc-docs-refactor` | "SKILL.md 수정" | Claude Code 메타 문서 리팩터링 |
+| `commit` | "커밋해줘", "git 커밋해줘" | Conventional Commits + Tidy First 로 자동 분리 커밋 (model: haiku) |
+| `data-analyst` | "테이블 추가", "마이그레이션", "쿼리 최적화", "통계 개선" | SQLite 스키마·집계·훅 데이터 흐름 분석 및 변경 |
 
-### 11.2 서브에이전트 (`.claude/agents/`)
-
-| 에이전트 | 위임 스킬 | 담당 |
-|----------|-----------|------|
-| `data-engineer` | `data-analyst` | DB·마이그레이션·쿼리·훅 스크립트 (Web/TUI 디자인 ✗) |
-| `designer` | `doc-planning` → `doc-adr` → `doc-tasks` → `ui-designer` | 모든 UI/UX (DB·서버 API ✗) |
-
-### 11.3 매핑 가이드 (요청 유형 → 권장 워크플로우)
+### 11.2 매핑 가이드 (요청 유형 → 권장 워크플로우)
 
 | 작업 유형 | 권장 흐름 |
 |-----------|-----------|
-| 새 컬럼/테이블 추가 | `data-engineer` 에이전트 → `data-analyst` Phase 1~5 |
-| 통계 쿼리 개선 | `data-analyst` 스킬 단독 |
-| 새 화면/패널 추가 | `designer` 에이전트 → doc-planning → doc-adr → doc-tasks → ui-designer |
-| 메타 문서 정리 | `cc-docs-refactor` 스킬 |
-| 일반 기능 개발 | 복잡도 ≥ 3 → `dev-orchestrator` / 단순 → `doc-planning` + 직접 구현 |
-| 기능 검증 | 구현 후 `dev-verify` 스킬 |
+| 새 컬럼/테이블 추가 · 마이그레이션 | `data-analyst` 스킬 |
+| 통계 쿼리 개선 · 데이터 흐름 분석 | `data-analyst` 스킬 |
 | 커밋 | 모든 경우 `commit` 스킬 |
+| 기능별 plan/adr/tasks/spec | `.claude/docs/plans/<feature>/` · `.claude/docs/specs/<feature>/` 에 수동 작성 |
 
-### 11.4 `sequential-thinking` MCP
+### 11.3 허용된 MCP 서버
 
-> 검토 요청이나 상세 분석 요청에는 반드시 **`sequential-thinking` MCP** 를 사용해 체계적으로 분석합니다 (`CLAUDE.md`). 리뷰·심층 분석성 요청은 `mcp__sequential-thinking__sequentialthinking` 도구를 우선 호출하세요.
+`.claude/settings.json` 의 `permissions.allow` 에 다음 MCP 가 사전 허용되어 있습니다.
+
+| MCP | 용도 |
+|-----|------|
+| `mcp__sequential-thinking__*` | 단계적 사고가 필요한 분석·리뷰 |
+| `mcp__context7__*` | 라이브러리 문서 조회 |
+| `mcp__playwright__*` | 웹 대시보드 브라우저 검증 |
 
 ---
 
@@ -598,28 +623,27 @@ PR 을 열기 전에 항목을 확인하세요. **아래 코드 블록을 그대
 
 **DB / 데이터 (해당 시)**
 
-- [ ] 마이그레이션 번호가 정확히 +1
+- [ ] 마이그레이션 번호가 마지막 + 1
 - [ ] 새 SQL 이 idempotent (`IF NOT EXISTS` 등)
 - [ ] 영향받는 쿼리·집계 테이블 재계산 검증
-- [ ] `data-analyst` 스킬 Phase 1~5 수행
+- [ ] `data-analyst` 스킬 사용
 
 **UI / UX (해당 시)**
 
-- [ ] `designer` 서브에이전트 (또는 동일 절차) 사용
-- [ ] `doc-planning` → `doc-adr` → `doc-tasks` 3종 문서 존재
-- [ ] 해당 플랫폼의 `screen-inventory.md` 현행화
+- [ ] 기존 렌더링 함수 재사용, 직접 HTML 작성 없음
+- [ ] 하드코딩 색상 없이 디자인 토큰만 사용
+- [ ] (Web) `packages/web/screen-inventory.md` 현행화
 
 **문서**
 
-- [ ] `docs/architecture/architecture.md` 영향 영역이 정확함 (post-push 신뢰 가능)
+- [ ] `docs/architecture/architecture.md` 영향 영역이 정확함
 - [ ] 새 메타 문서가 feature 명 컨벤션 준수
-- [ ] `docs/planning/` 레거시 건드리지 않음
 
 **커밋 · PR**
 
 - [ ] `commit` 스킬 사용 또는 동일 규칙으로 분리
 - [ ] Conventional Commits 형식 (`<type>(<scope>): <description>`)
-- [ ] PR 본문에 요약·동기·테스트 결과·연관 ADR 링크
+- [ ] PR 본문에 요약·동기·테스트 결과·연관 plan 링크
 - [ ] (UI) 스크린샷·녹화 포함
 
 ### 12.2 복사용 원본
@@ -641,25 +665,24 @@ PR 을 열기 전에 항목을 확인하세요. **아래 코드 블록을 그대
 - [ ] 버그 수정에 회귀 테스트(`*-regression.test.ts`) 추가
 
 **DB / 데이터 (해당 시)**
-- [ ] 마이그레이션 번호가 정확히 +1
+- [ ] 마이그레이션 번호가 마지막 + 1
 - [ ] 새 SQL 이 idempotent (`IF NOT EXISTS` 등)
 - [ ] 영향받는 쿼리/집계 테이블 재계산 검증
-- [ ] `data-analyst` 스킬 Phase 1~5 수행
+- [ ] `data-analyst` 스킬 사용
 
 **UI / UX (해당 시)**
-- [ ] `designer` 서브에이전트(또는 동일 절차) 사용
-- [ ] `doc-planning` → `doc-adr` → `doc-tasks` 3종 문서 존재
-- [ ] 해당 플랫폼의 `screen-inventory.md` 현행화
+- [ ] 기존 렌더링 함수 재사용, 직접 HTML 작성 없음
+- [ ] 하드코딩 색상 없이 디자인 토큰만 사용
+- [ ] (Web) `packages/web/screen-inventory.md` 현행화
 
 **문서**
-- [ ] `docs/architecture/architecture.md` 영향 영역이 정확함 (post-push 신뢰 가능)
+- [ ] `docs/architecture/architecture.md` 영향 영역이 정확함
 - [ ] 새 메타 문서가 feature 명 컨벤션 준수
-- [ ] `docs/planning/` 레거시 건드리지 않음
 
 **커밋 · PR**
 - [ ] `commit` 스킬 사용 또는 동일 규칙으로 분리
 - [ ] Conventional Commits 형식 (`<type>(<scope>): <description>`)
-- [ ] PR 본문에 요약·동기·테스트 결과·연관 ADR 링크
+- [ ] PR 본문에 요약·동기·테스트 결과·연관 plan 링크
 - [ ] (UI) 스크린샷/녹화 포함
 ```
 
@@ -668,10 +691,13 @@ PR 을 열기 전에 항목을 확인하세요. **아래 코드 블록을 그대
 ## 참고 링크
 
 - `CLAUDE.md` — 프로젝트 최상위 개발 원칙
-- `docs/architecture/architecture.md` — 현행 아키텍처 (자동 현행화)
+- [`index.md`](./index.md) — 아키텍처 문서 인덱스
+- [`architecture.md`](./architecture.md) — 현행 아키텍처 전체
+- [`database.md`](./database.md) · [`migrations.md`](./migrations.md) — 스키마·마이그레이션
+- [`hooks-integration.md`](./hooks-integration.md) · [`data-flow.md`](./data-flow.md) — 훅 수집·데이터 흐름
+- [`web-dashboard.md`](./web-dashboard.md) · [`tui.md`](./tui.md) · [`cli.md`](./cli.md) — UI·CLI
 - `docs/install-guide.md` — 사용자 설치 가이드
-- `.claude/skills/` — 사용 가능한 스킬 카탈로그
-- `.claude/agents/` — 사용 가능한 서브에이전트 카탈로그
+- `.claude/skills/` — 사용 가능한 스킬 카탈로그 (`commit`, `data-analyst`)
 - `.githooks/post-push`, `.githooks/doc-sync-prompt.md` — 자동 문서 현행화 훅
 
 기여 과정에서 막히는 부분이 있다면 PR 초안을 먼저 올리고 댓글로 질문해 주세요.
