@@ -119,8 +119,12 @@ app.whenReady().then(async () => {
   buildAppMenu();
 
   try {
-    const port = parseInt(process.env.SPGLASS_PORT || `${DEFAULT_PORT}`, 10);
-    const host = process.env.SPGLASS_HOST || DEFAULT_HOST;
+    // env 별칭: 신철자 SPYGLASS_* 우선, 구철자 SPGLASS_* 폴백 (server config 와 동일 규약).
+    const port = parseInt(
+      process.env.SPYGLASS_PORT || process.env.SPGLASS_PORT || `${DEFAULT_PORT}`,
+      10,
+    );
+    const host = process.env.SPYGLASS_HOST || process.env.SPGLASS_HOST || DEFAULT_HOST;
     const result = await ensureServer({ port, host });
     serverOrigin = `http://${result.host}:${result.port}`;
 

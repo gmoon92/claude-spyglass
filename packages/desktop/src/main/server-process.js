@@ -102,6 +102,9 @@ function resolveBunBin() {
 function resolveServerLaunch(cfg) {
   const baseEnv = {
     ...process.env,
+    // 신철자(서버가 우선 읽음) + 구철자 별칭(구버전 server 바이너리 호환) 둘 다 주입.
+    SPYGLASS_PORT: String(cfg.port),
+    SPYGLASS_HOST: cfg.host,
     SPGLASS_PORT: String(cfg.port),
     SPGLASS_HOST: cfg.host,
   };
