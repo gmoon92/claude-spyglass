@@ -315,6 +315,14 @@
 }
 .meta-docs-flow-region .node .icon svg { width: 16px; height: 16px; }
 
+/* 아이콘 kind별 색조 (circle-color-consistency-analysis D3) — sub-type family SSoT 와 일치.
+ *   노드 우측 .ds-chip 라벨 톤(data-tone)과 같은 색을 아이콘에도 부여해 노드 내부 일관성 확보.
+ *   command 은 D2 결정에 따라 skill 금색과 동일. tool kind 는 F4 미결정이라 기본 회색 유지. */
+.meta-docs-flow-region .node[data-kind="agent"] .icon   { color: var(--sub-type-agent-color); }
+.meta-docs-flow-region .node[data-kind="skill"] .icon,
+.meta-docs-flow-region .node[data-kind="command"] .icon { color: var(--sub-type-skill-color); }
+.meta-docs-flow-region .node[data-kind="mcp"] .icon     { color: var(--sub-type-mcp-color); }
+
 .meta-docs-flow-region .node .body { line-height: 1.25; min-width: 0; flex: 1; }
 .meta-docs-flow-region .node .body .title-row {
   display: flex; align-items: center; gap: 6px;

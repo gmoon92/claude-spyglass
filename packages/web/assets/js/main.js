@@ -503,9 +503,9 @@ function findChipTarget(key) {
 /**
  * request id 로 활성 턴 log-pane 안의 정확한 행을 찾는다 (그룹 칩 우선 경로).
  *
- * 사용처: NEUTRAL 윈도우 묶음 칩(turn-views.js#chipHtml isGroup 분기)이
+ * 사용처: 모든 도구 칩(turn-views.js#chipHtml — 그룹/agent/mcp/일반)이
  *   `data-target-request-id="<items[0].id>"` 를 부착 — chip-key 중복으로 인한
- *   오점프(같은 도구명이 그룹 앞쪽에 또 있는 경우)를 차단한다.
+ *   오점프(같은 도구명이 턴 앞쪽에 또 있는 경우)를 차단한다.
  *
  * @param {string} rid request.id
  * @returns {Element|null}

@@ -68,9 +68,15 @@ const KIND_TO_ICON = {
 const KIND_TO_TONE = {
   skill:   'skill',
   agent:   'agent',
-  tool:    'task',
+  // 일반 tool 은 neutral (circle-color-consistency-analysis F4). 이전 'task'(호박)는 task family
+  //   정체성을 잘못 빌려 쓴 것 — 로그 페이지의 "일반 도구 칩 = 중립 회색(특수 sub-type 만 색 부여)"
+  //   철학과 어긋났다. chip.css 에 정의된 neutral 톤으로 교정 (전용 토큰 신설 불필요).
+  tool:    'neutral',
   mcp:     'mcp',
-  command: 'command',
+  // command 은 chip.css 에 전용 톤이 없다. render/badges.js 의 SlashCommand→Skill 합류 규칙
+  //   (circle-color-consistency-analysis D2)에 따라 Skill 금색 톤을 재사용한다 —
+  //   'command' 톤을 쓰면 ds-chip 매칭 룰이 없어 무색 fallback 되는 결함(F3) 방지.
+  command: 'skill',
 };
 const KIND_TO_LABEL = {
   skill:   'SKILL',

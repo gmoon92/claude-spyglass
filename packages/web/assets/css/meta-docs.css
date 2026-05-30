@@ -394,8 +394,10 @@
 }
 
 /* ── 타입 뱃지 ───────────────────────────────────────────────────────── *
- * 턴 뷰 Agent/Skill 칩과 동일 시각 언어 (badges.css `.tool-icon-agent` SSoT +
- * turn-view.css `.tool-chip` / `.agent-chip` 재사용). agent/skill/command 모두 동일 주황 톤.
+ * 턴 뷰 Agent/Skill 칩과 동일 시각 언어 (turn-view.css `.tool-chip` / `.tool-chip-{kind}` /
+ * `.agent-chip` 재사용). 색은 타입별 대표색으로 분리됨 (circle-color-consistency-analysis D1/D2):
+ *   agent → .tool-chip-agent (주황) / skill·command → .tool-chip-skill (금색).
+ * 색 SSoT 는 meta-docs-view.js#metaDocTypeBadge 가 부여하는 .tool-chip-{kind} modifier.
  * 여기서는 Behavior Definitions 표 컨텍스트에 맞춘 미세 조정만 수행 (폰트 굵기·자간) — 색상은
  * 절대 덮어쓰지 않는다 (SSoT 보존).
  */
