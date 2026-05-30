@@ -578,7 +578,7 @@
         "full": {
           "label": "권장 (Full)",
           "desc": "Claude Code 의 모든 라이프사이클 이벤트를 추적해 가장 풍부한 시각화·통계를 얻습니다.",
-          "tooltip": "Pre/Post/SessionStart/Stop/SubagentStart/SubagentStop/PreCompact/PostCompact 등 27개 이벤트를 모두 등록합니다. 가장 정밀한 분석이 필요한 일반 사용자에게 권장."
+          "tooltip": "Pre/Post/SessionStart/Stop/SubagentStart/SubagentStop/PreCompact/PostCompact 등 30개 이벤트를 모두 등록합니다. 가장 정밀한 분석이 필요한 일반 사용자에게 권장."
         },
         "minimal": {
           "label": "최소 (Minimal)",

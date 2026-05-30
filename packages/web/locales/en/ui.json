@@ -578,7 +578,7 @@
         "full": {
           "label": "Recommended (Full)",
           "desc": "Track every Claude Code lifecycle event for the richest visualizations and analytics.",
-          "tooltip": "Registers all 27 events: Pre/Post/SessionStart/Stop/SubagentStart/SubagentStop/PreCompact/PostCompact, etc. Best for users who want maximum analysis fidelity."
+          "tooltip": "Registers all 30 events: Pre/Post/SessionStart/Stop/SubagentStart/SubagentStop/PreCompact/PostCompact, etc. Best for users who want maximum analysis fidelity."
         },
         "minimal": {
           "label": "Minimal",

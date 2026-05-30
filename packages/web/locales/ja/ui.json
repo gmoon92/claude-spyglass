@@ -578,7 +578,7 @@
         "full": {
           "label": "推奨 (Full)",
           "desc": "Claude Code のすべてのライフサイクルイベントを追跡し、最も豊富な可視化・統計を得られます。",
-          "tooltip": "Pre/Post/SessionStart/Stop/SubagentStart/SubagentStop/PreCompact/PostCompact など 27 イベントすべてを登録。最も精密な分析が必要な一般ユーザーに推奨。"
+          "tooltip": "Pre/Post/SessionStart/Stop/SubagentStart/SubagentStop/PreCompact/PostCompact など 30 イベントすべてを登録。最も精密な分析が必要な一般ユーザーに推奨。"
         },
         "minimal": {
           "label": "最小 (Minimal)",

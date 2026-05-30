@@ -69,7 +69,7 @@ export interface HookDetectResult {
  *
  *   minimal 프로필(`docs/examples/settings.hooks.minimal.json`) 의 6개 + 자주 쓰이는 4개.
  *   사용자가 minimal 만 깔았어도 핵심 6개는 *모두* expected:true 로 등록 상태가 정확히 표시됨.
- *   full 프로필의 27개 전부는 UI 가 너무 빽빽해지므로 *핵심 셋* 만 유지 — 사용자가 자세히
+ *   full 프로필의 30개 전부는 UI 가 너무 빽빽해지므로 *핵심 셋* 만 유지 — 사용자가 자세히
  *   보고 싶으면 settings.json 을 직접 열어 확인 가능.
  */
 const EXPECTED_EVENTS: ReadonlyArray<string> = [
