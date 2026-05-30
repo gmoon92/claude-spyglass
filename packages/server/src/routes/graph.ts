@@ -38,6 +38,8 @@ import {
   getLadybugClient,
   bfsTurnsNear,
   getUnifiedFlow,
+  resurrectDeadLetters,
+  readDeadLetters,
   LadybugUnavailableError,
   type LadybugClient,
   type FlowBfsResult,
@@ -66,6 +68,23 @@ export async function graphRouter(req: Request, db: Database): Promise<Response 
   const method = req.method;
 
   if (!path.startsWith('/api/graph/')) return null;
+
+  // DLQ 복구 — POST 전용 (운영자 명시 호출).
+  if (path === '/api/graph/dlq/resurrect') {
+    if (method !== 'POST') {
+      return jsonResponse({ success: false, error: 'Method not allowed — use POST' }, 405);
+    }
+    return await handleDlqResurrect(req, db);
+  }
+
+  // DLQ 목록 조회 — GET.
+  if (path === '/api/graph/dlq') {
+    if (method !== 'GET') {
+      return jsonResponse({ success: false, error: 'Method not allowed — use GET' }, 405);
+    }
+    return handleDlqList(url, db);
+  }
+
   if (method !== 'GET') {
     return jsonResponse({ success: false, error: `Method ${method} not allowed on graph routes` }, 405);
   }
@@ -693,6 +712,61 @@ function reroutedEdges(
     }
   }
   return [...seen.values()];
+}
+
+// =============================================================================
+// /api/graph/dlq — DLQ 목록 조회 + 수동 복구
+// =============================================================================
+
+/**
+ * GET /api/graph/dlq?limit=N
+ *
+ * dead=1 로 격리된 outbox row 목록 반환. status 진단용.
+ * query param:
+ *   limit: 최대 반환 건수 (기본 50, 상한 500).
+ */
+function handleDlqList(url: URL, db: Database): Response {
+  const limit = Math.min(parseIntParam(url.searchParams.get('limit'), 50), 500);
+  const letters = readDeadLetters(db, limit);
+  return jsonResponse({ success: true, data: { deadLetters: letters, count: letters.length } });
+}
+
+/**
+ * POST /api/graph/dlq/resurrect
+ *
+ * dead=1 row 를 dead=0 으로 reset 해 다음 tick 에서 재처리되도록 한다.
+ * **운영자 명시 호출 전용** — 자동 스케줄러에서 호출하지 말 것.
+ *
+ * body (optional JSON):
+ *   { ids: number[] }  — 생략 시 전체 dead=1 복구.
+ *
+ * cold rebuild 로는 복구 불가(throwAwayAndRebuild 제거됨) — 이 엔드포인트가 유일한
+ * dead=1 → dead=0 복구 경로다.
+ */
+async function handleDlqResurrect(req: Request, db: Database): Promise<Response> {
+  let ids: number[] | undefined;
+  try {
+    const text = await req.text();
+    if (text.trim().length > 0) {
+      const body = JSON.parse(text) as unknown;
+      if (
+        typeof body === 'object' &&
+        body !== null &&
+        'ids' in body &&
+        Array.isArray((body as { ids: unknown }).ids)
+      ) {
+        ids = ((body as { ids: unknown[] }).ids).filter((x): x is number => typeof x === 'number');
+      }
+    }
+  } catch {
+    return jsonResponse({ success: false, error: 'Invalid JSON body' }, 400);
+  }
+
+  const resurrected = resurrectDeadLetters(db, ids);
+  return jsonResponse({
+    success: true,
+    data: { resurrected, message: `${resurrected} row(s) reset to dead=0 — will be retried on next tick` },
+  });
 }
 
 // =============================================================================

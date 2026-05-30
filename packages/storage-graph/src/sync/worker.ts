@@ -309,3 +309,76 @@ function readDeadLetterCount(): number {
     return 0;
   }
 }
+
+// =============================================================================
+// DLQ 복구 경로 (R1) — 운영자 명시 호출 전용
+// =============================================================================
+
+/**
+ * DLQ(dead=1) row 를 dead=0, attempts=0, last_error=NULL 로 reset 해 다음 tick 에서
+ * 재처리되도록 한다.
+ *
+ * **운영자 명시 호출 전용** — 자동 스케줄러/타이머에 연결하지 말 것.
+ * 독성 row 가 같은 원인으로 즉시 재격리되는 루프를 방지하기 위해, reset 은 반드시
+ * 운영자가 원인을 확인하고 수동으로 호출해야 한다.
+ *
+ * **cold rebuild 로는 복구 불가** — `throwAwayAndRebuild` 가 제거됐으므로 이 함수가
+ * dead=1 row 를 복구할 수 있는 유일한 경로다. SQLite SSoT(requests/sessions) 에
+ * 원천이 남아 있으므로 재처리 시 idempotent MERGE 로 데이터 손상 0.
+ *
+ * @param db  SQLite Database 인스턴스.
+ * @param ids 복구할 row id 목록. 생략 시 dead=1 전체 복구.
+ * @returns   실제로 변경된 행 수.
+ */
+export function resurrectDeadLetters(db: Database, ids?: number[]): number {
+  if (ids !== undefined && ids.length === 0) return 0;
+
+  if (ids !== undefined) {
+    const placeholders = ids.map(() => '?').join(', ');
+    // bun:sqlite SQLQueryBindings 타입 — number[] 는 허용되나 spread 시 타입 좁힘 필요.
+    db.prepare(
+      `UPDATE kuzu_outbox
+          SET dead = 0, attempts = 0, last_error = NULL
+        WHERE dead = 1 AND id IN (${placeholders})`,
+    ).run(...(ids as Parameters<ReturnType<Database['prepare']>['run']>));
+  } else {
+    db.prepare(
+      `UPDATE kuzu_outbox
+          SET dead = 0, attempts = 0, last_error = NULL
+        WHERE dead = 1`,
+    ).run();
+  }
+
+  // bun:sqlite 의 Database.run() 은 변경 행 수를 직접 반환하지 않으므로 changes 를 조회.
+  const result = db.prepare('SELECT changes() AS c').get() as { c: number } | undefined;
+  return result?.c ?? 0;
+}
+
+/** readDeadLetters 반환 행 타입. */
+export interface DeadLetterRow {
+  id: number;
+  source: string;
+  event_id: string;
+  attempts: number;
+  last_error: string | null;
+  ts: number;
+}
+
+/**
+ * DLQ(dead=1) 격리된 outbox row 목록 조회 — 운영 진단/status 용.
+ *
+ * @param db    SQLite Database 인스턴스.
+ * @param limit 최대 반환 행 수.
+ * @returns     dead=1 row 목록 (id ASC).
+ */
+export function readDeadLetters(db: Database, limit: number): DeadLetterRow[] {
+  return db
+    .prepare(
+      `SELECT id, source, event_id, attempts, last_error, ts
+         FROM kuzu_outbox
+        WHERE dead = 1
+        ORDER BY id ASC
+        LIMIT ?`,
+    )
+    .all(limit) as DeadLetterRow[];
+}

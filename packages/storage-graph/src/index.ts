@@ -93,7 +93,10 @@ export {
   startGraphSyncWorker,
   stopGraphSyncWorker,
   getSyncWorkerStatus,
+  resurrectDeadLetters,
+  readDeadLetters,
   type SyncWorkerStatus,
+  type DeadLetterRow,
 } from './sync/worker';
 
 // graph 캐시 wipe 시 cursor singleton 도 함께 초기화하기 위한 진입점.
