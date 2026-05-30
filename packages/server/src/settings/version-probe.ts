@@ -126,7 +126,7 @@ const SQLITE3_TOOL_DEF = {
   bin: 'sqlite3',
   args: ['--version'],
   re: /(\d+\.\d+(?:\.\d+)?)/,
-  installHint: '# 선택: brew install sqlite (DB 직접 조회용 CLI)',
+  installHint: '# optional: brew install sqlite (for direct DB CLI queries)',
 };
 
 // =============================================================================
