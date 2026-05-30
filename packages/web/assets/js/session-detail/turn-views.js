@@ -39,6 +39,7 @@
  */
 
 import { escHtml, fmtToken, fmtTime } from '../formatters.js';
+import { asEl } from '../dom.js';
 import { svgDiamond } from '../design-system/icons/diamond.js';
 import { toolIconHtml, _promptCache, togglePromptExpand } from '../renderers.js';
 import { subTypeOf } from '../request-types.js';
@@ -395,7 +396,7 @@ export function renderLogPane(turn) {
   // 1) 현재 펼친 행 id 들 캡처 (보통 0~1개, 정책상 단일 펼침이지만 안전하게 배열).
   const expandedIds = [];
   body.querySelectorAll('[data-expand-for]').forEach(el => {
-    const id = el.dataset.expandFor;
+    const id = asEl(el).dataset.expandFor;
     if (id) expandedIds.push(id);
   });
 
@@ -451,7 +452,7 @@ export function jumpToChipRow(key) {
   if (!key) return;
   const body = document.getElementById('turnLogBody');
   if (!body) return;
-  const tr = body.querySelector(`tr[data-chip-key="${CSS.escape(key)}"]`);
+  const tr = /** @type {HTMLTableRowElement|null} */ (body.querySelector(`tr[data-chip-key="${CSS.escape(key)}"]`));
   flashRow(tr);
 }
 
@@ -1050,7 +1051,8 @@ function attachHaystackToTurnLines(turns, newRemindersByTurn) {
   const spineEl = document.getElementById('turnSpine');
   if (!spineEl) return;
   const byId = new Map(turns.map(t => [t.turn_id, t]));
-  spineEl.querySelectorAll('.turn-line[data-turn]').forEach(el => {
+  spineEl.querySelectorAll('.turn-line[data-turn]').forEach(node => {
+    const el = asEl(node);
     const id = el.getAttribute('data-turn');
     const turn = byId.get(id);
     if (!turn) return;
@@ -1071,7 +1073,8 @@ export function applyTurnCardSearch(query) {
   const q = (query || '').toLowerCase();
   // 신 모델 — turn-spine 안 .turn-line[data-turn]
   const lines = document.querySelectorAll('#turnSpine .turn-line[data-turn]');
-  lines.forEach(line => {
+  lines.forEach(node => {
+    const line = asEl(node);
     if (!q) { line.style.display = ''; return; }
     const haystack = line.dataset.searchHaystack || '';
     line.style.display = haystack.includes(q) ? '' : 'none';
@@ -1079,18 +1082,20 @@ export function applyTurnCardSearch(query) {
   // SPINE_ARROW 인접 처리: 인접 마커가 숨겨질 때 spine-arrow도 함께 숨김.
   // (구조상 turn-line 다음 형제 svg.spine-arrow가 매칭됨)
   const arrows = document.querySelectorAll('#turnSpine .spine-arrow');
-  arrows.forEach(svg => {
+  arrows.forEach(node => {
+    const svg = asEl(node);
     if (!q) { svg.style.display = ''; return; }
     const prev = svg.previousElementSibling;
     const next = svg.nextElementSibling;
-    const prevVisible = prev && prev.style.display !== 'none';
-    const nextVisible = next && next.style.display !== 'none';
+    const prevVisible = prev && asEl(prev).style.display !== 'none';
+    const nextVisible = next && asEl(next).style.display !== 'none';
     svg.style.display = (prevVisible && nextVisible) ? '' : 'none';
   });
 
   // 폴백 — 구버전 turn-card 가 아직 있을 수 있는 환경 호환.
   const cards = document.querySelectorAll('#turnUnifiedBody .turn-card[data-card-turn-id]');
-  cards.forEach(card => {
+  cards.forEach(node => {
+    const card = asEl(node);
     if (!q) { card.style.display = ''; return; }
     const haystack = card.dataset.searchHaystack || '';
     card.style.display = haystack.includes(q) ? '' : 'none';

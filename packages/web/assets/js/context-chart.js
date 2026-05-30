@@ -1,6 +1,7 @@
 // Accumulated Tokens Chart — Canvas 기반 턴별 누적 토큰 라인 차트
 import { DETAIL_FILTER_CHANGED } from './events.js';
 import { formatContextWindowLabel, DEFAULT_CONTEXT_WINDOW } from './context-window.js';
+import { asEl } from './dom.js';
 
 /**
  * 차트 스케일·풋터·툴팁에 쓰일 한도값을 턴 배열에서 결정.
@@ -126,7 +127,7 @@ export function initContextChart() {
       setTimeout(() => target.classList.remove('row-flash'), 1500);
     });
     // 시각 어포던스 — 풋터에 hover 시 cursor: pointer
-    _footer.style.cursor = 'pointer';
+    asEl(_footer).style.cursor = 'pointer';
     _footer.setAttribute('role', 'button');
     _footer.setAttribute('tabindex', '0');
   }

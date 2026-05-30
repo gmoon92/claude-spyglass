@@ -56,6 +56,7 @@ import {
 import { loadSession, abortCurrentSession } from './views/detail-view.js';
 import { renderToolCategoriesCard, resetToolCategoriesMode } from './obs-panel.js';
 import { initVersionCheck } from './version-check.js';
+import { asEl } from './dom.js';
 
 const STORAGE_KEY = 'spyglass:lastProject';
 
@@ -530,7 +531,7 @@ function flashChipTarget(el) {
   el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   el.classList.remove('row-highlight-flash');
   // eslint-disable-next-line no-unused-expressions — reflow 강제 (애니메이션 재시작)
-  void el.offsetWidth;
+  void asEl(el).offsetWidth;
   el.classList.add('row-highlight-flash');
   setTimeout(() => el.classList.remove('row-highlight-flash'), CHIP_FLASH_MS);
 }
@@ -552,7 +553,7 @@ function flashChipTarget(el) {
  * 칩 자체에 `tabindex="0"` / `role="button"` / `aria-label` 부여는 칩 빌더(turn-views.js)
  * 책임 (SSoT). 본 함수는 동작만 책임.
  *
- * @param {Element} chip `[data-chip-key]` 노드 (선택적으로 `data-target-request-id` 동반)
+ * @param {HTMLElement} chip `[data-chip-key]` 노드 (선택적으로 `data-target-request-id` 동반)
  */
 function handleChipActivation(chip) {
   const key = chip?.dataset?.chipKey || '';
@@ -567,9 +568,9 @@ function handleChipActivation(chip) {
   // 모든 log-pane 행 타깃 — 점프 후 상세 메시지 자동 펼치기.
   if (target.tagName === 'TR') {
     const preview = target.querySelector('[data-expand-id]');
-    const rid = preview?.dataset?.expandId;
-    if (rid && target.dataset.expanded !== rid) {
-      togglePromptExpand(rid, target);
+    const rid = asEl(preview)?.dataset?.expandId;
+    if (rid && asEl(target).dataset.expanded !== rid) {
+      togglePromptExpand(rid, asEl(target));
     }
   }
 }
@@ -587,23 +588,23 @@ function initChipActivationDelegation() {
   if (!root) return;
 
   root.addEventListener('click', (e) => {
-    const chip = e.target.closest('[data-chip-key]');
+    const chip = asEl(e.target).closest('[data-chip-key]');
     if (!chip) return;
     // log-pane 표 행(`tr`)은 행 자체에 chip-key가 박혀있어도 클릭 시 점프 동작을
     // 트리거하지 않는다 — 표 행 클릭은 prompt-expand 등 다른 핸들러의 영역.
     if (chip.tagName === 'TR') return;
     e.preventDefault();
     e.stopPropagation();
-    handleChipActivation(chip);
+    handleChipActivation(asEl(chip));
   });
 
   root.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
-    const chip = e.target.closest('[data-chip-key][role="button"]');
+    const chip = asEl(e.target).closest('[data-chip-key][role="button"]');
     if (!chip) return;
     if (chip.tagName === 'TR') return;
     e.preventDefault();
-    handleChipActivation(chip);
+    handleChipActivation(asEl(chip));
   });
 }
 
@@ -671,7 +672,7 @@ function patchCell(container, cellName, text) {
  */
 function patchActiveTurnFromSSE(req) {
   if (!req || !req.turn_id) return false;
-  const container = findActiveTurnContainer(req.turn_id);
+  const container = asEl(findActiveTurnContainer(req.turn_id));
   if (!container) return false;
 
   // 누적 합계가 컨테이너 dataset(`data-in-sum`, `data-out-sum`)으로 들어와 있으면 그 위에 누적한다.
@@ -722,9 +723,9 @@ function initEventDelegation() {
   //   [data-meta-subtab] 단일 SSoT — meta-docs-view.js의 setMetaSubTab이 가시성/aria/데이터 로드 일원화.
   //   meta-docs-flow ego-graph (2026-05-21 rev): 'flow' 탭 제거 — 흐름은 'docs' 탭 상단 영역으로 흡수.
   document.body.addEventListener('click', e => {
-    const tab = e.target.closest('[data-meta-subtab]');
+    const tab = asEl(e.target).closest('[data-meta-subtab]');
     if (!tab) return;
-    const which = tab.dataset.metaSubtab;
+    const which = asEl(tab).dataset.metaSubtab;
     if (which !== 'docs' && which !== 'tools') return;
     setMetaSubTab(which);
   });
@@ -742,15 +743,19 @@ function initEventDelegation() {
     if (getAppMode() !== 'metadocs' && getAppMode() !== 'settings') return;
     const ae = document.activeElement;
     const tag = ae?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || ae?.isContentEditable) return;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || (ae && asEl(ae).isContentEditable)) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     restorePrevState();
   }, { capture: true });
 
   document.getElementById('detailTabBar').addEventListener('click', e => {
-    const tab = e.target.closest('[data-tab]');
-    if (tab) { setDetailTab(tab.dataset.tab); setDetailView(tab.dataset.tab); }
+    const tab = asEl(e.target).closest('[data-tab]');
+    if (tab) {
+      const tabVal = asEl(tab).dataset.tab;
+      setDetailTab(tabVal);
+      setDetailView(/** @type {'log'|'llm'|'syslib'} */ (tabVal));
+    }
   });
 
   document.getElementById('retryBtn').addEventListener('click', manualRefresh);
@@ -789,9 +794,9 @@ function initEventDelegation() {
   document.getElementById('detailView').addEventListener('click', e => {
     // 턴 카드의 "API 페이로드" 액션 (deeplink pass) — toggle-card 가드보다 먼저 매칭해
     // 카드 펼침이 함께 발생하지 않도록 분기 + stopPropagation 불필요(return).
-    const payloadBtn = e.target.closest('[data-payload-ts]');
+    const payloadBtn = asEl(e.target).closest('[data-payload-ts]');
     if (payloadBtn) {
-      const ts = parseInt(payloadBtn.dataset.payloadTs, 10);
+      const ts = parseInt(asEl(payloadBtn).dataset.payloadTs, 10);
       if (Number.isFinite(ts)) openLlmInputForTurn(ts);
       return;
     }
@@ -800,32 +805,32 @@ function initEventDelegation() {
     //   레거시 [data-toggle-turn](접힘/펼침 카드)도 호환을 위해 함께 처리한다.
     //   활성 턴 전환 후 applyDetailFilter()를 호출해 필터 chip 카운트를 새 활성 턴 기준으로 재계산
     //   (turn-view-tab fix: "활성 턴 좁힘" 정책 — flat-view.js applyDetailFilter 참조).
-    const turnMarker = e.target.closest('.turn-line[data-turn]');
-    if (turnMarker) { toggleTurn(turnMarker.dataset.turn); applyDetailFilter(); return; }
-    const turnBtn  = e.target.closest('[data-toggle-turn]');
-    if (turnBtn) { toggleTurn(turnBtn.dataset.toggleTurn); applyDetailFilter(); return; }
+    const turnMarker = asEl(e.target).closest('.turn-line[data-turn]');
+    if (turnMarker) { toggleTurn(asEl(turnMarker).dataset.turn); applyDetailFilter(); return; }
+    const turnBtn  = asEl(e.target).closest('[data-toggle-turn]');
+    if (turnBtn) { toggleTurn(asEl(turnBtn).dataset.toggleTurn); applyDetailFilter(); return; }
 
-    if (e.target.closest('.turn-card-expanded')) {
-      const groupRow = e.target.closest('[data-toggle-group]');
+    if (asEl(e.target).closest('.turn-card-expanded')) {
+      const groupRow = asEl(e.target).closest('[data-toggle-group]');
       if (groupRow) {
         groupRow.classList.toggle('open');
         return;
       }
-      const promptEl = resolveExpandTarget(e.target);
+      const promptEl = asEl(resolveExpandTarget(asEl(e.target)));
       if (promptEl) {
         const container = promptEl.closest('tr') || promptEl.closest('.turn-row');
-        if (container) togglePromptExpand(promptEl.dataset.expandId, container);
+        if (container) togglePromptExpand(promptEl.dataset.expandId, asEl(container));
       }
       return;
     }
 
-    const cardBtn = e.target.closest('[data-toggle-card]');
-    if (cardBtn) { toggleCardExpand(cardBtn.dataset.toggleCard); return; }
+    const cardBtn = asEl(e.target).closest('[data-toggle-card]');
+    if (cardBtn) { toggleCardExpand(asEl(cardBtn).dataset.toggleCard); return; }
 
-    const promptEl = resolveExpandTarget(e.target);
+    const promptEl = asEl(resolveExpandTarget(asEl(e.target)));
     if (promptEl) {
       const container = promptEl.closest('tr') || promptEl.closest('.turn-row');
-      if (container) togglePromptExpand(promptEl.dataset.expandId, container);
+      if (container) togglePromptExpand(promptEl.dataset.expandId, asEl(container));
     }
   });
 
@@ -833,7 +838,7 @@ function initEventDelegation() {
   // 단클릭은 prompt-preview expand로 보존, 더블클릭만 라우팅 — 충돌 회피.
   // tr.dataset.requestId는 makeRequestRow가 부여 (data-request-id).
   document.getElementById('detailView').addEventListener('dblclick', e => {
-    const tr = e.target.closest('tr[data-request-id]');
+    const tr = asEl(asEl(e.target).closest('tr[data-request-id]'));
     if (!tr || !tr.dataset.requestId) return;
     setDetailTab('llm');
     setDetailView('llm');
@@ -842,10 +847,10 @@ function initEventDelegation() {
 
   document.getElementById('detailView').addEventListener('keydown', e => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
-    const cardBtn = e.target.closest('[data-toggle-card]');
+    const cardBtn = asEl(e.target).closest('[data-toggle-card]');
     if (cardBtn) {
       e.preventDefault();
-      toggleCardExpand(cardBtn.dataset.toggleCard);
+      toggleCardExpand(asEl(cardBtn).dataset.toggleCard);
     }
   });
 }
@@ -884,10 +889,11 @@ async function init() {
   initAppRail((mode) => {
     // rail 클릭으로 metadocs/settings 진입 시 직전 browse 상태 snapshot — ESC 복귀용.
     //   settings-page (2026-05-26): settings 모드도 동일하게 snapshot 대상.
-    if ((mode === 'metadocs' || mode === 'settings') && getAppMode() === 'browse') {
+    const appMode = /** @type {'browse'|'metadocs'|'settings'} */ (getAppMode());
+    if ((mode === 'metadocs' || mode === 'settings') && appMode === 'browse') {
       snapshotBrowseState();
     }
-    if (mode === 'browse' && (getAppMode() === 'metadocs' || getAppMode() === 'settings')) {
+    if (mode === 'browse' && (appMode === 'metadocs' || appMode === 'settings')) {
       // rail에서 직접 browse로 — prevState가 있으면 그대로 복원, 없으면 단순 전환
       restorePrevState();
       return;
@@ -917,7 +923,7 @@ async function init() {
     if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'b') return;
     const ae = document.activeElement;
     const tag = ae?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || ae?.isContentEditable) return;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || (ae && asEl(ae).isContentEditable)) return;
     e.preventDefault();
     toggleLeftPanel();
   });

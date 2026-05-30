@@ -321,16 +321,20 @@ function findEdgeAncestor(target) {
   return null;
 }
 
-/** target 으로부터 거슬러 올라가 `data-node-id` 보유한 foreignObject 반환. */
+/**
+ * target 으로부터 거슬러 올라가 `data-node-id` 보유한 foreignObject 반환.
+ * @param {EventTarget|Node|null} target
+ * @returns {HTMLElement|null}
+ */
 function findNodeForeignObject(target) {
   let cur = target;
   while (cur && cur !== document) {
     if (cur instanceof Element
         && cur.tagName.toLowerCase() === 'foreignobject'
-        && cur.dataset.nodeId) {
-      return cur;
+        && /** @type {HTMLElement} */ (cur).dataset.nodeId) {
+      return /** @type {HTMLElement} */ (cur);
     }
-    cur = cur.parentNode;
+    cur = /** @type {Node} */ (cur).parentNode;
   }
   return null;
 }

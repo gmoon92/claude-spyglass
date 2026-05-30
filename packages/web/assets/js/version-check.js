@@ -16,6 +16,8 @@
  * 응답 필드는 모두 옵셔널 — 트랙 A 미적용 환경에서도 회귀 없이 자연 동작.
  */
 
+import { asButton } from './dom.js';
+
 const API = '';
 
 const els = {
@@ -430,8 +432,8 @@ function showSuccess(msg) {
 
 function setLoading(loading) {
   isUpdating = loading;
-  els.confirmBtn.disabled = loading;
-  els.cancelBtn.disabled = loading;
+  asButton(els.confirmBtn).disabled = loading;
+  asButton(els.cancelBtn).disabled = loading;
   if (loading) {
     els.confirmBtn.innerHTML = `<span class="update-modal-spinner"></span>${window.I18n.t('ui.version-check.updating')}`;
   } else {

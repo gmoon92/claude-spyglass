@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * render/icons.js — 디자인 시스템 아이콘 패밀리의 호환 shim.
  *

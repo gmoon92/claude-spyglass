@@ -1,3 +1,4 @@
+// @ts-check
 // 행/리스트 빌더 — request row, session row, 리스트 렌더/append.
 //
 // 변경 이유: 행 컬럼 구성·순서·뷰 변형(전체 피드 vs 세션 flat) 변경 시 묶여서 손이 가는 묶음.

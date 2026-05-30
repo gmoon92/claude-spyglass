@@ -1,6 +1,7 @@
 // filter-bar.js — 타입 필터 버튼 바 컴포넌트
 
 import { renderFilterBtn } from '../design-system/primitives/filter-button.js';
+import { asEl } from '../dom.js';
 
 /** i18n 준비 후 호출 시점에 평가되도록 함수로 정의 */
 function getFilterGroups() {
@@ -56,9 +57,9 @@ export function createFilterBar(containerId, { dataAttr, onChange }) {
   }).join('');
 
   container.addEventListener('click', e => {
-    const btn = e.target.closest(`[data-${dataAttr}]`);
+    const btn = asEl(e.target).closest(`[data-${dataAttr}]`);
     if (!btn) return;
-    const filter = btn.dataset[dataAttr.replace(/-([a-z])/g, (_, c) => c.toUpperCase())];
+    const filter = asEl(btn).dataset[dataAttr.replace(/-([a-z])/g, (_, c) => c.toUpperCase())];
     // ds-filter-btn 활성 시각은 [aria-pressed="true"]로 결정되므로 .active 클래스와 함께 동기화.
     container.querySelectorAll('.type-filter-btn').forEach(b => {
       b.classList.remove('active');
@@ -72,7 +73,7 @@ export function createFilterBar(containerId, { dataAttr, onChange }) {
   return {
     setActive(filter) {
       container.querySelectorAll('.type-filter-btn').forEach(b => {
-        const val = b.dataset[dataAttr.replace(/-([a-z])/g, (_, c) => c.toUpperCase())];
+        const val = asEl(b).dataset[dataAttr.replace(/-([a-z])/g, (_, c) => c.toUpperCase())];
         const isActive = val === filter;
         b.classList.toggle('active', isActive);
         b.setAttribute('aria-pressed', isActive ? 'true' : 'false');

@@ -30,12 +30,10 @@ jobs:
           TMPDIR: /tmp/spyglass-ci-${{ matrix.package }}-${{ github.run_id }}
 
   web-typecheck:
-    name: web typecheck (checkJs, non-blocking)
+    name: web typecheck (checkJs, blocking)
     runs-on: ubuntu-latest
-    # 비차단: web은 buildless ESM + JS이고 @ts-check가 파일 단위로만 적용된다(T08).
-    # checkJs 베이스라인 에러가 0이 아니므로 게이트로 강제하지 않는다.
-    # T09에서 @ts-check 점진 적용으로 에러를 0까지 줄인 뒤 차단 모드로 승격한다.
-    continue-on-error: true
+    # R5(2026-05-30): @ts-check + JSDoc 보강으로 181개 에러를 0으로 줄임.
+    # globals.d.ts ambient 보강 + 파일별 수정으로 타입 계약 확정 → CI 차단 모드 승격.
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2

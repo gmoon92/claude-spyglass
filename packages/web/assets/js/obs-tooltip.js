@@ -9,6 +9,8 @@
  * 트리거: `data-obs-tooltip="<key>"` 속성. 카드 / Anomaly Badge / 카테고리 행에 부여.
  */
 
+import { asEl } from './dom.js';
+
 const OBS_TOOLTIP_CONTENT = {
   // ── 카드 4종 ──────────────────────────────────────────────────────────
   'burn-rate': {
@@ -89,19 +91,19 @@ export function initObsTooltip() {
   }
 
   document.addEventListener('mouseover', e => {
-    const el = e.target.closest('[data-obs-tooltip]');
+    const el = asEl(e.target).closest('[data-obs-tooltip]');
     if (!el) return;
-    show(e, el.dataset.obsTooltip);
+    show(e, asEl(el).dataset.obsTooltip);
   });
 
   document.addEventListener('mousemove', e => {
     if (tooltip.style.display === 'none') return;
-    if (!e.target.closest('[data-obs-tooltip]')) { hide(); return; }
+    if (!asEl(e.target).closest('[data-obs-tooltip]')) { hide(); return; }
     position(e);
   });
 
   document.addEventListener('mouseout', e => {
-    if (!e.target.closest('[data-obs-tooltip]')) return;
+    if (!asEl(e.target).closest('[data-obs-tooltip]')) return;
     hide();
   });
 }

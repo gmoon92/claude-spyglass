@@ -28,7 +28,7 @@
    * I18n이 준비되지 않았으면 DOMContentLoaded 이후 재시도.
    */
   function init() {
-    const el = document.getElementById('lang-switcher');
+    const el = /** @type {HTMLSelectElement|null} */ (document.getElementById('lang-switcher'));
     if (!el) return;
 
     const i18n = window.I18n;

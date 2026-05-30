@@ -54,7 +54,7 @@ function currentRatio(topEl, bottomEl) {
  *
  * @param {HTMLElement} handleEl  — .panel-vertical-handle 드래그 요소
  * @param {HTMLElement} topEl     — 위쪽 섹션
- * @param {HTMLElement|() => HTMLElement} bottomElOrFn — 아래쪽 섹션 (또는 그것을 반환하는 함수)
+ * @param {HTMLElement|(()=>HTMLElement)} bottomElOrFn — 아래쪽 섹션 (또는 그것을 반환하는 함수)
  * @param {string}      cssVar    — 갱신할 CSS 변수명 (e.g. '--projects-panel-height')
  * @param {string}      storageKey — localStorage 키
  */
@@ -97,7 +97,7 @@ function initResize(handleEl, topEl, bottomElOrFn, cssVar, storageKey) {
     const onUp = () => {
       document.body.style.userSelect = '';
       handleEl.classList.remove('dragging');
-      localStorage.setItem(storageKey, currentRatio(topEl, bottomEl));
+      localStorage.setItem(storageKey, String(currentRatio(topEl, bottomEl)));
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
     };
@@ -108,15 +108,15 @@ function initResize(handleEl, topEl, bottomElOrFn, cssVar, storageKey) {
 }
 
 /**
- * initPanelVerticalResize(handleEl, topEl, bottomEl)
+ * initPanelVerticalResize(handleEl, topEl, bottomElOrFn)
  * 프로젝트 섹션 / 세션 섹션 상하 분할.
  *
  * @param {HTMLElement} handleEl   — .panel-vertical-handle 드래그 요소
  * @param {HTMLElement} topEl      — 프로젝트 패널 섹션
- * @param {HTMLElement} bottomEl   — 세션 패널 섹션
+ * @param {HTMLElement|(()=>HTMLElement)} bottomElOrFn — 세션 패널 섹션 (또는 resolve 함수)
  */
-export function initPanelVerticalResize(handleEl, topEl, bottomEl) {
-  initResize(handleEl, topEl, bottomEl, '--projects-panel-height', STORAGE_KEY);
+export function initPanelVerticalResize(handleEl, topEl, bottomElOrFn) {
+  initResize(handleEl, topEl, bottomElOrFn, '--projects-panel-height', STORAGE_KEY);
 }
 
 /**

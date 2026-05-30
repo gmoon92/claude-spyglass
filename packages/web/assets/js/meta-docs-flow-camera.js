@@ -69,7 +69,7 @@ function easeInOutCubic(t) {
  * @param {number} opts.cx       타깃 중심 x (SVG 좌표).
  * @param {number} opts.cy       타깃 중심 y (SVG 좌표).
  * @param {number} [opts.zoom]   타깃 줌 (1=기본, 1.5=확대). 미지정 시 현 줌 유지.
- * @param {number} [opts.durationMs] 600ms 기본.
+ * @param {number} [opts.durationMs] 600 ms 기본.
  * @param {() => void} [opts.onDone] 완료 콜백 (예: 강조 해제).
  */
 export function focusOnNode(svgEl, viewState, opts) {
@@ -187,7 +187,7 @@ export function computeFitView(svgEl, bbox, opts) {
  * @param {{x:number,y:number,w:number,h:number}} target
  * @param {object} [opts]
  * @param {boolean} [opts.immediate] true 면 트윈 없이 즉시 적용 (초기 로드용).
- * @param {number} [opts.durationMs] 600ms 기본.
+ * @param {number} [opts.durationMs] 600 ms 기본.
  * @param {() => void} [opts.onDone]
  */
 export function animateToView(svgEl, viewState, target, opts) {

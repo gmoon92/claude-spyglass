@@ -1,3 +1,4 @@
+// @ts-check
 // payload·preview에서 표시 텍스트 추출 + 펼침 캐시.
 //
 // 변경 이유: payload 스키마 / preview 추출 정책 / AskUserQuestion 시각화 정책 변경 시 묶여서 손이 가는 묶음.

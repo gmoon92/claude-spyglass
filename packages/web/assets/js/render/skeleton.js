@@ -11,28 +11,30 @@
 // 1) Primitive — 인라인 한 줄 / 블록 / 원 / 바
 // ──────────────────────────────────────────────────────────────────────────
 
+// @ts-check
+
 /**
  * 한 줄 placeholder.
- * @param {Object} [opts]
- * @param {string|number} [opts.width]   '60%' / '80px' (생략 시 100%)
- * @param {string|number} [opts.height]  '11px' 기본
- * @param {string} [opts.className]      추가 클래스 (예: 'sk--dim')
+ * @param {{ width?: string|number, height?: string|number, className?: string }} [opts]
  */
 export function skLine({ width, height, className = '' } = {}) {
   const style = _styleSize(width, height);
   return `<span class="sk sk-line ${className}" ${style}></span>`;
 }
 
+/** @param {{ width?: string|number, height?: string|number, className?: string }} [opts] */
 export function skBlock({ width, height, className = '' } = {}) {
   const style = _styleSize(width, height);
   return `<span class="sk sk-block ${className}" ${style}></span>`;
 }
 
+/** @param {{ size?: string|number, className?: string }} [opts] */
 export function skCircle({ size, className = '' } = {}) {
   const style = size != null ? ` style="width:${_unit(size)};height:${_unit(size)}"` : '';
   return `<span class="sk sk-circle ${className}"${style}></span>`;
 }
 
+/** @param {{ width?: string|number, height?: string|number, className?: string }} [opts] */
 export function skBar({ width, height, className = '' } = {}) {
   const style = _styleSize(width, height);
   return `<span class="sk sk-bar ${className}" ${style}></span>`;

@@ -1,4 +1,6 @@
 // Cache Intelligence Panel 섹션 hover 툴팁 — stat-tooltip.js 패턴 동일
+import { asEl } from './dom.js';
+
 const CACHE_PANEL_TOOLTIP_CONTENT = {
   'hit-rate': {
     get title() { return window.I18n.t('ui.cache-panel.hit-rate.title'); },
@@ -45,19 +47,19 @@ export function initCachePanelTooltip() {
   }
 
   document.addEventListener('mouseover', e => {
-    const el = e.target.closest('[data-cache-panel-tooltip]');
+    const el = asEl(e.target).closest('[data-cache-panel-tooltip]');
     if (!el) return;
-    show(e, el.dataset.cachePanelTooltip);
+    show(e, asEl(el).dataset.cachePanelTooltip);
   });
 
   document.addEventListener('mousemove', e => {
     if (tooltip.style.display === 'none') return;
-    if (!e.target.closest('[data-cache-panel-tooltip]')) { hide(); return; }
+    if (!asEl(e.target).closest('[data-cache-panel-tooltip]')) { hide(); return; }
     position(e);
   });
 
   document.addEventListener('mouseout', e => {
-    if (!e.target.closest('[data-cache-panel-tooltip]')) return;
+    if (!asEl(e.target).closest('[data-cache-panel-tooltip]')) return;
     hide();
   });
 }

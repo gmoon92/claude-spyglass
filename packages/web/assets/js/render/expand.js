@@ -1,3 +1,4 @@
+// @ts-check
 // 펼침/expand 인터랙션 — 행/박스 토글, 복사 버튼.
 //
 // 변경 이유: 펼침 UX 정책(table/grid 모드, 복사 동작, 텍스트/HTML 모드 분기) 변경 시 묶여서 손이 가는 묶음.
@@ -16,6 +17,9 @@ export const RECENT_REQ_COLS = 10; // + Session
  *        cell이 비어있어 내부 expand 요소가 없으면 null.
  *
  * 호출자: main.js(#detailView), views/default/feed-interactions.js(#defaultView).
+ *
+ * @param {Element} target 클릭 타깃 (호출부에서 HTMLElement로 좁혀 전달)
+ * @returns {Element|null}
  */
 export function resolveExpandTarget(target) {
   const direct = target.closest('[data-expand-id]');

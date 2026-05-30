@@ -166,12 +166,14 @@ export function resetToolCategoriesMode() {
  * renderToolCategoriesCard — 두 모드를 단일 함수로 처리 (ADR-004 SSoT).
  *
  * 모드 A — 전역 (기본, 프로젝트 미선택):
- *   @param {Array<{category, request_count, percentage}>} payload  카테고리 배열
+ *   배열 payload  카테고리 배열
  *
  * 모드 B — Behavior Definitions Top N (프로젝트 선택 시):
- *   @param {{ mode: 'meta-docs', items: Array<{name, invocations}> }} payload
+ *   { mode: 'meta-docs', items: Array<{name, invocations}> } payload
  *
  * 호출 측(main.js)은 payload만 전달 — 판단은 이 함수 내부 단일 분기.
+ *
+ * @param {Array<{category?: string, request_count?: number, percentage?: number}>|{mode: string, items: Array<{name: string, invocations: number}>}} payload
  */
 export function renderToolCategoriesCard(payload) {
   const el = document.getElementById('cardToolCategories');

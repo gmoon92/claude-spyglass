@@ -5,6 +5,7 @@
 // 여기 팩토리에 콜백/getter 로 주입한다.
 
 import { renderRequests, appendRequests, togglePromptExpand, resolveExpandTarget } from '../../renderers.js';
+import { asEl } from '../../dom.js';
 import { fetchRequests, setReqFilter, getReqFilter } from '../../api.js';
 import { SUB_TYPES } from '../../request-types.js';
 import { createFilterBar } from '../../components/filter-bar.js';
@@ -27,7 +28,8 @@ export function applyFeedSearch(getSearchValue) {
   const q = (getSearchValue?.() ?? '').toLowerCase();
   const rows = document.querySelectorAll('#requestsBody tr[data-type]');
   const typeFilter = getReqFilter();
-  rows.forEach(tr => {
+  rows.forEach(node => {
+    const tr = asEl(node);
     const typeFiltered = typeFilter !== 'all' && (
       SUB_TYPES.includes(typeFilter)
         ? tr.dataset.subType !== typeFilter
@@ -83,7 +85,7 @@ export function handleFeedUpdated(e, getSearchValue) {
  */
 export function wireDefaultViewClicks({ onSelectSession }) {
   document.getElementById('defaultView').addEventListener('click', e => {
-    const sessEl = e.target.closest('[data-goto-session]');
+    const sessEl = asEl(asEl(e.target).closest('[data-goto-session]'));
     if (sessEl && sessEl.dataset.gotoSession) {
       const proj = sessEl.dataset.gotoProject;
       if (proj && proj !== getSelectedProject()) {
@@ -94,10 +96,10 @@ export function wireDefaultViewClicks({ onSelectSession }) {
       onSelectSession(sessEl.dataset.gotoSession);
       return;
     }
-    const promptEl = resolveExpandTarget(e.target);
+    const promptEl = asEl(resolveExpandTarget(asEl(e.target)));
     if (promptEl) {
       const tr = promptEl.closest('tr');
-      if (tr) togglePromptExpand(promptEl.dataset.expandId, tr);
+      if (tr) togglePromptExpand(promptEl.dataset.expandId, asEl(tr));
     }
   });
 }

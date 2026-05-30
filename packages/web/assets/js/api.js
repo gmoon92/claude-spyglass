@@ -1,5 +1,58 @@
 // @ts-check
 // API / Fetch 모듈
+//
+// DTO typedef — 서버 응답 shape과 1:1 계약 (서버 routes/ 참조).
+// fetchRequests / fetchAllSessions / fetchSessionsByProject → @spyglass/types 재사용.
+// 미정의분(Dashboard/Observability/ProxyRequest)은 아래 local typedef로 정의.
+//
+/** @typedef {import('@spyglass/types').NormalizedRequest} NormalizedRequest */
+/** @typedef {import('@spyglass/types').Session} Session */
+/**
+ * /api/dashboard 응답 data 필드 shape.
+ * @typedef {{
+ *   summary: {
+ *     totalSessions: number,
+ *     totalRequests: number,
+ *     totalTokens: number,
+ *     activeSessions: number,
+ *     avgDurationMs: number|null,
+ *     p95DurationMs: number|null,
+ *     errorRate: number|null,
+ *   },
+ *   requests: { avg_duration_ms?: number } | null,
+ *   projects: Array<{project_name: string, [k: string]: unknown}>,
+ *   types:    Array<{count: number, [k: string]: unknown}>,
+ *   active:   Session[],
+ * }} DashboardData
+ */
+/**
+ * /api/proxy-requests 응답 단일 행 shape.
+ * @typedef {{
+ *   id: string,
+ *   session_id?: string|null,
+ *   timestamp: number,
+ *   model?: string|null,
+ *   tokens_input?: number,
+ *   tokens_output?: number,
+ *   [k: string]: unknown,
+ * }} ProxyRequestRow
+ */
+/**
+ * /api/proxy-requests/stats 응답 data shape.
+ * @typedef {{
+ *   total_requests?: number,
+ *   total_tokens?: number,
+ *   [k: string]: unknown,
+ * }} ProxyStats
+ */
+/**
+ * /api/stats/cache 응답 data shape.
+ * @typedef {{
+ *   hit_rate?: number,
+ *   [k: string]: unknown,
+ * }} CacheStats
+ */
+
 import { fmt, fmtToken, formatDuration } from './formatters.js';
 import { setTypeData, setSourceData, drawDonut, renderTypeLegend, getDonutMode } from './chart.js';
 import { clearError, showError } from './infra.js';
@@ -183,6 +236,7 @@ export function buildQuery(base, extra = {}) {
 }
 
 // ── Dashboard ───────────────────────────────────────────────────────────────
+/** @returns {Promise<void>} */
 export async function fetchDashboard() {
   try {
     const res  = await fetch(buildQuery(`${API}/api/dashboard`), { signal: AbortSignal.timeout(8000) });
@@ -246,6 +300,7 @@ export async function fetchDashboard() {
 }
 
 // ── Requests ────────────────────────────────────────────────────────────────
+/** @param {boolean} [append] @returns {Promise<void>} */
 export async function fetchRequests(append = false) {
   if (!append) { reqOffset = 0; }
   try {
@@ -285,6 +340,7 @@ export async function fetchRequests(append = false) {
 }
 
 // ── Sessions ────────────────────────────────────────────────────────────────
+/** @returns {Promise<void>} */
 export async function fetchAllSessions() {
   try {
     const res  = await fetch(buildQuery(`${API}/api/sessions`, { limit: 500, ...getDateRange() }));
@@ -294,6 +350,7 @@ export async function fetchAllSessions() {
   } catch { /* silent */ }
 }
 
+/** @returns {Promise<void>} */
 export async function fetchCacheStats() {
   try {
     const res  = await fetch(buildQuery(`${API}/api/stats/cache`), { signal: AbortSignal.timeout(8000) });
@@ -303,6 +360,7 @@ export async function fetchCacheStats() {
   } catch { /* silent */ }
 }
 
+/** @param {string} projectName @returns {Promise<void>} */
 export async function fetchSessionsByProject(projectName) {
   try {
     const res  = await fetch(buildQuery(`${API}/api/projects/${encodeURIComponent(projectName)}/sessions`, { limit: 200 }));
@@ -326,6 +384,7 @@ async function safeJson(url) {
   } catch { return null; }
 }
 
+/** @returns {Promise<void>} */
 export async function fetchObservability() {
   // date-filter-propagation pass: 활성 range가 from/to로 자동 적용되도록 buildQuery만 사용.
   // 이전엔 extra에 `range:'24h'`를 박아넣어 '전체'/'오늘'/'이번주' 클릭 시에도 obs 카드가 24h 그대로였음.
@@ -360,6 +419,7 @@ export async function fetchObservability() {
 }
 
 // ── Proxy Requests ──────────────────────────────────────────────────────────
+/** @param {number} [limit] @returns {Promise<ProxyRequestRow[]>} */
 export async function fetchProxyRequests(limit = 50) {
   try {
     const url  = `${API}/api/proxy-requests?limit=${limit}`;
@@ -370,6 +430,7 @@ export async function fetchProxyRequests(limit = 50) {
   } catch { return []; }
 }
 
+/** @param {number} [since] @returns {Promise<ProxyStats|null>} */
 export async function fetchProxyStats(since) {
   try {
     const sinceMs = since ?? (Date.now() - 24 * 60 * 60 * 1000);

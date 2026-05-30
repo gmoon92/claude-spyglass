@@ -253,10 +253,10 @@ async function showDetailModal(hash) {
   // skeleton-loading T-11: 본문 큰 블록 영역으로 모달 높이 유지.
   modal.innerHTML = `<div class="syslib-detail-inner" data-skeleton="1">${skBlock({ height: 320 })}</div>`;
 
+  const t = window.I18n?.t ?? ((/** @type {string} */ k) => k);
   try {
     const res = await fetchJson(`/api/system-prompts/${encodeURIComponent(hash)}`);
     const row = res?.data;
-    const t = window.I18n?.t ?? ((k) => k);
     if (!row) {
       modal.innerHTML = renderModalShell(`<p class="syslib-dim">${t('ui.syslib.not-found')}</p>`);
     } else {

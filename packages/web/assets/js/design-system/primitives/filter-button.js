@@ -35,7 +35,7 @@ import { escHtml } from '../../formatters.js';
  * 필터 버튼 HTML 문자열을 생성한다.
  *
  * @param {object}          opts
- * @param {string}          opts.label              - 버튼 레이블 텍스트 (escHtml 처리됨)
+ * @param {string}          [opts.label]            - 버튼 레이블 텍스트 (escHtml 처리됨)
  * @param {boolean}         [opts.active=false]     - 활성 상태 여부 (aria-pressed 값)
  * @param {FilterStrength}  [opts.strength='soft']  - 활성 강조 강도 (soft: 은은한 / strong: 전체 채움)
  * @param {string}          [opts.value]            - data-value 속성값 (필터 식별자, 선택적)

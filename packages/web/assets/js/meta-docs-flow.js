@@ -186,7 +186,7 @@ export async function loadFlow(args) {
   };
 
   container.innerHTML = shellHtml(payload.meta);
-  const svgEl = container.querySelector('.flow-svg');
+  const svgEl = /** @type {SVGSVGElement|null} */ (container.querySelector('.flow-svg'));
   if (!svgEl) return;
   const edgesLayer = svgEl.querySelector('#flowEdgesLayer');
   const nodesLayer = svgEl.querySelector('#flowNodesLayer');
@@ -820,16 +820,20 @@ function bindNodeDoubleClick(svgEl) {
   });
 }
 
-/** target 으로부터 거슬러 올라가 foreignObject[data-node-id] 반환. dblclick 용 SSoT. */
+/**
+ * target 으로부터 거슬러 올라가 foreignObject[data-node-id] 반환. dblclick 용 SSoT.
+ * @param {EventTarget|Node|null} target
+ * @returns {HTMLElement|null}
+ */
 function findForeignObjectAncestor(target) {
   let cur = target;
   while (cur && cur !== document) {
     if (cur instanceof Element
         && cur.tagName.toLowerCase() === 'foreignobject'
-        && cur.dataset.nodeId) {
-      return cur;
+        && /** @type {HTMLElement} */ (cur).dataset.nodeId) {
+      return /** @type {HTMLElement} */ (cur);
     }
-    cur = cur.parentNode;
+    cur = /** @type {Node} */ (cur).parentNode;
   }
   return null;
 }

@@ -20,7 +20,7 @@ import {
 export function applyRangeLabels(rangeArg = getActiveRange()) {
   const key = typeof rangeArg === 'string'
     ? rangeArg
-    : (rangeArg && rangeArg.type === 'custom' ? 'custom' : (rangeArg?.value ?? 'all'));
+    : (rangeArg && rangeArg.type === 'custom' ? 'custom' : (/** @type {import('../../api.js').PresetRange} */ (rangeArg)?.value ?? 'all'));
   const rangeText = RANGE_LABELS[key] || RANGE_LABELS.all;
   const groups = document.querySelectorAll('#timelineMeta .timeline-meta-group');
   groups.forEach((group, i) => {
@@ -71,6 +71,6 @@ export function observeTimelineResize() {
       _rafId = requestAnimationFrame(() => drawTimeline());
     }).observe(timelineWrap);
   } else {
-    window.addEventListener('resize', drawTimeline);
+    /** @type {Window} */ (window).addEventListener('resize', drawTimeline);
   }
 }

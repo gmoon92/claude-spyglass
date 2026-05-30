@@ -1,3 +1,4 @@
+// @ts-check
 // 테이블 셀 빌더 — Action / Target / Cache / Skeleton.
 //
 // 변경 이유: 셀 구조(td 클래스·data-cell·placeholder) 변경 시 묶여서 손이 가는 묶음.

@@ -22,6 +22,8 @@
  *   4. 검색 input의 값 (있을 때)
  */
 
+import { asEl } from './dom.js';
+
 /**
  * @typedef {object} PreservedState
  * @property {number} scrollTop
@@ -43,13 +45,13 @@ export function captureInteraction(container) {
 
   const expandedRequestIds = new Set();
   container.querySelectorAll('[data-expand-for]').forEach((el) => {
-    const id = el.dataset.expandFor;
+    const id = asEl(el).dataset.expandFor;
     if (id) expandedRequestIds.add(id);
   });
 
   const expandedTurnIds = new Set();
   container.querySelectorAll('.turn-card[aria-expanded="true"]').forEach((el) => {
-    const tid = el.dataset.turnId;
+    const tid = asEl(el).dataset.turnId;
     if (tid) expandedTurnIds.add(tid);
   });
 

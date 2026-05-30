@@ -36,7 +36,7 @@
 
     // data-i18n-attr-* 패턴: 요소별로 dataset을 순회
     document.querySelectorAll('*').forEach(function (el) {
-      const dataset = el.dataset;
+      const dataset = /** @type {HTMLElement} */ (el).dataset;
       Object.keys(dataset).forEach(function (dataKey) {
         // dataKey 예: 'i18nAttrAriaLabel' (camelCase from data-i18n-attr-aria-label)
         if (!dataKey.startsWith('i18nAttr')) return;

@@ -5,6 +5,7 @@
 // 있으므로 여기 const로 둔다 (constants.js 로 끌어올리지 않음).
 
 import { makeRequestRow } from '../../renderers.js';
+import { asTableSection } from '../../dom.js';
 import {
   addScrollLockCount, updateScrollLockBanner, resetScrollLockCount,
 } from '../../infra.js';
@@ -68,7 +69,8 @@ export function prependRequest(r) {
       return;
     }
   }
-  while (body.rows.length >= FEED_ROW_CAP) body.deleteRow(body.rows.length - 1);
+  const bodyTable = asTableSection(body);
+  while (bodyTable.rows.length >= FEED_ROW_CAP) bodyTable.deleteRow(bodyTable.rows.length - 1);
   const tmp = document.createElement('tbody');
   tmp.innerHTML = makeRequestRow(r, { showSession: true });
   body.insertBefore(tmp.firstElementChild, body.firstChild);

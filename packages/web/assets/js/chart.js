@@ -249,7 +249,7 @@ export function initBuckets() {
 }
 
 export function drawTimeline() {
-  const canvas = document.getElementById('timelineChart');
+  const canvas = /** @type {HTMLCanvasElement|null} */ (document.getElementById('timelineChart'));
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
   const w   = canvas.parentElement.clientWidth - 32;
@@ -281,7 +281,7 @@ export function drawTimeline() {
       ctx.fillStyle  = COLORS.textDim;
       ctx.font       = '9px monospace';
       ctx.textAlign  = 'right';
-      ctx.fillText(Math.round(maxVal * t), padL - 3, y + 3);
+      ctx.fillText(String(Math.round(maxVal * t)), padL - 3, y + 3);
     }
   });
 
@@ -344,7 +344,7 @@ export function drawTimeline() {
 }
 
 export function drawDonut() {
-  const canvas = document.getElementById('typeChart');
+  const canvas = /** @type {HTMLCanvasElement|null} */ (document.getElementById('typeChart'));
   if (!canvas) return;
   const dpr  = window.devicePixelRatio || 1;
   const size = 90;

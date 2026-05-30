@@ -21,6 +21,7 @@
  */
 
 import { escHtml, fmtTime } from './formatters.js';
+import { asEl } from './dom.js';
 import { getCollator } from './i18n-utils.js';
 import { getDateRange } from './api.js';
 import { getSelectedProject, getMetaSubTab, setMetaSubTab as stateSetMetaSubTab } from './state.js';
@@ -86,6 +87,7 @@ export function initMetaSubTabs() {
   // meta-docs-flow ego-graph (2026-05-21 rev): 'flow' 탭 제거.
   //   ego-graph는 docs 탭 상단 영역(#metaDocsFlowRegion)에서 인라인으로 표시되므로
   //   서브 탭은 docs / tools 2종으로 회귀한다.
+  /** @type {(key: string, vars?: Record<string, string|number>) => string} */
   const t = window.I18n.t.bind(window.I18n);
   const TABS = [
     { value: 'docs',  label: t('ui.meta-docs-view.tab-docs-label')  || 'Behavior Definitions', id: 'metaTabDocs',      controls: 'metaDocsBody',      selected: true  },
@@ -187,14 +189,14 @@ function restoreLangSwitcherToChartActions() {
 export function initMetaDocsLeftNav() {
   // body 위임 — thead가 한 번도 다시 렌더되지 않지만, 안전성/일관성을 위해 body 레벨로 둔다.
   document.body.addEventListener('click', async (e) => {
-    const syncBtn = e.target.closest('[data-meta-left-refresh]');
+    const syncBtn = asEl(e.target).closest('[data-meta-left-refresh]');
     if (!syncBtn) return;
     // 메타 모드 전용 — browse 모드에서는 무시(thead가 hidden이지만 보호 분기).
     if (document.body.dataset.appMode !== 'metadocs') return;
-    await runRefresh(syncBtn);
+    await runRefresh(asEl(syncBtn));
   });
   // thead 동기화 버튼에 SVG 아이콘 1회 주입(정적 thead).
-  const icon = document.querySelector('.thead-sync-icon');
+  const icon = asEl(document.querySelector('.thead-sync-icon'));
   if (icon && !icon.dataset.injected) {
     icon.innerHTML = svgRefresh({ size: 12 });
     icon.dataset.injected = '1';
@@ -380,8 +382,10 @@ function highlightDeepLinkRow() {
   const term = (state.searchTerm || '').toLowerCase();
   if (!term) return;
   const rows = document.querySelectorAll('.meta-docs-table tbody tr.meta-doc-row[data-name]');
+  /** @type {HTMLElement|null} */
   let target = null;
-  for (const r of rows) {
+  for (const node of rows) {
+    const r = asEl(node);
     const name = String(r.dataset.name || '').toLowerCase();
     if (name === term) { target = r; break; }
     if (!target && name.includes(term)) target = r;
@@ -420,9 +424,9 @@ function renderLeftSummaryCards(counts) {
   if (root.dataset.metaBound === '1') return;
   root.dataset.metaBound = '1';
   root.addEventListener('click', (e) => {
-    const card = e.target.closest('[data-meta-filter]');
+    const card = asEl(e.target).closest('[data-meta-filter]');
     if (!card) return;
-    applyFilterChange(card.dataset.metaFilter, card.dataset.value);
+    applyFilterChange(asEl(card).dataset.metaFilter, asEl(card).dataset.value);
   });
 }
 

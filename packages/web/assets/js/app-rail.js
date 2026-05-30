@@ -26,7 +26,7 @@ const RAIL_SELECTOR = '.app-rail';
 /**
  * rail 초기화 — 클릭 위임 + 페이지 로드 시 현재 모드에 맞춰 aria-current 설정.
  *
- * @param {(mode: 'browse' | 'metadocs') => void} applyAppMode
+ * @param {(mode: 'browse' | 'metadocs' | 'settings') => void} applyAppMode
  *        main.js의 applyAppMode 헬퍼. rail은 직접 view를 만지지 않고 콜백에 위임.
  */
 export function initAppRail(applyAppMode) {
@@ -50,7 +50,7 @@ export function initAppRail(applyAppMode) {
 /**
  * rail 버튼 aria-current 토글 — applyAppMode 적용 후 호출.
  *
- * @param {'browse' | 'metadocs'} mode
+ * @param {'browse' | 'metadocs' | 'settings'} mode
  */
 export function setRailActive(mode) {
   const rail = document.querySelector(RAIL_SELECTOR);

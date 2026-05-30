@@ -30,6 +30,7 @@
  */
 
 import { escHtml, fmtTime, fmtToken, shortModelName } from './formatters.js';
+import { asEl, asDetails, asInput } from './dom.js';
 import { skLlmInputCards } from './render/skeleton.js';
 import { getSelectedSession } from './state.js';
 import { svgSearch, svgChevron, svgInfo } from './render/icons.js';
@@ -758,7 +759,8 @@ function onRefsPopoverKeydown(e) {
  */
 function setAllExpanded(open) {
   const all = document.querySelectorAll('details.llm-input-msg');
-  all.forEach(d => {
+  all.forEach(node => {
+    const d = asDetails(node);
     d.open = open;
     const id = d.dataset.messageId;
     if (!id) return;
@@ -776,7 +778,7 @@ function setAllExpanded(open) {
  *  - 미매칭 메시지: 이전 상태 유지 (open이면 open, closed면 closed)
  */
 function onSearchInput(e) {
-  const input = e.target.closest('[data-messages-search]');
+  const input = asInput(asEl(e.target).closest('[data-messages-search]'));
   if (!input) return;
   const term = String(input.value || '').trim();
   state.currentSearch = term;
@@ -792,7 +794,8 @@ function applySearchHighlight(term) {
   const all = document.querySelectorAll('details.llm-input-msg');
   const tooShort = term.length < SEARCH_MIN_LEN;
 
-  all.forEach(d => {
+  all.forEach(node => {
+    const d = asDetails(node);
     const body = d.querySelector('.llm-input-msg-body');
     if (!body) return;
 
@@ -836,7 +839,8 @@ function highlightTextNodes(root, term) {
       const parent = node.parentNode;
       if (!parent) return NodeFilter.FILTER_REJECT;
       if (parent.nodeName === 'MARK') return NodeFilter.FILTER_REJECT;
-      if (parent.closest && parent.closest('summary')) return NodeFilter.FILTER_REJECT;
+      const parentEl = asEl(parent);
+      if (parentEl.closest && parentEl.closest('summary')) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     },
   });

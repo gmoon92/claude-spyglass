@@ -1,3 +1,4 @@
+// @ts-check
 // Badge·아이콘 렌더링 — type / tool / status / hint / anomaly / sub-type 표지.
 //
 // 변경 이유: 배지 라벨·아이콘·아이콘 색·오류 판정 기준 변경 시 묶여서 손이 가는 묶음.

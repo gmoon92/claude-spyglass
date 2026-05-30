@@ -17,8 +17,8 @@ export function createSearchBox(containerId, { placeholder = '', onSearch }) {
     ${renderCloseBtn({ size: 'sm', label: window.I18n.t('ui.search-box.clear-label'), dataAttrs: { action: 'clear' } }).replace('class="ds-close-btn"', 'class="feed-search-clear ds-close-btn"')}
   `.trim();
 
-  const input = container.querySelector('.feed-search-input');
-  const clear = container.querySelector('.feed-search-clear');
+  const input = /** @type {HTMLInputElement} */ (container.querySelector('.feed-search-input'));
+  const clear = /** @type {HTMLElement} */ (container.querySelector('.feed-search-clear'));
 
   input.addEventListener('input', () => {
     const q = input.value.trim().toLowerCase();

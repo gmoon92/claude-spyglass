@@ -1,6 +1,7 @@
 // views/detail-view.js — DetailView 세션 선택 + AbortController 캡슐화
 
 import { getAllSessions, renderBrowserSessions } from '../left-panel.js';
+import { asEl } from '../dom.js';
 import {
   getSelectedSession, setSelectedSession,
   setRightView, getDetailTab,
@@ -108,7 +109,7 @@ export async function loadSession(id) {
   } finally {
     if (!signal.aborted) {
       document.getElementById('detailLoading').style.display = 'none';
-      setDetailView(getDetailTab());
+      setDetailView(/** @type {'log'|'llm'|'syslib'} */ (getDetailTab()));
     }
     if (_abortController === controller) _abortController = null;
   }
@@ -179,12 +180,12 @@ export function applyBloatedSysHeader(bloatedSys) {
   if (!host.dataset.bloatedHoverWired) {
     host.dataset.bloatedHoverWired = '1';
     host.addEventListener('mouseenter', (e) => {
-      const t = e.target?.closest?.('.badge-bloated-sys--full');
+      const t = e.target && asEl(e.target).closest('.badge-bloated-sys--full');
       if (!t) return;
       document.dispatchEvent(new CustomEvent('ctx-baseline-glow', { detail: { active: true } }));
     }, true);
     host.addEventListener('mouseleave', (e) => {
-      const t = e.target?.closest?.('.badge-bloated-sys--full');
+      const t = e.target && asEl(e.target).closest('.badge-bloated-sys--full');
       if (!t) return;
       document.dispatchEvent(new CustomEvent('ctx-baseline-glow', { detail: { active: false } }));
     }, true);

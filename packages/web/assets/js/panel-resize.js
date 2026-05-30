@@ -37,7 +37,7 @@ export function initPanelResize(panelEl, handleEl) {
     const onUp = () => {
       document.body.style.userSelect = '';
       handleEl.classList.remove('dragging');
-      localStorage.setItem(STORAGE_KEY, panelEl.getBoundingClientRect().width);
+      localStorage.setItem(STORAGE_KEY, String(panelEl.getBoundingClientRect().width));
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
     };
@@ -54,6 +54,6 @@ export function initPanelResize(panelEl, handleEl) {
     const maxW = measureMaxWidth(targets);
     // 패널 좌우 패딩(12px * 2) + 핸들 너비(4px) 여유
     const fitted = setPanelWidth(maxW + 28);
-    localStorage.setItem(STORAGE_KEY, fitted);
+    localStorage.setItem(STORAGE_KEY, String(fitted));
   });
 }

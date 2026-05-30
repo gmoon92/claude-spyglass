@@ -16,6 +16,7 @@
 
 import { setActiveRange, getActiveRange } from '../api.js';
 import { escHtml } from '../formatters.js';
+import { asEl } from '../dom.js';
 import { attachFloating } from '../util/floating-position.js';
 import { formatDateRangeLabel } from '../i18n-utils.js';
 
@@ -67,13 +68,13 @@ export function mountDateRangeDropdown(container) {
   const menuId    = `${idBase}-menu`;
 
   container.innerHTML = renderShell({ triggerId, menuId });
-  const trigger = container.querySelector(`#${triggerId}`);
-  const menu    = container.querySelector(`#${menuId}`);
+  const trigger = /** @type {HTMLElement} */ (container.querySelector(`#${triggerId}`));
+  const menu    = /** @type {HTMLElement} */ (container.querySelector(`#${menuId}`));
   const labelEl = trigger.querySelector('.ds-dropdown-trigger-label');
-  const fromInput = menu.querySelector('[data-role="custom-from"]');
-  const toInput   = menu.querySelector('[data-role="custom-to"]');
-  const applyBtn  = menu.querySelector('[data-role="custom-apply"]');
-  const warnEl    = menu.querySelector('[data-role="custom-warn"]');
+  const fromInput = /** @type {HTMLInputElement} */ (menu.querySelector('[data-role="custom-from"]'));
+  const toInput   = /** @type {HTMLInputElement} */ (menu.querySelector('[data-role="custom-to"]'));
+  const applyBtn  = /** @type {HTMLButtonElement} */ (menu.querySelector('[data-role="custom-apply"]'));
+  const warnEl    = /** @type {HTMLElement} */ (menu.querySelector('[data-role="custom-warn"]'));
 
   /** @type {(() => void) | null} */
   let detachPos = null;
@@ -90,7 +91,7 @@ export function mountDateRangeDropdown(container) {
     trigger.setAttribute('title', isCustom ? '' : tTitle(value));
     // 항목 aria-selected — 프리셋 항목 중에서만 (custom 항목 자체는 listbox에 없음)
     for (const item of menu.querySelectorAll('.ds-dropdown-item[role="option"]')) {
-      const v = item.dataset.value;
+      const v = asEl(item).dataset.value;
       item.setAttribute('aria-selected', String(v === value));
     }
   }
@@ -169,7 +170,7 @@ export function mountDateRangeDropdown(container) {
     const item = items[activeIdx];
     if (!item) return;
     if (item.getAttribute('aria-disabled') === 'true') return;
-    setActiveRange(item.dataset.value);
+    setActiveRange(asEl(item).dataset.value);
     closeMenu({ returnFocus: true });
   }
 

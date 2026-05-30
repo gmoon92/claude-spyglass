@@ -1,4 +1,6 @@
 // Command Center Strip 지표 hover 툴팁 — cache-tooltip.js 패턴 동일
+import { asEl } from './dom.js';
+
 const CTX_TOOLTIP_CONTENT = {
   'context-growth': {
     get title() { return window.I18n.t('ui.stat-tooltip.context-growth.title'); },
@@ -118,23 +120,24 @@ export function initStatTooltip() {
   }
 
   document.addEventListener('mouseover', e => {
-    const ctxEl = e.target.closest('[data-ctx-tooltip]');
+    const ctxEl = asEl(e.target).closest('[data-ctx-tooltip]');
     if (ctxEl) {
-      _currentCtxKey = ctxEl.dataset.ctxTooltip;
+      _currentCtxKey = asEl(ctxEl).dataset.ctxTooltip;
       showCtx(e, _currentCtxKey);
       return;
     }
-    const badge = e.target.closest('[data-mini-badge-tooltip]');
-    if (badge) { showBadge(e, badge.dataset.miniBadgeTooltip); return; }
-    const card = e.target.closest('[data-stat-tooltip]');
+    const badge = asEl(e.target).closest('[data-mini-badge-tooltip]');
+    if (badge) { showBadge(e, asEl(badge).dataset.miniBadgeTooltip); return; }
+    const card = asEl(e.target).closest('[data-stat-tooltip]');
     if (!card) return;
-    show(e, card.dataset.statTooltip);
+    show(e, asEl(card).dataset.statTooltip);
   });
 
   document.addEventListener('mousemove', e => {
     if (tooltip.style.display === 'none') return;
     if (_pointHoverActive) { position(e); return; } // 포인트 호버 중엔 위치만 갱신
-    if (!e.target.closest('[data-stat-tooltip]') && !e.target.closest('[data-ctx-tooltip]') && !e.target.closest('[data-mini-badge-tooltip]')) {
+    const t = asEl(e.target);
+    if (!t.closest('[data-stat-tooltip]') && !t.closest('[data-ctx-tooltip]') && !t.closest('[data-mini-badge-tooltip]')) {
       _currentCtxKey = null;
       hide();
       return;
@@ -143,7 +146,8 @@ export function initStatTooltip() {
   });
 
   document.addEventListener('mouseout', e => {
-    if (!e.target.closest('[data-stat-tooltip]') && !e.target.closest('[data-ctx-tooltip]') && !e.target.closest('[data-mini-badge-tooltip]')) return;
+    const t = asEl(e.target);
+    if (!t.closest('[data-stat-tooltip]') && !t.closest('[data-ctx-tooltip]') && !t.closest('[data-mini-badge-tooltip]')) return;
     if (_pointHoverActive) return;
     hide();
   });

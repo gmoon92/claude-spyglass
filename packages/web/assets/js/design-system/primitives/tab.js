@@ -27,7 +27,7 @@ import { escHtml } from '../../formatters.js';
  * 탭 버튼 HTML 문자열을 생성한다.
  *
  * @param {object}  opts
- * @param {string}  opts.label              - 탭 레이블 텍스트 (escHtml 처리됨)
+ * @param {string}  [opts.label]            - 탭 레이블 텍스트 (escHtml 처리됨)
  * @param {boolean} [opts.selected=false]   - 선택 상태 여부 (aria-selected 값)
  * @param {string}  [opts.value]            - data-tab-value 속성값 (탭 식별자, 선택적)
  * @returns {string} HTML 문자열

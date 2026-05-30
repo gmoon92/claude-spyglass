@@ -35,7 +35,9 @@ try {
 } catch { /* sessionStorage 미지원/거부 시 silent fallback */ }
 
 // ── appMode (ADR-003 + settings-page) ──
-export function getAppMode()          { return _appMode; }
+/** @returns {'browse'|'metadocs'|'settings'} */
+export function getAppMode()          { return /** @type {'browse'|'metadocs'|'settings'} */ (_appMode); }
+/** @param {'browse'|'metadocs'|'settings'} m */
 export function setAppMode(m) {
   if (m !== 'browse' && m !== 'metadocs' && m !== 'settings') return;
   _appMode = m;

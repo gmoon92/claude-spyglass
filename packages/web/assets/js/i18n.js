@@ -114,7 +114,7 @@
    * @returns {unknown}
    */
   function getByPath(obj, parts) {
-    let cur = obj;
+    let cur = /** @type {unknown} */ (obj);
     for (const part of parts) {
       if (cur == null || typeof cur !== 'object') return undefined;
       cur = /** @type {Record<string, unknown>} */ (cur)[part];

@@ -1,3 +1,4 @@
+// @ts-check
 // 모델 분류·칩 렌더링 — ADR-data-trust-visual-001 / ADR-token-trust-cleanup-001.
 //
 // 변경 이유: 모델 family/버전 매핑 정책, trust 시각 표지 정책 변경 시 묶여서 손이 가는 묶음.
@@ -156,6 +157,8 @@ export function makeModelCell(r) {
 export function rowTrustClass(r) {
   if (r.type === 'tool_call' || r.type === 'system') return '';
   const t = trustOf(r);
-  if (t === 'trusted' || t === 'external') return '';
+  if (t === 'trusted') return '';
+  // 'external'은 trustOf 반환 타입에 없으나 런타임 호환 방어용 캐스팅
+  if (/** @type {string} */ (t) === 'external') return '';
   return ` row-trust-${t}`;
 }

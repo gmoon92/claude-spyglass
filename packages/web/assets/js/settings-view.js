@@ -27,6 +27,13 @@
  */
 
 import { escHtml } from './formatters.js';
+import { asEl, asButton } from './dom.js';
+
+/**
+ * sticky alert 요소 — HTMLElement에 dismiss/remove 타이머 슬롯을 부착한 로컬 확장 타입.
+ * 전역 Element를 오염시키지 않고 이 객체에만 국한해 typedef로 좁힌다 (R5).
+ * @typedef {HTMLElement & { _dismissTimer?: ReturnType<typeof setTimeout>|null, _removeTimer?: ReturnType<typeof setTimeout>|null }} StickyAlertEl
+ */
 
 // =============================================================================
 // 디자인 시스템 SVG 아이콘 — 이모지 대신 통일 사용 (사용자 요청 2026-05-26)
@@ -71,7 +78,7 @@ let _activeTab = 'diag';
  * - 현재 활성 sub-tab 의 본문 렌더 (기본: diag).
  */
 export function enterSettingsMode() {
-  const view = document.querySelector(VIEW_SELECTOR);
+  const view = asEl(document.querySelector(VIEW_SELECTOR));
   if (!view) return;
   view.hidden = false;
   _generation++;
@@ -83,7 +90,7 @@ export function enterSettingsMode() {
 
 /** 설정 모드 종료 — in-flight fetch 결과를 무시하도록 generation 증가. */
 export function exitSettingsMode() {
-  const view = document.querySelector(VIEW_SELECTOR);
+  const view = asEl(document.querySelector(VIEW_SELECTOR));
   if (!view) return;
   view.hidden = true;
   _generation++;
@@ -343,7 +350,7 @@ async function renderDiagSection() {
   // jump 버튼 위임 — diag 행의 [→] 버튼들이 sub-tab 전환.
   el.querySelectorAll('[data-settings-jump]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const next = btn.dataset.settingsJump;
+      const next = asEl(btn).dataset.settingsJump;
       if (!next) return;
       _activeTab = next;
       const nav = document.querySelector(NAV_SELECTOR);
@@ -494,11 +501,11 @@ async function renderHooksSection() {
   // 옵션 카드 클릭 — 라디오 동작 시뮬레이션.
   el.querySelectorAll('[data-hook-profile]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const next = btn.dataset.hookProfile;
+      const next = asEl(btn).dataset.hookProfile;
       if (next !== 'full' && next !== 'minimal') return;
       _selectedProfile = next;
       el.querySelectorAll('[data-hook-profile]').forEach((b) => {
-        const isActive = b.dataset.hookProfile === next;
+        const isActive = asEl(b).dataset.hookProfile === next;
         b.classList.toggle('is-active', isActive);
         b.setAttribute('aria-checked', String(isActive));
       });
@@ -573,9 +580,10 @@ function showStickyAlert(message, kind = 'info') {
     else view.appendChild(slot);
   }
   // 동일 kind 이미 있으면 메시지만 갱신 + 기존 타이머 무효화.
-  let alert = slot.querySelector(`.settings-sticky-alert[data-alert-kind="${kind}"]`);
+  /** @type {StickyAlertEl} */
+  let alert = /** @type {StickyAlertEl} */ (slot.querySelector(`.settings-sticky-alert[data-alert-kind="${kind}"]`));
   if (!alert) {
-    alert = document.createElement('div');
+    alert = /** @type {StickyAlertEl} */ (document.createElement('div'));
     alert.className = `settings-sticky-alert settings-sticky-alert-${kind}`;
     alert.dataset.alertKind = kind;
     slot.appendChild(alert);
@@ -832,12 +840,12 @@ async function renderGraphSection() {
 
   // 옵션 카드 클릭 위임 (이전 방식 복원).
   el.querySelectorAll('[data-graph-mode]').forEach((btn) => {
-    btn.addEventListener('click', () => onGraphMode(btn.dataset.graphMode));
+    btn.addEventListener('click', () => onGraphMode(asEl(btn).dataset.graphMode));
   });
 
   // Ladybug 의존성 — 자동 설치 버튼.
   el.querySelectorAll('[data-ladybug-install]').forEach((btn) => {
-    btn.addEventListener('click', () => onLadybugInstall(btn.dataset.ladybugInstall));
+    btn.addEventListener('click', () => onLadybugInstall(asEl(btn).dataset.ladybugInstall));
   });
 }
 
@@ -903,12 +911,12 @@ async function onLadybugInstall(strategy) {
     <div class="install-running" data-role="running">${t('ui.settings-view.graph.ladybug.running') || t('ui.settings-view.graph.ladybug.installing')}</div>
     <div class="install-summary" data-role="summary"></div>
   `;
-  const cmdEl = resultEl.querySelector('[data-role="cmd"]');
-  const streamEl = resultEl.querySelector('[data-role="stream"]');
-  const runningEl = resultEl.querySelector('[data-role="running"]');
-  const summaryEl = resultEl.querySelector('[data-role="summary"]');
+  const cmdEl = asEl(resultEl.querySelector('[data-role="cmd"]'));
+  const streamEl = asEl(resultEl.querySelector('[data-role="stream"]'));
+  const runningEl = asEl(resultEl.querySelector('[data-role="running"]'));
+  const summaryEl = asEl(resultEl.querySelector('[data-role="summary"]'));
 
-  document.querySelectorAll('[data-ladybug-install]').forEach((b) => { b.disabled = true; });
+  document.querySelectorAll('[data-ladybug-install]').forEach((b) => { asButton(b).disabled = true; });
 
   const appendLine = (line, kind) => {
     const span = document.createElement('span');
@@ -972,7 +980,7 @@ async function onLadybugInstall(strategy) {
     }
   } finally {
     if (runningEl) runningEl.remove();
-    document.querySelectorAll('[data-ladybug-install]').forEach((b) => { b.disabled = false; });
+    document.querySelectorAll('[data-ladybug-install]').forEach((b) => { asButton(b).disabled = false; });
   }
 
   if (aborted) return;
@@ -1015,7 +1023,7 @@ async function onGraphMode(mode) {
 
     // 옵션 카드 active 갱신.
     document.querySelectorAll('[data-graph-mode]').forEach((b) => {
-      const isActive = b.dataset.graphMode === mode;
+      const isActive = asEl(b).dataset.graphMode === mode;
       b.classList.toggle('is-active', isActive);
       b.setAttribute('aria-checked', String(isActive));
     });
@@ -1319,7 +1327,7 @@ async function renderProxySection() {
   // 옵션 카드 클릭 — 셸 선택 갱신 + 재렌더 (port/스니펫이 셸 종류에 따라 다름).
   el.querySelectorAll('[data-proxy-shell]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const next = btn.dataset.proxyShell;
+      const next = asEl(btn).dataset.proxyShell;
       if (!next || next === _proxyShell) return;
       _proxyShell = next;
       renderProxySection();
@@ -1409,7 +1417,7 @@ async function refreshProxyStatusInline() {
 async function onProxyRestore(backupPath) {
   const out = document.getElementById('proxyResult');
   if (!out || !backupPath) return;
-  const btn = out.querySelector('#proxyUndoBtn');
+  const btn = asButton(out.querySelector('#proxyUndoBtn'));
   if (btn) {
     btn.disabled = true;
     btn.textContent = t('ui.settings-view.proxy.restoring');

@@ -24,6 +24,7 @@
  */
 
 import { subTypeOf, SUB_TYPES } from '../request-types.js';
+import { asEl } from '../dom.js';
 // anomaly-bloated-sys ADR-003: 클라이언트 계산 폐기.
 //  서버가 응답 행에 `bloated_sys`/`agent_spike` 필드를 채워 보낸다.
 //  packages/web/assets/js/anomaly.js 는 표시 매핑 헬퍼만 유지.
@@ -76,7 +77,8 @@ export function applyDetailFilter() {
     skill:    `Skill (${countMap.skill})`,
     mcp:      `MCP (${countMap.mcp})`,
   };
-  document.querySelectorAll('#detailTypeFilterBtns .type-filter-btn').forEach(b => {
+  document.querySelectorAll('#detailTypeFilterBtns .type-filter-btn').forEach(node => {
+    const b = asEl(node);
     if (labelMap[b.dataset.detailFilter]) b.textContent = labelMap[b.dataset.detailFilter];
   });
 

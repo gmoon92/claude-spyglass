@@ -1,4 +1,6 @@
 // Cache 셀 호버 툴팁 — position: fixed, 뷰포트 충돌 방지
+import { asEl } from './dom.js';
+
 function fmtNum(n) {
   return Number(n).toLocaleString('en-US');
 }
@@ -46,19 +48,19 @@ export function initCacheTooltip() {
   }
 
   document.addEventListener('mouseover', e => {
-    const cell = e.target.closest('.cache-cell');
+    const cell = asEl(e.target).closest('.cache-cell');
     if (!cell) return;
-    show(e, cell.dataset.cacheRead, cell.dataset.cacheWrite);
+    show(e, asEl(cell).dataset.cacheRead, asEl(cell).dataset.cacheWrite);
   });
 
   document.addEventListener('mousemove', e => {
     if (tooltip.style.display === 'none') return;
-    if (!e.target.closest('.cache-cell')) { hide(); return; }
+    if (!asEl(e.target).closest('.cache-cell')) { hide(); return; }
     position(e);
   });
 
   document.addEventListener('mouseout', e => {
-    if (!e.target.closest('.cache-cell')) return;
+    if (!asEl(e.target).closest('.cache-cell')) return;
     hide();
   });
 }
