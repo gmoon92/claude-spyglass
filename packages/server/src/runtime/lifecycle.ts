@@ -33,7 +33,7 @@ import {
   refreshGraphModeFromFile,
 } from '@spyglass/storage-graph';
 import { clearDiagLogs, getDiagLogDir, logDiagStatus } from '../diag-log';
-import { PORT, HOST, DB_PATH, SHUTDOWN_TIMEOUT_MS } from './config';
+import { PORT, HOST, DB_PATH, SHUTDOWN_TIMEOUT_MS, isNonLoopbackHost } from './config';
 import { startMaintenanceSchedule, stopMaintenanceSchedule } from './maintenance';
 import { handleRequest } from './dispatch';
 import { installServerStdioMirror } from './stdio-mirror';
@@ -134,6 +134,16 @@ export function startServer(options: {
     }
   } catch (e) {
     console.error('[Server] meta-docs bootstrap sync failed:', e);
+  }
+
+  // 보안 경고 (consistency-hardening P2.1): loopback 이 아닌 주소에 바인딩하면 평문 at-rest
+  //   DB(payload·system_prompts)가 네트워크에 노출될 수 있다. 기동은 막지 않고 경고만 — 운영자가
+  //   신뢰 네트워크에서만 의도적으로 사용하도록 한다.
+  if (isNonLoopbackHost(host)) {
+    console.warn(
+      `[Server] WARNING non-loopback bind (${host}) — DB is stored unencrypted at rest. ` +
+        `Use only on a trusted network.`,
+    );
   }
 
   // 서버 시작
