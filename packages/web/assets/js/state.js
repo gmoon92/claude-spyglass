@@ -1,3 +1,4 @@
+// @ts-check
 // state.js — 라우팅/뷰 상태 SSoT (ADR-003 라우팅 로직 단순화 + ADR-003 left-rail-meta-docs)
 //
 // 앱 모드 (ADR-003 left-rail-meta-docs + settings-page 2026-05-26):

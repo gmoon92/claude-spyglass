@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * context-window.js — 컨텍스트 윈도우 표시 유틸 (서버 SSoT 단일화 후 표시 전용).
  *

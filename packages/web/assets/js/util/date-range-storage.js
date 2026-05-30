@@ -1,3 +1,4 @@
+// @ts-check
 // util/date-range-storage.js — 활성 range localStorage hydrator
 //
 // date-range-filter ADR-004: preset만 저장, custom은 휘발 (절대시각 stale 위험).
@@ -32,7 +33,7 @@ export function saveDateRange(activeRange) {
 }
 
 /**
- * @returns {{type:'preset', value:string} | null} null이면 호출자가 default 사용
+ * @returns {import('../api.js').PresetRange | null} null이면 호출자가 default 사용
  */
 export function loadDateRange() {
   if (typeof localStorage === 'undefined') return null;
@@ -44,7 +45,8 @@ export function loadDateRange() {
   if (!parsed || parsed.v !== SCHEMA_VERSION) return null;
   if (parsed.type !== 'preset') return null;          // custom 저장된 경우 무시
   if (typeof parsed.value !== 'string') return null;
-  return { type: 'preset', value: parsed.value };
+  // 저장값은 런타임 string — setActiveRange가 normalizeRange로 재검증하므로 PresetValue로 좁힘.
+  return { type: 'preset', value: /** @type {import('../api.js').PresetValue} */ (parsed.value) };
 }
 
 /**

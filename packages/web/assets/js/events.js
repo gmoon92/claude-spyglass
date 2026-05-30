@@ -1,3 +1,4 @@
+// @ts-check
 // 커스텀 이벤트 이름 상수 (SSoT)
 
 export const FEED_UPDATED = 'feed:updated';

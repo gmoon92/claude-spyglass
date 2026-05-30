@@ -1,3 +1,4 @@
+// @ts-check
 // anomaly.js — 서버 응답 표시 헬퍼 (ADR-003 적용으로 계산 로직 폐기)
 //
 // 변경 이력 (anomaly-bloated-sys ADR-003):

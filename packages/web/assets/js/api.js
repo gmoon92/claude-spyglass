@@ -1,3 +1,4 @@
+// @ts-check
 // API / Fetch 모듈
 import { fmt, fmtToken, formatDuration } from './formatters.js';
 import { setTypeData, setSourceData, drawDonut, renderTypeLegend, getDonutMode } from './chart.js';
@@ -29,7 +30,8 @@ export const API = '';
 //   - setActiveRange(stringOrObject): normalize + freeze + 'cs:active-range-changed' 이벤트 발행
 //   - getActiveRange(): 현재 활성 range 객체 (읽기 전용 frozen)
 //
-/** @typedef {{type:'preset', value:'1h'|'today'|'yesterday'|'7d'|'30d'|'all'}} PresetRange */
+/** @typedef {'1h'|'today'|'yesterday'|'7d'|'30d'|'all'|'week'} PresetValue 'week'는 legacy 호환(T-06 제거 예정) */
+/** @typedef {{type:'preset', value:PresetValue}} PresetRange */
 /** @typedef {{type:'custom', from:number, to:number}} CustomRange */
 /** @typedef {PresetRange | CustomRange} ActiveRange */
 
@@ -48,7 +50,8 @@ const VALID_PRESETS = new Set(['1h', 'today', 'yesterday', '7d', '30d', 'all', '
  */
 function normalizeRange(input) {
   if (typeof input === 'string') {
-    const value = VALID_PRESETS.has(input) ? input : 'all';
+    // VALID_PRESETS.has가 런타임 유효성을 보장하므로 PresetValue로 좁힘 (tsc는 Set.has를 narrowing 못함).
+    const value = /** @type {PresetValue} */ (VALID_PRESETS.has(input) ? input : 'all');
     return { type: 'preset', value };
   }
   if (input && input.type === 'custom') {
@@ -63,8 +66,9 @@ function normalizeRange(input) {
 /** @param {ActiveRange} a @param {ActiveRange} b */
 function sameRange(a, b) {
   if (a.type !== b.type) return false;
-  if (a.type === 'preset') return a.value === b.value;
-  return a.from === b.from && a.to === b.to;
+  // type 동일성은 위에서 보장됨 — tsc는 a의 discriminant로 b를 좁히지 못하므로 명시 캐스팅.
+  if (a.type === 'preset') return a.value === /** @type {PresetRange} */ (b).value;
+  return a.from === /** @type {CustomRange} */ (b).from && a.to === /** @type {CustomRange} */ (b).to;
 }
 
 /**
@@ -103,9 +107,10 @@ export function setIsSSEConnected(v){ isSSEConnected = v; }
  * 순수 함수 — ActiveRange + now(ms epoch)를 받아 from/to 계산.
  * 테스트 용이성을 위해 export (TZ 의존을 now 주입으로 격리).
  * CONTRACT: returns {} or {from:number, to:number}. DO NOT leak {type, value}.
+ * 타입 표기는 `{from?, to?}` (런타임은 빈 객체 또는 둘 다 채움 — 부분 객체 미발생).
  * @param {ActiveRange} activeRange
  * @param {number} now
- * @returns {{}|{from:number, to:number}}
+ * @returns {{from?:number, to?:number}}
  */
 export function computeRange(activeRange, now) {
   if (activeRange.type === 'custom') {
@@ -150,7 +155,7 @@ export function computeRange(activeRange, now) {
  * 활성 range를 from/to로 계산.
  * CONTRACT: returns {} or {from:number, to:number}. DO NOT leak {type, value}.
  * 변경 시 buildQuery / chart-policy / fetchAllSessions 전 호출자 점검 필수 (ADR-002).
- * @returns {{}|{from:number, to:number}}
+ * @returns {{from?:number, to?:number}}
  */
 export function getDateRange() {
   return computeRange(_activeRange, Date.now());
@@ -171,7 +176,8 @@ export function getMetricRangeParams() {
 
 export function buildQuery(base, extra = {}) {
   const range  = getDateRange();
-  const params = new URLSearchParams({ ...range, ...extra });
+  // URLSearchParams는 number 값을 런타임에서 문자열화함 — 타입만 Record<string,string>로 캐스팅.
+  const params = new URLSearchParams(/** @type {Record<string, string>} */ (/** @type {unknown} */ ({ ...range, ...extra })));
   const qs     = params.toString();
   return qs ? `${base}?${qs}` : base;
 }

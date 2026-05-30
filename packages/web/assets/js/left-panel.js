@@ -1,3 +1,4 @@
+// @ts-check
 // 좌측 패널 모듈 — 프로젝트/세션 렌더링
 // (툴 통계는 left-panel-observability-revamp ADR-001로 obs-panel.js 위젯으로 이동.
 //  detail view 도구 매트릭스는 ts-mx 가 단일 진실 소스.)

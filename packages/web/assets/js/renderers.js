@@ -1,3 +1,4 @@
+// @ts-check
 // renderers.js — 호환 shim (srp-redesign Phase 5).
 //
 // 671줄짜리 단일 파일을 변경 이유별로 render/* 6파일로 분해한 결과,

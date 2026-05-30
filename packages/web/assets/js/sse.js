@@ -1,3 +1,4 @@
+// @ts-check
 // sse.js — SSE 연결 관리 (콜백 주입 방식)
 // 공개 API: connectSSE({ onNewRequest, onOpen, onError, onNewProxyRequest?, onSessionUpdate? })
 //
