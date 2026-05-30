@@ -44,6 +44,8 @@ export {
   deleteRequest,
   deleteRequestsBySession,
   deleteOldRequests,
+  // R3: payload 인코딩 헬퍼
+  encodeRequestPayload,
 } from './write';
 
 // 일반 통계 — 헤더/요약 카드

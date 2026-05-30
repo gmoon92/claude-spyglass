@@ -73,6 +73,8 @@ function ensureDir(): void {
       + `       - model-trace.log\n`
       + `       - hook-payload.jsonl\n`
       + `       - proxy-payload.jsonl\n`
+      + `       ⚠ SECURITY: raw hook/proxy payloads (대화 본문 평문)가 디스크에 평문으로 기록됩니다.\n`
+      + `         파일은 0o600으로 생성되며 재시작 시 truncate됩니다. 백업/공유에서 제외하세요.\n`
       + `       (To disable: unset SPYGLASS_DIAG_ENABLED and restart)`,
   );
   initialized = true;
@@ -92,7 +94,8 @@ export function diagLog(category: string, message: string): void {
   try {
     ensureDir();
     const ts = new Date().toISOString();
-    appendFileSync(join(LOG_DIR, `${category}.log`), `${ts} ${message}\n`);
+    // R10: 진단 파일은 평문 payload를 담으므로 생성 시 소유자 전용(0o600)으로 강제.
+    appendFileSync(join(LOG_DIR, `${category}.log`), `${ts} ${message}\n`, { mode: 0o600 });
   } catch {
     // 진단 로그 실패는 본 흐름을 막지 않음
   }
@@ -104,7 +107,8 @@ export function diagJson(category: string, payload: Record<string, unknown>): vo
   try {
     ensureDir();
     const line = JSON.stringify({ ts: new Date().toISOString(), ...payload }) + '\n';
-    appendFileSync(join(LOG_DIR, `${category}.jsonl`), line);
+    // R10: 진단 파일은 평문 raw payload를 담으므로 생성 시 소유자 전용(0o600)으로 강제.
+    appendFileSync(join(LOG_DIR, `${category}.jsonl`), line, { mode: 0o600 });
   } catch {
     // 진단 로그 실패는 본 흐름을 막지 않음
   }
@@ -131,7 +135,8 @@ export function logDiagStatus(): void {
     console.log(
       `[Diag] SPYGLASS_DIAG_ENABLED=1 → diagnostic logs ON at ${LOG_DIR}\n`
         + `       categories: model-trace.log, hook-payload.jsonl, proxy-payload.jsonl\n`
-        + `       (To disable: unset SPYGLASS_DIAG_ENABLED and restart)`,
+        + `       ⚠ SECURITY: 대화 본문 등 raw payload가 평문으로 디스크에 기록됩니다(0o600, 재시작 시 truncate).\n`
+        + `         백업/공유에서 제외하세요. (To disable: unset SPYGLASS_DIAG_ENABLED and restart)`,
     );
   } else {
     console.log(

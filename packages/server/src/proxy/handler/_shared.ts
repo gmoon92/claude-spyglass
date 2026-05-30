@@ -11,6 +11,7 @@
  */
 
 import type { RequestMeta, StreamState } from '../types';
+import type { PayloadAlgo } from '@spyglass/storage';
 
 /**
  * handleProxy 진입 직후 한 번 수집하여 stream/non-stream 분기에 전달.
@@ -33,10 +34,12 @@ export interface HandlerContext {
   req: Request;
   /** 본문 파싱 결과 (model, messagesCount 등) */
   reqMeta: RequestMeta;
-  /** zstd 압축된 요청 본문 — 비어있거나 압축 실패 시 null */
+  /** 인코딩된 요청 본문(zstd 또는 zstd+aes256gcm) — 비어있거나 인코딩 실패 시 null */
   payload: Uint8Array | null;
   /** 압축 전 byte 크기 — DB에 raw size 적재 */
   payloadRawSize: number | null;
+  /** payload 인코딩 알고리즘(payload_algo 적재값) — 'zstd' | 'zstd+aes256gcm' | null (R3) */
+  payloadAlgo: PayloadAlgo;
   /** v19 hook ↔ proxy 매칭 키 */
   sessionId: string | null;
   /** v19 같은 turn 묶음 키 */

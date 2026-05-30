@@ -125,6 +125,8 @@ export {
   // 생성
   createRequest,
   createRequests,
+  // R3: payload 인코딩 헬퍼(raw INSERT/UPDATE 경로에서 동일 정책 적용용)
+  encodeRequestPayload,
   // 조회
   getRequestById,
   getAllRequests,
@@ -361,3 +363,33 @@ export {
   getRetentionDays,
   getRetentionCutoffTs,
 } from './runtime/retention';
+
+// =============================================================================
+// At-rest 컬럼 암호화 (R3) — AES-256-GCM + payload_algo 분기 codec SSoT
+// 소비처: 본문 컬럼(payload/content) 쓰기·읽기 전 경로. 기본 OFF(옵트인).
+// =============================================================================
+
+export {
+  isEncryptionEnabled,
+  resolveEncryptionKey,
+  generateKey,
+  parseKeyBase64,
+  encryptBytes,
+  decryptBytes,
+  defaultKeyFilePath,
+  type ResolveKeyOptions,
+} from './crypto';
+
+export {
+  encodeText,
+  decodeText,
+  encodeBlob,
+  decodeBlob,
+  type PayloadAlgo,
+} from './payload-codec';
+
+export {
+  getActiveKey,
+  shouldEncrypt,
+  resetEncryptionRuntime,
+} from './runtime/encryption';

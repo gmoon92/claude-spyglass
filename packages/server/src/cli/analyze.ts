@@ -28,7 +28,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { getDatabase, upsertSystemPrompt, invalidateAnomalyThresholdsCache } from '@spyglass/storage';
+import { getDatabase, upsertSystemPrompt, invalidateAnomalyThresholdsCache, decodeBlob, getActiveKey } from '@spyglass/storage';
 import { normalizeSystem } from '../proxy/system-hash';
 import { t } from '../i18n';
 
@@ -149,8 +149,8 @@ function backfillSystemByteSize(
   let offset = 0;
   while (offset < eligible) {
     const rows = db
-      .query<{ id: string; timestamp: number; payload: Uint8Array }, [number, number, number]>(
-        `SELECT id, timestamp, payload FROM proxy_requests
+      .query<{ id: string; timestamp: number; payload: Uint8Array; payload_algo: string | null }, [number, number, number]>(
+        `SELECT id, timestamp, payload, payload_algo FROM proxy_requests
           WHERE system_hash IS NULL
             AND payload IS NOT NULL
             AND timestamp BETWEEN ? AND ?
@@ -165,9 +165,9 @@ function backfillSystemByteSize(
         processed++;
         let body: { system?: unknown };
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const raw = (Bun as any).zstdDecompressSync(row.payload);
-          const text = new TextDecoder().decode(raw);
+          // R3: payload_algo 분기 디코드(zstd/zstd+aes256gcm) — 무조건 zstd 가정 제거.
+          const raw = decodeBlob(row.payload, row.payload_algo, getActiveKey());
+          const text = new TextDecoder().decode(raw!);
           body = JSON.parse(text);
         } catch {
           decodeError++;

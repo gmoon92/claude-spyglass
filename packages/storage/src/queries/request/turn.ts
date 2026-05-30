@@ -23,6 +23,8 @@
 import type { Database } from 'bun:sqlite';
 import type { Request } from '../../schema';
 import { ACTIVE_REQUEST_FILTER_SQL } from './read';
+import { decodeText } from '../../payload-codec';
+import { getActiveKey } from '../../runtime/encryption';
 
 // =============================================================================
 // 턴 집계 (Turn View)
@@ -199,6 +201,7 @@ export function getTurnsBySession(
     duration_ms: number;
     model: string | null;
     payload: string | null;
+    payload_algo: string | null;
     cache_read_tokens: number;
     cache_creation_tokens: number;
     tokens_confidence: string | null;
@@ -209,7 +212,7 @@ export function getTurnsBySession(
   };
 
   const allRows = db.query(`
-    SELECT turn_id, id, timestamp, type, preview, payload,
+    SELECT turn_id, id, timestamp, type, preview, payload, payload_algo,
            tokens_input, tokens_output, tokens_total, duration_ms,
            model, cache_read_tokens, cache_creation_tokens, tokens_confidence,
            tool_name, tool_detail, event_type, parent_tool_use_id
@@ -220,6 +223,15 @@ export function getTurnsBySession(
       AND ${ACTIVE_REQUEST_FILTER_SQL}
     ORDER BY turn_id, timestamp ASC
   `).all(sessionId) as UnifiedRow[];
+
+  // R3: payload를 payload_algo 분기로 서버측 복호(평문/암호문 혼재). 이후 turn 구조의
+  // prompt.payload/t.payload/r.payload가 모두 평문 string으로 클라이언트에 전달된다.
+  {
+    const key = getActiveKey();
+    for (const row of allRows) {
+      if (row.payload != null) row.payload = decodeText(row.payload, row.payload_algo, key) ?? row.payload;
+    }
+  }
 
   // ─── 2. 메모리 1-pass — turn 별 summary + type 별 분류 ───
   type Summary = {
@@ -456,9 +468,9 @@ export function getTurnsBySession(
  * @returns 빈 배열이면 프롤로그 없음 — 호출자가 UI 섹션을 그리지 않음.
  */
 export function getOrphanRowsBySession(db: Database, sessionId: string): Request[] {
-  return db.query(`
+  const rows = db.query(`
     SELECT id, session_id, timestamp, type, tool_name, tool_detail, turn_id, model,
-           tokens_input, tokens_output, tokens_total, duration_ms, payload, source,
+           tokens_input, tokens_output, tokens_total, duration_ms, payload, payload_algo, source,
            cache_creation_tokens, cache_read_tokens, preview, tool_use_id, event_type,
            tokens_confidence, tokens_source, parent_tool_use_id, api_request_id,
            permission_mode, agent_id, agent_type, tool_interrupted, tool_user_modified,
@@ -468,4 +480,10 @@ export function getOrphanRowsBySession(db: Database, sessionId: string): Request
       AND ${ACTIVE_REQUEST_FILTER_SQL}
     ORDER BY timestamp ASC
   `).all(sessionId) as Request[];
+  // R3: payload_algo 분기 복호(평문/암호문 혼재).
+  const key = getActiveKey();
+  for (const r of rows) {
+    if (r.payload != null) r.payload = decodeText(r.payload, r.payload_algo, key) ?? r.payload;
+  }
+  return rows;
 }

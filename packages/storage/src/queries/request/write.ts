@@ -15,6 +15,18 @@
 
 import type { Database } from 'bun:sqlite';
 import type { RequestType } from '../../schema';
+import { encodeText } from '../../payload-codec';
+import { getActiveKey, shouldEncrypt } from '../../runtime/encryption';
+
+/**
+ * R3: requests.payload 쓰기 인코딩. 옵트인 시 AES-256-GCM(base64-in-TEXT), OFF면 평문(algo NULL).
+ * payload가 없으면 value/algo 모두 null. requests.payload는 TEXT 유지(string→BLOB 변경 없음).
+ */
+export function encodeRequestPayload(payload: string | null | undefined): { value: string | null; algo: string | null } {
+  if (payload == null) return { value: null, algo: null };
+  const { value, algo } = encodeText(payload, shouldEncrypt() ? getActiveKey() : null);
+  return { value, algo: algo ?? null };
+}
 
 // =============================================================================
 // 생성 (Create)
@@ -64,8 +76,8 @@ const SQL_CREATE_REQUEST = `
     cache_creation_tokens, cache_read_tokens, preview, tool_use_id, event_type,
     tokens_confidence, tokens_source, parent_tool_use_id, api_request_id,
     permission_mode, agent_id, agent_type, tool_interrupted, tool_user_modified,
-    slash_command
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    slash_command, payload_algo
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 /**
@@ -75,6 +87,7 @@ export function createRequest(
   db: Database,
   params: CreateRequestParams
 ): string {
+  const enc = encodeRequestPayload(params.payload);
   db.query(SQL_CREATE_REQUEST).run(
     params.id,
     params.session_id,
@@ -88,7 +101,7 @@ export function createRequest(
     params.tokens_output ?? 0,
     params.tokens_total ?? 0,
     params.duration_ms ?? 0,
-    params.payload ?? null,
+    enc.value,
     params.source ?? null,
     params.cache_creation_tokens ?? 0,
     params.cache_read_tokens ?? 0,
@@ -104,7 +117,8 @@ export function createRequest(
     params.agent_type ?? null,
     params.tool_interrupted ?? null,
     params.tool_user_modified ?? null,
-    params.slash_command ?? null
+    params.slash_command ?? null,
+    enc.algo
   );
   return params.id;
 }
@@ -119,6 +133,7 @@ export function createRequests(
   const stmt = db.prepare(SQL_CREATE_REQUEST);
   const insert = db.transaction((items: CreateRequestParams[]) => {
     for (const item of items) {
+      const enc = encodeRequestPayload(item.payload);
       stmt.run(
         item.id,
         item.session_id,
@@ -132,7 +147,7 @@ export function createRequests(
         item.tokens_output ?? 0,
         item.tokens_total ?? 0,
         item.duration_ms ?? 0,
-        item.payload ?? null,
+        enc.value,
         item.source ?? null,
         item.cache_creation_tokens ?? 0,
         item.cache_read_tokens ?? 0,
@@ -148,7 +163,8 @@ export function createRequests(
         item.agent_type ?? null,
         item.tool_interrupted ?? null,
         item.tool_user_modified ?? null,
-        item.slash_command ?? null
+        item.slash_command ?? null,
+        enc.algo
       );
     }
   });
@@ -182,8 +198,12 @@ export function updateRequest(
     values.push(params.duration_ms);
   }
   if (params.payload !== undefined) {
+    // R3: payload 갱신 시 동일 인코딩 정책 적용 + payload_algo 동기 기록.
+    const enc = encodeRequestPayload(params.payload);
     fields.push('payload = ?');
-    values.push(params.payload);
+    values.push(enc.value);
+    fields.push('payload_algo = ?');
+    values.push(enc.algo);
   }
 
   if (fields.length === 0) return false;

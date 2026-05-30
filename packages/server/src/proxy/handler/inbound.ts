@@ -17,6 +17,7 @@ import { selectUpstreamUrl, buildForwardHeaders, UPSTREAM_URL } from '../upstrea
 import { parseRequestBody } from '../request-parser';
 import { extractClientHeaders } from '../audit-headers';
 import { getLastTurnId } from '../../hook';
+import { encodeBlob, getActiveKey, shouldEncrypt, type PayloadAlgo } from '@spyglass/storage';
 import type { HandlerContext } from './_shared';
 
 const EMPTY_REQ_META: RequestMeta = {
@@ -44,15 +45,21 @@ export async function buildInboundContext(
   const bodyBuffer = req.body ? await req.arrayBuffer() : null;
   const reqMeta: RequestMeta = bodyBuffer ? parseRequestBody(bodyBuffer) : { ...EMPTY_REQ_META };
 
-  // v21: 요청 본문 zstd 압축 — bodyBuffer가 없거나 0 byte면 압축 생략 (DB에는 NULL).
+  // v21: 요청 본문 zstd 압축 — bodyBuffer가 없거나 0 byte면 생략 (DB에는 NULL).
+  // R3: 옵트인(SPYGLASS_ENCRYPTION) 시 압축 후 AES-256-GCM 암호화(payload_algo='zstd+aes256gcm').
+  // 인코딩 분기는 payload-codec(encodeBlob)에 SSoT로 위임.
   let payload: Uint8Array | null = null;
   let payloadRawSize: number | null = null;
+  let payloadAlgo: PayloadAlgo = null;
   if (bodyBuffer && bodyBuffer.byteLength > 0) {
     try {
-      payload = Bun.zstdCompressSync(new Uint8Array(bodyBuffer));
+      const key = shouldEncrypt() ? getActiveKey() : null;
+      const encoded = encodeBlob(new Uint8Array(bodyBuffer), key);
+      payload = encoded.value;
+      payloadAlgo = encoded.algo;
       payloadRawSize = bodyBuffer.byteLength;
     } catch (err) {
-      console.warn('[PROXY] Payload compression failed:', err);
+      console.warn('[PROXY] Payload encoding failed:', err);
     }
   }
 
@@ -69,7 +76,7 @@ export async function buildInboundContext(
     bodyBuffer,
     ctx: {
       requestId, startMs, method, path, url, req,
-      reqMeta, payload, payloadRawSize,
+      reqMeta, payload, payloadRawSize, payloadAlgo,
       sessionId, turnId,
       clientUserAgent, clientApp, anthropicBeta, clientMeta,
     },

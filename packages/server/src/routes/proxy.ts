@@ -16,6 +16,8 @@ import {
   getProxyRequestsBySession,
   getProxyStats,
   getRecentProxyRequests,
+  decodeBlob,
+  getActiveKey,
 } from '@spyglass/storage';
 import { jsonResponse, type RouteHandler } from './_shared';
 
@@ -47,13 +49,15 @@ export const proxyRouter: RouteHandler = (_req, db, url, path, method) => {
     const row = getProxyRequestById(db, id);
     if (!row) return jsonResponse({ success: false, error: 'proxy request not found' }, 404);
 
-    // payload BLOB → zstd 디코드 → JSON.parse → body.messages 추출 (graceful — 실패해도 200 with empty)
+    // payload BLOB → (payload_algo 분기) 디코드 → JSON.parse → body.messages 추출.
+    // R3: payload_algo로 zstd/zstd+aes256gcm 분기(decodeBlob SSoT) — 무조건 zstd 가정 제거.
+    // graceful — 실패해도 200 with empty.
     let messages: unknown[] = [];
     let decodeError: string | null = null;
     if (row.payload instanceof Uint8Array && row.payload.byteLength > 0) {
       try {
-        const raw = Bun.zstdDecompressSync(row.payload);
-        const text = new TextDecoder().decode(raw);
+        const raw = decodeBlob(row.payload, row.payload_algo, getActiveKey());
+        const text = new TextDecoder().decode(raw!);
         const body = JSON.parse(text) as { messages?: unknown };
         if (Array.isArray(body.messages)) messages = body.messages;
       } catch (err) {

@@ -25,6 +25,8 @@
  */
 
 import type { Database } from 'bun:sqlite';
+import { encodeText, decodeText } from '../payload-codec';
+import { getActiveKey, shouldEncrypt } from '../runtime/encryption';
 
 // =============================================================================
 // 타입 정의
@@ -40,6 +42,8 @@ export interface SystemPromptRow {
   last_seen_at: number;
   ref_count: number;
   created_at: number;
+  /** R3: content at-rest 인코딩 마커. NULL=평문, 'aes256gcm'=암호문(base64-in-TEXT). */
+  content_algo?: string | null;
 }
 
 /** 라이브러리 목록용 — 본문(content) 제외, 메타만. JOIN/응답 페이로드를 가볍게 유지. */
@@ -81,16 +85,18 @@ export type SystemPromptOrderBy =
  *       기존 행의 last_seen_at보다 더 이르면(시간 역행 케이스) 그대로 덮어쓰므로,
  *       호출자가 nowMs를 정상적인 요청 타임스탬프로 보장해야 한다.
  */
+// R3: content_algo 추가. hash는 평문 SHA-256 유지(dedup PK) — content만 암호화.
+// ON CONFLICT는 content/content_algo를 갱신하지 않음(동일 hash=동일 평문, 최초 저장값 보존).
 const SQL_UPSERT = `
-  INSERT INTO system_prompts (hash, content, byte_size, segment_count, first_seen_at, last_seen_at, ref_count)
-  VALUES (?, ?, ?, ?, ?, ?, 1)
+  INSERT INTO system_prompts (hash, content, byte_size, segment_count, first_seen_at, last_seen_at, ref_count, content_algo)
+  VALUES (?, ?, ?, ?, ?, ?, 1, ?)
   ON CONFLICT(hash) DO UPDATE SET
     last_seen_at = excluded.last_seen_at,
     ref_count    = ref_count + 1
 `;
 
 const SQL_GET_BY_HASH = `
-  SELECT hash, content, byte_size, segment_count, first_seen_at, last_seen_at, ref_count, created_at
+  SELECT hash, content, byte_size, segment_count, first_seen_at, last_seen_at, ref_count, created_at, content_algo
   FROM system_prompts
   WHERE hash = ?
 `;
@@ -115,13 +121,19 @@ const SQL_LIST_BASE = `
  * @param p    UpsertSystemPromptParams (hash + content + byteSize + segmentCount + nowMs)
  */
 export function upsertSystemPrompt(db: Database, p: UpsertSystemPromptParams): void {
+  // R3: 옵트인 시 content를 AES-256-GCM(base64-in-TEXT)로 암호화. hash·byte_size는 평문 기준 유지.
+  const { value: contentValue, algo } = encodeText(
+    p.content,
+    shouldEncrypt() ? getActiveKey() : null,
+  );
   db.run(SQL_UPSERT, [
     p.hash,
-    p.content,
+    contentValue,
     p.byteSize,
     p.segmentCount,
     p.nowMs,
     p.nowMs,
+    algo ?? null,
   ]);
 }
 
@@ -131,7 +143,12 @@ export function upsertSystemPrompt(db: Database, p: UpsertSystemPromptParams): v
  * @returns SystemPromptRow 또는 hash 미존재 시 null
  */
 export function getSystemPromptByHash(db: Database, hash: string): SystemPromptRow | null {
-  return (db.query(SQL_GET_BY_HASH).get(hash) as SystemPromptRow | null) ?? null;
+  const row = (db.query(SQL_GET_BY_HASH).get(hash) as SystemPromptRow | null) ?? null;
+  if (row) {
+    // R3: content_algo 분기 복호(평문/암호문 혼재 대응).
+    row.content = decodeText(row.content, row.content_algo, getActiveKey()) ?? row.content;
+  }
+  return row;
 }
 
 /**

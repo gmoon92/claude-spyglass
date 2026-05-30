@@ -105,10 +105,10 @@ function buildPersistArgs(
     tool_names: reqMeta.toolNames,
     metadata_user_id: reqMeta.metadataUserId,
     client_meta_json: ctx.clientMeta,
-    // v21: compressed payload
+    // v21: compressed payload / R3: 인코딩 알고리즘은 inbound(encodeBlob)가 결정
     payload: ctx.payload,
     payload_raw_size: ctx.payloadRawSize,
-    payload_algo: ctx.payload ? 'zstd' : null,
+    payload_algo: ctx.payloadAlgo ?? null,
     // v22: system_prompts cross-link
     system_hash: reqMeta.systemHash ?? null,
     system_byte_size: reqMeta.systemByteSize ?? null,
