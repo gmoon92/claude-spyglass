@@ -29,6 +29,24 @@ jobs:
         env:
           TMPDIR: /tmp/spyglass-ci-${{ matrix.package }}-${{ github.run_id }}
 
+  web-typecheck:
+    name: web typecheck (checkJs, non-blocking)
+    runs-on: ubuntu-latest
+    # 비차단: web은 buildless ESM + JS이고 @ts-check가 파일 단위로만 적용된다(T08).
+    # checkJs 베이스라인 에러가 0이 아니므로 게이트로 강제하지 않는다.
+    # T09에서 @ts-check 점진 적용으로 에러를 0까지 줄인 뒤 차단 모드로 승격한다.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: '1.2.x' }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - run: bun run --cwd packages/web typecheck
+
   contract:
     name: read-endpoint contract
     runs-on: ubuntu-latest

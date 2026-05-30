@@ -103,6 +103,10 @@
       "name": "@spyglass/types",
       "version": "0.1.0",
     },
+    "packages/web": {
+      "name": "@spyglass/web",
+      "version": "0.1.0",
+    },
   },
   "trustedDependencies": [
     "@ladybugdb/core",
@@ -169,6 +173,8 @@
     "@spyglass/tui": ["@spyglass/tui@workspace:packages/tui"],
 
     "@spyglass/types": ["@spyglass/types@workspace:packages/types"],
+
+    "@spyglass/web": ["@spyglass/web@workspace:packages/web"],
 
     "@stablelib/base64": ["@stablelib/base64@1.0.1", "", {}, "sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ=="],
 

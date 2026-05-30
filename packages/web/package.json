@@ -1,0 +1,10 @@
+{
+  "name": "@spyglass/web",
+  "version": "0.1.0",
+  "description": "Spyglass browser dashboard (buildless ESM, served as static assets by @spyglass/server)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}
