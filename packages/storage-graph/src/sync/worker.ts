@@ -127,25 +127,107 @@ export function getSyncWorkerStatus(): SyncWorkerStatus {
 // 본 tick
 // =============================================================================
 
+/** runOutboxTick 결과 — 모듈 상태(totalProcessed/lastError) 갱신용. */
+export interface OutboxTickResult {
+  /** cursor 가 실제로 통과(전진)한 row 수. */
+  processed: number;
+  /** 이번 tick 의 대표 에러(없으면 null). */
+  error: unknown;
+}
+
+/** cursor / circuit-breaker 의존성 — 싱글톤 대신 주입받아 단위 테스트 가능하게. */
+interface CursorLike {
+  current: number;
+  advance(id: number): void;
+}
+interface BreakerLike {
+  recordSuccess(): void;
+  recordFailure(error?: unknown): void;
+}
+
 /**
- * 한 tick = (a) traffic allowed 인지 회로 체크 → (b) outbox batch SELECT (dead 제외) →
- * (c) row 단위 enrich → merge → (d) 실패 row 격리(attempts/dead) → (e) cursor 정밀 전진.
+ * 한 tick 의 outbox 처리 본체 (deps 주입 — 테스트 가능).
  *
- * 실패 격리 정책 (consistency-hardening P1 — HoL 블로킹 제거):
- *   - 각 outbox row 를 id 오름차순으로 개별 enrich→merge. 한 row 의 op 중 하나라도
- *     실패하면 그 row 는 "실패"로 보고 attempts++/last_error 기록. attempts 가
- *     MAX_OUTBOX_ATTEMPTS 에 도달하면 dead=1 로 DLQ 격리(이후 readOutboxBatch 가 제외).
- *   - cursor 는 "아직 살아있는(dead 아님) 최저 실패 row id 직전" 까지만 전진한다.
- *     즉 독성 row 가 dead 가 되기 전까지는 그 앞에서 멈춰 재시도하지만, 그 *앞쪽*의
- *     성공 row 들은 cursor 가 통과시켜 더 이상 재처리되지 않는다.
- *   - Ladybug 트랜잭션은 no-op(롤백 없음)이라 부분 적용이 원래 모델 — 모든 op 가
- *     idempotent MERGE 라 재시도/부분적용 모두 데이터 손상 0.
+ * systemic(시스템 장애) vs poison(진짜 독성 row) 구분 (consistency-hardening P1 보강):
+ *   - **Phase 1** — batch 의 각 row 를 enrich→merge 하고 성공/실패만 *수집*한다(이 단계에선
+ *     attempts/dead 같은 DLQ 부수효과를 만들지 않는다).
+ *   - **Phase 2a — 전량 실패(anySuccess=false)**: Ladybug 연결 단절 등 *시스템 장애*로 간주.
+ *     attempts/dead 를 건드리지 않고(=일시 장애에 멀쩡한 row 가 대량 오격리되는 것을 방지)
+ *     cursor 를 동결한 채 회로 failure 만 보고한다 → 장애 복구 후 batch 전체 재시도.
+ *   - **Phase 2b — 1건 이상 성공(시스템 healthy)**: 실패한 row 는 *시스템이 정상인데도* 실패한
+ *     것이므로 진짜 독성으로 확정 → recordOutboxFailure 로 attempts++/dead 격리한다. cursor 는
+ *     미해결(dead 아님) 최저 실패 row 직전까지 전진(HoL 은 그 row 에만 국한, ≤MAX tick),
+ *     회로는 success 로 보고(독성 1개 때문에 회로를 열지 않음).
  *
- * 회로 차단 정책:
- *   - batch 에서 *하나라도* 성공하면 recordSuccess — 정상 트래픽이 흐르므로 독성 row
- *     1개 때문에 회로를 열지 않는다.
- *   - batch 전체가 실패한 경우(=Ladybug 연결 단절 등 시스템 장애)에만 recordFailure —
- *     이때만 회로가 OPEN 으로 가는 것이 옳다.
+ *   Ladybug 트랜잭션은 no-op(롤백 없음)이라 부분 적용이 원래 모델 — 모든 op 가 idempotent
+ *   MERGE 라 재시도/부분적용 모두 데이터 손상 0.
+ */
+export async function runOutboxTick(
+  db: Database,
+  client: import('../client').LadybugClient,
+  cursor: CursorLike,
+  breaker: BreakerLike,
+): Promise<OutboxTickResult> {
+  const batch = readOutboxBatch(db, cursor.current, BATCH_LIMIT);
+  if (batch.length === 0) return { processed: 0, error: null };
+
+  // Phase 1 — merge 시도, 결과만 수집(DLQ 부수효과 없음).
+  const outcomes: Array<{ row: OutboxRow; error: unknown }> = [];
+  let anySuccess = false;
+  let firstFailureError: unknown = null;
+  for (const row of batch) {
+    let rowError: unknown = null;
+    try {
+      const ops = enrichOutboxRow(row, db);
+      const { failed } = await mergeOps(client, ops);
+      if (failed.length > 0) rowError = failed[0].error;
+    } catch (err) {
+      // enrich 자체 throw 도 row 실패로 취급(거의 없음, 방어적).
+      rowError = err;
+    }
+    outcomes.push({ row, error: rowError });
+    if (rowError === null) anySuccess = true;
+    else if (firstFailureError === null) firstFailureError = rowError;
+  }
+
+  // Phase 2a — 전량 실패 = 시스템 장애. DLQ/cursor 손대지 않고 회로만 보고 → 재시도.
+  if (!anySuccess) {
+    if (firstFailureError !== null && !(firstFailureError instanceof LadybugUnavailableError)) {
+      breaker.recordFailure(firstFailureError);
+    }
+    return { processed: 0, error: firstFailureError };
+  }
+
+  // Phase 2b — 시스템 healthy. 실패 row 는 진짜 독성 → DLQ + cursor 정밀 전진.
+  let advanceTo = cursor.current;
+  let blocked = false;
+  let processed = 0;
+  for (const { row, error } of outcomes) {
+    if (error === null) {
+      if (!blocked) {
+        advanceTo = row.id;
+        processed++;
+      }
+      continue;
+    }
+    const becameDead = recordOutboxFailure(db, row.id, error);
+    if (becameDead && !blocked) {
+      // DLQ 격리됨 — cursor 가 통과해도 안전(이후 readOutboxBatch 가 제외).
+      advanceTo = row.id;
+      processed++;
+    } else if (!becameDead) {
+      // 재시도 여지 있음 — 이 row 직전에서 cursor 동결.
+      blocked = true;
+    }
+  }
+  if (advanceTo > cursor.current) cursor.advance(advanceTo);
+  breaker.recordSuccess();
+  return { processed, error: firstFailureError };
+}
+
+/**
+ * 200ms 주기 호출 래퍼 — 싱글톤(breaker/db/cursor/client)을 묶어 runOutboxTick 에 위임.
+ * 회로 OPEN 이면 skip, client 미준비면 cursor 동결 후 return. 동시 tick 방지.
  */
 async function tick(): Promise<void> {
   if (tickInFlight) return; // 동시 tick 방지.
@@ -156,8 +238,8 @@ async function tick(): Promise<void> {
 
     const db = getDatabase().getDb();
     const cursor = getSyncCursor();
-    const batch = readOutboxBatch(db, cursor.current, BATCH_LIMIT);
-    if (batch.length === 0) return;
+    // 빈 큐 빠른 체크 — 큐가 비었으면 native client init(dlopen) 자체를 회피.
+    if (readOutboxBatch(db, cursor.current, 1).length === 0) return;
 
     // Ladybug ready 보장 — 첫 tick 에서만 native dlopen + DDL apply.
     let client: import('../client').LadybugClient | null = null;
@@ -169,66 +251,10 @@ async function tick(): Promise<void> {
       return;
     }
     if (!client) return; // TS narrowing 보조 — 위 catch 가 return 했으므로 사실상 unreachable.
-    const readyClient = client;
 
-    let advanceTo = cursor.current; // 이 지점까지 cursor 전진 가능 (성공/dead row 의 최댓값).
-    let blocked = false;            // retryable 실패 row 를 만나면 true — 이후 cursor 전진 동결.
-    let anySuccess = false;
-    let anyFailure = false;
-    let firstFailureError: unknown = null;
-    let processedThisTick = 0;
-
-    for (const row of batch) {
-      // row 단위 enrich — enrich 자체 throw 도 row 실패로 취급(거의 없음, 방어적).
-      let rowError: unknown = null;
-      try {
-        const ops = enrichOutboxRow(row, db);
-        const { failed } = await mergeOps(readyClient, ops);
-        if (failed.length > 0) rowError = failed[0].error;
-      } catch (err) {
-        rowError = err;
-      }
-
-      if (rowError === null) {
-        // row 성공 — 아직 막히지 않았으면 cursor 전진 후보로.
-        // (blocked 이후의 성공 row 는 다음 tick 에 재처리되므로 여기선 세지 않는다.)
-        anySuccess = true;
-        if (!blocked) {
-          advanceTo = row.id;
-          processedThisTick++;
-        }
-        continue;
-      }
-
-      // row 실패 — attempts++/last_error 기록, MAX 도달 시 dead=1.
-      anyFailure = true;
-      if (firstFailureError === null) firstFailureError = rowError;
-      const becameDead = recordOutboxFailure(db, row.id, rowError);
-      if (becameDead && !blocked) {
-        // DLQ 격리됨 — 더 이상 재시도 안 하므로 cursor 가 통과해도 안전.
-        advanceTo = row.id;
-        processedThisTick++;
-      } else if (!becameDead) {
-        // 재시도 여지 있음 — 이 row 직전에서 cursor 동결(HoL 은 이 row 에만 국한).
-        blocked = true;
-      }
-    }
-
-    if (advanceTo > cursor.current) {
-      cursor.advance(advanceTo);
-      totalProcessed += processedThisTick;
-    }
-
-    // 회로 보고 — 부분 성공이면 success(HoL 해제), 전량 실패면 failure(시스템 장애 신호).
-    if (anySuccess) {
-      breaker.recordSuccess();
-      lastError = anyFailure ? firstFailureError : null;
-    } else if (anyFailure) {
-      lastError = firstFailureError;
-      if (!(firstFailureError instanceof LadybugUnavailableError)) {
-        breaker.recordFailure(firstFailureError);
-      }
-    }
+    const result = await runOutboxTick(db, client, cursor, breaker);
+    totalProcessed += result.processed;
+    lastError = result.error;
   } finally {
     tickInFlight = false;
   }
