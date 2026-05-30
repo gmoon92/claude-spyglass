@@ -35,7 +35,7 @@ bun test <영향 패키지>      # 동작 회귀 (현재 70 테스트)
 | T01 | metrics 의존성 정밀 분석 + 특성화 테스트 보강 | — | A | ✅ Done (브랜치 `stabilization/t01-metrics-tests`, +43 테스트) |
 | T02 | `@spyglass/metrics` 패키지 추출 | T01 | A | ✅ **Merged to main** (선반출 `c0c26c9` + 추출 `ad5c163`) |
 | T03 | proxy 의존성 정밀 분석 | — | B | ✅ Done (깨끗함 4/10 — 역참조 7건, 후순위 확정) |
-| T04 | ~~`@spyglass/proxy` 패키지 추출~~ → **사이클#2로 재정의** | — | B | 🔁 Redefined (proxy는 leaf 아님 — 공유 ingestion 파이프라인 bottom-up 선행 필요. ADR 참조) |
+| T04 | ~~`@spyglass/proxy` 패키지 추출~~ → 사이클#2 → **C2-1 분석 후 종결** | — | B | ✅ Closed (추출 불필요 — 파이프라인 이미 깨끗·응집단위 부재·proxy leaf화 미달. ADR C2-1 참조) |
 | T05 | meta-docs 의존성 분석 + 특성화 테스트 | — | C | ✅ Done (브랜치 `stabilization/t05-metadocs-tests`, +69 테스트) |
 | T06 | `@spyglass/meta-docs` 패키지 추출 | T05 | C | ✅ **Merged to main** (`fc08813`, ff 머지, 워크트리 정리됨) |
 | T07 | ~~cli↔runtime config 순환 해소~~ | — | D | ✅ Closed (순환 아님 — 모듈 레벨 acyclic, 변경 불필요) |
@@ -53,7 +53,7 @@ bun test <영향 패키지>      # 동작 회귀 (현재 70 테스트)
 - **web 27 fail (기존 코드 버그 2종, locale 무관)** — T08에서 clean main HEAD 재현으로 확정.
   - A. `assets/js/left-panel.js:33` top-level `document.addEventListener`가 비-DOM 테스트에서 throw → `api.js:37,39`(`VALID_PRESETS`/`_activeRange`) TDZ 연쇄 (21 fail +1 error). 브라우저 런타임은 정상, 테스트 격리 결함. 수정안: top-level side-effect 지연 등록 또는 테스트 DOM 프리로드.
   - B. `renderers.test.ts` 스냅샷 드리프트 — `ds-chip`/`role-badge` 디자인 변경 후 스냅샷 stale (9 fail). 수정안: 스냅샷 갱신.
-- **proxy 추출 (사이클#2)** — 공유 ingestion 파이프라인(`normalize→enrich→sse→persist`) 경계 정의 선행 필요(ADR 참조).
+- ~~proxy 추출 (사이클#2)~~ → **C2-1 분석 후 종결**: 공유 파이프라인이 이미 코어 역참조 0의 깨끗한 DAG라 추출이 줄일 결합이 없고, 응집 단위가 안 나오며(처리/전송/write 3관심사), 빼도 proxy는 dashboard/runtime/hook 결합으로 leaf화 안 됨. proxy는 hook 대칭 수집 어댑터로 server 영구 잔존. 선택적 경량 정리(sse `NormalizedRequest` → `@spyglass/types` 이관)만 후보.
 - **T09 @ts-check 점진** — web tsc baseline 427(@ts-check 0 상태 약검사). `window.I18n` ambient 선언 + `HTMLElement` 캐스팅 JSDoc으로 388 TS2339 대량 소거 가능. 테스트 보유 11개 파일부터.
 
 ## 진행 로그

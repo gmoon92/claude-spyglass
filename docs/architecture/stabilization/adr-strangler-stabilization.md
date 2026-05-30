@@ -67,7 +67,17 @@ leaf 추출(의존 역순, top-down)은 "형제를 import하지 않는 모듈"�
 
 ### 적용 사례 — proxy (T04)
 
-proxy 역참조 7건 분류: 배럴(`api`,`hook`) + 순수 leaf util(`in-flight`,`diag-log`) + **공유 도메인 코어(`sse`,`request-normalizer`,`anomaly-enricher`)**. 마지막이 핵심 — `normalize→enrich→sse→persist`는 proxy 전용이 아니라 hook(processor/events)·proxy·routes가 공유하는 **ingestion 파이프라인**이다. 따라서 proxy는 leaf가 아니라 **hook과 대칭인 수집 어댑터**다. proxy를 빼려면 공유 파이프라인을 먼저 도메인 코어로 정리해야 하며(bottom-up), 이는 hook까지 영향을 주는 큰 작업이라 **사이클#1(leaf 추출)에서 분리해 별도 사이클#2(ingestion 파이프라인 경계 정의)로 재정의**한다. T04는 사이클#1에서 Deferred.
+proxy 역참조 7건 분류: 배럴(`api`,`hook`) + 순수 leaf util(`in-flight`,`diag-log`) + **공유 도메인 코어(`sse`,`request-normalizer`,`anomaly-enricher`)**. 마지막이 핵심 — `normalize→enrich→sse→persist`는 proxy 전용이 아니라 hook(processor/events)·proxy·routes가 공유하는 **ingestion 파이프라인**이다. 따라서 proxy는 leaf가 아니라 **hook과 대칭인 수집 어댑터**다. proxy를 빼려면 공유 파이프라인을 먼저 도메인 코어로 정리해야 하며(bottom-up), 이는 hook까지 영향을 주는 큰 작업이라 **사이클#1(leaf 추출)에서 분리해 별도 사이클#2로 재정의**한다. T04는 사이클#1에서 Deferred.
+
+#### 사이클#2 분석(C2-1) 결과 — bottom-up 가설 기각, 물리 추출 불필요
+
+위 "공유 코어를 먼저 빼면 proxy가 leaf화된다"는 bottom-up 가설을 C2-1에서 전수 검증한 결과 **전제가 어긋났다**:
+
+1. **파이프라인이 이미 코어 역참조 0의 깨끗한 DAG** — normalizer/enricher/sse 모두 `routes|runtime|api`를 0번 import. 추출해도 줄일 결합이 없다(이미 0).
+2. **단일 응집 패키지가 성립하지 않음** — 처리(normalizer+enricher)·전송(sse, connections Set 소유 transport)·write(hook/persist, hook 내부 강결합)는 3개의 다른 관심사. 묶으면 잡탕 패키지.
+3. **빼도 proxy는 leaf화 안 됨** — `proxy/broadcast`는 파이프라인 외에 `api`(dashboard 캐시)·`runtime/in-flight`·`hook/turn`에 여전히 묶임. 파이프라인 추출은 7건 중 3건만 해소. proxy 추출이라는 원래 동기 미달성(ROI 음수).
+
+→ **새 결론 카테고리: "충분히 분리됨 + 응집 단위 부재 + 추출해도 목표 미달 → 추출 불필요".** "역참조 불가피 → bottom-up 추출"이 항상 답은 아니다. 공유 코어가 이미 깨끗하면 추출조차 불필요하다(T07 "순환 아님"과 같은 결의 "이미 분리됨"). **proxy는 hook 대칭 수집 어댑터로 server에 영구 잔존 확정.** 사이클#2는 물리 추출 없이 종결하거나, 경량 경계 정리(sse의 `NormalizedRequest` 타입을 `@spyglass/types`로 이관 → sse 코어 type 의존 0)로 축소한다.
 
 ## 비고 — over-engineering 가드
 
