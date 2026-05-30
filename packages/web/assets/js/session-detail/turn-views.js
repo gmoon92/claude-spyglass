@@ -148,19 +148,23 @@ function chipHtml(item, respSeq) {
   const chipMeta = firstReq ? chipFromRequest({ ...firstReq, type: 'tool_call' }, respSeq) : null;
   const key      = chipKey(chipMeta);
 
+  // 정확 점프 SSoT — 모든 도구 칩에 대표 request-id 부착 (#46 group-jump 정확도 확장).
+  //   chip-key 는 동명 도구가 비연속으로 여러 번 등장하면 중복된다. querySelector 는 DOM
+  //   첫 매칭을 반환하므로, chip-key 만으로는 뒤쪽 칩을 눌러도 앞쪽 최초 동명 행으로 잘못
+  //   점프한다. items[0].id 를 `data-target-request-id` 로 박아 main.js#handleChipActivation
+  //   이 이 id 로 정확한 행을 찾게 한다 (chip-key 는 폴백 + 일관성 유지용).
+  //   기존엔 NEUTRAL 윈도우 묶음 칩(isGroup)에만 부여했으나, 일반/agent/mcp 칩도 동일 버그를
+  //   겪으므로 공통 속성으로 끌어올린다.
+  const firstIdAttr = firstReq?.id ? ` data-target-request-id="${escHtml(firstReq.id)}"` : '';
+
   // NEUTRAL 윈도우 묶음 칩 (turn-rows.js#compressNeutralWindows) — 무채색 유지.
   //   - 묶음은 종류 무관한 노이즈 요약이므로 sub-type 색상/agent-chip 분기보다 먼저 처리.
   //   - title 에는 포함된 도구 종류 전체(`Read · Bash · Edit · ...`) 를 노출해 hover 단서 제공.
-  //   - 클릭 점프: items[0] 의 chip-key 만으로는 NEUTRAL 윈도우 앞쪽에 동명의 도구가
-  //     있으면 그곳으로 잘못 점프한다 (querySelector 가 DOM 첫 매칭 반환). 그래서
-  //     `data-target-request-id="<items[0].id>"` 를 함께 박아 main.js#handleChipActivation
-  //     이 request-id 로 직접 행을 찾도록 한다. chip-key 는 폴백 + 일관성 유지용.
   if (isGroup) {
     const groupAria  = count > 1 ? `${name} ×${count} (그룹)` : `${name} (그룹)`;
     const a11yAttrs  = chipAccessibilityAttrs(key, groupAria);
     const titleText  = (item.kinds || []).join(' · ');
-    const firstId    = firstReq?.id ? ` data-target-request-id="${escHtml(firstReq.id)}"` : '';
-    return `<span class="tool-chip tool-chip-group ds-chip" data-tone="tool" title="${escHtml(titleText)}" ${a11yAttrs}${firstId}>${fmtActionLabel(name, count)}</span>`;
+    return `<span class="tool-chip tool-chip-group ds-chip" data-tone="tool" title="${escHtml(titleText)}" ${a11yAttrs}${firstIdAttr}>${fmtActionLabel(name, count)}</span>`;
   }
 
   if (isAgent && agentName) {
@@ -171,7 +175,7 @@ function chipHtml(item, respSeq) {
     // toolIconHtml에 전체 도구 이름(name)을 넘긴다 — Task family는 startsWith('Task') 분기 매칭이
     //   tool-icon-task(오렌지)로 라우팅된다. baseName('Task')을 넘기면 정확 매칭 실패 시
     //   기본 분기로 빠질 위험 — 안전을 위해 name 전체를 전달.
-    return `<span class="tool-chip agent-chip${subCls} ds-chip" data-tone="${tone}" title="${escHtml(fullLabel)}" ${a11yAttrs}>${toolIconHtml(name)}<span class="agent-chip-name">${escHtml(agentName)}</span>${countSuffix ? `<span class="turn-group-count"> ${escHtml(countSuffix)}</span>` : ''}</span>`;
+    return `<span class="tool-chip agent-chip${subCls} ds-chip" data-tone="${tone}" title="${escHtml(fullLabel)}" ${a11yAttrs}${firstIdAttr}>${toolIconHtml(name)}<span class="agent-chip-name">${escHtml(agentName)}</span>${countSuffix ? `<span class="turn-group-count"> ${escHtml(countSuffix)}</span>` : ''}</span>`;
   }
 
   // MCP 칩 (2026-05-24): tool_name 자체가 식별자이므로 detail(agentName)이 비어 있다.
@@ -181,12 +185,12 @@ function chipHtml(item, respSeq) {
     const countSuffix = count > 1 ? `×${count}` : '';
     const fullLabel   = name + (countSuffix ? ` ${countSuffix}` : '');
     const a11yAttrs   = chipAccessibilityAttrs(key, fullLabel);
-    return `<span class="tool-chip agent-chip${subCls} ds-chip" data-tone="${tone}" title="${escHtml(name)}" ${a11yAttrs}>${toolIconHtml(name)}<span class="agent-chip-name">${escHtml(baseName)}</span>${countSuffix ? `<span class="turn-group-count"> ${escHtml(countSuffix)}</span>` : ''}</span>`;
+    return `<span class="tool-chip agent-chip${subCls} ds-chip" data-tone="${tone}" title="${escHtml(name)}" ${a11yAttrs}${firstIdAttr}>${toolIconHtml(name)}<span class="agent-chip-name">${escHtml(baseName)}</span>${countSuffix ? `<span class="turn-group-count"> ${escHtml(countSuffix)}</span>` : ''}</span>`;
   }
 
   const aria = count > 1 ? `${baseName} ×${count}` : baseName;
   const a11yAttrs = chipAccessibilityAttrs(key, aria);
-  return `<span class="tool-chip${subCls} ds-chip" data-tone="${tone}" ${a11yAttrs}>${fmtActionLabel(baseName, count)}</span>`;
+  return `<span class="tool-chip${subCls} ds-chip" data-tone="${tone}" ${a11yAttrs}${firstIdAttr}>${fmtActionLabel(baseName, count)}</span>`;
 }
 
 /**
