@@ -76,7 +76,7 @@ import {
   getServerConfigPath,
   type GraphMode,
 } from '@spyglass/storage-graph';
-import { PORT } from '../runtime/config';
+import { PORT, DB_PATH } from '../runtime/config';
 
 // =============================================================================
 // 모듈 스코프 캐시 — /api/settings/diag 응답 (방안 A, dashboard.ts 패턴 복제)
@@ -299,8 +299,9 @@ async function collectSqliteInfo(db: Database): Promise<{
   migration: { version: number | null; filename: string | null };
   cliVersion: VersionProbeResult;
 }> {
-  const dbPath = process.env.SPYGLASS_DB_PATH
-    || `${process.env.HOME || process.env.USERPROFILE}/.spyglass/spyglass.db`;
+  // config.DB_PATH 가 env 별칭(SPYGLASS_*/SPGLASS_*)+기본값을 일원화한 SSoT —
+  // 직접 process.env 를 읽으면 구철자 설정 시 실제 열린 DB 와 경로가 어긋난다.
+  const dbPath = DB_PATH;
 
   // dbSize stat 과 sqlite3 CLI 프로브는 서로 독립이므로 Promise.all 로 fan-out — 직렬 대기 회피.
   const [dbStatResult, cliVersion] = await Promise.all([

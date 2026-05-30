@@ -20,7 +20,7 @@ export const DEFAULT_PORT = 9999;
  * 기존에 `SPGLASS_*` 를 설정해 둔 환경이 조용히 기본값으로 폴백하지 않도록 별칭으로
  * 함께 읽는다. 신철자(SPYGLASS_*)가 우선.
  */
-function pickEnv(...keys: string[]): string | undefined {
+export function pickEnv(...keys: string[]): string | undefined {
   for (const k of keys) {
     const v = process.env[k];
     if (v != null && v.length > 0) return v;
@@ -29,10 +29,9 @@ function pickEnv(...keys: string[]): string | undefined {
 }
 
 /** 환경변수에서 설정 — 신철자 SPYGLASS_* 우선, 구철자 SPGLASS_* 폴백(하위 호환). */
-export const PORT = parseInt(
-  pickEnv('SPYGLASS_PORT', 'SPGLASS_PORT') || `${DEFAULT_PORT}`,
-  10,
-);
+const parsedPort = parseInt(pickEnv('SPYGLASS_PORT', 'SPGLASS_PORT') || `${DEFAULT_PORT}`, 10);
+// 잘못된 PORT 값(비숫자 → NaN)은 기본 포트로 폴백 — Bun.serve 기동 에러 방지.
+export const PORT = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : DEFAULT_PORT;
 export const HOST = pickEnv('SPYGLASS_HOST', 'SPGLASS_HOST') || '127.0.0.1';
 export const DB_PATH = pickEnv('SPYGLASS_DB_PATH', 'SPGLASS_DB_PATH') || getDefaultDbPath();
 
