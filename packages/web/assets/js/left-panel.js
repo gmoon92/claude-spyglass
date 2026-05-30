@@ -29,20 +29,24 @@ export function getAllProjects()  { return _allProjects; }
  *    sess-row-status 뒤에 부착)이므로 두 dot이 시각적으로 공존.
  *
  * 등록 위치: 모듈 부수효과 — 앱 라이프사이클 동안 유지.
+ * 비-DOM(테스트) 환경 호환: document 미존재 시 등록만 생략(api.js와 동일 가드).
+ * 이를 통해 api.js의 transitive import가 모듈 평가 단계에서 깨지지 않는다.
  */
-document.addEventListener('session-anomalies-loaded', (e) => {
-  const { sessionId, bloatedSys } = e.detail || {};
-  if (!sessionId) return;
-  const target = _allSessions.find(s => s.id === sessionId);
-  if (!target) return;
-  // critical만 사이드바 dot 노출 (ADR-005), 그 외 단계는 미노출. null도 같이 캐시해
-  // 응답 변동 시 stale dot이 잘못 남는 것을 막는다.
-  target.bloated_sys = bloatedSys || null;
-  // 선택한 프로젝트의 사이드바만 다시 그린다 — 무관한 프로젝트면 영향 없음.
-  if (getSelectedProject() && target.project_name === getSelectedProject()) {
-    renderBrowserSessions();
-  }
-});
+if (typeof document !== 'undefined') {
+  document.addEventListener('session-anomalies-loaded', (e) => {
+    const { sessionId, bloatedSys } = e.detail || {};
+    if (!sessionId) return;
+    const target = _allSessions.find(s => s.id === sessionId);
+    if (!target) return;
+    // critical만 사이드바 dot 노출 (ADR-005), 그 외 단계는 미노출. null도 같이 캐시해
+    // 응답 변동 시 stale dot이 잘못 남는 것을 막는다.
+    target.bloated_sys = bloatedSys || null;
+    // 선택한 프로젝트의 사이드바만 다시 그린다 — 무관한 프로젝트면 영향 없음.
+    if (getSelectedProject() && target.project_name === getSelectedProject()) {
+      renderBrowserSessions();
+    }
+  });
+}
 
 /**
  * meta-docs-view.js에서 카탈로그 fetch 직후 호출 — 프로젝트별/글로벌 항목 수를 주입.
