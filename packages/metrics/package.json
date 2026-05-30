@@ -1,0 +1,22 @@
+{
+  "name": "@spyglass/metrics",
+  "version": "0.1.0",
+  "description": "Observability metrics router and anomaly/burn-rate/cache-trend calculators for spyglass",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "dependencies": {
+    "@spyglass/storage": "workspace:*"
+  },
+  "scripts": {
+    "test": "bun test src"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

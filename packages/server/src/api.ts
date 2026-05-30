@@ -21,7 +21,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { metricsRouter } from './metrics';
+import { metricsRouter } from '@spyglass/metrics';
 import { jsonResponse } from './routes/_shared';
 import { sessionsRouter } from './routes/sessions';
 import { requestsRouter } from './routes/requests';

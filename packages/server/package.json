@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@spyglass/meta-docs": "workspace:*",
+    "@spyglass/metrics": "workspace:*",
     "@spyglass/storage": "workspace:*",
     "@spyglass/storage-graph": "workspace:*",
     "@spyglass/types": "workspace:*",

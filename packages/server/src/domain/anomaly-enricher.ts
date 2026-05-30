@@ -32,7 +32,7 @@ import {
   toAgentSpikeField,
   toBloatedSysField,
   toContextSaturationField,
-} from '../metrics/calculators/anomaly';
+} from '@spyglass/metrics';
 import type { NormalizedRequest } from './request-normalizer';
 
 /**

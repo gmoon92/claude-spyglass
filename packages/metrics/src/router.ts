@@ -43,7 +43,7 @@ import {
   getModelMaxTokens,
   getAllModelLimits,
 } from '@spyglass/storage';
-import { categorizeToolName, ALL_TOOL_CATEGORIES, type ToolCategory } from '../tool-category';
+import { categorizeToolName, ALL_TOOL_CATEGORIES, type ToolCategory } from './tool-category';
 import { buildMeta, jsonResponse, parseTimeWindow } from './_shared';
 import { computeBurnRate } from './calculators/burn-rate';
 import { computeCacheTrend } from './calculators/cache-trend';
