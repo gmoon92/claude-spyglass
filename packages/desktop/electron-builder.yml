@@ -44,7 +44,10 @@ files:
 # server / storage(src) / types 소스 코드는 standalone bin 안에 embed 되므로 동봉하지 않는다.
 extraResources:
   # Bun standalone executable — `bun build --compile` 산출물. child 로 spawn 됨.
-  - from: build/bin/spyglass-server
+  #   arch별 bin: electron-builder ${arch} 매크로가 빌드 중인 타깃(arm64/x64)에 맞는 산출물을
+  #   선택한다. build:server-bins 가 두 arch bin(spyglass-server-arm64/-x64)을 모두 생성하므로
+  #   x64 dmg 에도 올바른 x64 bin 이 동봉된다(이전엔 arm64 고정이라 Intel Mac 에서 깨졌다).
+  - from: build/bin/spyglass-server-${arch}
     to: bin/spyglass-server
   # web 정적 자원 — dispatch.ts 가 SPYGLASS_WEB_ROOT 로 접근.
   - from: ../web
