@@ -1,26 +1,36 @@
 #!/usr/bin/env bash
 #
-# build-release-tarball.sh — Homebrew 배포용 tarball 빌드.
+# build-release-tarball.sh — Homebrew/멀티플랫폼 배포용 아카이브 빌드.
 #
 # 책임:
-#   1) Bun standalone executable 컴파일 (packages/server → bin/spyglass).
+#   1) Bun standalone executable 컴파일 (packages/server → bin/spyglass[.exe]).
 #      - Bun 1.3.12 darwin-arm64 code-sign 버그 우회: BUN_NO_CODESIGN_MACHO_BINARY=1 + ad-hoc codesign.
 #   2) 자원 디렉터리 staging (web, storage/migrations).
-#   3) tar.gz + .sha256 산출.
+#   3) 아카이브(tar.gz 또는 windows .zip) + .sha256 산출.
 #
 # 사용:
-#   ./scripts/build-release-tarball.sh --version 2.10.0 --arch arm64 [--out-dir dist/release]
-#   (기본값: package.json 의 version, 호스트 arch)
+#   ./scripts/build-release-tarball.sh --version 3.0.7 --arch arm64 [--os darwin] [--out-dir dist/release]
+#   (기본값: package.json 의 version, 호스트 arch, os=darwin)
+#
+#   멀티플랫폼 예시:
+#     --os darwin  --arch arm64   → spyglass-<v>-darwin-arm64.tar.gz   (codesign O)
+#     --os darwin  --arch x64     → spyglass-<v>-darwin-x64.tar.gz     (codesign O)
+#     --os linux   --arch x64     → spyglass-<v>-linux-x64.tar.gz      (codesign X)
+#     --os linux   --arch arm64   → spyglass-<v>-linux-arm64.tar.gz    (codesign X)
+#     --os windows --arch x64     → spyglass-<v>-windows-x64.zip       (codesign X, bin=spyglass.exe)
 #
 # 산출:
-#   <out-dir>/spyglass-<version>-darwin-<arch>.tar.gz
-#   <out-dir>/spyglass-<version>-darwin-<arch>.tar.gz.sha256
+#   <out-dir>/spyglass-<version>-<os>-<arch>.<tar.gz|zip>
+#   <out-dir>/spyglass-<version>-<os>-<arch>.<tar.gz|zip>.sha256
 #
-# 의존성: bun, codesign(macOS), tar, shasum
+# 의존성: bun, codesign(macOS darwin 만), tar(darwin/linux), zip(windows), shasum
 #
 # 호출 흐름:
-#   .github/workflows/release.yml      → 본 스크립트 → bun build --compile → codesign → tar → shasum
+#   .github/workflows/release.yml      → 본 스크립트 → bun build --compile → (darwin)codesign → tar/zip → shasum
 #   (개발자) 로컬 검증                  → 본 스크립트 → 동일 (--skip-codesign 옵션으로 codesign 생략 가능)
+#
+# 회귀 가드:
+#   --os 미지정 시 darwin 으로 동작 → 기존 darwin-arm64 호출(--arch arm64) 산출물 이름·codesign·tar 동작 불변.
 
 set -euo pipefail
 
@@ -29,6 +39,7 @@ set -euo pipefail
 # -----------------------------------------------------------------------------
 VERSION=""
 ARCH=""
+OS=""
 OUT_DIR="dist/release"
 SKIP_CODESIGN=0
 
@@ -36,10 +47,11 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --version)        VERSION="$2"; shift 2 ;;
     --arch)           ARCH="$2"; shift 2 ;;
+    --os)             OS="$2"; shift 2 ;;
     --out-dir)        OUT_DIR="$2"; shift 2 ;;
     --skip-codesign)  SKIP_CODESIGN=1; shift ;;
     -h|--help)
-      sed -n '1,30p' "$0"
+      sed -n '1,38p' "$0"
       exit 0
       ;;
     *)
@@ -57,6 +69,15 @@ if [[ -z "$VERSION" ]]; then
   VERSION="$(node -p "require('./package.json').version" 2>/dev/null || bun -e "console.log(require('./package.json').version)")"
 fi
 
+# OS 기본값: darwin (미지정 호출의 회귀 0 보장).
+if [[ -z "$OS" ]]; then
+  OS="darwin"
+fi
+case "$OS" in
+  darwin|linux|windows) ;;
+  *) echo "Unsupported --os: $OS (expected darwin|linux|windows)" >&2; exit 1 ;;
+esac
+
 if [[ -z "$ARCH" ]]; then
   HOST_ARCH="$(uname -m)"
   case "$HOST_ARCH" in
@@ -66,12 +87,22 @@ if [[ -z "$ARCH" ]]; then
   esac
 fi
 
-BUN_TARGET="bun-darwin-${ARCH}"
-TARBALL_NAME="spyglass-${VERSION}-darwin-${ARCH}"
+# Bun target arch 표기: arm64 호스트 표기와 Bun 표기(arm64/x64)가 일치 → 그대로 사용.
+BUN_TARGET="bun-${OS}-${ARCH}"
+TARBALL_NAME="spyglass-${VERSION}-${OS}-${ARCH}"
 STAGE_DIR="${OUT_DIR}/${TARBALL_NAME}"
 
-echo "[build] version=${VERSION} arch=${ARCH} target=${BUN_TARGET}"
-echo "[build] stage=${STAGE_DIR}"
+# windows 는 .exe 바이너리 + .zip 패키징, 그 외는 확장자 없는 bin + .tar.gz.
+if [[ "$OS" == "windows" ]]; then
+  BIN_NAME="spyglass.exe"
+  ARCHIVE_EXT="zip"
+else
+  BIN_NAME="spyglass"
+  ARCHIVE_EXT="tar.gz"
+fi
+
+echo "[build] version=${VERSION} os=${OS} arch=${ARCH} target=${BUN_TARGET}"
+echo "[build] stage=${STAGE_DIR} archive=${ARCHIVE_EXT} bin=${BIN_NAME}"
 
 # -----------------------------------------------------------------------------
 # 1) 깨끗한 staging 디렉토리
@@ -84,7 +115,8 @@ mkdir -p "$STAGE_DIR/share/spyglass"
 # 2) standalone bin 컴파일
 #    Bun 1.3.12 darwin-arm64 sig_size 잘림 버그 우회.
 #    - BUN_NO_CODESIGN_MACHO_BINARY=1 로 codesign 없이 컴파일
-#    - 직후 ad-hoc codesign --sign - 재서명
+#    - 직후(darwin 만) ad-hoc codesign --sign - 재서명
+#    windows 타깃은 Bun 이 outfile 에 .exe 를 자동 부착하므로 --outfile 은 확장자 없이 전달.
 # -----------------------------------------------------------------------------
 echo "[build] compiling standalone bin (Bun)..."
 BUN_NO_CODESIGN_MACHO_BINARY=1 bun build \
@@ -94,14 +126,19 @@ BUN_NO_CODESIGN_MACHO_BINARY=1 bun build \
   packages/server/src/index.ts \
   --outfile "$STAGE_DIR/bin/spyglass"
 
-if [[ "$SKIP_CODESIGN" -eq 0 ]]; then
+BIN_PATH="$STAGE_DIR/bin/${BIN_NAME}"
+
+# codesign 은 darwin 에서만. linux/windows 는 자동 skip (호스트가 macOS 라도 의미 없음).
+if [[ "$OS" == "darwin" && "$SKIP_CODESIGN" -eq 0 ]]; then
   echo "[build] ad-hoc codesign..."
-  codesign --sign - --force --options runtime "$STAGE_DIR/bin/spyglass"
-  codesign -dv "$STAGE_DIR/bin/spyglass" 2>&1 | sed 's/^/[build]   /'
+  codesign --sign - --force --options runtime "$BIN_PATH"
+  codesign -dv "$BIN_PATH" 2>&1 | sed 's/^/[build]   /'
+elif [[ "$OS" != "darwin" ]]; then
+  echo "[build] codesign skipped (os=${OS}, darwin 전용)"
 fi
 
 # 실행 권한 보장 (Bun build 가 이미 +x 주지만 확실히)
-chmod +x "$STAGE_DIR/bin/spyglass"
+chmod +x "$BIN_PATH"
 
 # -----------------------------------------------------------------------------
 # 3) 자원 staging
@@ -127,23 +164,31 @@ if [[ -f LICENSE ]]; then
 fi
 
 # -----------------------------------------------------------------------------
-# 4) tar.gz + sha256
+# 4) 아카이브(tar.gz | zip) + sha256
+#    darwin/linux → tar.gz, windows → zip.
 # -----------------------------------------------------------------------------
-echo "[build] packing tarball..."
-tar -czf "${OUT_DIR}/${TARBALL_NAME}.tar.gz" -C "${OUT_DIR}" "${TARBALL_NAME}"
+ARCHIVE_PATH="${OUT_DIR}/${TARBALL_NAME}.${ARCHIVE_EXT}"
+if [[ "$ARCHIVE_EXT" == "zip" ]]; then
+  echo "[build] packing zip..."
+  # -r 재귀, -q 조용히. 상대 경로 보존 위해 OUT_DIR 기준에서 실행.
+  ( cd "${OUT_DIR}" && rm -f "${TARBALL_NAME}.zip" && zip -r -q "${TARBALL_NAME}.zip" "${TARBALL_NAME}" )
+else
+  echo "[build] packing tarball..."
+  tar -czf "${ARCHIVE_PATH}" -C "${OUT_DIR}" "${TARBALL_NAME}"
+fi
 
 # BSD shasum (macOS) 와 GNU shasum 모두 같은 출력 형식
-SHA256_HEX="$(shasum -a 256 "${OUT_DIR}/${TARBALL_NAME}.tar.gz" | awk '{print $1}')"
-echo "${SHA256_HEX}  ${TARBALL_NAME}.tar.gz" > "${OUT_DIR}/${TARBALL_NAME}.tar.gz.sha256"
+SHA256_HEX="$(shasum -a 256 "${ARCHIVE_PATH}" | awk '{print $1}')"
+echo "${SHA256_HEX}  ${TARBALL_NAME}.${ARCHIVE_EXT}" > "${ARCHIVE_PATH}.sha256"
 
 # -----------------------------------------------------------------------------
 # 5) 최종 요약
 # -----------------------------------------------------------------------------
-TARBALL_SIZE="$(du -h "${OUT_DIR}/${TARBALL_NAME}.tar.gz" | awk '{print $1}')"
-BIN_SIZE="$(du -h "${STAGE_DIR}/bin/spyglass" | awk '{print $1}')"
+ARCHIVE_SIZE="$(du -h "${ARCHIVE_PATH}" | awk '{print $1}')"
+BIN_SIZE="$(du -h "${BIN_PATH}" | awk '{print $1}')"
 echo ""
 echo "[build] DONE"
-echo "[build]   tarball : ${OUT_DIR}/${TARBALL_NAME}.tar.gz (${TARBALL_SIZE})"
+echo "[build]   archive : ${ARCHIVE_PATH} (${ARCHIVE_SIZE})"
 echo "[build]   sha256  : ${SHA256_HEX}"
 echo "[build]   bin size: ${BIN_SIZE}"
-echo "[build]   sha-file: ${OUT_DIR}/${TARBALL_NAME}.tar.gz.sha256"
+echo "[build]   sha-file: ${ARCHIVE_PATH}.sha256"
