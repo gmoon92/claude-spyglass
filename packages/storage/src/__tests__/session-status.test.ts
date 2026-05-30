@@ -153,3 +153,58 @@ describe('Session Status — definition SSoT consistency', () => {
     expect(p2Visible).toBe(1);  // S3
   });
 });
+
+// ============================================================================
+// 날짜 범위 = 활동(요청 timestamp) 기준 회귀 가드 (range-activity-bug)
+//   버그: 범위 필터가 s.started_at 기준이라, 어제 시작해 오늘 활동 중인 세션이
+//   '오늘' 범위에서 누락 → 요청 목록엔 보이는데 프로젝트/세션 집계만 0이 됐다.
+//   수정: compileFilter 가 "범위 내 요청(r.timestamp) 존재" 로 판정(요청 통계와 일관).
+// ============================================================================
+describe('Session Status — 날짜 범위는 활동(요청) 기준', () => {
+  const RANGE_DB = `/tmp/spyglass-status-range-${Date.now()}-${Math.random().toString(36).slice(2)}.db`;
+  let db: SpyglassDatabase;
+  const NOW = 1_780_000_000_000;
+  const DAY = 86_400_000;
+  const rangeFrom = NOW - 60 * 60_000; // 범위 하한(최근 1시간 = 단순화한 '오늘')
+  const zeros = { tokens_input: 0, tokens_output: 0, tokens_total: 0, duration_ms: 0, payload: '', source: 'test' };
+
+  beforeEach(() => {
+    db = new SpyglassDatabase({ dbPath: RANGE_DB, autoInit: true });
+    // A: 어제(2일 전) 시작했지만 범위 내(10분 전) 활동 → 포함되어야 (버그 재현 대상).
+    createSession(db.instance, { id: 'A', project_name: 'PA', started_at: NOW - 2 * DAY, total_tokens: 10 });
+    createRequest(db.instance, { id: 'ra', session_id: 'A', timestamp: NOW - 10 * 60_000, type: 'prompt', ...zeros });
+    // B: 오늘(30분 전) 시작 + 범위 내 활동 → 포함.
+    createSession(db.instance, { id: 'B', project_name: 'PB', started_at: NOW - 30 * 60_000, total_tokens: 20 });
+    createRequest(db.instance, { id: 'rb', session_id: 'B', timestamp: NOW - 5 * 60_000, type: 'prompt', ...zeros });
+    // C: 5일 전 시작 + 범위 밖(5일 전) 활동 → 제외.
+    createSession(db.instance, { id: 'C', project_name: 'PC', started_at: NOW - 5 * DAY, total_tokens: 30 });
+    createRequest(db.instance, { id: 'rc', session_id: 'C', timestamp: NOW - 5 * DAY, type: 'prompt', ...zeros });
+  });
+
+  afterEach(() => {
+    closeDatabase();
+    for (const ext of ['', '-shm', '-wal']) {
+      try { require('fs').unlinkSync(`${RANGE_DB}${ext}`); } catch { /* ignore */ }
+    }
+  });
+
+  it('어제 시작했지만 범위 내 활동한 세션이 집계에 포함된다 (started_at 누락 버그 방지)', () => {
+    const stats = getSessionStats(db.instance, NOW, rangeFrom, NOW);
+    expect(stats.total_sessions).toBe(2); // A(어제 시작·범위 내 활동) + B, C 제외
+  });
+
+  it('프로젝트 집계도 범위 내 활동 프로젝트만 노출', () => {
+    const names = getProjectStats(db.instance, 99, NOW, rangeFrom, NOW)
+      .map((p) => p.project_name)
+      .sort();
+    expect(names).toEqual(['PA', 'PB']); // PC 제외
+  });
+
+  it('countVisibleSessions 도 활동 기준 (범위 밖 C 제외)', () => {
+    expect(countVisibleSessions(db.instance, { fromTs: rangeFrom, toTs: NOW })).toBe(2);
+  });
+
+  it('범위 미지정 시 전체 — 기존 동작 불변 (회귀 가드)', () => {
+    expect(getSessionStats(db.instance, NOW).total_sessions).toBe(3); // A+B+C
+  });
+});

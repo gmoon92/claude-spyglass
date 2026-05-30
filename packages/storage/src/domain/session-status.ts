@@ -53,9 +53,9 @@ import {
  * 시간/프로젝트 필터 — 모든 도메인 함수 공용 옵션.
  */
 export interface SessionStatusFilter {
-  /** 시작 시간(ms) 하한 (>= ). 미지정 시 무제한 과거. */
+  /** 활동 시간(요청 timestamp, ms) 하한 (>= ). 미지정 시 무제한 과거. 범위 내 요청이 있는 세션만 포함. */
   fromTs?: number;
-  /** 시작 시간(ms) 상한 (<= ). 미지정 시 무제한 미래. */
+  /** 활동 시간(요청 timestamp, ms) 상한 (<= ). 미지정 시 무제한 미래. */
   toTs?: number;
   /** 프로젝트명 정확 일치. 미지정 시 전체. */
   projectName?: string;
@@ -105,8 +105,18 @@ function compileFilter(f: SessionStatusFilter): CompiledWhere {
   const conds: string[] = [];
   const params: (number | string)[] = [];
   if (f.projectName) { conds.push('s.project_name = ?'); params.push(f.projectName); }
-  if (f.fromTs)      { conds.push('s.started_at >= ?'); params.push(f.fromTs); }
-  if (f.toTs)        { conds.push('s.started_at <= ?'); params.push(f.toTs); }
+  // 날짜 범위는 "세션 시작 시각(started_at)"이 아니라 "범위 내 요청 활동(r.timestamp)" 기준.
+  //   요청 통계(getRequestStats: hour_ts)와 일관 — 어제 시작해 오늘 활동 중인 세션도
+  //   '오늘' 범위에 포함되어야 한다. started_at 기준이면 그런 세션이 누락되어
+  //   요청 목록엔 보이는데 프로젝트/세션 집계만 0이 되는 불일치 버그가 난다.
+  if (f.fromTs || f.toTs) {
+    const tc: string[] = ['rf.session_id = s.id'];
+    if (f.fromTs) tc.push('rf.timestamp >= ?');
+    if (f.toTs)   tc.push('rf.timestamp <= ?');
+    conds.push(`EXISTS (SELECT 1 FROM requests rf WHERE ${tc.join(' AND ')})`);
+    if (f.fromTs) params.push(f.fromTs);
+    if (f.toTs)   params.push(f.toTs);
+  }
   return { sql: conds.length ? `WHERE ${conds.join(' AND ')}` : '', params };
 }
 
