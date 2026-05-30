@@ -72,9 +72,11 @@ export function processHookEvent(
   }
 
   // 요청 저장 (Upsert 분기 포함)
-  const { saved, wasUpsert, savedId } = saveRequest(db, payload);
+  const { saved, wasUpsert, savedId, duplicate } = saveRequest(db, payload);
 
-  if (saved) {
+  // 멱등 흡수 (P0.1): 중복 post / 늦은 pre 는 새 행을 만들지 않았으므로 세션 토큰 누적과
+  // SSE 브로드캐스트를 모두 건너뛴다 — 첫 값 고정 정책 + 토큰 이중 누적 방지.
+  if (saved && !duplicate) {
     // 세션 토큰 누적 정책:
     //  - Upsert(pre_tool → tool 병합): pre_tool은 tokens_total=0이므로 단순히 post 토큰 누적
     //  - 일반 INSERT 중 pre_tool 외: 정상 누적

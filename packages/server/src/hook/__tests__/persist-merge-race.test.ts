@@ -113,10 +113,11 @@ describe('persist W-1 — pre/post merge race & 중복', () => {
     expect(rows[0].duration_ms).toBe(500);
   });
 
-  it('out-of-order — post 먼저 도착: pre 매칭 NG → 일반 INSERT', () => {
-    // PostToolUse 가 PreToolUse 보다 먼저 도착하는 race. 현재 동작은
-    // "pre 매칭 실패 → fallthrough 일반 INSERT" 이고 이후 pre 가 와도 매칭이 안 된다.
-    // 결과: 같은 tool_use_id 의 두 행이 별개 (event_type='tool' + 'pre_tool').
+  it('out-of-order — post 먼저 도착: tool 행 INSERT, 늦은 pre 는 멱등 흡수', () => {
+    // PostToolUse 가 PreToolUse 보다 먼저 도착하는 race.
+    // consistency-hardening P0.1: post-first 는 'tool' 행을 정상 INSERT 하고, 뒤늦게 도착한
+    // PreToolUse 는 이미 'tool' 행이 있으므로 중복 행을 만들지 않고 흡수(duplicate)된다.
+    // 결과: 같은 tool_use_id 의 단일 'tool' 행 (첫 값 고정).
     const tuid = 'tu-race-ooo';
     const post = makePayload({
       id: 'post-ooo', session_id: sessionId, event_type: 'tool',
@@ -130,19 +131,20 @@ describe('persist W-1 — pre/post merge race & 중복', () => {
 
     const r1 = saveRequest(db.instance, post);
     expect(r1.saved).toBe(true);
-    expect(r1.wasUpsert).toBe(false);  // out-of-order → 머지 미발생
+    expect(r1.wasUpsert).toBe(false);  // post-first 최초 → 일반 INSERT
 
     const r2 = saveRequest(db.instance, pre);
     expect(r2.saved).toBe(true);
     expect(r2.wasUpsert).toBe(false);
+    expect(r2.duplicate).toBe(true);     // 이미 'tool' 행 존재 → pre 흡수(새 행 미생성)
+    expect(r2.savedId).toBe('post-ooo'); // 흡수 대상은 기존 'tool' 행
 
-    // 두 행 별개 저장 — 같은 tool_use_id 지만 머지되지 않음.
+    // 단일 'tool' 행만 남는다 — 늦은 pre 는 중복 행을 만들지 않음.
     const rows = fetchAllRows(db.instance, sessionId);
-    expect(rows.length).toBe(2);
-    const ids = rows.map(r => r.id).sort();
-    expect(ids).toEqual(['post-ooo', 'pre-ooo']);
-    const types = new Set(rows.map(r => r.event_type));
-    expect(types).toEqual(new Set(['tool', 'pre_tool']));
+    expect(rows.length).toBe(1);
+    expect(rows[0].id).toBe('post-ooo');
+    expect(rows[0].event_type).toBe('tool');
+    expect(rows[0].tokens_total).toBe(50);
   });
 
   it('중복 PreToolUse — 같은 tool_use_id 의 두 pre 행은 둘 다 INSERT', () => {
@@ -166,10 +168,10 @@ describe('persist W-1 — pre/post merge race & 중복', () => {
     for (const r of rows) expect(r.event_type).toBe('pre_tool');
   });
 
-  it('중복 PostToolUse — 이미 머지된 행 + 두 번째 post 는 fallthrough INSERT', () => {
-    // 첫 post 가 pre 행을 'tool' 로 머지. 두 번째 post 가 도착 시 pre 매칭 실패
-    // (event_type='tool' 이라 LIMIT 1 SELECT 가 NULL).
-    // → 일반 INSERT 분기, 별도 행 저장.
+  it('중복 PostToolUse — 두 번째 post 는 멱등 흡수, 단일 행 + 첫 값 고정', () => {
+    // 첫 post 가 pre 행을 'tool' 로 머지. 두 번째 post 가 도착하면 pre 매칭은 실패하지만
+    // (event_type='tool'), consistency-hardening P0.1 에 따라 이미 'tool' 행이 있으므로
+    // 새 행을 만들지 않고 흡수(duplicate)한다 — 첫 값 고정(정책 b), 토큰 이중 누적 방지.
     const tuid = 'tu-race-dup-post';
     const pre = makePayload({
       id: 'pre-2', session_id: sessionId, event_type: 'pre_tool',
@@ -193,20 +195,19 @@ describe('persist W-1 — pre/post merge race & 중복', () => {
 
     const r2 = saveRequest(db.instance, post2);
     expect(r2.saved).toBe(true);
-    // 첫 머지 이후 pre 가 'tool' 이라 두 번째 post 는 머지 미발생 → 새 행.
+    // 두 번째 post 는 기존 'tool' 행으로 흡수 — 새 행 미생성.
     expect(r2.wasUpsert).toBe(false);
+    expect(r2.duplicate).toBe(true);
+    expect(r2.savedId).toBe('pre-2');
 
     const rows = fetchAllRows(db.instance, sessionId)
       .filter(r => r.tool_use_id === tuid);
-    expect(rows.length).toBe(2);
-    // pre-2 머지된 행 + post-2b 새 INSERT 행.
-    const ids = rows.map(r => r.id).sort();
-    expect(ids).toEqual(['post-2b', 'pre-2']);
-    // 머지된 행은 tokens_total=50 (첫 post), 새 행은 70 (두 번째 post).
-    const merged = rows.find(r => r.id === 'pre-2');
-    const standalone = rows.find(r => r.id === 'post-2b');
-    expect(merged!.tokens_total).toBe(50);
-    expect(standalone!.tokens_total).toBe(70);
+    // 단일 행만 — pre-2 가 첫 post 로 머지된 상태로 고정.
+    expect(rows.length).toBe(1);
+    expect(rows[0].id).toBe('pre-2');
+    expect(rows[0].event_type).toBe('tool');
+    // 첫 post 값(50) 고정 — 두 번째 post(70)는 무시.
+    expect(rows[0].tokens_total).toBe(50);
   });
 
   it('다른 session_id 의 같은 tool_use_id — 머지 격리 (session 별 SSoT)', () => {

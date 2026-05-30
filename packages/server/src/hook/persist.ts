@@ -51,6 +51,23 @@ function findPreToolRecord(
 }
 
 /**
+ * tool_use_id 기준으로 완성된 'tool' 레코드 id 조회 (consistency-hardening P0.1).
+ *
+ * 멱등 수집 판정용:
+ *  - 중복 PostToolUse: 이미 'tool' 행이 있으면 새 행을 만들지 않고 흡수(첫 값 고정).
+ *  - out-of-order 의 늦은 PreToolUse: 이미 'tool' 행이 있으면 pre 를 무시.
+ */
+function findToolRecord(
+  db: Database,
+  sessionId: string,
+  toolUseId: string,
+): { id: string } | null {
+  return db.query(
+    "SELECT id FROM requests WHERE session_id = ? AND tool_use_id = ? AND event_type = 'tool' LIMIT 1",
+  ).get(sessionId, toolUseId) as { id: string } | null;
+}
+
+/**
  * pre_tool 레코드를 post_tool 데이터로 UPDATE (Upsert merge).
  *
  * - 토큰/소요 시간/payload/event_type을 'tool'로 갱신
@@ -119,11 +136,13 @@ function resolveApiRequestId(db: Database, toolUseId: string | null): string | n
  *   saved      : INSERT 또는 UPDATE 성공 여부
  *   wasUpsert  : true=pre_tool을 덮어씀 → handler에서 세션 토큰 갱신 필요
  *   savedId    : Upsert 시 DB의 실제 id(pre-xxx) — SSE 브로드캐스트 일관성 위해 호출자가 사용
+ *   duplicate  : true=멱등 흡수(중복 post / 늦은 pre) — 새 행 미생성. 호출자는 세션 토큰
+ *                누적·SSE 브로드캐스트를 *건너뛴다*(이중 누적 방지, P0.1 첫 값 고정 정책).
  */
 export function saveRequest(
   db: Database,
   payload: NormalizedHookPayload,
-): { saved: boolean; wasUpsert: boolean; savedId?: string } {
+): { saved: boolean; wasUpsert: boolean; savedId?: string; duplicate?: boolean } {
   try {
     const toolUseId = extractToolUseId(payload.payload);
     const isPostTool = payload.event_type === 'tool' && payload.request_type === 'tool_call';
@@ -143,132 +162,157 @@ export function saveRequest(
           return { saved: true, wasUpsert: true, savedId: preToolRecord.id };
         }
       }
+      // 멱등 흡수 (P0.1): pre 매칭이 없거나(=중복 post / out-of-order post) merge 가 일어나지
+      // 않았는데 같은 (session, tool_use_id) 의 완성된 'tool' 행이 이미 있으면, 새 행을 만들지
+      // 않고 첫 값을 고정한다(정책 b — 이후 데이터 무시). duplicate=true 로 호출자가 세션
+      // 토큰 이중 누적·중복 broadcast 를 건너뛰게 한다. 'tool' 행이 없으면(post-first 최초)
+      // 아래 일반 INSERT 로 흘러가 event_type='tool' 행을 정상 생성한다.
+      const existingTool = findToolRecord(db, payload.session_id, toolUseId);
+      if (existingTool) {
+        return { saved: true, wasUpsert: false, savedId: existingTool.id, duplicate: true };
+      }
     }
 
-    // 일반 INSERT (pre_tool 또는 매칭 실패한 post_tool, 또는 prompt/system 등)
-    let turnId: string | undefined;
+    // 늦은 PreToolUse 흡수 (P0.1): out-of-order 로 PostToolUse 가 먼저 와서 이미 'tool' 행이
+    // 완성돼 있으면, 뒤늦게 도착한 PreToolUse 는 중복 행을 만들지 않고 무시한다(첫 값 고정).
+    if (payload.event_type === 'pre_tool' && toolUseId) {
+      const existingTool = findToolRecord(db, payload.session_id, toolUseId);
+      if (existingTool) {
+        return { saved: true, wasUpsert: false, savedId: existingTool.id, duplicate: true };
+      }
+    }
+
+    // 일반 INSERT (pre_tool 또는 매칭 실패한 post_tool, 또는 prompt/system 등).
+    // turn/parent 해소 + createRequest 를 하나의 클로저로 묶는다 — prompt 경로에서만
+    // BEGIN IMMEDIATE 트랜잭션으로 감싸 동시 turn_id 채번 경합을 직렬화하기 위함(P0.2).
+    const runInsert = (turnId: string | undefined): void => {
+      // meta-flow tree (Migration 037): 슬래시 커맨드 행은 가상 tool_use_id를 부여해
+      // 같은 turn의 root-level 호출 자식들과 parent_tool_use_id로 연결 가능하게 만든다.
+      let resolvedToolUseId: string | null = toolUseId;
+      let resolvedParentToolUseId: string | null = null;
+      if (payload.request_type === 'prompt' && payload.slash_command && turnId) {
+        resolvedToolUseId = `slash:${turnId}`;
+      } else if (
+        payload.request_type === 'tool_call'
+        && turnId
+        && toolUseId
+        && !toolUseId.startsWith('slash:')
+      ) {
+        // root-level 호출(payload상 부모 없음)이 같은 turn의 슬래시 가상 ID를 부모로 갖도록 연결.
+        // pre_tool 매 행마다 1회 조회 — turn당 최대 1건이므로 비용 미미. 슬래시 행이 없으면 NULL 유지.
+        const slashVirtualId = `slash:${turnId}`;
+        const slashExists = db.query(
+          "SELECT 1 FROM requests WHERE tool_use_id = ? AND slash_command IS NOT NULL LIMIT 1",
+        ).get(slashVirtualId);
+        if (slashExists) {
+          resolvedParentToolUseId = slashVirtualId;
+        }
+      }
+
+      // meta-flow tree (Migration 038/039): 서브에이전트 자식 행은 agent_type=<부모 Agent 이름> 만
+      // 채워질 뿐 parent_tool_use_id 는 비어 있다 (subagent 측 hook 페이로드에 부모 toolUseId 없음).
+      // rolling-parent 규칙(transcript.ts L184~):
+      //   - Skill/Task 행은 매칭 Agent 를 부모로 (Skill 끼리는 형제).
+      //   - 그 외 도구는 같은 (session,turn,agent_type) 안의 직전 Skill/Task 를 부모로, 없으면 Agent.
+      if (!resolvedParentToolUseId
+        && payload.agent_type
+        && turnId
+        && payload.session_id) {
+        const isSkillOrTask = payload.tool_name === 'Skill'
+          || payload.tool_name === 'Task'
+          || payload.tool_name?.startsWith('Skill')
+          || payload.tool_name?.startsWith('Task');
+
+        // 1순위: Skill/Task 가 아닐 때 — 직전 Skill/Task 의 tool_use_id.
+        if (!isSkillOrTask) {
+          const rollingSkill = db.query(
+            `SELECT tool_use_id FROM requests
+             WHERE agent_type = ?
+               AND session_id = ?
+               AND turn_id = ?
+               AND (tool_name IN ('Skill','Task')
+                    OR tool_name LIKE 'Skill%'
+                    OR tool_name LIKE 'Task%')
+               AND tool_use_id IS NOT NULL
+               AND timestamp < ?
+             ORDER BY timestamp DESC
+             LIMIT 1`,
+          ).get(payload.agent_type, payload.session_id, turnId, payload.timestamp) as
+            | { tool_use_id: string }
+            | null;
+          if (rollingSkill?.tool_use_id) {
+            resolvedParentToolUseId = rollingSkill.tool_use_id;
+          }
+        }
+
+        // 2순위: Skill/Task 가 없거나 self 가 Skill/Task 인 경우 — 매칭 Agent.
+        if (!resolvedParentToolUseId) {
+          const parentRow = db.query(
+            `SELECT tool_use_id FROM requests
+             WHERE tool_name = 'Agent'
+               AND tool_detail = ?
+               AND session_id = ?
+               AND turn_id = ?
+               AND tool_use_id IS NOT NULL
+               AND (event_type IS NULL OR event_type = 'tool')
+               AND timestamp <= ?
+             ORDER BY timestamp DESC
+             LIMIT 1`,
+          ).get(payload.agent_type, payload.session_id, turnId, payload.timestamp) as
+            | { tool_use_id: string }
+            | null;
+          if (parentRow?.tool_use_id) {
+            resolvedParentToolUseId = parentRow.tool_use_id;
+          }
+        }
+      }
+
+      createRequest(db, {
+        id: payload.id,
+        session_id: payload.session_id,
+        timestamp: payload.timestamp,
+        type: payload.request_type,
+        tool_name: payload.tool_name,
+        tool_detail: payload.tool_detail,
+        turn_id: turnId,
+        model: payload.model,
+        tokens_input: payload.tokens_input,
+        tokens_output: payload.tokens_output,
+        tokens_total: payload.tokens_total,
+        duration_ms: payload.duration_ms || 0,
+        payload: payload.payload,
+        source: payload.source || null,
+        cache_creation_tokens: payload.cache_creation_tokens ?? 0,
+        cache_read_tokens: payload.cache_read_tokens ?? 0,
+        preview: extractPreview(payload) ?? undefined,
+        tool_use_id: resolvedToolUseId,
+        parent_tool_use_id: resolvedParentToolUseId,
+        event_type: payload.event_type || null,
+        tokens_confidence: payload.tokens_confidence,
+        tokens_source: payload.tokens_source,
+        // ADR-001 P1-E: PostToolUse는 proxy_tool_uses에서 직접 매칭, 그 외는 NULL
+        // (events.ts/proxy backfill의 시간 기반 cross-link이 후속 채움 담당).
+        api_request_id: resolvedApiRequestId,
+        // v20: hook raw 페이로드 감사 메타
+        permission_mode: payload.permission_mode ?? null,
+        agent_id: payload.agent_id ?? null,
+        agent_type: payload.agent_type ?? null,
+        tool_interrupted: payload.tool_interrupted ?? null,
+        tool_user_modified: payload.tool_user_modified ?? null,
+        // v24: Behavior Definitions 카탈로그 매칭용 슬래시 커맨드 이름
+        slash_command: payload.slash_command ?? null,
+      });
+    };
+
     if (payload.request_type === 'prompt') {
-      turnId = assignTurnId(db, payload.session_id);
+      // P0.2: turn_id 채번(COUNT)+INSERT 를 BEGIN IMMEDIATE 로 원자화. write-lock 을 선점해
+      // 동시 prompt 가 같은 turn_id(`<sess>-T<N>`)를 받는 경합을 차단(단일 writer 직렬화).
+      db.transaction(() => {
+        runInsert(assignTurnId(db, payload.session_id));
+      }).immediate();
     } else {
-      turnId = getLastTurnId(db, payload.session_id) ?? undefined;
+      runInsert(getLastTurnId(db, payload.session_id) ?? undefined);
     }
-
-    // meta-flow tree (Migration 037): 슬래시 커맨드 행은 가상 tool_use_id를 부여해
-    // 같은 turn의 root-level 호출 자식들과 parent_tool_use_id로 연결 가능하게 만든다.
-    let resolvedToolUseId: string | null = toolUseId;
-    let resolvedParentToolUseId: string | null = null;
-    if (payload.request_type === 'prompt' && payload.slash_command && turnId) {
-      resolvedToolUseId = `slash:${turnId}`;
-    } else if (
-      payload.request_type === 'tool_call'
-      && turnId
-      && toolUseId
-      && !toolUseId.startsWith('slash:')
-    ) {
-      // root-level 호출(payload상 부모 없음)이 같은 turn의 슬래시 가상 ID를 부모로 갖도록 연결.
-      // pre_tool 매 행마다 1회 조회 — turn당 최대 1건이므로 비용 미미. 슬래시 행이 없으면 NULL 유지.
-      const slashVirtualId = `slash:${turnId}`;
-      const slashExists = db.query(
-        "SELECT 1 FROM requests WHERE tool_use_id = ? AND slash_command IS NOT NULL LIMIT 1",
-      ).get(slashVirtualId);
-      if (slashExists) {
-        resolvedParentToolUseId = slashVirtualId;
-      }
-    }
-
-    // meta-flow tree (Migration 038/039): 서브에이전트 자식 행은 agent_type=<부모 Agent 이름> 만
-    // 채워질 뿐 parent_tool_use_id 는 비어 있다 (subagent 측 hook 페이로드에 부모 toolUseId 없음).
-    // rolling-parent 규칙(transcript.ts L184~):
-    //   - Skill/Task 행은 매칭 Agent 를 부모로 (Skill 끼리는 형제).
-    //   - 그 외 도구는 같은 (session,turn,agent_type) 안의 직전 Skill/Task 를 부모로, 없으면 Agent.
-    if (!resolvedParentToolUseId
-      && payload.agent_type
-      && turnId
-      && payload.session_id) {
-      const isSkillOrTask = payload.tool_name === 'Skill'
-        || payload.tool_name === 'Task'
-        || payload.tool_name?.startsWith('Skill')
-        || payload.tool_name?.startsWith('Task');
-
-      // 1순위: Skill/Task 가 아닐 때 — 직전 Skill/Task 의 tool_use_id.
-      if (!isSkillOrTask) {
-        const rollingSkill = db.query(
-          `SELECT tool_use_id FROM requests
-           WHERE agent_type = ?
-             AND session_id = ?
-             AND turn_id = ?
-             AND (tool_name IN ('Skill','Task')
-                  OR tool_name LIKE 'Skill%'
-                  OR tool_name LIKE 'Task%')
-             AND tool_use_id IS NOT NULL
-             AND timestamp < ?
-           ORDER BY timestamp DESC
-           LIMIT 1`,
-        ).get(payload.agent_type, payload.session_id, turnId, payload.timestamp) as
-          | { tool_use_id: string }
-          | null;
-        if (rollingSkill?.tool_use_id) {
-          resolvedParentToolUseId = rollingSkill.tool_use_id;
-        }
-      }
-
-      // 2순위: Skill/Task 가 없거나 self 가 Skill/Task 인 경우 — 매칭 Agent.
-      if (!resolvedParentToolUseId) {
-        const parentRow = db.query(
-          `SELECT tool_use_id FROM requests
-           WHERE tool_name = 'Agent'
-             AND tool_detail = ?
-             AND session_id = ?
-             AND turn_id = ?
-             AND tool_use_id IS NOT NULL
-             AND (event_type IS NULL OR event_type = 'tool')
-             AND timestamp <= ?
-           ORDER BY timestamp DESC
-           LIMIT 1`,
-        ).get(payload.agent_type, payload.session_id, turnId, payload.timestamp) as
-          | { tool_use_id: string }
-          | null;
-        if (parentRow?.tool_use_id) {
-          resolvedParentToolUseId = parentRow.tool_use_id;
-        }
-      }
-    }
-
-    createRequest(db, {
-      id: payload.id,
-      session_id: payload.session_id,
-      timestamp: payload.timestamp,
-      type: payload.request_type,
-      tool_name: payload.tool_name,
-      tool_detail: payload.tool_detail,
-      turn_id: turnId,
-      model: payload.model,
-      tokens_input: payload.tokens_input,
-      tokens_output: payload.tokens_output,
-      tokens_total: payload.tokens_total,
-      duration_ms: payload.duration_ms || 0,
-      payload: payload.payload,
-      source: payload.source || null,
-      cache_creation_tokens: payload.cache_creation_tokens ?? 0,
-      cache_read_tokens: payload.cache_read_tokens ?? 0,
-      preview: extractPreview(payload) ?? undefined,
-      tool_use_id: resolvedToolUseId,
-      parent_tool_use_id: resolvedParentToolUseId,
-      event_type: payload.event_type || null,
-      tokens_confidence: payload.tokens_confidence,
-      tokens_source: payload.tokens_source,
-      // ADR-001 P1-E: PostToolUse는 proxy_tool_uses에서 직접 매칭, 그 외는 NULL
-      // (events.ts/proxy backfill의 시간 기반 cross-link이 후속 채움 담당).
-      api_request_id: resolvedApiRequestId,
-      // v20: hook raw 페이로드 감사 메타
-      permission_mode: payload.permission_mode ?? null,
-      agent_id: payload.agent_id ?? null,
-      agent_type: payload.agent_type ?? null,
-      tool_interrupted: payload.tool_interrupted ?? null,
-      tool_user_modified: payload.tool_user_modified ?? null,
-      // v24: Behavior Definitions 카탈로그 매칭용 슬래시 커맨드 이름
-      slash_command: payload.slash_command ?? null,
-    });
     return { saved: true, wasUpsert: false };
   } catch (error) {
     console.error('[Collect] Failed to save request:', error);
