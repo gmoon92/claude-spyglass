@@ -14,7 +14,12 @@ const PROJECT_ROOT = resolve(__dirname, '../../../..');
 const LANGS = ['ko', 'en', 'ja', 'zh'] as const;
 const NSS = ['common', 'request', 'badges', 'session', 'ui'] as const;
 const KEBAB_RE = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
-const EXCEPTIONS = new Set(['cat-Agent', 'cat-Skill', 'cat-MCP', 'cat-Native']);
+const EXCEPTIONS = new Set([
+  'cat-Agent', 'cat-Skill', 'cat-MCP', 'cat-Native',
+  // 시간범위 preset 식별자 — api.js VALID_PRESETS('1h'|'7d'|'30d')와 1:1 대응하는
+  //   도메인 키라 숫자 접두를 허용(cat-* 와 동일 취지의 의도된 design choice 예외).
+  '1h', '7d', '30d',
+]);
 
 function collectKeys(obj: unknown, out: { key: string; path: string }[], path: string[] = []) {
   if (obj === null || typeof obj !== 'object') return;

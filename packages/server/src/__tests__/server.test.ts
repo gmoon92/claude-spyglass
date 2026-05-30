@@ -194,7 +194,7 @@ describe('API Endpoints', () => {
       expect(body.data.requests).toBeDefined();
     });
 
-    it('should reflect fromTs/toTs range on chartSection stats (avg/p95/error/cost)', async () => {
+    it('should reflect fromTs/toTs range on chartSection stats (avg/p95/error)', async () => {
       // 과거(범위 밖) — 1시간 전 ~ 50분 전: prompt + tool_call PostToolUse(에러 포함)
       const oldBase = Date.now() - 60 * 60_000;
       createRequest(db.instance, {
@@ -250,9 +250,8 @@ describe('API Endpoints', () => {
       expect(s.p95DurationMs).toBe(100);
       // recent-tool은 'ok'라 오류 0건
       expect(s.errorRate).toBe(0);
-      // proxy 비용은 범위 내 proxy_requests가 없으므로 0 (proxy-hourly 도입 후 추가된 키)
-      expect(s.proxyTotalCostUsd).toBe(0);
-      expect(s.proxyTotalRequests).toBe(0);
+      // proxy 통계(요청수/비용)는 dashboard summary 책임이 아니라 /api/stats/proxy 가
+      //   별도 제공한다. proxyTotalCostUsd 는 ADR-015(costUsd 제거)로 summary 에서 제외됐다.
     });
 
     it('should aggregate over full history when fromTs/toTs are not provided', async () => {
