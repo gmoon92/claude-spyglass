@@ -25,7 +25,7 @@ import { normalizeRequest } from './domain/request-normalizer';
 import { enrichRowWithAnomalies } from './domain/anomaly-enricher';
 import { invalidateDashboardCache } from './api';
 import { diagJson } from './diag-log';
-import { syncCwd as syncMetaDocsCwd } from './meta-docs';
+import { syncCwd as syncMetaDocsCwd } from '@spyglass/meta-docs';
 
 export interface RawHookPayload {
   hook_event_name: string;

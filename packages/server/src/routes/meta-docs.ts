@@ -35,7 +35,7 @@ import { existsSync } from 'node:fs';
 import type { Database } from 'bun:sqlite';
 import { listMetaDocsWithUsage, type MetaDocType } from '@spyglass/storage';
 import { jsonResponse } from './_shared';
-import { syncCwd, syncGlobalOnce, syncAllKnownCwds, pruneDeadSourceRoots } from '../meta-docs';
+import { syncCwd, syncGlobalOnce, syncAllKnownCwds, pruneDeadSourceRoots } from '@spyglass/meta-docs';
 
 /** source_root 경로 존재 여부 캐시 — 같은 요청 안에서 반복 stat 호출 방지. */
 function buildSourceRootExistsCache(rows: { source_root?: string | null }[]): Map<string, boolean> {

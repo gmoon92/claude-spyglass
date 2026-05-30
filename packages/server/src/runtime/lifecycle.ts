@@ -43,7 +43,7 @@ import {
   bootstrapSync as bootstrapMetaDocsSync,
   syncAllKnownCwds,
   discoverKnownCwds,
-} from '../meta-docs';
+} from '@spyglass/meta-docs';
 import {
   startVersionCheckSchedule,
   stopVersionCheckSchedule,

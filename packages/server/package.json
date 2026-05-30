@@ -12,6 +12,7 @@
     "test": "bun test src/__tests__"
   },
   "dependencies": {
+    "@spyglass/meta-docs": "workspace:*",
     "@spyglass/storage": "workspace:*",
     "@spyglass/storage-graph": "workspace:*",
     "@spyglass/types": "workspace:*",
