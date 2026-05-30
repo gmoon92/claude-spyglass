@@ -49,7 +49,7 @@ const BATCH_LIMIT = 500;
  * 한 outbox row 의 merge 가 이 횟수만큼 연속 실패하면 DLQ(dead=1) 로 격리한다
  * (consistency-hardening P1). 격리 후 cursor 가 그 row 를 통과해 HoL 블로킹이 풀린다.
  */
-const MAX_OUTBOX_ATTEMPTS = 5;
+export const MAX_OUTBOX_ATTEMPTS = 5;
 
 // =============================================================================
 // 모듈 상태
@@ -238,7 +238,9 @@ async function tick(): Promise<void> {
 // SQLite outbox SELECT — 본 모듈만의 책임 (다른 곳에서 outbox 컬럼 모름)
 // =============================================================================
 
-function readOutboxBatch(db: Database, afterId: number, limit: number): OutboxRow[] {
+// export: DLQ 동작(dead 전이·제외)을 단위 테스트로 검증하기 위해 노출 (worker tick 자체는
+// 싱글톤 의존이 많아 직접 테스트가 어렵다 — 본 두 헬퍼가 cursor 전진 정합성의 핵심 primitive).
+export function readOutboxBatch(db: Database, afterId: number, limit: number): OutboxRow[] {
   // dead=1 (DLQ 격리) 행은 영구 skip — 부분 인덱스 idx_kuzu_outbox_live(dead=0) 사용.
   const stmt = db.prepare(
     `SELECT id, source, event_id, op, ts
@@ -254,7 +256,7 @@ function readOutboxBatch(db: Database, afterId: number, limit: number): OutboxRo
  * outbox row 의 merge 실패 기록 — attempts++/last_error 갱신, MAX 도달 시 dead=1.
  * @returns 이번 호출로 dead=1 (DLQ 격리) 가 됐으면 true.
  */
-function recordOutboxFailure(db: Database, id: number, error: unknown): boolean {
+export function recordOutboxFailure(db: Database, id: number, error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error);
   db.prepare(
     `UPDATE kuzu_outbox
