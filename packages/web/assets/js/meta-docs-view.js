@@ -793,19 +793,25 @@ function rowHtml(r) {
 /**
  * Behavior Definitions 타입 뱃지 — 턴 뷰의 Agent/Skill 칩과 동일 시각 언어로 렌더.
  *
- * SSoT 재사용:
- *  - 머리표시 ◎/◉ + 색상 그라디언트는 render/badges.js의 toolIconHtml(toolName)을 그대로 호출.
- *  - 칩 보더+radius는 turn-view.css의 .tool-chip을, agent 톤은 .agent-chip을 그대로 활용.
- *  - command도 Agent/Skill과 동일 주황 — meta 문서는 "정의된 행동 단위"로 의미가 같다는 사용자 결정.
+ * 타입별 대표 글리프 + 색 (디자인 시스템 SSoT 일치 — circle-color-consistency-analysis D1/D2):
+ *  - agent         → 주황 bullseye  : toolIconHtml('Agent') + .tool-chip-agent (--sub-type-agent-color)
+ *  - skill/command → 금색 fish-eye  : toolIconHtml('Skill') + .tool-chip-skill (--sub-type-skill-color)
+ *      command 은 render/badges.js 의 SlashCommand→Skill 합류 규칙에 따라 Skill 과 동일 금색.
  *
- * type 값: 'agent' | 'skill' | 'command' — 정규식이 대문자 시작을 요구하므로 'Agent'로 통일해서 넘긴다.
+ * 색 결정 SSoT:
+ *  - .agent-chip 안에서 .tool-icon-*는 currentColor 를 상속한다(turn-view.css L678) — 따라서
+ *    아이콘·텍스트·보더 색은 모두 .tool-chip-{kind} modifier 한 곳에서 결정된다.
+ *  - 글리프(bullseye vs fish-eye)는 toolIconHtml 에 넘기는 도구명이 결정.
+ *  - 정규식이 대문자 시작을 요구하므로 'Agent'/'Skill' 로 정규화해 넘긴다.
  */
 function metaDocTypeBadge(type) {
   const safe = String(type || '').toLowerCase();
-  // 모든 Behavior Definitions 타입은 Agent/Skill 칩과 동일 톤. 정규식 매칭을 위해 'Agent'로 정규화.
-  const icon = toolIconHtml('Agent');
+  const isAgent  = safe === 'agent';
+  const iconName = isAgent ? 'Agent' : 'Skill';   // skill·command 은 Skill fish-eye 글리프
+  const toneCls  = isAgent ? 'tool-chip-agent' : 'tool-chip-skill';  // 색 SSoT
+  const icon = toolIconHtml(iconName);
   const label = safe.toUpperCase();
-  return `<span class="tool-chip agent-chip meta-doc-type meta-doc-type-${escHtml(safe)}">
+  return `<span class="tool-chip agent-chip ${toneCls} meta-doc-type meta-doc-type-${escHtml(safe)}">
     ${icon}<span class="agent-chip-name">${escHtml(label)}</span>
   </span>`;
 }

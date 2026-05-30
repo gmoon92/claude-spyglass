@@ -395,9 +395,13 @@ tr.row-bloated-critical > td:first-child,
   color: var(--success);
   filter: drop-shadow(0 0 4px rgba(52, 211, 153, 0.5));
 }
+/* agent-icon-color (F5 unify, circle-color-consistency-analysis): 단독 노출(flat-view·tool-stats)
+ * 아이콘을 Agent family SSoT `--sub-type-agent-color`(#FF9B6E)로 통일. 이전엔 `--accent`(#FF7A45)를
+ * 빌려 써서 같은 Agent 표지가 위치(아이콘 vs sub-type 칩)에 따라 두 주황으로 갈렸다(F5).
+ * (.agent-chip 내부에서는 turn-view.css L678 가 currentColor 로 덮으므로 본 색은 단독 노출에만 적용.) */
 .tool-icon-agent {
-  color: var(--accent);
-  filter: drop-shadow(0 0 4px rgba(255, 122, 69, 0.5));
+  color: var(--sub-type-agent-color);
+  filter: drop-shadow(0 0 4px rgba(255, 155, 110, 0.5));
 }
 /* skill-icon-color (2026-05-24): Agent와 동일 광학 위계로 황금 노랑 톤 적용.
  * sub-type-skill-color (#FACC15)와 drop-shadow 글로우를 매칭해 turn-spine 칩에서
