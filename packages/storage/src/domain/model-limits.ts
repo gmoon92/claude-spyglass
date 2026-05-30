@@ -32,10 +32,10 @@
 
 import type { Database } from 'bun:sqlite';
 import {
-  getAllModelLimitsFromDb,
+  getAllModelLimits as getAllModelLimitsFromDb,
   getObservedMaxContextForModel,
   type ModelLimitRow,
-} from '@spyglass/storage';
+} from '../queries/model-limits';
 
 /** 레거시 1M opt-in beta 헤더 토큰 (Anthropic 공식). */
 const CONTEXT_1M_BETA = 'context-1m-2025-08-07';

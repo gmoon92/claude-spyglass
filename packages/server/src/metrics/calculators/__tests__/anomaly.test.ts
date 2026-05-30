@@ -27,8 +27,8 @@ import {
   DEFAULT_ANOMALY_THRESHOLDS,
   getAnomalyThresholds,
   invalidateAnomalyThresholdsCache,
-} from '../../../anomaly-thresholds';
-import { invalidateModelLimitsCache } from '../../../model-limits';
+  invalidateModelLimitsCache,
+} from '@spyglass/storage';
 
 // =============================================================================
 // fixture

@@ -28,7 +28,7 @@ import {
   getAllAnomalyThresholds,
   invalidateAnomalyThresholdsCache,
   DEFAULT_ANOMALY_THRESHOLDS,
-} from '../anomaly-thresholds';
+} from '@spyglass/storage';
 
 // =============================================================================
 // fixture — in-memory bun:sqlite (기존 테스트 스타일 준수)

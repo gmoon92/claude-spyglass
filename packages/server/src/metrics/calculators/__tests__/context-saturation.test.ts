@@ -15,7 +15,7 @@ import {
   toContextSaturationField,
   __test,
 } from '../anomaly';
-import { invalidateModelLimitsCache } from '../../../model-limits';
+import { invalidateModelLimitsCache } from '@spyglass/storage';
 
 function createTestDb(): Database {
   const db = new Database(':memory:');

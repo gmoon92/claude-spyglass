@@ -28,9 +28,8 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { getDatabase, upsertSystemPrompt } from '@spyglass/storage';
+import { getDatabase, upsertSystemPrompt, invalidateAnomalyThresholdsCache } from '@spyglass/storage';
 import { normalizeSystem } from '../proxy/system-hash';
-import { invalidateAnomalyThresholdsCache } from '../anomaly-thresholds';
 import { t } from '../i18n';
 
 interface BackfillRange {

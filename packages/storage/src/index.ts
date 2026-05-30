@@ -327,6 +327,32 @@ export {
 } from './queries/model-limits';
 
 // =============================================================================
+// 모델 한도 추론 (T02 선반출 — 헤더/suffix 우선순위 + 시드·관측 결합 정책)
+// raw `getAllModelLimitsFromDb`(위)와 달리 추론 wrapper. 소비처: metrics, routes/sessions.
+// =============================================================================
+
+export {
+  getModelMaxTokens,
+  getAllModelLimits,
+  invalidateModelLimitsCache,
+  DEFAULT_MAX_TOKENS,
+  EXTENDED_MAX_TOKENS,
+} from './domain/model-limits';
+
+// =============================================================================
+// Anomaly Thresholds (T02 선반출 — Migration 033 bloated-sys / agent-spike 임계 정책)
+// 소비처: metrics/calculators/anomaly, cli/analyze.
+// =============================================================================
+
+export {
+  getAnomalyThresholds,
+  getAllAnomalyThresholds,
+  invalidateAnomalyThresholdsCache,
+  DEFAULT_ANOMALY_THRESHOLDS,
+  type AnomalyThresholds,
+} from './queries/anomaly-thresholds';
+
+// =============================================================================
 // Retention 정책 (SQLite + Graph 공통 SoT — packages/storage-graph 도 본 모듈 참조)
 // =============================================================================
 

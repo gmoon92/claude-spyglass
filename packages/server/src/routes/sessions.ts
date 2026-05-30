@@ -38,10 +38,10 @@ import {
   getOrphanRowsBySession,
   type Request,
   type TurnItem,
+  getModelMaxTokens,
 } from '@spyglass/storage';
 import { normalizeRequests, normalizeTurns, type NormalizedTurn } from '../domain/request-normalizer';
 import { enrichWithAnomalies, summarizeSessionAnomalies } from '../domain/anomaly-enricher';
-import { getModelMaxTokens } from '../model-limits';
 import { jsonResponse, type RouteHandler } from './_shared';
 
 /**

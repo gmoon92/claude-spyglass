@@ -23,12 +23,13 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { getMaxContextProxyForSession, type AnomalyInputRow } from '@spyglass/storage';
-import { getModelMaxTokens } from '../../model-limits';
 import {
+  getMaxContextProxyForSession,
+  getModelMaxTokens,
   getAnomalyThresholds,
+  type AnomalyInputRow,
   type AnomalyThresholds,
-} from '../../anomaly-thresholds';
+} from '@spyglass/storage';
 
 export interface AnomalyTimeSeriesRow {
   timestamp: string;

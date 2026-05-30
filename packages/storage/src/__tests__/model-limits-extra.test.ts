@@ -27,7 +27,7 @@ import {
   invalidateModelLimitsCache,
   DEFAULT_MAX_TOKENS,
   EXTENDED_MAX_TOKENS,
-} from '../model-limits';
+} from '@spyglass/storage';
 
 function newDb(): Database {
   const db = new Database(':memory:');

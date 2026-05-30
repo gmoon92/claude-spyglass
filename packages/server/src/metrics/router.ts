@@ -40,8 +40,9 @@ import {
   getSessionContextUsage,
   getToolCategoryRawCounts,
   getTurnsPerSession,
+  getModelMaxTokens,
+  getAllModelLimits,
 } from '@spyglass/storage';
-import { getModelMaxTokens, getAllModelLimits } from '../model-limits';
 import { categorizeToolName, ALL_TOOL_CATEGORIES, type ToolCategory } from '../tool-category';
 import { buildMeta, jsonResponse, parseTimeWindow } from './_shared';
 import { computeBurnRate } from './calculators/burn-rate';
