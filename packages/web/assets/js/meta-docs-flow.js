@@ -384,7 +384,7 @@ function shellHtml(meta) {
            preserveAspectRatio="xMidYMid meet"
            xmlns="${SVGNS}">
         <defs>
-          <!-- 화살표 marker 단일화: SVG2 context-stroke 로 참조 path 의 stroke 색을 자동 상속. -->
+          <!-- Unified arrow marker: SVG2 context-stroke auto-inherits stroke color from referencing path. -->
           <marker id="flowArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="context-stroke"/></marker>
         </defs>
         <g id="flowEdgesLayer"></g>

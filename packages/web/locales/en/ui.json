@@ -343,6 +343,18 @@
         "modal": "system dominates · compact won't help"
       }
     },
+    "context-saturation": {
+      "warn": {
+        "label": "▦ ctx {pct}%",
+        "tooltip": "Session context {pct}% used — approaching limit",
+        "modal": "/clear or /compact recommended"
+      },
+      "critical": {
+        "label": "▦ ctx {pct}%",
+        "tooltip": "Session context {pct}% used — approaching limit",
+        "modal": "/clear or /compact recommended"
+      }
+    },
     "agent-spike": {
       "label": "↑×{n}",
       "tooltip": "Agent is {n}× parent row",
@@ -526,7 +538,8 @@
   },
   "detail-view": {
     "total-tokens": "Total {tokens} tokens",
-    "ended-at": "Ended: {time}"
+    "ended-at": "Ended: {time}",
+    "turn-count-hint": "Session {count} turns accumulated — /clear or start a new session"
   },
   "settings-view": {
     "title": "Settings",

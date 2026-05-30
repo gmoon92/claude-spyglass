@@ -317,9 +317,8 @@ async function renderDiagSection() {
       ${versionRow('jq', 'jq')}
     </div>
     <div class="settings-card">
-      <!-- 행 순서는 좌측 sub-tab 메뉴 순서와 일치 — Proxy → Hook → SQLite → Graph DB.
-           메뉴와 진단 카드의 시선 흐름을 같은 방향으로 정렬해 점프 버튼 → 해당 탭의 매핑을
-           직관적으로 만든다. -->
+      <!-- Row order matches left sub-tab menu order: Proxy → Hook → SQLite → Graph DB.
+           Aligning the visual flow of the menu and diagnostic cards makes jump-button → tab mapping intuitive. -->
       ${proxyRowHtml(data.proxy)}
       ${rowHtml(t('ui.settings-view.diag.hook-label'), hookStatus, hookValue,
         `<button class="settings-jump-btn" data-settings-jump="hooks">${t('ui.settings-view.diag.jump-hooks')}</button>${hookTail}`)}
@@ -1293,7 +1292,7 @@ async function renderProxySection() {
           <span class="settings-health-text">${escHtml(healthLabel)}</span>
         </span>
       </div>
-      <!-- 배지 바로 아래에 *백엔드가 본 경로* 를 명시 노출 — 사용자가 "왜 미설치로 나오는지" 즉시 진단 가능. -->
+      <!-- Show the *path seen by the backend* directly below the badge — lets users diagnose "why not installed" instantly. -->
       <div class="settings-health-target">
         ${t('ui.settings-view.proxy.health-target', {
           path: `<code>${escHtml(statusData.profilePath)}</code>`,
@@ -1307,17 +1306,17 @@ async function renderProxySection() {
       <div class="settings-option-grid" role="radiogroup" aria-label="${t('ui.settings-view.proxy.shell-pick-title')}">
         ${shellCardsHtml}
       </div>
-      <!-- 메인 액션 — [프록시 자동 등록] 클릭이 *실제 설치* 의 트리거.
-           healthState === 'ok' (이미 설치됨) 인 경우 버튼·도움말 모두 숨김. 상단 통합 배지가
-           이미 "✓ 설치됨" 을 알려주므로 중복 액션을 노출하지 않는다. 다른 셸에 추가 등록하려면
-           위의 셸 카드를 선택 → status 가 미설치로 갱신되면 버튼이 다시 노출됨. -->
+      <!-- Main action — clicking [Auto-register proxy] is the trigger for *actual installation*.
+           When healthState === 'ok' (already installed), both button and help text are hidden.
+           The top unified badge already shows "✓ Installed", so duplicate actions are suppressed.
+           To register for another shell: select the shell card → status updates to uninstalled → button reappears. -->
       ${healthState === 'ok' ? '' : `
         <div class="settings-actions">
           <button class="settings-action-btn settings-action-primary" id="proxyInstallBtn">${t('ui.settings-view.proxy.install')}</button>
         </div>
         <div class="settings-card-sub settings-action-help">${t('ui.settings-view.proxy.action-help')}</div>
       `}
-      <!-- result 영역은 설치/복구 직후 0.6s 동안 결과 메시지를 표시하는 임시 슬롯 — 항상 렌더. -->
+      <!-- result area: temporary slot that shows the result message for 0.6s after install/restore — always rendered. -->
       <div class="settings-result" id="proxyResult"></div>
     </div>
 

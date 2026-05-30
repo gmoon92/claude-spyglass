@@ -46,7 +46,11 @@
       "prologue-hint-title": "첫 사용자 프롬프트가 등록되기 전에 도착한 도구·응답입니다. 세션 resume 또는 hook 누락으로 발생할 수 있습니다.",
       "prologue-transcript-tag": "transcript에서 보충된 어시스턴트 응답",
       "prompt-row-aria": "사용자 프롬프트",
-      "prompt-icon-aria": "사용자 프롬프트"
+      "prompt-icon-aria": "사용자 프롬프트",
+      "chip-group-multi": "{name} ×{count} (그룹)",
+      "chip-group-single": "{name} (그룹)",
+      "chip-aria-suffix": "칩 — 클릭 시 해당 행으로 이동",
+      "active-turn-log-aria": "활성 턴 요청 로그"
     }
   }
 }

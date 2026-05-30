@@ -152,7 +152,7 @@ export function applyContextSaturationHeader(ctxSat, turnCount) {
 
   // turn count 가이드 힌트 — 20턴 이상이면 가벼운 ⟲ 표지(stage 없이 톤 정보만).
   if (Number.isFinite(turnCount) && turnCount >= 20) {
-    const tip = `세션 ${turnCount}턴 누적 — /clear 또는 새 세션 권장`;
+    const tip = window.I18n.t('ui.detail-view.turn-count-hint', { count: turnCount });
     host.insertAdjacentHTML(
       'beforeend',
       `<span class="badge-turn-count--hint ds-badge" data-tone="muted"

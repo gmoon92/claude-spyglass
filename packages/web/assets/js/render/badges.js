@@ -241,8 +241,8 @@ export function contextSaturationBadgeFullHtml(ctxSat) {
     } catch { return fallback; }
   };
   const label   = tFallback(`${i18nBase}.label`,   `▦ ctx ${pct}%`, { pct });
-  const tooltip = tFallback(`${i18nBase}.tooltip`, `세션 컨텍스트 ${pct}% 사용 — 한도 가까움`, { pct });
-  const action  = tFallback(`${i18nBase}.modal`,   `/clear 또는 /compact 권장`, { pct });
+  const tooltip = tFallback(`${i18nBase}.tooltip`, `Session context ${pct}% used — approaching limit`, { pct });
+  const action  = tFallback(`${i18nBase}.modal`,   `/clear or /compact recommended`, { pct });
   const fullTip = `${tooltip} · ${action}`;
   return `<span class="badge-context-saturation badge-context-saturation--full${stageCls} ds-badge"
     data-tone="${tone}" data-context-saturation-stage="${stage}"

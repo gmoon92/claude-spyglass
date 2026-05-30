@@ -162,7 +162,9 @@ function chipHtml(item, respSeq) {
   //   - 묶음은 종류 무관한 노이즈 요약이므로 sub-type 색상/agent-chip 분기보다 먼저 처리.
   //   - title 에는 포함된 도구 종류 전체(`Read · Bash · Edit · ...`) 를 노출해 hover 단서 제공.
   if (isGroup) {
-    const groupAria  = count > 1 ? `${name} ×${count} (그룹)` : `${name} (그룹)`;
+    const groupAria  = count > 1
+      ? window.I18n.t('session.session-detail.turn-views.chip-group-multi', { name, count })
+      : window.I18n.t('session.session-detail.turn-views.chip-group-single', { name, count: 1 });
     const a11yAttrs  = chipAccessibilityAttrs(key, groupAria);
     const titleText  = (item.kinds || []).join(' · ');
     return `<span class="tool-chip tool-chip-group ds-chip" data-tone="tool" title="${escHtml(titleText)}" ${a11yAttrs}${firstIdAttr}>${fmtActionLabel(name, count)}</span>`;
@@ -204,7 +206,8 @@ function chipHtml(item, respSeq) {
  */
 function chipAccessibilityAttrs(key, labelText) {
   const keyAttr = key ? ` data-chip-key="${escHtml(key)}"` : '';
-  const aria    = `${labelText} 칩 — 클릭 시 해당 행으로 이동`;
+  const suffix  = window.I18n.t('session.session-detail.turn-views.chip-aria-suffix');
+  const aria    = `${labelText} ${suffix}`;
   return `${keyAttr} tabindex="0" role="button" aria-label="${escHtml(aria)}"`;
 }
 
@@ -994,7 +997,7 @@ export function renderTurnCards(turns, badgeTurns, allRequests) {
         </header>
         <div class="turn-spine" id="turnSpine" role="tablist" aria-label="${escHtml(summaryLabel)}"></div>
       </section>
-      <section class="log-pane" aria-label="활성 턴 요청 로그" data-region="log">
+      <section class="log-pane" aria-label="${window.I18n.t('session.session-detail.turn-views.active-turn-log-aria')}" data-region="log">
         <div class="log-table-wrap">
           <table class="requests-table" id="turnLogTable">
             <colgroup>

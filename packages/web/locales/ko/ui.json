@@ -343,6 +343,18 @@
         "modal": "시스템 압도 · compact 무효 · CLAUDE.md 축소"
       }
     },
+    "context-saturation": {
+      "warn": {
+        "label": "▦ ctx {pct}%",
+        "tooltip": "세션 컨텍스트 {pct}% 사용 — 한도 가까움",
+        "modal": "/clear 또는 /compact 권장"
+      },
+      "critical": {
+        "label": "▦ ctx {pct}%",
+        "tooltip": "세션 컨텍스트 {pct}% 사용 — 한도 가까움",
+        "modal": "/clear 또는 /compact 권장"
+      }
+    },
     "agent-spike": {
       "label": "↑×{n}",
       "tooltip": "Agent가 부모 대비 {n}배",
@@ -526,7 +538,8 @@
   },
   "detail-view": {
     "total-tokens": "총 {tokens} 토큰",
-    "ended-at": "종료: {time}"
+    "ended-at": "종료: {time}",
+    "turn-count-hint": "세션 {count}턴 누적 — /clear 또는 새 세션 권장"
   },
   "settings-view": {
     "title": "설정",

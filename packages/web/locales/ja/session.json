@@ -46,7 +46,11 @@
       "prologue-hint-title": "最初のユーザープロンプトが登録される前に到着したツール・応答です。セッションの再開またはフック欠落により発生する場合があります。",
       "prologue-transcript-tag": "transcript から補完されたアシスタント応答",
       "prompt-row-aria": "ユーザープロンプト",
-      "prompt-icon-aria": "ユーザープロンプト"
+      "prompt-icon-aria": "ユーザープロンプト",
+      "chip-group-multi": "{name} ×{count} (グループ)",
+      "chip-group-single": "{name} (グループ)",
+      "chip-aria-suffix": "チップ — クリックで該当行へ移動",
+      "active-turn-log-aria": "アクティブターンリクエストログ"
     }
   }
 }

@@ -343,6 +343,18 @@
         "modal": "system 压制 · compact 无效"
       }
     },
+    "context-saturation": {
+      "warn": {
+        "label": "▦ ctx {pct}%",
+        "tooltip": "会话上下文已使用 {pct}% — 接近上限",
+        "modal": "建议使用 /clear 或 /compact"
+      },
+      "critical": {
+        "label": "▦ ctx {pct}%",
+        "tooltip": "会话上下文已使用 {pct}% — 接近上限",
+        "modal": "建议使用 /clear 或 /compact"
+      }
+    },
     "agent-spike": {
       "label": "↑×{n}",
       "tooltip": "Agent 是父级 {n} 倍",
@@ -526,7 +538,8 @@
   },
   "detail-view": {
     "total-tokens": "共 {tokens} 个token",
-    "ended-at": "结束: {time}"
+    "ended-at": "结束: {time}",
+    "turn-count-hint": "会话累计 {count} 轮 — 建议 /clear 或开启新会话"
   },
   "settings-view": {
     "title": "设置",

@@ -46,7 +46,11 @@
       "prologue-hint-title": "Tools and responses that arrived before the first user prompt was registered. May occur due to session resume or missing hooks.",
       "prologue-transcript-tag": "Assistant response supplemented from transcript",
       "prompt-row-aria": "User prompt",
-      "prompt-icon-aria": "User prompt"
+      "prompt-icon-aria": "User prompt",
+      "chip-group-multi": "{name} ×{count} (group)",
+      "chip-group-single": "{name} (group)",
+      "chip-aria-suffix": "chip — click to jump to row",
+      "active-turn-log-aria": "Active turn request log"
     }
   }
 }

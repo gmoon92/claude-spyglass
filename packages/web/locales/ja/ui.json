@@ -343,6 +343,18 @@
         "modal": "system 圧迫 · compact 無効"
       }
     },
+    "context-saturation": {
+      "warn": {
+        "label": "▦ ctx {pct}%",
+        "tooltip": "セッションコンテキスト {pct}% 使用 — 上限に近づいています",
+        "modal": "/clear または /compact を推奨"
+      },
+      "critical": {
+        "label": "▦ ctx {pct}%",
+        "tooltip": "セッションコンテキスト {pct}% 使用 — 上限に近づいています",
+        "modal": "/clear または /compact を推奨"
+      }
+    },
     "agent-spike": {
       "label": "↑×{n}",
       "tooltip": "Agent が親比 {n} 倍",
@@ -526,7 +538,8 @@
   },
   "detail-view": {
     "total-tokens": "合計 {tokens} トークン",
-    "ended-at": "終了: {time}"
+    "ended-at": "終了: {time}",
+    "turn-count-hint": "セッション {count} ターン累積 — /clear または新しいセッションを推奨"
   },
   "settings-view": {
     "title": "設定",
