@@ -320,6 +320,29 @@ function enrichRequest(row: OutboxRow, db: Database): GraphOp[] {
       });
     }
 
+    // R7: 양방향 PARENT_OF — 이 ToolCall 을 parent 로 갖는 기존 자식들에 대해서도 발행.
+    //   부모 Agent ToolCall 노드는 PostToolUse 재enrich(event_type='tool') 시점에 생성되는데,
+    //   이는 sub-agent 자식 활동 이후라(`:255-256`) 자식 측 PARENT_OF(`:312-320`)는 부모 노드
+    //   부재로 조용히 유실됐을 수 있다(merge.ts mergeRel MATCH 0 → no-op). 부모 측에서도 발행해
+    //   순서 무관 최종 일관성을 만든다 — 모두 idempotent MERGE 라 child-side 와 중복돼도 무해.
+    //   pre_tool 자식은 ToolCall 노드가 아직 없어 제외(자식의 PostToolUse 재enrich 때 child-side 가 처리).
+    const childRows = db
+      .prepare(
+        `SELECT tool_use_id FROM requests
+          WHERE parent_tool_use_id = ? AND tool_use_id IS NOT NULL AND event_type != 'pre_tool'`,
+      )
+      .all(r.tool_use_id) as Array<{ tool_use_id: string }>;
+    for (const child of childRows) {
+      ops.push({
+        kind: 'rel',
+        rel: {
+          type: 'PARENT_OF',
+          from: { label: 'ToolCall', key: 'tool_use_id', value: r.tool_use_id },
+          to: { label: 'ToolCall', key: 'tool_use_id', value: child.tool_use_id },
+        },
+      });
+    }
+
     // MetaDocument + USES — flow 시각화의 SoT.
     //
     //   SQLite 측 카탈로그 매핑 규칙(storage/queries/meta-document.ts §listFlowAggregates)

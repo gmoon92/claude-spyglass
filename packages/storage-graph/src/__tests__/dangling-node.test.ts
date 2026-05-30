@@ -430,10 +430,14 @@ describe('R7 dangling-node — enrich 노드-우선 op 순서', () => {
     expect(idxOfKind('agent')).toBeLessThan(idxOfRel('CALLED'));
   });
 
-  it('외부 row 가 만드는 엣지 끝점(Session·parent ToolCall)은 본 row 에 노드 op 가 없다 — mergeRel no-op 재시도가 흡수', () => {
+  it('외부 row 가 만드는 엣지 끝점(Session·parent ToolCall)은 본 row 에 노드 op 가 없다', () => {
     // CONTAINS 의 from=Session, PARENT_OF 의 from=parent ToolCall 은 *다른* outbox row 가 만든다.
-    //   이 끝점들이 본 row 의 노드 op 에 없음을 고정 → 같은 batch 에서 못 찾으면 mergeRel 이
-    //   MATCH-0 no-op 으로 흡수하고 다음 tick 재시도한다는 설계를 명문화.
+    //   이 끝점들이 본 row 의 노드 op 에 없음을 고정.
+    //   R7 정정(adr-r7): 끝점 부재 시 mergeRel 은 MATCH-0 no-op 이며 *재시도되지 않는다*
+    //   (silent success → cursor 전진). 복구는 "다음 tick 재시도"가 아니라:
+    //     - CONTAINS: Session outbox row 가 PK 순서상 선행하므로 정상 운영에서 부재 미발생.
+    //     - PARENT_OF: enrich 의 양방향 발행(부모 재enrich 시 자식 PARENT_OF 발행, parent-of-recovery.test.ts)이
+    //       순서 무관 최종 일관성을 만든다.
     createRequest(db.instance, {
       id: 'ext', session_id: sessionId, timestamp: NOW, type: 'tool_call',
       tool_name: 'Bash', tool_detail: 'ls', event_type: 'tool',
