@@ -157,6 +157,8 @@ export interface Request {
   tool_interrupted?: number | null;
   tool_user_modified?: number | null;
   created_at?: number;
+  /** R3: payload at-rest 인코딩 마커. NULL=평문, 'aes256gcm'=암호문(base64-in-TEXT). */
+  payload_algo?: string | null;
 }
 
 // =============================================================================

@@ -42,6 +42,8 @@
 
 import type { Database } from 'bun:sqlite';
 import type { Session } from '../schema';
+import { decodeText } from '../payload-codec';
+import { getActiveKey } from '../runtime/encryption';
 import {
   ACTIVE_SESSION_REQUEST_JOIN_SQL,
   buildLiveSessionPredicate,
@@ -204,11 +206,15 @@ export function listVisibleSessions(
   const liveStateCol = buildLiveStateColumn(now, 's.ended_at', 'MAX(r.timestamp)');
   const where = compileFilter(filter);
 
-  return db.query(`
+  // R3: first_prompt_payload는 클라이언트가 JSON.parse하므로 algo를 함께 가져와 서버측 복호한다.
+  const rows = db.query(`
     SELECT s.*,
       (SELECT r.payload FROM requests r
        WHERE r.session_id = s.id AND r.type = 'prompt'
        ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload,
+      (SELECT r.payload_algo FROM requests r
+       WHERE r.session_id = s.id AND r.type = 'prompt'
+       ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload_algo,
       MAX(r.timestamp) as last_activity_at,
       ${liveStateCol.sql} as live_state
     FROM sessions s
@@ -218,7 +224,16 @@ export function listVisibleSessions(
     HAVING last_activity_at IS NOT NULL
     ORDER BY (s.ended_at IS NULL) DESC, COALESCE(MAX(r.timestamp), s.started_at) DESC
     LIMIT ?
-  `).all(...liveStateCol.params, ...where.params, limit) as Session[];
+  `).all(...liveStateCol.params, ...where.params, limit) as Array<Session & { first_prompt_payload_algo?: string | null }>;
+
+  const key = getActiveKey();
+  for (const row of rows) {
+    if (row.first_prompt_payload != null) {
+      row.first_prompt_payload = decodeText(row.first_prompt_payload, row.first_prompt_payload_algo, key) ?? row.first_prompt_payload;
+    }
+    delete row.first_prompt_payload_algo; // 응답에 내부 marker 비노출
+  }
+  return rows;
 }
 
 // ============================================================================

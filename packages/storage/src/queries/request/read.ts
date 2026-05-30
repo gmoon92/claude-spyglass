@@ -14,6 +14,26 @@
 
 import type { Database } from 'bun:sqlite';
 import type { Request, RequestType } from '../../schema';
+import { decodeText } from '../../payload-codec';
+import { getActiveKey } from '../../runtime/encryption';
+
+/**
+ * R3: requests.payload를 payload_algo 분기로 서버측 복호(평문/암호문 혼재 대응).
+ * payload는 클라이언트(web/tui)가 JSON.parse하므로, 모든 read 출구에서 평문 string으로 복원해야 한다.
+ */
+function decodeRequestRow<T extends { payload?: string | null; payload_algo?: string | null }>(row: T | null): T | null {
+  if (row && row.payload != null) {
+    row.payload = decodeText(row.payload, row.payload_algo, getActiveKey()) ?? row.payload;
+  }
+  return row;
+}
+function decodeRequestRows<T extends { payload?: string | null; payload_algo?: string | null }>(rows: T[]): T[] {
+  const key = getActiveKey();
+  for (const row of rows) {
+    if (row.payload != null) row.payload = decodeText(row.payload, row.payload_algo, key) ?? row.payload;
+  }
+  return rows;
+}
 
 // =============================================================================
 // 활성 요청 필터 (SSoT — ADR-003 log-view-unification)
@@ -59,7 +79,7 @@ export function getRequestById(
   db: Database,
   id: string
 ): RequestQueryResult | null {
-  return db.query('SELECT * FROM requests WHERE id = ?').get(id) as RequestQueryResult | null;
+  return decodeRequestRow(db.query('SELECT * FROM requests WHERE id = ?').get(id) as RequestQueryResult | null);
 }
 
 // =============================================================================
@@ -80,8 +100,8 @@ export function getAllRequests(
   if (fromTs) { conditions.push('timestamp >= ?'); params.push(fromTs); }
   if (toTs)   { conditions.push('timestamp <= ?'); params.push(toTs); }
   const where = `WHERE ${conditions.join(' AND ')}`;
-  return db.query(`SELECT * FROM requests ${where} ORDER BY timestamp DESC LIMIT ?`)
-    .all(...params, limit) as RequestQueryResult[];
+  return decodeRequestRows(db.query(`SELECT * FROM requests ${where} ORDER BY timestamp DESC LIMIT ?`)
+    .all(...params, limit) as RequestQueryResult[]);
 }
 
 /**
@@ -92,9 +112,9 @@ export function getRequestsBySession(
   sessionId: string,
   limit: number = 100
 ): RequestQueryResult[] {
-  return db.query(
+  return decodeRequestRows(db.query(
     `SELECT * FROM requests WHERE session_id = ? AND ${ACTIVE_REQUEST_FILTER_SQL} ORDER BY timestamp DESC LIMIT ?`
-  ).all(sessionId, limit) as RequestQueryResult[];
+  ).all(sessionId, limit) as RequestQueryResult[]);
 }
 
 /**
@@ -113,9 +133,9 @@ export function getRequestsByType(
   if (fromTs !== undefined) { conditions.push('timestamp >= ?'); params.push(fromTs); }
   if (toTs   !== undefined) { conditions.push('timestamp <= ?'); params.push(toTs); }
   params.push(limit, offset);
-  return db.query(
+  return decodeRequestRows(db.query(
     `SELECT * FROM requests WHERE ${conditions.join(' AND ')} ORDER BY timestamp DESC LIMIT ? OFFSET ?`
-  ).all(...params) as RequestQueryResult[];
+  ).all(...params) as RequestQueryResult[]);
 }
 
 /**
@@ -162,7 +182,7 @@ export function getRequestsWithFilter(
 
   const sql = `SELECT * FROM requests ${whereClause} ORDER BY timestamp DESC ${limitClause} ${offsetClause}`;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return db.query(sql).all(...params as any[]) as RequestQueryResult[];
+  return decodeRequestRows(db.query(sql).all(...params as any[]) as RequestQueryResult[]);
 }
 
 /**
@@ -183,7 +203,7 @@ export function getTopTokenRequests(
 
   sql += ' ORDER BY tokens_total DESC LIMIT ?';
 
-  return db.query(sql).all(...params, limit) as RequestQueryResult[];
+  return decodeRequestRows(db.query(sql).all(...params, limit) as RequestQueryResult[]);
 }
 
 // =============================================================================
@@ -201,11 +221,11 @@ export function getChildRequestsByParentToolUseId(
   db: Database,
   parentToolUseId: string
 ): RequestQueryResult[] {
-  return db.query(
+  return decodeRequestRows(db.query(
     `SELECT * FROM requests
      WHERE parent_tool_use_id = ?
      ORDER BY timestamp ASC`
-  ).all(parentToolUseId) as RequestQueryResult[];
+  ).all(parentToolUseId) as RequestQueryResult[]);
 }
 
 /**
@@ -219,11 +239,11 @@ export function getChildRequestsByParents(
 ): Record<string, RequestQueryResult[]> {
   if (parentToolUseIds.length === 0) return {};
   const placeholders = parentToolUseIds.map(() => '?').join(',');
-  const rows = db.query(
+  const rows = decodeRequestRows(db.query(
     `SELECT * FROM requests
      WHERE parent_tool_use_id IN (${placeholders})
      ORDER BY timestamp ASC`
-  ).all(...parentToolUseIds) as RequestQueryResult[];
+  ).all(...parentToolUseIds) as RequestQueryResult[]);
 
   const grouped: Record<string, RequestQueryResult[]> = {};
   for (const row of rows) {

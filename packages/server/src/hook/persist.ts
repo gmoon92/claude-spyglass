@@ -28,7 +28,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Database } from 'bun:sqlite';
-import { createRequest, getProxyToolUseById } from '@spyglass/storage';
+import { createRequest, getProxyToolUseById, encodeRequestPayload } from '@spyglass/storage';
 import type { Request as DbRequest } from '@spyglass/storage';
 import type { NormalizedHookPayload, SubagentChildToolCall } from './types';
 import type { AssistantTextEntry } from './transcript';
@@ -83,6 +83,9 @@ function mergePostToolIntoPreTool(
   apiRequestId: string | null,
 ): boolean {
   // ADR-001 P1-E: api_request_id를 COALESCE로 채워 기존 값 보존(동시 backfill 회피).
+  // R3: payload 갱신 시 payload_algo도 함께 갱신해야 한다. 미갱신 시 pre_tool INSERT가
+  // 남긴 algo(암호화 ON이면 'aes256gcm')와 평문 payload가 어긋나 복호 실패(silent corruption).
+  const enc = encodeRequestPayload(payload.payload ?? null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result = (db as any).run(
     `UPDATE requests
@@ -94,6 +97,7 @@ function mergePostToolIntoPreTool(
          cache_read_tokens = ?,
          model = COALESCE(?, model),
          payload = ?,
+         payload_algo = ?,
          event_type = 'tool',
          api_request_id = COALESCE(api_request_id, ?)
      WHERE id = ?`,
@@ -104,7 +108,8 @@ function mergePostToolIntoPreTool(
     payload.cache_creation_tokens ?? 0,
     payload.cache_read_tokens ?? 0,
     payload.model ?? null,
-    payload.payload ?? null,
+    enc.value,
+    enc.algo,
     apiRequestId,
     preToolId,
   );
@@ -466,13 +471,15 @@ export function persistAssistantTextResponses(
       tokens_input, tokens_output, tokens_total, duration_ms, payload, source,
       cache_creation_tokens, cache_read_tokens, preview, tool_use_id, event_type,
       tokens_confidence, tokens_source, parent_tool_use_id, api_request_id,
-      permission_mode, agent_id, agent_type, tool_interrupted, tool_user_modified
+      permission_mode, agent_id, agent_type, tool_interrupted, tool_user_modified,
+      payload_algo
     ) VALUES (
       ?, ?, ?, 'response', NULL, NULL, ?, ?,
       ?, ?, ?, 0, ?, 'transcript-assistant-text',
       ?, ?, ?, NULL, 'assistant_response',
       'high', 'transcript', NULL, ?,
-      NULL, NULL, NULL, NULL, NULL
+      NULL, NULL, NULL, NULL, NULL,
+      ?
     )
   `);
 
@@ -487,6 +494,10 @@ export function persistAssistantTextResponses(
     const entryTurnId = getTurnIdAt(db, context.sessionId, entry.timestampMs)
       ?? context.turnId
       ?? null;
+    // R3: assistant_response payload도 옵트인 시 암호화(base64-in-TEXT) + payload_algo 기록.
+    const enc = encodeRequestPayload(
+      JSON.stringify({ message_id: entry.messageId, text: entry.text, source: 'transcript' }),
+    );
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = (stmt as any).run(
@@ -498,11 +509,12 @@ export function persistAssistantTextResponses(
         entry.tokensInput,
         entry.tokensOutput,
         tokensTotal,
-        JSON.stringify({ message_id: entry.messageId, text: entry.text, source: 'transcript' }),
+        enc.value,
         entry.cacheCreationTokens,
         entry.cacheReadTokens,
         previewText,
         entry.messageId, // api_request_id — entry.messageId가 곧 Anthropic msg_xxx
+        enc.algo,
       );
       if (result.changes > 0) inserted++;
     } catch (e) {

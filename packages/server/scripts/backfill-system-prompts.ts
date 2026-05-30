@@ -22,13 +22,14 @@
  * 호출자: 사용자 직접 (npm/bun script). v21 이전 행은 payload BLOB 자체가 없어 backfill 불가능 — 의도된 한계.
  */
 
-import { getDatabase, upsertSystemPrompt } from '@spyglass/storage';
+import { getDatabase, upsertSystemPrompt, decodeBlob, getActiveKey } from '@spyglass/storage';
 import { normalizeSystem } from '../src/proxy/system-hash';
 
 interface BackfillRow {
   id: string;
   timestamp: number;
   payload: Uint8Array;
+  payload_algo: string | null;
 }
 
 const BATCH_SIZE = 100;
@@ -87,7 +88,7 @@ function main(): void {
   while (offset < remaining) {
     const batchSize = Math.min(BATCH_SIZE, remaining - offset);
     const rows = db.query(
-      `SELECT id, timestamp, payload FROM proxy_requests
+      `SELECT id, timestamp, payload, payload_algo FROM proxy_requests
        WHERE system_hash IS NULL AND payload IS NOT NULL
        ORDER BY timestamp ASC LIMIT ?`
     ).all(batchSize) as BackfillRow[];
@@ -100,8 +101,9 @@ function main(): void {
         processed++;
         let body: { system?: unknown };
         try {
-          const raw = Bun.zstdDecompressSync(row.payload);
-          const text = new TextDecoder().decode(raw);
+          // R3: payload_algo 분기 디코드(zstd/zstd+aes256gcm) — 무조건 zstd 가정 제거.
+          const raw = decodeBlob(row.payload, row.payload_algo, getActiveKey());
+          const text = new TextDecoder().decode(raw!);
           body = JSON.parse(text);
         } catch {
           decodeError++;
