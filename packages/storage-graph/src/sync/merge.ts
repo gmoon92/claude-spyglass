@@ -3,7 +3,9 @@
  *
  * 책임:
  *   enrich.ts 가 만든 GraphOp 배열을 LadybugClient 의 Cypher MERGE 문장으로 변환해
- *   순차 실행한다. 트랜잭션 안에서 실행되므로 batch 단위 atomicity 보장.
+ *   op 단위 try/catch 로 순차 실행한다. Ladybug 0.16.x 의 transaction() 은 no-op 이라
+ *   batch 단위 atomicity 는 보장되지 않으나, 모든 op 가 idempotent MERGE 라 부분적용/재시도
+ *   모두 무해하다(아래 "디자인 결정" 참조).
  *
  * 의존성:
  *   - client.ts (LadybugClient.query / transaction)
