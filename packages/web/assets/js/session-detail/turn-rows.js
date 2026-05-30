@@ -22,8 +22,8 @@
  *  서버 정규화로 `turn.items[]`가 timestamp 오름차순 + `{kind:'tool'|'response', request}`로
  *  도착하므로 본 모듈은 인터리빙/정렬 책임을 지지 않는다 (ADR-006 server-led ordering).
  *
- * @see ADR-turn-view-revamp-003 — 칩 → 첫 매칭 행 스크롤 (data-chip-key SSoT)
- * @see ADR-turn-view-revamp-004 — turn-rows.js → makeRequestRow 위임
+ * @see ADR-turn-view-revamp-003: 칩 → 첫 매칭 행 스크롤 (data-chip-key SSoT)
+ * @see ADR-turn-view-revamp-004: turn-rows.js → makeRequestRow 위임
  */
 
 import { escHtml } from '../formatters.js';
@@ -339,7 +339,7 @@ function injectChipKey(rowHtml, key) {
  * @param {{anomalyFlags?: Map<string, Set<string>>, showSession?: boolean}} [opts]
  * @returns {string} `<tr>` 행들의 HTML concat
  *
- * @see ADR-turn-view-revamp-004 — 하단 표는 기존 요청 탭 모듈(`makeRequestRow`) 100% 재사용.
+ * @see ADR-turn-view-revamp-004: 하단 표는 기존 요청 탭 모듈(`makeRequestRow`) 100% 재사용.
  */
 export function makeTurnLogRows(turn, opts = {}) {
   if (!turn) return '';

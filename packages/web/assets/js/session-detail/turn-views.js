@@ -32,10 +32,10 @@
  *  - 9컬럼 표 행 HTML                → render/rows.js#makeRequestRow (절대 수정 금지)
  *  - 시각 어휘(턴 spine/flow-head/log-pane) → 본 파일이 단일 책임
  *
- * @see ADR-turn-view-revamp-001 — turn-spine inline-flow + 활성 카드 박스 폐기
- * @see ADR-turn-view-revamp-002 — flow-head 두 행 + 영역 h2 제거
- * @see ADR-turn-view-revamp-003 — 칩 클릭 → 첫 매칭 행 스크롤
- * @see ADR-turn-view-revamp-004 — "턴 뷰"+"요청" → 단일 "로그" 탭 통합
+ * @see ADR-turn-view-revamp-001: turn-spine inline-flow + 활성 카드 박스 폐기
+ * @see ADR-turn-view-revamp-002: flow-head 두 행 + 영역 h2 제거
+ * @see ADR-turn-view-revamp-003: 칩 클릭 → 첫 매칭 행 스크롤
+ * @see ADR-turn-view-revamp-004: "턴 뷰"+"요청" → 단일 "로그" 탭 통합
  */
 
 import { escHtml, fmtToken, fmtTime } from '../formatters.js';

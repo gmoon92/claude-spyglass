@@ -17,6 +17,6 @@
       "@spyglass/types": ["../types/src/index.ts"]
     }
   },
-  "include": ["assets/js/**/*.js"],
+  "include": ["assets/js/**/*.js", "assets/js/**/*.d.ts"],
   "exclude": ["node_modules", "assets/js/__tests__/**"]
 }
