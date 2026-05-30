@@ -15,7 +15,7 @@
  *     - scanGlobalUserDir만 homedir()를 쓰므로 mock.module로 교체.
  *     - tmp 디렉토리는 realpathSync로 정규화(macOS /tmp → /private/tmp).
  *
- * @see packages/server/src/meta-docs/scanner.ts
+ * @see packages/meta-docs/src/scanner.ts
  */
 
 import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
@@ -150,17 +150,47 @@ describe('scanRoot — frontmatter 파서 엣지', () => {
     expect(rows[0].description).toBe('bom desc');
   });
 
-  it('CRLF 개행 — 닫는 fence 직전 마지막 key는 trailing \\r로 누락 (현재 동작 고정 — 추후 검토)', () => {
+  it('CRLF 개행 — 모든 key가 LF와 동일하게 파싱 (닫는 fence 직전 마지막 key 포함)', () => {
     writeFile('.claude/agents/crlf.md', '---\r\nname: crlfname\r\ndescription: crlf desc\r\n---\r\nbody line\r\n');
     const rows = scanRoot(ROOT, 'projectSettings', ROOT);
-    // 현재 동작 고정 — 추후 검토:
-    //   splitFrontmatter는 indexOf('\n---')로 닫는 fence를 찾는데, CRLF에서는 fmText의
-    //   마지막 라인이 trailing '\r'을 그대로 보유한다("description: crlf desc\r").
-    //   parseSimpleYaml 정규식의 `$` 앵커는 trailing '\r' 앞에서 매치되지 않으므로(개행 아님)
-    //   해당 마지막 key가 통째로 누락된다. 앞쪽 key(name)는 '\r\n' split로 정상 파싱.
-    //   → description이 누락되어 body 첫 줄(extractFirstHeading)로 폴백된다.
+    // parseSimpleYaml이 라인 분할 시 trailing '\r'을 제거하므로 마지막 key(description)도
+    // LF 입력과 동일하게 파싱된다. body 첫 줄로 폴백하지 않는다.
     expect(rows[0].name).toBe('crlfname');
-    expect(rows[0].description).toBe('body line'); // 'crlf desc'가 아님 (CRLF \r 누락 버그)
+    expect(rows[0].description).toBe('crlf desc');
+    // 값에 trailing '\r'이 남지 않는지 frontmatter_json으로 검증
+    expect(rows[0].frontmatter_json).toBe(JSON.stringify({ name: 'crlfname', description: 'crlf desc' }));
+  });
+
+  it('CRLF+LF 혼합 개행 — 두 스타일 모두 정상 파싱', () => {
+    // name은 CRLF, description은 LF로 종료
+    writeFile('.claude/agents/mixed.md', '---\r\nname: mixedname\ndescription: mixed desc\r\n---\nbody');
+    const rows = scanRoot(ROOT, 'projectSettings', ROOT);
+    expect(rows[0].name).toBe('mixedname');
+    expect(rows[0].description).toBe('mixed desc');
+  });
+
+  it('CRLF + 마지막 줄 개행 없음 — 마지막 key 보존', () => {
+    // 닫는 fence 뒤 body가 개행으로 끝나지 않음
+    writeFile('.claude/agents/noeol.md', '---\r\nname: noeolname\r\ndescription: noeol desc\r\n---\r\nbody');
+    const rows = scanRoot(ROOT, 'projectSettings', ROOT);
+    expect(rows[0].name).toBe('noeolname');
+    expect(rows[0].description).toBe('noeol desc');
+  });
+
+  it('값 내부 \\r (개행 아님) — 라인 끝의 \\r만 제거되고 내부 텍스트는 보존', () => {
+    // 라인 종료자가 아닌 CR은 값에 포함된 것으로 간주(트레일링만 정리). 여기선 trailing \r만 제거.
+    writeFile('.claude/agents/innercr.md', '---\nname: innername\ndescription: a value\r\n---\nbody');
+    const rows = scanRoot(ROOT, 'projectSettings', ROOT);
+    expect(rows[0].name).toBe('innername');
+    expect(rows[0].description).toBe('a value');
+  });
+
+  it('빈 frontmatter (CRLF) — frontmatter_json=null, description은 body 폴백', () => {
+    writeFile('.claude/agents/empty.md', '---\r\n---\r\nbody only\r\n');
+    const rows = scanRoot(ROOT, 'projectSettings', ROOT);
+    expect(rows[0].name).toBe('empty'); // 파일명 폴백
+    expect(rows[0].frontmatter_json).toBeNull();
+    expect(rows[0].description).toBe('body only');
   });
 
   it('따옴표 값 — 양끝 따옴표 제거(stripQuotes)', () => {

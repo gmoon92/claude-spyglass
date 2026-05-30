@@ -191,7 +191,10 @@ function splitFrontmatter(text: string): { frontmatter: Record<string, unknown>;
 
 function parseSimpleYaml(text: string): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  for (const line of text.split(/\r?\n/)) {
+  // 라인 분할은 CRLF(\r\n)·CR(\r)·LF(\n)를 모두 종료자로 취급한다.
+  // (split(/\r?\n/)은 닫는 fence 직전 마지막 라인의 trailing '\r'을 남겨
+  //  정규식 `$` 매치를 깨뜨려 마지막 key를 통째로 누락시켰다 — CRLF 데이터 손실 버그.)
+  for (const line of text.split(/\r\n|\r|\n/)) {
     const m = line.match(/^([A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(.*)$/);
     if (!m) continue;
     const key = m[1];
