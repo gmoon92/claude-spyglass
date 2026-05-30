@@ -21,7 +21,7 @@
  *   - 경로 separator 는 `path.join` 으로 OS 독립 유지 (현재는 macOS-only지만 향후 대비).
  */
 
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 
 // =============================================================================
@@ -85,6 +85,14 @@ export function getGraphDir(): string {
     } catch {
       // README 쓰기 실패는 치명 아님 — 무시.
     }
+  }
+  // 보안 (consistency-hardening P2.2): RDB(connection.ts)와 동일하게 소유자 전용 권한.
+  //   그래프 DB 도 평문 at-rest 이므로 디렉토리를 0o700 으로 강제(매 호출 best-effort —
+  //   기존 폴더의 권한도 교정). 실패해도 치명 아님(권한 없는 FS 등) — 무시.
+  try {
+    chmodSync(graphDir, 0o700);
+  } catch {
+    // chmod 실패는 무시 — 일부 파일시스템/권한 환경에서 불가할 수 있음.
   }
   return graphDir;
 }

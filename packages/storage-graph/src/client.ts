@@ -32,9 +32,30 @@
  *   §2 Bun ↔ Ladybug 호환성 — exit segfault 등 잠재 위험은 회로 차단기로 격리.
  */
 
+import { existsSync, statSync, chmodSync } from 'node:fs';
 import { getGraphDir, getGraphDbPath } from './runtime/paths';
 import { getCircuitBreaker } from './runtime/circuit-breaker';
 import { applySchema, SchemaMismatchError } from './schema/apply';
+
+/**
+ * 그래프 DB 파일/보조파일을 소유자 전용 권한으로 강제 (consistency-hardening P2.2).
+ *
+ *   RDB(connection.ts)는 0o600(파일)/0o700(디렉토리)를 적용하지만 그래프 DB 는 native
+ *   가 OS 기본 권한으로 만들어 왔다. 그래프도 평문 at-rest 이므로 동일 수준으로 맞춘다.
+ *   Ladybug 파일 포맷이 단일 파일일 수도, 디렉토리일 수도 있어 stat 후 분기한다.
+ *   WAL/SHM 보조파일도 같은 평문 데이터를 담으므로 함께 처리. 모두 best-effort.
+ */
+function secureGraphArtifacts(dbPath: string): void {
+  for (const p of [dbPath, `${dbPath}.wal`, `${dbPath}.shm`]) {
+    try {
+      if (!existsSync(p)) continue;
+      const mode = statSync(p).isDirectory() ? 0o700 : 0o600;
+      chmodSync(p, mode);
+    } catch {
+      // 권한 강화 실패는 치명 아님 — 디렉토리 레벨 0o700 이 1차 방어선.
+    }
+  }
+}
 
 // =============================================================================
 // 타입 — Ladybug native 결과를 좁은 표면적으로 추상화
@@ -113,6 +134,9 @@ export class LadybugClient {
 
       this.dbHandle = new DatabaseCtor(dbPath);
       this.connHandle = new ConnectionCtor(this.dbHandle);
+
+      // 파일이 만들어진 직후 소유자 전용 권한으로 강화 (P2.2) — 디렉토리는 paths 가 0o700.
+      secureGraphArtifacts(dbPath);
 
       // 스키마 idempotent 적용. SCHEMA_VERSION 이 어긋나면 SchemaMismatchError 가 throw 되며
       // 본 분기는 *기존 데이터를 보존* 한 채 graph DB 를 이번 세션 동안 비활성화한다.
