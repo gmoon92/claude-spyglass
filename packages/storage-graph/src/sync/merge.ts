@@ -11,10 +11,13 @@
  *
  * 호출 흐름:
  *   sync/worker.ts::tick()
- *     → client.transaction(async () => mergeOps(client, ops))
- *     → for each op: 적절한 MERGE 한 줄 실행
+ *     → for each outbox row: mergeOps(client, enrichOutboxRow(row))
+ *     → mergeOps 가 op 단위 try/catch 로 { failed } 수집 (중단 없음)
+ *     → worker 가 failed 로 row 의 attempts/dead 갱신 + cursor 정밀 전진
  *
  * 디자인 결정:
+ *   - Ladybug 0.16.x 의 transaction() 은 no-op(롤백 없음) — batch atomicity 는 없고,
+ *     모든 op 가 idempotent MERGE 라 재시도/부분적용 모두 무해(consistency-hardening P1).
  *   - 모든 노드는 PRIMARY KEY 기준 MERGE — 같은 row 가 두 번 들어와도 idempotent.
  *   - 노드 속성은 MERGE 시 SET (덮어쓰기) — 가장 최근 enrich 결과가 승리.
  *   - 엣지는 fork 의 MATCH ... CREATE ... 패턴 (Ladybug 는 REL 에 MERGE 가 없을 수
@@ -30,36 +33,67 @@
 import type { LadybugClient } from '../client';
 import type { GraphOp, RelOp, MetaDocumentProps } from './enrich';
 
+/** 한 op 의 merge 실패 기록 — worker 가 row 단위 실패 집계/DLQ 판정에 사용. */
+export interface FailedOp {
+  op: GraphOp;
+  error: unknown;
+}
+
+/** mergeOps 결과 — 실패한 op 목록. 비어 있으면 전부 성공. */
+export interface MergeResult {
+  failed: FailedOp[];
+}
+
 /**
- * GraphOp 배열을 순서대로 MERGE. 호출자(worker)가 본 함수를 transaction 으로 감싸야
- * batch atomicity 가 확보된다.
+ * GraphOp 배열을 순서대로 MERGE — op 단위 try/catch 로 격리.
+ *
+ * 설계 (consistency-hardening P1):
+ *   Ladybug 0.16.x 의 transaction() 은 no-op(롤백 없음, client.ts 참조)이라 batch
+ *   atomicity 는 애초에 없다. 따라서 한 op 가 throw 해도 *중단하지 않고* 계속 진행하며
+ *   실패만 수집한다. 이렇게 하면 독성 op 1개가 같은 batch 의 나머지 정상 op 적재를
+ *   막지 않는다(Head-of-Line 블로킹 제거). 모든 op 는 idempotent MERGE 라 다음 tick
+ *   재시도 시 중복 손상이 없다.
+ *
+ *   호출자(worker)는 반환된 failed 를 보고 outbox row 단위로 attempts/dead 를 갱신하고
+ *   cursor 전진을 정밀 제어한다.
  */
-export async function mergeOps(client: LadybugClient, ops: GraphOp[]): Promise<void> {
+export async function mergeOps(client: LadybugClient, ops: GraphOp[]): Promise<MergeResult> {
+  const failed: FailedOp[] = [];
   for (const op of ops) {
-    switch (op.kind) {
-      case 'session':
-        await mergeSession(client, op.props);
-        break;
-      case 'turn':
-        await mergeTurn(client, op.props);
-        break;
-      case 'agent':
-        await mergeAgent(client, op.props);
-        break;
-      case 'tool_call':
-        await mergeToolCall(client, op.props);
-        break;
-      case 'event':
-        await mergeEvent(client, op.props);
-        break;
-      case 'meta_doc':
-        await mergeMetaDocument(client, op.props);
-        break;
-      case 'rel':
-        await mergeRel(client, op.rel);
-        break;
-      // exhaustive switch — discriminated union 의 모든 case 처리.
+    try {
+      await dispatchOp(client, op);
+    } catch (error) {
+      failed.push({ op, error });
     }
+  }
+  return { failed };
+}
+
+/** 단일 op 를 종류별 MERGE 헬퍼로 디스패치. exhaustive switch. */
+async function dispatchOp(client: LadybugClient, op: GraphOp): Promise<void> {
+  switch (op.kind) {
+    case 'session':
+      await mergeSession(client, op.props);
+      break;
+    case 'turn':
+      await mergeTurn(client, op.props);
+      break;
+    case 'agent':
+      await mergeAgent(client, op.props);
+      break;
+    case 'tool_call':
+      await mergeToolCall(client, op.props);
+      break;
+    case 'event':
+      await mergeEvent(client, op.props);
+      break;
+    case 'meta_doc':
+      await mergeMetaDocument(client, op.props);
+      break;
+    case 'rel':
+      await mergeRel(client, op.rel);
+      break;
+    // exhaustive switch — discriminated union 의 모든 case 처리.
   }
 }
 
