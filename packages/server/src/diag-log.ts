@@ -64,7 +64,9 @@ let initialized = false;
 function ensureDir(): void {
   if (initialized) return;
   if (!existsSync(LOG_DIR)) {
-    mkdirSync(LOG_DIR, { recursive: true });
+    // 0o700 — 진단 로그(hook/proxy payload 평문)는 민감하므로 소유자 전용 권한.
+    //   RDB/그래프 DB 파일(connection.ts/client.ts)의 0o600/0o700 방어선과 일관.
+    mkdirSync(LOG_DIR, { recursive: true, mode: 0o700 });
   }
   console.log(
     `[Diag] Diagnostic logs ENABLED at ${LOG_DIR}\n`
