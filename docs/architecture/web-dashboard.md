@@ -127,7 +127,7 @@
 | 컨트롤 | ID | 동작 |
 |--------|----|------|
 | 언어 스위처 | `#lang-switcher` | `ko / en / ja / zh` native name 표시 |
-| 날짜 필터 | `#dateFilter` | `전체 / 오늘 / 이번주 / 사용자 지정` 드롭다운(`date-range-dropdown.js`). 선택 시 `setActiveRange()`가 `cs:active-range-changed` 이벤트를 발행하고, `main.js` 리스너가 `applyRangeLabels` + `fetchDashboard/Requests/CacheStats/AllSessions`를 일괄 트리거 |
+| 날짜 필터 | `#dateFilter` | 6개 프리셋 드롭다운(`date-range-dropdown.js`의 `PRESETS = ['1h','today','yesterday','7d','30d','all']`). 선택 시 `setActiveRange()`가 `cs:active-range-changed` 이벤트를 발행하고, `main.js` 리스너가 `applyRangeLabels` + `fetchDashboard/Requests/CacheStats/AllSessions`를 일괄 트리거 |
 | 차트 접기 토글 | `#btnToggleChart` | chevron 회전. collapse 상태 `localStorage('spyglass:chart-collapsed')` 영속화 |
 
 ### 3.2 좌측 패널 (`.left-panel`)
@@ -269,13 +269,18 @@ graph TD
 
   subgraph 렌더링
     chart["chart.js / context-chart.js\ncanvas(timeline/도넛/컨텍스트)"]
+    context_window["context-window.js\n컨텍스트 윈도우 표시(표시 전용)"]
     renderers["renderers.js (re-export)"]
     render["render/{badges,model,cells,\nextract,expand,rows,skeleton}.js"]
+    request_types["request-types.js\n타입 상수·판별 SSoT"]
     renderers --> render
+    chart --> context_window
+    render --> request_types
   end
 
   subgraph 데이터_통신
     api["api.js\nfetchDashboard / fetchRequests / ..."]
+    metrics_api["metrics-api.js\n/api/metrics/* 래퍼"]
     formatters["formatters.js"]
     cache_obs["cache-panel.js / obs-panel.js"]
     anomaly["anomaly.js / left-panel.js / events.js"]
@@ -283,6 +288,7 @@ graph TD
     api --> formatters
     api --> cache_obs
     api --> anomaly
+    api --> metrics_api
   end
 
   subgraph 뷰
@@ -296,10 +302,17 @@ graph TD
   subgraph 상태_컴포넌트
     state["state.js\nappMode/metaSubTab/rightView/selected* SSoT"]
     components["components/{filter-bar,search-box}.js"]
+    tool_colors["tool-colors.js\nTOOL_COLORS 토큰"]
+  end
+
+  subgraph 전역_스크립트["전역 스크립트 (index.html &lt;script&gt; 직접 로드, ESM import 아님)"]
     i18n["i18n.js + i18n-dom.js\n전역 window.I18n"]
+    lang_switcher["lang-switcher.js\nIIFE — window.I18n 런타임 참조"]
+    lang_switcher -. "runtime: window.I18n" .-> i18n
   end
 
   subgraph 인터랙션
+    app_rail["app-rail.js\n좌측 모드 rail 클릭 위임"]
     resize["panel-resize.js / left-panel-vertical-resize.js / col-resize.js"]
     tooltip["stat-tooltip.js / cache-tooltip.js\ncache-panel-tooltip.js / obs-tooltip.js"]
   end
@@ -317,7 +330,8 @@ graph TD
   main --> misc_view
   main --> state
   main --> components
-  main --> i18n
+  main --> tool_colors
+  main --> app_rail
   main --> resize
   main --> tooltip
   main --> misc
@@ -337,7 +351,7 @@ graph TD
 | `fetchObservability()` | `/api/metrics/{burn-rate,cache-trend,tool-categories}` + `/api/sessions/active` | obs-panel 3 카드(burn/cache/pulse) + metadocs 전용 tool-categories 카드 |
 | `fetchProxyRequests/Stats` | `/api/proxy-requests*` | 프록시 (UI 미노출) |
 | `buildQuery(base, extra)` | — | `from/to` 자동 합성 |
-| `setActiveRange(r)` | — | `'all' / 'today' / 'week'` 상태 SSoT |
+| `setActiveRange(r)` | — | 활성 range SSoT. `VALID_PRESETS`(api.js) = `'1h' / 'today' / 'yesterday' / '7d' / '30d' / 'all'` 프리셋 + 커스텀 범위(`{type:'custom', from, to}`) |
 
 ### 5.3 `main.js` — 메인 루프
 
@@ -361,7 +375,6 @@ flowchart TD
   new_request["이벤트: new_request\n(훅 데이터 — requests 테이블)"]
   new_proxy_request["이벤트: new_proxy_request\n(프록시 데이터 — proxy_requests 테이블)"]
   session_update["이벤트: session_update\n(세션 started/ended/token_update)"]
-  ping["이벤트: ping\n(8초 연결 유지)"]
 
   onNewRequest["onNewRequest(e)"]
   onNewProxyRequest["onNewProxyRequest(e)"]
@@ -377,7 +390,6 @@ flowchart TD
   EventSource --> new_request
   EventSource --> new_proxy_request
   EventSource --> session_update
-  EventSource --> ping
 
   new_request --> onNewRequest
   new_proxy_request --> onNewProxyRequest
@@ -394,7 +406,7 @@ flowchart TD
   onNewProxyRequest --> proxyFeed["spyglass:proxy-request\n커스텀 이벤트 디스패치\n(UI 미노출 경로) + scheduleRefresh"]
 ```
 
-> `sse.js`는 `onNewProxyRequest`·`onSessionUpdate`가 콜백으로 전달된 경우에만 해당 채널을 등록합니다(후방 호환).
+> `sse.js`는 `onNewProxyRequest`·`onSessionUpdate`가 함수로 전달된 경우에만 해당 채널의 `addEventListener`를 등록합니다.
 > 서버(`packages/server/src/sse.ts`)는 연결 직후 `ping`을 1회 전송하고 이후 8초 간격으로 반복합니다.
 
 ### 5.4 `renderers.js` — DOM 렌더
@@ -424,7 +436,7 @@ flowchart TD
 | `feed-interactions.js` | C축 — 인터랙션 | 검색 박스·클릭 위임·필터 바 — 사용자 입력 → 피드 표시 상태 매핑 |
 | `feed-live.js` | B축 — 라이브 | SSE `new_request`를 피드 테이블에 prepend / in-place 갱신. `prependRequest` SSoT |
 | `keyboard.js` | D축 — 키보드 | `Esc` 우선순위 정책, `/`·`?`·`1~7` 등 단축키 정의 및 KBD 도움말 모달 |
-| `layout-persist.js` | E축 — 레이아웃 영속 | 차트 섹션·좌측 패널 접힘 상태 `localStorage` 저장·복원. 키 네임스페이스 마이그레이션 |
+| `layout-persist.js` | E축 — 레이아웃 영속 | 차트 섹션·좌측 패널 접힘 상태 `localStorage` 저장·복원 |
 
 ### 5.4-c `session-detail/` — 세션 상세 서브모듈
 

@@ -51,6 +51,7 @@ flowchart TD
   sort --> loop{"각 파일 순회"}
   loop -->|"다음 파일"| parse["parseMigrationVersion(file)<br/>숫자 prefix → 버전"]
   parse -->|"4자리+ prefix"| throw["throw (ADR-002)"]
+  throw --> panic
   parse -->|"null (숫자 prefix 없음)"| skip1["continue (스킵)"]
   parse -->|"버전 반환"| vcheck{"version ≤ current?"}
   vcheck -->|"예"| skip2["continue (스킵)"]
@@ -117,19 +118,17 @@ INSERT INTO foo (...) VALUES (...) ON CONFLICT(id) DO UPDATE SET ...;
 INSERT INTO foo VALUES (1, 'bar');
 ```
 
-#### 비멱등 회피 사례 — `029-backfill-stats-hourly.sql`
+#### `ON CONFLICT` 컬럼은 활성 제약과 일치해야 한다
 
-`029-backfill-stats-hourly.sql`는 `INSERT ... ON CONFLICT(hour_ts, model, type) DO NOTHING`
-패턴으로 보일 듯 멱등하지만, 다음 조건에서 깨진다:
+`INSERT ... ON CONFLICT(...) DO ...` 패턴은 멱등해 보여도, ON CONFLICT 절에 나열한 컬럼
+조합이 대상 테이블의 **활성 PRIMARY KEY 또는 UNIQUE 제약과 정확히 일치하지 않으면** SQLite가
+충돌 대상을 찾지 못해 멱등성이 깨진다. 특히 backfill 마이그레이션에서 흔한 함정이다.
 
-- migrator가 user_version을 강제 후퇴시킨 상태에서 재실행 (테스트 환경)
-- 027이 정의한 `UNIQUE(hour_ts, model, type)` 제약과 ON CONFLICT 절의 컬럼 조합 불일치
-
-**교훈**: ON CONFLICT 절의 컬럼은 반드시 해당 테이블의 **PRIMARY KEY 또는 UNIQUE 제약**과 일치해야 한다.
 신규 backfill 작성 시:
 
-1. 대상 테이블의 PK/UNIQUE를 먼저 확인
-2. ON CONFLICT 절에 PK/UNIQUE 컬럼 조합을 정확히 적기
+1. 대상 테이블의 현재 PK/UNIQUE 제약을 `schema.ts` 또는 최신 정의 마이그레이션에서 먼저 확인
+2. ON CONFLICT 절에 그 PK/UNIQUE 컬럼 조합을 정확히 적기 (예: `stats_hourly`는
+   `UNIQUE(hour_ts, model, type, event_type)`)
 3. 가능하면 `INSERT OR IGNORE` 단순 형태 선호
 
 ### 2.2 트랜잭션 경계

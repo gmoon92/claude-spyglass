@@ -419,7 +419,7 @@ flowchart TD
 ## 5. `.claude/settings.json` 등록 방법
 
 **요약**: 두 가지 프로파일이 있습니다 — **minimal**(6개 이벤트, 코어 기능 충분) /
-**full**(27개 이벤트, 모든 메트릭 활성화). 모든 항목은 동일한 명령(`bash $SPYGLASS_DIR/hooks/spyglass-collect.sh`)을 가리킵니다.
+**full**(30개 이벤트, 모든 메트릭 활성화). 모든 항목은 동일한 명령(`bash $SPYGLASS_DIR/hooks/spyglass-collect.sh`)을 가리킵니다.
 
 > 훅은 반드시 **글로벌 `~/.claude/settings.json`** 에 등록하세요.
 > 프로젝트 단위 설정에 두면 다른 프로젝트의 작업이 누락됩니다.
@@ -478,7 +478,7 @@ flowchart TD
 }
 ```
 
-### 5.3 full 프로파일 — 27개 이벤트 (권장, `docs/examples/settings.hooks.full.json`)
+### 5.3 full 프로파일 — 30개 이벤트 (권장, `docs/examples/settings.hooks.full.json`)
 
 **대상**: 모든 메트릭(compact·permission·subagent·worktree 등)을 활용하고 싶을 때.
 모든 항목은 동일한 패턴을 따르므로 한 줄로 요약하면 다음과 같습니다.
@@ -494,10 +494,10 @@ flowchart TD
 
 | 카테고리 | 이벤트 |
 |----------|--------|
-| 도구 | `PreToolUse`, `PostToolUse`, `PostToolUseFailure` |
-| 프롬프트·세션 | `UserPromptSubmit`, `SessionStart`, `SessionEnd`, `Stop`, `StopFailure` |
+| 도구 | `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PostToolBatch` |
+| 프롬프트·세션 | `UserPromptSubmit`, `UserPromptExpansion`, `SessionStart`, `SessionEnd`, `Stop`, `StopFailure` |
 | 서브에이전트 | `SubagentStart`, `SubagentStop` |
-| 알림·UX | `Notification`, `Setup`, `TeammateIdle`, `Elicitation`, `ElicitationResult` |
+| 알림·UX | `Notification`, `MessageDisplay`, `Setup`, `TeammateIdle`, `Elicitation`, `ElicitationResult` |
 | 컨텍스트·권한 | `PreCompact`, `PostCompact`, `PermissionRequest`, `PermissionDenied` |
 | 태스크 | `TaskCreated`, `TaskCompleted` |
 | 시스템 상태 | `ConfigChange`, `WorktreeCreate`, `WorktreeRemove`, `InstructionsLoaded`, `CwdChanged`, `FileChanged` |
@@ -510,7 +510,7 @@ flowchart TD
 ```bash
 # 1) 등록된 훅 키 수
 jq '.hooks | keys | length' ~/.claude/settings.json
-# 27   (또는 6)
+# 30   (또는 6)
 
 # 2) SPYGLASS_DIR 절대경로 확인
 jq -r '.env.SPYGLASS_DIR' ~/.claude/settings.json

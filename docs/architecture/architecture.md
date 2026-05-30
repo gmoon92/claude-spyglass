@@ -125,13 +125,15 @@ flowchart TD
     SERVER --> |"/events POST"| CE
     SERVER --> |"/events GET"| SSE_ROUTER
     SERVER --> |"/api/*"| ROUTES
-    SERVER --> |"/api/metrics"| METRICS
+    ROUTES --> |"/api/metrics/* 위임"| METRICS
     SERVER --> |"/v1/*"| PROXY_H
     SERVER --> |"/ 및 /assets/*"| WEB_STATIC
 
     PROC -->|"broadcast (SSE)"| SSE_SET
     SSE_SET --> CLIENT
-    CLIENT -->|"GET /api/*"| SQLITE
+    CLIENT -->|"GET /api/* 요청"| SERVER
+    ROUTES -->|"sessions/requests/stats 읽기"| SQLITE
+    METRICS -->|"집계 읽기"| SQLITE
     SQLITE -->|"kuzu_outbox 트리거"| GRAPH
     ROUTES -->|"/api/graph/* (read)"| GRAPH
 ```
@@ -216,19 +218,21 @@ flowchart TD
 ```mermaid
 flowchart TD
     WRITE["requests / sessions\nINSERT·UPDATE"]
-    TRG["AFTER INSERT/UPDATE 트리거\n(migration 049/051/053)"]
+    TRG["requests·sessions\nAFTER INSERT/UPDATE 트리거"]
     OUTBOX["kuzu_outbox 테이블\n(append-only 큐, id 단조증가)"]
     WORKER["sync worker (200ms tick)\nstorage-graph/src/sync/worker.ts"]
     CURSOR["sync/cursor\n마지막 처리 id 영속화"]
     CIRCUIT["circuit-breaker\n연속 실패 시 OPEN → tick no-op"]
-    ENRICH["sync/enrich\noutbox row → GraphOp[]"]
+    ENRICH["sync/enrich.ts\nenrichOutboxRow(row, db) → GraphOp[]"]
+    MERGE["sync/merge.ts\nmergeOps(client, ops)\n(Ladybug 트랜잭션 안에서 실행)"]
     LADYBUG["Ladybug 그래프 DB\nMERGE (idempotent)"]
 
     WRITE --> TRG --> OUTBOX
     WORKER -->|"cursor 이후 batch SELECT"| OUTBOX
     WORKER --> CIRCUIT
     WORKER --> ENRICH
-    ENRICH --> LADYBUG
+    ENRICH -->|"GraphOp[]"| MERGE
+    MERGE -->|"transaction { MERGE }"| LADYBUG
     WORKER --> CURSOR
 ```
 
@@ -301,7 +305,7 @@ flowchart TD
 | `@spyglass/storage-graph` | Ladybug 그래프 client, outbox sync worker, unified-flow 쿼리, 회로 차단기, 그래프 retention. | Bun + Ladybug | `src/{client,queries/*,sync/*,runtime/*,schema/*}` |
 | `@spyglass/server` | HTTP 서버 + SSE + Hook 수집 + Proxy + Metrics + Meta-docs + Graph + Settings. | Bun | `src/{api,sse,hook,proxy,metrics,meta-docs,routes,runtime,settings}` |
 | `@spyglass/tui` | Ink 기반 터미널 UI. SSE 클라이언트, KPI strip, 사이드바, screens. | React 18 + Ink 5 | `src/{app.tsx,components,screens,hooks,stores}` |
-| `@spyglass/web` | Vanilla JS 대시보드. `index.html` + ES modules + CSS 모듈. | 브라우저 | `index.html`, `assets/{js,css}` |
+| `packages/web` | Vanilla JS 대시보드. `index.html` + ES modules + CSS 모듈. **`package.json` 없음 — npm workspace 패키지가 아니라 서버가 정적 서빙하는 자산 디렉토리.** | 브라우저 | `index.html`, `assets/{js,css}` |
 | `packages/desktop` | 서버를 띄우고 대시보드를 감싸는 Electron 래퍼. | Electron | `main/`, `preload/` |
 
 ---
@@ -359,7 +363,7 @@ packages/server/src/
 │   ├── version-probe.ts           — bun/node/sqlite 등 바이너리 버전 진단
 │   └── file-edit-toolkit.ts       — 백업 + diff + atomic 파일 편집 헬퍼
 │
-├── metrics/                       — /api/metrics/* (UI Redesign Phase 2)
+├── metrics/                       — /api/metrics/* 시계열·이상치 계산 라우터
 │   ├── router.ts                  — 라우터 (11개 라우트)
 │   ├── _shared.ts                 — 시간 윈도우 파서, meta 빌더
 │   └── calculators/               — 시계열·이상치 계산기
@@ -408,13 +412,13 @@ packages/server/src/
 │   ├── upstream.ts                — URL 라우팅 (Anthropic 기본 / env override)
 │   ├── request-parser.ts          — RequestMeta 추출
 │   ├── sse-state.ts               — 스트리밍 SSE 누적 파서 (token usage 등)
-│   ├── system-hash.ts             — system 본문 SHA256 (v22 dedup 키)
+│   ├── system-hash.ts             — system 본문 SHA256 (dedup 키)
 │   ├── audit-headers.ts           — 클라이언트/응답 헤더 정규화
 │   ├── log-result.ts              — stdout 디버그 출력
-│   ├── backfill.ts                — hook 측 model NULL 채움 (v19)
+│   ├── backfill.ts                — hook 측 model NULL 채움 (api_request_id 매칭)
 │   └── types.ts                   — RequestMeta, StreamState, AnthropicUsage
 │
-├── meta-docs/                     — Behavior Definitions 카탈로그 (v24)
+├── meta-docs/                     — Behavior Definitions 카탈로그
 │   ├── index.ts                   — barrel
 │   ├── scanner.ts                 — 파일 시스템 스캔 (CLAUDE.md/SKILL.md/agents.md)
 │   ├── resolver.ts                — cwd → project chain 해석 (`.claude/` 계층)
@@ -550,7 +554,7 @@ flowchart TD
     HEADERS -->|"if JSON non-stream"| JSON_RESP
 ```
 
-저장은 `proxy_requests` 테이블(스키마 v14 추가). `hook` 테이블(`requests`)과는 **`api_request_id`로 cross-link**(v19 마이그레이션)되어 같은 API 호출에 대한 hook/proxy 두 측 메타를 매칭할 수 있다.
+저장은 `proxy_requests` 테이블이다. hook 테이블(`requests`)과는 **`api_request_id`로 cross-link**되어 같은 API 호출에 대한 hook/proxy 두 측 메타를 매칭할 수 있다.
 
 ### 4.5 Metrics 라우터 (`/api/metrics/*`)
 
@@ -572,18 +576,17 @@ flowchart TD
 
 공통 쿼리: `?range=24h|7d|30d|all` 또는 `?from=<ms>&to=<ms>`. 가공 알고리즘은 `metrics/calculators/`로 분리되어 단위 테스트가 가능하다.
 
-### 4.6 Meta-docs (Behavior Definitions, v24)
+### 4.6 Meta-docs (Behavior Definitions)
 
 Claude Code의 `.claude/agents/`, `.claude/skills/`, `~/.claude/commands/`, `CLAUDE.md` 등 **모델 동작을 정의하는 markdown 파일**을 자동 스캔하여 `meta_documents` 테이블에 카탈로그화한다.
 
 ```mermaid
 flowchart TD
-    BOOT["server boot"]
+    BOOT["server boot (lifecycle.ts:116-)"]
     DISCOVER["discoverKnownCwds(db)\nsessions 테이블에서 cwd 후보 모음"]
-    BOOTSTRAP["bootstrapMetaDocsSync\n글로벌(~/.claude) 1회 스캔"]
-    SYNC_DECISION{"cwd 수"}
-    SYNC_SYNC["syncCwd 동기 (≤10 cwd)"]
-    SYNC_BG["setImmediate 백그라운드 (>10 cwd)"]
+    SYNC_DECISION{"knownCwds.length ≤ 10?"}
+    SYNC_SYNC["bootstrapMetaDocsSync(db, { activeCwds })\n글로벌 + cwd 동기 (즉시 일관성)"]
+    SYNC_BG["bootstrapMetaDocsSync(db) (글로벌만 동기)\n+ setImmediate → syncAllKnownCwds (백그라운드)"]
     RESOLVE["resolveProjectChain(cwd)\n~/.claude → project/.claude 체인"]
     SCAN["scanRoot(root)\n각 디렉토리에서 SKILL.md/agents/CLAUDE.md 파일 모음"]
     UPSERT["upsertMetaDocument\n파일별 dedup INSERT"]
@@ -591,10 +594,9 @@ flowchart TD
     REPLACE["replaceResolutionsForCwd\ncwd ↔ doc 매핑 갱신"]
 
     BOOT --> DISCOVER
-    BOOT --> BOOTSTRAP
-    BOOT --> SYNC_DECISION
-    SYNC_DECISION -->|"≤10 cwd"| SYNC_SYNC
-    SYNC_DECISION -->|">10 cwd"| SYNC_BG
+    DISCOVER --> SYNC_DECISION
+    SYNC_DECISION -->|"예 (≤10 cwd)"| SYNC_SYNC
+    SYNC_DECISION -->|"아니오 (>10 cwd)"| SYNC_BG
     SYNC_SYNC --> RESOLVE
     SYNC_BG --> RESOLVE
     RESOLVE --> SCAN
@@ -656,7 +658,7 @@ SessionStart 훅이 새 cwd를 감지하면 lazy 재동기화한다.
 
 ## 5. `packages/storage` — SQLite 영속 계층
 
-> **TL;DR** — `migrations/` 디렉토리의 SQL 파일이 누적된 SQLite(WAL 모드). 적용 버전은 `PRAGMA user_version`(파일 번호 기준)으로 관리되고, v35부터는 `_migrations` 메타테이블에 히스토리도 함께 기록된다. `index.ts` barrel이 다수의 쿼리 함수를 한 곳에서 노출하며, 시간대별 사전 집계(`stats_hourly`)로 차트 응답 시간을 5ms 수준으로 유지한다.
+> **TL;DR** — `migrations/` 디렉토리의 SQL 파일이 누적된 SQLite(WAL 모드). 적용 버전은 `PRAGMA user_version`(파일 번호 기준)으로 관리되고, `_migrations` 메타테이블에 적용 히스토리도 함께 기록된다. `index.ts` barrel이 다수의 쿼리 함수를 한 곳에서 노출하며, 시간대별 사전 집계(`stats_hourly`)로 차트 응답 시간을 5ms 수준으로 유지한다.
 
 ### 5.1 디렉토리 구조
 
@@ -764,9 +766,9 @@ packages/storage/
     │   ├── metadata.ts            — get/setMetadata (k/v store)
     │   ├── proxy.ts               — proxy_requests CRUD + tool_uses
     │   ├── proxy-stats.ts         — getProxyHourlyStats(ByModel)
-    │   ├── system-prompt.ts       — v22 dedup 카탈로그
-    │   ├── meta-document.ts       — v24 Behavior Definitions
-    │   ├── model-limits.ts        — v26 모델 context window
+    │   ├── system-prompt.ts       — system 본문 dedup 카탈로그
+    │   ├── meta-document.ts       — Behavior Definitions
+    │   ├── model-limits.ts        — 모델 context window
     │   └── metrics.ts             — 호환 shim (queries/metrics/ 로 위임)
     │
     ├── domain/
@@ -802,25 +804,25 @@ CREATE TABLE requests (
   timestamp INTEGER NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('prompt', 'tool_call', 'system', 'response')),
   tool_name TEXT,
-  tool_detail TEXT,              -- v2: 'Read:/path/to/file.ts' 등 사람 읽기 좋은 표현
-  turn_id TEXT,                  -- v3: prompt → tool* → response 인터리빙 묶음 식별자
+  tool_detail TEXT,              -- 'Read:/path/to/file.ts' 등 사람 읽기 좋은 표현
+  turn_id TEXT,                  -- prompt → tool* → response 인터리빙 묶음 식별자
   model TEXT,
   tokens_input INTEGER DEFAULT 0,
   tokens_output INTEGER DEFAULT 0,
   tokens_total INTEGER DEFAULT 0,
-  cache_creation_tokens INTEGER, -- v5
-  cache_read_tokens INTEGER,     -- v5
+  cache_creation_tokens INTEGER,
+  cache_read_tokens INTEGER,
   duration_ms INTEGER,
   payload TEXT,                  -- raw hook JSON
-  source TEXT,                   -- v4: 'hook' or 'proxy'
-  preview TEXT,                  -- v7,v10: 짧은 UI 미리보기 (≤500자)
-  tool_use_id TEXT,              -- v8: pre→tool 머지 키
-  event_type TEXT,               -- v8: 'pre_tool'|'tool'|'prompt'|'system'
-  tokens_confidence TEXT,        -- v11: 'high'|'error'
-  tokens_source TEXT,            -- v11: 'transcript'|'proxy'|'unavailable'
-  parent_tool_use_id TEXT,       -- v17: Agent 자식 → 부모 매핑
-  api_request_id TEXT,           -- v19: Anthropic 응답 ID (proxy_requests와 cross-link)
-  -- v20 감사 메타 (16개):
+  source TEXT,                   -- 'hook' or 'proxy'
+  preview TEXT,                  -- 짧은 UI 미리보기 (≤500자)
+  tool_use_id TEXT,              -- pre→tool 머지 키
+  event_type TEXT,               -- 'pre_tool'|'tool'|'prompt'|'system'
+  tokens_confidence TEXT,        -- 'high'|'error'
+  tokens_source TEXT,            -- 'transcript'|'proxy'|'unavailable'
+  parent_tool_use_id TEXT,       -- Agent 자식 → 부모 매핑
+  api_request_id TEXT,           -- Anthropic 응답 ID (proxy_requests와 cross-link)
+  -- 감사 메타 컬럼:
   permission_mode TEXT,
   agent_id TEXT,
   agent_type TEXT,
@@ -831,7 +833,7 @@ CREATE TABLE requests (
 );
 ```
 
-인덱스: `idx_requests_session`, `idx_requests_type`, `idx_requests_tokens`, `idx_requests_session_type`, `idx_requests_tool_use_id`, `idx_requests_parent_tool_use_id`, v25 복합 `event_type` 인덱스 등.
+인덱스: `idx_requests_session`, `idx_requests_type`, `idx_requests_tokens`, `idx_requests_session_type`, `idx_requests_tool_use_id`, `idx_requests_parent_tool_use_id`, 복합 `event_type` 인덱스 등.
 
 #### `claude_events`
 SessionStart, Stop, SessionEnd, Notification, PreCompact 등 **상태 이벤트**를 별도 테이블로 보관(`requests`와 직교).
@@ -839,7 +841,7 @@ SessionStart, Stop, SessionEnd, Notification, PreCompact 등 **상태 이벤트*
 #### `proxy_requests`
 HTTP 레벨 미러링(`/v1/*`) 결과. `messages_count`, `tools_count`, `first_token_ms`, `tokens_per_second`, `stop_reason`, `request_preview`, `response_preview`, `error_*`, `system_hash`, `system_byte_size` 등.
 
-#### `system_prompts` (v22)
+#### `system_prompts`
 ```sql
 -- content-addressable dedup. 같은 system 본문은 1행만 저장.
 CREATE TABLE system_prompts (
@@ -854,20 +856,20 @@ CREATE TABLE system_prompts (
 
 `proxy_requests.system_hash`로 참조. UI에서는 **본문 lazy-fetch** (`GET /api/system-prompts/:hash`)로 N+1 페이로드 부담 회피.
 
-#### `meta_documents` (v24)
+#### `meta_documents`
 SKILL.md / agents.md / CLAUDE.md / commands 파일별 1행. type, source, file_path, content, last_modified, status. cwd 매핑은 `meta_doc_resolutions` 정규화 테이블.
 
-#### `stats_hourly` / `stats_proxy_hourly` (v27, v32)
-1시간 버킷 사전 집계. 트리거(v28)로 `requests` INSERT 시 자동 갱신. 24h 차트는 raw scan 대신 이 테이블을 쿼리.
+#### `stats_hourly` / `stats_proxy_hourly`
+1시간 버킷 사전 집계. `requests`에 대한 INSERT/UPDATE 트리거(`trg_stats_after_insert`·`trg_stats_after_update`)로 자동 갱신된다. 24h 차트는 raw scan 대신 이 테이블을 쿼리.
 
-#### `model_limits` (v26)
+#### `model_limits`
 모델별 context window 한도 시드. 1M opt-in(`anthropic-beta` 헤더 반영)까지 처리.
 
-#### `anomaly_thresholds` (v33)
+#### `anomaly_thresholds`
 project/model별 warn/critical 임계값 정책 SSoT. bloated-sys / agent-spike 같은 이상치 판정 기준을 DB에 시드한다. 서버 측 `anomaly-thresholds.ts`가 조회·캐시한다.
 
-#### `kuzu_outbox` (v49)
-SQLite → Ladybug 그래프 sync를 위한 append-only 큐. `requests`·`sessions`의 INSERT/UPDATE 트리거(v49/v51/v53)가 `(source, event_id, op)` 행을 쌓고, `storage-graph`의 sync worker가 `id` cursor 이후 batch를 읽어 MERGE한다.
+#### `kuzu_outbox`
+SQLite → Ladybug 그래프 sync를 위한 append-only 큐. `requests`·`sessions`의 INSERT/UPDATE 트리거가 `(source, event_id, op)` 행을 쌓고, `storage-graph`의 sync worker가 `id` cursor 이후 batch를 읽어 MERGE한다.
 
 ### 5.3 연결 관리 (`connection.ts`)
 
@@ -894,9 +896,9 @@ runMigrations(db, debug?):
          COMMIT  (or ROLLBACK on error)
 ```
 
-적용 버전은 디렉토리 **파일 번호**(PRAGMA user_version) 기준이며, `schema.ts`의 `SCHEMA_VERSION` 상수와는 별개다. v35 이후부터는 `_migrations` 메타테이블(v35 신설)에 적용 히스토리도 같은 트랜잭션에서 INSERT한다.
+적용 버전은 디렉토리 **파일 번호**(PRAGMA user_version) 기준이며, `schema.ts`의 `SCHEMA_VERSION` 상수와는 별개다. `_migrations` 메타테이블이 존재하면 적용 히스토리(번호·이름·적용 시각)도 같은 트랜잭션에서 INSERT한다.
 
-`splitSqlStatements`는 단순 `split(';')`가 아니라 `BEGIN ... END;` 블록(트리거 정의)을 placeholder로 보존했다가 복원한다. v28 stats 트리거·v49/v51/v53 outbox 트리거를 안전하게 처리하기 위한 장치.
+`splitSqlStatements`는 단순 `split(';')`가 아니라 `BEGIN ... END;` 블록(트리거 정의)을 placeholder로 보존했다가 복원한다. stats 트리거·outbox 트리거처럼 본문에 세미콜론을 포함한 트리거 DDL을 한 statement로 온전히 실행하기 위한 장치.
 
 ### 5.5 외부 노출 모듈 — `index.ts` barrel
 
@@ -910,16 +912,20 @@ import { getDatabase, createSession, getRequestsBySession, broadcastNewRequest }
 
 ### 5.6 사전 집계 (stats_hourly)
 
-마이그레이션 v27(테이블) + v28(트리거) + v32(proxy 버킷)가 **트리거 기반 사전 집계**를 구성한다.
+`stats_hourly`·`stats_proxy_hourly`는 **트리거 기반 사전 집계** 테이블이다. `requests`에 INSERT/UPDATE가 일어나면 두 트리거(`trg_stats_after_insert`, `trg_stats_after_update`)가 시간 버킷을 갱신한다. `trg_stats_after_insert`는 INSERT 시점(pre_tool 행 제외)에, `trg_stats_after_update`는 pre_tool 행이 tool로 전환(`mergePostToolIntoPreTool`)될 때 실제 토큰 델타를 누적한다 — 후자가 없으면 pre→tool 머지로 채워진 토큰이 집계에 빠진다.
 
 ```mermaid
 flowchart TD
-    INSERT["requests INSERT"]
-    TRIGGER["AFTER INSERT trigger (v28)"]
-    UPSERT["INSERT INTO stats_hourly\n(hour_bucket, session_id, type, event_type, model, ...)\nON CONFLICT DO UPDATE SET\n  request_count = request_count + 1,\n  tokens_total = tokens_total + NEW.tokens_total, ..."]
+    INSERT["requests INSERT\n(pre_tool 포함)"]
+    UPDATE["requests UPDATE\n(pre_tool → tool 머지\n= mergePostToolIntoPreTool)"]
+    TRG_INS["trg_stats_after_insert\nAFTER INSERT (pre_tool 제외)"]
+    TRG_UPD["trg_stats_after_update\nAFTER UPDATE OF (tool 전환 시 토큰 델타 누적)"]
+    UPSERT["INSERT INTO stats_hourly\n(hour_bucket, session_id, type, event_type, model, ...)\nON CONFLICT DO UPDATE SET\n  request_count = request_count + 1,\n  tokens_total = tokens_total + 델타, ..."]
 
-    INSERT --> TRIGGER
-    TRIGGER --> UPSERT
+    INSERT --> TRG_INS
+    UPDATE --> TRG_UPD
+    TRG_INS --> UPSERT
+    TRG_UPD --> UPSERT
 ```
 
 24h 차트(`/api/metrics/burn-rate`, `/api/metrics/cache-trend`)는 raw `requests` 스캔 대신 사전 집계 테이블을 쿼리하여 응답 시간 ~5ms 유지.
@@ -1250,7 +1256,7 @@ es.addEventListener('new_request', (ev) => {
 
 `index.html:130`의 `.app-rail` aside:
 - **browse 모드** (기본): 프로젝트/세션 탐색.
-- **metadocs 모드**: Behavior Definitions 카탈로그(v24).
+- **metadocs 모드**: Behavior Definitions 카탈로그.
 - **settings 모드**: 설정 패널.
 
 전환은 `body[data-app-mode]` 속성만 토글 — CSS 셀렉터(`body[data-app-mode="metadocs"] .right-panel { display:none }`)가 가시성을 처리하고 JS는 부수 흐름(이전 선택 복원 등)만 담당.
@@ -1317,8 +1323,8 @@ export interface Session { id, project_name, started_at, ended_at, total_tokens,
 export type Lang = 'ko' | 'en' | 'ja' | 'zh';
 export const SUPPORTED_LANGS: readonly Lang[];
 export const DEFAULT_LANG: Lang;
-export function isLang(s): s is Lang;
-export function resolveLang(input): Lang;
+export function isLang(value: unknown): value is Lang;
+export function resolveLang(input: string | undefined | null): Lang | null; // 매칭 실패 시 null (호출 측이 default 결정)
 ```
 
 ### 8.3 비책임
@@ -1607,7 +1613,7 @@ export { handleHookHttpRequest, ... } from './http-entry';
 | **Bun** ≥ 1.2.0 (engines) | root | server, storage, storage-graph | HTTP 서버(`Bun.serve`), SQLite 드라이버(`bun:sqlite`), 파일 API. |
 | **@anthropic-ai/sdk** ^0.96.0 | root | server (proxy) | Anthropic 타입 정의 사용(미러링 시 RequestMeta 추출 보조). |
 | **eventsource** ^4.1.0 | root + tui | tui | Node EventSource 폴리필 (Bun에 `globalThis.EventSource` 없음). |
-| **@ladybugdb/core** ^0.16.1 | storage-graph | storage-graph | 임베디드 그래프 DB 엔진(Cypher MERGE + 컬럼 압축). |
+| **@ladybugdb/core** 0.16.1 (고정 버전, 캐럿 없음) | storage-graph | storage-graph | 임베디드 그래프 DB 엔진(Cypher MERGE + 컬럼 압축). |
 | **i18next** ^26.2.0 | server, tui | server, tui | 서버측 i18n 키 로더 + TUI i18n. |
 | **ink** ^5.2.0 | tui | tui | React 렌더러(터미널). |
 | **react** ^18.3.1 | tui | tui | Ink의 호스트(`useState`, `useSyncExternalStore` 활용). |
@@ -1648,18 +1654,21 @@ export { handleHookHttpRequest, ... } from './http-entry';
 
 | 변수 | 기본값 | 용도 |
 |------|--------|------|
-| `SPYGLASS_PORT` | 9999 | 서버 포트 |
-| `SPYGLASS_HOST` | localhost | 서버 호스트 |
-| `SPYGLASS_DB_PATH` | `~/.spyglass/spyglass.db` | DB 경로 |
-| `SPYGLASS_PID_FILE` | `~/.spyglass/server.pid` | PID 파일 경로 |
+| `SPGLASS_PORT` | 9999 | 서버 포트 (`config.ts:17`, 키에 'Y' 없음 — 코드와 일치) |
+| `SPGLASS_HOST` | `127.0.0.1` | 서버 호스트 (`config.ts:18`, 키에 'Y' 없음) |
+| `SPGLASS_DB_PATH` | `~/.spyglass/spyglass.db` | DB 경로 (`config.ts:19`, 키에 'Y' 없음) |
+| `SPYGLASS_PID_FILE` | `~/.spyglass/server.pid` | PID 파일 경로 (`daemon.ts:57`) |
 | `SPYGLASS_API_URL` | `http://127.0.0.1:9999` | TUI가 연결할 서버 URL |
 | `SPYGLASS_ALL_PROJECTS` | `0` | 1이면 TUI에서 모든 프로젝트 표시 |
-| `SPYGLASS_TIMEOUT` | 1 | hook 스크립트 curl 타임아웃(sec) |
-| `SPYGLASS_HOOK_DIAG` | `0` | hook 진단 jsonl on/off |
-| `SPYGLASS_PROXY_DIAG` | `0` | proxy 진단 jsonl on/off |
+| `SPYGLASS_TIMEOUT` | 1 | hook 스크립트 curl 타임아웃(sec) (`spyglass-collect.sh:22`) |
+| `SPYGLASS_DIAG_ENABLED` | (없음) | 진단 jsonl 통합 on/off — `1`/`true`만 활성 (`diag-log.ts:55`) |
+| `SPYGLASS_DIAG_LOG_DIR` | `<cwd>/.claude/.tmp/logs` | 진단 로그 디렉토리 override (`diag-log.ts:60`) |
+| `SPYGLASS_DIAG_RAW_SSE` | (없음) | `1`이면 proxy raw SSE 응답 본문도 jsonl에 포함 (`proxy/handler/diag.ts:95`) |
 | `SPYGLASS_GRAPH_MODE` | `primary` | 그래프 sync 모드 (`off`\|`shadow`\|`primary`). env가 설정 파일보다 우선. |
 | `SPYGLASS_RETENTION_DAYS` | `30` | RDB·그래프 retention cutoff 일수 (0/음수/non-numeric은 default 폴백) |
 | `ANTHROPIC_BASE_URL` | (없음) | 설정 시 `/v1/*` 프록시 미러링 활성화 |
+
+> **키 철자 주의**: 서버 런타임 설정(`packages/server/src/runtime/config.ts:17-19`)이 읽는 포트·호스트·DB경로 변수는 'Y'가 빠진 `SPGLASS_PORT`/`SPGLASS_HOST`/`SPGLASS_DB_PATH`다. 이 철자는 코드에 그대로 보존되어 있고 deployment.md·configuration.md·troubleshooting.md 등 다른 아키텍처 문서도 동일하게 `SPGLASS_`로 기재한다. 한편 hook 수집 스크립트(`hooks/spyglass-collect.sh:18-22`)는 별개의 클라이언트 측 변수 `SPYGLASS_HOST`(기본 `localhost`)/`SPYGLASS_PORT`/`SPYGLASS_TIMEOUT`('Y' 포함)를 사용한다 — 두 변수군은 서로 다르다.
 
 ---
 
@@ -1779,10 +1788,10 @@ export { handleHookHttpRequest, ... } from './http-entry';
    • clone으로 SSE 청크 파싱 (sse-state.ts):
      - content_block_start / content_block_delta 누적
      - message_delta의 usage 추출
-     - tool_use_id 매핑 (v23)
+     - tool_use_id 매핑 (proxy_tool_uses)
    • 종료 후 persist (proxy_requests INSERT in tx)
 6. broadcastNewProxyRequest(payload) → SSE 'new_proxy_request'
-7. 별도로 hook에서 model NULL인 행이 있으면 backfill (v19: api_request_id 매칭)
+7. 별도로 hook에서 model NULL인 행이 있으면 backfill (api_request_id 매칭)
    • requests UPDATE → broadcastNewRequest(..., { event_phase: 'updated' })
    • 클라이언트는 in-place 갱신
 ```

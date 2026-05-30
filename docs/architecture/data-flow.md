@@ -90,7 +90,7 @@ Claude Code는 사용자가 `~/.claude/settings.json` 또는 프로젝트 `.clau
 `hooks/spyglass-collect.sh:101-133`은 다음 순서로 동작한다.
 
 1. **TTY가 아닐 때만 동작**(`[[ ! -t 0 ]]`) — Claude Code의 자동 호출인지 확인.
-2. **원장 우선 기록**: `payload`를 `~/.spyglass/logs/hook-raw.jsonl`에 한 줄 append (서버 전송 전에, `spyglass-collect.sh:106`).
+2. **원장 우선 기록**: `ensure_log_dir`(`spyglass-collect.sh:105`)로 로그 디렉토리를 보장한 뒤, `echo "$payload" >> "$SPYGLASS_RAW_LOG"`로 `~/.spyglass/logs/hook-raw.jsonl`에 한 줄 append (서버 전송 전에, `spyglass-collect.sh:106`).
 3. **`hook_event_name` 추출**: python3 한 줄 인라인 스크립트로 파싱.
 4. **case 분기 라우팅**:
    - `UserPromptSubmit | PreToolUse | PostToolUse` → `/collect`
@@ -354,7 +354,7 @@ savingsRate        = cache_read / totalBillableInput
 
 ### 8.3 `aggregate-general.ts` 핵심 (`getRequestStats`, `aggregate-general.ts:50-82`)
 
-`stats_hourly`의 NULL→'' 정규화 컨벤션에 맞춰 `event_type IN ('tool','')` 필터를 적용한다(`aggregate-general.ts:53`). 토큰 합계는 `tokens_*_high_sum` 컬럼(`tokens_confidence='high'`만), avg_duration_ms는 `duration_ms_sum / duration_ms_count` 전체 평균이다(`aggregate-general.ts:72-77`).
+`stats_hourly`의 NULL→'' 정규화 컨벤션에 맞춰 `event_type IN ('tool','')` 필터를 적용한다(`aggregate-general.ts:53`). 토큰 합계는 `tokens_*_high_sum` 컬럼(`tokens_confidence='high'`만), avg_duration_ms는 `duration_ms_sum / duration_ms_count` 전체 평균이다(`aggregate-general.ts:75-77`).
 
 ### 8.4 `aggregate-strip.ts` 핵심 (`aggregate-strip.ts:32-86`)
 
@@ -455,11 +455,13 @@ CLAUDE.md 규칙대로 `prependRequest(r)`(`packages/web/assets/js/views/default
 flowchart TD
   A["prependRequest(req)\nviews/default/feed-live.js:31"] --> R{"활성 date range\n밖이면 skip"}
   R -- "범위 내" --> B{"#requestsBody에\ntr[data-request-id=req.id] 존재?"}
-  B -- "있으면" --> C["replaceRowCells(existing, req)\n셀 단위 교체 (위치 유지)\n내부에서 makeRequestRow 호출"]
+  B -- "있으면" --> C["replaceRowCells(existing, req)\n셀 단위 교체 (위치 유지)\n내부에서 makeRequestRow 호출\n(feed-live.js:59)"]
   C --> C2{"event_phase\n= 'updated'?"}
-  C2 -- "예" --> C3["row-flash-update 펄스"]
-  C2 -- "아니오" --> C4["return (feed-live.js:68)"]
-  C3 --> C4
+  C2 -- "예" --> C3["row-flash-update 펄스\n(feed-live.js:61-64)"]
+  C3 --> C5
+  C2 -- "아니오" --> C5["reapplyFeedAnomalies()\n(feed-live.js:66)"]
+  C5 --> C6["dispatchEvent(FEED_UPDATED)\n(feed-live.js:67)"]
+  C6 --> C4["return (feed-live.js:68)"]
   B -- "없으면" --> D["makeRequestRow(req)\n새 tr을 최상단 insertBefore"]
   C -. "내부 호출" .-> E
   D --> E["makeRequestRow\n→ makeTargetCell\n→ toolIconHtml(r.tool_name, r.event_type)"]

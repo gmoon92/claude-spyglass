@@ -167,7 +167,7 @@ SQLite 만 초기화하려면 `spyglass.db*` 를, 그래프만 초기화하려�
 
 ### 3.3 패키지 간 의존성 원칙
 
-실제 `package.json` 의존 관계:
+실제 `package.json` 의존 관계입니다. 화살표 컨벤션은 [`architecture.md`](./architecture.md) §3.1 과 동일하게 **`A --> B` = `A` 가 `B` 에 import 됨 (`B` 가 `A` 에 의존)** 입니다.
 
 ```mermaid
 graph LR
@@ -177,21 +177,25 @@ graph LR
     server[server]
     tui[tui]
     web[web<br/>정적 자산]
+    desktop[desktop<br/>Electron 셸]
 
-    storage --> sgraph
     types --> sgraph
-    storage --> server
-    sgraph --> server
     types --> server
-    server --> tui
-    storage --> tui
     types --> tui
+    storage --> sgraph
+    storage --> server
+    storage --> tui
+    sgraph --> server
+    server --> tui
     server -.serves.-> web
+    server -.spawns.-> desktop
 ```
 
-- **단방향 의존** — 하위 패키지가 상위(`server`/`tui`)를 import 하지 않습니다. `storage` 가 `server` 를 import 하면 안 됨 (순환 차단).
-- `storage-graph` 는 `storage` · `types` 에 의존하며, `server` 가 두 저장소 패키지를 함께 사용합니다.
-- 공통 타입은 반드시 `@spyglass/types` 에 두고 양쪽에서 import.
+- **단방향 의존** — 의존은 항상 `types → storage-graph → server → tui` 및 `storage → server → tui` 방향으로만 흐릅니다. 상위 패키지(`server`/`tui`)를 하위 패키지가 import 하지 않습니다 (순환 차단).
+- `storage` 는 어떤 워크스페이스 패키지에도 의존하지 않습니다 — `packages/storage/package.json` 의 `dependencies` 가 비어 있고(`{}`), `src/` 전체에서 `@spyglass/types` import 가 없습니다.
+- `storage-graph` 는 `storage`(`@spyglass/storage`) · `types`(`@spyglass/types`) 에 의존하며, `server` 가 `storage` · `storage-graph` · `types` 세 패키지를 모두 import 합니다. `tui` 는 `server` · `storage` · `types` 를 import 합니다(`storage-graph` 는 import 하지 않음).
+- `desktop` 은 워크스페이스 `dependencies` 가 없는 Electron 셸로, 빌드된 `server` 바이너리를 런타임에 spawn 합니다 ([`architecture.md`](./architecture.md) §3.1 의 `SERVER -.-> DESKTOP` 와 동일).
+- 공통 타입은 반드시 `@spyglass/types` 에 두고 각 패키지에서 import.
 
 ### 3.4 공통 스크립트
 
@@ -260,7 +264,7 @@ row.appendChild(makeRequestRow(r));
 
 다음은 `CLAUDE.md` 가 "누락 방지" 함수로 지정한 것들입니다 — 모든 UI 요소는 이 함수들을 거쳐야 하며, 페이지 코드에서 `innerHTML = '<svg …>'` 같은 직접 HTML 작성은 금지입니다.
 
-`render/*` 의 렌더링 함수들은 `packages/web/assets/js/renderers.js` 호환 shim 이 `export * from './render/*.js'` 로 일괄 re-export 하므로, 기존 코드는 `./renderers.js` 경로로 import 할 수 있습니다 (단, 함수 정의 자체는 아래 표의 `render/*` 파일에 있습니다). `prependRequest` 는 이 shim 에 포함되지 않으며 `views/default-view.js` 를 통해서만 re-export 됩니다.
+`packages/web/assets/js/renderers.js` 는 `render/*` 파일들의 re-export 진입점(호환 shim)으로, 각 모듈에 대해 개별 `export *` 구문 7줄로 re-export 합니다 — `export * from './render/badges.js'`, `'./render/model.js'`, `'./render/cells.js'`, `'./render/extract.js'`, `'./render/expand.js'`, `'./render/rows.js'`, `'./render/skeleton.js'` (ES Modules 는 glob import 를 지원하지 않으므로 파일별로 한 줄씩 명시). 함수 정의 자체는 아래 표의 `render/*` 파일에 있습니다. `prependRequest` 는 이 진입점에 포함되지 않으며 `views/default-view.js` 를 통해서만 re-export 됩니다.
 
 | 함수 | 정의 파일 | 책임 |
 |------|-----------|------|

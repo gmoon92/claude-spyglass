@@ -8,7 +8,7 @@ Claude Spyglass SQLite 데이터베이스 스키마 설명서입니다.
 
 | 항목 | 내용 |
 |------|------|
-| DB 파일 | `~/.spyglass/spyglass.db` (`SPYGLASS_DB_PATH` 로 재정의 가능) |
+| DB 파일 | `~/.spyglass/spyglass.db` (`SPGLASS_DB_PATH` 로 재정의 가능 — `Y` 가 빠진 표기가 실제 키) |
 | 엔진 | SQLite (WAL 모드, Bun `bun:sqlite`) |
 | 스키마 출처 | `packages/storage/migrations/NNN-*.sql` (마이그레이터가 파일명 순으로 적용) |
 | 테이블 수 | 15개 |

@@ -206,7 +206,7 @@ fi
 | 프로파일 | 훅 수 | 수집 범위 | 예제 |
 |---------|------|----------|------|
 | **최소** | 6개 | UserPromptSubmit, PreToolUse, PostToolUse, SessionStart, SessionEnd, Stop | [`docs/examples/settings.hooks.minimal.json`](./examples/settings.hooks.minimal.json) |
-| **권장** ★ | 27개 | Subagent / Task / Permission / Compact / Worktree / FileChanged / CwdChanged 등 전체 HOOK_EVENTS | [`docs/examples/settings.hooks.full.json`](./examples/settings.hooks.full.json) |
+| **권장** ★ | 30개 | Subagent / Task / Permission / Compact / Worktree / FileChanged / CwdChanged 등 전체 HOOK_EVENTS | [`docs/examples/settings.hooks.full.json`](./examples/settings.hooks.full.json) |
 
 ### 4.4 자동 병합 (jq 사용 — 권장)
 

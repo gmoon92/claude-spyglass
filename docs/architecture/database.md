@@ -63,14 +63,16 @@ claude-spyglass는 **단일 사용자의 로컬 옵저버빌리티 도구**입�
 
 ```mermaid
 flowchart LR
-    hooks["Claude Code hooks"] -->|"/collect, /events"| raw["requests<br/>claude_events"]
+    hooks["Claude Code hooks"] -->|"/collect: hook/* → processor"| req["requests"]
+    hooks -->|"/events: events.ts createEvent"| evt["claude_events"]
     hooks -->|"/collect: ensureSession<br/>/events: reactivateSession / ended_at"| ss2["sessions"]
     hooks -->|"/events: SessionStart → meta-docs synchronizer"| md["meta_documents<br/>meta_doc_resolutions"]
+    hooks -->|"/events: Stop 훅 → type='response'"| req
     proxy["HTTP proxy layer"] -->|proxy/handler/persist.ts| praw["proxy_requests<br/>proxy_tool_uses"]
     proxy -->|"body.system → system-hash.ts"| sp["system_prompts<br/>(dedup)"]
-    raw -.->|AFTER INSERT/UPDATE 트리거| sh["stats_hourly<br/>(사전 집계)"]
+    req -.->|AFTER INSERT/UPDATE 트리거| sh["stats_hourly<br/>(사전 집계)"]
     praw -.->|AFTER INSERT 트리거| sph["stats_proxy_hourly<br/>(사전 집계)"]
-    raw -.->|AFTER INSERT/UPDATE 트리거| ko["kuzu_outbox"]
+    req -.->|AFTER INSERT/UPDATE 트리거| ko["kuzu_outbox"]
     ss2 -.->|AFTER INSERT 트리거| ko
     ko -->|storage-graph sync worker<br/>200ms tick · cursor| graph["Ladybug 그래프 DB"]
 ```
@@ -669,7 +671,7 @@ ORDER BY duration_ms ASC
 
 → `idx_requests_tool_duration_partial`이 정렬·필터 모두 흡수. JS의 `computeP95(rows)`가 95% 분위수 계산.
 
-오류율은 `tool_detail`의 다국어 에러 패턴(`error`, `[오류]`, `エラー`, `错误`) `LIKE` 매칭 비율.
+오류율은 동일 기간 `event_type='tool'` 행 중 `tool_detail`에 에러 패턴이 포함된 행 비율입니다. 영어 패턴은 `LOWER(tool_detail) LIKE '%error%'`로 대소문자를 무시하고, 나머지(`[오류]`, `エラー`, `错误`)는 대소문자 구분 `LIKE`로 매칭합니다 (`OR` 결합). `errors / total`을 소수점 4자리로 반올림해 반환.
 
 ### 7.6 시계열 버킷 (`metrics/timeseries.ts`)
 
