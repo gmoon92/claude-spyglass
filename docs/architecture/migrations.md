@@ -25,7 +25,7 @@
 packages/storage/migrations/NNN-description.sql
 ```
 
-- `NNN`: 3자리 zero-padded 버전 번호 (`001`, `002`, …, `052`, `053`, ...)
+- `NNN`: 3자리 zero-padded 버전 번호 (`001`, `002`, …, `053`, `055`, ...)
 - `description`: kebab-case 짧은 설명 (`add-tool-detail`, `add-claude-events`)
 - 파일명에서 앞 3자리가 `PRAGMA user_version` 값에 1:1 매핑된다.
 - 디렉토리 번호에 gap이 있어도 (예: 040 다음 047) 동작에 영향 없음 — migrator는 정렬된
@@ -186,7 +186,7 @@ try {
 
 - `999-final.sql`까지 정상 동작
 - 앞 숫자 prefix가 4자리 이상(`1000-xxx.sql` 등)이면 `parseMigrationVersion()`이 명확한 에러로 throw
-- 999 도달 시점에 4자리 padding 확장을 별도 ADR로 결정 (yagni — 현재 053번)
+- 999 도달 시점에 4자리 padding 확장을 별도 ADR로 결정 (yagni — 현재 055번)
 
 ```typescript
 // ❌ 금지 — silent overflow 차단됨
@@ -204,12 +204,13 @@ try {
 ```bash
 # 1. 현재 최신 버전 확인
 ls packages/storage/migrations/ | tail -3
-# → 051-kuzu-outbox-update-trigger.sql
 # → 052-backfill-subagent-parent-tool-use-id.sql
 # → 053-kuzu-outbox-trigger-hardening.sql
+# → 055-kuzu-outbox-dlq.sql
+# (디렉토리에 gap 존재: 041~046·054 결번 — 동작 무관, 다음 번호는 항상 max+1)
 
-# 2. 새 파일 생성 — 다음 번호 사용
-touch packages/storage/migrations/054-your-feature.sql
+# 2. 새 파일 생성 — 다음 번호 사용 (현재 max 055 → 056)
+touch packages/storage/migrations/056-your-feature.sql
 ```
 
 ### 3.2 SQL 작성 템플릿
@@ -318,7 +319,7 @@ curl -X POST http://localhost:8765/api/update
 
 # 재기동 대기 (1.5s) 후 검증
 sleep 2 && curl http://localhost:8765/api/version
-# → dbUserVersion: 53, latestMigrationFile: "053-kuzu-outbox-trigger-hardening.sql"
+# → dbUserVersion: 55, latestMigrationFile: "055-kuzu-outbox-dlq.sql"
 ```
 
 ### 5.2 마이그레이션 lag 감지
@@ -336,7 +337,7 @@ sleep 2 && curl http://localhost:8765/api/version
     "latestMigrationFile": "050-kuzu-outbox-backfill.sql",
     "migrationLag": {
       "current": 50,
-      "latestFile": "053-kuzu-outbox-trigger-hardening.sql"
+      "latestFile": "055-kuzu-outbox-dlq.sql"
     }
   }
 }
