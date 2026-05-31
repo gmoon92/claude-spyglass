@@ -23,8 +23,8 @@ declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>)
 
 interface SessionLike {
   id: string;
-  started_at?: string | null;
-  ended_at?: string | null;
+  started_at?: string | number | null;
+  ended_at?: string | number | null;
   live_state?: string | null;
   first_prompt_payload?: string | null;
   total_tokens?: number;
