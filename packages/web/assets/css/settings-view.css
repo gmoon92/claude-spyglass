@@ -48,6 +48,19 @@ body[data-app-mode="settings"] #settingsView.settings-view {
   display: flex !important;
 }
 
+/**
+ * React Router cutover — `.settings-view--router`.
+ *
+ *   classic 셸은 body[data-app-mode="settings"] 토글로 #settingsView 를 노출하지만,
+ *   React App(app/App.tsx)은 React Router 가 `/settings` 경로에서 SettingsLayout 만 마운트하고
+ *   body[data-app-mode] 를 세팅하지 않는다(meta-docs-root 와 동일 패턴 — 라우터가 가시성 SoT).
+ *   따라서 위 기본 `display:none` 이 셸을 숨겨버리는 회귀를 끊기 위해, 라우터 마운트 셸은
+ *   무조건 display:flex 로 가시화한다. grid-column/flex-direction 등 나머지 시각은 위 룰 그대로 상속.
+ */
+#settingsView.settings-view.settings-view--router {
+  display: flex;
+}
+
 /* settings 모드일 때 다른 view + 사이드바 관련 위젯 모두 숨김.
  *
  *   .left-panel              : 좌측 패널 본체 (padding/border 가 잔여 frame 으로 보임 → 완전 숨김)
@@ -165,13 +178,22 @@ body[data-app-mode="settings"] .main-layout {
   padding-left: 9px; /* 3px border 만큼 보정 */
 }
 
-/* 우측 컨텐츠 */
+/* 우측 컨텐츠 — 스크롤·패딩 컨테이너. */
 .settings-content {
   padding: 20px 28px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* React 셸의 remount-key 래퍼(.settings-content-body) — 탭/refresh 키 변경 시 패널만 remount.
+   부모 .settings-content 의 세로 스택(flex column + gap)을 그대로 이어받아 패널 카드 간격을 보존. */
+.settings-content-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
 }
 
 .settings-section-title {

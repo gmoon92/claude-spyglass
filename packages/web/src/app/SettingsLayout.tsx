@@ -78,11 +78,22 @@ export function SettingsLayout(): ReactElement {
     }
   }, []);
 
+  // 컨테이너 셸 — 원본 index.html `<section id="settingsView" class="settings-view">`(:814) 1:1.
+  //   설정 CSS(settings-view.css) 가 `#settingsView.settings-view` 셀렉터로 grid-column:3/4 +
+  //   flex column + 본문 색/보더를 부여한다. React Router 는 /settings 경로에서만 본 셸을 마운트하므로
+  //   레거시의 body[data-app-mode="settings"] display 토글 대신 `.settings-view--router`
+  //   (settings-view.css 말미 정의) 가 무조건 display:flex 로 가시화한다(meta-docs-root 동형).
   return (
-    <div className="settings-layout" data-testid="settings-layout">
+    <section
+      id="settingsView"
+      className="settings-view settings-view--router"
+      data-testid="settings-layout"
+      aria-label="Settings panel"
+    >
       <SettingsHeader onRefresh={onRefresh} t={tt} />
+      {/* 본문 2-column grid — 좌 .settings-nav(200px) + 우 .settings-content(1fr). 원본 :829. */}
       <div className="settings-body">
-        <nav className="settings-nav" data-testid="settings-nav" role="tablist">
+        <nav className="settings-nav" data-testid="settings-nav" role="tablist" aria-label="Settings sub-tabs">
           {SETTINGS_TABS.map(({ key, labelKey }) => (
             <button
               key={key}
@@ -90,21 +101,21 @@ export function SettingsLayout(): ReactElement {
               role="tab"
               data-settings-tab={key}
               aria-selected={tab === key}
-              className={`settings-tab${tab === key ? ' active' : ''}`}
+              className={`settings-nav-btn${tab === key ? ' is-active' : ''}`}
               onClick={() => setTab(key)}
             >
               {tt(labelKey)}
             </button>
           ))}
         </nav>
-        <section className="settings-panel" data-testid="settings-panel">
+        <div className="settings-content" data-testid="settings-panel" role="tabpanel">
           {/* key=tab:refreshKey — 탭 전환·새로고침 모두 패널 remount → useAsyncResource 재페치(원본 :131). */}
-          <div key={`${tab}:${refreshKey}`} className="settings-panel-body">
+          <div key={`${tab}:${refreshKey}`} className="settings-content-body">
             {renderPanel(tab, setTab, onCopy)}
           </div>
-        </section>
+        </div>
       </div>
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
-    </div>
+    </section>
   );
 }
