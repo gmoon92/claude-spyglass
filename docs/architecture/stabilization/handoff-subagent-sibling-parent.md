@@ -13,11 +13,13 @@
   - `resolvedParentToolUseId = child.parentToolUseId ?? context.parentToolUseId` (그 Agent 인스턴스 transcript 기반 ground truth).
 - **신규 테스트**: `packages/server/src/hook/__tests__/subagent-sibling-parent.regression.test.ts` (메인 1 + 무회귀 4: 단일/깊이3 Skill 보존/NULL 백필/멱등).
 - 마이그레이션 없음(코드-only). T4(saveRequest 방어)는 over-eng 보류.
+- **그래프 완결 보완(commit `ff23519`)**: `packages/storage-graph/src/sync/merge.ts` `mergeRel`이 `PARENT_OF(parent→child)` CREATE 전 같은 child의 *다른* 부모 PARENT_OF 엣지를 DELETE(single-parent 불변식). 교정(A→B) 시 구 엣지 `PARENT_OF(A→child)` 잔존(증분 sync)을 self-healing·idempotent로 제거. best-effort try/catch라 DLQ/HoL 무영향. 신규 테스트 `packages/storage-graph/src/__tests__/parent-of-correction.test.ts`.
 
 ## 검증 결과 (변경 전후)
-- 신규 회귀: Red 3 fail → Green **5 pass / 21 expect**.
-- `bun test packages/server`: **233 pass / 0 fail / 666 expect (30 files)**.
-- `bun run typecheck`: 12 errors = main baseline 동일(persist.ts/신규 테스트 신규 0) → **회귀 0**.
+- 신규 회귀(hook): Red 3 fail → Green **5 pass / 21 expect**.
+- 신규 회귀(graph): Red 5 fail → Green **6 pass / 15 expect**.
+- `bun test packages/server`: **233 pass / 0 fail (30 files)** · `bun test packages/storage-graph`: **135 pass / 0 fail (15 files)** (기존 parent-of-recovery 7 + dangling-node 9 포함, 회귀 0).
+- `bun run typecheck`: 12 errors = main baseline 동일(신규 파일 오류 0) → **회귀 0**.
 
 ## 머지 전 재현 체크리스트
 1. `cd /Users/moongyeom/IdeaProjects/claude-spyglass-fix && bun install`(필요 시) → `bun test packages/server` green 확인.
