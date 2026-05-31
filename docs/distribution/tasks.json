@@ -1,0 +1,255 @@
+{
+  "mission": "claude-spyglass 배포를 단일 무과금 Homebrew Formula 로 마무리한다. 사용자가 'brew install spyglass' 한 번으로 런타임(Bun=SQLite 포함)·네이티브(LadybugDB .node)·정적자산(web)·마이그레이션·i18n 까지 전부 받고, 'brew upgrade spyglass' 하나로 갱신되게 한다. git pull(install.sh·/api/update)·Electron DMG·수동 라이브러리 설치 경로를 모두 제거한다. ad-hoc codesign 만 사용(무과금).",
+  "constraints": {
+    "zero_cost": "절대 제약. 어느 task 에도 Apple Developer ID·notarization·Cask·DMG 도입 금지. native/실행파일은 ad-hoc codesign(build-release-tarball.sh:125-128)만. 변경 후 'codesign -dv' 로 ad-hoc 유지 확인. spctl 거부는 정상.",
+    "bundle_ssot": "standalone bin 자동 번들(순수 JS 의존성·bun:sqlite·i18n locale 정적 import)은 추가 작업 0. bin 에 못 들어가는 fs 자원(web/migrations)·native(@ladybugdb .node)만 tarball 동봉. 추가 동봉 대상 = LadybugDB native 하나뿐(03 §3 매트릭스).",
+    "ladybug_required": "LadybugDB 는 필수 동봉(사용자 확정). graph 기능이 brew 설치만으로 동작해야 한다. D2 누락 금지.",
+    "isolation": "모든 구현은 git worktree(wt-<id>) 로 격리. 메인 작업 디렉토리·미커밋·React 워크트리(다른 세션 대규모 변환 진행 중) 불가침. 사용자 동시작업 감지 시 즉시 중단+보고.",
+    "regression_gate": "머지 전/후 전량 통과: (1) bun test 회귀 0, (2) bun run typecheck 에러 증분 0, (3) bash .claude/skills/detect-architecture-violation/scripts/check-architecture.sh 통과, (4) 배포 스모크 — build-release-tarball.sh 산출 후 brew install --formula <path> 또는 압축해제 → spyglass status/health(+D2 후 /api/graph/status mode=shadow).",
+    "commits": "Tidy First — 구조 변경(refactor:)과 동작 변경(feat:) 커밋 분리. 커밋 prefix 로 bisect 회귀 유형 식별. push 는 게이트 통과 + 사용자 승인 후에만.",
+    "react_noninterference": "web 정적자산 동봉은 현재 packages/web 산출물 기준으로 설계. React 전환(다른 워크트리) 완료 시 Vite dist/ 가 같은 자리에 들어오므로 동봉 '경로 계약'만 고정하고 web 빌드 방식은 건드리지 않는다.",
+    "no_code_yet": "본 산출물(tasks.json)은 향후 TaskCreate 1:1 등록용 명세다. 본 단계에서 구현 코드를 작성하지 않는다.",
+    "doc_last": "D6(문서 현행화)은 반드시 마지막 태스크. 모든 구현 완료 후 문서 현행화 + 태스크 보드 종료.",
+    "status_enum": ["pending", "in_progress", "completed"]
+  },
+  "baseline": {
+    "date": "2026-05-31",
+    "source_repo": "gmoon92/claude-spyglass (public)",
+    "tap_repo": "gmoon92/homebrew-claude-code-spyglass (public, 생성완료 — brew tap gmoon92/claude-code-spyglass 성공)",
+    "root_version": "v3.1.0",
+    "desktop_version": "v2.11.0 (폐기 예정)",
+    "latest_release_assets": "spyglass-3.1.0-darwin-{arm64,x64}.tar.gz(+.sha256) 게시됨",
+    "formula_state": "version 2.10.0(구) + sha256 REPLACE_WITH_* placeholder → brew install 실패(tarball 다운로드는 성공, sha 불일치)",
+    "native_runtime": "@ladybugdb/core lbugjs.node (런타임 lazy import, tarball 미동봉 → graph off)",
+    "already_bundled": "bun:sqlite(Bun 내장) · i18n locale en/ja/ko/zh(정적 import) · web · migrations",
+    "git_pull_paths": "install.sh:118-145(clone/pull) · routes/version.ts:190(/api/update git pull)",
+    "update_channel": "git/brew/packaged 분기 존재(version.ts:60-88). brew 채널 git pull 배지 숨김(version-check.js:362-368), brew 안내 배너 미구현"
+  },
+  "phases": [
+    {
+      "phase": "D1",
+      "name": "Formula 동작",
+      "goal": "sha256 충전 + version 동기화로 brew install spyglass 완전 동작. tap repo 는 생성 완료, sha256 placeholder만 해소하면 됨.",
+      "merge_order": ["D1-01", "D1-02"]
+    },
+    {
+      "phase": "D2",
+      "name": "LadybugDB 번들 (필수)",
+      "goal": "arch별 @ladybugdb .node 를 tarball 동봉 + lazy import resolution 확보 + Formula GRAPH_MODE off→shadow. brew 설치만으로 graph 동작.",
+      "merge_order": ["D2-01", "D2-02", "D2-03", "D2-04"]
+    },
+    {
+      "phase": "D3",
+      "name": "업데이트 일원화",
+      "goal": "git pull 경로 제거(install.sh contributor 격하 · /api/update brew 가드) + web 에 brew upgrade 안내 배너 구현. 업데이트 지점을 brew 하나로.",
+      "merge_order": ["D3-01", "D3-02", "D3-03", "D3-04"]
+    },
+    {
+      "phase": "D4",
+      "name": "release 자동화",
+      "goal": "cmux update-homebrew.yml 차용 → 2-arch sha256 자동 갱신 update-formula.yml. matrix x64 prebuilt 확보. tag push 만으로 Formula 자동 갱신.",
+      "merge_order": ["D4-01", "D4-02", "D4-03"]
+    },
+    {
+      "phase": "D5",
+      "name": "desktop 폐기",
+      "goal": "packages/desktop·electron-builder·desktop:* 제거 + updateChannel packaged 분기 정리. 업데이트 일원화·무과금 완성.",
+      "merge_order": ["D5-01", "D5-02"]
+    },
+    {
+      "phase": "D6",
+      "name": "문서 현행화 (마지막)",
+      "goal": "install-guide brew 1차화 + README/01·02·03 정합 + distribution SSoT 갱신 + 태스크 보드 종료. 반드시 마지막.",
+      "merge_order": ["D6-01", "D6-02"]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "D1-01",
+      "title": "Formula version 2.10.0→3.1.0 동기화 + darwin arm64/x64 실 sha256 2개 충전 후 tap repo push",
+      "paths": ["tap-template/Formula/spyglass.rb", "gh release view v3.1.0 자산 *.tar.gz.sha256"],
+      "depends_on": [],
+      "owner": "backend-agent",
+      "owner_skill": "commit",
+      "verify": "brew update && brew install spyglass 시 sha 불일치 사라짐. brew audit --formula spyglass 통과.",
+      "worktree": false,
+      "risk": "low"
+    },
+    {
+      "id": "D1-02",
+      "title": "brew install 스모크 — tap→install→spyglass status/open, /health 200 확인",
+      "paths": ["(검증 task — 코드 변경 없음)"],
+      "depends_on": ["D1-01"],
+      "owner": "backend-agent",
+      "owner_skill": null,
+      "verify": "brew install spyglass && spyglass start && curl -sf 127.0.0.1:9999/health. codesign -dv 로 ad-hoc 확인(무과금 가드).",
+      "worktree": false,
+      "risk": "low"
+    },
+    {
+      "id": "D2-01",
+      "title": "LadybugDB native resolution 방식 결정 — (a)Formula NODE_PATH 주입 vs (b)client.ts env 로드. .distribution-gap-report.md 기록",
+      "paths": ["docs/distribution/.distribution-gap-report.md", "근거 packages/storage-graph/src/client.ts:120", "packages/desktop/electron-builder.yml(extraResources 패턴 참고)"],
+      "depends_on": ["D1-02"],
+      "owner": "backend-agent",
+      "owner_skill": "architecture-guard",
+      "verify": "(결정 task) 두 안의 트레이드오프·검증 방법 기록. 권고 (a) NODE_PATH(코드 무수정).",
+      "worktree": false,
+      "risk": "high"
+    },
+    {
+      "id": "D2-02",
+      "title": "build-release-tarball.sh 에 arch별 @ladybugdb lbugjs.node 동봉 단계 추가 (share/spyglass/native/<arch>)",
+      "paths": ["scripts/build-release-tarball.sh", "근거 node_modules/.bun/@ladybugdb+core-darwin-<arch>/.../lbugjs.node"],
+      "depends_on": ["D2-01"],
+      "owner": "backend-agent",
+      "owner_skill": "scan-sensitive-at-rest",
+      "verify": "arm64/x64 각 tarball 압축해제 시 해당 arch lbugjs.node 존재. native 파일 권한 0o600/디렉토리 0o700 확인.",
+      "worktree": true,
+      "risk": "high"
+    },
+    {
+      "id": "D2-03",
+      "title": "Formula SPYGLASS_GRAPH_MODE off→shadow 승격 + (a택 시)NODE_PATH 동봉경로 주입 (write_env_script)",
+      "paths": ["tap-template/Formula/spyglass.rb:75-80"],
+      "depends_on": ["D2-02"],
+      "owner": "backend-agent",
+      "owner_skill": null,
+      "verify": "brew install 후 /api/graph/status mode=shadow + circuit CLOSED. 실패 시 SQLite 폴백 동작(사용자 영향 0) 확인.",
+      "worktree": true,
+      "risk": "med"
+    },
+    {
+      "id": "D2-04",
+      "title": "graph 동작 스모크 — brew 설치 환경에서 native 로드→projection sync→/api/graph/* 응답",
+      "paths": ["(검증 task)"],
+      "depends_on": ["D2-03"],
+      "owner": "backend-agent",
+      "owner_skill": null,
+      "verify": "tail server.log 에 [graph-sync]/[graph-flag] 정상. /api/graph/status totalProcessed 증가.",
+      "worktree": false,
+      "risk": "med"
+    },
+    {
+      "id": "D3-01",
+      "title": "install.sh git clone/pull 경로(step_clone_repo)를 contributor 전용으로 격하 또는 제거 — 일반 사용자는 brew 만",
+      "paths": ["scripts/install.sh:118-145,327"],
+      "depends_on": ["D1-02"],
+      "owner": "backend-agent",
+      "owner_skill": "refactoring-expert",
+      "verify": "일반 설치 경로에서 git 인증 프롬프트 미발생. contributor 안내는 'From source' 로 분리.",
+      "worktree": true,
+      "risk": "med"
+    },
+    {
+      "id": "D3-02",
+      "title": "/api/update git pull(handlePostUpdate)을 brew 채널에서 비활성 가드 — git 채널(개발자)에서만 동작",
+      "paths": ["packages/server/src/routes/version.ts:60-64,170-246"],
+      "depends_on": ["D1-02"],
+      "owner": "backend-agent",
+      "owner_skill": "refactoring-expert",
+      "verify": "SPYGLASS_UPDATE_CHANNEL=brew 일 때 /api/update 가 409/안내 반환(git pull 미실행). git 채널은 기존 동작 유지(bun test 회귀 0).",
+      "worktree": true,
+      "risk": "med"
+    },
+    {
+      "id": "D3-03",
+      "title": "version-checker GITHUB_TAGS_URL 정합 확인 — 소스 public 유지 전제로 태그 조회 동작, brew 채널 표시 정합",
+      "paths": ["packages/server/src/version-checker.ts:10-12", "packages/server/src/routes/version.ts:80-88"],
+      "depends_on": ["D1-02"],
+      "owner": "backend-agent",
+      "owner_skill": null,
+      "verify": "/api/version updateChannel=brew + latestTag 정상 조회. (향후 소스 private 전환 시 public 배포repo 태그로 교체 — Gap §배포repo, 본 task 범위 밖)",
+      "worktree": true,
+      "risk": "low"
+    },
+    {
+      "id": "D3-04",
+      "title": "web version-check.js brew 채널 'brew upgrade spyglass 안내 배너' 구현 — 현재 숨김만(주석 '추후 banner UI 별도 결정') → 명령 복사/문서 링크 배너",
+      "paths": ["packages/web/assets/js/version-check.js:362-368"],
+      "depends_on": ["D3-03"],
+      "owner": "backend-agent",
+      "owner_skill": null,
+      "verify": "brew 채널 + updateAvailable 시 배너 노출, 클릭=git pull 아닌 명령 복사/링크. bun test packages/web 회귀 0. (React 워크트리 진행 중 — 동봉 충돌 시 D6 이후로 보류 가능)",
+      "worktree": true,
+      "risk": "med"
+    },
+    {
+      "id": "D4-01",
+      "title": "update-formula.yml 신설 — cmux update-homebrew.yml 차용. release 완료 workflow_run → arm64/x64 tarball sha256 계산 → Formula on_arm/on_intel 2블록 재생성 → SHA 대조 → tap repo push",
+      "paths": [".github/workflows/update-formula.yml(신규)", "차용원본 cmux/.github/workflows/update-homebrew.yml", "근거 .github/workflows/release.yml(name:release)"],
+      "depends_on": ["D1-01"],
+      "owner": "backend-agent",
+      "owner_skill": null,
+      "verify": "다음 tag push 시 tap repo 자동 커밋 생성 + brew upgrade spyglass 동작. pre-release(-rc) skip. SHA 대조 실패 시 push 차단.",
+      "worktree": true,
+      "risk": "high"
+    },
+    {
+      "id": "D4-02",
+      "title": "release matrix x64 prebuilt(@ladybugdb/core-darwin-x64) 확보 보장 — x64 빌드에서 native 동봉 가능하게",
+      "paths": [".github/workflows/release.yml", "scripts/build-release-tarball.sh(D2-02 연계)"],
+      "depends_on": ["D2-02", "D4-01"],
+      "owner": "backend-agent",
+      "owner_skill": "dependency-analyst",
+      "verify": "x64 runner 빌드 산출 tarball 에 darwin-x64 lbugjs.node 포함. (로컬엔 arm64 prebuilt만 — Gap §x64)",
+      "worktree": true,
+      "risk": "high"
+    },
+    {
+      "id": "D4-03",
+      "title": "HOMEBREW_TAP_TOKEN secret 등록 + tap repo(homebrew-claude-code-spyglass) submodule 연결 (cmux .gitmodules 방식)",
+      "paths": [".gitmodules", "tap-template/README.md(PAT 안내)"],
+      "depends_on": ["D4-01"],
+      "owner": "backend-agent",
+      "owner_skill": "commit",
+      "verify": "git submodule status 에 homebrew-claude-code-spyglass. update-formula.yml 이 PAT 로 push 성공.",
+      "worktree": false,
+      "risk": "low"
+    },
+    {
+      "id": "D5-01",
+      "title": "packages/desktop + electron-builder.yml + 루트 desktop:* 스크립트 + electron/electron-builder devDeps 제거",
+      "paths": ["packages/desktop/", "package.json(desktop:dev/build:mac/pack:mac, devDeps electron·electron-builder)"],
+      "depends_on": ["D3-02"],
+      "owner": "backend-agent",
+      "owner_skill": "architecture-guard",
+      "verify": "bun install 정상, bun test 회귀 0, check-architecture.sh 통과. iconv-corefoundation native 동반 제거 확인.",
+      "worktree": true,
+      "risk": "med"
+    },
+    {
+      "id": "D5-02",
+      "title": "updateChannel 'packaged' 분기·auto-updater 참조 정리 — desktop 제거 후 죽은 코드 제거(git/brew 2채널로 축소)",
+      "paths": ["packages/server/src/routes/version.ts:60-88", "packages/web/assets/js/version-check.js", "packages/desktop/src/main/server-process.js(제거됨)"],
+      "depends_on": ["D5-01"],
+      "owner": "backend-agent",
+      "owner_skill": "detect-architecture-violation",
+      "verify": "packaged 참조 0(grep). bun test/typecheck 회귀 0.",
+      "worktree": true,
+      "risk": "low"
+    },
+    {
+      "id": "D6-01",
+      "title": "install-guide.md brew 1차화 — brew tap/install/services/open/upgrade 를 1차 설치 경로로, git clone 은 'From source(contributors)' 격하. ad-hoc 서명 안내 추가",
+      "paths": ["docs/install-guide.md"],
+      "depends_on": ["D5-02"],
+      "owner": "doc-enricher",
+      "owner_skill": null,
+      "verify": "README.md(이미 brew 1순위)와 정합. 명령 실제 실행 확인. graph(D2) 자동 동작 안내 반영.",
+      "worktree": false,
+      "risk": "low"
+    },
+    {
+      "id": "D6-02",
+      "title": "문서 현행화 종결 — README/01·02·03 정합(tap 이름 claude-code-spyglass, desktop 폐기, LadybugDB 동봉 완료), distribution SSoT 갱신, 태스크 보드 종료",
+      "paths": ["docs/distribution/{README,01,02,03}.md(+html)", "README.md", "docs/architecture/deployment.md(brew 교차링크)"],
+      "depends_on": ["D6-01"],
+      "owner": "doc-enricher",
+      "owner_skill": "commit",
+      "verify": "전 문서 tap 이름·desktop 상태·번들 현황 일치. 모든 D 태스크 completed. 사용자 최종 확인.",
+      "worktree": false,
+      "risk": "low"
+    }
+  ]
+}
