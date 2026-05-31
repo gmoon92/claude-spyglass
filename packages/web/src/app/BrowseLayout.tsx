@@ -93,7 +93,9 @@ export function BrowseLayout(): ReactElement {
   }, [setSessions]);
 
   return (
-    <div className="browse-layout" data-testid="browse-layout">
+    // Fragment — .main-layout(AppShell) grid 직계 자식으로 left-panel·right-panel 전개.
+    // 래퍼 div 를 두면 grid 3컬럼(app-rail|left-panel|1fr) 직계가 깨져 우측이 비고 차트가 흐른다.
+    <>
       <aside className="left-panel" data-testid="browse-sidebar">
         <table className="browser-projects-table">
           <tbody>
@@ -122,6 +124,6 @@ export function BrowseLayout(): ReactElement {
         {/* default/detail 뷰 전환은 app-store.rightView/selectedSession 기준 — DetailView 데이터
             결선(useSessionLoad)은 후속 결선에서 호출처가 주입한다. */}
       </main>
-    </div>
+    </>
   );
 }

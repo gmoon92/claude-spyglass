@@ -41,7 +41,9 @@ function renderAt(path: string): string {
 describe('AppRoutes — 경로 → 레이아웃 마운트 매핑', () => {
   it('"/" → BrowseLayout 마운트', () => {
     const html = renderAt('/');
-    expect(html).toContain('data-testid="browse-layout"');
+    // BrowseLayout 은 Fragment(래퍼 div 없음) — .main-layout grid 직계로 left-panel/right-panel 전개.
+    expect(html).toContain('data-testid="browse-sidebar"');
+    expect(html).toContain('data-testid="browse-main"');
     expect(html).not.toContain('data-testid="meta-docs-layout"');
     expect(html).not.toContain('data-testid="settings-layout"');
   });
@@ -60,7 +62,7 @@ describe('AppRoutes — 경로 → 레이아웃 마운트 매핑', () => {
 
   it('미지 경로 → BrowseLayout 폴백(main.js applyAppMode 무효값 가드 1:1)', () => {
     const html = renderAt('/no-such-route');
-    expect(html).toContain('data-testid="browse-layout"');
+    expect(html).toContain('data-testid="browse-sidebar"');
   });
 });
 
