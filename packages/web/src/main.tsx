@@ -1,13 +1,16 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { App } from './app';
 
-// P1-01: Vite/React 빌드·HMR 파이프라인 동작 검증용 최소 마운트 포인트.
-// 실제 컴포넌트/스토어/라우팅은 후속 task(P1-04 이후)에서 작성한다.
+// P4-10: 운영 진입 전환 — index.html(#react-root)에 App(AppShell+AppRoutes) 트리를 마운트.
+//   - App: BrowserRouter + AppModeSync + AppShell(chrome: rail/footer/banner/modal/warning) + AppRoutes.
+//   - StrictMode: 개발 시 부수효과 이중 호출로 effect 정합성 검출(프로덕션 빌드는 단일 호출).
+//   - classic i18n 3종(window.I18n)은 이 module 진입 전에 로드됨(index.html + externalizeDaemonAssets plugin).
 const container = document.getElementById('react-root');
 if (container) {
   createRoot(container).render(
     <StrictMode>
-      <div data-testid="react-mount-placeholder">Spyglass React migration scaffold</div>
+      <App />
     </StrictMode>
   );
 }

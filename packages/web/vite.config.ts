@@ -1,19 +1,106 @@
 import { resolve } from 'node:path';
+import { cpSync, existsSync } from 'node:fs';
 import { defineConfig } from 'vite';
+import type { Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// P1-01: Vite + React 18 빌드 파이프라인 스캐폴딩 (인프라 추가 전용).
-// - 기존 Vanilla 자산(assets/js/*.js)·index.html(buildless ESM 엔트리)은 무수정 병존.
-// - build 진입은 React 전용 엔트리(index.react.html)로 한정해, vite build 가
-//   vanilla index.html/main.js 모놀리식 그래프를 번들링하지 않도록 격리한다
-//   (기존 코드 변환 금지 / 진입 전환은 P4-07 소관).
-// - 데몬(9999) 정적 서빙 계약 정합(WEB_ROOT→dist, locales dist 복사, mimeMap 확장,
-//   SPA fallback)은 P1-02 서빙 계약 결정에서 확정한다. 본 설정은 dev proxy + dist 산출만.
+// P4-10: 운영 진입 전환 — build input = index.html(#react-root) + 데몬 정적 자산 외부화 plugin.
+// - 기존 Vanilla 자산(assets/css/*.css·assets/js/i18n*.js·lang-switcher.js)은 데몬(/assets/*)이
+//   직접 서빙한다. Vite 번들 그래프에 끌어오지 않고 <head>/<body> 에 raw 태그로 외부 주입한다
+//   (externalizeDaemonAssets). 이렇게 해야 index.html 소스는 FOUC/lang 인라인 + #react-root + module 진입만
+//   유지하면서, dev(Vite 5173)·build(dist) 양쪽에서 동일한 CSS24/classic-i18n3 가 로드된다.
+// - locales 는 build 후 dist/locales 로 복사(F2, P1-02 §3) — WEB_ROOT→dist 시 /locales/* 정합.
+// - 데몬(9999) 정적 서빙 계약(WEB_ROOT→dist, mimeMap .map, SPA fallback)은 dispatch.ts 에서 처리.
 const DAEMON_TARGET = 'http://127.0.0.1:9999';
 
 // dispatch.ts 의 정적/REST/SSE 라우팅 prefix 와 1:1 정합.
 // 근거: dispatch.ts:56(/v1)·61(/collect)·69(/events)·77(/api)·82(/health)·152(/locales).
 const PROXY_PREFIXES = ['/api', '/events', '/collect', '/v1', '/health', '/locales'] as const;
+
+// 데몬(/assets/css/*)이 서빙하는 CSS 24종 — index.html 구 <head> link 순서를 SSoT 로 보존.
+// cascade 순서가 시각에 영향(design-tokens 가 최선두) → 배열 순서 = 주입 순서 = 구 link 순서.
+const DAEMON_CSS = [
+  '/assets/css/design-tokens.css',
+  '/assets/css/card.css',
+  '/assets/css/state.css',
+  '/assets/css/keyboard-help.css',
+  '/assets/css/layout.css',
+  '/assets/css/header.css',
+  '/assets/css/left-panel.css',
+  '/assets/css/default-view.css',
+  '/assets/css/detail-view.css',
+  '/assets/css/table.css',
+  '/assets/css/badges.css',
+  '/assets/css/skeleton.css',
+  '/assets/css/cache-panel.css',
+  '/assets/css/turn-view.css',
+  '/assets/css/llm-input.css',
+  '/assets/css/syslib.css',
+  '/assets/css/meta-docs.css',
+  '/assets/css/context-chart.css',
+  '/assets/css/tool-stats.css',
+  '/assets/css/flow-diagram.css',
+  '/assets/css/obs-panel.css',
+  '/assets/css/app-rail.css',
+  '/assets/css/settings-view.css',
+  '/assets/css/design-system/_index.css',
+] as const;
+
+// classic i18n 3종 — 로드 순서 고정(i18n.js → i18n-dom.js → lang-switcher.js).
+// module(main.tsx) 진입 전에 실행돼 window.I18n 이 React 첫 렌더 전 선존재(P1-03 §3.2).
+const DAEMON_I18N = [
+  '/assets/js/i18n.js',
+  '/assets/js/i18n-dom.js',
+  '/assets/js/lang-switcher.js',
+] as const;
+
+/**
+ * 데몬 정적 자산 외부화 — index.html 에 CSS24(head) + classic-i18n3(body-prepend) 를 주입한다.
+ *   - transformIndexHtml 은 dev/build 양쪽에서 발화 → 두 환경의 진입 HTML 이 동일.
+ *   - body-prepend: i18n 스크립트를 <body> 선두(= #react-root·module 진입 앞)에 배치 → window.I18n 선존재.
+ *   - closeBundle: build 후 locales → dist/locales 복사(F2) — dispatch /locales/* 분기 무수정 유지.
+ */
+function externalizeDaemonAssets(): Plugin {
+  return {
+    name: 'spyglass-externalize-daemon-assets',
+    transformIndexHtml() {
+      return [
+        ...DAEMON_CSS.map((href) => ({
+          tag: 'link',
+          attrs: { rel: 'stylesheet', href },
+          injectTo: 'head' as const,
+        })),
+        ...DAEMON_I18N.map((src) => ({
+          tag: 'script',
+          attrs: { src },
+          injectTo: 'body-prepend' as const,
+        })),
+      ];
+    },
+    closeBundle() {
+      // WEB_ROOT→dist 전환(dispatch.ts) 후 데몬이 dist/ 만 서빙하므로, 데몬-서빙 classic 자산을 dist 로 복사한다.
+      //   - assets/{css,js} → dist/assets/{css,js}: index.html 이 외부 참조하는 CSS24 + classic i18n3(+의존 모듈).
+      //     Vite 산출(dist/assets/index-<hash>.js·favicon)과 파일명이 겹치지 않아 recursive 병합이 안전.
+      //   - locales → dist/locales (F2, P1-02 §3): /locales/* 분기 정합. dev 는 proxy 위임이라 불요.
+      const copies: Array<[string, string]> = [
+        [resolve(__dirname, 'assets'), resolve(__dirname, 'dist/assets')],
+        [resolve(__dirname, 'locales'), resolve(__dirname, 'dist/locales')],
+        // dispatch favicon 분기(/favicon.svg|ico)는 WEB_ROOT 루트에서 찾는다. 진입 HTML 의 <link> 는
+        // Vite 가 해시 자산으로 재작성하지만, 하드코딩/레거시 /favicon.svg 요청 호환을 위해 루트에도 복사.
+        [resolve(__dirname, 'favicon.svg'), resolve(__dirname, 'dist/favicon.svg')],
+      ];
+      // dist 는 운영 산출물 — __tests__/*.test/*.spec/*.d.ts 같은 비런타임 파일은 제외한다.
+      // (제외하지 않으면 dist/assets/js/__tests__ 가 bun test packages/web/ 수집에 잡혀 테스트가 중복된다.)
+      const isCopyable = (p: string): boolean =>
+        !/(^|[/\\])__tests__([/\\]|$)/.test(p) &&
+        !/\.(test|spec)\.[cm]?[jt]sx?$/.test(p) &&
+        !/\.d\.ts$/.test(p);
+      for (const [src, dest] of copies) {
+        if (existsSync(src)) cpSync(src, dest, { recursive: true, filter: isCopyable });
+      }
+    },
+  };
+}
 
 const proxy = Object.fromEntries(
   PROXY_PREFIXES.map((prefix) => [
@@ -30,7 +117,7 @@ const proxy = Object.fromEntries(
 );
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), externalizeDaemonAssets()],
   base: '/',
   // 데몬 dispatch 가 /assets/ prefix 로만 정적 파일을 찾으므로(dispatch.ts:135)
   // 산출 자산 디렉토리를 'assets' 로 고정해 URL 계약을 유지한다.
@@ -40,8 +127,8 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: true,
     rollupOptions: {
-      // React 전용 엔트리만 빌드. 기존 index.html(vanilla)은 P4-07 까지 무수정 병존.
-      input: resolve(__dirname, 'index.react.html'),
+      // 운영 진입(P4-10): index.html(#react-root) 단일 엔트리. 구 index.react.html 은 P5-01 정리 대상.
+      input: resolve(__dirname, 'index.html'),
     },
   },
   server: {
