@@ -1,0 +1,719 @@
+{
+  "mission": "claude-spyglass packages/web (Vanilla JS, buildless ESM, 105 .js) 를 React 18 + Vite + TypeScript(strict) 로 풀 마이그레이션(대안 C). buildless 정체성을 의도적으로 폐기하고 Vite 빌드 파이프라인을 도입한다. 백엔드(REST API/SSE) 핸들러 로직은 무수정, 클라이언트만 교체한다.",
+  "constraints": {
+    "backend": "REST API/SSE/collect/proxy 핸들러 로직 무수정. dispatch.ts 정적 자산 라우팅 분기(WEB_ROOT, mimeMap, SPA fallback)는 클라이언트 자산 서빙 접합부로 한정해 변경하며, 이 경계는 휴먼 검증 포인트(P1-02).",
+    "isolation": "모든 실제 구현은 git worktree 로 격리. 트랙별 전용 worktree(wt-<id>). 메인 작업 디렉토리/미커밋/타 브랜치 불가침.",
+    "tdd": "테스트 우선(Red->Green->Refactor). 추출/전환 전 현재 동작을 고정하는 테스트 통과 확인 후에만 변경. 테스트 없는 함수 변경 금지.",
+    "regression_gate": "회귀 0. 머지 전/후 3중 게이트 전량 통과: (1) bun run --cwd packages/web typecheck 에러 증분 0, (2) bun test packages/web 전량 통과(baseline 174 pass/0 fail/12 files), (3) renderers.test.ts.snap 20 snapshot 1:1 일치. 스냅샷 갱신은 의도 변경 시에만 + 커밋 메시지에 사유 명기. 신규 계약 카운트 분리: useSSE/LeftPanel 언마운트 cleanup 등 원본 미보장 신규 Red 테스트의 통과 수 증가는 '회귀'가 아니라 '신계약'이다. 회귀 0 정의는 'baseline 174 case 의 pass 유지 + 신규 fail 0' 이며, 신규 케이스 통과 증가는 별도 카운트로 추적해 거짓 회귀 경보를 방지한다(review-safety GAP-3).",
+    "bisect": "회귀 감지 시 git bisect run 으로 도입 커밋 자동 탐색. bisect run 게이트는 패키지 스크립트(P1-01 머지 전엔 부재)가 아닌 경로인자형 명령으로 고정해 baseline 전 구간에서 동작: 'bun test packages/web/' (동작) · 'tsc --noEmit -p packages/web/tsconfig.json' 또는 'bun run --cwd packages/web typecheck'(타입). 패키지 스크립트는 편의용일 뿐 bisect 게이트 SSoT 가 아님(review-safety BLK-2). 작은 커밋(refactor/feat 분리, 서브컴포넌트 단위)이 bisect 해상도를 보장.",
+    "commits": "Tidy First — 구조 변경(refactor:)과 동작 변경(feat:)을 절대 같은 커밋에 섞지 않음. 커밋 prefix(test/refactor/feat)로 bisect 시 회귀 유형 식별.",
+    "static_gate": "packages/web/src/ 신설 시 check-architecture.sh 의 KEBAB(디렉토리 kebab-case)만 web 에 처음 적용됨. 모든 디렉토리 kebab-case, React 컴포넌트는 파일명만 PascalCase. DEP 규칙은 'web 은 @spyglass/types(rank0)만 import' 컨벤션이나 현 check-architecture.sh 는 이를 정적으로 강제하지 못함(rank 정방향 import 전부 통과) — 따라서 'types 외 @spyglass import 금지'는 휴먼/리뷰 검증 또는 P1-08 의 게이트 보강으로만 보장된다(review-safety BLK-4).",
+    "no_react_code_yet": "본 산출물 단계에서는 React 코드를 작성하지 않는다. tasks.json 은 향후 TaskCreate 1:1 등록용 명세다.",
+    "status_enum": [
+      "pending",
+      "in_progress",
+      "completed"
+    ]
+  },
+  "baseline": {
+    "head_label": "착수 시점 HEAD 를 단일 SSoT 로 고정한다. 본 명세 수치(174 pass/12 files/20 snap/typecheck0)는 검증 시점 HEAD '1992b54' 에서 재확인됨. 마이그레이션 착수 직전 실측 HEAD 를 'head' 에 1회 확정 기입하고, README §3 의 bisect good 앵커·_panel 문서 전부가 동일 SHA 를 참조하도록 통일한다(review-safety BLK-1).",
+    "head": "TBD-착수직전확정(분석시점 2126e11, 검증시점 1992b54 — 수치 유효, SHA 라벨만 stale)",
+    "version": "v3.0.7",
+    "test_pass": 174,
+    "test_files": 12,
+    "snapshots": 20,
+    "web_typecheck_errors": 0,
+    "innerHTML": 130,
+    "design_system_js": 30,
+    "largest_files": {
+      "settings-view.js": 1590,
+      "meta-docs-view.js": 1370,
+      "meta-docs-flow.js": 1157,
+      "session-detail/turn-views.js": 1117,
+      "main.js": 1036,
+      "llm-input-view.js": 902,
+      "chart.js": 462,
+      "api.js": 443,
+      "left-panel.js": 195,
+      "state.js": 82,
+      "sse.js": 64
+    },
+    "tsconfig": "strict:false + checkJs:true + allowJs:true (paths @spyglass/types)",
+    "runner": "bun test (Playwright E2E 없음)",
+    "cycles": 0
+  },
+  "phases": [
+    {
+      "phase": 1,
+      "name": "빌드 인프라 + 전역 스토어",
+      "goal": "Vite+React18+TS 빌드 파이프라인 스캐폴딩, 서버 서빙 계약 결정, Zustand 전역 스토어(state.js 흡수)와 Zod 스키마 계층 설계. 회귀 보루(12 테스트/스냅샷/typecheck 0)를 Vite 환경에서 1:1 재현.",
+      "duration": "0~2주",
+      "merge_order": [
+        "P1-01",
+        "P1-06",
+        "P1-02",
+        "P1-03",
+        "P1-08",
+        "P1-04",
+        "P1-05",
+        "P1-07"
+      ],
+      "merge_order_note": "P1-06(러너 결정)을 P1-01 직후·P1-04 이전 선결 게이트로 승격(review-safety BLK-3). P1-02·P1-03 은 독립 GAP 문서 두 항목으로 분리(review-schema 4-C). P1-08 은 105 파일 전수 매핑+innerHTML 인벤토리로 후속 페이즈 게이트의 기준선."
+    },
+    {
+      "phase": 2,
+      "name": "원자적 저위험 컴포넌트화",
+      "goal": "design-system 30개 + render/* 순수 렌더 함수 + components 3개를 stateless TSX 로 이식. settings-view 1590줄 폼 단위 서브컴포넌트 분해 선행 후 React 전환. 회귀 위험 최소 구간(전부 leaf/배럴).",
+      "duration": "2~5주",
+      "merge_order": [
+        "P2-01",
+        "P2-02",
+        "P2-03",
+        "P2-04",
+        "P2-08",
+        "P2-05",
+        "P2-06",
+        "P2-07"
+      ]
+    },
+    {
+      "phase": 3,
+      "name": "중위험 결합 컴포넌트 + API 데이터 역전",
+      "goal": "chart.js useRef 캡슐화, left-panel/session-detail DOM 분해 후 스토어 결합, api.js 의 9개 render 사이드이펙트 제거(raw data 반환 + 스토어 dispatch). 데이터 흐름 역전의 핵심 구간.",
+      "duration": "5~9주",
+      "merge_order": [
+        "P3-01",
+        "P3-02",
+        "P3-03",
+        "P3-04",
+        "P3-08",
+        "P3-05",
+        "P3-06",
+        "P3-07",
+        "P3-09"
+      ]
+    },
+    {
+      "phase": 4,
+      "name": "고위험 모놀리식 해체 + 라우팅/SSE",
+      "goal": "meta-docs-view 1370줄 분해, sse.js -> useSSE 훅(cleanup 신규 계약), main.js 1036줄 폐기 -> React Router v6, index.html 진입 전환(FOUC/lang 인라인 보존). electron-builder dist 전환 + 패키지 빌드 verify(운영 분기 end-to-end).",
+      "duration": "9~15주",
+      "merge_order": [
+        "P4-01",
+        "P4-04",
+        "P4-02",
+        "P4-03",
+        "P4-05",
+        "P4-06",
+        "P4-08",
+        "P4-07"
+      ]
+    },
+    {
+      "phase": 5,
+      "name": "TS strict 승격 + 렌더링 최적화",
+      "goal": "잔여 .js -> .ts/.tsx 일괄 전환, strict:true 단일화, any 제거 + Zod 전면 적용. 측정 선행 후 React.memo/useMemo/가상스크롤 도입(over-engineering 가드). 최종 회귀 게이트 + Gap Report 종합.",
+      "duration": "15~20주",
+      "merge_order": [
+        "P5-01",
+        "P5-02",
+        "P5-03",
+        "P5-04",
+        "P5-05",
+        "P5-07",
+        "P5-06"
+      ],
+      "merge_order_note": " | P5-07(Vitest 전환)을 P5-06 최종 게이트 직전 배치 — 휴먼 결정(단계적 전환): bun test 보루 유지 후 Vite 생태계 통일."
+    }
+  ],
+  "tasks": [
+    {
+      "id": "P1-01",
+      "title": "Vite + React18 + TS 빌드 파이프라인 스캐폴딩",
+      "phase": 1,
+      "path": "packages/web/{vite.config.ts,package.json,tsconfig.json}",
+      "depends_on": [],
+      "status": "pending",
+      "test_strategy": "vite.config.ts(react()·dev proxy)·package.json dev/build/preview 스크립트·tsconfig jsx:react-jsx + include src 확장. bun run --cwd packages/web typecheck 무에러 유지(strict:false+checkJs baseline). include 에 assets/js/**/*.js 와 src/**/*.{ts,tsx} 동시 포함해 단일 게이트가 둘 다 검증. 거짓통과 검증: 신규 .tsx 에 의도적 타입에러 주입해 tsc 가 잡는지 확인 후 복원. 빈 packages/web/src/ 생성 직후 check-architecture.sh 1회 실행해 KEBAB 게이트 가동 확인(review-safety CPL-1: web 첫 src 커밋이 게이트 첫 실전, pre-commit 훅 부재로 수동/CI 호출 의존).",
+      "worktree": true,
+      "risk": "high",
+      "done_criteria": "vite dev(5173, /api·/events·/collect·/v1·/health·/locales proxy→9999) 동작: /api/* 프록시가 9999 로 패스스루 200 + /events SSE 스트림 유지를 런타임 확인(typecheck/test 게이트는 프록시 미검증). vite build(dist/assets) 산출. typecheck 0 에러 유지. bun test 12파일 174 pass 불변. react/react-dom/zustand/zod/react-router-dom/vite deps + lockfile 커밋. 빈 src/ 에서 check-architecture.sh 통과 확인."
+    },
+    {
+      "id": "P1-02",
+      "title": "서버 정적 서빙 계약 결정 문서화 (Vite outDir ↔ dispatch.ts 정합)",
+      "phase": 1,
+      "path": "packages/web/docs/react-migration/.architecture-decision-serving.md",
+      "depends_on": [
+        "P1-01"
+      ],
+      "status": "pending",
+      "test_strategy": "GAP 문서 task(백엔드 무수정 vs 정적 라우팅 접합부 변경 경계) — 코드 회귀 없음. 결정안(방식 A: WEB_ROOT→dist + Vite proxy + locales publicDir 복사 + mimeMap 확장 + 페이즈4 SPA fallback)을 dispatch.ts 실제 경로 해석과 1:1 대조 검증. bun test 전량 통과 확인만. dispatch.ts 실제 변경(P4-07 fallback 1분기)은 web 트랙과 분리된 커밋 prefix/worktree 로 격리해 백엔드 회귀와 클라이언트 회귀를 bisect 가 구분하게 함(review-safety CPL-3).",
+      "worktree": false,
+      "risk": "high",
+      "done_criteria": "WEB_ROOT/base/assetsDir/locales/mimeMap/SPA-fallback 매핑 확정. 백엔드 무수정 원칙과 정적 라우팅 분기 변경(mimeMap·WEB_ROOT·fallback)의 경계를 휴먼 검증 포인트로 명시. electron-builder from:../web/dist 변경 '문서화'(실제 패키징 전환+빌드 verify 는 P4-08 이 수행)."
+    },
+    {
+      "id": "P1-03",
+      "title": "i18n 전역(window.I18n) → ESM/React 컨텍스트 어댑터 전략 결정 (39파일 의존, classic script 3종, 스냅샷 I18n 모킹 영향)",
+      "phase": 1,
+      "path": "packages/web/docs/react-migration/.migration-gap-report-i18n.md",
+      "depends_on": [
+        "P1-01"
+      ],
+      "status": "pending",
+      "test_strategy": "기존 bun test 미영향 확인. window.I18n 소비 지점(main.js 외 38파일) 전수 조사. renderers.test.ts 의 I18n 스텁(결정론 조건)이 전환 후에도 유지되는지 검증.",
+      "worktree": false,
+      "risk": "med",
+      "done_criteria": "병존 기간 classic script 3종 유지(회귀 최소), i18n ESM화는 별도 트랙으로 분리 결정. 스냅샷 결정론(I18n·Date.now 모킹) 보존 전략 기록."
+    },
+    {
+      "id": "P1-04",
+      "title": "Zustand 전역 스토어 설계 — state.js(82줄, SSoT) getter/setter + appMode/metaSubTab/prevState 1:1 매핑, fan-in 13 코어",
+      "phase": 1,
+      "path": "packages/web/src/stores/app-store.ts",
+      "depends_on": [
+        "P1-01",
+        "P1-06"
+      ],
+      "status": "pending",
+      "test_strategy": "TDD 선행 — 신규 app-store.test.ts(state.test.ts 14 case 와 동작 동치, beforeEach 초기화→useStore.setState(initial,true) 리셋). 스토어 진짜 초기값은 state.js:14-26 을 SSoT로(테스트 beforeEach 강제초기화 패턴 계승). 케이스 추가/삭제 금지(회귀 비교 성립).",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "state.js getter/setter 11쌍 + 라우팅 슬라이스 액션/셀렉터 1:1 이식. state.test.ts 14 case 동치 통과. 소비처 13곳은 어댑터로 공존."
+    },
+    {
+      "id": "P1-05",
+      "title": "스토어 영속 미들웨어 — Zustand persist (partialize/migrate)",
+      "phase": 1,
+      "path": "packages/web/src/stores/__tests__/app-store-persist.test.ts",
+      "depends_on": [
+        "P1-04"
+      ],
+      "status": "pending",
+      "test_strategy": "date-range-storage.test.ts 12 case 를 persist 미들웨어 테스트로 흡수. 핵심 회귀 케이스 보존: 미지원 버전(v:2)→null, JSON 파싱 실패→null, type=custom 저장값 무시. MemStorage 목→persist storage 옵션 주입. 영속 키 round-trip 검증.",
+      "worktree": true,
+      "risk": "low",
+      "done_criteria": "ADR-004 영속 스키마(preset만 영속/custom 휘발) persist 로 재현. date-range-storage 12 case 회귀 0."
+    },
+    {
+      "id": "P1-06",
+      "title": "테스트 러너 확정 — bun test 유지(보루), Vitest는 P5-07로 분리",
+      "phase": 1,
+      "path": "packages/web/bunfig.toml",
+      "depends_on": [
+        "P1-01"
+      ],
+      "status": "pending",
+      "test_strategy": "기존 12개 bun test 전량 통과 유지(러너 미교체). Vite resolve(@spyglass/types 별칭 등) 하 호환만 확인.",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "휴먼 결정 확정(2026-05-31): 마이그레이션 전 구간 회귀 보루는 bun test 유지. 12 web 테스트가 Vite resolve 하에 bun test로 전량 통과. Vite 생태계 통일(Vitest)은 P5-07에서 단계적 수행."
+    },
+    {
+      "id": "P1-07",
+      "title": "Zod 스키마 계층 설계 — SSE/API JSON 파싱 런타임 검증 (any 금지, @spyglass/types 형태로 정규화)",
+      "phase": 1,
+      "path": "packages/web/src/schema/sse-schema.ts",
+      "depends_on": [
+        "P1-01"
+      ],
+      "status": "pending",
+      "test_strategy": "신규 schema 단위 테스트 — SSE 페이로드 fixture(new_request/new_proxy_request/session_update) 검증. api/sse 경계에서 raw JSON → Zod parse → @spyglass/types 정규화 계약 테스트.",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "SSE 3 이벤트 + API 응답 스키마 정의. 파싱 실패 시 안전 처리(any 없이). @spyglass/types SSoT 재사용(web 로컬 도메인 타입 재선언 금지)."
+    },
+    {
+      "id": "P1-08",
+      "title": "105 파일 전수 소속 매핑 + innerHTML 130건 사이트별 인벤토리",
+      "phase": 1,
+      "path": "packages/web/docs/react-migration/.migration-coverage-map.md",
+      "depends_on": [
+        "P1-01"
+      ],
+      "status": "pending",
+      "test_strategy": "문서/인벤토리 task — 코드 회귀 없음. (1) packages/web 105 .js 전수를 소속 task 에 귀속(orphan 0 확인). (2) innerHTML 130건을 grep 으로 파일:라인 단위 추출해 각 건을 소유 task 에 귀속. 두 표가 후속 페이즈의 '구 .js 삭제·innerHTML 0' 게이트 기준선. bun test 전량 통과 확인만.",
+      "worktree": false,
+      "risk": "med",
+      "done_criteria": "105 파일 전수 매핑표(파일→소유 task, orphan 0) + innerHTML 130건 인벤토리(파일:라인→소유 task). M1 무소속 식별군(obs-panel·cache-panel·context-chart·sparkline·tool-stats·metrics-api·system-prompt-library·version-check·infra·request-types·tool-colors / 툴팁·리사이즈 헬퍼 9종 / i18n 4종)이 P3-09 또는 P5-01 중 어디에 귀속되는지 확정. 잔여 미귀속 시 사유 기록."
+    },
+    {
+      "id": "P2-01",
+      "title": "design-system icons 21개 → stateless TSX 컴포넌트 이식",
+      "phase": 2,
+      "path": "packages/web/assets/js/design-system/icons/*.js → src/components/design-system/icons/*.tsx",
+      "depends_on": [
+        "P1-01"
+      ],
+      "status": "pending",
+      "test_strategy": "신규 스냅샷 테스트(아이콘 SVG 출력 고정). 순수 함수(import 0, leaf)라 회귀 위험 최소. SSoT 우회 금지: hex/글리프 직접 지정 금지, 토큰/CSS 변수 경유.",
+      "worktree": true,
+      "risk": "low",
+      "done_criteria": "icons 21개 TSX 이식, 신규 스냅샷 통과, 기존 회귀 0. 디렉토리 kebab-case·파일 PascalCase."
+    },
+    {
+      "id": "P2-02",
+      "title": "design-system primitives 3 (close-button, filter-button, tab) → TSX",
+      "phase": 2,
+      "path": "packages/web/assets/js/design-system/primitives/*.js → src/components/design-system/primitives/*.tsx",
+      "depends_on": [
+        "P2-01"
+      ],
+      "status": "pending",
+      "test_strategy": "신규 컴포넌트 렌더 테스트; 클릭 핸들러 prop 검증.",
+      "worktree": true,
+      "risk": "low",
+      "done_criteria": "primitives 3개 TSX, 핸들러 prop 동작 검증, 회귀 0."
+    },
+    {
+      "id": "P2-03",
+      "title": "design-system markers 2 + badges/chips/feedback/stats 5 → TSX",
+      "phase": 2,
+      "path": "packages/web/assets/js/design-system/{markers/*,badges/badge,chips/chip,feedback/index,stats/bar}.js → src/components/design-system/*.tsx",
+      "depends_on": [
+        "P2-01"
+      ],
+      "status": "pending",
+      "test_strategy": "신규 스냅샷 테스트(7개 출력 고정).",
+      "worktree": true,
+      "risk": "low",
+      "done_criteria": "markers 2 + badges/chips/feedback/stats 5 TSX, 스냅샷 통과, 회귀 0. design-system 30개 이식 완료."
+    },
+    {
+      "id": "P2-04",
+      "title": "render/* 8파일 순수 렌더 함수 → TSX (render/badges 393·model 164·cells 88·rows·icons·expand·extract·skeleton), 스냅샷 골든마스터 대상",
+      "phase": 2,
+      "path": "packages/web/assets/js/render/{badges,model,cells,rows,icons,expand,extract,skeleton}.js → src/components/render/*.tsx",
+      "depends_on": [
+        "P1-01",
+        "P2-01"
+      ],
+      "status": "pending",
+      "test_strategy": "renderers.test.ts.snap 20 case 동일 입력→동일 출력 게이트. renderToStaticMarkup/container.innerHTML 으로 HTML 문자열화 후 정규화 비교(공백 위양성 차단, 단 data-*/id/class 토큰은 정규화 제외=셀렉터 계약 엄격 검증). React 렌더는 class→className·자기닫힘·속성순서가 Vanilla 문자열과 미세 상이(review-safety BLK-5) → 정규화 헬퍼 필수. 단 정규화 헬퍼 자체의 거짓통과 검증 동반: 의도적 셀렉터 변형(data-session-id 제거 등)을 주입해 정규화가 그 회귀를 잡는지 확인 후 복원(위양성=실회귀를 정규화가 삼키는 것 차단). 의도 변경 시에만 스냅샷 갱신+커밋 사유 명기. renderers.js 배럴 우회→render/* 직접 import 경로 교정.",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "makeRequestRow/makeSessionRow/makeTargetCell 등 컴포넌트 전환, renderers 20 골든마스터 diff 0. 정규화 헬퍼 거짓통과 검증 테스트 통과. SSoT(toolIconHtml·chipKey) 재구현 금지, 헬퍼 1:1 이식. 구 render/* .js 삭제 + 잔여 import 0(grep) 확인."
+    },
+    {
+      "id": "P2-05",
+      "title": "settings-view 1590줄 폼 단위 서브컴포넌트 경계 설계 문서화 (진단/Hook/Graph DB/Proxy 4영역)",
+      "phase": 2,
+      "path": "packages/web/docs/react-migration/.architecture-decision-settings.md",
+      "depends_on": [
+        "P1-04"
+      ],
+      "status": "pending",
+      "test_strategy": "설계 task — 회귀 0 확인. 결합도 low(import 2: dom,formatters)이나 1590줄 최대 파일 → 분해(refactor) 선행, 이식(feat) 분리.",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "4영역 폼 서브컴포넌트 경계 + innerHTML 집중 매핑 + 분해→이식 커밋 분리 계획 확정."
+    },
+    {
+      "id": "P2-06",
+      "title": "settings-view 진단/Hook 폼 → React 컴포넌트 + 폼 핸들링 단위 테스트 (신규 공백 보강)",
+      "phase": 2,
+      "path": "packages/web/src/features/settings/*.tsx",
+      "depends_on": [
+        "P2-05",
+        "P1-04"
+      ],
+      "status": "pending",
+      "test_strategy": "신규 폼 핸들링 테스트(입력→상태→apiFetch 호출 mock). settings-view 는 폼 테스트 0 공백 → 변경 전 특성화 테스트 보강.",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "진단/Hook 폼 React 전환, 폼 검증/제출 테스트 통과, 회귀 0."
+    },
+    {
+      "id": "P2-07",
+      "title": "settings-view Graph DB/Proxy 폼 → React 컴포넌트",
+      "phase": 2,
+      "path": "packages/web/src/features/settings/*.tsx",
+      "depends_on": [
+        "P2-05",
+        "P1-04"
+      ],
+      "status": "pending",
+      "test_strategy": "신규 폼 테스트; apiFetch 모킹.",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "Graph DB/Proxy 폼 React 전환, 테스트 통과. settings-view 분해+이식 완료 = settings-view.js 삭제 + 잔여 import 0(grep) 확인(객관 종료 조건, review-completeness A3)."
+    },
+    {
+      "id": "P2-08",
+      "title": "components 3개 (date-range-dropdown 321·filter-bar 86·search-box 42) → TSX",
+      "phase": 2,
+      "path": "packages/web/assets/js/components/{date-range-dropdown,filter-bar,search-box}.js → src/components/*.tsx",
+      "depends_on": [
+        "P2-01",
+        "P1-04"
+      ],
+      "status": "pending",
+      "test_strategy": "신규 컴포넌트 테스트; date-range 는 date-range-storage.test.ts(12)·get-date-range.test.ts(20) 회귀 게이트.",
+      "worktree": true,
+      "risk": "low",
+      "done_criteria": "components 3개 TSX, date-range 회귀 0, 스토어 연결 검증."
+    },
+    {
+      "id": "P3-01",
+      "title": "chart.js(462줄) → useRef canvas 컴포넌트 캡슐화 (setSourceData 외부주입→props, donutMode→스토어)",
+      "phase": 3,
+      "path": "packages/web/assets/js/chart.js → src/components/Chart.tsx",
+      "depends_on": [
+        "P1-04",
+        "P2-04"
+      ],
+      "status": "pending",
+      "test_strategy": "chart.js 단위 테스트 0 공백 → canvas 렌더 입력→데이터 변환 골든마스터 신규 작성. context-window.test.ts(6 case)는 본 task 의 명시 회귀 게이트로 귀속(context-chart.js 데이터 변환 의존, review-completeness A6). 특성화 테스트는 renderers.test.ts 의 모킹 패턴(Date.now/I18n 고정)을 동일 적용해 결정론 확보(review-safety GAP-4). canvas timing/resize 는 단위테스트 불충분 → 수동 verify 보강(Gap). 수동 verify 판정 기준 사전 체크리스트: N px 리사이즈 후 깜빡임 0회 + 도넛 재그림 1회 + DPR 변경 시 선명도 유지, 증거=before/after 스크린샷.",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "Chart.tsx useRef 캡슐화, 데이터 변환 골든마스터 통과, context-window(6) 회귀 0, resize/redraw 수동 verify 체크리스트 전항 통과 + 증거 스크린샷 첨부."
+    },
+    {
+      "id": "P3-02",
+      "title": "left-panel.js(195줄) → Sidebar.tsx (_allProjects/_allSessions→스토어/props, renderBrowserSessions/renderProjects→JSX)",
+      "phase": 3,
+      "path": "packages/web/assets/js/left-panel.js → src/features/browse/Sidebar.tsx",
+      "depends_on": [
+        "P1-04",
+        "P2-08"
+      ],
+      "status": "pending",
+      "test_strategy": "left-panel.test.ts(2) 를 컴포넌트 마운트 가드로 재정의: 마운트 시 session-anomalies-loaded 구독 등록, 언마운트 시 해제(누수 가드=원본 미보장 신규 계약, Gap 기록). renderBrowserSessions/GLOBAL_PROJECT_KEY 동작 동치.",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "Sidebar.tsx, left-panel 동작 동치 + 마운트/언마운트 cleanup 검증, 회귀 0."
+    },
+    {
+      "id": "P3-03",
+      "title": "api.js(443줄) 데이터 흐름 역전 — 9개 render 사이드이펙트(:276~418) 제거, raw data 반환 + 스토어 dispatch",
+      "phase": 3,
+      "path": "packages/web/assets/js/api.js → src/api/*.ts",
+      "depends_on": [
+        "P1-04",
+        "P3-01",
+        "P3-02"
+      ],
+      "status": "pending",
+      "test_strategy": "Tidy First 4단계: (A) api.test.ts(10: setActiveRange/getDateRange/buildQuery) 특성화 확인+보강, (B) render 호출을 임시 어댑터로 끌어올림(refactor:, 출력 동일·스냅샷 통과), (C) 어댑터→Zustand 액션 치환(feat:, B와 별도 커밋), (D) api/→stores/ 역참조 0 확인. render-coupled fetcher 는 main.js만 소비하므로 다른 5 소비처(range 유틸) 무영향. 9개 사이트별 작은 커밋(bisect 해상도).",
+      "worktree": true,
+      "risk": "high",
+      "done_criteria": "api 가 raw data 만 반환, render 사이드이펙트 0, 스토어 구독 리렌더 동작. api.test.ts 회귀 0, renderers 스냅샷 diff 0, api→stores 역참조 0."
+    },
+    {
+      "id": "P3-04",
+      "title": "session-detail/ facade(7파일, 최대 turn-views 1117) 컴포넌트 경계 설계 문서화",
+      "phase": 3,
+      "path": "packages/web/docs/react-migration/.architecture-decision-session-detail.md",
+      "depends_on": [
+        "P1-04"
+      ],
+      "status": "pending",
+      "test_strategy": "설계 task. session-detail 직접 테스트 0 공백 → turn-rows/flat-view 출력 스냅샷 보강 계획. 이미 7파일 facade 로 분리됨(api/left-panel 미import) → 추가 미세분할은 가상스크롤 성능 실측 시에만(over-eng 가드).",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "facade 컴포넌트 경계 확정, 특성화 테스트 보강 계획, table 골격(thead/colgroup col-resize) 보존 명시."
+    },
+    {
+      "id": "P3-05",
+      "title": "session-detail/flat-view(201)·turn-rows(402) → SessionLog/TurnRows TSX",
+      "phase": 3,
+      "path": "packages/web/assets/js/session-detail/{flat-view,turn-rows}.js → src/features/session-detail/*.tsx",
+      "depends_on": [
+        "P3-04",
+        "P3-02"
+      ],
+      "status": "pending",
+      "test_strategy": "신규 컴포넌트 테스트 + parseToolDetail.test.ts(10) 회귀 게이트. ★선행 Tidy 정정(review-safety GAP-1)★: parseToolDetail 는 이미 render/extract.js:212 에 export 로 존재하나 테스트(parseToolDetail.test.ts:9-24)는 인라인 복제본을 자체 정의해 SSoT 가 2곳으로 분기. 따라서 '추출'이 아니라 '재연결' — 두 사본의 동작 동치를 먼저 확인(양쪽 동일 입력→동일 출력 테스트)한 뒤, 테스트가 render/extract.js 의 export 를 import 하도록 교체. 별도 src/lib 신규 추출은 3번째 사본을 만들 위험이 있어 금지(extract.js export 를 SSoT 로 단일화). 출력 스냅샷 신규 보강.",
+      "worktree": true,
+      "risk": "high",
+      "done_criteria": "SessionLog/TurnRows TSX. parseToolDetail SSoT 단일화 = 테스트가 render/extract.js export 를 import(인라인 복제 제거) + 동작 동치 확인, 회귀 0. chipKey SSoT 재구현 금지."
+    },
+    {
+      "id": "P3-06",
+      "title": "session-detail/turn-views(1117줄) → 턴 카드 서브컴포넌트 분해",
+      "phase": 3,
+      "path": "packages/web/assets/js/session-detail/turn-views.js → src/features/session-detail/*.tsx",
+      "depends_on": [
+        "P3-04",
+        "P3-05"
+      ],
+      "status": "pending",
+      "test_strategy": "신규 분해 컴포넌트 테스트; 출력 동치 검증. 분해(refactor)→이식(feat) 커밋 분리.",
+      "worktree": true,
+      "risk": "high",
+      "done_criteria": "턴 카드 서브컴포넌트 분해+이식, 출력 동치, 회귀 0."
+    },
+    {
+      "id": "P3-07",
+      "title": "session-detail/{system-reminder,system-reminder-popover}(73+241) + views/detail-view(193) → TSX",
+      "phase": 3,
+      "path": "packages/web/assets/js/session-detail/system-reminder*.js, views/detail-view.js → src/features/session-detail/*.tsx",
+      "depends_on": [
+        "P3-05"
+      ],
+      "status": "pending",
+      "test_strategy": "신규 컴포넌트 테스트.",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "system-reminder/popover/detail-view TSX, 테스트 통과, 회귀 0."
+    },
+    {
+      "id": "P3-08",
+      "title": "llm-input-view.js(902줄) 상태 정제 → LLMInput TSX (toggle/expand/scroll 상태 분리, state→스토어)",
+      "phase": 3,
+      "path": "packages/web/assets/js/llm-input-view.js → src/features/llm-input/LLMInput.tsx",
+      "depends_on": [
+        "P1-04",
+        "P3-02"
+      ],
+      "status": "pending",
+      "test_strategy": "신규 컴포넌트 테스트; state.js 의존만→스토어 연결 검증.",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "LLMInput TSX, toggle/expand/scroll 상태 스토어 연결, 회귀 0."
+    },
+    {
+      "id": "P3-09",
+      "title": "대시보드/통계 뷰 → TSX 이식 (obs-panel·cache-panel·context-chart·sparkline·tool-stats·metrics-api 등)",
+      "phase": 3,
+      "path": "packages/web/assets/js/{obs-panel,cache-panel,context-chart,sparkline,tool-stats,metrics-api,system-prompt-library,version-check,infra,request-types,tool-colors}.js → src/features/dashboard/*.tsx",
+      "depends_on": [
+        "P1-04",
+        "P3-01",
+        "P1-08"
+      ],
+      "status": "pending",
+      "test_strategy": "M1 무소속 사각지대 해소(review-completeness M1) — obs-panel 의 카드 렌더(burn-rate/cache-health/live-pulse/tool-categories/anomaly-badge)는 P3-03 api 역전에서 호출부만 dispatch 로 바뀔 뿐 뷰 컴포넌트 TSX 이식 task 가 없었음. 직접 테스트 0 공백 → 카드 렌더 출력 골든마스터 신규 작성(Date.now/I18n 모킹 결정론). context-chart 는 P3-01 Chart.tsx 재사용 여부 설계 포함. 툴팁/리사이즈 헬퍼(cache-panel-tooltip·obs-tooltip·col-resize·panel-resize·resize-utils·dom-preserve 등)는 P1-08 매핑 결과에 따라 본 task 또는 P5-01 에 귀속.",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "대시보드 카드/통계 뷰 TSX 이식, 카드 렌더 골든마스터 통과, 회귀 0. 이식 대상 구 .js 삭제 + 잔여 import 0(grep). innerHTML 잔여 0(본 군 보유분)."
+    },
+    {
+      "id": "P4-01",
+      "title": "meta-docs-view(1370, import 16)+meta-docs-flow(1157) 분해 경계 설계 (flow/catalog/search/sidebar/tool-stats 5분할)",
+      "phase": 4,
+      "path": "packages/web/docs/react-migration/.architecture-decision-meta-docs.md",
+      "depends_on": [
+        "P1-04"
+      ],
+      "status": "pending",
+      "test_strategy": "설계 task. meta-docs-view 직접 테스트 0 공백 → 카탈로그/검색 필터 단위 테스트 보강 계획. getDateRange(api)만 의존 → P3-03(api역전) 이전 착수 가능.",
+      "worktree": true,
+      "risk": "high",
+      "done_criteria": "5분할 경계 + 특성화 테스트 보강 계획 + scopeMode/searchText/activeRow 상태 매핑 확정."
+    },
+    {
+      "id": "P4-02",
+      "title": "meta-docs catalog 테이블 + 검색 → MetaDocsCatalog/MetaDocsSearch TSX",
+      "phase": 4,
+      "path": "packages/web/src/features/meta-docs/*.tsx",
+      "depends_on": [
+        "P4-01",
+        "P2-08"
+      ],
+      "status": "pending",
+      "test_strategy": "신규 컴포넌트 테스트; 검색 필터 동작 검증.",
+      "worktree": true,
+      "risk": "high",
+      "done_criteria": "MetaDocsCatalog/Search TSX, 검색 필터 회귀 0."
+    },
+    {
+      "id": "P4-03",
+      "title": "meta-docs flow(ego-graph) + tool-stats 패널 → TSX 통합",
+      "phase": 4,
+      "path": "packages/web/src/features/meta-docs/*.tsx",
+      "depends_on": [
+        "P4-02"
+      ],
+      "status": "pending",
+      "test_strategy": "신규 테스트; scopeMode/searchText/activeRow 상태 검증.",
+      "worktree": true,
+      "risk": "high",
+      "done_criteria": "flow+tool-stats TSX 통합, 상태 검증, meta-docs 모놀리식 해체 완료 = meta-docs-view.js·meta-docs-flow.js 삭제 + 잔여 import 0(grep) 확인(객관 종료 조건, review-completeness A3)."
+    },
+    {
+      "id": "P4-04",
+      "title": "useSSE 커스텀 훅 — sse.js(64줄) 재연결/5초 backoff 기반, 3 이벤트 바인딩 + Zod 검증 + 언마운트 cleanup(신규 계약)",
+      "phase": 4,
+      "path": "packages/web/src/hooks/use-sse.ts",
+      "depends_on": [
+        "P1-04",
+        "P1-07"
+      ],
+      "status": "pending",
+      "test_strategy": "sse.test.ts(8: connectSSE) 동작 동치 게이트 + 신규 훅 테스트. MockEventSource/globalThis.EventSource 주입 jsdom 재사용. vi.useFakeTimers/advanceTimersByTime(5000) 재연결 검증. 언마운트 cleanup(close+clearTimeout)는 원본 미보장 신규 Red 테스트 1개 추가 → Gap 기록.",
+      "worktree": true,
+      "risk": "high",
+      "done_criteria": "useSSE 훅, /events EventSource·onopen/onerror·5초 재연결 동치, 언마운트 cleanup 신규 통과. sse 8 case 회귀 0."
+    },
+    {
+      "id": "P4-05",
+      "title": "SSE 이벤트 핸들러(onNewRequest/onNewProxyRequest/onSessionUpdate, main.js:359-440) → 스토어 액션 이전",
+      "phase": 4,
+      "path": "packages/web/assets/js/main.js:359-440 → src/stores/ 액션",
+      "depends_on": [
+        "P4-04",
+        "P3-03"
+      ],
+      "status": "pending",
+      "test_strategy": "events.test.ts(6: DETAIL_FILTER_CHANGED/FEED_UPDATED) → 스토어 구독/액션으로 흡수(상수 검증 삭제 시 커밋 사유 명기) + sse.test.ts 회귀.",
+      "worktree": true,
+      "risk": "high",
+      "done_criteria": "3 SSE 핸들러 스토어 액션 이전, 이벤트버스→스토어 구독 흡수, 회귀 0."
+    },
+    {
+      "id": "P4-06",
+      "title": "main.js(1036, import 31) 폐기 → React Router v6 (App/BrowseLayout/MetaDocsLayout/SettingsLayout, appMode→useNavigate)",
+      "phase": 4,
+      "path": "packages/web/assets/js/main.js → src/app/App.tsx + routes",
+      "depends_on": [
+        "P3-03",
+        "P4-03",
+        "P4-05",
+        "P3-08"
+      ],
+      "status": "pending",
+      "test_strategy": "전 페이즈 컴포넌트 통합; main.js 는 sink(역참조 0)이라 마지막 통째 교체. ★진성 빅뱅(review-safety §2)★ — 부분 revert 불가(라우터냐 main.js냐 이분법), 자동 게이트(bun test) 사각이라 수동 verify 가 유일 게이트. revert 단위=이 커밋 전체. bun test 전량 + 수동 verify 판정 기준 사전 체크리스트: (1) 3모드(browse/meta-docs/settings) 전환 시 각 화면 정상 마운트, (2) init 순서=store hydrate→라우터 마운트→SSE 연결, (3) tooltip/col-resize/panel-resize 재바인딩 동작, (4) SSE 재연결 후 피드 갱신. 각 항목 통과/실패 결정 규칙 + 증거(스크린샷/콘솔로그) 첨부.",
+      "worktree": true,
+      "risk": "high",
+      "done_criteria": "main.js 폐기 = main.js 삭제 + 잔여 import 0(grep). React Router 레이아웃, appMode CSS 라우팅→useNavigate. 수동 verify 체크리스트 4항 전부 통과 + 증거 첨부, 회귀 0. 의존(P3-03·P4-03·P4-05·P3-08) 전부 머지·게이트 통과 후 단독 worktree, 머지 직전 main 최신 store 로 rebase 후 게이트 재실행(review-safety CPL-2)."
+    },
+    {
+      "id": "P4-07",
+      "title": "index.html 진입 전환 (Vite 번들 + FOUC/lang 인라인 보존 + SPA fallback)",
+      "phase": 4,
+      "path": "packages/web/index.html:14-83,975-978",
+      "depends_on": [
+        "P4-06",
+        "P1-02",
+        "P1-03"
+      ],
+      "status": "pending",
+      "test_strategy": "main.js module script(:978)→Vite 번들, FOUC/lang 인라인(:14-83) 보존, classic i18n 3종 처리, dispatch SPA fallback 1분기 추가(json 미요청 GET→index.html). ★진성 빅뱅(review-safety §2)★ — 병존 종료(classic i18n·main.js 제거)는 비가역에 가까움(되돌리려면 entry+라우터 동시 revert), bun test 영향 0=자동 게이트 사각, 전부 수동 verify. dispatch SPA fallback 1분기는 백엔드 접근=서버 패키지 별도 커밋/worktree 로 격리(P1-02·CPL-3). 수동 verify 판정 기준 사전 체크리스트: lang 우선순위 4종 구체 매트릭스=(1)localStorage spyglass:lang, (2)?lang= 쿼리, (3)navigator.language, (4)기본값 — 각 입력→기대 표시 언어 명시. FOUC=초기 페인트 시 미번역 플래시 0. SPA fallback=라우트 직접진입/새로고침 시 404 아닌 index.html 응답.",
+      "worktree": true,
+      "risk": "high",
+      "done_criteria": "Vite 번들 단일 진입, FOUC/lang 인라인 보존, lang 4종 매트릭스 + FOUC + SPA fallback 수동 verify 전항 통과 + 증거 첨부, 병존 종료(classic i18n·main.js 제거 + 잔여 import 0)."
+    },
+    {
+      "id": "P4-08",
+      "title": "electron-builder dist 전환 + 패키지 빌드 verify (운영 분기 end-to-end)",
+      "phase": 4,
+      "path": "electron-builder 설정(from:../web/dist) + 패키징 검증",
+      "depends_on": [
+        "P4-06",
+        "P1-02"
+      ],
+      "status": "pending",
+      "test_strategy": "M4 해소(review-completeness M4) — P1-02 가 electron-builder from:../web/dist 를 문서화만 했고 실제 패키징 전환·검증 task 가 없었음. vite build dist 산출 후 electron-builder from 경로를 ../web/dist 로 실제 전환하고, 패키징된 앱이 dist 를 서빙(운영 분기=데몬 dist 서빙)하는지 end-to-end 확인. 백엔드 무수정 경계상 패키징 설정 변경은 서버/electron 패키지 커밋이므로 web 트랙과 분리 격리.",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "electron-builder from:../web/dist 전환 완료. 패키지 빌드 후 운영 모드에서 dist 자산 서빙·앱 기동 verify(3모드 화면 로드) 통과 + 증거 첨부. bun test 회귀 0."
+    },
+    {
+      "id": "P5-01",
+      "title": "잔여 .js → .ts/.tsx 전수 전환 (P1-08 매핑 기준 orphan 0)",
+      "phase": 5,
+      "path": "packages/web/assets/js/ 잔여 전부 (renderers·formatters·dom·app-rail·util/*·state/*·views/* + P1-08 매핑상 미귀속 잔여: i18n 4종·툴팁/리사이즈 헬퍼 잔여 등)",
+      "depends_on": [
+        "P4-06",
+        "P3-09",
+        "P1-08"
+      ],
+      "status": "pending",
+      "test_strategy": "formatters.test.ts(53)·anomaly.test.ts(14) 회귀 0; renderers.test.ts.snap 일치. 순수 함수(E형) 거의 무변경 이식. ★범위 정정(review-completeness M1c)★: 대상은 '열거 목록'이 아니라 'P1-08 전수 매핑상 아직 .tsx 가 안 된 잔여 전부'다. P1-08 매핑표를 기준으로 packages/web/assets/js 잔여 .js 0 을 종료 조건으로 한다.",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "packages/web/assets/js 잔여 .js 0(전 파일 .ts/.tsx, P1-08 매핑 대비 orphan 0). 순수 함수 테스트 회귀 0, 스냅샷 일치. 잔여 발생 시 사유 + 후속 task 기록."
+    },
+    {
+      "id": "P5-02",
+      "title": "tsconfig strict:true 단일화 — checkJs 임시 tsconfig 폐기, strict 한정 위반 0",
+      "phase": 5,
+      "path": "packages/web/tsconfig.json",
+      "depends_on": [
+        "P5-01"
+      ],
+      "status": "pending",
+      "test_strategy": "bun run --cwd packages/web typecheck 무에러(CI web-typecheck blocking 유지). 거짓통과 검증: 신규 .tsx 가 strict 게이트에 실제 포함되는지 의도적 에러 주입 확인.",
+      "worktree": true,
+      "risk": "high",
+      "done_criteria": "strict:true, 전 파일 .ts/.tsx, typecheck 0 에러, CI blocking 유지."
+    },
+    {
+      "id": "P5-03",
+      "title": "any 잔재 제거 + Zod 스키마 전면 적용 (JSON 파싱부)",
+      "phase": 5,
+      "path": "packages/web/src/schema/*, api/sse 파싱부",
+      "depends_on": [
+        "P5-02",
+        "P1-07"
+      ],
+      "status": "pending",
+      "test_strategy": "typecheck strict 0 에러; 스키마 테스트 통과.",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "무분별한 any 0, JSON 파싱부 Zod 검증 전면 적용."
+    },
+    {
+      "id": "P5-04",
+      "title": "React.memo/useMemo 배치 최적화 — SSE 고주기(5-20 events/sec) 스트림 리렌더 억제 (측정 선행, over-eng 가드)",
+      "phase": 5,
+      "path": "src/features/browse/Sidebar.tsx, feed, src/features/session-detail/SessionLog.tsx",
+      "depends_on": [
+        "P5-02"
+      ],
+      "status": "pending",
+      "test_strategy": "기존 테스트 회귀 0. ★'측정' 필수 산출물 정의(review-completeness A2)★ — 부하 시나리오(SSE 5~20 events/sec 모의 주입) + React Profiler/performance.measure 프로파일 결과를 반드시 산출. 임계=프레임 예산 16ms(60fps) 초과 또는 commit 시간 유의 증가. '측정 없이 종결' 금지 — 측정은 수행하되, 임계 미초과면 '측정 데이터 첨부 + 불필요 결론'으로 종결.",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "부하 시나리오 측정 데이터 산출(필수). 임계(16ms 프레임 예산) 초과 구간에만 memo/useMemo 적용, 회귀 0. 미초과 시 측정 데이터와 함께 '불필요' 결론 기록(무측정 통과 금지)."
+    },
+    {
+      "id": "P5-05",
+      "title": "session-detail/meta-docs 카탈로그 가상 스크롤 부분 도입 (대량 턴/항목, 측정 선행)",
+      "phase": 5,
+      "path": "src/features/session-detail/SessionLog.tsx, src/features/meta-docs/MetaDocsCatalog.tsx",
+      "depends_on": [
+        "P5-04",
+        "P4-03",
+        "P3-06"
+      ],
+      "status": "pending",
+      "test_strategy": "신규 가상화 테스트; 출력 동치(가시영역) 검증. ★'측정' 필수 산출물 정의(review-completeness A2)★ — 대량 목록 시나리오(예: 세션 턴 N≥500, 메타docs 카탈로그 N≥1000) 마운트/스크롤 렌더 시간 프로파일 산출. 임계=초기 마운트 또는 스크롤 프레임이 16ms 예산 초과. 측정 데이터 없이 종결 금지.",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "대량 목록 측정 데이터 산출(필수). 임계 초과 목록에만 가상 스크롤 도입, 가시영역 출력 동치, 회귀 0. 미초과 시 측정 데이터와 함께 '불필요' 결론 기록."
+    },
+    {
+      "id": "P5-06",
+      "title": "최종 회귀 게이트 + Gap Report 종합 — bun test 전량 통계·신규 테스트 커버리지·미결 Gap 목록",
+      "phase": 5,
+      "path": "packages/web/docs/react-migration/.migration-final-report.md",
+      "depends_on": [
+        "P5-05",
+        "P5-07"
+      ],
+      "status": "pending",
+      "test_strategy": "bun test 전량 + bun run --cwd packages/web typecheck 최종 게이트. 신규 작성 코드 경로·미결 Gap Report 목록 출력. ★최종 전수 게이트 추가(review-completeness M2·M3)★: (1) innerHTML 잔여 0 grep(잔존 시 사유), (2) packages/web/assets/js 잔여 .js 0(전 파일 .tsx, dangling import 0), (3) P1-08 매핑표 대비 orphan 0 재확인.",
+      "worktree": false,
+      "risk": "low",
+      "done_criteria": "전 페이즈 테스트 통과 통계 + strict typecheck 0. innerHTML 잔여 0 + .js 잔여 0(전 파일 .tsx) + orphan 0 게이트 통과. 미결 Gap(서빙계약/i18n ESM화/canvas timing/Vitest 결정/SPA fallback/Playwright 도입 보류·도입 결정) 종합 보고."
+    },
+    {
+      "id": "P5-07",
+      "title": "Vitest 전환 — bun:test→Vitest 1:1 매핑, 스냅샷 1회 재생성 diff 0",
+      "phase": 5,
+      "path": "packages/web (vitest.config.ts + assets 테스트 전반)",
+      "depends_on": [
+        "P1-01",
+        "P5-02"
+      ],
+      "status": "pending",
+      "test_strategy": "전체 web 테스트(.tsx 이식분 포함)를 Vitest로 재실행 전량 통과. renderers 스냅샷 1회 재생성 후 diff 0(출력 동치). bun:test 시그니처(mock→vi.fn, useFakeTimers→vi.useFakeTimers) 매핑.",
+      "worktree": true,
+      "risk": "med",
+      "done_criteria": "전체 테스트 Vitest 통과 + 스냅샷 diff 0 + CI 게이트 Vitest 전환 + bun:test 잔재 0. 단계적 전환이므로 그 전까지 보루는 bun test 유지."
+    }
+  ]
+}
