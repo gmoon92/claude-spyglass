@@ -44,9 +44,18 @@
 - 본 `work-log.md` 신설.
 - **커밋(예정)**: `docs(distribution): 배포 마무리 설계·tasks·작업로그 착수`
 
-### D1 — Formula 동작 (계획)
-- D1-01: `tap-template/Formula/spyglass.rb` version `2.10.0`→`3.1.0`, macOS 2타겟 실 sha256 충전(현 release matrix는 darwin 전용 — `on_linux` 정합 정리 검토), tap repo push.
-- D1-02: `brew install spyglass` 스모크(`status`/`/health`), `codesign -dv` ad-hoc 확인(무과금 가드).
-- (착수 시 본 섹션에 착수 전 상태 → 완료 후 결과·커밋 해시 기록)
+### D1 — Formula 동작 · ✅ 완료 (2026-05-31)
+**착수 전**: Formula version `2.10.0`, sha256 placeholder, `on_linux` 4타겟(release는 macOS 전용이라 불일치). `brew install` sha 불일치로 실패.
+**변경** (`tap-template/Formula/spyglass.rb`):
+- version `2.10.0`→`3.1.0`
+- darwin arm64 sha256 `3f11aed5…`, x64 `3e636141…` (v3.1.0 release 자산 `.sha256` 기준)
+- `on_linux` 블록 제거 + 헤더 주석 macOS 전용 정합(`e1f8266`)
+**tap repo**: `gmoon92/homebrew-claude-code-spyglass` `2a19fa0` push — **수동 1회**(D4 `update-formula.yml` 자동화 대상). git push는 `gh auth setup-git`(git credential helper를 gh 토큰으로)로 인증.
+**검증(D1-02)**: `brew install spyglass`→`Cellar/spyglass/3.1.0` ✅ · `spyglass status` 실행 ✅ · `codesign -dv`: `Signature=adhoc`·`TeamIdentifier=not set`(무과금) ✅ · `spctl` rejected(ad-hoc 정상).
+**머지 주의**: `tap-template/Formula`는 React 무관(충돌 없음). tap repo는 별도 repo라 머지 대상 아님.
+**커밋**: (아래 워크트리 커밋)
 
-<!-- 이후 태스크(D2 LadybugDB 동봉 ~ D6 문서 현행화) 진행 시 본 로그에 동일 형식으로 추가 -->
+### D2 — LadybugDB 번들 (다음, 필수)
+- D2-01 resolution 결정 → D2-02 `build-release-tarball.sh` native 동봉 → D2-03 Formula `GRAPH_MODE` → D2-04 graph 스모크.
+
+<!-- 이후 태스크(D2 ~ D6) 진행 시 본 로그에 동일 형식으로 추가 -->

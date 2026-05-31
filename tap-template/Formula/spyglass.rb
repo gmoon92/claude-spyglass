@@ -22,41 +22,29 @@
 #
 # 비범위:
 #   - 코드 서명 / Apple Developer ID 는 미적용. ad-hoc codesign 으로만 서명되어 있음.
-#   - Windows 는 Homebrew 대상이 아님 → Release 의 .zip 산출물로 별도 배포(Formula 미포함).
+#   - windows/linux 미지원 — release.yml 이 macOS 전용(darwin arm64/x64)으로 축소됨(e1f8266).
 #
-# 멀티플랫폼 (R6):
-#   - darwin-arm64 / darwin-x64 / linux-x64 / linux-arm64 4개 플랫폼 url+sha256.
-#   - ⚠️ darwin-arm64 url 은 release.yml 산출물 이름(spyglass-<v>-darwin-arm64.tar.gz)에 의존.
-#     bump-homebrew-formula-action 이 이 항목을 자동 갱신하므로 형식 변경 금지.
-#   - darwin-x64 / linux-* 의 sha256 은 자동 bump 대상이 아니다(아래 sha256 갱신 주석 참조).
+# 플랫폼 (macOS 전용):
+#   - darwin-arm64 / darwin-x64 2개 url+sha256.
+#   - ⚠️ url 은 release.yml 산출물 이름(spyglass-<v>-darwin-<arch>.tar.gz)에 의존.
+#     update-formula.yml(D4)이 두 arch sha256 을 자동 갱신하므로 형식 변경 금지.
 
 class Spyglass < Formula
   desc "Local observability for Claude Code (token, cost, anomaly)"
   homepage "https://github.com/gmoon92/claude-spyglass"
   license "MIT" # ※ 본 repo 의 실제 LICENSE 와 일치하도록 갱신
-  version "2.10.0"
+  version "3.1.0"
 
   # ⚠️ on_macos 안에 on_arm/on_intel 중첩 — top-level on_arm 만 쓰면 Linux ARM 머신이
   #     macOS arm64 binary 를 받는 버그가 있다 (steipete/homebrew-tap#19).
   on_macos do
     on_arm do
       url "https://github.com/gmoon92/claude-spyglass/releases/download/v#{version}/spyglass-#{version}-darwin-arm64.tar.gz"
-      sha256 "REPLACE_WITH_ARM64_SHA256_ON_FIRST_RELEASE"
+      sha256 "3f11aed54ff9c6238a97ea524340892079eed4c73c6ef3284e1754e3131c7e23"
     end
     on_intel do
       url "https://github.com/gmoon92/claude-spyglass/releases/download/v#{version}/spyglass-#{version}-darwin-x64.tar.gz"
-      sha256 "REPLACE_WITH_DARWIN_X64_SHA256"
-    end
-  end
-
-  on_linux do
-    on_arm do
-      url "https://github.com/gmoon92/claude-spyglass/releases/download/v#{version}/spyglass-#{version}-linux-arm64.tar.gz"
-      sha256 "REPLACE_WITH_LINUX_ARM64_SHA256"
-    end
-    on_intel do
-      url "https://github.com/gmoon92/claude-spyglass/releases/download/v#{version}/spyglass-#{version}-linux-x64.tar.gz"
-      sha256 "REPLACE_WITH_LINUX_X64_SHA256"
+      sha256 "3e6361411ae5e0dffa17b26820838373bda49a88329ebe5b6c356052216c6631"
     end
   end
 
