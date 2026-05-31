@@ -55,6 +55,12 @@ interface RequestRowOpts {
   showSession?: boolean;
   anomalyFlags?: Set<string> | null;
   fmtTime?: (ts: string | null | undefined) => string;
+  /**
+   * data-chip-key 주입 (P3-05 TurnRows 전용). 빈/미지정이면 속성 미부여 —
+   * 원본 turn-rows.js#injectChipKey 와 동일(키 없으면 속성 생략).
+   * 원본은 `<tr `의 첫 속성 위치에 삽입하므로 JSX 도 className 보다 앞에 둔다(속성 순서 동치).
+   */
+  chipKey?: string;
 }
 
 /**
@@ -96,12 +102,11 @@ export function RequestRow({ r, opts = {} }: { r: RowLike; opts?: RequestRowOpts
   const fmtTs = opts.fmtTime || fmtTimestamp;
   const flags = opts.anomalyFlags || null;
 
+  // contextPreview 는 이미 완성된 `<span class="prompt-preview">…</span>` HTML 을 반환한다.
+  //   원본 makeRequestRow 는 이 HTML 을 td innerHTML 로 직접 삽입한다(래퍼 span 없음).
+  //   래퍼 span 으로 감싸면 `<span><span class="prompt-preview">…` 이중 span 회귀가 생긴다
+  //   — P3-05 TurnRows 동치 테스트(tool_detail preview 케이스)가 적발. 빈 경우만 cell-msg-empty.
   const msgPreviewHtml = contextPreview(r);
-  const msgNode: ReactNode = msgPreviewHtml ? (
-    <span dangerouslySetInnerHTML={{ __html: msgPreviewHtml }} />
-  ) : (
-    <span className="cell-msg-empty" aria-label={window.I18n.t('session.rows.empty-message')} />
-  );
 
   const spikeLoopFlags = flags ? new Set([...flags].filter((f) => f !== 'slow')) : null;
   const hasSlow = !!(flags && flags.has('slow'));
@@ -126,8 +131,13 @@ export function RequestRow({ r, opts = {} }: { r: RowLike; opts?: RequestRowOpts
   );
   const hasExtra = (spikeLoopFlags && spikeLoopFlags.size > 0) || !!bloatedMiniHtml;
 
+  // data-chip-key 는 원본 injectChipKey 와 동일하게 `<tr ` 첫 속성 위치(className 앞)에 둔다.
+  // 빈 문자열/미지정이면 undefined → React 가 속성을 출력하지 않음(원본 "키 없으면 속성 생략"과 동치).
+  const chipKeyAttr = opts.chipKey ? opts.chipKey : undefined;
+
   return (
     <tr
+      data-chip-key={chipKeyAttr}
       className={rowCls}
       data-type={r.type ?? ''}
       data-sub-type={subTypeOf(r)}
@@ -147,9 +157,13 @@ export function RequestRow({ r, opts = {} }: { r: RowLike; opts?: RequestRowOpts
         <TargetCellWithBadges r={r} extra={null} />
       )}
       <ModelCell r={r} />
-      <td className="cell-msg" data-cell="msg">
-        {msgNode}
-      </td>
+      {msgPreviewHtml ? (
+        <td className="cell-msg" data-cell="msg" dangerouslySetInnerHTML={{ __html: msgPreviewHtml }} />
+      ) : (
+        <td className="cell-msg" data-cell="msg">
+          <span className="cell-msg-empty" aria-label={window.I18n.t('session.rows.empty-message')} />
+        </td>
+      )}
       <td className="cell-token num" data-cell="in">
         {(r.tokens_input ?? 0) > 0 ? fmtToken(r.tokens_input) : '—'}
       </td>
