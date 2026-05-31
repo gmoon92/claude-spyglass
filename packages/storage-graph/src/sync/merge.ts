@@ -192,6 +192,17 @@ async function mergeMetaDocument(client: LadybugClient, p: MetaDocumentProps): P
  * 엣지 MERGE — Ladybug 는 REL 에 직접 MERGE 가 제한적이라 MATCH 두 노드 + CREATE
  * REL 패턴 + duplicate 에러 흡수. 노드가 아직 없으면(드물게 enrich 순서 어긋남) MATCH
  * 가 0 row 라 그냥 no-op — 다음 tick 에서 재시도.
+ *
+ * PARENT_OF single-parent 불변식 (subagent-sibling-parent 교정의 그래프 짝):
+ *   한 ToolCall 은 부모가 정확히 1개라는 도메인 불변식을 가진다. RDB 측 persistSubagentChildren
+ *   가 자식의 parent_tool_use_id 를 잘못된 형제(A)에서 권위값(B)으로 교정하면 outbox 'update' 가
+ *   흘러와 enrich 가 PARENT_OF(B→child) 를 발행한다. 그러나 그래프 sync 가 CREATE-only 였던 탓에
+ *   구 엣지 PARENT_OF(A→child) 가 잔존해 child 가 A·B 양쪽 자식으로 중복 표시됐다.
+ *
+ *   해결: PARENT_OF 를 CREATE 하기 전, 같은 child(to) 로 들어오는 *다른* parent(from≠B)의
+ *   PARENT_OF 엣지를 먼저 DELETE 한다. self-healing(매 발행이 불변식을 재확정) · idempotent
+ *   (현재 parent 엣지는 보존되어 중복/재추가 없음). DELETE 는 best-effort — 실패해도 정답 엣지
+ *   CREATE 는 그대로 진행하고 throw 를 전파하지 않아(DLQ/HoL 위험 0) 다음 발행에서 수렴한다.
  */
 async function mergeRel(client: LadybugClient, rel: RelOp): Promise<void> {
   const propsClause =
@@ -206,6 +217,20 @@ async function mergeRel(client: LadybugClient, rel: RelOp): Promise<void> {
   };
   if (rel.props) {
     for (const [k, v] of Object.entries(rel.props)) params[`rel_${k}`] = v;
+  }
+
+  // single-parent 불변식 강제 — PARENT_OF 한정. 같은 child 로 들어오는 다른 부모 엣지 제거.
+  if (rel.type === 'PARENT_OF') {
+    const deleteCypher =
+      `MATCH (other:${rel.from.label})-[r:PARENT_OF]->(b:${rel.to.label} {${rel.to.key}: $to_value}) ` +
+      `WHERE other.${rel.from.key} <> $from_value ` +
+      `DELETE r`;
+    try {
+      await client.query(deleteCypher, params);
+    } catch {
+      // best-effort — DELETE 실패는 정답 엣지 CREATE 를 막지 않는다(throw 미전파).
+      //   stale 엣지는 다음 PARENT_OF 발행(child-side/parent-side 양방향)에서 다시 제거 시도된다.
+    }
   }
 
   // 중복 방지를 위해 먼저 존재 체크 — 없을 때만 CREATE.
