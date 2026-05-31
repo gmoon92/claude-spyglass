@@ -252,22 +252,40 @@ export function saveRequest(
 
         // 2순위: Skill/Task 가 없거나 self 가 Skill/Task 인 경우 — 매칭 Agent.
         if (!resolvedParentToolUseId) {
-          const parentRow = db.query(
-            `SELECT tool_use_id FROM requests
+          // T8 prevention 가드: 같은 (session,turn) 에 동일 agent_type Agent 인스턴스가 2개
+          // 이상이면 어느 Agent 가 진짜 부모인지 라이브 추측으로 분간할 수 없다(G5 오귀속의
+          // 근본 원인). 그 모호 상황에서는 추측을 *보류*(parent NULL 유지)하고 권위 transcript
+          // 백필(persistSubagentChildren)에 위임한다 — "모호하면 틀리게 쓰지 않는다".
+          // 단일 인스턴스일 때만 추측을 채택한다(기존 정상 동작 보존).
+          //   카운트는 event_type 무관(pre_tool/tool 모두 인스턴스로 셈) + DISTINCT tool_use_id
+          //   로 Upsert 중복을 배제한다. pre_tool 인 나중 Agent 도 형제로 계수돼야 모호 판정됨.
+          const agentCount = db.query(
+            `SELECT COUNT(DISTINCT tool_use_id) AS c FROM requests
              WHERE tool_name = 'Agent'
                AND tool_detail = ?
                AND session_id = ?
                AND turn_id = ?
-               AND tool_use_id IS NOT NULL
-               AND (event_type IS NULL OR event_type = 'tool')
-               AND timestamp <= ?
-             ORDER BY timestamp DESC
-             LIMIT 1`,
-          ).get(payload.agent_type, payload.session_id, turnId, payload.timestamp) as
-            | { tool_use_id: string }
-            | null;
-          if (parentRow?.tool_use_id) {
-            resolvedParentToolUseId = parentRow.tool_use_id;
+               AND tool_use_id IS NOT NULL`,
+          ).get(payload.agent_type, payload.session_id, turnId) as { c: number };
+
+          if (agentCount.c <= 1) {
+            const parentRow = db.query(
+              `SELECT tool_use_id FROM requests
+               WHERE tool_name = 'Agent'
+                 AND tool_detail = ?
+                 AND session_id = ?
+                 AND turn_id = ?
+                 AND tool_use_id IS NOT NULL
+                 AND (event_type IS NULL OR event_type = 'tool')
+                 AND timestamp <= ?
+               ORDER BY timestamp DESC
+               LIMIT 1`,
+            ).get(payload.agent_type, payload.session_id, turnId, payload.timestamp) as
+              | { tool_use_id: string }
+              | null;
+            if (parentRow?.tool_use_id) {
+              resolvedParentToolUseId = parentRow.tool_use_id;
+            }
           }
         }
       }

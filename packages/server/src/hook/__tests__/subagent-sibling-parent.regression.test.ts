@@ -169,7 +169,7 @@ describe('G5 회귀 — 형제 서브에이전트 부모 오귀속 권위 교정
     try { require('fs').unlinkSync(TEST_DB_PATH); } catch {}
   });
 
-  it('메인 케이스 — 오귀속(A)된 자식을 권위값(B)으로 교정', () => {
+  it('메인 케이스 — 모호 시 라이브 보류(NULL) 후 권위값(B)으로 백필', () => {
     // A: 먼저 완료된 Explore (event_type='tool')
     saveRequest(db.instance, makeAgent({
       id: 'agent-A', sessionId, toolUseId: 'A', agentType: 'Explore',
@@ -181,14 +181,68 @@ describe('G5 회귀 — 형제 서브에이전트 부모 오귀속 권위 교정
       timestamp: now + 2000, eventType: 'pre_tool',
     }));
 
-    // 자식 Y(B 의 내부 도구)가 메인 hook 으로 들어옴 → rolling-parent 추측.
-    // B 는 pre_tool 이라 2순위 후보에서 빠지고 완료된 A 가 부모로 선택됨(버그).
+    // 자식 Y(B 의 내부 도구)가 메인 hook 으로 들어옴 → rolling-parent 추측 시도.
     saveRequest(db.instance, makeChildLiveHook({
       id: 'child-Y', sessionId, toolUseId: 'Y', agentType: 'Explore',
       timestamp: now + 3000,
     }));
 
-    // 오귀속 확인 — Y 의 부모가 A 로 잘못 채워졌다.
+    // [동작 변경 — T8 prevention 가드] 과거에는 B 가 pre_tool 이라 2순위 후보에서 빠지고
+    // 완료된 형제 A 가 부모로 *오귀속*(toBe('A'))됐다. 이제 같은 (session,turn) 에 동일타입
+    // Agent 인스턴스가 2개(A,B)면 라이브 추측을 *보류*(NULL)한다 — 틀린 형제로 쓰지 않기 위함.
+    // 이는 회귀가 아니라 오귀속 방지를 위한 정당한 동작 개선이다. (라이브 추측이 만든 *non-NULL*
+    // 오귀속의 교정 보장은 아래 '독립 correction' 테스트가 라이브 추측과 분리해 영구 커버한다.)
+    expect(getParent(db.instance, 'Y')).toBeNull();
+
+    // 권위 백필: B 의 sub-transcript 에서 Y 추출 → context.parentToolUseId='B'.
+    const res = persistSubagentChildren(
+      db.instance,
+      [makeChildCall({ toolUseId: 'Y', timestampMs: now + 3000 })],
+      { parentToolUseId: 'B', sessionId, turnId },
+    );
+
+    // 기대: 보류된 NULL 이 권위값 B 로 채워진다.
+    expect(getParent(db.instance, 'Y')).toBe('B');
+    expect(res.backfilled).toBe(1);
+    expect(res.inserted).toBe(0);
+    // 그래프 sync 를 위한 outbox update 발행 확인.
+    const yId = (db.instance.query(
+      'SELECT id FROM requests WHERE tool_use_id = ? LIMIT 1',
+    ).get('Y') as { id: string }).id;
+    expect(countOutboxFor(db.instance, yId)).toBeGreaterThanOrEqual(1);
+  });
+
+  it('독립 correction — 수동 주입된 *틀린 non-NULL*(A) 를 권위값(B)으로 덮어쓰기', () => {
+    // 라이브 추측에 *의존하지 않고*, 이미 틀린 형제 A 로 오귀속된 행을 직접 주입해
+    // persistSubagentChildren 의 non-NULL 교정 경로를 독립적으로 보장한다.
+    // (T8 가드로 라이브 메인 케이스가 NULL→백필로 바뀌어도, non-NULL 오귀속 교정 보장은
+    //  이 테스트가 항상 커버한다.)
+    saveRequest(db.instance, makeAgent({
+      id: 'agent-A', sessionId, toolUseId: 'A', agentType: 'Explore',
+      timestamp: now + 1000, eventType: 'tool',
+    }));
+    saveRequest(db.instance, makeAgent({
+      id: 'agent-B', sessionId, toolUseId: 'B', agentType: 'Explore',
+      timestamp: now + 2000, eventType: 'tool',
+    }));
+    // 자식 Y 를 *직접* INSERT 하며 틀린 parent='A' 를 주입(라이브 추측 경로 우회).
+    db.instance.run(
+      `INSERT INTO requests
+        (id, session_id, timestamp, type, tool_name, tool_detail, turn_id,
+         tokens_input, tokens_output, tokens_total, duration_ms, payload, source,
+         cache_creation_tokens, cache_read_tokens, tool_use_id, event_type,
+         tokens_confidence, tokens_source, parent_tool_use_id, agent_type)
+       VALUES
+        (?, ?, ?, 'tool_call', 'Bash', 'ls', ?,
+         0, 0, 0, 0, ?, 'claude-code-hook',
+         0, 0, ?, 'tool',
+         'high', 'transcript', ?, 'Explore')`,
+      [
+        'child-Y-manual', sessionId, now + 3000, turnId,
+        JSON.stringify({ tool_use_id: 'Y' }), 'Y', 'A',
+      ],
+    );
+    // 전제: 틀린 non-NULL 부모 A 가 주입됨.
     expect(getParent(db.instance, 'Y')).toBe('A');
 
     // 권위 교정: B 의 sub-transcript 에서 Y 추출 → context.parentToolUseId='B'.
@@ -197,12 +251,10 @@ describe('G5 회귀 — 형제 서브에이전트 부모 오귀속 권위 교정
       [makeChildCall({ toolUseId: 'Y', timestampMs: now + 3000 })],
       { parentToolUseId: 'B', sessionId, turnId },
     );
-
-    // 기대: Y 의 부모가 권위값 B 로 교정된다.
+    // 기대: 틀린 A 가 권위값 B 로 덮어써진다(NULL 백필이 아니라 non-NULL 교정).
     expect(getParent(db.instance, 'Y')).toBe('B');
     expect(res.backfilled).toBe(1);
     expect(res.inserted).toBe(0);
-    // 그래프 sync 를 위한 outbox update 발행 확인.
     const yId = (db.instance.query(
       'SELECT id FROM requests WHERE tool_use_id = ? LIMIT 1',
     ).get('Y') as { id: string }).id;
