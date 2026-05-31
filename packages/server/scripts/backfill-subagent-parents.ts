@@ -1,47 +1,42 @@
 #!/usr/bin/env bun
 /**
- * backfill-subagent-parents.ts — 작업 B 백필 (사용자 명시 2026-05-26)
+ * backfill-subagent-parents.ts — T9 transcript 권위 재도출 마이그레이션
  *
  * 책임:
- *   메인 hook 경로 (source='claude-code-hook') 로 들어와 SQLite 에 적재된
- *   서브에이전트 자식 도구 호출들 중 `parent_tool_use_id IS NULL` 인 행들에 대해
- *   *같은 agent_id 그룹 안의 부모 Agent ToolCall* 을 추적해 parent 를 복원한다.
- *   UPDATE 직후 kuzu_outbox 에 op='update' row 를 발행해 그래프 sync 워커가 재동기.
+ *   메인 hook 경로 (source='claude-code-hook') 로 들어와 SQLite 에 적재된 서브에이전트 자식
+ *   도구 호출들의 parent_tool_use_id 를 *그 자식이 속한 Agent 인스턴스의 sub-transcript* 에서
+ *   재도출한 권위값으로 교정한다. parent 가 NULL 인 행뿐 아니라 *틀린 non-NULL*(라이브 추측이
+ *   넣은 형제 Agent 오귀속) 행도 권위값과 다르면 교정한다.
+ *   UPDATE 직후 kuzu_outbox 에 op='update' row 를 발행해 그래프 sync 워커가 PARENT_OF 재동기.
  *
- * 근본 원인 (확인된 사실):
- *   Claude Code 는 서브에이전트 내부 도구 호출도 메인 세션 PreToolUse/PostToolUse hook
- *   으로 발사. hook payload 에 agent_id/agent_type 라벨은 있지만 parent_tool_use_id 는
- *   없음 → SQLite NULL. Agent('xx') PostToolUse 시점에 transcript 파싱하는
- *   persistSubagentChildren 이 자식들을 다시 INSERT 하려 해도 *이미 존재* 라 skip.
- *   결과: 그래프 enrich 가 PARENT_OF 엣지 생성 못 함 → flow chart ancestor 단절.
+ * 권위 근거 (라이브 persistSubagentChildren 과 동일한 ground truth):
+ *   자식 row 의 agent_id 로 sub-transcript 경로(agent-<agent_id>.jsonl)를 구해
+ *   extractSubagentToolCalls 로 그 tool_use_id 의 직속 부모를 재도출한다.
+ *     - transcript 가 Skill/Task 직속 부모를 알면(rolling parent) 그 값.
+ *     - null(=Agent 직속) 이면 그 sub-transcript 를 spawn 한 부모 Agent 의 tool_use_id 로 폴백.
+ *       (메인 requests 의 Agent 행 payload 안 tool_response.agentId == 자식 agent_id 매칭.)
  *
- * 백필 휴리스틱 (정확성 ≥ 95% 목표):
- *   - 매칭 후보: parent_tool_use_id IS NULL AND agent_id IS NOT NULL AND tool_use_id IS NOT NULL
- *   - 부모 ToolCall 후보: tool_name='Agent' AND tool_detail = 자식의 agent_type
- *                          AND session_id 동일
- *                          AND timestamp 가 자식의 timestamp *이전*
- *                          AND (agent_id IS NULL OR agent_id != 자식의 agent_id) — 메인 세션 호출
- *     → 그 중 timestamp 차이가 가장 작은 (= 가장 가까운 직전) Agent 호출을 부모로 매핑.
+ * 구(舊) 방식과의 차이 (격상):
+ *   - 구: SQL 휴리스틱(같은 agent_type 의 직전 Agent). 같은 agent_type 여러 인스턴스 시 오매핑,
+ *         NULL 만 처리. → 폐기(findParentAgentToolUseId 제거).
+ *   - 신: transcript 권위 재도출. 동일타입 다중 인스턴스도 agent_id 로 정확 분간, non-NULL 교정.
  *
- *   휴리스틱 한계:
- *     - 같은 session 안에 같은 agent_type 의 Agent 호출이 *없는* 경우 (예: 사용자가 직접
- *       /slash 로 호출) → skip. 진짜 부모가 없는 케이스라 정상.
- *     - 같은 session 안에 같은 agent_type Agent 호출이 *여러 인스턴스* 있고 자식
- *       agent_id 가 다른 인스턴스에 속하면 오매핑 가능. agent_id 가 동일한 자식들이
- *       *같은 부모* 에서 spawn 됐다고 가정 — 일반적으로 안전.
+ * 안전:
+ *   - graceful skip: 메인 transcript_path 미확보 / sub-transcript 파일 부재·파싱 실패 / 그
+ *     transcript 에 해당 tool_use_id 없음 / 폴백 Agent 미발견 → 그 행은 *건드리지 않고* 카운트만.
+ *   - idempotent: 권위값 == 기존값이면 no-op. 두 번 실행해도 결과 동일.
+ *   - 트랜잭션: BATCH_SIZE(200) 단위 commit — 중간 실패 시 직전 batch 보존.
+ *   - 라이브 DB 미변경 보장은 호출자 책임(배포 단계). 본 스크립트는 주어진 db 핸들만 다룬다.
  *
  * 사용:
  *   bun run packages/server/scripts/backfill-subagent-parents.ts --dry-run  # 변경 없이 카운트
- *   bun run packages/server/scripts/backfill-subagent-parents.ts            # 실제 UPDATE + outbox 발행
+ *   bun run packages/server/scripts/backfill-subagent-parents.ts            # 실제 UPDATE + outbox
  *   bun run packages/server/scripts/backfill-subagent-parents.ts --limit N  # 첫 N건만
- *
- * 안전:
- *   - idempotent: 두 번 실행해도 결과 동일 (이미 채워진 행은 다시 안 건드림).
- *   - 트랜잭션: 한 batch (200행) 단위로 commit — 중간 실패 시 직전 batch 보존.
- *   - outbox INSERT 는 enrich 단계의 idempotent MERGE 와 결합해 그래프 중복 무해.
  */
 
-import { getDatabase } from '@spyglass/storage';
+import type { Database } from 'bun:sqlite';
+import { getDatabase, decodeText, getActiveKey } from '@spyglass/storage';
+import { resolveSubagentTranscriptPath, extractSubagentToolCalls } from '../src/hook/transcript';
 
 interface CandidateRow {
   id: string;
@@ -50,145 +45,217 @@ interface CandidateRow {
   agent_type: string | null;
   session_id: string;
   timestamp: number;
+  parent_tool_use_id: string | null;
 }
 
-interface ParentMatch {
-  parent_tool_use_id: string;
-  parent_timestamp: number;
+export interface BackfillOptions {
+  dryRun: boolean;
+  limit: number | null;
+}
+
+export interface BackfillResult {
+  candidates: number;
+  /** dry-run 에서 교정 대상으로 집계된 수(실제 UPDATE 미수행). */
+  wouldUpdate: number;
+  /** 실제 UPDATE 된 행 수(dry-run 시 0). */
+  updated: number;
+  /** 권위값이 기존값과 같아 no-op 인 행. */
+  alreadyCorrect: number;
+  /** 메인/서브 transcript 미확보·파싱 실패·해당 tool_use 없음으로 건너뛴 행. */
+  skippedNoTranscript: number;
+  /** Agent 폴백이 필요한데 부모 Agent 를 못 찾아 건너뛴 행. */
+  skippedNoParentAgent: number;
 }
 
 const BATCH_SIZE = 200;
 
-function parseArgs(): { dryRun: boolean; limit: number | null } {
-  const args = process.argv.slice(2);
-  const dryRun = args.includes('--dry-run');
+function parseArgs(argv: string[]): BackfillOptions {
+  const dryRun = argv.includes('--dry-run');
   let limit: number | null = null;
-  const li = args.indexOf('--limit');
-  if (li >= 0 && args[li + 1]) {
-    const n = parseInt(args[li + 1], 10);
+  const li = argv.indexOf('--limit');
+  if (li >= 0 && argv[li + 1]) {
+    const n = parseInt(argv[li + 1], 10);
     if (Number.isFinite(n) && n > 0) limit = n;
   }
   return { dryRun, limit };
 }
 
-function findParentAgentToolUseId(
-  db: ReturnType<ReturnType<typeof getDatabase>['getDb']>,
-  child: CandidateRow,
-): ParentMatch | null {
-  // 같은 session 안에서, 시점이 이전이고, agent 도구 호출이며 detail 이 자식의 agent_type 인
-  // 호출 중 가장 가까운(timestamp DESC 첫 행) 행을 부모로 채택.
-  // 또한 그 부모는 자식과 *다른 agent_id* (= 메인 세션 발급) 여야 한다 — 같은 인스턴스 안에서
-  // 자기 자신을 spawn 하는 케이스 회피.
-  if (!child.agent_type) return null;
+/**
+ * 세션의 메인 transcript_path 를 claude_events 에서 1건 해석.
+ * 세션 단위 캐싱 권장(호출자) — 같은 세션의 자식들은 동일 경로.
+ */
+function resolveMainTranscriptPath(db: Database, sessionId: string): string | null {
   const row = db.query(
-    `SELECT tool_use_id, timestamp
-       FROM requests
-      WHERE session_id = ?
-        AND tool_name = 'Agent'
-        AND tool_detail = ?
-        AND timestamp <= ?
-        AND tool_use_id IS NOT NULL
-        AND (agent_id IS NULL OR agent_id = '' OR agent_id != ?)
-      ORDER BY timestamp DESC
-      LIMIT 1`,
-  ).get(child.session_id, child.agent_type, child.timestamp, child.agent_id) as
-    | { tool_use_id: string; timestamp: number }
-    | undefined;
-  if (!row) return null;
-  return { parent_tool_use_id: row.tool_use_id, parent_timestamp: row.timestamp };
+    `SELECT transcript_path FROM claude_events
+      WHERE session_id = ? AND transcript_path IS NOT NULL AND transcript_path != ''
+      ORDER BY timestamp DESC LIMIT 1`,
+  ).get(sessionId) as { transcript_path: string } | undefined;
+  return row?.transcript_path ?? null;
 }
 
-function main(): void {
-  const { dryRun, limit } = parseArgs();
-  const wrapper = getDatabase();
-  const db = wrapper.getDb();
+/**
+ * Agent 직속 자식의 폴백 부모 — sub-transcript 를 spawn 한 Agent 의 tool_use_id.
+ * 메인 requests 의 Agent 행 payload(복호) 안 tool_response.agentId == 자식 agent_id 매칭.
+ */
+function resolveParentAgentToolUseId(
+  db: Database,
+  sessionId: string,
+  agentId: string,
+  agentType: string | null,
+): string | null {
+  const key = getActiveKey();
+  // 같은 session 의 Agent 행만 후보(있으면 agent_type 으로 1차 좁힘 — 비용 절감).
+  const rows = db.query(
+    `SELECT tool_use_id, payload, payload_algo FROM requests
+      WHERE tool_name = 'Agent'
+        AND session_id = ?
+        AND tool_use_id IS NOT NULL
+        ${agentType ? 'AND tool_detail = ?' : ''}`,
+  ).all(...(agentType ? [sessionId, agentType] : [sessionId])) as Array<{
+    tool_use_id: string;
+    payload: string | null;
+    payload_algo: string | null;
+  }>;
+  for (const r of rows) {
+    if (!r.payload) continue;
+    let decoded: string | null;
+    try {
+      decoded = decodeText(r.payload, r.payload_algo, key);
+    } catch {
+      continue; // 복호 실패(키 부재 등) → 이 후보 skip.
+    }
+    if (!decoded) continue;
+    let obj: { tool_response?: { agentId?: string } };
+    try {
+      obj = JSON.parse(decoded) as { tool_response?: { agentId?: string } };
+    } catch {
+      continue;
+    }
+    if (obj?.tool_response?.agentId === agentId) {
+      return r.tool_use_id;
+    }
+  }
+  return null;
+}
 
-  console.log(`[backfill-subagent-parents] dryRun=${dryRun} limit=${limit ?? 'none'}`);
+/**
+ * 자식 1건의 권위 부모 tool_use_id 를 sub-transcript 에서 재도출.
+ * @returns 권위값(string) | null(=transcript/매핑 부재로 도출 불가).
+ *          호출자는 reason 으로 skip 카운트를 분류한다.
+ */
+function deriveAuthoritativeParent(
+  db: Database,
+  child: CandidateRow,
+  mainPathCache: Map<string, string | null>,
+): { parent: string | null; reason: 'ok' | 'no_transcript' | 'no_parent_agent' } {
+  let mainPath = mainPathCache.get(child.session_id);
+  if (mainPath === undefined) {
+    mainPath = resolveMainTranscriptPath(db, child.session_id);
+    mainPathCache.set(child.session_id, mainPath);
+  }
+  if (!mainPath) return { parent: null, reason: 'no_transcript' };
 
-  // 후보 수집.
-  const limitClause = limit ? `LIMIT ${limit}` : '';
+  const subPath = resolveSubagentTranscriptPath(mainPath, child.session_id, child.agent_id);
+  const calls = extractSubagentToolCalls(subPath); // 파일 부재/파싱 실패 → []
+  const found = calls.find((c) => c.toolUseId === child.tool_use_id);
+  if (!found) return { parent: null, reason: 'no_transcript' };
+
+  // Skill/Task 직속 부모가 transcript 에 있으면 그 값이 권위.
+  if (found.parentToolUseId) {
+    return { parent: found.parentToolUseId, reason: 'ok' };
+  }
+  // Agent 직속 → 부모 Agent tool_use_id 폴백.
+  const parentAgent = resolveParentAgentToolUseId(
+    db, child.session_id, child.agent_id, child.agent_type,
+  );
+  if (!parentAgent) return { parent: null, reason: 'no_parent_agent' };
+  return { parent: parentAgent, reason: 'ok' };
+}
+
+/**
+ * 권위 재도출 백필 본체 — 테스트/CLI 공용.
+ * 주어진 db 핸들에 대해서만 동작(라이브 DB 보호는 호출자 책임).
+ */
+export function runBackfill(db: Database, opts: BackfillOptions): BackfillResult {
+  const limitClause = opts.limit ? `LIMIT ${opts.limit}` : '';
+  // 후보: 메인 hook 으로 적재된 서브에이전트 자식. parent 가 NULL 이든 non-NULL 이든
+  // 모두 후보로 잡아 권위값과 비교한다(틀린 형제 오귀속 교정 포함).
   const candidates = db.query(
-    `SELECT id, tool_use_id, agent_id, agent_type, session_id, timestamp
+    `SELECT id, tool_use_id, agent_id, agent_type, session_id, timestamp, parent_tool_use_id
        FROM requests
-      WHERE (parent_tool_use_id IS NULL OR parent_tool_use_id = '')
-        AND agent_id IS NOT NULL AND agent_id != ''
-        AND agent_type IS NOT NULL AND agent_type != ''
+      WHERE agent_id IS NOT NULL AND agent_id != ''
         AND tool_use_id IS NOT NULL AND tool_use_id != ''
         AND source = 'claude-code-hook'
       ORDER BY timestamp ASC
       ${limitClause}`,
   ).all() as CandidateRow[];
 
-  console.log(`[backfill-subagent-parents] candidates=${candidates.length}`);
+  const result: BackfillResult = {
+    candidates: candidates.length,
+    wouldUpdate: 0,
+    updated: 0,
+    alreadyCorrect: 0,
+    skippedNoTranscript: 0,
+    skippedNoParentAgent: 0,
+  };
 
-  // session+agent_id 그룹별로 캐싱 — 같은 그룹은 같은 부모.
-  const cache = new Map<string, ParentMatch | null>();
-
-  let matched = 0;
-  let skippedNoParent = 0;
-  let updated = 0;
+  const mainPathCache = new Map<string, string | null>();
   let batchOpened = false;
 
-  function commitBatchIfNeeded(force: boolean): void {
+  const commitIfNeeded = (force: boolean): void => {
     if (!batchOpened) return;
-    if (force || (updated > 0 && updated % BATCH_SIZE === 0)) {
+    if (force || result.updated % BATCH_SIZE === 0) {
       db.run('COMMIT');
       batchOpened = false;
     }
-  }
+  };
 
   for (const c of candidates) {
-    const cacheKey = `${c.session_id}::${c.agent_id}::${c.agent_type}`;
-    let match = cache.get(cacheKey);
-    if (match === undefined) {
-      match = findParentAgentToolUseId(db, c);
-      cache.set(cacheKey, match);
-    }
-    if (!match) {
-      skippedNoParent++;
-      continue;
-    }
-    matched++;
-    if (dryRun) continue;
+    const { parent, reason } = deriveAuthoritativeParent(db, c, mainPathCache);
+    if (reason === 'no_transcript') { result.skippedNoTranscript++; continue; }
+    if (reason === 'no_parent_agent') { result.skippedNoParentAgent++; continue; }
+    if (!parent) { result.skippedNoTranscript++; continue; }
 
-    if (!batchOpened) {
-      db.run('BEGIN');
-      batchOpened = true;
-    }
+    // 권위값 == 기존값 → no-op (idempotent).
+    if (parent === c.parent_tool_use_id) { result.alreadyCorrect++; continue; }
+
+    if (opts.dryRun) { result.wouldUpdate++; continue; }
+
+    if (!batchOpened) { db.run('BEGIN'); batchOpened = true; }
     try {
-      db.run(
-        'UPDATE requests SET parent_tool_use_id = ? WHERE id = ?',
-        [match.parent_tool_use_id, c.id],
-      );
-      // 그래프 sync 가 PARENT_OF 엣지 새로 생성하도록 outbox 발행.
+      db.run('UPDATE requests SET parent_tool_use_id = ? WHERE id = ?', [parent, c.id]);
+      // Migration 051 트리거는 event_type 전환만 capture → parent 만 바꾸는 UPDATE 는
+      // 본 스크립트가 명시적으로 outbox 발행(enrich 의 idempotent MERGE 와 결합해 중복 무해).
       db.run(
         "INSERT INTO kuzu_outbox(source, event_id, op) VALUES ('requests', ?, 'update')",
         [c.id],
       );
-      updated++;
-      commitBatchIfNeeded(false);
+      result.updated++;
+      commitIfNeeded(false);
     } catch (e) {
       console.error('[backfill-subagent-parents] UPDATE failed:', c.id, e);
     }
   }
-  commitBatchIfNeeded(true);
+  commitIfNeeded(true);
 
-  console.log(`[backfill-subagent-parents] matched=${matched} updated=${updated} skipped_no_parent=${skippedNoParent}`);
-  // agent_type 별 매칭 통계.
-  const byType = new Map<string, { matched: number; skipped: number }>();
-  for (const c of candidates) {
-    const cacheKey = `${c.session_id}::${c.agent_id}::${c.agent_type}`;
-    const m = cache.get(cacheKey);
-    const t = c.agent_type ?? '(null)';
-    const slot = byType.get(t) ?? { matched: 0, skipped: 0 };
-    if (m) slot.matched++; else slot.skipped++;
-    byType.set(t, slot);
-  }
-  const rows = [...byType.entries()].sort((a, b) => (b[1].matched + b[1].skipped) - (a[1].matched + a[1].skipped));
-  console.log('[backfill-subagent-parents] agent_type breakdown:');
-  for (const [t, s] of rows.slice(0, 20)) {
-    console.log(`  ${t.padEnd(24)} matched=${s.matched} skipped=${s.skipped}`);
-  }
+  return result;
 }
 
-main();
+function main(): void {
+  const opts = parseArgs(process.argv.slice(2));
+  const wrapper = getDatabase();
+  const db = wrapper.getDb();
+  console.log(`[backfill-subagent-parents] dryRun=${opts.dryRun} limit=${opts.limit ?? 'none'}`);
+  const r = runBackfill(db, opts);
+  console.log(
+    `[backfill-subagent-parents] candidates=${r.candidates} `
+      + `${opts.dryRun ? `would_update=${r.wouldUpdate}` : `updated=${r.updated}`} `
+      + `already_correct=${r.alreadyCorrect} `
+      + `skipped_no_transcript=${r.skippedNoTranscript} `
+      + `skipped_no_parent_agent=${r.skippedNoParentAgent}`,
+  );
+}
+
+if (import.meta.main) {
+  main();
+}
