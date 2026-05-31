@@ -335,26 +335,32 @@ export function saveRequest(
  *   ⇒ Agent → Skill → Tool 깊이 2~3 트리가 정확히 구성되어
  *     metrics/calculators/anomaly.ts 의 WITH RECURSIVE(깊이 3) 가 작동.
  * - source='subagent-transcript', event_type='tool'
- * - 중복 방지: 동일 tool_use_id가 이미 존재하면 *NULL parent 백필 후* skip.
+ * - 중복 방지: 동일 tool_use_id가 이미 존재하면 *권위값으로 parent 교정 후* skip.
  *
- * Race 방어 (2026-05-26 사용자 명세, 작업 A):
+ * Race 방어 (2026-05-26 사용자 명세, 작업 A) + G5 권위 교정:
  *   Claude Code 는 서브에이전트 *내부* 의 도구 호출도 메인 세션 PreToolUse/PostToolUse hook
  *   으로 발사한다 (source='claude-code-hook'). 그 hook payload 에는 agent_id/agent_type
  *   라벨만 있고 parent_tool_use_id 는 *없다* — 그래서 메인 hook 경로로 들어온 행은
- *   parent_tool_use_id=NULL 상태로 SQLite 에 적재된다.
+ *   saveRequest 의 rolling-parent 가 추측한 값(또는 NULL)으로 SQLite 에 적재된다.
  *
- *   나중에 Agent('pm') PostToolUse 시점에 본 함수가 transcript 파싱 결과로 같은 child
- *   를 다시 INSERT 하려 하지만 *이미 존재* 하므로 단순 skip 하면 parent NULL 이 영원히
- *   잔존 → 그래프 PARENT_OF 엣지 미생성 → flow chart 의 ancestor 단절.
+ *   문제 1 (NULL 잔존): rolling-parent 가 매칭 실패하면 parent NULL → 그래프 PARENT_OF
+ *     엣지 미생성 → flow chart 의 ancestor 단절.
+ *   문제 2 (G5 오귀속): 같은 (session,turn) 에 동일 타입 Agent 형제(예: Explore 2개)가
+ *     있고 나중 Agent B 가 아직 pre_tool 이면, rolling-parent 2순위는 완료된 형제 A 를
+ *     부모로 *잘못* 채운다. NULL 만 백필하던 기존 정책으로는 이 non-NULL 오귀속을 교정 불가.
  *
- *   해결: exists 체크 시 *parent_tool_use_id 가 NULL/empty* 이고 우리에게 resolved 가
- *   있으면 UPDATE 로 채워준다. UPDATE 직후 kuzu_outbox 에 op='update' row 를 직접 발행
- *   해 그래프 sync 워커가 재동기. (Migration 051 트리거는 event_type 변경에만 발동하므로
- *   parent_tool_use_id 만 채우는 UPDATE 는 본 함수가 명시적으로 outbox INSERT 한다.)
+ *   해결: child 는 *그 Agent 인스턴스의 sub-transcript* 에서 추출되고
+ *   context.parentToolUseId = 그 Agent 의 정확한 tool_use_id 이므로,
+ *   resolvedParentToolUseId(=child.parentToolUseId ?? context) 는 transcript 기반 ground
+ *   truth 다. exists 체크 시 기존 parent 가 resolved 와 *다르면*(NULL 이든 틀린 형제 Agent
+ *   든) UPDATE 로 권위값에 수렴시킨다(같으면 no-op 멱등). 깊이3 Skill/Task 정상 케이스는
+ *   resolved==existing 이라 불변(보존). UPDATE 직후 kuzu_outbox 에 op='update' row 를 직접
+ *   발행해 그래프 sync 워커가 재동기. (Migration 051 트리거는 event_type 변경에만 발동하므로
+ *   parent_tool_use_id 만 바꾸는 UPDATE 는 본 함수가 명시적으로 outbox INSERT 한다.)
  *
  * 호출 시점: handlers/post-tool-use.handler.ts의 PostToolUse + tool_name='Agent' 처리 끝 직후.
  *
- * @returns { inserted, backfilled } — 신규 INSERT 수 + 기존 행 parent 백필 수
+ * @returns { inserted, backfilled } — 신규 INSERT 수 + 기존 행 parent 교정 수
  */
 export function persistSubagentChildren(
   db: Database,
@@ -367,14 +373,18 @@ export function persistSubagentChildren(
     // 직속 부모 우선, 없으면 Agent 폴백 (T-07 정책).
     const resolvedParentToolUseId = child.parentToolUseId ?? context.parentToolUseId;
 
-    // 이미 동일 tool_use_id가 존재하면 — *NULL parent 만 백필* 후 skip.
+    // 이미 동일 tool_use_id가 존재하면 — 권위값(transcript)으로 parent 교정 후 skip.
+    //   resolvedParentToolUseId 는 *그 Agent 인스턴스의 sub-transcript* 에서 추출된
+    //   ground truth(child.parentToolUseId ?? context Agent tool_use_id) 이므로,
+    //   기존 행의 parent 가 다르면(NULL 이든, 라이브 추측이 넣은 틀린 형제 Agent 든)
+    //   권위값으로 수렴시킨다 (G5: 동일 타입 형제 서브에이전트 오귀속 교정).
+    //   같으면 no-op(멱등). 깊이3 Skill/Task 정상 케이스는 resolved==existing 이라 불변.
     const existing = db.query(
       'SELECT id, parent_tool_use_id FROM requests WHERE tool_use_id = ? LIMIT 1',
     ).get(child.toolUseId) as { id: string; parent_tool_use_id: string | null } | null;
     if (existing) {
       const existingParent = existing.parent_tool_use_id;
-      const isEmpty = !existingParent || existingParent === '';
-      if (isEmpty && resolvedParentToolUseId) {
+      if (resolvedParentToolUseId && existingParent !== resolvedParentToolUseId) {
         try {
           db.run(
             'UPDATE requests SET parent_tool_use_id = ? WHERE id = ?',
