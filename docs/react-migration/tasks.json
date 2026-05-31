@@ -17,7 +17,7 @@
   },
   "baseline": {
     "head_label": "착수 시점 HEAD 를 단일 SSoT 로 고정한다. 본 명세 수치(174 pass/12 files/20 snap/typecheck0)는 검증 시점 HEAD '1992b54' 에서 재확인됨. 마이그레이션 착수 직전 실측 HEAD 를 'head' 에 1회 확정 기입하고, README §3 의 bisect good 앵커·_panel 문서 전부가 동일 SHA 를 참조하도록 통일한다(review-safety BLK-1).",
-    "head": "TBD-착수직전확정(분석시점 2126e11, 검증시점 1992b54 — 수치 유효, SHA 라벨만 stale)",
+    "head": "2ae3c39",
     "version": "v3.0.7",
     "test_pass": 174,
     "test_files": 12,
@@ -40,7 +40,8 @@
     },
     "tsconfig": "strict:false + checkJs:true + allowJs:true (paths @spyglass/types)",
     "runner": "bun test (Playwright E2E 없음)",
-    "cycles": 0
+    "cycles": 0,
+    "head_confirmed": "2026-05-31 착수 직전 실측 — web typecheck exit0, bun test 174 pass/0 fail/20 snap/12 files 재확인. bisect good 앵커 = 2ae3c39."
   },
   "phases": [
     {
