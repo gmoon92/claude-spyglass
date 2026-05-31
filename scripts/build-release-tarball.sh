@@ -138,15 +138,14 @@ chmod +x "$BIN_PATH"
 #    - web:        __tests__, *.test.ts 제외 모든 파일
 #    - migrations: *.sql 만
 # -----------------------------------------------------------------------------
-echo "[build] staging web/..."
-# rsync 는 windows git-bash 에 미탑재(exit 127) → tar 파이프로 portable 복사.
-#   tar 는 macOS(BSD)/linux(GNU)/git-bash(GNU) 모두 --exclude 지원, exclude 규칙 동일.
+echo "[build] building web (Vite) → dist..."
+# React+Vite 전환(P4-10): 데몬은 빌드 산출(dist: index.html + assets)을 서빙한다(WEB_ROOT→dist).
+# 따라서 tarball 도 원본 .ts/.tsx 가 아닌 dist 산출만 stage 한다(P5-08 머지 정합).
+bun run --cwd packages/web build
+echo "[build] staging web/dist..."
 mkdir -p "$STAGE_DIR/share/spyglass/web"
-tar --exclude='__tests__' \
-    --exclude='*.test.ts' \
-    --exclude='*.md' \
-    --exclude='prototypes' \
-    -cf - -C packages/web . \
+# rsync 는 windows git-bash 에 미탑재(exit 127) → tar 파이프로 portable 복사.
+tar -cf - -C packages/web/dist . \
   | tar -xf - -C "$STAGE_DIR/share/spyglass/web"
 
 echo "[build] staging migrations/..."
