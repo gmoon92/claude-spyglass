@@ -146,13 +146,15 @@ chmod +x "$BIN_PATH"
 #    - migrations: *.sql 만
 # -----------------------------------------------------------------------------
 echo "[build] staging web/..."
-# rsync 는 macOS 기본 탑재. exclude 규칙 단순.
-rsync -a \
-  --exclude='__tests__' \
-  --exclude='*.test.ts' \
-  --exclude='*.md' \
-  --exclude='prototypes' \
-  packages/web/ "$STAGE_DIR/share/spyglass/web/"
+# rsync 는 windows git-bash 에 미탑재(exit 127) → tar 파이프로 portable 복사.
+#   tar 는 macOS(BSD)/linux(GNU)/git-bash(GNU) 모두 --exclude 지원, exclude 규칙 동일.
+mkdir -p "$STAGE_DIR/share/spyglass/web"
+tar --exclude='__tests__' \
+    --exclude='*.test.ts' \
+    --exclude='*.md' \
+    --exclude='prototypes' \
+    -cf - -C packages/web . \
+  | tar -xf - -C "$STAGE_DIR/share/spyglass/web"
 
 echo "[build] staging migrations/..."
 mkdir -p "$STAGE_DIR/share/spyglass/migrations"
