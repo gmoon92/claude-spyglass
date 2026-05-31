@@ -20,6 +20,7 @@
   },
   "include": [
     "assets/js/**/*.js",
+    "assets/js/**/*.ts",
     "assets/js/**/*.d.ts",
     "src/**/*.ts",
     "src/**/*.tsx",

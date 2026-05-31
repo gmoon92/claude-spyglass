@@ -91,10 +91,14 @@ function externalizeDaemonAssets(): Plugin {
       ];
       // dist 는 운영 산출물 — __tests__/*.test/*.spec/*.d.ts 같은 비런타임 파일은 제외한다.
       // (제외하지 않으면 dist/assets/js/__tests__ 가 bun test packages/web/ 수집에 잡혀 테스트가 중복된다.)
+      // P5-01: assets/js SSoT 가 .ts 로 전환됐다 — 이 소스 .ts/.tsx 는 Vite 가 이미 번들에 흡수하므로
+      //   dist/assets/js 로 raw 복사하지 않는다(번들 흡수분과 중복·미서빙 소스 노출 방지). 데몬이 raw 로
+      //   서빙하는 잔여 classic 자산은 i18n 3종(.js)뿐이며 .js 는 계속 복사 대상으로 남는다.
       const isCopyable = (p: string): boolean =>
         !/(^|[/\\])__tests__([/\\]|$)/.test(p) &&
         !/\.(test|spec)\.[cm]?[jt]sx?$/.test(p) &&
-        !/\.d\.ts$/.test(p);
+        !/\.d\.ts$/.test(p) &&
+        !/\.tsx?$/.test(p);
       for (const [src, dest] of copies) {
         if (existsSync(src)) cpSync(src, dest, { recursive: true, filter: isCopyable });
       }
