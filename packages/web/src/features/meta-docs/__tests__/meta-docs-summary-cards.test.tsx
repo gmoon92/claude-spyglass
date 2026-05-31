@@ -3,7 +3,9 @@
  *
  * 원본: meta-docs-view.js renderLeftSummaryCards(:399) + computeRowCounts(:430).
  *   - 카드 3개(사용/미사용/orphan) 카운트 SSoT(computeRowCounts) + display 필터 클릭 전이.
- *   - behavior mini-bar(type별 invocations 합) — ds-bar SSoT 재사용.
+ *   - behavior mini-bar(type별 invocations 합) — obs-panel.js#renderToolCategoriesCard 모드 B 마크업
+ *     (obs-cat-bar/obs-meta-row + ds-bar-fill[data-tone]) 재사용. 신규 클래스(meta-docs-summary-bars)는
+ *     CSS 부재로 평문 세로 나열 회귀를 유발했어서 폐기됨.
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -42,11 +44,18 @@ describe('MetaDocsSummaryCards — 좌측 요약 카드 (원본 renderLeftSummar
     expect(html).toContain('data-value="unused"');
     expect(html).toContain('data-value="orphan"');
   });
-  it('behavior mini-bar — type별 invocations 합 + ds-bar SSoT', () => {
+  it('behavior mini-bar — obs-panel.js#renderToolCategoriesCard 모드 B 마크업(obs-cat-bar/obs-meta-row) 1:1', () => {
     const html = renderToStaticMarkup(createElement(MetaDocsSummaryCards, { rows: ROWS, onSelectDisplay: noop }));
-    expect(html).toContain('meta-docs-summary-bars');
-    expect(html).toContain('ds-bar-track'); // Bar 컴포넌트 재사용
-    expect(html).toContain('ds-bar-fill');
+    // 컨테이너 + 행 — obs-panel.css 가 grid 스타일을 가진 SSoT 클래스.
+    expect(html).toContain('obs-card-tools obs-card-meta-docs');
+    expect(html).toContain('obs-meta-row');
+    expect(html).toContain('obs-meta-name');
+    // fill 이중 클래스 + design-system tone(ds-bar-fill[data-tone=warn]) — bar.css SSoT.
+    expect(html).toContain('obs-cat-bar-fill obs-cat-bar-fill--agent ds-bar-fill');
+    expect(html).toContain('data-tone="warn"');
+    expect(html).toContain('obs-cat-pct');
+    // 신규(미정의) 클래스로의 회귀 방지 가드.
+    expect(html).not.toContain('meta-docs-summary-bars');
     // 그룹 라벨 노출(agent/skill/command)
     expect(html).toContain('agent');
     expect(html).toContain('command');
@@ -54,6 +63,6 @@ describe('MetaDocsSummaryCards — 좌측 요약 카드 (원본 renderLeftSummar
   it('빈 rows → mini-bar 미렌더(카드만)', () => {
     const html = renderToStaticMarkup(createElement(MetaDocsSummaryCards, { rows: [], onSelectDisplay: noop }));
     expect(html).toContain('meta-docs-summary-cards');
-    expect(html).not.toContain('meta-docs-summary-bars');
+    expect(html).not.toContain('obs-meta-row');
   });
 });
