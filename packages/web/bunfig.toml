@@ -1,0 +1,14 @@
+# 테스트 러너 SSoT — P1-06 휴먼 결정(2026-05-31)
+#
+# 회귀 보루는 `bun test` 유지(마이그레이션 전 구간 P1~P4 게이트).
+# Vite 생태계 통일(Vitest 전환)은 P5-07 에서 단계적으로 수행한다.
+#   - 근거: docs/react-migration/{README.md §7-3, panel-consensus.md D1}
+#   - bisect run 게이트는 경로인자형 명령 사용:
+#       bun test packages/web/
+#       tsc --noEmit -p packages/web/tsconfig.json
+#
+# @spyglass/types 등 별칭은 tsconfig.json 의 compilerOptions.paths 를
+# bun 이 자동 resolve 한다(별도 alias 설정 불필요 — baseline 174 pass 가 근거).
+
+[test]
+root = "."
