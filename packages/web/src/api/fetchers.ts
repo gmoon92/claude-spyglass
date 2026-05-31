@@ -105,8 +105,14 @@ async function fetchParsed<T, F>(
 const RequestRowSchema = z.object({ id: z.string() }).passthrough();
 export type RequestRow = z.infer<typeof RequestRowSchema>;
 
-/** 세션 행 — 도메인 Session(@spyglass/types) 으로 흘러갈 최소 필드. passthrough 로 나머지 보존. */
-const SessionRowSchema = z.object({ session_id: z.string() }).passthrough();
+/**
+ * 세션 행 — 도메인 Session(@spyglass/types) 으로 흘러갈 최소 필드. passthrough 로 나머지 보존.
+ * /api/sessions · /api/projects/:name/sessions 응답 행의 1급 키는 `id`(server sessions 테이블 PK).
+ *   과거 스키마는 `session_id` 를 필수로 요구했으나 응답에 그 키가 없어 z.array 검증이 전건 실패 →
+ *   fetchAllSessions/fetchSessionsByProject 가 항상 빈 배열로 폴백, 좌측 세션 리스트가 'No data' 였다.
+ *   서버 실제 계약(id)에 맞춰 필수 키를 `id` 로 정정한다(session_id 는 SSE 이벤트 전용 키).
+ */
+const SessionRowSchema = z.object({ id: z.string() }).passthrough();
 type SessionRow = z.infer<typeof SessionRowSchema>;
 
 /** /api/stats/cache data. */
