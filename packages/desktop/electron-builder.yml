@@ -9,7 +9,7 @@
 # 의존성:
 #   - packages/desktop/build/icon.png            — macOS .icns 자동 생성 소스 (1024x1024)
 #   - packages/desktop/build/bin/spyglass-server — bun build --compile 산출물 (build:server-bin 스크립트)
-#   - packages/web/                              — 정적 자원 (server 가 fs로 서빙)
+#   - packages/web/dist/                         — Vite 빌드 산출 정적 자원 (server 가 fs로 서빙, P4-08)
 #   - packages/storage/migrations/*.sql          — DB 마이그레이션 (migrator.ts 가 readdir)
 #   - packages/storage-graph/node_modules/@ladybugdb — Graph projection native binding (런타임 lazy import)
 #
@@ -49,13 +49,19 @@ extraResources:
   #   x64 dmg 에도 올바른 x64 bin 이 동봉된다(이전엔 arm64 고정이라 Intel Mac 에서 깨졌다).
   - from: build/bin/spyglass-server-${arch}
     to: bin/spyglass-server
-  # web 정적 자원 — dispatch.ts 가 SPYGLASS_WEB_ROOT 로 접근.
-  - from: ../web
+  # web 정적 자원 — Vite 프로덕션 빌드 산출(packages/web/dist).
+  #   P4-08: 소스 트리(../web) 대신 빌드 산출(../web/dist)을 동봉한다. dispatch.ts 가
+  #   SPYGLASS_WEB_ROOT(=Resources/app/web)로 접근하므로 to: app/web 은 불변 →
+  #   server-process.js:121 의 주입값 무수정 유지.
+  #   선행 조건: 패키징 전 `vite build`(packages/web build:scripts)로 dist 가 생성돼 있어야 한다
+  #   — desktop build:mac 파이프라인이 build:web 을 선행한다.
+  #   dist 는 순수 빌드 산출이라 __tests__/*.test.ts 가 포함되지 않으므로 필터를 단순화한다.
+  #   주의(P4-07 선행 필요): dist 진입은 index.react.html 이며 index.html 부재(F1),
+  #   dist/locales 미생성(F2). 운영 진입 일원화·locales 복사는 P4-07/후속에서 해소한다.
+  - from: ../web/dist
     to: app/web
     filter:
       - "**/*"
-      - "!**/__tests__/**"
-      - "!**/*.test.ts"
   # DB 마이그레이션 SQL — migrator.ts 가 SPYGLASS_MIGRATIONS_ROOT 로 readdir.
   - from: ../storage/migrations
     to: app/storage/migrations
