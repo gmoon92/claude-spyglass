@@ -17,7 +17,7 @@
 //
 // 레이어(architecture.md §1.3): app 셸 → features(dashboard) + hooks(use-sse) + stores 정방향.
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useSSE } from '../hooks/use-sse';
@@ -60,6 +60,17 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
   // rail 활성 모드 — 현재 경로에서 도출(SSR 결정적, store hydrate 무관).
   const activeMode = pathToAppMode(location.pathname);
 
+  // body[data-app-mode] 동기화 — 레거시 main.js#applyAppMode(:73-123) 의 선언적 대체.
+  //   레거시 CSS(left-panel/settings-view/meta-docs)는 body[data-app-mode="browse|metadocs|settings"]
+  //   셀렉터로 모드별 show/hide 를 제어한다. React 라우팅은 이 속성을 세팅하지 않아 모드-게이트 CSS 가
+  //   전부 무력화됐다(설정뷰 display:none, 메타 모드 세션섹션 미숨김 등). 외부 DOM 속성 동기화는
+  //   effect 가 정석(렌더 중 부수효과 금지). SSR(renderToStaticMarkup)에서는 미발화.
+  useEffect(() => {
+    const body = (globalThis as { document?: Document }).document?.body;
+    if (!body) return;
+    body.dataset.appMode = activeMode;
+  }, [activeMode]);
+
   // SSE 연결 상태 — onOpen=연결, onError=끊김. 초기 true(연결 시도 중엔 배너 숨김 — 원본 onError 전까지 숨김).
   const [connected, setConnected] = useState(true);
   const lifecycle = useMemo(
@@ -73,6 +84,22 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
 
   // 모달 open 셸 로컬 상태 — available 배지 클릭 시 진입(openModal 가드 1:1).
   const [modalOpen, setModalOpen] = useState(false);
+
+  // 좌측 패널 접기(#btnPanelCollapse + ⌘B) — 원본 main.js#toggleLeftPanel(:911) + 단축키(:917).
+  //   .main-layout 에 left-panel-hidden 클래스를 토글(원본 클래스 1:1).
+  const [leftPanelHidden, setLeftPanelHidden] = useState(false);
+  const toggleLeftPanel = useCallback(() => setLeftPanelHidden((v) => !v), []);
+  useEffect(() => {
+    const doc = (globalThis as { document?: Document }).document;
+    if (!doc) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'b') return;
+      e.preventDefault();
+      toggleLeftPanel();
+    };
+    doc.addEventListener('keydown', onKey);
+    return () => doc.removeEventListener('keydown', onKey);
+  }, [toggleLeftPanel]);
 
   // shallow dismiss 로컬 상태 — 초기값은 localStorage 영속분 반영(원본 applyShallowWarning dismiss 판정).
   const [shallowDismissed, setShallowDismissed] = useState<boolean>(() => readShallowDismissed());
@@ -107,8 +134,21 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
       {/* 연결 실패 배너 — .app-shell grid row1(auto). main-layout 보다 먼저 와야 row 정합. */}
       <ErrorBanner visible={!connected} onRetry={onRetry} t={tt} />
 
-      <div className="main-layout">
+      <div className={`main-layout${leftPanelHidden ? ' left-panel-hidden' : ''}`}>
         <AppRail appMode={activeMode} onSelect={setAppMode} t={tt} />
+        {/* 좌측 패널 접기 토글(원본 sidebar-edge-toggle) — ⌘B 단축키와 동작 공유. */}
+        <button
+          className="sidebar-edge-toggle"
+          id="btnPanelCollapse"
+          type="button"
+          title={tt('ui.html.sidebar-toggle.title')}
+          aria-label={tt('ui.html.sidebar-toggle.aria')}
+          onClick={toggleLeftPanel}
+        >
+          <svg className="ds-chevron" data-dir={leftPanelHidden ? 'right' : 'left'} aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M7.5 2L3.5 6L7.5 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
         {/* 콘텐츠 슬롯 — AppRoutes(좌/우 패널 레이아웃). */}
         {children}
       </div>
