@@ -37,8 +37,10 @@ import { SearchBox } from '../components/SearchBox';
 import { FilterBar, type FilterBarLabeler } from '../components/FilterBar';
 import { subTypeOf, SUB_TYPES } from '../features/dashboard/request-types';
 import { SessionDetailContainer } from '../features/session-detail';
+import { DateRangeDropdown, type DateRangeLabeler } from '../components/DateRangeDropdown';
 import { useSSEStore } from '../stores/sse-store';
 import { useAppStore } from '../stores/app-store';
+import type { PresetValue } from '../stores/app-store';
 import { makeI18nLabeler, tt } from './i18n-labeler';
 import { deriveBrowseData } from './browse-data';
 import { fetchDashboard, fetchAllSessions, fetchRequests, type RequestRow as RequestRowData } from '../api/fetchers';
@@ -74,6 +76,9 @@ export function BrowseLayout(): ReactElement {
   const searchQuery = useAppStore((s) => s.searchQuery);
   const setFeedFilter = useAppStore((s) => s.setFeedFilter);
   const setSearchQuery = useAppStore((s) => s.setSearchQuery);
+  // 차트 헤더 date-filter — activeRange SSoT(app-store, persist cs.dateRange).
+  const activeRange = useAppStore((s) => s.activeRange);
+  const setActiveRange = useAppStore((s) => s.setActiveRange);
 
   // 데이터 population 상태.
   const [projects, setProjects] = useState<ProjectLike[]>([]);
@@ -155,6 +160,45 @@ export function BrowseLayout(): ReactElement {
   const feedTableRef = useRef<HTMLTableElement>(null);
   useColResize(feedTableRef, { storageKey: 'feed' });
 
+  // ── 차트 헤더 chart-actions(원본 index.html chart-actions) ──
+  // 차트 접기 토글(#btnToggleChart) — 로컬 state → #chartSection collapsed 클래스.
+  const [chartCollapsed, setChartCollapsed] = useState(false);
+  // date-filter 드롭다운 열림(트리거 클릭 토글 + 바깥클릭 닫기). 데이터 refilter 는 store activeRange 소비처 책임.
+  const [dateOpen, setDateOpen] = useState(false);
+
+  // date-filter 바깥 클릭 시 닫기(원본 dropdown outside-close).
+  useEffect(() => {
+    if (!dateOpen) return;
+    const onDocDown = (e: MouseEvent): void => {
+      const t = e.target as HTMLElement | null;
+      if (t && !t.closest('#dateFilter')) setDateOpen(false);
+    };
+    const doc = (globalThis as { document?: Document }).document;
+    doc?.addEventListener('mousedown', onDocDown);
+    return () => doc?.removeEventListener('mousedown', onDocDown);
+  }, [dateOpen]);
+
+  // date-filter i18n 라벨러 — 원본 date-range-dropdown.js 키(ui.main.date-filter.*) 1:1.
+  const dateLabeler: DateRangeLabeler = useMemo(
+    () => ({
+      presetLabel: (v) => tt(`ui.main.date-filter.${v}.label`),
+      presetTitle: (v) => tt(`ui.main.date-filter.${v}.title`),
+      triggerAria: () => tt('ui.main.date-filter.trigger-aria'),
+      customFrom: () => tt('ui.main.date-filter.custom.from'),
+      customTo: () => tt('ui.main.date-filter.custom.to'),
+      customApply: () => tt('ui.main.date-filter.custom.apply'),
+      customLabel: () => tt('ui.main.date-filter.custom.label'),
+      formatCustom: (from, to) => {
+        const fmt = (ms: number): string => {
+          const d = new Date(ms);
+          return Number.isFinite(ms) ? d.toISOString().slice(0, 10) : '';
+        };
+        return `${fmt(from)} ~ ${fmt(to)}`;
+      },
+    }),
+    [],
+  );
+
   // detail 활성 판정 — rightView==='detail' && 선택 세션 존재.
   const detailActive = rightView === 'detail' && !!selectedSession;
 
@@ -200,11 +244,61 @@ export function BrowseLayout(): ReactElement {
 
       <main className="right-panel" data-testid="browse-main">
         {/* ── chartSection(원본 :395) — 차트 섹션 카드. CSS 는 #chartSection/.view-section 키. ── */}
-        <div className="view-section card card--compact" id="chartSection">
+        <div className={`view-section card card--compact${chartCollapsed ? ' collapsed' : ''}`} id="chartSection">
           <div className="view-section-header">
+            {/* default-meta(원본 chart-default-meta) — 30분 sliding 타임라인 고정 라벨. */}
             <div className="chart-default-meta">
-              <span className="panel-label">Request trend (live)</span>
-              <span className="panel-hint" id="chartSubtitle">Last 30 min · live</span>
+              <span className="panel-label">{tt('ui.html.chart-section.label')}</span>
+              <span className="panel-hint" id="chartSubtitle">{tt('ui.html.chart-section.subtitle')}</span>
+            </div>
+            {/* detail-meta(원본 chart-detail-meta) — 세션 선택 시 세션ID/프로젝트 노출(CSS 가 모드별 토글). */}
+            <div className="chart-detail-meta">
+              <span className="detail-session-id" id="detailSessionId" title={selectedSession ?? ''}>
+                {selectedSession ? `${selectedSession.slice(0, 8)}…` : ''}
+              </span>
+              <span className="detail-project" id="detailProject">{selectedProject ?? ''}</span>
+              <span className="detail-tokens" id="detailTokens" />
+              <span className="detail-ended-at" id="detailEndedAt" />
+              <div className="detail-agg-badges" id="detailBadges" />
+            </div>
+            {/* actions(원본 chart-actions) — date-filter + lang-switcher + 차트 접기. */}
+            <div className="chart-actions">
+              <div
+                className="date-filter"
+                id="dateFilter"
+                onClick={(e) => {
+                  // 트리거 클릭 → 열림 토글(원본 dropdown trigger). 메뉴 내부 클릭은 토글하지 않음.
+                  if ((e.target as HTMLElement).closest('.ds-dropdown-trigger')) setDateOpen((v) => !v);
+                }}
+              >
+                <DateRangeDropdown
+                  activeRange={activeRange}
+                  labeler={dateLabeler}
+                  open={dateOpen}
+                  onSelectPreset={(v: PresetValue) => {
+                    setActiveRange({ type: 'preset', value: v });
+                    setDateOpen(false);
+                  }}
+                  onApplyCustom={(from, to) => {
+                    setActiveRange({ type: 'custom', from, to });
+                    setDateOpen(false);
+                  }}
+                />
+              </div>
+              {/* lang-switcher 는 index.html 정적 classic i18n island(#lang-switcher, lang-switcher.js 바인딩)이
+                  SSoT — 여기서 중복 렌더하면 동일 id 충돌로 island 바인딩이 깨진다. 따라서 미렌더(island 유지). */}
+              <button
+                className="btn-toggle"
+                id="btnToggleChart"
+                type="button"
+                title={tt('ui.html.chart-section.toggle-title')}
+                aria-label={tt('ui.html.chart-section.toggle-aria')}
+                onClick={() => setChartCollapsed((v) => !v)}
+              >
+                <svg className="ds-chevron" data-dir={chartCollapsed ? 'up' : 'down'} aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M2 4.5L6 8.5L10 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
             </div>
           </div>
           <div className="charts-inner">
