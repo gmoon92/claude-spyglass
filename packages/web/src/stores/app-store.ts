@@ -14,6 +14,7 @@
 //   데이터 contract)에 존재하지 않는 신규 UI 타입이다. 도메인 타입 재선언이 아니므로 여기서 선언한다.
 
 import { create } from 'zustand';
+import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware';
 
 /**
  * 앱 모드 (state.js:6-9, ADR-003 left-rail-meta-docs + settings-page).
@@ -38,6 +39,23 @@ export type MetaSubTab = 'docs' | 'tools';
  */
 export type PrevState = { rightView?: string; detailTab?: string; sessionId?: string | null } | null;
 
+/**
+ * 날짜 범위 프리셋 값 (api.js:86 PresetValue 1:1). 'week' 는 legacy 호환(T-06 제거 예정).
+ * @spyglass/types 가 아닌 web 로컬 api.js 의 런타임 contract 이므로 여기서 재선언한다.
+ */
+export type PresetValue = '1h' | 'today' | 'yesterday' | '7d' | '30d' | 'all' | 'week';
+
+/**
+ * 활성 날짜 범위 (api.js:87-89 ActiveRange 1:1).
+ *   - preset : 영속 대상 (ADR-004). 새로고침 시 복원.
+ *   - custom : 휘발. 절대시각 stale 위험으로 영속하지 않는다(ADR-004).
+ *   - null   : 미설정. 호출자가 default('all')로 폴백.
+ */
+export type ActiveRange =
+  | { type: 'preset'; value: PresetValue }
+  | { type: 'custom'; from: number; to: number }
+  | null;
+
 export interface AppStoreState {
   // ── 라우팅 슬라이스 (appMode/metaSubTab/prevState) ──
   appMode: AppMode;
@@ -50,6 +68,8 @@ export interface AppStoreState {
   selectedSession: string | null;
   feedFilterBar: unknown;
   detailFilterBar: unknown;
+  // ── 영속 슬라이스 (ADR-004, P1-05): preset만 영속 / custom·null 휘발 ──
+  activeRange: ActiveRange;
 
   // ── 액션 (state.js accessor 1:1) ──
   setAppMode: (m: AppMode) => void;
@@ -62,6 +82,7 @@ export interface AppStoreState {
   setSelectedSession: (s: string | null) => void;
   setFeedFilterBar: (b: unknown) => void;
   setDetailFilterBar: (b: unknown) => void;
+  setActiveRange: (r: ActiveRange) => void;
 }
 
 /**
@@ -79,9 +100,73 @@ export const initialState = {
   selectedSession: null as string | null,
   feedFilterBar: null as unknown,
   detailFilterBar: null as unknown,
+  // activeRange 초기값 null — loadDateRange()가 null 반환 시 호출자 default('all') 폴백하는 의미 1:1.
+  activeRange: null as ActiveRange,
 };
 
-export const useAppStore = create<AppStoreState>((set) => ({
+/**
+ * 영속 슬라이스 형태 — partialize 가 추출하는 부분(activeRange만).
+ */
+type PersistedSlice = { activeRange: ActiveRange };
+
+/**
+ * persist storage 어댑터 — Zustand StorageValue 봉투 ↔ 레거시 평면 형식 변환.
+ *
+ * done_criteria(병존 데이터 공유): localStorage 키 'cs.dateRange' 와 값 형식
+ *   `{ v:1, type:'preset', value }` 을 date-range-storage.js 와 byte-호환 유지한다.
+ *   따라서 zustand 기본 `{ state, version }` 봉투를 쓰지 않고 레거시 평면 형식으로 직렬화한다.
+ *
+ * ADR-004 휘발 규칙은 어댑터 양방향에 내장:
+ *   - setItem: activeRange.type==='preset' 만 기록, 그 외(custom/null)는 removeItem(휘발).
+ *     → date-range-storage.js saveDateRange 의 "preset만 저장 / custom no-op" 1:1.
+ *   - getItem: v===SCHEMA_VERSION && type==='preset' && typeof value==='string' 만 복원.
+ *     → loadDateRange 의 "버전/파싱실패/custom/타입누락/비문자열 → null" 1:1.
+ *
+ * localStorage 는 () => globalThis.localStorage 로 지연 평가 — 모듈 로드 순서/테스트 목 교체에 견고.
+ */
+const STORAGE_KEY = 'cs.dateRange';
+const SCHEMA_VERSION = 1;
+
+const dateRangeStorage: PersistStorage<PersistedSlice> = {
+  getItem: (_name): StorageValue<PersistedSlice> | null => {
+    const ls = typeof globalThis !== 'undefined' ? (globalThis as { localStorage?: Storage }).localStorage : undefined;
+    if (!ls) return null;
+    let raw: string | null;
+    try { raw = ls.getItem(STORAGE_KEY); } catch { return null; }
+    if (!raw) return null;
+    let parsed: unknown;
+    try { parsed = JSON.parse(raw); } catch { return null; } // parse 실패 → null
+    if (!parsed || typeof parsed !== 'object') return null;
+    const p = parsed as { v?: unknown; type?: unknown; value?: unknown };
+    if (p.v !== SCHEMA_VERSION) return null;                  // 미지원 버전 → null
+    if (p.type !== 'preset') return null;                     // custom/타입누락 → null (custom 휘발)
+    if (typeof p.value !== 'string') return null;             // value 비문자열 → null
+    return {
+      // 런타임 string 을 PresetValue 로 좁힘 — 소비처(api.js normalizeRange)가 재검증.
+      state: { activeRange: { type: 'preset', value: p.value as PresetValue } },
+      version: SCHEMA_VERSION,
+    };
+  },
+  setItem: (_name, value): void => {
+    const ls = typeof globalThis !== 'undefined' ? (globalThis as { localStorage?: Storage }).localStorage : undefined;
+    if (!ls) return;
+    const r = value.state.activeRange;
+    try {
+      if (r && r.type === 'preset') {
+        ls.setItem(STORAGE_KEY, JSON.stringify({ v: SCHEMA_VERSION, type: 'preset', value: r.value }));
+      } else {
+        ls.removeItem(STORAGE_KEY); // custom/null 휘발
+      }
+    } catch { /* quota/serialize 실패 silent */ }
+  },
+  removeItem: (_name): void => {
+    const ls = typeof globalThis !== 'undefined' ? (globalThis as { localStorage?: Storage }).localStorage : undefined;
+    if (!ls) return;
+    try { ls.removeItem(STORAGE_KEY); } catch { /* silent */ }
+  },
+};
+
+export const useAppStore = create<AppStoreState>()(persist((set) => ({
   ...initialState,
 
   // ── appMode (state.js:39-45) — 유효값 검증 가드 1:1 보존, 무효값은 무시 ──
@@ -107,4 +192,16 @@ export const useAppStore = create<AppStoreState>((set) => ({
   setSelectedSession: (s) => set({ selectedSession: s }),
   setFeedFilterBar: (b) => set({ feedFilterBar: b }),
   setDetailFilterBar: (b) => set({ detailFilterBar: b }),
+
+  // ── activeRange (ADR-004, P1-05) — set 즉시 persist 어댑터가 preset만 기록/custom·null 휘발 ──
+  setActiveRange: (r) => set({ activeRange: r }),
+}), {
+  name: STORAGE_KEY,
+  version: SCHEMA_VERSION,
+  storage: dateRangeStorage,
+  // 영속 대상은 activeRange 뿐 — appMode/metaSubTab/view 등은 cs.dateRange 형식에 섞지 않는다.
+  partialize: (s): PersistedSlice => ({ activeRange: s.activeRange }),
+  // 어댑터 getItem 이 이미 버전/형식을 검증하므로 migrate 는 통과 데이터만 받는다.
+  // 미지원/위반 데이터는 getItem 단계에서 null 처리되어 여기 도달하지 않는다(default 폴백).
+  migrate: (persisted): PersistedSlice => persisted as PersistedSlice,
 }));
