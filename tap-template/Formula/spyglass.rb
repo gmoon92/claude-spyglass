@@ -10,10 +10,11 @@
 #
 # 의존성:
 #   - 동봉된 standalone bin 안에 Bun 런타임이 포함되어 있어 시스템 bun 불필요.
-#   - native deps 없음 (storage-graph @ladybugdb 는 SPYGLASS_GRAPH_MODE=off 로 dormant).
+#   - LadybugDB native(@ladybugdb/core + core-darwin-<arch>) 동봉 — share/spyglass/native/node_modules.
+#     NODE_PATH 주입으로 graph projection(SPYGLASS_GRAPH_MODE=shadow) 활성. 실패 시 SQLite 자동 폴백.
 #
 # 호출 흐름:
-#   brew tap gmoon92/spyglass
+#   brew tap gmoon92/claude-code-spyglass
 #   brew install spyglass                  →  tarball 다운로드 → bin/share 배치
 #   spyglass start                         →  background daemonize wrapper
 #   spyglass status / stop                 →  PID/LISTEN 기반 lifecycle
@@ -22,41 +23,29 @@
 #
 # 비범위:
 #   - 코드 서명 / Apple Developer ID 는 미적용. ad-hoc codesign 으로만 서명되어 있음.
-#   - Windows 는 Homebrew 대상이 아님 → Release 의 .zip 산출물로 별도 배포(Formula 미포함).
+#   - windows/linux 미지원 — release.yml 이 macOS 전용(darwin arm64/x64)으로 축소됨(e1f8266).
 #
-# 멀티플랫폼 (R6):
-#   - darwin-arm64 / darwin-x64 / linux-x64 / linux-arm64 4개 플랫폼 url+sha256.
-#   - ⚠️ darwin-arm64 url 은 release.yml 산출물 이름(spyglass-<v>-darwin-arm64.tar.gz)에 의존.
-#     bump-homebrew-formula-action 이 이 항목을 자동 갱신하므로 형식 변경 금지.
-#   - darwin-x64 / linux-* 의 sha256 은 자동 bump 대상이 아니다(아래 sha256 갱신 주석 참조).
+# 플랫폼 (macOS 전용):
+#   - darwin-arm64 / darwin-x64 2개 url+sha256.
+#   - ⚠️ url 은 release.yml 산출물 이름(spyglass-<v>-darwin-<arch>.tar.gz)에 의존.
+#     update-formula.yml(D4)이 두 arch sha256 을 자동 갱신하므로 형식 변경 금지.
 
 class Spyglass < Formula
   desc "Local observability for Claude Code (token, cost, anomaly)"
   homepage "https://github.com/gmoon92/claude-spyglass"
   license "MIT" # ※ 본 repo 의 실제 LICENSE 와 일치하도록 갱신
-  version "2.10.0"
+  version "3.1.0"
 
   # ⚠️ on_macos 안에 on_arm/on_intel 중첩 — top-level on_arm 만 쓰면 Linux ARM 머신이
   #     macOS arm64 binary 를 받는 버그가 있다 (steipete/homebrew-tap#19).
   on_macos do
     on_arm do
       url "https://github.com/gmoon92/claude-spyglass/releases/download/v#{version}/spyglass-#{version}-darwin-arm64.tar.gz"
-      sha256 "REPLACE_WITH_ARM64_SHA256_ON_FIRST_RELEASE"
+      sha256 "3f11aed54ff9c6238a97ea524340892079eed4c73c6ef3284e1754e3131c7e23"
     end
     on_intel do
       url "https://github.com/gmoon92/claude-spyglass/releases/download/v#{version}/spyglass-#{version}-darwin-x64.tar.gz"
-      sha256 "REPLACE_WITH_DARWIN_X64_SHA256"
-    end
-  end
-
-  on_linux do
-    on_arm do
-      url "https://github.com/gmoon92/claude-spyglass/releases/download/v#{version}/spyglass-#{version}-linux-arm64.tar.gz"
-      sha256 "REPLACE_WITH_LINUX_ARM64_SHA256"
-    end
-    on_intel do
-      url "https://github.com/gmoon92/claude-spyglass/releases/download/v#{version}/spyglass-#{version}-linux-x64.tar.gz"
-      sha256 "REPLACE_WITH_LINUX_X64_SHA256"
+      sha256 "3e6361411ae5e0dffa17b26820838373bda49a88329ebe5b6c356052216c6631"
     end
   end
 
@@ -70,13 +59,16 @@ class Spyglass < Formula
 
     # wrapper script — env 주입을 단일 진입점으로 고정.
     #   - 사용자가 `spyglass <cmd>` 로 호출하든 brew services 가 호출하든 동일한 env 보장.
-    #   - SPYGLASS_GRAPH_MODE=off: native @ladybugdb 는 brew tarball 에 미동봉이므로 dormant.
-    #     storage-graph 의 circuit breaker 가 동작하지만 첫 부팅 에러 로그를 피하려 명시.
+    #   - NODE_PATH: 동봉된 @ladybugdb native(share/spyglass/native/node_modules)를 가리켜
+    #     client.ts 의 동적 import('@ladybugdb/core') 가 resolve 되게 한다(PoC 검증 D2-01).
+    #   - SPYGLASS_GRAPH_MODE=shadow: native 동봉 완료 → graph projection 활성(SQLite 100% 유지 +
+    #     백그라운드 sync). 실패 시 circuit breaker 가 SQLite 로 자동 폴백하므로 사용자 영향 0.
     (bin/"spyglass").write_env_script libexec/"spyglass-bin",
       SPYGLASS_WEB_ROOT:        share/"spyglass/web",
       SPYGLASS_MIGRATIONS_ROOT: share/"spyglass/migrations",
+      NODE_PATH:                share/"spyglass/native/node_modules",
       SPYGLASS_APP_VERSION:     version.to_s,
-      SPYGLASS_GRAPH_MODE:      "off",
+      SPYGLASS_GRAPH_MODE:      "shadow",
       SPYGLASS_UPDATE_CHANNEL:  "brew"
   end
 

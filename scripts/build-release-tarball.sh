@@ -153,6 +153,19 @@ echo "[build] staging migrations/..."
 mkdir -p "$STAGE_DIR/share/spyglass/migrations"
 cp packages/storage/migrations/*.sql "$STAGE_DIR/share/spyglass/migrations/"
 
+# LadybugDB native (@ladybugdb) — graph projection.
+#   bun --compile bin 은 .node(native addon) 를 내장 못 하므로 동봉한다. Formula 의
+#   write_env_script 가 NODE_PATH=share/spyglass/native/node_modules 를 주입 → client.ts 의
+#   동적 import('@ladybugdb/core') 가 이 경로에서 resolve 된다.
+#   (PoC 근거: docs/distribution/.distribution-gap-report.md D2-01)
+#   wrapper(core) + arch 별 native(core-${OS}-${ARCH}) 둘 다 필요(optionalDependencies 구조).
+echo "[build] staging LadybugDB native (@ladybugdb/core + core-${OS}-${ARCH})..."
+NATIVE_DST="$STAGE_DIR/share/spyglass/native/node_modules/@ladybugdb"
+mkdir -p "$NATIVE_DST"
+cp -RL node_modules/.bun/@ladybugdb+core@*/node_modules/@ladybugdb/core "$NATIVE_DST/"
+cp -RL node_modules/.bun/@ladybugdb+core-${OS}-${ARCH}@*/node_modules/@ladybugdb/core-${OS}-${ARCH} "$NATIVE_DST/"
+echo "[build]   native staged: $(ls "$NATIVE_DST" | tr '\n' ' ')"
+
 # LICENSE 가 있으면 동봉
 if [[ -f LICENSE ]]; then
   cp LICENSE "$STAGE_DIR/LICENSE"

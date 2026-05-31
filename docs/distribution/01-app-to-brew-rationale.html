@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>claude-spyglass — 배포 전략 분석: 앱(Electron DMG) → Homebrew 전환</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --line:#2a3441;
+    --ink:#e6edf3; --mut:#9aa7b4; --dim:#6e7b8a;
+    --spy:#58a6ff; --spy-soft:#172335;
+    --good:#3fb950; --warn:#d29922; --bad:#f85149;
+    --grid:#21262d;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo",Pretendard,Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.65;font-size:15px;-webkit-font-smoothing:antialiased}
+  a{color:var(--spy);text-decoration:none}
+  code,.mono{font-family:var(--mono);font-size:.86em}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+
+  header.hero{padding:64px 0 40px;border-bottom:1px solid var(--line);background:
+     radial-gradient(900px 320px at 80% -10%, rgba(88,166,255,.12), transparent 60%),
+     radial-gradient(800px 300px at 12% -10%, rgba(248,81,73,.08), transparent 60%);}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+  h1.title{font-size:36px;line-height:1.16;margin:14px 0 10px;font-weight:800;letter-spacing:-.02em}
+  h1.title .s{color:var(--spy)}
+  .sub{color:var(--mut);max-width:840px;font-size:15.5px}
+  .meta-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+  .chip{font-family:var(--mono);font-size:11.5px;color:var(--mut);border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:5px 12px}
+  .chip b{color:var(--ink)}
+
+  nav.toc{position:sticky;top:0;z-index:20;background:rgba(13,17,23,.88);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  nav.toc .wrap{display:flex;gap:6px;flex-wrap:wrap;padding:10px 24px}
+  nav.toc a{font-size:12px;color:var(--mut);padding:5px 10px;border-radius:7px;font-family:var(--mono)}
+  nav.toc a:hover{background:var(--panel);color:var(--ink)}
+
+  section{padding:46px 0;border-bottom:1px solid var(--grid)}
+  h2.sec{font-size:13px;font-family:var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--spy);margin:0 0 4px}
+  h3.big{font-size:25px;margin:0 0 18px;font-weight:750;letter-spacing:-.01em}
+  p.lead{color:var(--mut);max-width:900px}
+
+  table.t{width:100%;border-collapse:collapse;margin-top:14px;font-size:13.5px}
+  table.t th,table.t td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--grid);vertical-align:top}
+  table.t thead th{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--line)}
+  table.t tr:hover{background:var(--panel)}
+  table.t td b{color:var(--ink)}
+  .ref{font-family:var(--mono);font-size:11.5px;color:var(--spy);background:var(--spy-soft);border-radius:4px;padding:1px 5px;white-space:nowrap}
+  code.f{font-family:var(--mono);font-size:11.5px;color:var(--mut);background:#0a0e13;border:1px solid var(--grid);border-radius:5px;padding:2px 6px}
+
+  .st{font-family:var(--mono);font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:6px;white-space:nowrap}
+  .st.ok{background:#13301c;color:var(--good)} .st.warn{background:#3a2f17;color:var(--warn)} .st.bad{background:#3a1a1a;color:var(--bad)}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+  .card.spy{border-left:3px solid var(--spy)} .card.warn{border-left:3px solid var(--warn)} .card.good{border-left:3px solid var(--good)} .card.bad{border-left:3px solid var(--bad)}
+  .card h4{margin:0 0 8px;font-size:15px}
+  .card p{margin:0;color:var(--mut);font-size:13.5px}
+  .card .big-n{font-family:var(--mono);font-size:30px;font-weight:800;color:var(--spy);line-height:1;display:block;margin-bottom:6px}
+  .card.bad .big-n{color:var(--bad)} .card.good .big-n{color:var(--good)}
+
+  blockquote.q{margin:18px 0 0;padding:16px 20px;border-left:3px solid var(--spy);background:var(--panel);border-radius:0 10px 10px 0;color:var(--mut);font-size:14px}
+  blockquote.q b{color:var(--ink)}
+  blockquote.tldr{margin:18px 0 0;padding:18px 22px;border-left:3px solid var(--good);background:var(--panel);border-radius:0 10px 10px 0;color:var(--mut);font-size:14.5px}
+  blockquote.tldr b{color:var(--ink)} blockquote.tldr ul{margin:8px 0 0;padding-left:20px} blockquote.tldr li{margin:6px 0}
+
+  ol.steps{counter-reset:s;list-style:none;padding:0;margin:18px 0 0}
+  ol.steps li{position:relative;padding:14px 16px 14px 52px;margin:10px 0;background:var(--panel);border:1px solid var(--line);border-radius:10px;color:var(--mut);font-size:14px}
+  ol.steps li:before{counter-increment:s;content:counter(s);position:absolute;left:14px;top:13px;width:26px;height:26px;border-radius:50%;background:var(--spy-soft);color:var(--spy);font-family:var(--mono);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center}
+  ol.steps li b{color:var(--ink)}
+
+  .tl{position:relative;margin:22px 0 0;padding-left:26px}
+  .tl:before{content:"";position:absolute;left:8px;top:6px;bottom:6px;width:2px;background:var(--line)}
+  .tl .ev{position:relative;margin:0 0 18px;padding:0 0 0 6px}
+  .tl .ev:before{content:"";position:absolute;left:-22px;top:5px;width:11px;height:11px;border-radius:50%;background:var(--spy);border:2px solid var(--bg)}
+  .tl .ev.brk:before{background:var(--bad)}
+  .tl .ev .c{font-family:var(--mono);font-size:11.5px;color:var(--spy)} .tl .ev .d{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-left:8px}
+  .tl .ev .h{font-weight:700;margin:3px 0 2px;color:var(--ink)} .tl .ev p{margin:0;color:var(--mut);font-size:13px}
+
+  pre.cli{background:#0a0e13;border:1px solid var(--grid);border-radius:10px;padding:14px 16px;overflow:auto;font-family:var(--mono);font-size:12.5px;color:var(--ink);margin-top:14px;line-height:1.55}
+  pre.cli .c{color:var(--dim)}
+  footer{padding:40px 0 70px;color:var(--dim);font-size:12.5px;font-family:var(--mono)}
+  @media(max-width:760px){h1.title{font-size:28px}}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="kicker">claude-spyglass · distribution strategy analysis</div>
+    <h1 class="title">앱(Electron DMG) 배포 → <span class="s">Homebrew</span> 전환 분석</h1>
+    <p class="sub">spyglass의 배포 채널이 "Electron <code>.dmg</code> 앱"에서 "Homebrew Formula"로 옮겨간 배경·근거·현재 상태를 소스 직접 Read로 정리했습니다. 핵심 동기는 <b>Electron 앱의 정식 배포에 드는 Apple Developer Program 연 $99 + 코드 서명/공증 부담</b>을 <b>ad-hoc codesign 기반 무과금 brew 배포</b>로 회피하는 것입니다.</p>
+    <div class="meta-row">
+      <span class="chip">루트 <b>v3.1.0</b></span>
+      <span class="chip">desktop <b>v2.11.0</b></span>
+      <span class="chip">기준일 <b>2026-05-31</b></span>
+      <span class="chip">근거 <b>파일:라인 / 커밋해시</b></span>
+    </div>
+  </div>
+</header>
+
+<nav class="toc"><div class="wrap">
+  <a href="#tldr">0 · 요약</a>
+  <a href="#app">1 · 앱의 정체</a>
+  <a href="#fee">2 · 과금의 정체</a>
+  <a href="#brew">3 · brew 회피</a>
+  <a href="#timeline">4 · 전환 타임라인</a>
+  <a href="#state">5 · 현재 상태</a>
+  <a href="#todo">6 · 잔여 작업</a>
+  <a href="#appendix">7 · 근거 인덱스</a>
+</div></nav>
+
+<section id="tldr"><div class="wrap">
+  <h2 class="sec">TL;DR</h2>
+  <h3 class="big">한 줄 요약</h3>
+  <blockquote class="tldr">
+    <b>"앱 배포" = <code>packages/desktop</code>의 Electron macOS <code>.dmg</code></b>, <b>"과금" = Apple Developer Program 연 $99(코드 서명·공증)</b>.
+    <ul>
+      <li><b>앱 배포의 정체</b> — Electron 42.x로 빌드한 macOS <code>.dmg</code> 네이티브 앱.</li>
+      <li><b>과금의 정체</b> — DMG를 정식 배포하려면 Apple Developer ID(<b>연 $99</b>) 코드 서명 + notarization이 필요. 없으면 ① Gatekeeper 차단 ② <code>electron-updater</code> 자동 업데이트 불가.</li>
+      <li><b>전환 방향</b> — standalone Bun bin을 <b>ad-hoc codesign(무료)</b>으로 서명 → tarball → GitHub Release → <code>brew install/upgrade/services</code>로 일원화. Apple Developer ID·연 과금 불필요.</li>
+      <li><b>현재 상태</b> — README·Formula·tap-template·빌드 스크립트로 전환은 <b>확정</b>. 단 <code>release.yml</code>은 tarball 게시까지만 자동화, tap repo 부재로 Formula 자동 갱신 잡은 일시 분리. <code>install-guide.md</code>는 아직 git clone 방식.</li>
+    </ul>
+  </blockquote>
+</div></section>
+
+<section id="app"><div class="wrap">
+  <h2 class="sec">Section 1</h2>
+  <h3 class="big">"앱 배포"의 정체 — Electron DMG</h3>
+  <p class="lead"><code>packages/desktop</code>은 Bun 서버 + 웹 대시보드를 macOS 네이티브 셸로 감싼 <b>Electron 데스크톱 앱</b>입니다.</p>
+  <table class="t">
+    <thead><tr><th>항목</th><th>근거</th></tr></thead>
+    <tbody>
+      <tr><td><b>Electron 42.x DMG 셸</b></td><td><code class="f">packages/desktop/package.json</code> — <code>electron: ^42.2.0</code>, <code>build:mac → electron-builder --mac dmg</code></td></tr>
+      <tr><td><b>패키징 설정</b></td><td><code class="f">packages/desktop/electron-builder.yml</code> — <code>appId: com.spyglass.desktop</code>, <code>productName: Claude Spyglass</code>, <code>mac.target: dmg</code> (arm64/x64)</td></tr>
+      <tr><td><b>동봉 방식</b></td><td><code>bun build --compile</code> standalone bin을 <code>extraResources</code>로 동봉, child로 spawn (<code class="f">server-process.js</code>)</td></tr>
+      <tr><td><b>자동 업데이트</b></td><td><code class="f">packages/desktop/src/main/auto-updater.js</code> — GitHub Releases API 폴링 알림</td></tr>
+      <tr><td><b>빌드 진입점</b></td><td>루트 <code class="f">package.json</code> — <code>desktop:build:mac</code> / <code>desktop:pack:mac</code></td></tr>
+    </tbody>
+  </table>
+  <blockquote class="q">Electron 앱은 <span class="ref">30cda7f feat(desktop,brew)</span>(2026-05-25, v2.10.0)에서 "Local agent mode"로 처음 도입됐습니다. <b>같은 커밋에서 Homebrew "Headless mode"도 함께 구축됐고, 처음부터 brew가 recommended</b>였습니다.</blockquote>
+</div></section>
+
+<section id="fee"><div class="wrap">
+  <h2 class="sec">Section 2</h2>
+  <h3 class="big">"과금"의 정체 — Apple Developer Program 연 $99</h3>
+  <p class="lead">Electron DMG를 macOS에 <b>정상적으로 배포</b>하려면 Apple Developer ID 코드 서명이 사실상 필수이고, 이 인증서는 <b>Apple Developer Program 연 $99 유료 멤버십</b>으로만 발급됩니다.</p>
+
+  <div class="cards">
+    <div class="card bad"><span class="big-n">$99</span><h4>Apple Developer Program</h4><p>Developer ID 인증서 = 코드 서명·notarization의 전제. 연 단위 유료.</p></div>
+    <div class="card warn"><h4>서명 미적용 → Gatekeeper</h4><p><code>identity: null</code>. 미서명 DMG는 차단 → 사용자가 <code>xattr -cr</code> 수동 실행 필요.</p></div>
+    <div class="card warn"><h4>서명 없으면 자동 업데이트 불가</h4><p><code>electron-updater</code>는 Developer ID 필수 → 반자동(수동 DMG 교체)으로 다운그레이드.</p></div>
+  </div>
+
+  <blockquote class="q" style="margin-top:22px"><b><code>auto-updater.js</code> 헤더 주석 (핵심 근거)</b><br>
+  "electron-updater 는 macOS 에서 Apple Developer ID 코드 서명이 필수다. 서명을 적용하지 않은 현 상태에서는 무료로 동작하는 반자동 방식을 채택" — GitHub Releases API로 최신 태그 조회 → native dialog 알림 → 사용자가 release 페이지에서 DMG를 직접 받아 교체.</blockquote>
+
+  <h3 class="big" style="margin-top:30px;font-size:18px">정리 — "앱 배포 시 과금"의 실체</h3>
+  <table class="t">
+    <thead><tr><th>항목</th><th>미서명 (현재)</th><th>정식 서명</th></tr></thead>
+    <tbody>
+      <tr><td>비용</td><td>$0</td><td><b>Apple Developer Program 연 $99</b></td></tr>
+      <tr><td>Gatekeeper</td><td>차단/경고 → <code>xattr -cr</code> 수동</td><td>통과</td></tr>
+      <tr><td>notarization</td><td>없음</td><td>필요(Apple 공증 제출)</td></tr>
+      <tr><td>자동 업데이트</td><td>반자동(수동 DMG 교체)</td><td>electron-updater 완전 자동</td></tr>
+      <tr><td>UX</td><td>설치 마찰 큼</td><td>매끄러움</td></tr>
+    </tbody>
+  </table>
+  <p class="lead" style="margin-top:14px">→ "제대로 된 앱 배포 = 연 $99 + 서명/공증 인프라", "미서명 앱 배포 = UX·자동업데이트 희생". 이 딜레마가 <b>brew 전환의 동기</b>입니다.</p>
+</div></section>
+
+<section id="brew"><div class="wrap">
+  <h2 class="sec">Section 3</h2>
+  <h3 class="big">Homebrew 배포가 과금을 회피하는 방식</h3>
+  <p class="lead">Homebrew Formula 경로는 <b>Apple Developer ID 없이도</b> 매끄러운 설치·업데이트를 제공합니다.</p>
+  <table class="t">
+    <thead><tr><th>메커니즘</th><th>근거</th><th>효과</th></tr></thead>
+    <tbody>
+      <tr><td><b>ad-hoc codesign</b></td><td><code class="f">scripts/build-release-tarball.sh:125-128</code> — <code>codesign --sign - --force --options runtime</code></td><td>Developer ID 불필요 = <b>연 과금 0</b></td></tr>
+      <tr><td><b>standalone bin</b></td><td><code class="f">spyglass.rb</code> — "standalone bin 안에 Bun 런타임 포함 → <code>depends_on \"bun\"</code> 불필요"</td><td>시스템 Bun 설치 불필요</td></tr>
+      <tr><td><b>tarball + GitHub Release</b></td><td><code class="f">release.yml</code> → <code>build-release-tarball.sh</code> → <code>tar.gz</code>+<code>sha256</code> 업로드</td><td>호스팅 비용 0</td></tr>
+      <tr><td><b>brew services</b></td><td><code class="f">spyglass.rb</code> — <code>service do … run [opt_bin/spyglass, serve]</code></td><td>launchd 자동시작, 코드서명 무관</td></tr>
+      <tr><td><b>brew upgrade</b></td><td><code class="f">spyglass.rb</code> — "auto-update 는 <code>brew upgrade</code> 가 canonical"</td><td>electron-updater 대체</td></tr>
+    </tbody>
+  </table>
+  <blockquote class="q"><b><code>spyglass.rb</code> 헤더 주석</b> — "코드 서명 / Apple Developer ID 는 미적용. ad-hoc codesign 으로만 서명되어 있음."</blockquote>
+  <pre class="cli"><span class="c"># 사용자 설치 흐름 (README.md §Install)</span>
+brew tap gmoon92/claude-code-spyglass
+brew install spyglass
+brew services start spyglass   <span class="c"># 로그인 시 자동 시작</span>
+spyglass open
+brew upgrade spyglass          <span class="c"># 업데이트</span></pre>
+</div></section>
+
+<section id="timeline"><div class="wrap">
+  <h2 class="sec">Section 4</h2>
+  <h3 class="big">전환 타임라인 (커밋 근거)</h3>
+  <div class="tl">
+    <div class="ev">
+      <span class="c">30cda7f</span><span class="d">05-25 · v2.10.0</span>
+      <div class="h">feat(desktop,brew) — 두 채널 동시 구축</div>
+      <p>Electron DMG(Local agent) + Homebrew(Headless, <b>recommended</b>). Formula sha256 자동 bump(<code>mislav/bump-homebrew-formula-action</code>) 포함. <code>serve</code>/<code>start</code> lifecycle 분리, <code>SPYGLASS_*_ROOT</code> env 외부화, <code>updateChannel: git|brew|packaged</code> 도입.</p>
+    </div>
+    <div class="ev">
+      <span class="c">0107ce7</span><span class="d">R6</span>
+      <div class="h">feat(release) — 멀티플랫폼 matrix 확장</div>
+      <p>5타겟(darwin arm64/x64, linux arm64/x64, windows-x64)으로 확장. Formula <code>on_macos</code>/<code>on_linux</code> 활성화.</p>
+    </div>
+    <div class="ev">
+      <span class="c">1992b54 · c47be60</span><span class="d">05-31</span>
+      <div class="h">fix(release) — windows 빌드 도구 부재 연쇄 수정</div>
+      <p>git-bash에 rsync(→tar 교체)·zip·PowerShell 부재로 빌드 실패 반복.</p>
+    </div>
+    <div class="ev">
+      <span class="c">af3c959</span><span class="d">05-31 12:51</span>
+      <div class="h">ci(release) — homebrew bump 잡 제거 (tarball-only)</div>
+      <p>tap repo(<code>gmoon92/homebrew-spyglass</code>)가 부재해 bump 잡이 항상 실패/skip → 잡 제거, GitHub Release 직접 다운로드로 전환. "추후 homebrew 도입 시 잡+tap repo 별도 구성".</p>
+    </div>
+    <div class="ev brk">
+      <span class="c">e1f8266</span><span class="d">05-31 13:04 · breaking</span>
+      <div class="h">feat(release)! — macOS 전용 축소</div>
+      <p>windows/linux 빌드 제거("windows 지원 중단 — 앱·설치형 배포 계획 없음"). matrix를 darwin arm64/x64만으로 축소.</p>
+    </div>
+  </div>
+  <blockquote class="q" style="margin-top:8px"><b>흐름 요약</b> — 두 채널 동시 출발(앱+brew) → brew를 recommended로 → 멀티플랫폼 확장 시도 → windows 빌드 마찰 + tap repo 부재로 정리 → macOS·tarball 중심으로 수렴. "앱(DMG) 배포"는 README 2순위로 남고, 무게중심은 brew/tarball로 이동.</blockquote>
+</div></section>
+
+<section id="state"><div class="wrap">
+  <h2 class="sec">Section 5</h2>
+  <h3 class="big">현재 상태 정합성 — 컴포넌트별</h3>
+  <table class="t">
+    <thead><tr><th>컴포넌트</th><th>상태</th><th>근거 / 비고</th></tr></thead>
+    <tbody>
+      <tr><td><b>README.md</b></td><td><span class="st ok">brew 1순위</span></td><td>§Install "1. Headless mode — Homebrew Formula (recommended)" / "2. Local agent mode — Electron app". brew tap/install/services/upgrade/uninstall 완비</td></tr>
+      <tr><td><b>Formula</b> <code class="f">tap-template/Formula/spyglass.rb</code></td><td><span class="st warn">sha256 미충전</span></td><td>4플랫폼 url+sha256, <code>write_env_script</code>, <code>service do</code>, <code>caveats</code> 완비. 단 sha256은 <code>REPLACE_WITH_*</code> placeholder</td></tr>
+      <tr><td><b>tap-template/README.md</b></td><td><span class="st ok">절차 완비</span></td><td><code>homebrew-spyglass</code> tap repo 부트스트랩(생성→복사→첫 release sha256 자동 갱신→<code>HOMEBREW_TAP_TOKEN</code> PAT) 안내</td></tr>
+      <tr><td><b>build-release-tarball.sh</b></td><td><span class="st ok">동작</span></td><td>standalone bin + ad-hoc codesign + <code>tar.gz</code> + <code>sha256</code> 산출. macOS 전용(windows 분기 제거)</td></tr>
+      <tr><td><b>release.yml</b></td><td><span class="st warn">부분 자동화</span></td><td>darwin arm64/x64 tarball을 GitHub Release에 게시까지만. <b>homebrew bump 잡 제거됨</b>(tap repo 부재). 비범위에 "homebrew tap·앱/설치형 배포 미지원" 명시</td></tr>
+      <tr><td><b>install-guide.md</b></td><td><span class="st bad">미현행화</span></td><td>여전히 <code>git clone</code> + <code>bun run dev</code> 방식만 1차 안내. <b>brew tap/install/services 절 부재</b></td></tr>
+      <tr><td><b>packages/desktop</b> (Electron)</td><td><span class="st warn">잔존</span></td><td>README 2순위로 유지. <code>desktop</code> v2.11.0(루트 3.1.0 대비 정체). x64 dmg arch 고정 이슈(R4)는 <code>SPYGLASS_BIN_ARCH</code> 인자화로 해결됨</td></tr>
+    </tbody>
+  </table>
+</div></section>
+
+<section id="todo"><div class="wrap">
+  <h2 class="sec">Section 6</h2>
+  <h3 class="big">brew 배포 완성까지 잔여 작업</h3>
+  <p class="lead">현재는 "brew Formula가 소비할 tarball"은 자동 생산되지만, Formula까지 닿는 마지막 연결고리가 끊겨 있습니다.</p>
+  <ol class="steps">
+    <li><b>tap repo 생성</b> — <code>gmoon92/homebrew-spyglass</code> public repo 생성 후 <code>tap-template/*</code> 푸시 (tap-template/README §1~2).</li>
+    <li><b>Formula sha256 충전</b> — 첫 release 후 macOS 2타겟 sha256을 <code>spyglass.rb</code>에 반영. 미충전 시 <code>brew install</code> 실패.</li>
+    <li><b>bump 잡 재도입</b> — <code>af3c959</code>에서 제거된 <code>bump-homebrew-formula-action</code>을 tap repo 구성 후 <code>release.yml</code>에 복원 → tag push 시 Formula 자동 갱신.</li>
+    <li><b>install-guide.md 현행화</b> — <code>brew tap</code>/<code>brew install</code>/<code>brew services</code> 절을 1차 설치 경로로 추가. 현재 git clone 방식은 "From source(contributors)"로 격하. README와 정합 맞춤.</li>
+    <li><b>(선택) desktop 노선 정리</b> — Electron DMG를 보조 채널로 유지할지/deprecate할지 결정. 유지 시 미서명·<code>xattr</code> 안내를 install-guide에 명시.</li>
+  </ol>
+</div></section>
+
+<section id="appendix"><div class="wrap">
+  <h2 class="sec">Section 7</h2>
+  <h3 class="big">부록 — 근거 인덱스</h3>
+  <table class="t">
+    <thead><tr><th>주장</th><th>근거</th></tr></thead>
+    <tbody>
+      <tr><td>Electron DMG = "앱 배포"</td><td><code class="f">packages/desktop/electron-builder.yml</code>, <code class="f">packages/desktop/package.json</code></td></tr>
+      <tr><td>코드 서명 미적용 / Gatekeeper / xattr</td><td><code class="f">packages/desktop/electron-builder.yml</code> (<code>identity: null</code> + 헤더 주석)</td></tr>
+      <tr><td>electron-updater = Apple Developer ID 필수 → 반자동 채택</td><td><code class="f">packages/desktop/src/main/auto-updater.js</code> (헤더 주석)</td></tr>
+      <tr><td>brew = ad-hoc codesign(무료)</td><td><code class="f">tap-template/Formula/spyglass.rb</code> (헤더), <code class="f">scripts/build-release-tarball.sh:125-128</code></td></tr>
+      <tr><td>brew upgrade = canonical auto-update</td><td><code class="f">tap-template/Formula/spyglass.rb</code> (헤더 주석)</td></tr>
+      <tr><td>brew 1순위 / Electron 2순위</td><td><code class="f">README.md</code> §Install</td></tr>
+      <tr><td>현재 release = macOS tarball-only, homebrew/앱 미지원</td><td><code class="f">.github/workflows/release.yml</code> (헤더 주석 + matrix)</td></tr>
+      <tr><td>tap repo 부트스트랩 절차</td><td><code class="f">tap-template/README.md</code></td></tr>
+      <tr><td>install-guide가 git clone 방식</td><td><code class="f">docs/install-guide.md</code> §3</td></tr>
+    </tbody>
+  </table>
+  <blockquote class="q" style="border-left-color:var(--warn)"><b style="color:var(--warn)">미확인 / 추정 (별도 검증 필요)</b><br>
+  ① "$99"는 Apple Developer Program 표준 연회비(외부 사실)다. 코드 주석은 "Apple Developer ID 코드 서명 필수"까지만 명시하며 금액 자체는 코드 근거가 아니다.<br>
+  ② desktop 노선의 deprecate 여부는 명시된 결정 문서가 없다. README 2순위 잔존·<code>desktop</code> v2.11.0 정체는 정황 근거일 뿐, 공식 중단 선언은 확인되지 않았다.</blockquote>
+</div></section>
+
+<footer><div class="wrap">
+  Generated by Claude Code (Opus 4.8) · 소스 직접 Read 기반 · 기준일 2026-05-31 · SSoT: <code>docs/distribution/01-app-to-brew-rationale.md</code>
+</div></footer>
+
+</body>
+</html>

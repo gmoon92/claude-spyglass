@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>spyglass 배포 개선 계획 — Homebrew Formula(무과금) + cmux 차용</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --line:#2a3441;
+    --ink:#e6edf3; --mut:#9aa7b4; --dim:#6e7b8a;
+    --spy:#58a6ff; --spy-soft:#172335;
+    --good:#3fb950; --warn:#d29922; --bad:#f85149;
+    --grid:#21262d;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo",Pretendard,Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.65;font-size:15px;-webkit-font-smoothing:antialiased}
+  a{color:var(--spy);text-decoration:none} a:hover{text-decoration:underline}
+  code,.mono{font-family:var(--mono);font-size:.86em}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+
+  header.hero{padding:64px 0 40px;border-bottom:1px solid var(--line);background:
+     radial-gradient(900px 320px at 80% -10%, rgba(63,185,80,.12), transparent 60%),
+     radial-gradient(800px 300px at 12% -10%, rgba(88,166,255,.10), transparent 60%);}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+  h1.title{font-size:34px;line-height:1.16;margin:14px 0 10px;font-weight:800;letter-spacing:-.02em}
+  h1.title .s{color:var(--good)}
+  .sub{color:var(--mut);max-width:860px;font-size:15.5px}
+  .meta-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+  .chip{font-family:var(--mono);font-size:11.5px;color:var(--mut);border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:5px 12px}
+  .chip b{color:var(--ink)} .chip.free{border-color:#21422a;color:var(--good)}
+
+  nav.toc{position:sticky;top:0;z-index:20;background:rgba(13,17,23,.88);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  nav.toc .wrap{display:flex;gap:6px;flex-wrap:wrap;padding:10px 24px}
+  nav.toc a{font-size:12px;color:var(--mut);padding:5px 10px;border-radius:7px;font-family:var(--mono)}
+  nav.toc a:hover{background:var(--panel);color:var(--ink);text-decoration:none}
+
+  section{padding:46px 0;border-bottom:1px solid var(--grid)}
+  h2.sec{font-size:13px;font-family:var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--good);margin:0 0 4px}
+  h3.big{font-size:25px;margin:0 0 18px;font-weight:750;letter-spacing:-.01em}
+  p.lead{color:var(--mut);max-width:900px}
+
+  table.t{width:100%;border-collapse:collapse;margin-top:14px;font-size:13.5px}
+  table.t th,table.t td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--grid);vertical-align:top}
+  table.t thead th{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--line)}
+  table.t tr:hover{background:var(--panel)} table.t td b{color:var(--ink)}
+  code.f{font-family:var(--mono);font-size:11.5px;color:var(--mut);background:#0a0e13;border:1px solid var(--grid);border-radius:5px;padding:2px 6px}
+  .yes{color:var(--good);font-weight:700} .no{color:var(--bad);font-weight:700} .adapt{color:var(--warn);font-weight:700}
+
+  .phase{background:var(--panel);border:1px solid var(--line);border-radius:14px;margin-top:16px;overflow:hidden}
+  .phase.star{border-left:3px solid var(--good)}
+  .phase .ph{padding:16px 20px;background:var(--panel2);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .phase .ph .n{font-family:var(--mono);font-weight:800;font-size:13px;color:var(--good);background:#13301c;border-radius:6px;padding:3px 9px}
+  .phase .ph h4{margin:0;font-size:17px;flex:1;min-width:180px}
+  .phase .ph .est{font-family:var(--mono);font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:6px;padding:2px 8px}
+  .phase .pb{padding:16px 20px} .phase .pb ul{margin:0;padding-left:18px;color:var(--mut);font-size:13.5px} .phase .pb li{margin:6px 0} .phase .pb li b{color:var(--ink)}
+
+  blockquote.q{margin:18px 0 0;padding:16px 20px;border-left:3px solid var(--spy);background:var(--panel);border-radius:0 10px 10px 0;color:var(--mut);font-size:14px}
+  blockquote.q b{color:var(--ink)}
+  blockquote.warn{border-left-color:var(--warn)} blockquote.warn b.h{color:var(--warn)}
+
+  pre.cli{background:#0a0e13;border:1px solid var(--grid);border-radius:10px;padding:14px 16px;overflow:auto;font-family:var(--mono);font-size:12.3px;color:var(--ink);margin-top:14px;line-height:1.6}
+  pre.cli .c{color:var(--dim)} pre.cli .k{color:var(--spy)} pre.cli .g{color:var(--good)}
+
+  ul.chk{list-style:none;padding:0;margin:16px 0 0}
+  ul.chk li{position:relative;padding:9px 12px 9px 34px;margin:7px 0;background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--mut);font-size:13.5px}
+  ul.chk li:before{content:"\2713";position:absolute;left:12px;top:9px;color:var(--good);font-weight:700}
+  ul.chk li b{color:var(--ink)}
+
+  footer{padding:40px 0 70px;color:var(--dim);font-size:12.5px;font-family:var(--mono)}
+  @media(max-width:760px){h1.title{font-size:26px}}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="kicker">claude-spyglass · distribution improvement plan</div>
+    <h1 class="title">Homebrew <span class="s">Formula(무과금)</span> 완성 + cmux 자동화 차용</h1>
+    <p class="sub">Electron DMG(앱) 배포 의존을 끊고 <b>standalone Bun bin을 Homebrew Formula로 배포하는 무과금 노선</b>을 완성합니다. cmux의 brew 자동화 패턴을 <b>차용(adapt)</b>하되, 과금을 유발하는 요소(Cask·DMG·Apple Developer ID 서명·notarization)는 <b>차용하지 않습니다</b>.</p>
+    <div class="meta-row">
+      <span class="chip free">과금 <b>0원</b></span>
+      <span class="chip">형식 <b>Formula (CLI bin)</b></span>
+      <span class="chip">레퍼런스 <b>manaflow-ai/cmux</b></span>
+      <span class="chip">선행 <b><a href="./01-app-to-brew-rationale.html">01 과금 분석</a></b></span>
+      <span class="chip">기준일 <b>2026-05-31</b></span>
+    </div>
+  </div>
+</header>
+
+<nav class="toc"><div class="wrap">
+  <a href="#decide">0 · 결정</a>
+  <a href="#borrow">1 · 차용 매트릭스</a>
+  <a href="#gap">2 · 현재 갭</a>
+  <a href="#key">3 · 핵심 설계</a>
+  <a href="#phases">4 · 실행 계획</a>
+  <a href="#wf">5 · 워크플로우 적응</a>
+  <a href="#scenario">6 · 배포 시나리오</a>
+  <a href="#risk">7 · 무과금 보장</a>
+</div></nav>
+
+<section id="decide"><div class="wrap">
+  <h2 class="sec">Section 0</h2>
+  <h3 class="big">결정 사항 (사용자 확정)</h3>
+  <table class="t">
+    <thead><tr><th>항목</th><th>결정</th></tr></thead>
+    <tbody>
+      <tr><td>배포 형식</td><td><b>Homebrew Formula</b> (CLI standalone bin). Cask 아님</td></tr>
+      <tr><td>서명</td><td><b>ad-hoc codesign 만</b> (무과금). Apple Developer ID·notarization 미적용</td></tr>
+      <tr><td>cmux 활용</td><td><b>차용(adapt)</b> — 자동화 패턴만. 그대로 복사 금지</td></tr>
+      <tr><td>과금</td><td><b class="yes">0원</b> 유지가 절대 제약</td></tr>
+    </tbody>
+  </table>
+</div></section>
+
+<section id="borrow"><div class="wrap">
+  <h2 class="sec">Section 1</h2>
+  <h3 class="big">cmux 차용 매트릭스</h3>
+  <p class="lead">cmux는 네이티브 앱을 <b>Cask + DMG + Developer ID 서명($99)</b>으로 배포합니다. spyglass는 그중 <b>자동화 골격만</b> 가져옵니다.</p>
+  <table class="t">
+    <thead><tr><th>cmux 요소</th><th>근거</th><th>spyglass 적용</th></tr></thead>
+    <tbody>
+      <tr><td>release 완료 후 <code>workflow_run</code> 트리거로 tap 정의 자동 갱신</td><td><code class="f">update-homebrew.yml:6-8</code></td><td><span class="yes">✅ 차용</span> — Formula 자동 갱신으로 적응</td></tr>
+      <tr><td>커스텀 스크립트로 brew 정의 <b>전체 재생성</b> + SHA256 직접 계산</td><td><code class="f">update-homebrew.yml:91-120</code></td><td><span class="yes">✅ 차용</span> — mislav action "단일 url" 한계 우회</td></tr>
+      <tr><td>SHA 검증(자산 vs 정의) 후 commit·push</td><td><code class="f">update-homebrew.yml:122-147</code></td><td><span class="yes">✅ 차용</span> — placeholder 오게시 방지</td></tr>
+      <tr><td>tap repo를 <b>git submodule</b>로 포함</td><td><code class="f">cmux/.gitmodules</code></td><td><span class="yes">✅ 차용</span> — <code>homebrew-claude-code-spyglass</code> submodule</td></tr>
+      <tr><td><code>HOMEBREW_TAP_TOKEN</code> PAT로 push</td><td><code class="f">update-homebrew.yml:83</code></td><td><span class="yes">✅ 차용</span> — tap-template가 이미 요구</td></tr>
+      <tr><td><b>Cask</b>(<code>--cask</code>) + <code>app "cmux.app"</code></td><td><code class="f">update-homebrew.yml:93-117</code></td><td><span class="no">❌ 미차용</span> — Formula(CLI) 유지</td></tr>
+      <tr><td><b>DMG</b> 빌드·<code>create-dmg</code></td><td><code class="f">build-sign-upload.sh</code></td><td><span class="no">❌ 미차용</span> — tarball 유지</td></tr>
+      <tr><td><b>Developer ID 서명 + notarization</b></td><td><code class="f">sign-cmux-bundle.sh</code></td><td><span class="no">❌ 미차용</span> — 과금. ad-hoc만</td></tr>
+      <tr><td><b>Sparkle</b> appcast 자동 업데이트</td><td><code class="f">release.yml</code> R2 appcast</td><td><span class="no">❌ 미차용</span> — <code>brew upgrade</code> canonical</td></tr>
+    </tbody>
+  </table>
+  <blockquote class="q"><b>한 줄 요약</b> — "release 후 → 자산 SHA 계산 → tap repo brew 정의 스크립트 재생성·검증·push" 라는 <b>무인 갱신 파이프라인</b>만 가져오고, 그 파이프라인이 다루는 산출물을 DMG/Cask → tarball/Formula 로 바꿉니다.</blockquote>
+</div></section>
+
+<section id="gap"><div class="wrap">
+  <h2 class="sec">Section 2</h2>
+  <h3 class="big">현재 갭</h3>
+  <p class="lead"><a href="./01-app-to-brew-rationale.html">01 문서</a> §5~6에서 식별된, brew 배포 완성까지 끊긴 연결고리:</p>
+  <table class="t">
+    <tbody>
+      <tr><td><b>1. tap repo 부재</b></td><td><code>gmoon92/homebrew-claude-code-spyglass</code> 미생성 → <code>af3c959</code>에서 bump 잡 제거됨</td></tr>
+      <tr><td><b>2. Formula sha256 placeholder</b></td><td><code class="f">tap-template/Formula/spyglass.rb</code>의 <code>REPLACE_WITH_*_SHA256</code> 미충전 → <code>brew install</code> 실패</td></tr>
+      <tr><td><b>3. 자동 갱신 잡 부재</b></td><td>release.yml은 tarball 게시까지만. tag push 후 Formula 미갱신</td></tr>
+      <tr><td><b>4. install-guide.md 미현행화</b></td><td>아직 <code>git clone</code> 방식만. brew 절 없음</td></tr>
+      <tr><td><b>5. 배포 시나리오 미정리</b></td><td>방향(Formula+무과금)은 잡혔으나 설치/실행/업데이트/제거 시나리오가 한 곳에 정리 안 됨 (§6)</td></tr>
+    </tbody>
+  </table>
+</div></section>
+
+<section id="key"><div class="wrap">
+  <h2 class="sec">Section 3</h2>
+  <h3 class="big">핵심 설계 — cmux 커스텀 스크립트 방식 채택</h3>
+  <blockquote class="q"><b class="h" style="color:var(--warn)">문제</b><br>
+  spyglass Formula는 macOS 2타겟(darwin-arm64 + darwin-x64) 각각의 <code>sha256</code>을 가집니다(<code>spyglass.rb</code> <code>on_arm</code>/<code>on_intel</code>). 그런데 과거 쓰던 <code>mislav/bump-homebrew-formula-action</code>은 <b>단일 download-url의 url+sha256만 패치</b>합니다(제거된 잡 주석: "darwin-arm64 만 자동 … 나머지 수동"). → arm64만 자동, x64는 매 릴리스 수동.</blockquote>
+  <blockquote class="q"><b class="h">해결</b><br>
+  cmux의 <b>커스텀 스크립트 방식</b>을 차용합니다. release 산출물 SHA256을 워크플로우에서 직접 계산하고 Formula 전체를 스크립트로 재생성하면 <b>2개 arch sha256을 한 번에</b> 채울 수 있습니다. <code>mislav</code> action 의존을 버리는 것이 차용의 핵심 가치입니다.</blockquote>
+  <table class="t">
+    <thead><tr><th>방식</th><th>다중 arch sha256</th><th>검증</th><th>적합성</th></tr></thead>
+    <tbody>
+      <tr><td><code>mislav</code> action (구)</td><td><span class="no">❌ 단일 url → arm64만</span></td><td>action 내부</td><td><span class="no">✗ x64 수동 잔존</span></td></tr>
+      <tr><td><b>cmux식 커스텀 스크립트 (차용)</b></td><td><span class="yes">✅ arch별 계산·주입</span></td><td>명시적 SHA 대조</td><td><span class="yes">✓ 2-arch 완전 자동</span></td></tr>
+    </tbody>
+  </table>
+</div></section>
+
+<section id="phases"><div class="wrap">
+  <h2 class="sec">Section 4</h2>
+  <h3 class="big">단계별 실행 계획</h3>
+  <p class="lead">각 단계는 독립 커밋. Phase 1~2는 1회성 부트스트랩, Phase 3~4가 자동화·문서 본체. <b>총 예상 Phase 1~5 약 4시간</b>.</p>
+
+  <div class="phase">
+    <div class="ph"><span class="n">P1</span><h4>tap repo 부트스트랩</h4><span class="est">~20분</span></div>
+    <div class="pb"><ul>
+      <li><code>gmoon92/homebrew-claude-code-spyglass</code> public repo 생성 (tap-template/README §1~2)</li>
+      <li><code>tap-template/*</code>를 초기 콘텐츠로 push</li>
+      <li>본 repo submodule 등록: <code>git submodule add … homebrew-claude-code-spyglass</code> (cmux <code>.gitmodules</code> 구조 차용)</li>
+      <li><b>검증</b>: <code>brew tap gmoon92/claude-code-spyglass</code> 성공</li>
+    </ul></div>
+  </div>
+
+  <div class="phase">
+    <div class="ph"><span class="n">P2</span><h4>첫 릴리스 + sha256 1회 충전</h4><span class="est">~30분</span></div>
+    <div class="pb"><ul>
+      <li><code>git tag v3.1.1 &amp;&amp; git push origin v3.1.1</code> → release.yml이 darwin arm64/x64 tarball + <code>.sha256</code> 게시</li>
+      <li>게시된 <code>*.tar.gz.sha256</code> 2개 값을 <code>spyglass.rb</code>의 placeholder에 수기 반영 후 tap push</li>
+      <li><b>검증</b>: <code>brew install spyglass &amp;&amp; spyglass status</code> 정상. <code>spctl</code> 거부는 정상(무과금 전제)</li>
+    </ul></div>
+  </div>
+
+  <div class="phase star">
+    <div class="ph"><span class="n">P3 ★</span><h4>Formula 자동 갱신 워크플로우 차용</h4><span class="est">~1.5시간</span></div>
+    <div class="pb"><ul>
+      <li>cmux <code>update-homebrew.yml</code>을 적응한 <code>update-formula.yml</code> 신설(§5 골격)</li>
+      <li><code>release</code> 워크플로우 완료 후 <code>workflow_run</code> 트리거</li>
+      <li>arm64/x64 tarball 다운로드 → 각 SHA256 계산 → <code>spyglass.rb</code> 재생성(2-arch 주입) → SHA 대조 → tap commit·push</li>
+      <li><code>HOMEBREW_TAP_TOKEN</code> secret 등록 · pre-release(<code>-rc</code>) tag skip</li>
+      <li><b>검증</b>: 다음 tag push 시 tap repo 자동 커밋 + <code>brew upgrade spyglass</code> 동작</li>
+    </ul></div>
+  </div>
+
+  <div class="phase">
+    <div class="ph"><span class="n">P4</span><h4>install-guide.md 현행화</h4><span class="est">~40분</span></div>
+    <div class="pb"><ul>
+      <li>1차 설치 경로를 <b>brew</b>로 교체(tap/install/services/open/upgrade)</li>
+      <li>git clone 절은 <b>"From source (contributors)"</b>로 격하(README와 동일 구조)</li>
+      <li>ad-hoc 서명 안내(<code>spctl</code> 거부는 정상) 명시</li>
+    </ul></div>
+  </div>
+
+  <div class="phase">
+    <div class="ph"><span class="n">P5</span><h4>배포 시나리오 정리</h4><span class="est">~40분</span></div>
+    <div class="pb"><ul>
+      <li>§6 시나리오 매트릭스를 <code>docs/distribution/</code>에 정식 문서로 확정(미완성분 마감)</li>
+      <li><code>docs/architecture/deployment.md</code>의 로컬/데몬/Docker 시나리오와 brew 설치 시나리오 교차 링크</li>
+    </ul></div>
+  </div>
+
+  <div class="phase">
+    <div class="ph"><span class="n">P6</span><h4>(선택) desktop 노선 정리</h4><span class="est">~30분 · 결정 필요</span></div>
+    <div class="pb"><ul>
+      <li><code>packages/desktop</code>(Electron) 유지/deprecate 결정</li>
+      <li>유지 시: README 2순위 + "미서명·<code>xattr -cr</code> 필요" 명시</li>
+      <li>deprecate 시: <code>desktop:*</code> 스크립트·<code>electron-builder.yml</code> 제거</li>
+      <li><span class="adapt">미확인</span> — 공식 중단 결정 문서 없음. 사용자 결정 대기</li>
+    </ul></div>
+  </div>
+</div></section>
+
+<section id="wf"><div class="wrap">
+  <h2 class="sec">Section 5</h2>
+  <h3 class="big">차용 워크플로우 적응 설계 (<code>update-formula.yml</code> 골격)</h3>
+  <p class="lead">cmux <code>update-homebrew.yml</code>을 spyglass Formula·2-arch로 적응한 <b>골격</b>(원본 복사가 아닌 적응안):</p>
+  <pre class="cli"><span class="k">name</span>: Update Homebrew Formula
+<span class="k">on</span>:
+  workflow_run:
+    workflows: [<span class="g">"release"</span>]        <span class="c"># spyglass release.yml 의 name</span>
+    types: [completed]
+  workflow_dispatch: { inputs: { version: { required: true } } }
+
+<span class="k">jobs</span>:
+  update-formula:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    steps:
+      <span class="c"># 1) 버전 결정 + semver 검증(pre-release skip)  ← cmux 분기 차용</span>
+      <span class="c"># 2) darwin-arm64 / darwin-x64 두 tarball 다운로드 → 각 sha256 계산</span>
+      <span class="c">#    ↑ cmux는 DMG 1개, 여기선 tarball 2개</span>
+      <span class="c"># 3) homebrew-claude-code-spyglass checkout (HOMEBREW_TAP_TOKEN)</span>
+      <span class="c"># 4) Formula/spyglass.rb 재생성:</span>
+      <span class="c">#      on_macos { on_arm → url+ARM64_SHA ; on_intel → url+X64_SHA }  ← 2-arch 동시 주입</span>
+      <span class="c"># 5) SHA 대조 검증(arm64·x64 각각) — 불일치 시 exit 1</span>
+      <span class="c"># 6) git commit -m "spyglass &lt;ver&gt;" &amp;&amp; push</span></pre>
+  <blockquote class="q"><b>핵심 차이(cmux 대비)</b> — 자산이 DMG 1개 → tarball 2개, 정의가 Cask → Formula의 <code>on_arm</code>/<code>on_intel</code> 2블록. 나머지(트리거·SHA검증·PAT·semver skip)는 동일 골격. 실제 코드는 본 계획 승인 후 작성.</blockquote>
+</div></section>
+
+<section id="scenario"><div class="wrap">
+  <h2 class="sec">Section 6</h2>
+  <h3 class="big">배포 시나리오 매트릭스 (미완성분 정리)</h3>
+  <p class="lead">사용자가 "완벽히 정리되지 않았다"고 한 부분. brew Formula 기준 전 구간 시나리오:</p>
+  <table class="t">
+    <thead><tr><th>시나리오</th><th>명령</th><th>비고</th></tr></thead>
+    <tbody>
+      <tr><td><b>설치</b></td><td><code>brew tap gmoon92/claude-code-spyglass &amp;&amp; brew install spyglass</code></td><td>standalone bin(Bun 내장), 시스템 Bun 불필요</td></tr>
+      <tr><td><b>수동 실행</b></td><td><code>spyglass start &amp;&amp; spyglass open</code></td><td>detached 백그라운드 데몬</td></tr>
+      <tr><td><b>자동 시작</b></td><td><code>brew services start spyglass</code></td><td>launchd → <code>spyglass serve</code>(foreground)</td></tr>
+      <tr><td><b>상태/중지</b></td><td><code>spyglass status</code> / <code>stop</code> / <code>brew services stop</code></td><td>포트(9999) LISTEN 기준</td></tr>
+      <tr><td><b>업데이트</b></td><td><code>brew upgrade spyglass</code></td><td>canonical. electron-updater 대체</td></tr>
+      <tr><td><b>제거</b></td><td><code>brew uninstall spyglass</code> (+ <code>rm -rf ~/.spyglass</code>)</td><td>데이터는 <code>~/.spyglass</code> 잔존</td></tr>
+      <tr><td><b>Gatekeeper</b></td><td>ad-hoc 서명 — CLI는 <code>.app</code>보다 마찰 적음</td><td><code>spctl</code> 거부는 정상, 무과금 전제</td></tr>
+      <tr><td><b>데이터 경로</b></td><td><code>~/.spyglass/</code> (Formula env 주입)</td><td>로컬/데몬/Docker와 동일</td></tr>
+    </tbody>
+  </table>
+  <blockquote class="q warn"><b class="h">미정리였던 핵심 공백</b> — ① brew services와 <code>spyglass start</code>(detached) 동시 사용 시 포트 충돌 가드, ② <code>brew upgrade</code> 시 서버 자동 재시작 여부(services는 자동, 수동 모드는 사용자 재시작), ③ <code>SPYGLASS_GRAPH_MODE=off</code>(brew tarball에 native 미동봉) 기본값 일관성. <b>Phase 5에서 확정.</b></blockquote>
+</div></section>
+
+<section id="risk"><div class="wrap">
+  <h2 class="sec">Section 7</h2>
+  <h3 class="big">리스크 &amp; 무과금 보장 체크리스트</h3>
+  <ul class="chk">
+    <li><b>무과금</b> — 어느 단계에도 Apple Developer ID·notarization·Cask·DMG 도입 금지. ad-hoc codesign만</li>
+    <li><b>arm64 회귀 0</b> — Formula 재생성이 darwin-arm64 url/이름(<code>spyglass-&lt;v&gt;-darwin-arm64.tar.gz</code>)을 깨지 않을 것</li>
+    <li><b>pre-release 격리</b> — <code>-rc</code> tag는 tap 갱신 skip(stable 사용자에 RC 미노출)</li>
+    <li><b>SHA 검증</b> — placeholder/불일치 Formula가 push되지 않도록 대조 단계 필수</li>
+    <li><b>PAT 스코프</b> — <code>HOMEBREW_TAP_TOKEN</code>은 tap repo에 한정(최소 권한)</li>
+  </ul>
+</div></section>
+
+<footer><div class="wrap">
+  Generated by Claude Code (Opus 4.8) · 계획 문서(구현은 승인 후) · 기준일 2026-05-31 · SSoT: <code>docs/distribution/02-brew-improvement-plan.md</code> · 선행: <a href="./01-app-to-brew-rationale.html">01-app-to-brew-rationale</a>
+</div></footer>
+
+</body>
+</html>
