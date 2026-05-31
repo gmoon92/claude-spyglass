@@ -1,0 +1,100 @@
+/**
+ * features/session-detail/FlowPane.tsx — flow-pane 조립체 (P3-06 진입점 컴포넌트)
+ *
+ * 원본 골격: assets/js/session-detail/turn-views.js#renderTurnCards 의 flow-pane <section>
+ *  (turn-views.js:982-999) + renderActiveTurn 의 spine/flow-head 동기(turn-views.js:705-745).
+ *
+ * 책임(SessionLog.flowPane 슬롯 SSoT):
+ *  - PrologueCard(turn_id NULL 행) → FlowHead(활성 턴 메타 + fhExtra=리마인더+spike) → TurnSpine.
+ *  - renderTurnCards 의 명령형 골격 멱등 주입(turn-views.js:979-1032)·view-transition(727-742)·
+ *    expand 캡처 복원(renderLogPane)은 **폐기** — React 가 골격을 선언적으로 보유(§3.2-2,3,4).
+ *
+ * SSoT 재사용(재구현 금지):
+ *  - 칩/스파인 → Chip/ChipFlow/TurnSpine(turn-spine-equivalence 게이트로 oracle 동치 보증).
+ *  - spike summary → render/badges.js#turnSpikeSummaryHtml(HTML 문자열 SSoT) — RawHtml 주입.
+ *  - 리마인더 칩 → SystemReminderChip.
+ *
+ * 활성 턴 결정/집계는 상위(이식 후 useSessionDetailData 훅/스토어)가 책임진다 — 본 컴포넌트는
+ *  주어진 turns/activeTurnId/파생 메타를 선언적으로 렌더한다(명령형 진입점 renderTurnCards 의 분해 산물).
+ *
+ * @module features/session-detail/FlowPane
+ */
+import type { ReactElement } from 'react';
+import { turnSpikeSummaryHtml } from '../../../assets/js/render/badges.js';
+import { FlowHead } from './FlowHead';
+import { TurnSpine } from './TurnSpine';
+import { PrologueCard } from './PrologueCard';
+import { SystemReminderChip } from './SystemReminderChip';
+
+declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
+
+interface TurnLike {
+  turn_id: string;
+  turn_index: number;
+  prompt?: { preview?: string } | null;
+  summary?: Record<string, number> | null;
+  [k: string]: unknown;
+}
+
+interface FlowPaneProps {
+  /** 보여줄 턴 목록(필터 결과). */
+  turns: TurnLike[];
+  /** 현재 활성 턴 ID. */
+  activeTurnId: string | null;
+  /** 세션 누적 토큰(비용 % 산출). */
+  sessionTotalTokens: number;
+  /** 프롤로그 행(turn_id NULL). */
+  prologue?: Record<string, unknown>[] | null;
+  /** 활성 턴 신규 reminder 본문(computeNewRemindersByTurn). */
+  activeReminders?: string[];
+  /** 활성 턴 agent_spike 객체(없으면 미노출). */
+  agentSpike?: unknown;
+  /** spike sparkline 샘플(자식 토큰 시계열). */
+  spikeSamples?: number[];
+}
+
+/** spike summary HTML(badges.js SSoT) 를 안전 주입 — 빈 문자열이면 미렌더. */
+function SpikeSummary({ agentSpike, samples }: { agentSpike: unknown; samples: number[] }): ReactElement | null {
+  const html = turnSpikeSummaryHtml(agentSpike, samples) || '';
+  if (!html) return null;
+  return <span dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+/**
+ * flow-pane 조립체. SessionLog 의 flowPane prop 으로 주입된다.
+ */
+export function FlowPane({
+  turns,
+  activeTurnId,
+  sessionTotalTokens,
+  prologue = null,
+  activeReminders = [],
+  agentSpike = null,
+  spikeSamples = [],
+}: FlowPaneProps): ReactElement {
+  const activeTurn = turns.find((t) => t.turn_id === activeTurnId) ?? null;
+  const summaryLabel = window.I18n.t('session.session-detail.turn-views.meta-tool-count', { count: turns.length });
+
+  const extra = (
+    <>
+      {activeTurn ? <SystemReminderChip turnIndex={activeTurn.turn_index} reminders={activeReminders} /> : null}
+      {activeTurn ? <SpikeSummary agentSpike={agentSpike} samples={spikeSamples} /> : null}
+    </>
+  );
+
+  return (
+    <>
+      <PrologueCard prologue={prologue as never} />
+      <section
+        className="flow-pane"
+        aria-label={window.I18n.t('session.session-detail.turn-views.prologue-aria')}
+        data-region="flow"
+      >
+        <FlowHead activeTurn={activeTurn} sessionTotalTokens={sessionTotalTokens} extra={extra} />
+        <div className="turn-spine" id="turnSpine" role="tablist" aria-label={summaryLabel}>
+          <TurnSpine turns={turns} activeTurnId={activeTurnId} />
+        </div>
+      </section>
+    </>
+  );
+}

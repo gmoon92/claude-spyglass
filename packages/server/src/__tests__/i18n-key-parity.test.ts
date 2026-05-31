@@ -119,8 +119,9 @@ function resolveKey(key: string, langData: Record<string, unknown>): string | nu
 
 describe('i18n 키 정합성 (정적 검증)', () => {
   it('모든 web t() 호출의 literal 키가 4언어 JSON에 존재해야 한다', () => {
-    // 1) 모든 JS 파일에서 literal 키 수집.
-    const files = collectFiles(WEB_JS_DIR, ['.js']);
+    // 1) 모든 web SSoT 파일에서 literal 키 수집.
+    //    P5-01: assets/js SSoT 가 .ts 로 전환됨 — .ts/.tsx 도 스캔 대상에 포함(잔여 classic i18n .js + 전환된 .ts).
+    const files = collectFiles(WEB_JS_DIR, ['.js', '.ts', '.tsx']);
     const allKeys = new Set<string>();
     for (const file of files) {
       const content = readFileSync(file, 'utf-8');
@@ -174,7 +175,8 @@ describe('i18n 키 정합성 (정적 검증)', () => {
     // ns-less 호출은 i18n.js의 fallback 로직(모든 ns 순회)에 의존 → fragile.
     // 미래에 같은 path가 다른 ns에 추가되면 어느 ns가 hit될지 예측 불가.
     // 모든 호출에 명시적 ns prefix를 강제해 단일 SSoT 보장.
-    const files = collectFiles(WEB_JS_DIR, ['.js']);
+    // P5-01: assets/js SSoT 가 .ts 로 전환됨 — .ts/.tsx 도 스캔 대상에 포함.
+    const files = collectFiles(WEB_JS_DIR, ['.js', '.ts', '.tsx']);
     const offenders: { file: string; key: string }[] = [];
     for (const file of files) {
       const content = readFileSync(file, 'utf-8');

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { formatContextWindowLabel, DEFAULT_CONTEXT_WINDOW } from '../context-window.js';
 
 // context-window-unify: 추론 로직은 서버 SSoT(`getModelMaxTokens`)로 이전됨.
