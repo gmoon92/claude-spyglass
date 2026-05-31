@@ -7,6 +7,7 @@
     "allowJs": true,
     "checkJs": true,
     "noEmit": true,
+    "jsx": "react-jsx",
     "strict": false,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
@@ -17,6 +18,12 @@
       "@spyglass/types": ["../types/src/index.ts"]
     }
   },
-  "include": ["assets/js/**/*.js", "assets/js/**/*.d.ts"],
-  "exclude": ["node_modules", "assets/js/__tests__/**"]
+  "include": [
+    "assets/js/**/*.js",
+    "assets/js/**/*.d.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "vite.config.ts"
+  ],
+  "exclude": ["node_modules", "dist", "assets/js/__tests__/**"]
 }
