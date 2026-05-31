@@ -1,37 +1,29 @@
 #
-# release.yml — tag push 시 멀티플랫폼 standalone bin 자동 빌드 · GitHub Release 게시 · tap repo Formula bump.
+# release.yml — tag push 시 멀티플랫폼 standalone bin 자동 빌드 · GitHub Release 게시 (tarball-only 배포).
 #
 # 책임:
 #   1) matrix runner(macos-14 / ubuntu / windows) 에서 standalone bun bin + 자원 staging.
 #      - darwin-arm64, darwin-x64, linux-x64, linux-arm64, windows-x64.
 #   2) 각 산출물(tar.gz | windows zip) + sha256 을 동일 GitHub Release 에 업로드.
-#   3) gmoon92/homebrew-spyglass 의 Formula/spyglass.rb 의 darwin-arm64 url+sha256 자동 갱신.
+#      배포는 GitHub Release 직접 다운로드(tarball-only). homebrew tap 자동 bump 미사용(tap repo 부재).
 #
 # 트리거:
-#   git tag v3.0.7 && git push origin v3.0.7
+#   git tag v3.1.0 && git push origin v3.1.0
 #
 # 의존성:
-#   - scripts/build-release-tarball.sh (--os/--arch 파라미터화)
+#   - scripts/build-release-tarball.sh (--os/--arch 파라미터화, web staging 은 tar 파이프 — rsync 비의존)
 #   - oven-sh/setup-bun@v2
 #   - softprops/action-gh-release@v2
-#   - mislav/bump-homebrew-formula-action@v4
-#
-# Secrets:
-#   HOMEBREW_TAP_TOKEN — tap repo(gmoon92/homebrew-spyglass) 에 push 가능한 PAT (repo + workflow scope).
 #
 # 비범위:
 #   - 코드 서명(Apple Developer ID), notarization, windows authenticode 서명은 본 워크플로 범위 밖.
 #     darwin 은 ad-hoc codesign 만, linux/windows 는 서명 없음.
+#   - homebrew 배포: tap repo 미설정으로 tarball-only. 추후 homebrew 도입 시 bump 잡 + tap repo 별도 구성.
 #
-# 회귀 가드 (R6 멀티플랫폼 확장):
-#   - 기존 darwin-arm64 경로 회귀 0 이 최우선. matrix include 의 darwin-arm64 항목은
-#     기존 단일 job 과 동일한 runner(macos-14)·bun-version(1.3.12)·산출물 이름
-#     (spyglass-<v>-darwin-arm64.tar.gz)·codesign/spctl 검증을 그대로 수행한다.
-#     Formula 의 arm64 url 이 이 산출물 이름에 의존하므로 절대 바꾸지 말 것.
-#   - fail-fast: false — linux/windows runner 빌드 실패가 darwin-arm64 게시를 막지 않게 한다.
-#   - 실제 멀티플랫폼 빌드·brew/zip install 검증은 tag push + 각 OS runner 에서만 가능하며 본 변경 범위 밖.
-#     로컬에서는 arm64 호스트 크로스 컴파일(bun --target=bun-linux-x64 / bun-windows-x64 등)로
-#     산출물 아키텍처(ELF/PE32+)만 확인했다. linux/windows runner 의 실제 게시는 첫 tag push 에서 검증된다.
+# 회귀 가드 (R6 멀티플랫폼):
+#   - fail-fast: false — 한 OS runner 빌드 실패가 다른 OS 게시를 막지 않게 한다.
+#   - 로컬에서는 호스트 크로스 컴파일(bun --target=bun-linux-x64 등)로 산출물 아키텍처(ELF/PE32+)만 확인 가능.
+#     5개 OS runner 의 실제 게시는 tag push 에서 검증된다.
 
 name: release
 
@@ -130,43 +122,3 @@ jobs:
           draft: false
           prerelease: ${{ steps.ver.outputs.is_prerelease }}
           generate_release_notes: true
-
-  bump-homebrew-formula:
-    name: Bump Homebrew Formula
-    # build matrix 전체 완료 후 실행. fail-fast:false 이므로 일부 OS 실패해도
-    # darwin-arm64 가 성공해 Release 에 올라가 있으면 bump 가능. needs 는 job 단위라
-    # darwin-arm64 가 실패하면 bump 도 건너뛴다(arm64 url 이 깨진 채 tap 갱신되는 것 방지).
-    needs: build
-    runs-on: ubuntu-latest
-    # 사전 릴리스(v2.10.0-rc.1 등)는 tap 갱신 안 함 — stable 사용자에게 RC 가 노출되지 않게.
-    if: ${{ !contains(github.ref_name, '-') }}
-    timeout-minutes: 5
-
-    steps:
-      - name: Resolve version (strip v-prefix)
-        id: ver
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      # ⚠️ 멀티플랫폼 자동 갱신 한계 (R6):
-      #   mislav/bump-homebrew-formula-action 은 단일 download-url 의 url+sha256 만 패치한다.
-      #   따라서 darwin-arm64 만 자동 bump 되고, Formula 의 나머지 3개 플랫폼
-      #   (darwin-x64 / linux-x64 / linux-arm64) sha256 placeholder 는 수동 갱신이 필요하다.
-      #   각 .tar.gz.sha256 산출물은 동일 Release 에 첨부되어 있으므로
-      #   그 값으로 Formula 의 REPLACE_WITH_*_SHA256 을 채운 뒤 tap repo 에 push 한다.
-      #   (무리한 다중 url 자동화로 arm64 회귀를 유발하지 않도록 의도적으로 단일 bump 유지.)
-      - name: Bump Formula in gmoon92/homebrew-spyglass (darwin-arm64 only)
-        uses: mislav/bump-homebrew-formula-action@v4
-        with:
-          formula-name: spyglass
-          formula-path: Formula/spyglass.rb
-          homebrew-tap: gmoon92/homebrew-spyglass
-          base-branch: main
-          # download-sha256 는 미지정 — action 이 런타임에 url 의 sha256 을 직접 계산해 패치한다.
-          # tag 는 v-prefix 포함(v2.10.0), tarball 이름은 미포함(spyglass-2.10.0-...).
-          download-url: https://github.com/gmoon92/claude-spyglass/releases/download/${{ github.ref_name }}/spyglass-${{ steps.ver.outputs.version }}-darwin-arm64.tar.gz
-          commit-message: |
-            spyglass ${{ steps.ver.outputs.version }}
-
-            Auto-bumped by release workflow at gmoon92/claude-spyglass.
-        env:
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
