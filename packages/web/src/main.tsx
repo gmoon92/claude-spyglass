@@ -13,4 +13,10 @@ if (container) {
       <App />
     </StrictMode>
   );
+  // 원본 main.js:865 이식 — init 완료 후 html.app-ready 부여.
+  // layout.css 의 `html:not(.app-ready) .main-layout {...}` preinit 규칙이 grid/left-panel 을
+  // 축소·차단하므로, 이 클래스를 붙여야 레이아웃이 활성화된다(rAF×2 = React 마운트 paint 후).
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => document.documentElement.classList.add('app-ready'))
+  );
 }

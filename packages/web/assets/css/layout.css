@@ -63,6 +63,20 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* React 진입(P4-10): 원본 body grid(auto 1fr auto·100vh) 역할을 .app-shell 로 이관.
+   body 직계는 #react-root 하나뿐이라 body grid 가 main-layout 에 닿지 않아 1fr 이 안 먹는다.
+   overlay(UpdateBadge/Modal/Warning)는 자체 position 으로 grid 흐름 밖. */
+#react-root { height: 100vh; overflow: hidden; }
+/* flex column — banner/footer 가 null(미연결·정상)일 때도 main-layout 이 항상 1fr 을 받도록.
+   grid 는 자식 수 변동(ErrorBanner null)에 row 가 밀려 footer 가 1fr 을 먹는 문제가 있었다. */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+.app-shell > .main-layout { flex: 1 1 auto; min-height: 0; }
+
 /* ── RIGHT PANEL (WDO Phase 2 — 좌/우 패널 통일 호흡) ───────────────────── */
 /* main-layout 통합 padding+gap으로 외곽 호흡 확보. 자체 padding 0. */
 .right-panel {

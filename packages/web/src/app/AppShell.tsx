@@ -102,19 +102,22 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
   }, []);
 
   return (
-    <div className="app-shell" data-testid="app-shell">
+    <>
+      <div className="app-shell" data-testid="app-shell">
+      {/* 연결 실패 배너 — .app-shell grid row1(auto). main-layout 보다 먼저 와야 row 정합. */}
+      <ErrorBanner visible={!connected} onRetry={onRetry} t={tt} />
+
       <div className="main-layout">
         <AppRail appMode={activeMode} onSelect={setAppMode} t={tt} />
         {/* 콘텐츠 슬롯 — AppRoutes(좌/우 패널 레이아웃). */}
         {children}
       </div>
 
-      {/* 연결 실패 시 노출(SSE onError) — 우측 상단 chrome. */}
-      <ErrorBanner visible={!connected} onRetry={onRetry} t={tt} />
-
       <Footer onHelp={onHelp} t={tt} />
+      </div>
 
-      {/* 버전 배지(chart 헤더 위치는 후속 — 본 셸은 chrome 레벨 마운트) + 모달. */}
+      {/* overlay(grid 흐름 밖) — UpdateBadge/Modal/Warning 은 자체 position. app-shell grid row 를
+          먹어 main-layout 1fr 을 압박하지 않도록 app-shell 형제로 분리. */}
       <UpdateBadge
         state={view.badge}
         currentVersion={view.currentVersion}
@@ -138,6 +141,6 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
         onCopy={onCopyShallow}
         t={tt}
       />
-    </div>
+    </>
   );
 }
