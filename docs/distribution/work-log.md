@@ -67,7 +67,10 @@
 **머지 주의**: build script·Formula·client.ts(무수정) 모두 React 무관. native 동봉은 `packages/web`과 독립.
 **커밋**: (아래)
 
-### D3 — 업데이트 일원화 (다음)
-- D3-01 install.sh git clone 격하 → D3-02 /api/update brew 가드 → D3-03 version-checker 정합 → D3-04 web brew 배너(React 충돌 가능 — 머지 후 재확인 가능).
+### D3~D6 — ⏸ 보류 (사용자 결정 2026-05-31)
+**상태: 미착수.** React 변환 작업(`feat/react-migration`) 우선 진행 → **종료 후 사용자 요청 시 재개**. 본 워크트리는 D1·D2 커밋 상태로 대기.
+- **D3-01~03** (`install.sh` git clone 격하 · `/api/update` brew 가드 · `version-checker` 정합): React 무관 파일 → 머지 충돌 0. 재개 시 우선.
+- **D3-04** (`version-check.js` brew 배너): React가 `packages/web` 재작성 → 머지 충돌+재작업 위험. **React 머지 후** 진행.
+- **D4** release 자동화(`update-formula.yml`) · **D5** desktop 폐기 · **D6** 문서 현행화: 재개 시 진행.
 
 <!-- 이후 태스크(D2 ~ D6) 진행 시 본 로그에 동일 형식으로 추가 -->
