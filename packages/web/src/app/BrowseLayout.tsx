@@ -25,16 +25,21 @@
 //
 // 레이어(architecture.md §1.3): app → features(browse/dashboard/session-detail) + stores 정방향.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { Sidebar, type ProjectLike, type SidebarLabeler } from '../features/browse/Sidebar';
+import type { ProjectLike, SidebarLabeler } from '../features/browse/Sidebar';
+import { BrowseSidebar } from '../features/browse';
 import { Chart, type ChartTokens } from '../components/Chart';
-import type { DataByKind, DonutDatum } from '../components/chart-data';
-import { RequestRow } from '../components/render/RequestRow';
-import { DetailView } from '../features/session-detail';
+import { useColResize } from '../components/use-col-resize';
+import { bucketizeByMinute, type DataByKind, type DonutDatum } from '../components/chart-data';
+import { RequestRow, buildSearchHaystack } from '../components/render/RequestRow';
+import { SearchBox } from '../components/SearchBox';
+import { FilterBar, type FilterBarLabeler } from '../components/FilterBar';
+import { subTypeOf, SUB_TYPES } from '../features/dashboard/request-types';
+import { SessionDetailContainer } from '../features/session-detail';
 import { useSSEStore } from '../stores/sse-store';
 import { useAppStore } from '../stores/app-store';
-import { makeI18nLabeler } from './i18n-labeler';
+import { makeI18nLabeler, tt } from './i18n-labeler';
 import { deriveBrowseData } from './browse-data';
 import { fetchDashboard, fetchAllSessions, fetchRequests, type RequestRow as RequestRowData } from '../api/fetchers';
 import { fetchModelUsage } from '../features/dashboard/metrics-fetchers';
@@ -47,9 +52,6 @@ const FALLBACK_TOKENS: ChartTokens = {
   cacheTokens: { read: '#10B981', creation: '#B794F6', others: '#6E7681' },
   typeColors: { prompt: '#d97757', tool_call: '#4ade80', system: '#f59e0b' },
 };
-
-/** 타임라인 버킷 폴백(빈) — 안정 ref(모듈 상수). 30분 sliding SSE 버퍼 결선은 후속(별도 소스). */
-const EMPTY_TIMELINE_BUCKETS: number[] = [];
 
 /** RequestRow 가 받는 RowLike 최소 형태(피드 이벤트/REST 행 공용). */
 type FeedRowLike = { id?: string | null; [k: string]: unknown };
@@ -67,6 +69,11 @@ export function BrowseLayout(): ReactElement {
   const setSelectedProject = useAppStore((s) => s.setSelectedProject);
   const setSelectedSession = useAppStore((s) => s.setSelectedSession);
   const setRightView = useAppStore((s) => s.setRightView);
+  // 피드 type 필터 / 검색 질의 — app-store SSoT(P2-08). 빈 div 였던 #feedSearchContainer·#typeFilterBtns 결선.
+  const feedFilter = useAppStore((s) => s.feedFilter);
+  const searchQuery = useAppStore((s) => s.searchQuery);
+  const setFeedFilter = useAppStore((s) => s.setFeedFilter);
+  const setSearchQuery = useAppStore((s) => s.setSearchQuery);
 
   // 데이터 population 상태.
   const [projects, setProjects] = useState<ProjectLike[]>([]);
@@ -88,6 +95,65 @@ export function BrowseLayout(): ReactElement {
     const seedTail = seedRequests.filter((r) => !liveIds.has(r.id as string));
     return [...(feed as unknown as FeedRowLike[]), ...(seedTail as unknown as FeedRowLike[])];
   }, [feed, seedRequests]);
+
+  // 타임라인 sliding window tick — 1분마다 now 갱신해 버킷이 좌로 흐르게(원본 advanceBuckets 의 시간경과 대응).
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // 30분 sliding 타임라인 버킷 — feed timestamp 를 현재 분 기준 30버킷에 분배(원본 recordRequest 증분 → 파생).
+  const timelineBuckets: number[] = useMemo(() => {
+    const ts = feedRows
+      .map((r) => (typeof r.timestamp === 'number' ? r.timestamp : Number(r.timestamp)))
+      .filter((n) => Number.isFinite(n)) as number[];
+    return bucketizeByMinute(ts, nowTick);
+  }, [feedRows, nowTick]);
+
+  // 피드 type 필터 + 검색 — 원본 feed-interactions.js: sub-type 키는 data-sub-type, 그 외는 data-type 매칭 + haystack.includes.
+  const filteredFeedRows: FeedRowLike[] = useMemo(() => {
+    const isSubType = (SUB_TYPES as readonly string[]).includes(feedFilter);
+    const q = searchQuery; // app-store 가 이미 normalize(trim+lowercase) 한 값.
+    return feedRows.filter((r) => {
+      if (feedFilter !== 'all') {
+        const ok = isSubType
+          ? subTypeOf(r as never) === feedFilter
+          : ((r.type as string) ?? '') === feedFilter;
+        if (!ok) return false;
+      }
+      if (q && !buildSearchHaystack(r as never).includes(q)) return false;
+      return true;
+    });
+  }, [feedRows, feedFilter, searchQuery]);
+
+  // FilterBar 라벨러 — window.I18n 키를 계약 형태로(무전역). 원본 filter-bar.js getFilterGroups SSoT 1:1.
+  //   key 'tool_call'(data-type 계약) → i18n 키는 하이픈 'tool-call'(locale ui.filter-bar.tool-call). 그 외 동일.
+  //   그룹 aria: request→request-type, tool→tool-category(원본 filter-bar.js:15,23).
+  const filterLabeler: FilterBarLabeler = useMemo(() => {
+    const i18nKey = (key: string) => key.replace(/_/g, '-');
+    return {
+      groupAria: (group) =>
+        tt(group === 'request' ? 'ui.filter-bar.request-type' : 'ui.filter-bar.tool-category'),
+      itemLabel: (key) => tt(`ui.filter-bar.${i18nKey(key)}`),
+      itemTitle: (key) => tt(`ui.filter-bar.${i18nKey(key)}-title`),
+    };
+  }, []);
+
+  // 피드 Session 셀(sess-id-link) 클릭 → 상세 이동(원본 feed-interactions.js#wireDefaultViewClicks).
+  //   프로젝트 전환 분기 포함(레거시: data-goto-project 가 현재와 다르면 프로젝트도 전환).
+  const onGotoSession = useMemo(
+    () => (id: string, project: string) => {
+      if (project && project !== selectedProject) setSelectedProject(project);
+      setSelectedSession(id);
+      setRightView('detail');
+    },
+    [selectedProject, setSelectedProject, setSelectedSession, setRightView],
+  );
+
+  // 피드 테이블 컬럼 리사이즈(원본 col-resize.js) — useColResize 가 th 핸들 부착/드래그/영속.
+  const feedTableRef = useRef<HTMLTableElement>(null);
+  useColResize(feedTableRef, { storageKey: 'feed' });
 
   // detail 활성 판정 — rightView==='detail' && 선택 세션 존재.
   const detailActive = rightView === 'detail' && !!selectedSession;
@@ -119,26 +185,18 @@ export function BrowseLayout(): ReactElement {
   return (
     // Fragment — .main-layout(AppShell) grid 직계 자식으로 left-panel·right-panel 전개.
     <>
-      <aside className="left-panel" data-testid="browse-sidebar">
-        <table className="browser-projects-table">
-          <tbody>
-            <Sidebar
-              projects={projects}
-              sessions={sessions}
-              selectedProject={selectedProject}
-              selectedSession={selectedSession}
-              isMetaMode={false}
-              metaCounts={null}
-              labeler={labeler}
-              onSelectProject={(p) => setSelectedProject(p)}
-              onSelectSession={(id) => {
-                setSelectedSession(id);
-                setRightView('detail');
-              }}
-            />
-          </tbody>
-        </table>
-      </aside>
+      <BrowseSidebar
+        projects={projects}
+        sessions={sessions}
+        selectedProject={selectedProject}
+        selectedSession={selectedSession}
+        labeler={labeler}
+        onSelectProject={(p) => setSelectedProject(p)}
+        onSelectSession={(id) => {
+          setSelectedSession(id);
+          setRightView('detail');
+        }}
+      />
 
       <main className="right-panel" data-testid="browse-main">
         {/* ── chartSection(원본 :395) — 차트 섹션 카드. CSS 는 #chartSection/.view-section 키. ── */}
@@ -154,7 +212,7 @@ export function BrowseLayout(): ReactElement {
               <Chart
                 dataByKind={dataByKind}
                 donutMode={donutMode}
-                timelineBuckets={EMPTY_TIMELINE_BUCKETS}
+                timelineBuckets={timelineBuckets}
                 tokens={FALLBACK_TOKENS}
               />
             </div>
@@ -169,13 +227,27 @@ export function BrowseLayout(): ReactElement {
               <div className="view-section-header">
                 <span className="panel-label">Recent requests</span>
                 <div className="feed-controls">
-                  <div id="feedSearchContainer" className="feed-search" />
-                  <div id="typeFilterBtns" className="type-filter-btns" />
+                  <div id="feedSearchContainer" className="feed-search">
+                    <SearchBox
+                      value={searchQuery}
+                      placeholder="model / tool / message"
+                      clearLabel={tt('ui.search-box.clear-label')}
+                      onSearch={setSearchQuery}
+                    />
+                  </div>
+                  <div id="typeFilterBtns" className="type-filter-btns">
+                    <FilterBar
+                      dataAttr="feed-filter"
+                      active={feedFilter}
+                      labeler={filterLabeler}
+                      onChange={setFeedFilter}
+                    />
+                  </div>
                 </div>
               </div>
               <div className="feed-body" id="feedBody">
                 <div className="scroll-lock-banner" id="scrollLockBanner" />
-                <table>
+                <table ref={feedTableRef}>
                   <colgroup>
                     <col style={{ width: '100px' }} />
                     <col style={{ width: '88px' }} />
@@ -203,8 +275,12 @@ export function BrowseLayout(): ReactElement {
                     </tr>
                   </thead>
                   <tbody id="requestsBody">
-                    {feedRows.map((r) => (
-                      <RequestRow key={(r.id as string) ?? Math.random()} r={r} opts={{ showSession: true }} />
+                    {filteredFeedRows.map((r) => (
+                      <RequestRow
+                        key={(r.id as string) ?? Math.random()}
+                        r={r}
+                        opts={{ showSession: true, onGotoSession }}
+                      />
                     ))}
                   </tbody>
                 </table>
@@ -215,13 +291,9 @@ export function BrowseLayout(): ReactElement {
           {/* detailView(원본 :644) — 세션 상세(헤더 + 턴뷰/로그). selectedSession 있을 때 마운트. */}
           <div id="detailView" className={detailActive ? 'right-view card active' : 'right-view card'}>
             {selectedSession ? (
-              <DetailView
+              <SessionDetailContainer
                 sessionId={selectedSession}
                 projectName={selectedProject ?? ''}
-                totalTokens={null}
-                endedAt={null}
-                turns={[]}
-                activeTurnId={null}
               />
             ) : null}
           </div>
