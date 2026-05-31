@@ -19,9 +19,16 @@
 //   - flow ego-graph: 정렬 결과 첫 "초점" 행 자동 중심(원본 autoLoadFirstRowFlow:557 우선순위 — id!=null && inv>0 → id!=null).
 //     행 클릭/재중심(onRecenter)으로 activeRow 갱신(loadFlow re-fetch 동치).
 //
+// tools 탭 결선(vanilla→React 배선 완료):
+//   - 도구 통계 매트릭스: fetchProjectToolStats(meta-docs colocated) → toolStats state → MetaDocsToolStats 주입.
+//     탭 진입('tools')/프로젝트 변경 시 AbortController fetch(원본 loadProjectToolStats onActivate:311 동치).
+//     정렬은 컨트롤드(toolSort + nextToolSort — tool-stats-sort SSoT).
+//   - 좌측 요약 카드: MetaDocsSummaryCards(사용/미사용/orphan + behavior mini-bar). 카탈로그 rows 에서 파생
+//     (computeRowCounts SSoT). 카드 클릭 → display 필터 전환(setDisplay).
+//
 // 비책임(후속 결선):
-//   - tools 탭 도구 통계 매트릭스 데이터(loadProjectToolStats fetch)는 TS fetcher 미존재 → stats=null(미로드 빈 매트릭스).
 //   - date-filter/lang-switcher DOM 이동(원본 meta-tabs-actions 슬롯)은 별도 chrome(빈 슬롯 유지).
+//   - tool-stats range 필터(원본 from/to)는 카탈로그 fetch 와 동형으로 전체 기간 — app-level range resolver 결선은 후속.
 //
 // 레이어(architecture.md §1.3): app → features(meta-docs/browse/dashboard) + stores 정방향.
 
@@ -33,6 +40,8 @@ import {
   MetaDocsSearch,
   MetaDocsFlow,
   MetaDocsToolStats,
+  MetaDocsSummaryCards,
+  fetchProjectToolStats,
   nextSort,
   DEFAULT_SORT,
   type MetaDocRow,
@@ -43,6 +52,13 @@ import {
   type MetaFilterGroup,
   type FlowActiveRow,
 } from '../features/meta-docs';
+import {
+  nextSort as nextToolSort,
+  DEFAULT_SORT as DEFAULT_TOOL_SORT,
+  type ToolStatRow,
+  type ToolStatsSortKey,
+  type SortDir as ToolSortDir,
+} from '../features/dashboard/tool-stats-sort';
 import { Sidebar, type ProjectLike, type SidebarLabeler, type MetaCounts } from '../features/browse/Sidebar';
 import { useAppStore } from '../stores/app-store';
 import { tt, makeI18nLabeler } from './i18n-labeler';
@@ -114,6 +130,10 @@ export function MetaDocsLayout(): ReactElement {
   // flow 활성 행 — null 이면 첫 행 자동 중심(pickFlowRow). 행 클릭/재중심 시 명시 지정.
   const [activeRow, setActiveRow] = useState<FlowActiveRow | null>(null);
 
+  // tools 탭 도구 통계 — null=미로드(빈 매트릭스). 정렬은 컨트롤드(원본 tool-stats.js 전역 폐기).
+  const [toolStats, setToolStats] = useState<ToolStatRow[] | null>(null);
+  const [toolSort, setToolSort] = useState<{ key: ToolStatsSortKey; dir: ToolSortDir }>(DEFAULT_TOOL_SORT);
+
   const labeler: SidebarLabeler = useMemo(() => makeI18nLabeler(), []);
 
   // 타입 필터 적용 — 원본 state.type(meta-docs-view.js:858) 동치. all 이면 통과.
@@ -147,8 +167,28 @@ export function MetaDocsLayout(): ReactElement {
     return () => ctrl.abort();
   }, [selectedProject]);
 
+  // tools 탭 도구 통계 population — 원본 tool-stats.js loadProjectToolStats(view.js:311 onActivate).
+  //   탭 진입('tools') / 프로젝트 변경 시 재조회(전체 기간 — 카탈로그 fetch 와 동형, range 미부착).
+  //   AbortController 로 in-flight 취소. project null → fetcher 가 [] 반환(원본 select-project 빈 상태).
+  useEffect(() => {
+    if (metaSubTab !== 'tools') return;
+    const ctrl = new AbortController();
+    const { signal } = ctrl;
+    (async () => {
+      const rows = await fetchProjectToolStats({ project: selectedProject, signal });
+      if (signal.aborted) return;
+      setToolStats(rows);
+    })().catch(() => {
+      /* silent — fetcher 가 이미 [] 안전 폴백. 미로드 유지(원본 silent catch 동치). */
+    });
+    return () => ctrl.abort();
+  }, [selectedProject, metaSubTab]);
+
   // 정렬 헤더 클릭 → nextSort 전이(meta-docs-sort SSoT).
   const onSort = (key: MetaDocSortKey): void => setSort((prev) => nextSort(prev, key));
+
+  // tools 매트릭스 정렬 헤더 클릭 → nextSort 전이(tool-stats-sort SSoT).
+  const onToolSort = (key: ToolStatsSortKey): void => setToolSort((prev) => nextToolSort(prev, key));
 
   // 필터 버튼 클릭 → 그룹별 상태 갱신(원본 onMetaContainerClick 분기 동치).
   const onFilterChange = (group: MetaFilterGroup, value: string): void => {
@@ -185,6 +225,9 @@ export function MetaDocsLayout(): ReactElement {
             />
           </tbody>
         </table>
+        {/* 좌측 요약 카드(원본 #metaDocsSummaryCards / renderLeftSummaryCards:399) — 사용/미사용/orphan + behavior mini-bar.
+            카드 클릭 → display 필터 전환(원본 data-meta-filter="display" 동치). 카운트 SSoT 는 전체 카탈로그 rows. */}
+        <MetaDocsSummaryCards rows={rows} onSelectDisplay={setDisplay} t={tt} />
       </aside>
 
       {/* ── metaDocsRoot(원본 :779) — Behavior Definitions 카탈로그 컨테이너(grid-column 3/4). ── */}
@@ -298,7 +341,9 @@ export function MetaDocsLayout(): ReactElement {
           aria-label="Project tool stats"
           {...(showTools ? {} : { hidden: true })}
         >
-          {showTools ? <MetaDocsToolStats stats={null} t={tt} /> : null}
+          {showTools ? (
+            <MetaDocsToolStats stats={toolStats} sort={toolSort} onSort={onToolSort} t={tt} />
+          ) : null}
         </div>
       </section>
     </>
