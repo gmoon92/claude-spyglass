@@ -37,7 +37,7 @@ export function getCollator() {
  * @param {number|Date} to
  * @returns {string}
  */
-export function formatDateRangeLabel(from, to) {
+export function formatDateRangeLabel(from: any, to: any) {
   const fromMs = from instanceof Date ? from.getTime() : Number(from);
   const toMs   = to   instanceof Date ? to.getTime()   : Number(to);
   if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) {

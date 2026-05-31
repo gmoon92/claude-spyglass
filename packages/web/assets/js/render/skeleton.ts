@@ -53,14 +53,14 @@ export function skBar({ width, height, className = '' }: { width?: string|number
  *   - Array<string>: ['60%', '80%', ...] 컬럼 수 = 배열 길이
  * @param {number} count 반복 row 수
  */
-export function skTableRows(colSpecs, count = 2) {
+export function skTableRows(colSpecs: any, count = 2) {
   if (typeof colSpecs === 'number') {
     // 호환: 기존 makeSkeletonRows(cols, count) 동작
     const row = `<tr data-skeleton="1"><td colspan="${colSpecs}" class="table-empty"><span class="sk sk-line sk-line--inline"></span></td></tr>`;
     return row.repeat(count);
   }
   const cellsHtml = colSpecs
-    .map((w) => `<td><span class="sk sk-line" style="width:${_unit(w)}"></span></td>`)
+    .map((w: any) => `<td><span class="sk sk-line" style="width:${_unit(w)}"></span></td>`)
     .join('');
   const row = `<tr data-skeleton="1">${cellsHtml}</tr>`;
   return row.repeat(count);
@@ -277,13 +277,13 @@ export function skDonutLegend(count = 4) {
 // 내부 헬퍼
 // ──────────────────────────────────────────────────────────────────────────
 
-function _unit(v) {
+function _unit(v: any) {
   if (v == null) return '100%';
   if (typeof v === 'number') return `${v}px`;
   return String(v);
 }
 
-function _styleSize(width, height) {
+function _styleSize(width: any, height: any) {
   const parts = [];
   if (width != null)  parts.push(`width:${_unit(width)}`);
   if (height != null) parts.push(`height:${_unit(height)}`);

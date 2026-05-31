@@ -21,7 +21,7 @@ export const SUB_TYPES = ['agent', 'skill', 'mcp', 'task'];
  * 디자인 토큰 매핑 SSoT는 design-tokens.css의 --sub-type-{kind}-{color,bg,border,...}.
  * renderers.js의 data-sub-type 속성 값과 동일하게 사용됨.
  */
-export function subTypeOf(r) {
+export function subTypeOf(r: any) {
   if (r.tool_name === AGENT_TOOL_NAME) return 'agent';
   if (r.tool_name === SKILL_TOOL_NAME) return 'skill';
   if (r.tool_name?.startsWith(MCP_TOOL_PREFIX)) return 'mcp';
@@ -49,7 +49,7 @@ export function subTypeOf(r) {
  * @param {object} r NormalizedRequest
  * @returns {boolean}
  */
-export function isAnchorTool(r) {
+export function isAnchorTool(r: any) {
   if (!r) return false;
   if (r.type === 'response') return true;
   if (r.tool_name === 'TaskUpdate') return true;

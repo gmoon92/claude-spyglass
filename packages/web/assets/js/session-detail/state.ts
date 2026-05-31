@@ -14,22 +14,26 @@
 // 필터/세션/검색 (1차 입력)
 // =============================================================================
 
+// 디스플레이 레이어 loose 타입 — 서버 JSON 파생 요청/턴. 파싱 계약은 P5-03(Zod).
+type Req = Record<string, any>;
+type Turn = Record<string, any>;
+
 let _detailFilter      = 'all';
-let _currentSessionId  = null;
-let _detailAllRequests = [];
-let _detailAllTurns    = [];
+let _currentSessionId: string | null  = null;
+let _detailAllRequests: Req[] = [];
+let _detailAllTurns: Turn[]    = [];
 let _detailSearchQuery = '';
-let _expandedTurnIds   = new Set();
-let _detailSearchBox   = null;
+let _expandedTurnIds   = new Set<string>();
+let _detailSearchBox: any   = null;
 
 // =============================================================================
 // 처리 결과 캐시 (2차 — applyDetailFilter가 채우고 리스너가 읽음)
 // =============================================================================
 
-let _flatFiltered    = [];
-let _flatAnomalyMap  = new Map();
-let _turnFiltered    = [];
-let _detailTurnAnomalyMap = new Map();
+let _flatFiltered: Req[]    = [];
+let _flatAnomalyMap  = new Map<string, Set<string>>();
+let _turnFiltered: Turn[]    = [];
+let _detailTurnAnomalyMap = new Map<string, Set<string>>();
 
 // =============================================================================
 // v22 system_prompts 카탈로그 카운트 (T-11 ADR-004 옵션 D)
@@ -40,40 +44,40 @@ let _detailTurnAnomalyMap = new Map();
 let _systemHashCount = 0;
 
 // ADR-001 P1: turn에 묶이지 않은 행 (session-prologue). 비면 UI 안 그림.
-let _detailPrologue = [];
+let _detailPrologue: Req[] = [];
 
 // =============================================================================
 // 1차 입력 — getter/setter
 // =============================================================================
 
 export function getDetailFilter()       { return _detailFilter; }
-export function setDetailFilter(f)      { _detailFilter = f; }
+export function setDetailFilter(f: string)      { _detailFilter = f; }
 export function getCurrentSessionId()   { return _currentSessionId; }
-export function setCurrentSessionId(id) { _currentSessionId = id; }
+export function setCurrentSessionId(id: string | null) { _currentSessionId = id; }
 export function getDetailRequests()     { return _detailAllRequests; }
-export function setDetailRequests(reqs) { _detailAllRequests = reqs; }
+export function setDetailRequests(reqs: Req[]) { _detailAllRequests = reqs; }
 export function getDetailTurns()        { return _detailAllTurns; }
-export function setDetailTurns(turns)   { _detailAllTurns = turns; }
+export function setDetailTurns(turns: Turn[])   { _detailAllTurns = turns; }
 export function getDetailPrologue()     { return _detailPrologue; }
-export function setDetailPrologue(rows) { _detailPrologue = Array.isArray(rows) ? rows : []; }
+export function setDetailPrologue(rows: Req[]) { _detailPrologue = Array.isArray(rows) ? rows : []; }
 export function getSearchQuery()        { return _detailSearchQuery; }
-export function setSearchQuery(q)       { _detailSearchQuery = q; }
+export function setSearchQuery(q: string)       { _detailSearchQuery = q; }
 export function getExpandedTurnIds()    { return _expandedTurnIds; }
 export function clearExpandedTurnIds()  { _expandedTurnIds.clear(); }
 export function getSearchBox()          { return _detailSearchBox; }
-export function setSearchBox(box)       { _detailSearchBox = box; }
+export function setSearchBox(box: any)       { _detailSearchBox = box; }
 
 // =============================================================================
 // 2차 처리 결과 — getter/setter
 // =============================================================================
 
 export function getFlatFiltered()         { return _flatFiltered; }
-export function setFlatFiltered(list)     { _flatFiltered = list; }
+export function setFlatFiltered(list: Req[])     { _flatFiltered = list; }
 export function getFlatAnomalyMap()       { return _flatAnomalyMap; }
-export function setFlatAnomalyMap(map)    { _flatAnomalyMap = map; }
+export function setFlatAnomalyMap(map: Map<string, Set<string>>)    { _flatAnomalyMap = map; }
 export function getTurnFiltered()         { return _turnFiltered; }
-export function setTurnFiltered(list)     { _turnFiltered = list; }
+export function setTurnFiltered(list: Turn[])     { _turnFiltered = list; }
 export function getTurnAnomalyMap()       { return _detailTurnAnomalyMap; }
-export function setTurnAnomalyMap(map)    { _detailTurnAnomalyMap = map; }
+export function setTurnAnomalyMap(map: Map<string, Set<string>>)    { _detailTurnAnomalyMap = map; }
 export function getSystemHashCount()      { return _systemHashCount; }
-export function setSystemHashCount(n)     { _systemHashCount = (typeof n === 'number' && n >= 0) ? n : 0; }
+export function setSystemHashCount(n: number)     { _systemHashCount = (typeof n === 'number' && n >= 0) ? n : 0; }

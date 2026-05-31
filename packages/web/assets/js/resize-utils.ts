@@ -7,7 +7,7 @@
  * @param {Iterable<Element>} elements
  * @returns {number}
  */
-export function measureMaxWidth(elements) {
+export function measureMaxWidth(elements: any) {
   let max = 0;
   for (const el of elements) max = Math.max(max, el.scrollWidth);
   return max;

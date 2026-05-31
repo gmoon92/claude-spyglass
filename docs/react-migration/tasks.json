@@ -122,7 +122,8 @@
         "P5-04",
         "P5-05",
         "P5-07",
-        "P5-06"
+        "P5-06",
+        "P5-08"
       ],
       "merge_order_note": " | P5-07(Vitest 전환)을 P5-06 최종 게이트 직전 배치 — 휴먼 결정(단계적 전환): bun test 보루 유지 후 Vite 생태계 통일."
     }
@@ -715,6 +716,20 @@
       "worktree": true,
       "risk": "med",
       "done_criteria": "전체 테스트 Vitest 통과 + 스냅샷 diff 0 + CI 게이트 Vitest 전환 + bun:test 잔재 0. 단계적 전환이므로 그 전까지 보루는 bun test 유지."
+    },
+    {
+      "id": "P5-08",
+      "title": "feat/distribution-brew 머지 정합 (tarball web staging dist 경로)",
+      "phase": 5,
+      "path": "scripts/build-release-tarball.sh (배포 브랜치 머지 시점, react-migration 범위 밖)",
+      "depends_on": [
+        "P5-06"
+      ],
+      "status": "pending",
+      "test_strategy": "handoff.md §5 기준. React를 main 먼저 머지 → 배포 브랜치(feat/distribution-brew) rebase/머지. build-release-tarball.sh web staging을 packages/web→packages/web/dist 로 1줄 조정. Formula/native 동봉/docs는 충돌 없음(그대로 머지).",
+      "worktree": false,
+      "risk": "low",
+      "done_criteria": "파일 직접 충돌 0(배포=release.yml/scripts/Formula, react=packages/web·server·desktop). tarball web staging이 Vite dist 산출 stage. release.yml→tarball→electron-builder(P4-08 dist) 배포 파이프라인 정합. 머지 후 build-release-tarball.sh 실행 + brew install smoke 검증. 연계 문서: claude-spyglass-dist/docs/distribution/handoff.md"
     }
   ]
 }

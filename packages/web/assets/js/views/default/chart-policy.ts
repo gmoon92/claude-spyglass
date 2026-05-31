@@ -21,17 +21,17 @@ export function applyRangeLabels(rangeArg = getActiveRange()) {
   const key = typeof rangeArg === 'string'
     ? rangeArg
     : ((rangeArg && (rangeArg as any).type === 'custom') ? 'custom' : ((rangeArg as any)?.value ?? 'all'));
-  const rangeText = RANGE_LABELS[key] || RANGE_LABELS.all;
+  const rangeText = (RANGE_LABELS as Record<string, string>)[key] || RANGE_LABELS.all;
   const groups = document.querySelectorAll('#timelineMeta .timeline-meta-group');
   groups.forEach((group, i) => {
     const label = group.querySelector('.timeline-meta-group-label');
-    if (label) label.textContent = `${TIMELINE_META_PREFIXES[i]} · ${rangeText}`;
-    group.setAttribute('aria-label', `${TIMELINE_META_ARIA_PREFIXES[i]} (${rangeText})`);
+    if (label) label.textContent = `${(TIMELINE_META_PREFIXES as Record<number, string>)[i]} · ${rangeText}`;
+    group.setAttribute('aria-label', `${(TIMELINE_META_ARIA_PREFIXES as Record<number, string>)[i]} (${rangeText})`);
   });
 }
 
 // ── 차트 모드 ─────────────────────────────────────────────────────────────────
-export async function setChartMode(mode) {
+export async function setChartMode(mode: string) {
   const chartSection = document.getElementById('chartSection');
   const rightPanel  = document.querySelector('.right-panel');
   if (!chartSection) return;
@@ -65,7 +65,7 @@ export function observeTimelineResize() {
   const timelineWrap = document.querySelector('#timelineChart')?.parentElement;
   if (!timelineWrap) return;
   if ('ResizeObserver' in window) {
-    let _rafId = null;
+    let _rafId: number = 0;
     new ResizeObserver(() => {
       cancelAnimationFrame(_rafId);
       _rafId = requestAnimationFrame(() => drawTimeline());

@@ -20,7 +20,7 @@ import { svgChevron } from './render/icons.js';
 const SPARK_W = 76;
 const SPARK_H = 24;
 
-function deltaIconHtml(deltaPct) {
+function deltaIconHtml(deltaPct: any) {
   if (deltaPct == null || !Number.isFinite(deltaPct) || deltaPct === 0) {
     return `<span class="obs-card-trend">—</span>`;
   }
@@ -34,7 +34,7 @@ function deltaIconHtml(deltaPct) {
 }
 
 /** 빈 상태 — 카드 라벨이 없으므로 dim 텍스트 한 줄만 노출 (의미는 hover 툴팁) */
-function emptyCard(msg) {
+function emptyCard(msg: any) {
   return `<span class="obs-card-empty">${escHtml(msg)}</span>`;
 }
 
@@ -49,14 +49,14 @@ function emptyCard(msg) {
  *   - yesterday_same_window: number
  *   - delta_pct: number|null
  */
-export function renderBurnRate(payload) {
+export function renderBurnRate(payload: any) {
   const el = document.getElementById('cardBurnRate');
   if (!el) return;
   if (!payload || !Array.isArray(payload.buckets) || payload.buckets.length === 0 || payload.current_total === 0) {
     el.innerHTML = emptyCard(window.I18n.t('ui.obs-panel.no-data'));
     return;
   }
-  const values = payload.buckets.map(b => b.tokens || 0);
+  const values = payload.buckets.map((b: any) => b.tokens || 0);
   const total  = payload.current_total || 0;
   const sub    = payload.yesterday_same_window > 0
     ? window.I18n.t('ui.obs-panel.yesterday', { val: fmtToken(payload.yesterday_same_window) })
@@ -79,7 +79,7 @@ export function renderBurnRate(payload) {
  *   - hit_rate_now: number|null  (0..1)
  *   - savings_tokens_total: number
  */
-export function renderCacheHealth(payload) {
+export function renderCacheHealth(payload: any) {
   const el = document.getElementById('cardCacheHealth');
   if (!el) return;
   if (!payload || !Array.isArray(payload.buckets) || payload.hit_rate_now == null) {
@@ -87,7 +87,7 @@ export function renderCacheHealth(payload) {
     return;
   }
   const hitPct = (payload.hit_rate_now * 100).toFixed(1);
-  const series = payload.buckets.map(b => b.hit_rate);
+  const series = payload.buckets.map((b: any) => b.hit_rate);
   const sub    = window.I18n.t('ui.obs-panel.savings', { val: fmtToken(payload.savings_tokens_total || 0) });
 
   // hit_rate 임계 (cache-panel-tooltip와 동일 정책): ≥0.7 success / ≥0.3 mid / <0.3 warn
@@ -113,7 +113,7 @@ export function renderCacheHealth(payload) {
  *   - last_event_ts: number|null  (epoch ms)
  *   - recent_calls?: number[]  (5분창 sparkline 입력, Phase 2)
  */
-export function renderLivePulse(payload) {
+export function renderLivePulse(payload: any) {
   const el = document.getElementById('cardLivePulse');
   if (!el) return;
   if (!payload || (payload.active_count === 0 && !payload.last_event_ts)) {
@@ -140,7 +140,7 @@ export function renderLivePulse(payload) {
 // W4. Tool Categories (4-카테고리 가로 막대) — 카테고리명 자체가 정보
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CATEGORY_CLASS = {
+const CATEGORY_CLASS: Record<string, string> = {
   Agent:  'agent',
   Skill:  'skill',
   MCP:    'mcp',
@@ -175,7 +175,7 @@ export function resetToolCategoriesMode() {
  *
  * @param {Array<{category?: string, request_count?: number, percentage?: number}>|{mode: string, items: Array<{name: string, invocations: number}>}} payload
  */
-export function renderToolCategoriesCard(payload) {
+export function renderToolCategoriesCard(payload: any) {
   const el = document.getElementById('cardToolCategories');
   if (!el) return;
 
@@ -187,8 +187,8 @@ export function renderToolCategoriesCard(payload) {
       el.innerHTML = emptyCard(window.I18n.t('ui.obs-panel.no-behavior-defs'));
       return;
     }
-    const max = Math.max(1, ...items.map(i => i.invocations || 0));
-    const rows = items.map(i => {
+    const max = Math.max(1, ...items.map((i: any) => i.invocations || 0));
+    const rows = items.map((i: any) => {
       const pct = Math.round((i.invocations || 0) / max * 100);
       // 이중 클래스: 기존 obs-cat-bar-fill obs-cat-bar-fill--agent 보존
       // + ds-bar-fill + data-tone="warn" (agent/skill → warn)
@@ -220,7 +220,7 @@ export function renderToolCategoriesCard(payload) {
     // 카테고리별 행에도 obs-tooltip 부여 → 카테고리 의미 hover 노출
     // 이중 클래스: 기존 obs-cat-bar-fill obs-cat-bar-fill--${cls} 보존
     // + ds-bar-fill + data-tone (agent/skill→warn, mcp→info, native→neutral)
-    const DS_TONE = { agent: 'warn', skill: 'warn', mcp: 'info', native: 'neutral' };
+    const DS_TONE: Record<string, string> = { agent: 'warn', skill: 'warn', mcp: 'info', native: 'neutral' };
     const dsTone = DS_TONE[cls] ?? 'neutral';
     return `<div class="obs-cat-row" data-obs-tooltip="cat-${escHtml(c.category || '')}">
       <span class="obs-cat-name">${escHtml(c.category || '—')}</span>
@@ -241,7 +241,7 @@ export function renderToolCategoriesCard(payload) {
  *   - counts: { high_error_rate, repeated_failure, deep_subagent, token_spike }
  *   - total: number
  */
-export function renderAnomalyBadge(payload) {
+export function renderAnomalyBadge(payload: any) {
   const el = document.getElementById('anomalyBadge');
   if (!el) return;
   const total = payload?.total ?? 0;

@@ -50,11 +50,9 @@ import type {
  *  - 성공: { ok:true,  data 채움, error 미설정 }
  *  - 실패: { ok:false, data 미설정, error 채움 }
  */
-export interface ParseResult<T> {
-  ok: boolean;
-  data?: T;
-  error?: string;
-}
+export type ParseResult<T> =
+  | { ok: true; data: T; error?: undefined }
+  | { ok: false; data?: undefined; error: string };
 
 /** ZodError → 사람이 읽을 수 있는 단일 문자열 (로깅/폴백용). */
 function formatZodError(err: z.ZodError): string {

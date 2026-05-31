@@ -64,6 +64,13 @@ import { computeNewRemindersByTurn } from './system-reminder.js';
 import { svgNote } from '../design-system/icons/note.js';
 import { initColResize } from '../col-resize.js';
 
+// 디스플레이 레이어 loose 타입 — 서버 JSON 파생 표시 객체.
+// 정확한 파싱 계약은 P5-03(Zod)에서 경계부에 적용한다. 이 레이어는 다형 표시 bag 을
+// 다루므로, 호출부 호환을 위해 인덱스 시그니처를 허용하는 loose alias 를 사용한다.
+type TurnItem = Record<string, any>;
+type FlowItem = Record<string, any>;
+type RequestRowLike = Record<string, any>;
+
 // =============================================================================
 // 활성 턴 ID — 모듈 수준 상태 (단일 캡슐화)
 // =============================================================================
@@ -74,7 +81,7 @@ import { initColResize } from '../col-resize.js';
 //    renderTurnCards가 첫 진입 시점에 자동으로 가장 최근 턴을 잡는다.
 //  - 칩 ↔ 행 1:1 매칭은 활성 턴 범위 안에서만 동작 (plan §3.6 Option α).
 
-let _activeTurnId = null;
+let _activeTurnId: string | null = null;
 
 /** @returns {string|null} 현재 활성 턴 ID (없으면 null). */
 export function getActiveTurnId() { return _activeTurnId; }
@@ -85,7 +92,7 @@ export function getActiveTurnId() { return _activeTurnId; }
  *
  * @param {string|null} turnId
  */
-export function setActiveTurnId(turnId) {
+export function setActiveTurnId(turnId: string | null) {
   _activeTurnId = turnId || null;
 }
 
@@ -106,7 +113,7 @@ const SPINE_ARROW_SVG = '<svg class="spine-arrow" width="14" height="14" viewBox
 // 이전엔 turn-rows.js에서 export했으나 turn-rows.js 폐기/슬림화로 본 파일에 흡수.
 // 칩 라벨 SSoT — count===1이면 라벨만, ≥2면 라벨 + `<span class="count">×N</span>`.
 
-function fmtActionLabel(label, count) {
+function fmtActionLabel(label: string, count: number) {
   const safeLabel = escHtml(label || '?');
   if (!count || count <= 1) return safeLabel;
   return `${safeLabel}<span class="count">×${count}</span>`;
@@ -127,7 +134,7 @@ function fmtActionLabel(label, count) {
  * @param {number} respSeq 응답 칩의 turn 내 등장 순번 (1-based). 응답이 아닐 땐 무시.
  * @returns {string} chip HTML
  */
-function chipHtml(item, respSeq) {
+function chipHtml(item: FlowItem, respSeq: number) {
   // 응답 칩 — ◆ 글리프.
   if (item.kind === 'response') {
     const meta = chipFromRequest({ ...item.request, type: 'response' }, respSeq);
@@ -204,7 +211,7 @@ function chipHtml(item, respSeq) {
  * @param {string} key       chip-key (chipKey 결과)
  * @param {string} labelText 사람이 읽는 라벨 (도구명/응답/Task id 등)
  */
-function chipAccessibilityAttrs(key, labelText) {
+function chipAccessibilityAttrs(key: string, labelText: string) {
   const keyAttr = key ? ` data-chip-key="${escHtml(key)}"` : '';
   const suffix  = window.I18n.t('session.session-detail.turn-views.chip-aria-suffix');
   const aria    = `${labelText} ${suffix}`;
@@ -221,11 +228,11 @@ function chipAccessibilityAttrs(key, labelText) {
  * @param {object} turn TurnItem
  * @returns {string} chip 시퀀스 HTML (감싸는 wrapper 없이 inline 자식들만 반환)
  */
-function chipFlowHtml(turn) {
+function chipFlowHtml(turn: TurnItem) {
   const flow = compressFlowWithResponses(turn);
   let respSeq = 0;
-  const parts = [];
-  flow.forEach((item, i) => {
+  const parts: string[] = [];
+  flow.forEach((item: FlowItem, i: number) => {
     if (item.kind === 'response') respSeq += 1;
     if (i > 0) parts.push(CHIP_ARROW_SVG);
     parts.push(chipHtml(item, respSeq));
@@ -251,7 +258,7 @@ function chipFlowHtml(turn) {
  * @param {boolean} isActive 본 턴이 활성 턴인지 여부
  * @returns {string} `<span class="turn-line ...">...</span>`
  */
-export function turnLineHtml(turn, isActive) {
+export function turnLineHtml(turn: TurnItem, isActive: boolean) {
   const id = escHtml(turn.turn_id);
   const indexLabel = `T${turn.turn_index}`;
   const cls = `turn-line${isActive ? ' is-active' : ''}`;
@@ -289,10 +296,10 @@ export function turnLineHtml(turn, isActive) {
  * @param {string|null}   activeTurnId  현재 활성 턴 ID
  * @returns {string} turn-spine inner HTML
  */
-export function renderSpine(turns, activeTurnId) {
+export function renderSpine(turns: TurnItem[], activeTurnId: string | null) {
   if (!turns || turns.length === 0) return '';
-  const sorted = turns.slice().sort((a, b) => b.turn_index - a.turn_index);
-  return sorted.map((turn, i) => {
+  const sorted = turns.slice().sort((a: TurnItem, b: TurnItem) => b.turn_index - a.turn_index);
+  return sorted.map((turn: TurnItem, i: number) => {
     const isActive = turn.turn_id === activeTurnId;
     const hasNext  = i < sorted.length - 1;
     return turnLineHtml(turn, isActive) + (hasNext ? SPINE_ARROW_SVG : '');
@@ -318,9 +325,9 @@ export function renderSpine(turns, activeTurnId) {
  * @param {object} turn               활성 TurnItem
  * @param {number} sessionTotalTokens 세션 누적 토큰 (비용 % 산출용)
  */
-export function updateFlowHead(turn, sessionTotalTokens) {
+export function updateFlowHead(turn: TurnItem, sessionTotalTokens: number) {
   if (!turn) return;
-  const set = (id, value) => {
+  const set = (id: string, value: string) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.textContent = value;
@@ -388,7 +395,7 @@ export function updateFlowHead(turn, sessionTotalTokens) {
  *
  * @param {object|null} turn 활성 TurnItem (null/없으면 빈 tbody)
  */
-export function renderLogPane(turn) {
+export function renderLogPane(turn: TurnItem | null) {
   const body = document.getElementById('turnLogBody');
   if (!body) return;
   if (!turn) {
@@ -397,7 +404,7 @@ export function renderLogPane(turn) {
   }
 
   // 1) 현재 펼친 행 id 들 캡처 (보통 0~1개, 정책상 단일 펼침이지만 안전하게 배열).
-  const expandedIds = [];
+  const expandedIds: string[] = [];
   body.querySelectorAll('[data-expand-for]').forEach(el => {
     const id = asEl(el).dataset.expandFor;
     if (id) expandedIds.push(id);
@@ -431,7 +438,7 @@ export function renderLogPane(turn) {
  *
  * @param {HTMLTableRowElement|null} tr 강조할 행
  */
-export function flashRow(tr) {
+export function flashRow(tr: HTMLTableRowElement | null) {
   if (!tr) return;
   const body = tr.closest('tbody');
   if (body) {
@@ -451,11 +458,11 @@ export function flashRow(tr) {
  *
  * @param {string} key chip-key
  */
-export function jumpToChipRow(key) {
+export function jumpToChipRow(key: string) {
   if (!key) return;
   const body = document.getElementById('turnLogBody');
   if (!body) return;
-  const tr = /** @type {HTMLTableRowElement|null} */ (body.querySelector(`tr[data-chip-key="${CSS.escape(key)}"]`));
+  const tr = body.querySelector(`tr[data-chip-key="${CSS.escape(key)}"]`) as HTMLTableRowElement | null;
   flashRow(tr);
 }
 
@@ -489,8 +496,8 @@ export function jumpToChipRow(key) {
  * @param {object} turn  TurnItem
  * @param {string[]} newReminders  computeNewRemindersByTurn으로 얻은 신규 reminder 본문 배열
  */
-function buildTurnHaystack(turn, newReminders) {
-  const parts = [];
+function buildTurnHaystack(turn: TurnItem, newReminders: string[]) {
+  const parts: string[] = [];
   parts.push(`T${turn.turn_index}`);
   if (turn.prompt?.preview) parts.push(turn.prompt.preview);
   if (turn.prompt) {
@@ -574,7 +581,7 @@ export function initDetailTabBar() {
  *
  * @param {'log'|'llm'|'syslib'} tab
  */
-export function setDetailView(tab) {
+export function setDetailView(tab: 'log' | 'llm' | 'syslib') {
   const turnView   = document.getElementById('detailTurnView');
   const llmView    = document.getElementById('detailLlmInputView');
   const sysLibView = document.getElementById('detailSysLibView');
@@ -582,7 +589,7 @@ export function setDetailView(tab) {
   if (llmView)    llmView.style.display    = tab === 'llm'    ? '' : 'none';
   if (sysLibView) sysLibView.style.display = tab === 'syslib' ? '' : 'none';
   // ds-tab 활성 시각은 [aria-selected="true"]로 결정되므로 .active 클래스와 함께 동기화.
-  const _syncTab = (id, isActive) => {
+  const _syncTab = (id: string, isActive: boolean) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.toggle('active', isActive);
@@ -604,7 +611,7 @@ export function setDetailView(tab) {
  *  - 인자(turnId)를 활성 턴으로 승격해 spine + log-pane을 재렌더한다.
  *  - main.js 가 아직 [data-toggle-turn] 위임을 호출할 수 있으므로 export 유지.
  */
-export function toggleTurn(turnId) {
+export function toggleTurn(turnId: string) {
   if (!turnId) return;
   if (_activeTurnId !== turnId) {
     setActiveTurnId(turnId);
@@ -616,19 +623,19 @@ export function toggleTurn(turnId) {
  * 카드 펼침 토글 — 신 모델(turn-spine)에선 카드 자체가 없으므로 turnId를 활성 턴으로
  * 승격한다. main.js [data-toggle-card] 위임 호환용 thin adapter.
  */
-export function toggleCardExpand(turnId) {
+export function toggleCardExpand(turnId: string) {
   toggleTurn(turnId);
 }
 
 /** setTurnViewMode: 통합 뷰 모델로 일원화됨 — 외부 호환용 stub. */
-export function setTurnViewMode(_mode) { /* no-op */ }
+export function setTurnViewMode(_mode: string) { /* no-op */ }
 
 /**
  * 턴 카드의 "API 페이로드" 액션 클릭 진입점 (deeplink pass).
  *  - 흐름: setPendingProxyTargetTs(ts) → setDetailTab('llm') → setDetailView('llm')
  *  - setPendingProxyTargetTs는 1회용 — setDetailView('llm') 안의 showLatestLlmInput()이 소비.
  */
-export function openLlmInputForTurn(turnStartedAt) {
+export function openLlmInputForTurn(turnStartedAt: number) {
   setPendingProxyTargetTs(turnStartedAt);
   setDetailTab('llm');
   setDetailView('llm');
@@ -638,7 +645,7 @@ export function openLlmInputForTurn(turnStartedAt) {
  * 레거시 테이블형 turn 뷰 — 통합 카드 뷰 전환 이후 turnListBody가 DOM에 없으므로 no-op.
  * 일부 외부 호출처(session-detail.js facade)를 위해 export 유지.
  */
-export function renderTurnView(_turns, _badgeTurns) {
+export function renderTurnView(_turns: TurnItem[], _badgeTurns: TurnItem[]) {
   // 통합 뷰 전환으로 폐기. SSoT는 renderTurnCards.
 }
 
@@ -652,12 +659,12 @@ export function renderTurnView(_turns, _badgeTurns) {
  *  - SSE 신규 turn 도착 (활성 턴 동일) 같은 갱신은 즉시 swap — 불필요한 깜빡임/스크롤 점프 회피.
  *  - chip-flow stagger 애니메이션 1회 게이트(`do-chip-anim`) 부여 조건도 동일하게 판정한다.
  */
-let _lastRenderedActiveTurnId = null;
+let _lastRenderedActiveTurnId: string | null = null;
 
 /**
  * chip-flow stagger 게이트 클래스 자동 해제 타이머 핸들 — 빠른 연속 턴 전환 시 중복 예약 방지.
  */
-let _chipAnimReleaseTimer = null;
+let _chipAnimReleaseTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * chip-flow stagger 애니메이션 게이트 클래스 부여/해제.
@@ -671,7 +678,7 @@ let _chipAnimReleaseTimer = null;
  *
  * @param {Document} doc 테스트 호환을 위한 document 주입 (기본 globalThis.document)
  */
-function triggerChipFlowStagger(doc) {
+function triggerChipFlowStagger(doc: Document) {
   const active = doc.querySelector('.turn-line.is-active');
   if (!active) return;
   active.classList.add('do-chip-anim');
@@ -715,7 +722,7 @@ export function renderActiveTurn(opts: { turns?: any[]; badgeTurns?: any[] } = {
     const spineEl = document.getElementById('turnSpine');
     if (spineEl) spineEl.innerHTML = renderSpine(turns, _activeTurnId);
 
-    const activeTurn = turns.find(t => t.turn_id === _activeTurnId) || null;
+    const activeTurn = turns.find((t: TurnItem) => t.turn_id === _activeTurnId) || null;
     if (!activeTurn) return;
 
     const sessionTotalTokens = (badgeTurns || []).reduce((s, t) => s + (t.summary?.total_tokens || 0), 0);
@@ -755,9 +762,9 @@ export function renderActiveTurn(opts: { turns?: any[]; badgeTurns?: any[] } = {
  * 별도 섹션으로 렌더한다. "사용자 프롬프트 = 턴" 원칙을 깨지 않으면서 데이터 누락을
  * 시각적으로 보존한다.
  */
-function renderPrologueCardHtml(prologue) {
+function renderPrologueCardHtml(prologue: RequestRowLike[]) {
   if (!prologue || prologue.length === 0) return '';
-  const rows = prologue.map((r) => {
+  const rows = prologue.map((r: RequestRowLike) => {
     const targetHtml = targetInnerHtml(r).html;
     const previewHtml = contextPreview(r, 60);
     const ts = fmtTime(r.timestamp);
@@ -791,12 +798,12 @@ function renderPrologueCardHtml(prologue) {
  *  - aria id는 turn_index 기반 unique pattern.
  *  - reminder 본문은 escHtml로 escape 후 <pre>에 삽입.
  */
-function buildSystemReminderChip(turnIndex, reminders) {
+function buildSystemReminderChip(turnIndex: number, reminders: string[]) {
   if (!reminders || reminders.length === 0) return '';
   const count = reminders.length;
   const chipId    = `turn-sysrem-chip-${turnIndex}`;
   const popoverId = `turn-sysrem-popover-${turnIndex}`;
-  const itemsHtml = reminders.map(body =>
+  const itemsHtml = reminders.map((body: string) =>
     `<pre class="turn-system-reminder-item">${escHtml(body)}</pre>`
   ).join('');
 
@@ -836,17 +843,17 @@ function buildSystemReminderChip(turnIndex, reminders) {
  *  - bloated-sys 헤더 뱃지(detail-view.js applyBloatedSysHeader) 재부착도 함께.
  *  - sessionTotalTokens===0 이면 뱃지 영역 자체를 hidden.
  */
-function updateSessionBadges(bTurns, sessionTotalTokens) {
+function updateSessionBadges(bTurns: TurnItem[], sessionTotalTokens: number) {
   const badgesEl = document.getElementById('detailBadges');
   if (!badgesEl) return;
   if (sessionTotalTokens <= 0) {
     badgesEl.classList.add('detail-agg-badges--hidden');
     return;
   }
-  const maxCostTurn = bTurns.reduce((a, b) =>
+  const maxCostTurn = bTurns.reduce((a: TurnItem, b: TurnItem) =>
     (a.summary.total_tokens > b.summary.total_tokens ? a : b));
   const toolCountMap: Record<string, number> = {};
-  bTurns.forEach(t => t.tool_calls.forEach(tc => {
+  bTurns.forEach((t: TurnItem) => t.tool_calls.forEach((tc: RequestRowLike) => {
     if (tc.tool_name) toolCountMap[tc.tool_name] = (toolCountMap[tc.tool_name] || 0) + 1;
   }));
   const topTool = Object.entries(toolCountMap).sort((a, b) => b[1] - a[1])[0];
@@ -879,14 +886,14 @@ function updateSessionBadges(bTurns, sessionTotalTokens) {
  * @param {Array} badgeTurns    헤더 집계용(전체 turn)
  * @param {Array} [allRequests] flat 응답 — agent_spike 추출에 사용. 없으면 turn.agent_spike 폴백.
  */
-export function renderTurnCards(turns, badgeTurns, allRequests) {
+export function renderTurnCards(turns: TurnItem[], badgeTurns: TurnItem[], allRequests?: RequestRowLike[]) {
   const container = document.getElementById('turnUnifiedBody');
   if (!container) return;
 
   // anomaly-bloated-sys T-16: turn 단위 agent_spike 인덱스 — 헤더 spike summary 용.
   //   현재 활성 턴에 한해 flow-head 옆 spike summary 칩을 노출한다.
-  const spikeByTurn = new Map();
-  const samplesByTurn = new Map();
+  const spikeByTurn = new Map<string, any>();
+  const samplesByTurn = new Map<string, any>();
   if (Array.isArray(allRequests)) {
     for (const r of allRequests) {
       if (!r?.turn_id) continue;
@@ -905,13 +912,13 @@ export function renderTurnCards(turns, badgeTurns, allRequests) {
       samplesByTurn.set(r.turn_id, arr);
     }
     for (const [k, arr] of samplesByTurn) {
-      arr.sort((a, b) => a.ts - b.ts);
-      samplesByTurn.set(k, arr.map(x => x.v));
+      arr.sort((a: { ts: number; v: number }, b: { ts: number; v: number }) => a.ts - b.ts);
+      samplesByTurn.set(k, arr.map((x: { ts: number; v: number }) => x.v));
     }
   }
 
   const bTurns = (badgeTurns && badgeTurns.length) ? badgeTurns : turns;
-  const sessionTotalTokens = bTurns.reduce((s, t) => s + (t.summary.total_tokens || 0), 0);
+  const sessionTotalTokens = bTurns.reduce((s: number, t: TurnItem) => s + (t.summary.total_tokens || 0), 0);
   updateSessionBadges(bTurns, sessionTotalTokens);
 
   // ADR-001 P1 — 프롤로그 카드 (turn_id NULL 행). 비면 빈 문자열.
@@ -927,15 +934,15 @@ export function renderTurnCards(turns, badgeTurns, allRequests) {
   //  - 명시적 _activeTurnId 가 현재 turns 안에 있으면 유지.
   //  - 그렇지 않으면 가장 최신 턴(turn_index 최대)을 활성으로.
   //  - "활성 턴 좁힘"(plan §3.6 Option α) — 동시에 1개만 활성.
-  const currentIds = new Set(turns.map(t => t.turn_id));
+  const currentIds = new Set(turns.map((t: TurnItem) => t.turn_id));
   if (!_activeTurnId || !currentIds.has(_activeTurnId)) {
-    const latest = turns.slice().sort((a, b) => b.turn_index - a.turn_index)[0];
+    const latest = turns.slice().sort((a: TurnItem, b: TurnItem) => b.turn_index - a.turn_index)[0];
     _activeTurnId = latest ? latest.turn_id : null;
   }
 
   // ── 활성 턴 메타 보조 — system reminder / spike summary ────────────────────
   const newRemindersByTurn = computeNewRemindersByTurn(turns);
-  const activeTurn = turns.find(t => t.turn_id === _activeTurnId) || null;
+  const activeTurn = turns.find((t: TurnItem) => t.turn_id === _activeTurnId) || null;
   const activeReminders = activeTurn ? (newRemindersByTurn.get(activeTurn.turn_id) || []) : [];
   const reminderChipHtml = activeTurn ? buildSystemReminderChip(activeTurn.turn_index, activeReminders) : '';
   const agentSpike = activeTurn ? (spikeByTurn.get(activeTurn.turn_id) || activeTurn.agent_spike || null) : null;
@@ -943,8 +950,8 @@ export function renderTurnCards(turns, badgeTurns, allRequests) {
     (agentSpike?.samples)
       || samplesByTurn.get(activeTurn.turn_id)
       || (activeTurn.tool_calls || [])
-        .map(tc => (tc.tokens_input || 0) + (tc.tokens_output || 0))
-        .filter(v => v > 0)
+        .map((tc: RequestRowLike) => (tc.tokens_input || 0) + (tc.tokens_output || 0))
+        .filter((v: number) => v > 0)
   ) : [];
   const spikeSummary = activeTurn ? turnSpikeSummaryHtml(agentSpike, spikeSamples) : '';
 
@@ -1072,7 +1079,7 @@ function attachHaystackToTurnLines(turns: any[], newRemindersByTurn: Map<any, an
  *
  * 호출자: session-detail/flat-view.js applyDetailFilter (DETAIL_FILTER_CHANGED listener).
  */
-export function applyTurnCardSearch(query) {
+export function applyTurnCardSearch(query: string) {
   const q = (query || '').toLowerCase();
   // 신 모델 — turn-spine 안 .turn-line[data-turn]
   const lines = document.querySelectorAll('#turnSpine .turn-line[data-turn]');

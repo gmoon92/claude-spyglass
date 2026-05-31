@@ -27,7 +27,7 @@ function dismissCachePanelSkeleton() {
   });
 }
 
-export function renderCachePanel(data) {
+export function renderCachePanel(data: any) {
   if (!data) return;
   dismissCachePanelSkeleton();
 
@@ -120,7 +120,7 @@ export function renderCachePanel(data) {
  * @param {Array} requests — 세션 내 모든 요청 (_detailAllRequests)
  * @returns {Object} renderCachePanel가 받는 형태
  */
-export function computeSessionCacheStats(requests) {
+export function computeSessionCacheStats(requests: any) {
   let cacheRead = 0, cacheCreate = 0, input = 0;
   for (const r of requests || []) {
     // pre_tool 행 제외 — PreToolUse는 토큰=0 미완성 레코드.

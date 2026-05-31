@@ -54,6 +54,7 @@
  */
 
 import { fmt, fmtToken, formatDuration } from './formatters.js';
+import { asEl } from './dom.js';
 import { setTypeData, setSourceData, drawDonut, renderTypeLegend, getDonutMode } from './chart.js';
 import { clearError, showError } from './infra.js';
 import { renderProjects, getAllSessions, setAllSessions, renderBrowserSessions } from './left-panel.js';
@@ -83,13 +84,12 @@ export const API = '';
 //   - setActiveRange(stringOrObject): normalize + freeze + 'cs:active-range-changed' 이벤트 발행
 //   - getActiveRange(): 현재 활성 range 객체 (읽기 전용 frozen)
 //
-/** @typedef {'1h'|'today'|'yesterday'|'7d'|'30d'|'all'|'week'} PresetValue 'week'는 legacy 호환(T-06 제거 예정) */
-/** @typedef {{type:'preset', value:PresetValue}} PresetRange */
-/** @typedef {{type:'custom', from:number, to:number}} CustomRange */
-/** @typedef {PresetRange | CustomRange} ActiveRange */
+type PresetValue = '1h' | 'today' | 'yesterday' | '7d' | '30d' | 'all' | 'week'; // 'week'는 legacy 호환(T-06 제거 예정)
+type PresetRange = { type: 'preset'; value: PresetValue };
+type CustomRange = { type: 'custom'; from: number; to: number };
+type ActiveRange = PresetRange | CustomRange;
 
-/** @type {ActiveRange} */
-let _activeRange: { type: string; value?: string; from?: number; to?: number } = Object.freeze({ type: 'preset', value: 'all' });
+let _activeRange: ActiveRange = Object.freeze({ type: 'preset', value: 'all' });
 
 const VALID_PRESETS = new Set(['1h', 'today', 'yesterday', '7d', '30d', 'all', 'week']); // 'week'는 legacy 호환만 (T-06에서 제거)
 
@@ -101,10 +101,10 @@ const VALID_PRESETS = new Set(['1h', 'today', 'yesterday', '7d', '30d', 'all', '
  * @param {string|ActiveRange} input
  * @returns {ActiveRange}
  */
-function normalizeRange(input) {
+function normalizeRange(input: string | ActiveRange): ActiveRange {
   if (typeof input === 'string') {
     // VALID_PRESETS.has가 런타임 유효성을 보장하므로 PresetValue로 좁힘 (tsc는 Set.has를 narrowing 못함).
-    const value = /** @type {PresetValue} */ (VALID_PRESETS.has(input) ? input : 'all');
+    const value = (VALID_PRESETS.has(input) ? input : 'all') as PresetValue;
     return { type: 'preset', value };
   }
   if (input && input.type === 'custom') {
@@ -116,12 +116,11 @@ function normalizeRange(input) {
   return { type: 'preset', value: 'all' };
 }
 
-/** @param {ActiveRange} a @param {ActiveRange} b */
-function sameRange(a, b) {
+function sameRange(a: ActiveRange, b: ActiveRange) {
   if (a.type !== b.type) return false;
   // type 동일성은 위에서 보장됨 — tsc는 a의 discriminant로 b를 좁히지 못하므로 명시 캐스팅.
-  if (a.type === 'preset') return a.value === /** @type {PresetRange} */ (b).value;
-  return a.from === /** @type {CustomRange} */ (b).from && a.to === /** @type {CustomRange} */ (b).to;
+  if (a.type === 'preset') return a.value === (b as PresetRange).value;
+  return a.from === (b as CustomRange).from && a.to === (b as CustomRange).to;
 }
 
 /**
@@ -130,7 +129,7 @@ function sameRange(a, b) {
  * 통지 이벤트: `cs:active-range-changed` (detail = 새 ActiveRange).
  * @param {string|ActiveRange} input
  */
-export function setActiveRange(input) {
+export function setActiveRange(input: string | ActiveRange) {
   const next = normalizeRange(input);
   if (sameRange(_activeRange, next)) return;
   _activeRange = Object.freeze(next);
@@ -149,10 +148,10 @@ export let reqOffset = 0;
 export const REQ_PAGE = 200;
 export let isSSEConnected = false;
 
-export function setReqFilter(f)     { reqFilter = f; }
+export function setReqFilter(f: string)     { reqFilter = f; }
 export function getReqFilter()      { return reqFilter; }
-export function setReqOffset(n)     { reqOffset = n; }
-export function setIsSSEConnected(v){ isSSEConnected = v; }
+export function setReqOffset(n: number)     { reqOffset = n; }
+export function setIsSSEConnected(v: boolean){ isSSEConnected = v; }
 
 // ── URL 빌더 ────────────────────────────────────────────────────────────────
 
@@ -165,7 +164,7 @@ export function setIsSSEConnected(v){ isSSEConnected = v; }
  * @param {number} now
  * @returns {{from?:number, to?:number}}
  */
-export function computeRange(activeRange, now) {
+export function computeRange(activeRange: ActiveRange, now: number): { from?: number; to?: number } {
   if (activeRange.type === 'custom') {
     if (!Number.isFinite(activeRange.from) || !Number.isFinite(activeRange.to)) {
       console.warn('[api] custom range missing from/to → falling back to {}', activeRange);
@@ -227,10 +226,10 @@ export function getMetricRangeParams() {
   return { range: 'all' };
 }
 
-export function buildQuery(base, extra = {}) {
+export function buildQuery(base: string, extra: Record<string, unknown> = {}) {
   const range  = getDateRange();
   // URLSearchParams는 number 값을 런타임에서 문자열화함 — 타입만 Record<string,string>로 캐스팅.
-  const params = new URLSearchParams(/** @type {Record<string, string>} */ (/** @type {unknown} */ ({ ...range, ...extra })));
+  const params = new URLSearchParams({ ...range, ...extra } as unknown as Record<string, string>);
   const qs     = params.toString();
   return qs ? `${base}?${qs}` : base;
 }
@@ -244,27 +243,27 @@ export async function fetchDashboard() {
     const json = await res.json();
     const d    = json.data;
 
-    document.getElementById('statSessions').textContent    = fmt(d.summary?.totalSessions ?? 0);
-    document.getElementById('statRequests').textContent    = fmt(d.summary?.totalRequests ?? 0);
-    document.getElementById('statTokens').textContent      = fmtToken(d.summary?.totalTokens ?? 0);
+    asEl(document.getElementById('statSessions')).textContent    = fmt(d.summary?.totalSessions ?? 0);
+    asEl(document.getElementById('statRequests')).textContent    = fmt(d.summary?.totalRequests ?? 0);
+    asEl(document.getElementById('statTokens')).textContent      = fmtToken(d.summary?.totalTokens ?? 0);
     // brand-strip-cleanup ADR-001: #statActive 노드가 제거되어 옵셔널 체이닝으로 안전 처리.
     // 활성 세션 시각화는 obs-panel.LivePulse 카드(#obsLivePulse)가 SSoT로 담당.
     // ADR-004: 백엔드 summary.activeSessions 필드는 향후 재활용 가능성 위해 보존됨.
     const statActiveEl = document.getElementById('statActive');
     if (statActiveEl) statActiveEl.textContent = fmt(d.summary?.activeSessions ?? 0);
-    document.getElementById('statAvgDuration').textContent =
+    asEl(document.getElementById('statAvgDuration')).textContent =
       formatDuration(d.summary?.avgDurationMs ?? d.requests?.avg_duration_ms ?? null);
 
     // ── Command Center: 성능 지표 (ADR-015 — costUsd / cacheSavingsUsd 제거) ──
     const p95Ms = d.summary?.p95DurationMs;
     if (p95Ms != null) {
-      document.getElementById('stat-p95').textContent =
+      asEl(document.getElementById('stat-p95')).textContent =
         p95Ms < 1000 ? `${Math.round(p95Ms)}ms` : `${(p95Ms / 1000).toFixed(1)}s`;
     }
 
     const errorRate = d.summary?.errorRate;
     if (errorRate != null) {
-      const errEl = document.getElementById('stat-error-rate');
+      const errEl = asEl(document.getElementById('stat-error-rate'));
       errEl.textContent = `${(Number(errorRate) * 100).toFixed(1)}%`;
       const errCard = errEl.closest('.header-stat');
       if (errCard) {
@@ -274,7 +273,7 @@ export async function fetchDashboard() {
     }
 
     renderProjects(d.projects || []);
-    setTypeData((d.types || []).sort((a, b) => b.count - a.count));
+    setTypeData((d.types || []).sort((a: any, b: any) => b.count - a.count));
 
     // v21 fix: SSE 도착 시 도넛 갱신 보장 — model 분포는 별도 metrics 엔드포인트라
     //   default-view.setChartMode가 페이지 로드 시 1회만 fetch했던 한계로 SSE 도착 후
@@ -294,7 +293,7 @@ export async function fetchDashboard() {
     // 옵저빌리티 패널은 dashboard 갱신 트리거에 맞춰 함께 갱신
     // (left-panel-observability-revamp ADR-003 — 별도 Promise.all 병렬)
     fetchObservability();
-  } catch (err) {
+  } catch (err: any) {
     showError(window.I18n.t('common.api-error.dashboard-load-failed', { message: err.message }));
   }
 }
@@ -333,7 +332,7 @@ export async function fetchRequests(append = false) {
     }
   } catch {
     if (!append) {
-      document.getElementById('requestsBody').innerHTML =
+      asEl(document.getElementById('requestsBody')).innerHTML =
         `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty" style="color:var(--red)">${window.I18n.t('common.api-error.request-list-load-failed')}</td></tr>`;
     }
   }
@@ -361,11 +360,11 @@ export async function fetchCacheStats() {
 }
 
 /** @param {string} projectName @returns {Promise<void>} */
-export async function fetchSessionsByProject(projectName) {
+export async function fetchSessionsByProject(projectName: string) {
   try {
     const res  = await fetch(buildQuery(`${API}/api/projects/${encodeURIComponent(projectName)}/sessions`, { limit: 200 }));
     const json = await res.json();
-    const others = getAllSessions().filter(s => s.project_name !== projectName);
+    const others = getAllSessions().filter((s: any) => s.project_name !== projectName);
     setAllSessions([...others, ...(json.data || [])]);
     renderBrowserSessions();
   } catch { /* silent */ }
@@ -375,7 +374,7 @@ export async function fetchSessionsByProject(projectName) {
 // left-panel-observability-revamp ADR-003/004:
 //   /api/metrics/* 라우트 4개 병렬 호출 → 위젯별 raw payload 그대로 전달.
 //   fetch 실패 시 위젯은 함수 내부에서 빈 상태 처리 (콘솔 throw 금지).
-async function safeJson(url) {
+async function safeJson(url: string) {
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
@@ -431,7 +430,7 @@ export async function fetchProxyRequests(limit = 50) {
 }
 
 /** @param {number} [since] @returns {Promise<ProxyStats|null>} */
-export async function fetchProxyStats(since) {
+export async function fetchProxyStats(since?: number) {
   try {
     const sinceMs = since ?? (Date.now() - 24 * 60 * 60 * 1000);
     const url  = `${API}/api/proxy-requests/stats?since=${sinceMs}`;

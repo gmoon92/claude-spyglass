@@ -4,8 +4,11 @@ import { renderFilterBtn } from '../design-system/primitives/filter-button.js';
 import { asEl } from '../dom.js';
 
 /** i18n 준비 후 호출 시점에 평가되도록 함수로 정의 */
-function getFilterGroups() {
-  const t = (key) => window.I18n.t(key);
+interface FilterItem { key: string; label: string; defaultActive?: boolean; title?: string; }
+interface FilterGroup { group: string; ariaLabel?: string; items: FilterItem[]; }
+
+function getFilterGroups(): FilterGroup[] {
+  const t = (key: string) => window.I18n.t(key);
   return [
     {
       group: 'all',
@@ -37,8 +40,8 @@ function getFilterGroups() {
  * @param {{ dataAttr: string, onChange: (filter: string) => void }} opts
  * @returns {{ setActive: (filter: string) => void, buttons: () => NodeList }}
  */
-export function createFilterBar(containerId, { dataAttr, onChange }) {
-  const container = document.getElementById(containerId);
+export function createFilterBar(containerId: string, { dataAttr, onChange }: { dataAttr: string, onChange: (filter: string) => void }) {
+  const container = asEl(document.getElementById(containerId));
 
   container.innerHTML = getFilterGroups().map(g => {
     const ariaAttr = g.ariaLabel ? ` aria-label="${g.ariaLabel}"` : '';
@@ -59,7 +62,7 @@ export function createFilterBar(containerId, { dataAttr, onChange }) {
   container.addEventListener('click', e => {
     const btn = asEl(e.target).closest(`[data-${dataAttr}]`);
     if (!btn) return;
-    const filter = asEl(btn).dataset[dataAttr.replace(/-([a-z])/g, (_, c) => c.toUpperCase())];
+    const filter = asEl(btn).dataset[dataAttr.replace(/-([a-z])/g, (_: string, c: string) => c.toUpperCase())];
     // ds-filter-btn 활성 시각은 [aria-pressed="true"]로 결정되므로 .active 클래스와 함께 동기화.
     container.querySelectorAll('.type-filter-btn').forEach(b => {
       b.classList.remove('active');
@@ -67,13 +70,13 @@ export function createFilterBar(containerId, { dataAttr, onChange }) {
     });
     btn.classList.add('active');
     btn.setAttribute('aria-pressed', 'true');
-    onChange(filter);
+    onChange(filter ?? '');
   });
 
   return {
-    setActive(filter) {
+    setActive(filter: string) {
       container.querySelectorAll('.type-filter-btn').forEach(b => {
-        const val = asEl(b).dataset[dataAttr.replace(/-([a-z])/g, (_, c) => c.toUpperCase())];
+        const val = asEl(b).dataset[dataAttr.replace(/-([a-z])/g, (_: string, c: string) => c.toUpperCase())];
         const isActive = val === filter;
         b.classList.toggle('active', isActive);
         b.setAttribute('aria-pressed', isActive ? 'true' : 'false');

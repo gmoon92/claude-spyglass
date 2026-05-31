@@ -25,7 +25,7 @@ describe('version-check-controller — 응답 → 배지 상태', () => {
     });
     await ctrl.refresh();
     expect(states).toEqual(['available']);
-    expect(cache).toEqual({ currentVersion: '1.0.0', latestTag: '1.1.0', updateAvailable: true });
+    expect(cache!).toEqual({ currentVersion: '1.0.0', latestTag: '1.1.0', updateAvailable: true });
     ctrl.stop();
   });
 

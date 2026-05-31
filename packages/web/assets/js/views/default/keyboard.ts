@@ -27,7 +27,7 @@ function toggleKbdHelp() {
   else showKbdHelp();
 }
 
-function isTypingTarget(el) {
+function isTypingTarget(el: any) {
   if (!el) return false;
   const tag = el.tagName;
   return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
@@ -41,7 +41,7 @@ function isTypingTarget(el) {
  *   onCloseDetail: () => void,
  * }} opts
  */
-export function wireKeyboard({ getFeedSearchBox, onCloseDetail }) {
+export function wireKeyboard({ getFeedSearchBox, onCloseDetail }: { getFeedSearchBox: () => any, onCloseDetail: () => void }) {
   function activeSearchInput() {
     const box = getRightView() === 'detail' ? detailSearchBox : getFeedSearchBox();
     return box?.element() ?? null;
@@ -57,7 +57,7 @@ export function wireKeyboard({ getFeedSearchBox, onCloseDetail }) {
     if (el) { el.focus(); el.select?.(); }
   }
 
-  function triggerFilterByIndex(idx) {
+  function triggerFilterByIndex(idx: number) {
     const btns = activeTypeFilterButtons();
     if (idx >= 0 && idx < btns.length) btns[idx].click();
   }

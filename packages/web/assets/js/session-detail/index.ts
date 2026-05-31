@@ -47,13 +47,13 @@ export const API = '';
  * detailSearchBox — createSearchBox로 만든 인스턴스 한 개를 모듈 수준에서 공유.
  * 외부(main.js)가 인스턴스를 직접 참조해 .clear() 등을 호출하므로 mutable export 유지.
  */
-export let detailSearchBox = null;
+export let detailSearchBox: any = null;
 
 /**
  * 진행 중 세션을 다시 fetch해 갱신한다 (SSE 업데이트 후 등).
  * 실패는 silent — 사용자 경험 차단 방지.
  */
-export async function refreshDetailSession(sessionId) {
+export async function refreshDetailSession(sessionId: string) {
   if (!sessionId) return;
   try {
     const [reqRes, turnRes, sysRes] = await Promise.all([

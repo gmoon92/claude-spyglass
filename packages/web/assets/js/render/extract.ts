@@ -13,7 +13,7 @@ import { svgCheck } from '../design-system/icons/check.js';
 const PROMPT_CACHE_MAX = 500;
 export const _promptCache = new Map(); // export: togglePromptExpand 공유
 
-export function getContextText(r) {
+export function getContextText(r: any) {
   if (!r) return null;
   if (r.type === 'tool_call') {
     if (r.tool_name === 'Agent' || r.tool_name === 'Skill') {
@@ -49,7 +49,7 @@ export function getContextText(r) {
  * 구조화 카드로 시각화한다 (web-design-balance-pass ADR-004).
  * 다른 도구는 모두 텍스트 모드 유지 (회귀 안전).
  */
-function getDetailText(r) {
+function getDetailText(r: any) {
   if (!r) return null;
   if (r.type === 'tool_call') {
     try {
@@ -155,12 +155,12 @@ function getDetailText(r) {
  * @param {object} toolInput   payload.tool_input 객체.
  * @returns {string|null}      HTML 문자열 또는 questions가 비어있으면 null.
  */
-function buildAskUserQuestionHtml(toolInput) {
+function buildAskUserQuestionHtml(toolInput: any) {
   const questions = Array.isArray(toolInput?.questions) ? toolInput.questions : null;
   if (!questions || questions.length === 0) return null;
   const answers = (toolInput && typeof toolInput.answers === 'object' && toolInput.answers) || {};
 
-  const blocks = questions.map(q => {
+  const blocks = questions.map((q: any) => {
     const qText  = typeof q?.question === 'string' ? q.question : '';
     const header = typeof q?.header   === 'string' ? q.header   : '';
     const multi  = !!q?.multiSelect;
@@ -177,7 +177,7 @@ function buildAskUserQuestionHtml(toolInput) {
       rawAnswer.forEach(v => { if (typeof v === 'string') selectedSet.add(v); });
     }
 
-    const optsHtml = opts.map(opt => {
+    const optsHtml = opts.map((opt: any) => {
       const label    = typeof opt?.label       === 'string' ? opt.label       : '';
       const desc     = typeof opt?.description === 'string' ? opt.description : '';
       const selected = selectedSet.has(label);
@@ -209,7 +209,7 @@ function buildAskUserQuestionHtml(toolInput) {
   return `<div class="askq-block">${blocks}</div>`;
 }
 
-export function parseToolDetail(raw) {
+export function parseToolDetail(raw: any) {
   if (!raw) return null;
   try {
     const obj = JSON.parse(raw);
@@ -220,13 +220,13 @@ export function parseToolDetail(raw) {
     }
   } catch {}
   try {
-    const lines = raw.split('\n').filter(l => /^\w[\w\s]*=/.test(l.trim()));
-    if (lines.length) return lines.slice(0, 3).map(l => l.trim()).join(' · ');
+    const lines = raw.split('\n').filter((l: string) => /^\w[\w\s]*=/.test(l.trim()));
+    if (lines.length) return lines.slice(0, 3).map((l: string) => l.trim()).join(' · ');
   } catch {}
   return raw;
 }
 
-export function extractPromptText(r) {
+export function extractPromptText(r: any) {
   // payload 우선: 원본 전체 텍스트 추출 (DB preview는 최대 2000자로 저장되나 payload는 무제한)
   if (r.payload) {
     try {
@@ -242,7 +242,7 @@ export function extractPromptText(r) {
 
 // type='response' 행의 본문 추출 — Stop 훅의 last_assistant_message
 // payload 우선, preview fallback (extractPromptText와 같은 패턴)
-export function extractAssistantText(r) {
+export function extractAssistantText(r: any) {
   if (r.payload) {
     try {
       const p = typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
@@ -254,7 +254,7 @@ export function extractAssistantText(r) {
   return '';
 }
 
-export function contextPreview(r, maxLen = 60) {
+export function contextPreview(r: any, maxLen = 60) {
   const rawText = getContextText(r);
   if (!rawText) return '';
   if (_promptCache.size >= PROMPT_CACHE_MAX) {
@@ -276,9 +276,9 @@ export function contextPreview(r, maxLen = 60) {
   return `<span class="prompt-preview" data-expand-id="${escHtml(r.id)}" title="${escHtml(tooltip)}">${escHtml(display)}${flat.length > maxLen ? '…' : ''}${hintHtml}</span>`;
 }
 
-export function extractFirstPrompt(payload) {
+export function extractFirstPrompt(payload: any) {
   if (!payload) return '';
-  function clean(text) {
+  function clean(text: string) {
     return text.replace(/<[^>]+>/g, '').replace(/[\n\r]+/g, ' ').trim().slice(0, 60);
   }
   try {

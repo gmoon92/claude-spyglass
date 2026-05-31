@@ -1,6 +1,7 @@
 // 인프라 모듈 — 에러 표시, 상태 배지, 스크롤 락 (외부 의존 없음)
 // Wave 8-B: ↓ 글리프를 svgChevron SVG로 교체 (innerHTML 사용).
 import { svgChevron } from './design-system/icons/chevron.js';
+import { asEl } from './dom.js';
 
 let _scrollLockNewCount = 0;
 
@@ -34,21 +35,21 @@ export function jumpToLatest() {
  * 함수 시그너처는 외부 호출자(showError / clearError) 호환을 위해 보존.
  * SSE 연결 상태는 #errorBanner 및 obs-panel.LivePulse 카드로 일원화됨.
  */
-export function setLiveStatus(connected) {
+export function setLiveStatus(connected: any) {
   const b = document.getElementById('liveBadge');
   if (!b) return; // brand-strip-cleanup ADR-001: liveBadge 노드가 제거되어 사실상 no-op.
   b.className = connected ? 'badge-live' : 'badge-live disconnected';
 }
 
-export function showError(msg) {
+export function showError(msg: any) {
   const t = window.I18n?.t ?? ((k) => k);
-  document.getElementById('errorMsg').textContent = msg || t('common.server-unavailable');
-  document.getElementById('errorBanner').classList.add('visible');
+  asEl(document.getElementById('errorMsg')).textContent = msg || t('common.server-unavailable');
+  asEl(document.getElementById('errorBanner')).classList.add('visible');
   setLiveStatus(false);
 }
 
 export function clearError() {
-  document.getElementById('errorBanner').classList.remove('visible');
+  asEl(document.getElementById('errorBanner')).classList.remove('visible');
   setLiveStatus(true);
 }
 

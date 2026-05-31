@@ -22,10 +22,10 @@ import { wireKeyboard } from './keyboard.js';
  *   onGoHome: () => void,
  * }} opts
  */
-export function initDefaultView({ onSelectSession, onCloseDetail, onGoHome }) {
+export function initDefaultView({ onSelectSession, onCloseDetail, onGoHome }: { onSelectSession: (id: string) => void, onCloseDetail: () => void, onGoHome: () => void }) {
   // 클로저 상태 — 검색 박스 핸들. 필터 바 onChange 가 박스 생성 전에 호출될
   // 수 있으므로 getter 로 감싸서 다른 모듈에 넘긴다.
-  let feedSearchBox = null;
+  let feedSearchBox: any = null;
   const getFeedSearchBox  = () => feedSearchBox;
   const getSearchValue    = () => feedSearchBox?.getValue() ?? '';
 
@@ -34,7 +34,7 @@ export function initDefaultView({ onSelectSession, onCloseDetail, onGoHome }) {
   wireDefaultViewClicks({ onSelectSession });
 
   // Load more 버튼
-  document.getElementById('loadMoreBtn').addEventListener('click', () => fetchRequests(true));
+  document.getElementById('loadMoreBtn')?.addEventListener('click', () => fetchRequests(true));
 
   // C축: 피드 검색 박스
   feedSearchBox = createSearchBox('feedSearchContainer', {
@@ -43,7 +43,7 @@ export function initDefaultView({ onSelectSession, onCloseDetail, onGoHome }) {
   });
 
   // 단일 FEED_UPDATED 리스너 — 인터랙션 모듈에 위임
-  document.addEventListener(FEED_UPDATED, (e) => handleFeedUpdated(e, getSearchValue));
+  document.addEventListener(FEED_UPDATED, (e) => handleFeedUpdated(e as CustomEvent, getSearchValue));
 
   // D축: 키보드 단축키 + KBD 도움말 모달
   wireKeyboard({ getFeedSearchBox, onCloseDetail });

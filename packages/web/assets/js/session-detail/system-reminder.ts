@@ -29,7 +29,7 @@ const REMINDER_RE = /<system-reminder>([\s\S]*?)<\/system-reminder>/g;
  * @param {string|null|undefined} raw — TurnItem.system_reminder 그대로
  * @returns {string[]} 각 reminder 본문 (trim된 문자열). raw가 비어있으면 빈 배열.
  */
-export function parseReminderBodies(raw) {
+export function parseReminderBodies(raw: any) {
   if (!raw || typeof raw !== 'string') return [];
   const out = [];
   let m;
@@ -51,7 +51,7 @@ export function parseReminderBodies(raw) {
  * @param {Array<{turn_id: string, turn_index: number, system_reminder?: string|null}>} turns
  * @returns {Map<string, string[]>} turn_id → 신규 reminder 본문 배열
  */
-export function computeNewRemindersByTurn(turns) {
+export function computeNewRemindersByTurn(turns: any) {
   const result = new Map();
   if (!Array.isArray(turns) || turns.length === 0) return result;
 

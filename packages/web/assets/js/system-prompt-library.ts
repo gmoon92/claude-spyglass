@@ -64,9 +64,12 @@ const DEFAULT_DIR = {
   last_seen_at:   'desc',
 };
 
+// 디스플레이 레이어 loose 타입 — system-prompt 라이브러리 행 JSON bag. 파싱 계약은 P5-03(Zod).
+type LibRow = Record<string, any>;
+
 let _sortKey = 'last_seen_at';
 let _sortDir = 'desc';
-let _rows    = [];   // 마지막 fetch 결과 캐시 — 정렬만 변경할 때 재 fetch 회피.
+let _rows: LibRow[]    = [];   // 마지막 fetch 결과 캐시 — 정렬만 변경할 때 재 fetch 회피.
 
 /**
  * 라이브러리 목록 로드 + 렌더 — 탭 진입 시 호출.
@@ -83,8 +86,8 @@ export async function loadSystemPromptLibrary() {
     const res = await fetchJson(`/api/system-prompts?orderBy=${encodeURIComponent(INITIAL_FETCH_ORDER)}&limit=${DEFAULT_LIMIT}`);
     _rows = Array.isArray(res?.data) ? res.data : [];
     renderContainer(container);
-  } catch (err) {
-    const t = window.I18n?.t ?? ((k) => k);
+  } catch (err: any) {
+    const t = window.I18n?.t ?? ((k: string) => k);
     container.innerHTML = `<div class="state-empty"><span class="state-empty-title">${t('ui.syslib.load-failed', { message: escHtml(String(err?.message ?? err)) })}</span></div>`;
   }
 }
@@ -101,14 +104,14 @@ export async function loadSystemPromptLibrary() {
  * 드래그(<col>.style.width 직접 조정) + 더블클릭 Auto-fit. table-layout:fixed가
  * 글로벌(table.css)이라 colgroup의 width가 즉시 반영된다.
  */
-function renderContainer(container) {
+function renderContainer(container: HTMLElement) {
   container.innerHTML = renderHtml(applySort(_rows, _sortKey, _sortDir));
   bindEvents(container);
   initColResize(container.querySelector('.syslib-table'));
 }
 
-function renderHtml(rows) {
-  const t = window.I18n?.t ?? ((k) => k);
+function renderHtml(rows: LibRow[]) {
+  const t = window.I18n?.t ?? ((k: string) => k);
   if (rows.length === 0) {
     return `<div class="state-empty"><span class="state-empty-title">${t('ui.syslib.no-prompts')}</span></div>`;
   }
@@ -119,7 +122,7 @@ function renderHtml(rows) {
     ? Math.max(1, Math.ceil(rows.length * REF_HOT_RATIO))
     : 0;
 
-  const tableRows = rows.map((r, idx) => {
+  const tableRows = rows.map((r: LibRow, idx: number) => {
     const refClass  = (_sortKey === 'ref_count' && idx < refHotCutoff) ? ' syslib-ref-hot' : '';
     const sizeClass = sizeClassFor(r.byte_size);
     return `
@@ -136,7 +139,7 @@ function renderHtml(rows) {
 
   // 모든 sortable 컬럼은 동일 패턴으로 — SORTABLE_KEYS 기준 단일 정의.
   // renderSortHead: ds-sort-head 이중 클래스 패턴 — 기존 data-syslib-sort/aria-sort/<th> 속성 보존.
-  const th = (key, label, extraCls = '') => {
+  const th = (key: string, label: string, extraCls = '') => {
     const cls = `${extraCls} sortable ${sortHeaderCls(key)}`.trim();
     const sortState = _sortKey !== key ? 'idle' : (_sortDir === 'asc' ? 'asc' : 'desc');
     return `<th data-syslib-sort="${key}"
@@ -175,12 +178,12 @@ function renderHtml(rows) {
 }
 
 /** 헤더 active 클래스 — 단일 책임 */
-function sortHeaderCls(key) {
+function sortHeaderCls(key: string) {
   if (_sortKey !== key) return '';
   return _sortDir === 'asc' ? 'sort-asc' : 'sort-desc';
 }
 /** 헤더 aria-sort 속성 값 — WAI-ARIA 표준 */
-function ariaSortValue(key) {
+function ariaSortValue(key: string) {
   if (_sortKey !== key) return 'none';
   return _sortDir === 'asc' ? 'ascending' : 'descending';
 }
@@ -210,25 +213,26 @@ function ensureDetailModal() {
  * 정렬 변경 적용 — 같은 컬럼이면 방향 토글, 다른 컬럼이면 기본 방향 진입.
  * Behavior Definitions 테이블의 applyFilterChange 'sort' 분기와 동일 규칙.
  */
-function applySortChange(key) {
+function applySortChange(key: string) {
   if (!SORTABLE_KEYS.has(key)) return;
   if (_sortKey === key) {
     _sortDir = _sortDir === 'asc' ? 'desc' : 'asc';
   } else {
     _sortKey = key;
-    _sortDir = DEFAULT_DIR[key] ?? 'desc';
+    _sortDir = (DEFAULT_DIR as Record<string, string>)[key] ?? 'desc';
   }
 }
 
-function bindEvents(container) {
+function bindEvents(container: HTMLElement) {
   // 헤더 클릭/키보드 → 정렬 변경 후 재렌더 (재 fetch 없음)
   container.querySelectorAll('[data-syslib-sort]').forEach(th => {
+    const thEl = th as HTMLElement;
     const onActivate = () => {
-      applySortChange(th.dataset.syslibSort);
+      applySortChange(thEl.dataset.syslibSort ?? '');
       renderContainer(container);
     };
-    th.addEventListener('click', onActivate);
-    th.addEventListener('keydown', (e) => {
+    thEl.addEventListener('click', onActivate);
+    thEl.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
       e.preventDefault();
       onActivate();
@@ -237,15 +241,16 @@ function bindEvents(container) {
 
   // 행 클릭 → 본문 lazy-fetch 후 모달 표시
   container.querySelectorAll('.syslib-row').forEach(row => {
-    const open = () => showDetailModal(row.dataset.syslibHash);
-    row.addEventListener('click', open);
-    row.addEventListener('keydown', (e) => {
+    const rowEl = row as HTMLElement;
+    const open = () => showDetailModal(rowEl.dataset.syslibHash ?? '');
+    rowEl.addEventListener('click', open);
+    rowEl.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
     });
   });
 }
 
-async function showDetailModal(hash) {
+async function showDetailModal(hash: string) {
   const modal = ensureDetailModal();
   if (!modal) return;
 
@@ -270,7 +275,7 @@ async function showDetailModal(hash) {
         <pre class="syslib-detail-content">${escHtml(row.content ?? '')}</pre>
       `);
     }
-  } catch (err) {
+  } catch (err: any) {
     modal.innerHTML = renderModalShell(`<p class="syslib-dim">${t('ui.syslib.modal-load-failed', { message: escHtml(String(err?.message ?? err)) })}</p>`);
   }
 
@@ -281,17 +286,17 @@ async function showDetailModal(hash) {
     modal.innerHTML = '';
     document.removeEventListener('keydown', onKey);
   };
-  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
   modal.querySelector('[data-syslib-close]')?.addEventListener('click', close);
-  modal.addEventListener('click', (e) => {
+  modal.addEventListener('click', (e: Event) => {
     if (e.target === modal) close();   // backdrop 영역 직접 클릭 시
   });
   document.addEventListener('keydown', onKey);
 }
 
-function renderModalShell(inner) {
+function renderModalShell(inner: string) {
   // renderCloseBtn: ds-close-btn 이중 클래스 패턴 — 기존 syslib-detail-close / data-syslib-close / aria-label 보존.
-  const t = window.I18n?.t ?? ((k) => k);
+  const t = window.I18n?.t ?? ((k: string) => k);
   const closeBtn = renderCloseBtn({ size: 'lg', label: t('ui.syslib.close-label'), dataAttrs: { 'syslib-close': '' } })
     .replace('class="ds-close-btn"', 'class="syslib-detail-close ds-close-btn"');
   return `<div class="syslib-detail-inner">
@@ -300,13 +305,13 @@ function renderModalShell(inner) {
   </div>`;
 }
 
-async function fetchJson(url) {
+async function fetchJson(url: string) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json();
 }
 
-function formatBytes(n) {
+function formatBytes(n: number) {
   if (typeof n !== 'number' || !isFinite(n)) return '-';
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
@@ -321,17 +326,17 @@ function formatBytes(n) {
  * @param {number} n  byte_size
  * @returns {string}  '' (정상) | 'syslib-size-warn' (>16KB) | 'syslib-size-large' (>32KB)
  */
-function sizeClassFor(n) {
+function sizeClassFor(n: number) {
   if (typeof n !== 'number' || !isFinite(n)) return '';
   if (n > SIZE_LARGE_THRESHOLD) return 'syslib-size-large';
   if (n > SIZE_WARN_THRESHOLD)  return 'syslib-size-warn';
   return '';
 }
 
-function formatTime(ms) {
+function formatTime(ms: number) {
   if (typeof ms !== 'number' || !isFinite(ms)) return '-';
   const d = new Date(ms);
-  const pad = (n) => String(n).padStart(2, '0');
+  const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
@@ -346,17 +351,17 @@ function formatTime(ms) {
 
 // 활성 언어 기반 collator는 i18n-utils.js의 SSoT를 재사용 (chart.js / 다른 정렬 모듈과 통일).
 // 'ko' 하드코딩 시 영/일/중 사용자에게도 한국어 정렬 규칙이 적용되어 의도와 어긋남.
-function cmpString(a, b) {
+function cmpString(a: unknown, b: unknown) {
   const sa = a == null ? '' : String(a);
   const sb = b == null ? '' : String(b);
   const collator = getCollator();
   return collator ? collator.compare(sa, sb) : sa.localeCompare(sb);
 }
-function cmpNumber(a, b) {
+function cmpNumber(a: number | null | undefined, b: number | null | undefined) {
   return (a ?? 0) - (b ?? 0);
 }
 
-const COMPARATORS = {
+const COMPARATORS: Record<string, (a: LibRow, b: LibRow) => number> = {
   hash:          (a, b) => cmpString(a.hash, b.hash),
   byte_size:     (a, b) => cmpNumber(a.byte_size, b.byte_size),
   segment_count: (a, b) => cmpNumber(a.segment_count, b.segment_count),
@@ -369,8 +374,8 @@ const COMPARATORS = {
  * 정렬 dispatcher — sort 키와 dir만 받아 새 배열을 반환한다 (원본 _rows 불변 유지).
  * COMPARATORS에 없는 키는 last_seen_at으로 fallback.
  */
-function applySort(rows, key, dir = 'desc') {
+function applySort(rows: LibRow[], key: string, dir = 'desc') {
   const cmp = COMPARATORS[key] ?? COMPARATORS.last_seen_at;
   const factor = dir === 'asc' ? 1 : -1;
-  return rows.slice().sort((a, b) => factor * cmp(a, b));
+  return rows.slice().sort((a: LibRow, b: LibRow) => factor * cmp(a, b));
 }

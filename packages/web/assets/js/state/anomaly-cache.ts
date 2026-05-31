@@ -15,10 +15,10 @@
 
 const _bloatedSysCache = new Map();
 
-export function getBloatedSysFor(sessionId) {
+export function getBloatedSysFor(sessionId: any) {
   return _bloatedSysCache.get(sessionId) || null;
 }
 
-export function setBloatedSysFor(sessionId, bloatedSys) {
+export function setBloatedSysFor(sessionId: any, bloatedSys: any) {
   _bloatedSysCache.set(sessionId, bloatedSys || null);
 }

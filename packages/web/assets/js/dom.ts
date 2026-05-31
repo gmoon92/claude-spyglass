@@ -27,8 +27,8 @@
  * @param {EventTarget|Element|null|undefined} el
  * @returns {HTMLElement}
  */
-export function asEl(el) {
-  return /** @type {HTMLElement} */ (/** @type {unknown} */ (el));
+export function asEl(el: EventTarget | Element | null | undefined): HTMLElement {
+  return el as unknown as HTMLElement;
 }
 
 /**
@@ -36,8 +36,8 @@ export function asEl(el) {
  * @param {EventTarget|Element|null|undefined} el
  * @returns {HTMLInputElement}
  */
-export function asInput(el) {
-  return /** @type {HTMLInputElement} */ (/** @type {unknown} */ (el));
+export function asInput(el: EventTarget | Element | null | undefined): HTMLInputElement {
+  return el as unknown as HTMLInputElement;
 }
 
 /**
@@ -45,8 +45,8 @@ export function asInput(el) {
  * @param {EventTarget|Element|null|undefined} el
  * @returns {HTMLButtonElement}
  */
-export function asButton(el) {
-  return /** @type {HTMLButtonElement} */ (/** @type {unknown} */ (el));
+export function asButton(el: EventTarget | Element | null | undefined): HTMLButtonElement {
+  return el as unknown as HTMLButtonElement;
 }
 
 /**
@@ -54,8 +54,8 @@ export function asButton(el) {
  * @param {EventTarget|Element|null|undefined} el
  * @returns {HTMLTableSectionElement}
  */
-export function asTableSection(el) {
-  return /** @type {HTMLTableSectionElement} */ (/** @type {unknown} */ (el));
+export function asTableSection(el: EventTarget | Element | null | undefined): HTMLTableSectionElement {
+  return el as unknown as HTMLTableSectionElement;
 }
 
 /**
@@ -63,6 +63,6 @@ export function asTableSection(el) {
  * @param {EventTarget|Element|null|undefined} el
  * @returns {HTMLDetailsElement}
  */
-export function asDetails(el) {
-  return /** @type {HTMLDetailsElement} */ (/** @type {unknown} */ (el));
+export function asDetails(el: EventTarget | Element | null | undefined): HTMLDetailsElement {
+  return el as unknown as HTMLDetailsElement;
 }

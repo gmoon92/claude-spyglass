@@ -30,7 +30,7 @@ export const DEFAULT_CONTEXT_WINDOW = 200_000;
  * 토큰 한도를 사람이 읽기 좋은 라벨로 변환 ("200K" / "1.0M" / "262.1K").
  * 인디케이터·풋터·툴팁의 일관 표기를 위해 한 곳에서 관리.
  */
-export function formatContextWindowLabel(size) {
+export function formatContextWindowLabel(size: any) {
   if (size >= 1_000_000) {
     const m = size / 1_000_000;
     return Number.isInteger(m) ? `${m}M` : `${m.toFixed(1)}M`;

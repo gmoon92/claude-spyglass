@@ -26,7 +26,7 @@
  */
 export function svgChevron(opts: { size?: number; className?: string; ariaLabel?: string | null; dir?: string } = {}) {
   const { size = 12, dir = 'right', className = '', ariaLabel = null } = opts;
-  const rotateMap = { right: 0, down: 90, left: 180, up: 270 };
+  const rotateMap: Record<string, number> = { right: 0, down: 90, left: 180, up: 270 };
   const deg = rotateMap[dir] ?? 0;
   const cls = className ? ` class="${className}"` : '';
   const aria = ariaLabel

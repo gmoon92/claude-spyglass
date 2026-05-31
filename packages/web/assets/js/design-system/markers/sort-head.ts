@@ -27,7 +27,7 @@ import { escHtml } from '../../formatters.js';
  * @param {SortState} sort
  * @returns {string}
  */
-function arrowGlyph(sort) {
+function arrowGlyph(sort: any) {
   if (sort === 'asc') return '↑';
   if (sort === 'desc') return '↓';
   return '↕';
@@ -38,7 +38,7 @@ function arrowGlyph(sort) {
  * @param {SortState} sort
  * @returns {string}
  */
-function ariaSort(sort) {
+function ariaSort(sort: any) {
   if (sort === 'asc') return 'ascending';
   if (sort === 'desc') return 'descending';
   return 'none';

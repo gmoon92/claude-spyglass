@@ -8,7 +8,7 @@ import { renderCloseBtn } from '../design-system/primitives/close-button.js';
  * @param {{ placeholder?: string, onSearch: (query: string) => void }} opts
  * @returns {{ getValue: () => string, clear: () => void, focus: () => void, element: () => HTMLInputElement }}
  */
-export function createSearchBox(containerId, { placeholder = '', onSearch }) {
+export function createSearchBox(containerId: string, { placeholder = '', onSearch }: { placeholder?: string, onSearch: (query: string) => void }) {
   const container = document.getElementById(containerId) as HTMLElement;
 
   container.innerHTML = `

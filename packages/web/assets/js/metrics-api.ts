@@ -26,7 +26,7 @@ function qs(params = {}) {
 /**
  * fetch + envelope unwrap. 실패 시 빈 객체 또는 빈 배열 반환.
  */
-async function getMetric(path, params = {}, fallback = null) {
+async function getMetric(path: string, params: Record<string, any> = {}, fallback: any = null) {
   try {
     const res  = await fetch(`${BASE}${path}${qs(params)}`, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

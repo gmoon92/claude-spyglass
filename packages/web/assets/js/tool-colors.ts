@@ -20,7 +20,7 @@ export const TOOL_COLORS = {
 // CSS 변수 값으로 TOOL_COLORS 덮어쓰기. main.js에서 1회 호출.
 export function initToolColors() {
   const s   = getComputedStyle(document.documentElement);
-  const get = v => s.getPropertyValue(v).trim();
+  const get = (v: string) => s.getPropertyValue(v).trim();
   const agent  = get('--tool-agent')   || TOOL_COLORS.Agent;
   const task   = get('--tool-task')    || TOOL_COLORS.Task;
   const fs     = get('--tool-fs')      || TOOL_COLORS.Read;
@@ -43,8 +43,8 @@ export function initToolColors() {
   TOOL_COLORS.default   = def;
 }
 
-export function getToolColor(toolName) {
+export function getToolColor(toolName: any) {
   if (!toolName) return TOOL_COLORS.default;
   const base = toolName.split('__').pop();
-  return TOOL_COLORS[base] || TOOL_COLORS.default;
+  return (TOOL_COLORS as Record<string, string>)[base] || TOOL_COLORS.default;
 }

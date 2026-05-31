@@ -29,7 +29,7 @@ const ROW_FLASH_DURATION_MS = 600;
  * 셀 갱신 범위: `data-cell="time|action|target|model|msg|in|out|cache|duration|sess"`
  * 모든 셀을 다시 만들어 교체. 셀 빌더는 SSoT(`makeRequestRow` 내부와 동일).
  */
-export function prependRequest(r) {
+export function prependRequest(r: any) {
   // date-range-filter ADR-009: SSE 클라이언트 필터링 단일 진입점.
   // 활성 range 밖 레코드는 prepend/inplace 모두 skip — stale 데이터 노출 방지.
   // dr가 {} (=전체)일 때는 통과. inplace 업데이트도 차단해야 하므로 함수 맨 앞에서 가드.
@@ -40,6 +40,7 @@ export function prependRequest(r) {
   }
 
   const body      = document.getElementById('requestsBody');
+  if (!body) return;
   const feedBody  = document.getElementById('feedBody');
   const isNearTop = !feedBody || feedBody.scrollTop < 80;
 
@@ -73,7 +74,7 @@ export function prependRequest(r) {
   while (bodyTable.rows.length >= FEED_ROW_CAP) bodyTable.deleteRow(bodyTable.rows.length - 1);
   const tmp = document.createElement('tbody');
   tmp.innerHTML = makeRequestRow(r, { showSession: true });
-  body.insertBefore(tmp.firstElementChild, body.firstChild);
+  if (tmp.firstElementChild) body.insertBefore(tmp.firstElementChild, body.firstChild);
 
   if (!isNearTop && feedBody) {
     const addedHeight = feedBody.scrollHeight - prevScrollHeight;
@@ -98,7 +99,7 @@ export function prependRequest(r) {
  *
  * 옵션 `showSession`은 컨테이너에 따라 유추 — 기존 행에 .cell-sess가 있으면 true.
  */
-function replaceRowCells(existing, r) {
+function replaceRowCells(existing: Element, r: any) {
   const showSession = !!existing.querySelector('.cell-sess');
   const tmp = document.createElement('tbody');
   tmp.innerHTML = makeRequestRow(r, { showSession });
@@ -114,7 +115,7 @@ function replaceRowCells(existing, r) {
   // 셀 단위 교체 — fresh의 각 [data-cell]을 existing의 동일 키 셀과 swap.
   fresh.querySelectorAll('[data-cell]').forEach((newCell) => {
     const key = newCell.getAttribute('data-cell');
-    const oldCell = existing.querySelector(`[data-cell="${CSS.escape(key)}"]`);
+    const oldCell = existing.querySelector(`[data-cell="${CSS.escape(key ?? '')}"]`);
     if (oldCell) oldCell.outerHTML = newCell.outerHTML;
   });
 }

@@ -62,13 +62,13 @@ export function applyDetailFilter() {
   const activeTurnId = getActiveTurnId?.() || null;
   const activeScope = activeTurnId ? requests.filter(r => r.turn_id === activeTurnId) : [];
   const countSource = activeScope.length ? activeScope : requests;
-  const countMap = { all: countSource.length, prompt: 0, tool_call: 0, system: getSystemHashCount(), agent: 0, skill: 0, mcp: 0 };
-  countSource.forEach(r => {
+  const countMap: Record<string, number> = { all: countSource.length, prompt: 0, tool_call: 0, system: getSystemHashCount(), agent: 0, skill: 0, mcp: 0 };
+  countSource.forEach((r: any) => {
     if (r.type in countMap && r.type !== 'system') countMap[r.type]++;
     const sub = subTypeOf(r);
     if (sub) countMap[sub]++;
   });
-  const labelMap = {
+  const labelMap: Record<string, string> = {
     all:      `All (${countMap.all})`,
     prompt:   `prompt (${countMap.prompt})`,
     tool_call:`tool_call (${countMap.tool_call})`,
@@ -79,7 +79,8 @@ export function applyDetailFilter() {
   };
   document.querySelectorAll('#detailTypeFilterBtns .type-filter-btn').forEach(node => {
     const b = asEl(node);
-    if (labelMap[b.dataset.detailFilter]) b.textContent = labelMap[b.dataset.detailFilter];
+    const key = b.dataset.detailFilter ?? '';
+    if (labelMap[key]) b.textContent = labelMap[key];
   });
 
   // 평면 / 턴 필터링 결과
@@ -140,7 +141,7 @@ export function applyDetailFilter() {
  * 렌더링 호출 제거. 단일 SSoT는 turn-views.js#renderTurnCards (turn-spine + log-pane).
  */
 document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
-  const { turnFiltered, allTurns, allRequests } = e.detail;
+  const { turnFiltered, allTurns, allRequests } = (e as CustomEvent).detail;
 
   // anomaly-bloated-sys T-16: turn 카드 sparkline은 requests 응답의 agent_spike 객체에 의존.
   //   turns 응답엔 agent_spike 메타데이터가 없어 turn-views는 allRequests를 한 번 더 받는다.

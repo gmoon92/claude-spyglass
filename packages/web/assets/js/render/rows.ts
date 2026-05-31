@@ -30,7 +30,7 @@ import { svgStatusActive, svgStatusStale, svgStatusEnded } from '../design-syste
  * 외부에서 별도 검색용 인덱스를 두지 않는 이유: 행 자체가 SSoT이므로 SSE in-place 업데이트나
  * append 같은 비동기 렌더에도 row dataset이 자연스럽게 따라간다.
  */
-function buildSearchHaystack(r) {
+function buildSearchHaystack(r: any) {
   const parts = [];
   if (r.tool_name)   parts.push(r.tool_name);
   if (r.tool_detail) parts.push(r.tool_detail);
@@ -97,14 +97,14 @@ export function makeRequestRow(r: any, opts: { fmtTime?: any; anomalyFlags?: any
   </tr>`;
 }
 
-function makeTargetCellWithBadges(r, extraBadges) {
+function makeTargetCellWithBadges(r: any, extraBadges: any) {
   if (!extraBadges) return makeTargetCell(r);
   const base = makeTargetCell(r);
   // </td> 직전에 배지 삽입
   return base.replace(/<\/td>$/, `${extraBadges}</td>`);
 }
 
-export function makeSessionRow(s, isSelected) {
+export function makeSessionRow(s: any, isSelected: boolean) {
   // 사이드바 활성도 마커 — 서버가 결정한 live_state 단일 분기.
   //   ● live   : 라이브 세션 (storage._shared.buildLiveStateColumn에서 산출)
   //   ◐ stale  : SessionEnd 누락 의심 — reactivateSession 흐름에서 새 hook 도달 시 자동 ●로 복귀
@@ -143,15 +143,15 @@ export function makeSessionRow(s, isSelected) {
   </tr>`;
 }
 
-export function renderRequests(container, list, anomalyMap = new Map()) {
+export function renderRequests(container: HTMLElement, list: any[], anomalyMap = new Map()) {
   if (!list.length) {
     container.innerHTML = `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty">${window.I18n.t('session.rows.no-data')}</td></tr>`;
     return;
   }
-  container.innerHTML = list.map(r => makeRequestRow(r, { showSession: true, anomalyFlags: anomalyMap.get(r.id) || null })).join('');
+  container.innerHTML = list.map((r: any) => makeRequestRow(r, { showSession: true, anomalyFlags: anomalyMap.get(r.id) || null })).join('');
 }
 
-export function appendRequests(container, list, anomalyMap = new Map()) {
+export function appendRequests(container: HTMLElement, list: any[], anomalyMap = new Map()) {
   if (!list.length) return;
-  container.insertAdjacentHTML('beforeend', list.map(r => makeRequestRow(r, { showSession: true, anomalyFlags: anomalyMap.get(r.id) || null })).join(''));
+  container.insertAdjacentHTML('beforeend', list.map((r: any) => makeRequestRow(r, { showSession: true, anomalyFlags: anomalyMap.get(r.id) || null })).join(''));
 }

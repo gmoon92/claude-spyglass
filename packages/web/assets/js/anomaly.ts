@@ -33,7 +33,7 @@
  * @param {object} r — NormalizedRequest 형태의 응답 행
  * @returns {Set<'bloated-sys-warn'|'bloated-sys-critical'|'agent-spike'|'spike'|'loop'|'slow'>}
  */
-export function getAnomalyFlagsForRow(r) {
+export function getAnomalyFlagsForRow(r: any) {
   const flags = new Set<string>();
   if (!r) return flags;
 
@@ -65,12 +65,12 @@ export function getAnomalyFlagsForRow(r) {
  * @param {Element} rowEl
  * @param {Set<string>} flags
  */
-export function applyAnomalyBadgesToRow(rowEl, flags) {
+export function applyAnomalyBadgesToRow(rowEl: any, flags: any) {
   if (!rowEl || !flags || flags.size === 0) return;
   const targetCell = rowEl.querySelector('.cell-target');
   const tokenCells = rowEl.querySelectorAll('.cell-token.num');
   const durationCell = tokenCells[tokenCells.length - 1];
-  const has = (name) => !!rowEl.querySelector(`.badge-${name}`);
+  const has = (name: string) => !!rowEl.querySelector(`.badge-${name}`);
 
   for (const f of flags) {
     if (f === 'slow') {

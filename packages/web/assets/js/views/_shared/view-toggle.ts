@@ -4,9 +4,10 @@
 // 자기 자신의 active 클래스를 직접 만지지 않고 이 함수만 호출한다.
 
 import { getRightView } from '../../state.js';
+import { asEl } from '../../dom.js';
 
 export function renderRightPanel() {
   const isDetail = getRightView() === 'detail';
-  document.getElementById('defaultView').classList.toggle('active', !isDetail);
-  document.getElementById('detailView').classList.toggle('active', isDetail);
+  asEl(document.getElementById('defaultView')).classList.toggle('active', !isDetail);
+  asEl(document.getElementById('detailView')).classList.toggle('active', isDetail);
 }

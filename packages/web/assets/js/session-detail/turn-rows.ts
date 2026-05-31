@@ -30,6 +30,12 @@ import { escHtml } from '../formatters.js';
 import { makeRequestRow } from '../render/rows.js';
 import { subTypeOf, isAnchorTool } from '../request-types.js';
 
+// 디스플레이 레이어 loose 타입 — 서버 JSON 파생 요청/턴/흐름. 파싱 계약은 P5-03(Zod).
+type Req = Record<string, any>;
+type Turn = Record<string, any>;
+type FlowItem = Record<string, any>;
+interface ToolGroup { key: string; name: string; count: number; isAgent: boolean; agentName: string; items: Req[]; kinds?: string[]; isGroup?: boolean; }
+
 // =============================================================================
 // 흐름 그룹화 헬퍼 — turn-views.js 칩 렌더러가 재사용한다 (SSoT 유지).
 // =============================================================================
@@ -50,8 +56,8 @@ import { subTypeOf, isAnchorTool } from '../request-types.js';
  * @param {Array<object>} toolCalls 도구 호출 요청 배열 (시간순)
  * @returns {Array<{key:string,name:string,count:number,isAgent:boolean,agentName:string,items:object[]}>}
  */
-export function compressContinuousTools(toolCalls) {
-  const compressed = [];
+export function compressContinuousTools(toolCalls: Req[]): ToolGroup[] {
+  const compressed: ToolGroup[] = [];
   for (const tc of toolCalls) {
     const name      = tc.tool_name || '?';
     const sub       = subTypeOf(tc);
@@ -89,7 +95,7 @@ export function compressContinuousTools(toolCalls) {
  * @param {object} turn TurnItem (server normalized)
  * @returns {Array<object>} 흐름 항목 배열
  */
-export function compressFlowWithResponses(turn) {
+export function compressFlowWithResponses(turn: Turn) {
   const flow = (turn?.items && turn.items.length)
     ? compressItemsFlow(turn.items)
     : compressLegacyFlow(turn?.tool_calls || [], turn?.responses || []);
@@ -118,9 +124,9 @@ export function compressFlowWithResponses(turn) {
  * @param {Array<object>} flow compressFlowWithResponses 1차 결과
  * @returns {Array<object>} ANCHOR 보존 + NEUTRAL 윈도우 묶음 적용
  */
-export function compressNeutralWindows(flow) {
-  const out = [];
-  let buf = [];
+export function compressNeutralWindows(flow: FlowItem[]) {
+  const out: FlowItem[] = [];
+  let buf: FlowItem[] = [];
   const flush = () => {
     if (buf.length === 0) return;
     if (buf.length === 1) out.push(buf[0]);
@@ -148,10 +154,10 @@ export function compressNeutralWindows(flow) {
  * @param {Array<{name:string,items:object[],count:number}>} groups
  * @returns {object} 묶음 칩 메타
  */
-function makeNeutralGroup(groups) {
-  const items = groups.flatMap(g => g.items);
-  const seen = new Set();
-  const kinds = [];
+function makeNeutralGroup(groups: FlowItem[]) {
+  const items = groups.flatMap((g: FlowItem) => g.items as Req[]);
+  const seen = new Set<string>();
+  const kinds: string[] = [];
   for (const g of groups) {
     if (!seen.has(g.name)) { seen.add(g.name); kinds.push(g.name); }
   }
@@ -170,9 +176,9 @@ function makeNeutralGroup(groups) {
   };
 }
 
-function compressItemsFlow(items) {
-  const flow = [];
-  let toolBuf = [];
+function compressItemsFlow(items: Req[]) {
+  const flow: FlowItem[] = [];
+  let toolBuf: Req[] = [];
   const flushTools = () => {
     if (toolBuf.length) {
       compressContinuousTools(toolBuf).forEach(g => flow.push({ kind: 'tool', ...g }));
@@ -190,16 +196,16 @@ function compressItemsFlow(items) {
   return flow;
 }
 
-function compressLegacyFlow(toolCalls, responses) {
-  const tools = toolCalls.slice().sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-  const resps = responses.slice().sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+function compressLegacyFlow(toolCalls: Req[], responses: Req[]) {
+  const tools = toolCalls.slice().sort((a: Req, b: Req) => (a.timestamp || 0) - (b.timestamp || 0));
+  const resps = responses.slice().sort((a: Req, b: Req) => (a.timestamp || 0) - (b.timestamp || 0));
   if (resps.length === 0) {
     return compressContinuousTools(tools).map(g => ({ kind: 'tool', ...g }));
   }
-  const flow = [];
+  const flow: FlowItem[] = [];
   let i = 0;
   for (const r of resps) {
-    const seg = [];
+    const seg: Req[] = [];
     while (i < tools.length && (tools[i].timestamp || 0) <= (r.timestamp || 0)) seg.push(tools[i++]);
     if (seg.length) compressContinuousTools(seg).forEach(g => flow.push({ kind: 'tool', ...g }));
     flow.push({ kind: 'response', request: r });
@@ -223,7 +229,7 @@ function compressLegacyFlow(toolCalls, responses) {
  * @param {object} r request
  * @returns {string} taskId (없으면 빈 문자열)
  */
-function parseTaskId(r) {
+function parseTaskId(r: Req) {
   const fromInput = r?.payload?.tool_input?.taskId;
   if (fromInput != null) return String(fromInput);
   const detail = r?.tool_detail || '';
@@ -245,7 +251,7 @@ function parseTaskId(r) {
  * @param {number} respSeq 응답일 때 턴 내 ◆ 등장 순번 (1-based)
  * @returns {object|null} chip 메타
  */
-export function chipFromRequest(r, respSeq) {
+export function chipFromRequest(r: Req, respSeq?: number): Record<string, any> | null {
   if (!r) return null;
   if (r.type === 'response') return { type: 'response', respSeq };
   if (r.type !== 'tool_call') return null;
@@ -281,7 +287,7 @@ export function chipFromRequest(r, respSeq) {
  *
  * @see ADR-turn-view-revamp-003
  */
-export function chipKey(chip) {
+export function chipKey(chip: Record<string, any> | null) {
   if (!chip) return '';
   switch (chip.type) {
     case 'response':   return chip.respSeq ? `resp:${chip.respSeq}` : '';
@@ -298,7 +304,7 @@ export function chipKey(chip) {
  * 단일 요청을 받아 그 요청에 해당하는 행 chip-key를 계산한다 (편의 wrapper).
  * `chipKey(chipFromRequest(r, respSeq))`와 동치.
  */
-export function chipKeyForRequest(r, respSeq) {
+export function chipKeyForRequest(r: Req, respSeq?: number) {
   return chipKey(chipFromRequest(r, respSeq));
 }
 
@@ -318,7 +324,7 @@ export function chipKeyForRequest(r, respSeq) {
  * @param {string} key 행의 chip-key
  * @returns {string} chip-key가 주입된 행 HTML
  */
-function injectChipKey(rowHtml, key) {
+function injectChipKey(rowHtml: string, key: string) {
   if (!key) return rowHtml;
   return rowHtml.replace(/^<tr /, `<tr data-chip-key="${escHtml(key)}" `);
 }
@@ -345,12 +351,12 @@ export function makeTurnLogRows(turn: any, opts: { anomalyFlags?: Map<string, Se
   if (!turn) return '';
   const anomalyMap = opts.anomalyFlags || null;
   const showSession = !!opts.showSession; // 기본 false — 활성 턴 좁힘 정책(Option α).
-  const rowOpts = (r) => ({
+  const rowOpts = (r: Req) => ({
     showSession,
     anomalyFlags: anomalyMap?.get(r.id) || null,
   });
 
-  const parts = [];
+  const parts: string[] = [];
 
   // 1) prompt 행 — chip-key 없음 (prompt에는 spine 칩이 존재하지 않음).
   if (turn.prompt) {
@@ -386,10 +392,10 @@ export function makeTurnLogRows(turn: any, opts: { anomalyFlags?: Map<string, Se
  * tool_calls와 responses를 timestamp 기준으로 머지해 `{kind, request}` 시퀀스로 반환한다.
  * 새 데이터 경로는 서버 SSoT의 items[]를 우선 사용 — 본 함수는 미세한 누락만 보정.
  */
-function legacyInterleave(toolCalls, responses) {
-  const tools = toolCalls.slice().sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-  const resps = responses.slice().sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-  const out = [];
+function legacyInterleave(toolCalls: Req[], responses: Req[]) {
+  const tools = toolCalls.slice().sort((a: Req, b: Req) => (a.timestamp || 0) - (b.timestamp || 0));
+  const resps = responses.slice().sort((a: Req, b: Req) => (a.timestamp || 0) - (b.timestamp || 0));
+  const out: FlowItem[] = [];
   let i = 0;
   for (const r of resps) {
     while (i < tools.length && (tools[i].timestamp || 0) <= (r.timestamp || 0)) {

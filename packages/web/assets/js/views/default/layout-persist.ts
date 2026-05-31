@@ -6,10 +6,11 @@
 // `restoreChartCollapsedState` — 가 의미 있다 (마이그레이션 후 읽기).
 
 import { CHART_COLLAPSED_KEY, PANEL_HIDDEN_KEY } from './constants.js';
+import { asEl } from '../../dom.js';
 
 // ── 차트 섹션 접힘 ────────────────────────────────────────────────────────────
 export function toggleChartCollapse() {
-  const chartSection = document.getElementById('chartSection');
+  const chartSection = asEl(document.getElementById('chartSection'));
   const btn = document.getElementById('btnToggleChart');
   chartSection.classList.toggle('chart-collapsed');
   const collapsed = chartSection.classList.contains('chart-collapsed');
@@ -20,7 +21,7 @@ export function toggleChartCollapse() {
 export function restoreChartCollapsedState() {
   const collapsed = JSON.parse(localStorage.getItem(CHART_COLLAPSED_KEY) || 'false');
   if (collapsed) {
-    const chartSection = document.getElementById('chartSection');
+    const chartSection = asEl(document.getElementById('chartSection'));
     const btn = document.getElementById('btnToggleChart');
     chartSection.classList.add('chart-collapsed');
     if (btn) btn.setAttribute('aria-label', window.I18n.t('ui.default-view.layout.expand'));
@@ -28,7 +29,7 @@ export function restoreChartCollapsedState() {
 }
 
 // ── 좌측 패널 접힘 ────────────────────────────────────────────────────────────
-function migrateKey(oldKey, newKey) {
+function migrateKey(oldKey: string, newKey: string) {
   const v = localStorage.getItem(oldKey);
   if (v != null && localStorage.getItem(newKey) == null) {
     localStorage.setItem(newKey, v);
@@ -41,7 +42,7 @@ export function migrateLocalStorage() {
   migrateKey('left-panel-state', 'spyglass:left-panel-state');
 }
 
-function savePanelHiddenState(isHidden) {
+function savePanelHiddenState(isHidden: boolean) {
   localStorage.setItem(PANEL_HIDDEN_KEY, JSON.stringify(isHidden));
 }
 
@@ -53,7 +54,7 @@ export function restorePanelHiddenState() {
 }
 
 export function toggleLeftPanel() {
-  const mainLayout = document.querySelector('.main-layout');
+  const mainLayout = asEl(document.querySelector('.main-layout'));
   mainLayout.classList.toggle('left-panel-hidden');
   const isHidden = mainLayout.classList.contains('left-panel-hidden');
   savePanelHiddenState(isHidden);

@@ -11,7 +11,7 @@ import { escHtml } from '../formatters.js';
  * @param {string|null} model
  * @returns {'haiku'|'sonnet'|'opus'|'external'|'synthetic'|'unknown'}
  */
-export function modelClassOf(model) {
+export function modelClassOf(model: string | null | undefined): 'haiku' | 'sonnet' | 'opus' | 'external' | 'synthetic' | 'unknown' {
   if (!model) return 'unknown';
   const m = String(model).toLowerCase();
   if (m === 'synthetic' || m === '<synthetic>') return 'synthetic';
@@ -48,7 +48,7 @@ export function modelClassOf(model) {
  * @param {{model?: string|null, tokens_source?: string|null}} r
  * @returns {'trusted'|'synthetic'|'unknown'}
  */
-export function trustOf(r) {
+export function trustOf(r: { model?: string | null; tokens_source?: string | null } | null | undefined): 'trusted' | 'synthetic' | 'unknown' {
   const cls = modelClassOf(r?.model);
   if (cls === 'synthetic') return 'synthetic';
   if (cls === 'unknown')   return 'unknown';
@@ -63,7 +63,7 @@ export function trustOf(r) {
  *     null                          → "모델불명"
  *     "<synthetic>" / "synthetic"   → "SDK 합성"
  */
-export function modelChipLabel(model, cls) {
+export function modelChipLabel(model: string | null | undefined, cls: string): string {
   if (cls === 'unknown')   return window.I18n.t('badges.renderers.model.unknown');
   if (cls === 'synthetic') return window.I18n.t('badges.renderers.model.synthetic');
   if (cls === 'external') {
@@ -90,7 +90,7 @@ export function modelChipLabel(model, cls) {
   // 기타 — family 단어만 추출
   const fm = m.match(/(haiku|sonnet|opus)/i);
   if (fm) return fm[1].charAt(0).toUpperCase() + fm[1].slice(1);
-  return model;
+  return m;
 }
 
 /**
@@ -125,7 +125,7 @@ export function modelChipHtml(r: any, opts: { mini?: boolean } = {}) {
   return `<span class="model-chip model-chip-${cls}${sizeCls} ds-chip" data-tone="${cls}" title="${escHtml(title)}">${escHtml(label)}</span>`;
 }
 
-export function makeModelCell(r) {
+export function makeModelCell(r: { model?: string | null } | null | undefined) {
   // 모든 타입에서 model을 표시. model이 없으면 "—".
   // (이전: tool_call/system은 무조건 "—" 처리 → 사용자가 LLM 모델을 알 수 없음)
   // ADR-001: 서버 정규화로 raw model이 NULL이어도 turn 폴백된 model이 들어와 있다.
@@ -154,7 +154,7 @@ export function makeModelCell(r) {
  *
  * 'estimated' 분기는 ADR-token-trust-cleanup-001로 제거됨.
  */
-export function rowTrustClass(r) {
+export function rowTrustClass(r: { type?: string | null; model?: string | null; tokens_source?: string | null }) {
   if (r.type === 'tool_call' || r.type === 'system') return '';
   const t = trustOf(r);
   if (t === 'trusted') return '';

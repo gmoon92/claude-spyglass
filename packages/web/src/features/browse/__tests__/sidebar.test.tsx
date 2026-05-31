@@ -240,7 +240,7 @@ describe('ProjectList — browse 모드 DOM/선택 계약', () => {
     const row = findNode(tree, (el) => (el.props as Record<string, unknown>)['data-project'] === 'beta');
     expect(row).not.toBeNull();
     (row!.props.onClick as () => void)();
-    expect(picked).toBe('beta');
+    expect(picked!).toBe('beta');
   });
 });
 
@@ -278,7 +278,7 @@ describe('ProjectList — metadocs 모드 가상 global 행 + 항목 수', () =>
     const row = findNode(tree, (el) => (el.props as Record<string, unknown>)['data-project'] === GLOBAL_PROJECT_KEY);
     expect(row).not.toBeNull();
     (row!.props.onClick as () => void)();
-    expect(picked).toBe(GLOBAL_PROJECT_KEY);
+    expect(picked!).toBe(GLOBAL_PROJECT_KEY);
   });
 });
 
@@ -325,7 +325,7 @@ describe('SessionList — selectedProject 필터 + 세션 행 렌더', () => {
     expect(row).not.toBeNull();
     expect(typeof row!.props.onClick).toBe('function');
     (row!.props.onClick as () => void)();
-    expect(picked).toBe('aaaaaaaa-1');
+    expect(picked!).toBe('aaaaaaaa-1');
   });
 });
 

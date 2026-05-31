@@ -8,12 +8,20 @@
 //  - 'session_update'    : 세션 활성/비활성 전환 (started/ended/token_update) — v22 추가
 // @see ${CLAUDE_PROJECT_DIR}/.claude/docs/plans/proxy-sse-integration/adr.md ADR-001
 
-let _source     = null;
-let _retryTimer = null;
-let _callbacks  = null;
+interface SseCallbacks {
+  onNewRequest:       (e: MessageEvent) => void;
+  onOpen:             () => void;
+  onError:            () => void;
+  onNewProxyRequest?: (e: MessageEvent) => void;
+  onSessionUpdate?:   (e: MessageEvent) => void;
+}
+
+let _source: EventSource | null     = null;
+let _retryTimer: ReturnType<typeof setTimeout> | undefined = undefined;
+let _callbacks: SseCallbacks | null  = null;
 
 function _retry() {
-  _retryTimer = setTimeout(() => connectSSE(_callbacks), 5000);
+  _retryTimer = setTimeout(() => { if (_callbacks) connectSSE(_callbacks); }, 5000);
 }
 
 /**
@@ -26,7 +34,7 @@ function _retry() {
  *   onSessionUpdate?:   (e: MessageEvent) => void,
  * }} callbacks
  */
-export function connectSSE(callbacks) {
+export function connectSSE(callbacks: SseCallbacks) {
   _callbacks = callbacks;
   const { onNewRequest, onOpen, onError, onNewProxyRequest, onSessionUpdate } = callbacks;
 
@@ -54,7 +62,7 @@ export function connectSSE(callbacks) {
     };
 
     _source.onerror = () => {
-      _source.close(); _source = null;
+      _source?.close(); _source = null;
       onError();
       _retry();
     };

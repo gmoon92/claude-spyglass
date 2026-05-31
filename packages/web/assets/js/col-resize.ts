@@ -2,8 +2,8 @@
 // Auto-fit 측정 로직은 resize-utils.js의 measureMaxWidth를 공유 (ADR-004)
 import { measureMaxWidth } from './resize-utils.js';
 
-export function initColResize(tableEl: HTMLTableElement) {
-  if (!tableEl) return;
+export function initColResize(tableEl: HTMLTableElement | Element | null) {
+  if (!tableEl || !(tableEl instanceof HTMLTableElement)) return;
   const ths  = Array.from(tableEl.querySelectorAll<HTMLElement>('thead th'));
   const cols = Array.from(tableEl.querySelectorAll<HTMLElement>('col'));
 
@@ -12,17 +12,17 @@ export function initColResize(tableEl: HTMLTableElement) {
     handle.className = 'col-resize-handle';
     th.appendChild(handle);
 
-    let startX, startW;
+    let startX = 0, startW = 0;
 
     // 드래그 리사이즈
-    handle.addEventListener('mousedown', e => {
+    handle.addEventListener('mousedown', (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
       startX = e.clientX;
       startW = th.getBoundingClientRect().width;
       handle.classList.add('dragging');
 
-      const onMove = ev => {
+      const onMove = (ev: MouseEvent) => {
         const newW = Math.max(32, startW + (ev.clientX - startX));
         if (cols[i]) cols[i].style.width = newW + 'px';
       };

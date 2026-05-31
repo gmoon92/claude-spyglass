@@ -16,12 +16,12 @@ import { skTurnCardList } from '../render/skeleton.js';
 import { bloatedSysBadgeFullHtml, contextSaturationBadgeFullHtml } from '../render/badges.js';
 import { setBloatedSysFor } from '../state/anomaly-cache.js';
 
-let _abortController = null;
+let _abortController: AbortController | null = null;
 
 // 세션 단위 anomaly 캐시는 별도 모듈(state/anomaly-cache.js)로 분리되어
 // render/rows.js·context-chart.js 등이 순환 의존성 없이 참조할 수 있다.
 
-export async function loadSession(id) {
+export async function loadSession(id: string) {
   if (id === getSelectedSession()) return;
 
   _abortController?.abort();
@@ -34,15 +34,15 @@ export async function loadSession(id) {
   setRightView('detail');
   // 세션 전환 시 마지막에 보던 탭을 유지한다(getDetailTab()는 모듈 수준 _detailTab을 그대로 반환).
   // setDetailView(getDetailTab())이 finally에서 새 세션의 데이터로 lazy 갱신해 준다.
-  document.getElementById('detailView').classList.remove('detail-collapsed');
+  asEl(document.getElementById('detailView')).classList.remove('detail-collapsed');
   setChartMode('detail');
   renderRightPanel();
 
-  document.getElementById('detailLoading').style.display = 'block';
+  asEl(document.getElementById('detailLoading')).style.display = 'block';
   // 로딩 중에는 모든 탭 뷰를 숨겨 이전 세션 데이터의 깜빡임을 방지한다.
   // 데이터 fetch 완료 후 setDetailView(getDetailTab())이 현재 탭만 다시 표시한다.
   // (turn-view-tab fix: 레거시 #detailRequestsView 컨테이너 제거 — #detailTurnView 단일 SSoT)
-  document.getElementById('detailTurnView').style.display = 'none';
+  asEl(document.getElementById('detailTurnView')).style.display = 'none';
 
   // skeleton-loading T-07: 이전 세션 turn 뷰의 잔여 콘텐츠를 skeleton 으로 리셋.
   // 탭 자체는 display:none 이지만 fetch 완료 후 setDetailView('turn')으로 노출되는
@@ -55,13 +55,13 @@ export async function loadSession(id) {
   if (llmViewEl)    llmViewEl.style.display    = 'none';
   if (sysLibViewEl) sysLibViewEl.style.display = 'none';
 
-  const session = getAllSessions().find(s => s.id === id);
-  const detailIdEl = document.getElementById('detailSessionId');
+  const session = getAllSessions().find((s: any) => s.id === id);
+  const detailIdEl = asEl(document.getElementById('detailSessionId'));
   detailIdEl.textContent = id.slice(0, 8) + '…';
   detailIdEl.title = id;
-  document.getElementById('detailProject').textContent = session ? session.project_name : '';
-  document.getElementById('detailTokens').textContent = session ? window.I18n.t('ui.detail-view.total-tokens', { tokens: fmtToken(session.total_tokens) }) : '';
-  document.getElementById('detailEndedAt').textContent = session?.ended_at ? window.I18n.t('ui.detail-view.ended-at', { time: fmtDate(session.ended_at) }) : '';
+  asEl(document.getElementById('detailProject')).textContent = session ? session.project_name : '';
+  asEl(document.getElementById('detailTokens')).textContent = session ? window.I18n.t('ui.detail-view.total-tokens', { tokens: fmtToken(session.total_tokens) }) : '';
+  asEl(document.getElementById('detailEndedAt')).textContent = session?.ended_at ? window.I18n.t('ui.detail-view.ended-at', { time: fmtDate(session.ended_at) }) : '';
 
   // anomaly-bloated-sys T-12: 세션 헤더에 `▤ sys {pct}%` full 뱃지 부착.
   //   서버 응답이 아직 없거나 stage='normal'이면 빈 문자열 → DOM에서 자연 미노출.
@@ -93,7 +93,7 @@ export async function loadSession(id) {
       document.dispatchEvent(new CustomEvent('session-anomalies-loaded', {
         detail: { sessionId: id, bloatedSys: bs, contextSaturation: ctxSat, turnCount },
       }));
-    } catch (e) {
+    } catch (e: any) {
       if (e?.name === 'AbortError') return;
     }
   })();
@@ -103,13 +103,13 @@ export async function loadSession(id) {
 
   try {
     await loadSessionDetail(id, { signal });
-  } catch (e) {
+  } catch (e: any) {
     if (e.name === 'AbortError') return;
     applyDetailFilter();
   } finally {
     if (!signal.aborted) {
-      document.getElementById('detailLoading').style.display = 'none';
-      setDetailView(/** @type {'log'|'llm'|'syslib'} */ (getDetailTab()));
+      asEl(document.getElementById('detailLoading')).style.display = 'none';
+      setDetailView(getDetailTab() as 'log' | 'llm' | 'syslib');
     }
     if (_abortController === controller) _abortController = null;
   }
@@ -138,7 +138,7 @@ export function abortCurrentSession() {
  * @param {{ stage, context_tokens, window_max, pct, threshold_warn, threshold_critical } | null} ctxSat
  * @param {number | null} turnCount
  */
-export function applyContextSaturationHeader(ctxSat, turnCount) {
+export function applyContextSaturationHeader(ctxSat: any, turnCount: number | null) {
   const host = document.getElementById('detailBadges');
   if (!host) return;
   // 기존 잔재 제거 — 세션 전환 시 이전 값 박힌 채로 남지 않도록.
@@ -151,7 +151,7 @@ export function applyContextSaturationHeader(ctxSat, turnCount) {
   }
 
   // turn count 가이드 힌트 — 20턴 이상이면 가벼운 ⟲ 표지(stage 없이 톤 정보만).
-  if (Number.isFinite(turnCount) && turnCount >= 20) {
+  if (turnCount != null && Number.isFinite(turnCount) && turnCount >= 20) {
     const tip = window.I18n.t('ui.detail-view.turn-count-hint', { count: turnCount });
     host.insertAdjacentHTML(
       'beforeend',
@@ -163,7 +163,7 @@ export function applyContextSaturationHeader(ctxSat, turnCount) {
   }
 }
 
-export function applyBloatedSysHeader(bloatedSys) {
+export function applyBloatedSysHeader(bloatedSys: any) {
   const host = document.getElementById('detailBadges');
   if (!host) return;
   // 기존 bloated-sys 뱃지 제거 (세션 전환 시)

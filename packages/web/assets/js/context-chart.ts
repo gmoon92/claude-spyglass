@@ -15,7 +15,11 @@ import { asEl } from './dom.js';
  *
  * 반환값: { size, label, model } — UI 라벨링 일관성을 위해 함께 묶어 반환.
  */
-function resolveSessionContextWindow(sortedTurns) {
+// 디스플레이 레이어 loose 타입 — 서버 JSON 파생 턴/포인트. 파싱 계약은 P5-03(Zod).
+type Turn = Record<string, any>;
+interface PointData { cx: number; cy: number; turnIndex: number; value: number; delta: number | null; }
+
+function resolveSessionContextWindow(sortedTurns: Turn[]) {
   for (let i = sortedTurns.length - 1; i >= 0; i--) {
     const p = sortedTurns[i]?.prompt;
     if (p && p.model) {
@@ -26,13 +30,13 @@ function resolveSessionContextWindow(sortedTurns) {
   return { size: DEFAULT_CONTEXT_WINDOW, label: formatContextWindowLabel(DEFAULT_CONTEXT_WINDOW), model: null };
 }
 
-let _canvas    = null;
-let _footer    = null;
-let _indicator = null;
-let _empty     = null;
-let _pointData = []; // [{cx, cy, turnIndex, value, delta}] — 마우스 hit-test 용
+let _canvas: HTMLCanvasElement | null    = null;
+let _footer: HTMLElement | null    = null;
+let _indicator: HTMLElement | null = null;
+let _empty: HTMLElement | null     = null;
+let _pointData: PointData[] = []; // [{cx, cy, turnIndex, value, delta}] — 마우스 hit-test 용
 let _hoveredIdx = -1;
-let _lastTurns  = null;
+let _lastTurns: Turn[] | null  = null;
 /**
  * anomaly-bloated-sys T-17: 세션 헤더 bloated-sys 라벨 hover 시 baseline 강조.
  *  - 기본 baseline opacity .55 → hover 시 1.0
@@ -41,14 +45,14 @@ let _lastTurns  = null;
  */
 let _baselineGlow = false;
 /** session 헤더에서 dispatch한 bloated_sys 정보를 차트가 들고 풋터 split을 표현. */
-let _bloatedSysCache = null;
+let _bloatedSysCache: Record<string, any> | null = null;
 /**
  * 현재 렌더된 세션의 context window 정보. _onCanvasMouseMove가 hover 툴팁에
  * "사용률 %"·"한도 label"을 함께 전달하기 위해 renderContextChart에서 갱신한다.
  */
-let _contextWindow = { size: 0, label: '', model: null };
+let _contextWindow: { size: number; label: string; model: string | null } = { size: 0, label: '', model: null };
 
-function getCssVar(name) {
+function getCssVar(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
@@ -62,7 +66,7 @@ function getColors() {
   };
 }
 
-function setEmptyState(isEmpty) {
+function setEmptyState(isEmpty: boolean) {
   // ADR-017: hidden 속성과 클래스 둘 다 토글 (chartSection 안 신규 마크업 호환)
   if (_canvas) {
     _canvas.classList.toggle('context-chart-hidden', isEmpty);
@@ -75,7 +79,7 @@ function setEmptyState(isEmpty) {
 }
 
 export function initContextChart() {
-  _canvas    = document.getElementById('contextGrowthChart');
+  _canvas    = document.getElementById('contextGrowthChart') as HTMLCanvasElement | null;
   _footer    = document.querySelector('.context-chart-footer');
   _indicator = document.getElementById('ctxUsageIndicator');
   _empty     = document.getElementById('contextChartEmpty');
@@ -89,8 +93,8 @@ export function initContextChart() {
   // turns 응답에 bloated_sys 정보가 같이 오면 풋터 split 표시에 사용.
   //   단건 fetch(session-anomalies-loaded)가 먼저 도착해 _bloatedSysCache를 채워두면
   //   여기서 null로 덮어쓰지 않는다 — turns 응답엔 anomaly 메타가 빠진 케이스가 SSoT.
-  document.addEventListener(DETAIL_FILTER_CHANGED, (e) => {
-    const { allTurns, bloatedSys } = e.detail || {};
+  document.addEventListener(DETAIL_FILTER_CHANGED, (e: Event) => {
+    const { allTurns, bloatedSys } = (e as CustomEvent).detail || {};
     const fromTurns = bloatedSys || _extractBloatedSysFromTurns(allTurns);
     if (fromTurns) _bloatedSysCache = fromTurns;
     // 캐시 유지 — 단건 fetch가 이미 채워뒀거나 turns 응답에 있으면 그대로 사용.
@@ -99,16 +103,17 @@ export function initContextChart() {
 
   // anomaly-bloated-sys T-17: detail-view.js 단건 fetch 응답을 받아 baseline/풋터 split 동기.
   //   사이드바 dot · 헤더 full 뱃지와 동일 SSoT — 클라이언트 보조 fetch 1회로 4종 표지 모두 갱신.
-  document.addEventListener('session-anomalies-loaded', (e) => {
-    const bs = e.detail?.bloatedSys || null;
+  document.addEventListener('session-anomalies-loaded', (e: Event) => {
+    const bs = (e as CustomEvent).detail?.bloatedSys || null;
     _bloatedSysCache = bs;
     if (_lastTurns) renderContextChart(_lastTurns);
   });
 
   // anomaly-bloated-sys T-17: 세션 헤더 hover → baseline 강조 동기화.
   //   detail-view.js의 applyBloatedSysHeader에서 dispatch.
-  document.addEventListener('ctx-baseline-glow', (e) => {
-    const active = !!(e.detail && e.detail.active);
+  document.addEventListener('ctx-baseline-glow', (e: Event) => {
+    const detail = (e as CustomEvent).detail;
+    const active = !!(detail && detail.active);
     if (_baselineGlow === active) return;
     _baselineGlow = active;
     renderContextChart(_lastTurns);
@@ -138,10 +143,10 @@ export function initContextChart() {
  *  - 일부 응답은 session 레벨, 일부는 첫 prompt 레벨에 부착될 수 있음.
  *  - 어느 쪽도 없으면 null 반환 — 풋터 split 미노출 자연 폴백.
  */
-function _extractBloatedSysFromTurns(turns) {
+function _extractBloatedSysFromTurns(turns: Turn[] | null | undefined) {
   if (!Array.isArray(turns) || turns.length === 0) return null;
   // 서버 컨트랙트 `stage` 우선, 과거 `status` 별칭 호환. null/'normal' 외에는 anomaly로 간주.
-  const _st = (x) => x && (x.stage ?? x.status);
+  const _st = (x: any) => x && (x.stage ?? x.status);
   for (const t of turns) {
     if (t?.prompt?.bloated_sys && _st(t.prompt.bloated_sys) && _st(t.prompt.bloated_sys) !== 'normal') return t.prompt.bloated_sys;
     if (t?.bloated_sys && _st(t.bloated_sys) && _st(t.bloated_sys) !== 'normal') return t.bloated_sys;
@@ -149,8 +154,8 @@ function _extractBloatedSysFromTurns(turns) {
   return null;
 }
 
-function _onCanvasMouseMove(e) {
-  if (!_pointData.length) return;
+function _onCanvasMouseMove(e: MouseEvent) {
+  if (!_pointData.length || !_canvas) return;
   const rect = _canvas.getBoundingClientRect();
   const mx   = e.clientX - rect.left;
   const my   = e.clientY - rect.top;
@@ -169,7 +174,7 @@ function _onCanvasMouseMove(e) {
     renderContextChart(_lastTurns);
   }
 
-  _canvas.style.cursor = hitIdx >= 0 ? 'crosshair' : '';
+  if (_canvas) _canvas.style.cursor = hitIdx >= 0 ? 'crosshair' : '';
 
   if (hitIdx >= 0) {
     const pt = _pointData[hitIdx];
@@ -199,19 +204,19 @@ function _onCanvasMouseLeave() {
     _hoveredIdx = -1;
     renderContextChart(_lastTurns);
   }
-  _canvas.style.cursor = '';
+  if (_canvas) _canvas.style.cursor = '';
   document.dispatchEvent(new CustomEvent('ctx-point-hover', { detail: null }));
 }
 
-function _fmtDelta(n) {
+function _fmtDelta(n: number) {
   const sign = n >= 0 ? '+' : '-';
   const abs  = Math.abs(n);
   return sign + (abs >= 1000 ? `${(abs / 1000).toFixed(1)}K` : String(abs));
 }
 
-export function renderContextChart(turns) {
+export function renderContextChart(turns: Turn[] | null | undefined) {
   if (!_canvas) return;
-  _lastTurns = turns;
+  _lastTurns = turns ?? null;
 
   // 유효 데이터가 하나라도 있는지 확인 (빈 상태 표시 여부 판단)
   const hasValid = (turns || []).some(t => t.prompt && (t.prompt.context_tokens > 0 || t.prompt.tokens_input > 0));
@@ -272,6 +277,7 @@ export function renderContextChart(turns) {
   _canvas.height = H * dpr;
 
   const ctx = _canvas.getContext('2d');
+  if (!ctx) return;
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, W, H);
 
@@ -283,18 +289,18 @@ export function renderContextChart(turns) {
 
   const cols   = getColors();
   const n      = values.length;
-  const scaleY = (v) => PAD.top + cH - (v / maxVal) * cH;
-  const scaleX = (i) => PAD.left + (n === 1 ? cW / 2 : (i / (n - 1)) * cW);
+  const scaleY = (v: number) => PAD.top + cH - (v / maxVal) * cH;
+  const scaleX = (i: number) => PAD.left + (n === 1 ? cW / 2 : (i / (n - 1)) * cW);
 
   // CSS pixel 좌표 미리 계산 (hit-test 와 동일 좌표계)
   const pts = values.map((v, i) => ({ cx: scaleX(i), cy: scaleY(v) }));
 
   // 마우스 hit-test 용 포인트 데이터 갱신
-  _pointData = sorted.map((t, i) => ({
+  _pointData = sorted.map((t: Turn, i: number): PointData => ({
     cx:        pts[i].cx,
     cy:        pts[i].cy,
-    turnIndex: t.turn_index,
-    value:     values[i],
+    turnIndex: Number(t.turn_index),
+    value:     Number(values[i]),
     delta:     i > 0 ? values[i] - values[i - 1] : null,
   }));
 
@@ -424,7 +430,7 @@ export function renderContextChart(turns) {
   }
 }
 
-function fmtK(n) {
+function fmtK(n: number) {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
   return String(n);
 }

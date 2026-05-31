@@ -24,7 +24,7 @@ import { STORAGE_KEY } from './constants.js';
  *   model / tool / Skill / Agent / MCP / role / payload 본문(8KB 상한)을 모두 포함하므로
  *   추가 textContent 수집 없이 substring 매칭만으로 일관 검색이 가능.
  */
-export function applyFeedSearch(getSearchValue) {
+export function applyFeedSearch(getSearchValue: (() => string) | null | undefined) {
   const q = (getSearchValue?.() ?? '').toLowerCase();
   const rows = document.querySelectorAll('#requestsBody tr[data-type]');
   const typeFilter = getReqFilter();
@@ -45,7 +45,7 @@ export function applyFeedSearch(getSearchValue) {
  * 타입 필터 바 생성. SUB_TYPES 클릭 시 fetch 없이 클라이언트 필터만 재적용,
  * 그 외 메인 타입 클릭 시 서버 재요청.
  */
-export function createFeedFilterBar({ getSearchValue }) {
+export function createFeedFilterBar({ getSearchValue }: { getSearchValue: () => string }) {
   const feedFilterBar = createFilterBar('typeFilterBtns', {
     dataAttr: 'filter',
     onChange(filter) {
@@ -67,14 +67,16 @@ export function createFeedFilterBar({ getSearchValue }) {
  * 단일 prepend 케이스(detail 없음)는 feed-live.js 에서 직접 dispatch 하고
  * 여기서는 list 가 들어왔을 때만 컨테이너 갱신을 한다.
  */
-export function handleFeedUpdated(e, getSearchValue) {
+export function handleFeedUpdated(e: CustomEvent, getSearchValue: () => string) {
   const detail = e.detail;
   if (detail && detail.list !== undefined) {
     const container = document.getElementById('requestsBody');
-    if (detail.append) {
-      appendRequests(container, detail.list, detail.anomalyMap);
-    } else {
-      renderRequests(container, detail.list, detail.anomalyMap);
+    if (container) {
+      if (detail.append) {
+        appendRequests(container, detail.list, detail.anomalyMap);
+      } else {
+        renderRequests(container, detail.list, detail.anomalyMap);
+      }
     }
   }
   applyFeedSearch(getSearchValue);
@@ -83,8 +85,8 @@ export function handleFeedUpdated(e, getSearchValue) {
 /**
  * #defaultView 의 클릭 위임 — 세션 점프 + prompt expand toggle.
  */
-export function wireDefaultViewClicks({ onSelectSession }) {
-  document.getElementById('defaultView').addEventListener('click', e => {
+export function wireDefaultViewClicks({ onSelectSession }: { onSelectSession: (id: string) => void }) {
+  asEl(document.getElementById('defaultView')).addEventListener('click', e => {
     const sessEl = asEl(asEl(e.target).closest('[data-goto-session]'));
     if (sessEl && sessEl.dataset.gotoSession) {
       const proj = sessEl.dataset.gotoProject;
@@ -99,7 +101,7 @@ export function wireDefaultViewClicks({ onSelectSession }) {
     const promptEl = asEl(resolveExpandTarget(asEl(e.target)));
     if (promptEl) {
       const tr = promptEl.closest('tr');
-      if (tr) togglePromptExpand(promptEl.dataset.expandId, asEl(tr));
+      if (tr) togglePromptExpand(promptEl.dataset.expandId ?? '', asEl(tr));
     }
   });
 }

@@ -106,20 +106,23 @@ const state = {
  * - _pendingTargetTs: 턴뷰 → API 페이로드 딥링크 1회용. setPendingProxyTargetTs(ts) 후
  *   다음 showLatestLlmInput()이 가장 가까운 proxy를 자동 선택하고 nulled out.
  */
-let _sessionProxyList = [];
-let _sessionProxyListSessionId = null;
-let _pendingTargetTs = null;
+// 디스플레이 레이어 loose 타입 — proxy 요청 JSON bag. 정확한 파싱 계약은 P5-03(Zod).
+type ProxyRequest = Record<string, any>;
+
+let _sessionProxyList: ProxyRequest[] = [];
+let _sessionProxyListSessionId: string | null = null;
+let _pendingTargetTs: number | null = null;
 
 /**
  * 턴뷰 카드의 "API 페이로드" 액션이 호출. 다음 showLatestLlmInput() 1회만 ts에 가장 가까운
  * proxy를 선택. setDetailView('llm')이 자동으로 showLatestLlmInput을 호출하므로 호출자는
  * 이 함수 → setDetailTab('llm') → setDetailView('llm') 순서로 부르면 된다.
  */
-export function setPendingProxyTargetTs(ts) {
+export function setPendingProxyTargetTs(ts: number) {
   _pendingTargetTs = typeof ts === 'number' && Number.isFinite(ts) ? ts : null;
 }
 
-async function ensureSessionProxyList(sessionId) {
+async function ensureSessionProxyList(sessionId: string | null) {
   if (!sessionId) return [];
   if (_sessionProxyListSessionId === sessionId && _sessionProxyList.length > 0) {
     return _sessionProxyList;
@@ -135,9 +138,9 @@ async function ensureSessionProxyList(sessionId) {
   return _sessionProxyList;
 }
 
-function findClosestProxyToTs(ts) {
+function findClosestProxyToTs(ts: number) {
   if (!_sessionProxyList.length) return null;
-  return _sessionProxyList.reduce((a, b) =>
+  return _sessionProxyList.reduce((a: ProxyRequest, b: ProxyRequest) =>
     Math.abs((b.timestamp ?? 0) - ts) < Math.abs((a.timestamp ?? 0) - ts) ? b : a);
 }
 
@@ -155,7 +158,7 @@ function findClosestProxyToTs(ts) {
 export async function showLatestLlmInput() {
   const container = document.getElementById(CONTAINER_ID);
   if (!container) return;
-  const t = window.I18n?.t ?? ((k) => k);
+  const t = window.I18n?.t ?? ((k: string) => k);
 
   // skeleton-loading T-10: system 카드(큰 본문) + user 카드 2개로 구조 유지.
   container.innerHTML = skLlmInputCards(2);
@@ -184,13 +187,13 @@ export async function showLatestLlmInput() {
       return;
     }
     await renderLlmInput(list[0].id);
-  } catch (err) {
+  } catch (err: any) {
     container.innerHTML = `<div class="state-empty"><span class="state-empty-title">${t('ui.llm-input.load-failed', { message: escHtml(String(err?.message ?? err)) })}</span></div>`;
   }
 }
 
-function renderEmptySessionHtml(sessionId) {
-  const t = window.I18n?.t ?? ((k) => k);
+function renderEmptySessionHtml(sessionId: string) {
+  const t = window.I18n?.t ?? ((k: string) => k);
   return `<div class="state-empty">
     <span class="state-empty-title">${t('ui.llm-input.no-session-proxy')}</span>
     <span class="state-empty-sub">${t('ui.llm-input.session-id-label')} <code>${escHtml(sessionId.slice(0, 12))}…</code></span>
@@ -206,10 +209,10 @@ function renderEmptySessionHtml(sessionId) {
  *
  * @param {string} requestId  proxy_requests.id
  */
-export async function renderLlmInput(requestId) {
+export async function renderLlmInput(requestId: string) {
   const container = document.getElementById(CONTAINER_ID);
   if (!container) return;
-  const t = window.I18n?.t ?? ((k) => k);
+  const t = window.I18n?.t ?? ((k: string) => k);
 
   // 신규 요청 로드 시 아코디언 상태 리셋 — 다른 요청 잔여 ID 혼입 방지.
   resetAccordionState();
@@ -254,7 +257,7 @@ export async function renderLlmInput(requestId) {
     });
 
     bindAccordionEvents(container);
-  } catch (err) {
+  } catch (err: any) {
     container.innerHTML = `<div class="state-empty"><span class="state-empty-title">${t('ui.llm-input.load-failed', { message: escHtml(String(err?.message ?? err)) })}</span></div>`;
   }
 }
@@ -273,8 +276,8 @@ export async function renderLlmInput(requestId) {
  *     ├─ 컨트롤 바: 검색 + 전체 펼침 + 전체 접기
  *     └─ <details data-message-id="m-N">...</details> 시퀀스
  */
-function renderHtml(p) {
-  const t = window.I18n?.t ?? ((k) => k);
+function renderHtml(p: Record<string, any>) {
+  const t = window.I18n?.t ?? ((k: string) => k);
   // 배너 — proxy 데이터의 본질(hook 관측과 다름)을 사용자가 즉시 인지 (banner pass).
   const bannerHtml = `
     <div class="llm-input-banner" role="note">
@@ -315,10 +318,10 @@ function renderHtml(p) {
  * 옵션 라벨: `#idx HH:mm:ss · {model-short} · IN+OUT · id-12자`
  * 컨테이너 id `llm-input-proxy-select`는 bindAccordionEvents에서 change 핸들러 매칭에 사용.
  */
-function renderProxySelector(activeId) {
-  const t = window.I18n?.t ?? ((k) => k);
+function renderProxySelector(activeId: string) {
+  const t = window.I18n?.t ?? ((k: string) => k);
   const total = _sessionProxyList.length;
-  const options = _sessionProxyList.map((r, i) => {
+  const options = _sessionProxyList.map((r: ProxyRequest, i: number) => {
     const idx = i + 1;
     const ts  = r.timestamp ? fmtTime(r.timestamp) : '—';
     const model = r.model ? shortModelName(r.model) : '?';
@@ -353,8 +356,8 @@ function renderProxySelector(activeId) {
  * (system-accordion pass). 긴 system 본문(수십 KB)이 Messages 도달까지 스크롤을 점유하는
  * 부담을 사용자가 직접 조절 가능. 빈/로딩 변형은 접을 내용이 없으므로 <section> 유지.
  */
-function renderSystemSection(content, meta, systemHash) {
-  const t = window.I18n?.t ?? ((k) => k);
+function renderSystemSection(content: string, meta: Record<string, any>, systemHash: string) {
+  const t = window.I18n?.t ?? ((k: string) => k);
   if (!content) {
     return `<section class="llm-input-system llm-input-system--loading">
       <h3>System Prompt</h3>
@@ -402,13 +405,13 @@ function renderSystemSection(content, meta, systemHash) {
  *  - 검색 입력(매칭 시 auto-open + <mark>)
  *  - "전체 펼침" / "전체 접기" 버튼
  */
-function renderMessagesSection(messages) {
-  const t = window.I18n?.t ?? ((k) => k);
+function renderMessagesSection(messages: Array<Record<string, any>>) {
+  const t = window.I18n?.t ?? ((k: string) => k);
   if (!messages.length) {
     return `<section class="llm-input-messages"><h3>Messages (0)</h3><p class="llm-input-dim">${t('ui.llm-input.no-messages')}</p></section>`;
   }
 
-  const items = messages.map((m, i) => renderMessageDetails(m, i)).join('');
+  const items = messages.map((m: Record<string, any>, i: number) => renderMessageDetails(m, i)).join('');
 
   return `<section class="llm-input-messages">
     <header class="llm-input-messages-header">
@@ -426,7 +429,7 @@ function renderMessagesSection(messages) {
  * "전체 접기"는 시스템 메시지도 함께 접는다 (사용자가 의도적으로 닫고 싶을 때 보장).
  */
 function renderMessagesControls() {
-  const t = window.I18n?.t ?? ((k) => k);
+  const t = window.I18n?.t ?? ((k: string) => k);
   return `
     <div class="llm-input-messages-controls">
       <label class="llm-input-search">
@@ -460,7 +463,7 @@ function renderMessagesControls() {
  * @param {{role?: string, content: any}} m
  * @param {number} i  message index
  */
-function renderMessageDetails(m, i) {
+function renderMessageDetails(m: Record<string, any>, i: number) {
   const role = String(m?.role ?? 'unknown');
   const id = `m-${i}`;
   const isSystem = role === 'system';
@@ -468,7 +471,7 @@ function renderMessageDetails(m, i) {
   if (isSystem) state.expandedMessages.add(id);
 
   const previewText = previewFromContent(m?.content);
-  const icon = ROLE_ICON[role] ?? '•';
+  const icon = (ROLE_ICON as Record<string, string>)[role] ?? '•';
   const body = renderMessageBody(m?.content);
 
   return `<details
@@ -490,7 +493,7 @@ function renderMessageDetails(m, i) {
  * content에서 미리보기 텍스트 추출 — string은 그대로, array는 text 파트 join.
  * 100자 초과 시 ellipsis. 줄바꿈은 공백으로 평탄화.
  */
-function previewFromContent(content) {
+function previewFromContent(content: unknown) {
   let raw = '';
   if (typeof content === 'string') {
     raw = content;
@@ -511,7 +514,7 @@ function previewFromContent(content) {
 }
 
 /** message.content를 직렬화 — text는 pre, tool_*는 details 그대로 유지. */
-function renderMessageBody(content) {
+function renderMessageBody(content: unknown) {
   if (typeof content === 'string') {
     return `<pre class="llm-input-msg-text">${escHtml(content)}</pre>`;
   }
@@ -539,7 +542,7 @@ function renderMessageBody(content) {
  * 캡슐화 원칙(CLAUDE.md): 호출 측에서 boolean 재계산하지 않고,
  * raw event를 핸들러에 넘기고 판단(어떤 details/어떤 버튼)은 핸들러 안에서.
  */
-function bindAccordionEvents(container) {
+function bindAccordionEvents(container: HTMLElement) {
   container.addEventListener('change', onAccordionChange);
   container.addEventListener('click', onControlsClick);
   container.addEventListener('input', onSearchInput);
@@ -550,15 +553,16 @@ function bindAccordionEvents(container) {
  *  - 사용자가 summary 클릭 / Space·Enter / 프로그램으로 details.open = true 등 모두 발생
  *  - state.expandedMessages에 ID 추가/제거하여 동기화
  */
-function onAccordionChange(e) {
+function onAccordionChange(e: Event) {
+  const target = e.target as Element;
   // Proxy 선택기 변경 — change 이벤트가 <select>에서도 발생하므로 같은 핸들러에서 분기 (proxy-selector pass).
-  const sel = e.target.closest('[data-proxy-select]');
+  const sel = target.closest('[data-proxy-select]') as HTMLSelectElement | null;
   if (sel) {
     const newId = sel.value;
     if (newId) renderLlmInput(newId);
     return;
   }
-  const details = e.target.closest('details.llm-input-msg');
+  const details = target.closest('details.llm-input-msg') as HTMLDetailsElement | null;
   if (!details) return;
   const id = details.dataset.messageId;
   if (!id) return;
@@ -575,17 +579,18 @@ function onAccordionChange(e) {
  *  - [data-refs-hash] 매칭 시 같은 hash의 참조 proxy_requests 팝오버 토글
  *  - [data-refs-jump-id] 매칭 시 같은 세션의 다른 proxy로 점프 (renderLlmInput)
  */
-function onControlsClick(e) {
+function onControlsClick(e: Event) {
+  const target = e.target as Element;
   // ref_count 칩 — 참조 목록 팝오버 토글 (ref-drilldown pass).
   // 팝오버 자체는 document.body에 append되어 container 밖이므로 내부 항목 클릭은
   // onRefsPopoverDocClick에서 별도 처리. 여기서는 칩 토글만.
-  const refsBtn = e.target.closest('[data-refs-hash]');
+  const refsBtn = target.closest('[data-refs-hash]') as HTMLElement | null;
   if (refsBtn) {
     toggleRefsPopover(refsBtn);
     return;
   }
 
-  const btn = e.target.closest('[data-action]');
+  const btn = target.closest('[data-action]') as HTMLElement | null;
   if (!btn) return;
   const action = btn.dataset.action;
   if (action === 'expand-all') setAllExpanded(true);
@@ -596,11 +601,11 @@ function onControlsClick(e) {
 // ref_count 드릴다운 팝오버 (ref-drilldown pass)
 // =============================================================================
 
-let _refsPopoverEl = null;       // 현재 열린 팝오버 DOM (또는 null)
-let _refsPopoverHash = null;     // 어느 hash의 팝오버인지 — 같은 칩 재클릭 시 닫기 토글
-let _refsPopoverChip = null;     // anchor chip (aria-expanded 동기화용)
+let _refsPopoverEl: HTMLElement | null = null;       // 현재 열린 팝오버 DOM (또는 null)
+let _refsPopoverHash: string | null = null;     // 어느 hash의 팝오버인지 — 같은 칩 재클릭 시 닫기 토글
+let _refsPopoverChip: HTMLElement | null = null;     // anchor chip (aria-expanded 동기화용)
 
-function toggleRefsPopover(chipEl) {
+function toggleRefsPopover(chipEl: HTMLElement) {
   const hash = chipEl.dataset.refsHash;
   if (!hash) return;
   // 같은 chip 재클릭 → 닫기
@@ -613,7 +618,7 @@ function toggleRefsPopover(chipEl) {
   openRefsPopover(chipEl, hash);
 }
 
-async function openRefsPopover(chipEl, hash) {
+async function openRefsPopover(chipEl: HTMLElement, hash: string) {
   _refsPopoverHash = hash;
   _refsPopoverChip = chipEl;
   chipEl.setAttribute('aria-expanded', 'true');
@@ -622,7 +627,7 @@ async function openRefsPopover(chipEl, hash) {
   const popover = document.createElement('div');
   popover.className = 'llm-input-refs-popover';
   popover.setAttribute('role', 'dialog');
-  const t = window.I18n?.t ?? ((k) => k);
+  const t = window.I18n?.t ?? ((k: string) => k);
   popover.setAttribute('aria-label', t('ui.llm-input.refs-popover-aria-label'));
   popover.innerHTML = `
     <header class="llm-input-refs-popover-header">
@@ -647,15 +652,15 @@ async function openRefsPopover(chipEl, hash) {
     if (_refsPopoverEl !== popover) return; // 다른 액션으로 이미 닫힘
     renderRefsPopoverBody(popover, refs, hash);
     positionRefsPopover(popover, chipEl); // 본문 크기 바뀌면 재정렬
-  } catch (err) {
+  } catch (err: any) {
     if (_refsPopoverEl !== popover) return;
     const body = popover.querySelector('.llm-input-refs-popover-body');
     if (body) body.innerHTML = `<p class="llm-input-dim" style="padding:var(--space-3);color:var(--error)">${t('ui.llm-input.refs-popover-load-failed', { message: escHtml(String(err?.message ?? err)) })}</p>`;
   }
 }
 
-function renderRefsPopoverBody(popover, refs, hash) {
-  const t = window.I18n?.t ?? ((k) => k);
+function renderRefsPopoverBody(popover: HTMLElement, refs: ProxyRequest[], hash: string) {
+  const t = window.I18n?.t ?? ((k: string) => k);
   const currentSession = getSelectedSession();
   const total = refs.length;
   const headerSub = popover.querySelector('.llm-input-refs-popover-sub');
@@ -667,7 +672,7 @@ function renderRefsPopoverBody(popover, refs, hash) {
     return;
   }
 
-  const itemsHtml = refs.map((r, i) => {
+  const itemsHtml = refs.map((r: ProxyRequest, i: number) => {
     const idx = i + 1;
     const ts = r.timestamp ? fmtTime(r.timestamp) : '—';
     const model = r.model ? shortModelName(r.model) : '?';
@@ -697,7 +702,7 @@ function renderRefsPopoverBody(popover, refs, hash) {
   if (body) body.innerHTML = `<ul class="llm-input-refs-list">${itemsHtml}</ul>`;
 }
 
-function positionRefsPopover(popover, chipEl) {
+function positionRefsPopover(popover: HTMLElement, chipEl: HTMLElement) {
   const rect = chipEl.getBoundingClientRect();
   // 폭은 컨테이너 기준 최대치, 위치는 chip 아래 6px 띄움. 화면 우측 넘침 보정.
   const maxWidth = Math.min(560, window.innerWidth - 24);
@@ -719,15 +724,16 @@ function closeRefsPopover() {
   document.removeEventListener('keydown', onRefsPopoverKeydown);
 }
 
-function onRefsPopoverDocClick(e) {
+function onRefsPopoverDocClick(e: Event) {
   if (!_refsPopoverEl) return;
+  const target = e.target as Element;
   // 닫기 버튼
-  if (e.target.closest('[data-refs-close]')) {
+  if (target.closest('[data-refs-close]')) {
     closeRefsPopover();
     return;
   }
   // 같은 세션 참조 항목 클릭 → 해당 proxy로 점프 (팝오버는 container 밖이라 여기서 처리)
-  const refItem = e.target.closest('[data-refs-jump-id]');
+  const refItem = target.closest('[data-refs-jump-id]') as HTMLElement | null;
   if (refItem && _refsPopoverEl.contains(refItem)) {
     const proxyId = refItem.dataset.refsJumpId;
     closeRefsPopover();
@@ -735,13 +741,13 @@ function onRefsPopoverDocClick(e) {
     return;
   }
   // 팝오버 내부 그 외 클릭 — 닫지 않음
-  if (_refsPopoverEl.contains(e.target)) return;
+  if (_refsPopoverEl.contains(target)) return;
   // chip 자신 클릭은 toggleRefsPopover가 토글 처리 — 여기선 close 안 함
-  if (_refsPopoverChip && _refsPopoverChip.contains(e.target)) return;
+  if (_refsPopoverChip && _refsPopoverChip.contains(target)) return;
   closeRefsPopover();
 }
 
-function onRefsPopoverKeydown(e) {
+function onRefsPopoverKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     e.preventDefault();
     closeRefsPopover();
@@ -757,7 +763,7 @@ function onRefsPopoverKeydown(e) {
  *
  * @param {boolean} open
  */
-function setAllExpanded(open) {
+function setAllExpanded(open: boolean) {
   const all = document.querySelectorAll('details.llm-input-msg');
   all.forEach(node => {
     const d = asDetails(node);
@@ -777,7 +783,7 @@ function setAllExpanded(open) {
  *  - 매칭 메시지: details.open = true + body 내 텍스트에 <mark> 래핑
  *  - 미매칭 메시지: 이전 상태 유지 (open이면 open, closed면 closed)
  */
-function onSearchInput(e) {
+function onSearchInput(e: Event) {
   const input = asInput(asEl(e.target).closest('[data-messages-search]'));
   if (!input) return;
   const term = String(input.value || '').trim();
@@ -790,7 +796,7 @@ function onSearchInput(e) {
  *
  * @param {string} term
  */
-function applySearchHighlight(term) {
+function applySearchHighlight(term: string) {
   const all = document.querySelectorAll('details.llm-input-msg');
   const tooShort = term.length < SEARCH_MIN_LEN;
 
@@ -802,6 +808,7 @@ function applySearchHighlight(term) {
     // 1. 이전 highlight 복원
     body.querySelectorAll('mark.llm-input-mark').forEach(mk => {
       const parent = mk.parentNode;
+      if (!parent) return;
       while (mk.firstChild) parent.insertBefore(mk.firstChild, mk);
       parent.removeChild(mk);
       parent.normalize();
@@ -830,7 +837,7 @@ function applySearchHighlight(term) {
  * 노드 트리를 순회하며 일치 텍스트를 <mark>로 래핑.
  * <pre>/<code> 안의 텍스트 노드도 처리. <summary>는 대상 외.
  */
-function highlightTextNodes(root, term) {
+function highlightTextNodes(root: Node, term: string) {
   const needle = term.toLowerCase();
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
@@ -845,12 +852,13 @@ function highlightTextNodes(root, term) {
     },
   });
 
-  const targets = [];
-  let n;
+  const targets: Node[] = [];
+  let n: Node | null;
   while ((n = walker.nextNode())) targets.push(n);
 
   for (const text of targets) {
     const raw = text.nodeValue;
+    if (raw == null) continue;
     const lower = raw.toLowerCase();
     let idx = lower.indexOf(needle);
     if (idx === -1) continue;
@@ -867,7 +875,7 @@ function highlightTextNodes(root, term) {
       idx = lower.indexOf(needle, cursor);
     }
     if (cursor < raw.length) frag.appendChild(document.createTextNode(raw.slice(cursor)));
-    text.parentNode.replaceChild(frag, text);
+    text.parentNode?.replaceChild(frag, text);
   }
 }
 
@@ -884,19 +892,19 @@ function resetAccordionState() {
 // 유틸
 // =============================================================================
 
-async function fetchJson(url) {
+async function fetchJson(url: string) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json();
 }
 
-function formatBytes(n) {
+function formatBytes(n: number) {
   if (typeof n !== 'number' || !isFinite(n)) return '';
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / 1024 / 1024).toFixed(2)} MB`;
 }
 
-function safeStringify(v) {
+function safeStringify(v: unknown) {
   try { return JSON.stringify(v, null, 2); } catch { return '[unserializable]'; }
 }

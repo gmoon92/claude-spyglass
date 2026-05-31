@@ -6,8 +6,8 @@ import { fmt, fmtToken, escHtml } from './formatters.js';
 import { makeSessionRow, skSessionRows } from './renderers.js';
 import { getSelectedProject, getSelectedSession, getAppMode } from './state.js';
 
-let _allProjects     = [];
-let _allSessions     = [];
+let _allProjects: any[]     = [];
+let _allSessions: any[]      = [];
 // meta-docs feedback ADR (2026-05-14): 메타 모드에서 프로젝트별 항목 수를 좌측 패널에
 // 표시하기 위한 카운트 스토어. meta-docs-view.js가 카탈로그 fetch 후 setMetaDocsCounts로 채운다.
 // 키 규칙: projects[project_name] = N, global/total은 별도 필드. 시작 시 빈 객체.
@@ -17,7 +17,7 @@ let _metaCounts      = { projects: Object.create(null), global: 0, total: 0 };
 export const GLOBAL_PROJECT_KEY = '__global__';
 
 export function getAllSessions()  { return _allSessions; }
-export function setAllSessions(list) { _allSessions = list; }
+export function setAllSessions(list: any[]) { _allSessions = list; }
 export function getAllProjects()  { return _allProjects; }
 
 /**
@@ -34,10 +34,10 @@ export function getAllProjects()  { return _allProjects; }
  * 이를 통해 api.js의 transitive import가 모듈 평가 단계에서 깨지지 않는다.
  */
 if (typeof document !== 'undefined') {
-  document.addEventListener('session-anomalies-loaded', (e) => {
-    const { sessionId, bloatedSys } = e.detail || {};
+  document.addEventListener('session-anomalies-loaded', (e: Event) => {
+    const { sessionId, bloatedSys } = (e as CustomEvent).detail || {};
     if (!sessionId) return;
-    const target = _allSessions.find(s => s.id === sessionId);
+    const target = _allSessions.find((s: any) => s.id === sessionId);
     if (!target) return;
     // critical만 사이드바 dot 노출 (ADR-005), 그 외 단계는 미노출. null도 같이 캐시해
     // 응답 변동 시 stale dot이 잘못 남는 것을 막는다.
@@ -55,12 +55,12 @@ if (typeof document !== 'undefined') {
  *
  * @param {{ projects?: Record<string, number>, global?: number, total?: number }} counts
  */
-export function setMetaDocsCounts(counts) {
+export function setMetaDocsCounts(counts: { projects?: Record<string, number>, global?: number, total?: number } | null | undefined) {
   const safe = counts && typeof counts === 'object' ? counts : {};
   _metaCounts = {
     projects: safe.projects && typeof safe.projects === 'object' ? safe.projects : Object.create(null),
-    global:   Number.isFinite(safe.global) ? safe.global : 0,
-    total:    Number.isFinite(safe.total)  ? safe.total  : 0,
+    global:   Number.isFinite(safe.global) ? (safe.global ?? 0) : 0,
+    total:    Number.isFinite(safe.total)  ? (safe.total ?? 0)  : 0,
   };
   if (getAppMode() === 'metadocs') renderBrowserProjects();
 }
@@ -80,7 +80,7 @@ export function renderBrowserProjects() {
   // metadocs 모드: 최상단 가상 'user (global)' 행 (scopeMode='all' 진입점)
   if (isMetaMode) rows.push(renderMetaGlobalRow());
 
-  const maxT = Math.max(..._allProjects.map(p => p.total_tokens || 0), 1);
+  const maxT = Math.max(..._allProjects.map((p: any) => p.total_tokens || 0), 1);
   for (const p of _allProjects) {
     rows.push(isMetaMode ? renderMetaProjectRow(p) : renderBrowseProjectRow(p, maxT));
   }
@@ -92,7 +92,7 @@ export function renderBrowserProjects() {
  *  - 세션 컬럼은 활성 세션 수만 노출.
  *  - active가 0이면 dash.
  */
-function renderBrowseProjectRow(p, maxT) {
+function renderBrowseProjectRow(p: any, maxT: number) {
   const isSelected = getSelectedProject() === p.project_name;
   const pct        = Math.max(1, Math.round((p.total_tokens || 0) / maxT * 100));
   const active = p.active_count ?? 0;
@@ -120,7 +120,7 @@ function renderBrowseProjectRow(p, maxT) {
  *  - 클릭 시 main.js selectProject가 scopeMode='selected'로 전환하여 해당 프로젝트만 표시.
  *  - 동기화 버튼은 thead 셀에 단독 배치되므로 행 우측 셀은 비워둔다(컬럼 폭은 colgroup 공유).
  */
-function renderMetaProjectRow(p) {
+function renderMetaProjectRow(p: any) {
   const isSelected = getSelectedProject() === p.project_name;
   const count = _metaCounts.projects?.[p.project_name] ?? 0;
   return `<tr class="clickable${isSelected ? ' row-selected' : ''}" data-project="${escHtml(p.project_name)}">
@@ -154,15 +154,16 @@ function renderMetaGlobalRow() {
 export function renderBrowserSessions() {
   const body = document.getElementById('browserSessionsBody');
   const hint = document.getElementById('sessionPaneHint');
-  const t = window.I18n?.t ?? ((k) => k);
+  if (!body || !hint) return;
+  const t = window.I18n?.t ?? ((k: string) => k);
   if (!getSelectedProject()) {
     body.innerHTML = '<tr><td colspan="4" class="table-empty">—</td></tr>';
     hint.textContent = t('ui.left-panel.select-project');
     return;
   }
   const list = _allSessions
-    .filter(s => s.project_name === getSelectedProject())
-    .sort((a, b) => {
+    .filter((s: any) => s.project_name === getSelectedProject())
+    .sort((a: any, b: any) => {
       const aActive = a.ended_at == null ? 1 : 0;
       const bActive = b.ended_at == null ? 1 : 0;
       if (bActive !== aActive) return bActive - aActive;
@@ -171,15 +172,15 @@ export function renderBrowserSessions() {
       if (bLast !== aLast) return bLast - aLast;
       return (b.started_at || 0) - (a.started_at || 0);
     });
-  hint.textContent = t('ui.left-panel.session-count', { project: getSelectedProject(), count: list.length });
+  hint.textContent = t('ui.left-panel.session-count', { project: getSelectedProject() ?? '', count: list.length });
   if (!list.length) {
     body.innerHTML = `<tr><td colspan="4" class="table-empty">${t('ui.left-panel.no-data')}</td></tr>`;
     return;
   }
-  body.innerHTML = list.map(s => makeSessionRow(s, getSelectedSession() === s.id)).join('');
+  body.innerHTML = list.map((s: any) => makeSessionRow(s, getSelectedSession() === s.id)).join('');
 }
 
-export function renderProjects(list) {
+export function renderProjects(list: any[]) {
   _allProjects = list;
   renderBrowserProjects();
 }
@@ -191,5 +192,6 @@ export function renderProjects(list) {
 export function showSkeletonSessions() {
   // skeleton-loading T-13: 세션 행 4 컬럼 구조(상태 dot + 이름 + 활성 표시 + 토큰) 흉내.
   // 4 row 로 평균 세션 리스트 높이를 유지 → 프로젝트 클릭 후 fetch 동안 CLS 0.
-  document.getElementById('browserSessionsBody').innerHTML = skSessionRows(4);
+  const body = document.getElementById('browserSessionsBody');
+  if (body) body.innerHTML = skSessionRows(4);
 }

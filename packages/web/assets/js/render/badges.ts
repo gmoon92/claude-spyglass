@@ -11,11 +11,11 @@ import { escHtml } from '../formatters.js';
 import { subTypeOf } from '../request-types.js';
 import { svgToolDot, svgAgentDot, svgSkillDot, svgMcpDot } from '../design-system/icons/_index.js';
 
-export function typeBadge(type) {
+export function typeBadge(type: string) {
   const known = ['prompt', 'tool_call', 'system', 'response'];
   const cls   = known.includes(type) ? type : 'unknown';
   const label = known.includes(type) ? type : (type || '?');
-  const toneMap = { prompt: 'brand', tool_call: 'success', system: 'warn', response: 'info' };
+  const toneMap: Record<string, string> = { prompt: 'brand', tool_call: 'success', system: 'warn', response: 'info' };
   const tone = toneMap[type] ?? 'neutral';
   return `<span class="type-badge type-${cls} ds-badge" data-tone="${tone}" title="${escHtml(type)}" aria-label="${escHtml(type)}">${escHtml(label)}</span>`;
 }
@@ -56,7 +56,7 @@ export function typeBadge(type) {
  * @param {string|null} [eventType=null]    'pre_tool'이면 실행 중 pulse 애니메이션 클래스 부착
  * @returns {string} 아이콘 SVG를 감싼 `<span>` HTML
  */
-export function toolIconHtml(toolName, eventType = null) {
+export function toolIconHtml(toolName: string | null | undefined, eventType: string | null = null) {
   const name    = typeof toolName === 'string' ? toolName : '';
   const isSkill = name === 'Skill' || name.startsWith('Skill');
   const isMcp   = !isSkill && name.startsWith('mcp__');
@@ -79,7 +79,7 @@ export function toolIconHtml(toolName, eventType = null) {
 }
 
 // payload에서 tool_response 추출
-function getToolResponse(r) {
+function getToolResponse(r: any) {
   if (!r.payload) return null;
   try {
     const p = typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
@@ -88,7 +88,7 @@ function getToolResponse(r) {
 }
 
 // 상태 배지: 오류만 표시 (Signal over Noise 원칙)
-export function toolStatusBadge(r) {
+export function toolStatusBadge(r: any) {
   const tr = getToolResponse(r);
   if (!tr) return ''; // tool_response 없으면 미표시 (실행 전/중)
   const tn = r.tool_name || '';
@@ -98,7 +98,7 @@ export function toolStatusBadge(r) {
   } else if (tn === 'Agent' || tn === 'Skill') {
     try {
       const content = Array.isArray(tr.content) ? tr.content : (tr.content ? [tr.content] : []);
-      hasError = content.some(c => c?.type === 'tool_result' && c?.is_error);
+      hasError = content.some((c: any) => c?.type === 'tool_result' && c?.is_error);
       if (!hasError && tr.is_error) hasError = true;
     } catch { hasError = !!tr.is_error; }
   } else {
@@ -108,7 +108,7 @@ export function toolStatusBadge(r) {
 }
 
 // 도구별 결과 힌트: "[202줄]" 등
-export function toolResponseHint(r) {
+export function toolResponseHint(r: any) {
   const tr = getToolResponse(r);
   if (!tr) return ''; // tool_response 없으면 미표시
   const tn = r.tool_name || '';
@@ -138,10 +138,10 @@ export function toolResponseHint(r) {
   return '';
 }
 
-export function anomalyBadgesHtml(flags) {
+export function anomalyBadgesHtml(flags: Set<string> | null | undefined) {
   if (!flags || flags.size === 0) return '';
-  const toneMap = { spike: 'warn', loop: 'info', slow: 'warn' };
-  return [...flags].map(f => {
+  const toneMap: Record<string, string> = { spike: 'warn', loop: 'info', slow: 'warn' };
+  return [...flags].map((f: string) => {
     const tone = toneMap[f] ?? 'neutral';
     return `<span class="mini-badge badge-${f} ds-badge" data-tone="${tone}" data-mini-badge-tooltip="${f}">${f}</span>`;
   }).join('');
@@ -168,13 +168,13 @@ export function anomalyBadgesHtml(flags) {
  *   - full: views/detail-view.js (세션 헤더 detailBadges)
  *   - dot:  left-panel.js (사이드바 세션 리스트)
  */
-export function bloatedSysBadgeMiniHtml(bloatedSys) {
+export function bloatedSysBadgeMiniHtml(bloatedSys: any) {
   return _bloatedBadge(bloatedSys, 'mini');
 }
-export function bloatedSysBadgeFullHtml(bloatedSys) {
+export function bloatedSysBadgeFullHtml(bloatedSys: any) {
   return _bloatedBadge(bloatedSys, 'full');
 }
-export function bloatedSysBadgeDotHtml(bloatedSys) {
+export function bloatedSysBadgeDotHtml(bloatedSys: any) {
   // 사이드바 dot은 critical만 노출 (ADR-005)
   // 서버 컨트랙트는 `stage` (anomaly-bloated-sys ADR-003). 과거 `status` 별칭도 호환.
   const stage = bloatedSys && (bloatedSys.stage ?? bloatedSys.status);
@@ -182,7 +182,7 @@ export function bloatedSysBadgeDotHtml(bloatedSys) {
   return _bloatedBadge(bloatedSys, 'dot');
 }
 
-function _bloatedBadge(bs, variant) {
+function _bloatedBadge(bs: any, variant: string) {
   // 서버 컨트랙트 `stage` 우선 (anomaly-bloated-sys ADR-003), 과거 `status` 별칭도 호환.
   const status = bs && (bs.stage ?? bs.status);
   if (!status || (status !== 'warn' && status !== 'critical')) return '';
@@ -225,7 +225,7 @@ function _bloatedBadge(bs, variant) {
  * 호출자:
  *   - full: views/detail-view.js (세션 헤더 detailBadges 영역)
  */
-export function contextSaturationBadgeFullHtml(ctxSat) {
+export function contextSaturationBadgeFullHtml(ctxSat: any) {
   const stage = ctxSat && (ctxSat.stage ?? null);
   if (stage !== 'warn' && stage !== 'critical') return '';
   const pctRaw = (ctxSat.pct != null && Number.isFinite(ctxSat.pct)) ? ctxSat.pct : null;
@@ -234,7 +234,7 @@ export function contextSaturationBadgeFullHtml(ctxSat) {
   const stageCls = stage === 'critical' ? ' is-critical' : ' is-warn';
   const i18nBase = `ui.anomaly.context-saturation.${stage}`;
   // i18n 키가 아직 없을 수 있으므로 fallback 라벨 제공 — translate 누락 시 키 그대로 노출되는 회귀 회피.
-  const tFallback = (key, fallback, vars) => {
+  const tFallback = (key: string, fallback: string, vars?: Record<string, string | number>) => {
     try {
       const t = window.I18n?.t?.(key, vars);
       return t && t !== key ? t : fallback;
@@ -257,7 +257,7 @@ export function contextSaturationBadgeFullHtml(ctxSat) {
  *
  * 반환: HTML 또는 ''.  '' 반환 시 호출 측이 기본 spike 표지를 그대로 유지하면 됨.
  */
-export function agentSpikeBadgeHtml(agentSpike) {
+export function agentSpikeBadgeHtml(agentSpike: any) {
   // 서버 컨트랙트: stage='spike'(트리거) | null. ratio 대신 multiplier 사용.
   // 과거 status='critical'/ratio 별칭도 호환.
   const stage = agentSpike && (agentSpike.stage ?? agentSpike.status);
@@ -286,7 +286,7 @@ export function agentSpikeBadgeHtml(agentSpike) {
  * @param {object} agentSpike
  * @param {number[]} samples — 최대 20개 자식 토큰 시계열 (옵션)
  */
-export function turnSpikeSummaryHtml(agentSpike, samples) {
+export function turnSpikeSummaryHtml(agentSpike: any, samples: number[]) {
   // 서버 컨트랙트: stage='spike' / multiplier. 과거 status/ratio 별칭 호환.
   const stage = agentSpike && (agentSpike.stage ?? agentSpike.status);
   if (stage !== 'spike' && stage !== 'critical') return '';
@@ -301,7 +301,7 @@ export function turnSpikeSummaryHtml(agentSpike, samples) {
   </span>`;
 }
 
-function _spikeSparklineSvg(samples) {
+function _spikeSparklineSvg(samples: number[]) {
   const W = 60, H = 16;
   if (!Array.isArray(samples) || samples.length === 0) {
     // 빈 baseline만 — sparkline 모듈 emptySvg 패턴 재사용
@@ -358,7 +358,7 @@ function _spikeSparklineSvg(samples) {
  * @param {object} r 행 raw 데이터 (tool_name / tool_detail / tool_input 사용)
  * @returns {string} chip HTML 또는 '' (빈 sub_type)
  */
-export function subTypeBadgeHtml(r) {
+export function subTypeBadgeHtml(r: any) {
   const sub = subTypeOf(r);
   if (!sub) return '';
   let label;
@@ -387,7 +387,7 @@ export function subTypeBadgeHtml(r) {
   } else {
     return '';
   }
-  const toneMap = { mcp: 'mcp', agent: 'agent', skill: 'skill', task: 'task' };
+  const toneMap: Record<string, string> = { mcp: 'mcp', agent: 'agent', skill: 'skill', task: 'task' };
   const tone = toneMap[sub] ?? 'neutral';
   return `<span class="sub-type-chip sub-type-chip-${sub} ds-chip" data-tone="${tone}" title="${escHtml(fullId)}" aria-label="${escHtml(fullId)}"${deepLinkAttrs}>${label}</span>`;
 }

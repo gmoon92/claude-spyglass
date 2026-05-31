@@ -20,7 +20,7 @@ const SCHEMA_VERSION = 1;
 /**
  * @param {{type:'preset', value:string} | {type:'custom', from:number, to:number}} activeRange
  */
-export function saveDateRange(activeRange) {
+export function saveDateRange(activeRange: any) {
   if (typeof localStorage === 'undefined') return;
   if (!activeRange || activeRange.type !== 'preset') return; // custom 휘발
   try {
@@ -46,7 +46,7 @@ export function loadDateRange() {
   if (parsed.type !== 'preset') return null;          // custom 저장된 경우 무시
   if (typeof parsed.value !== 'string') return null;
   // 저장값은 런타임 string — setActiveRange가 normalizeRange로 재검증하므로 PresetValue로 좁힘.
-  return { type: 'preset', value: /** @type {import('../api.js').PresetValue} */ (parsed.value) };
+  return { type: 'preset' as const, value: parsed.value as string };
 }
 
 /**
@@ -55,11 +55,11 @@ export function loadDateRange() {
  *
  * @param {(msg: string) => void} [onCustomEphemeralToast] custom 잔존값 발견 시 안내용
  */
-export function initDateRangeStorage(onCustomEphemeralToast) {
+export function initDateRangeStorage(onCustomEphemeralToast?: (msg: string) => void) {
   // 1. hydrate
   const restored = loadDateRange();
   if (restored) {
-    setActiveRange(restored);
+    setActiveRange(restored as Parameters<typeof setActiveRange>[0]);
   } else if (typeof localStorage !== 'undefined') {
     // 구버전 raw 값이 있었는데 폴백된 경우 — 사용자에게 1회 안내 (선택)
     try {
@@ -73,7 +73,7 @@ export function initDateRangeStorage(onCustomEphemeralToast) {
   // 2. 변경 이벤트 자동 저장
   if (typeof document !== 'undefined') {
     document.addEventListener('cs:active-range-changed', (e) => {
-      saveDateRange(e.detail);
+      saveDateRange((e as CustomEvent).detail);
     });
   }
 }
