@@ -70,6 +70,12 @@ export interface AppStoreState {
   detailFilterBar: unknown;
   // ── 영속 슬라이스 (ADR-004, P1-05): preset만 영속 / custom·null 휘발 ──
   activeRange: ActiveRange;
+  // ── filter/search 슬라이스 (P2-08): filter-bar/search-box 선택 상태 SSoT. in-memory(휘발). ──
+  //   feedFilter/detailFilter: filter-bar.js 의 활성 필터 키(기본 'all'). 두 인스턴스 독립.
+  //   searchQuery: search-box.js 의 정규화(trim+lowercase) 질의(기본 ''). partialize 비대상.
+  feedFilter: string;
+  detailFilter: string;
+  searchQuery: string;
 
   // ── 액션 (state.js accessor 1:1) ──
   setAppMode: (m: AppMode) => void;
@@ -83,6 +89,9 @@ export interface AppStoreState {
   setFeedFilterBar: (b: unknown) => void;
   setDetailFilterBar: (b: unknown) => void;
   setActiveRange: (r: ActiveRange) => void;
+  setFeedFilter: (f: string) => void;
+  setDetailFilter: (f: string) => void;
+  setSearchQuery: (q: string) => void;
 }
 
 /**
@@ -102,6 +111,10 @@ export const initialState = {
   detailFilterBar: null as unknown,
   // activeRange 초기값 null — loadDateRange()가 null 반환 시 호출자 default('all') 폴백하는 의미 1:1.
   activeRange: null as ActiveRange,
+  // filter/search 초기값 (P2-08): filter-bar 'all' 기본 활성(filter-bar.js:12 defaultActive) / search 빈 질의.
+  feedFilter: 'all',
+  detailFilter: 'all',
+  searchQuery: '',
 };
 
 /**
@@ -195,6 +208,11 @@ export const useAppStore = create<AppStoreState>()(persist((set) => ({
 
   // ── activeRange (ADR-004, P1-05) — set 즉시 persist 어댑터가 preset만 기록/custom·null 휘발 ──
   setActiveRange: (r) => set({ activeRange: r }),
+
+  // ── filter/search (P2-08) — in-memory only. partialize 비대상이라 localStorage 미기록(휘발). ──
+  setFeedFilter: (f) => set({ feedFilter: f }),
+  setDetailFilter: (f) => set({ detailFilter: f }),
+  setSearchQuery: (q) => set({ searchQuery: q }),
 }), {
   name: STORAGE_KEY,
   version: SCHEMA_VERSION,
