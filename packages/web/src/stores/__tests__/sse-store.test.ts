@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { useSSEStore, initialSSEState, FEED_CAP, PROXY_FEED_CAP } from '../sse-store';
 import type { NewRequestEvent, NewProxyRequestEvent, SessionUpdateEvent } from '../../schema/sse-schema';
 

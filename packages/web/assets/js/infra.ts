@@ -35,13 +35,13 @@ export function jumpToLatest() {
  * 함수 시그너처는 외부 호출자(showError / clearError) 호환을 위해 보존.
  * SSE 연결 상태는 #errorBanner 및 obs-panel.LivePulse 카드로 일원화됨.
  */
-export function setLiveStatus(connected: any) {
+export function setLiveStatus(connected: boolean) {
   const b = document.getElementById('liveBadge');
   if (!b) return; // brand-strip-cleanup ADR-001: liveBadge 노드가 제거되어 사실상 no-op.
   b.className = connected ? 'badge-live' : 'badge-live disconnected';
 }
 
-export function showError(msg: any) {
+export function showError(msg: string) {
   const t = window.I18n?.t ?? ((k) => k);
   asEl(document.getElementById('errorMsg')).textContent = msg || t('common.server-unavailable');
   asEl(document.getElementById('errorBanner')).classList.add('visible');

@@ -7,7 +7,7 @@
  *
  * 전략(무 DOM 하네스): 마크업/모달 토글은 renderToStaticMarkup, 버튼 배선은 onClick 직접 invoke.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 import { UpdateBadge } from '../UpdateBadge';

@@ -6,7 +6,7 @@
  * 전략: 원본 SSoT 1:1 이식 검증 — 정규식 본문 추출·trim·세션 누적 dedup·turn_index ASC 정렬
  *   불변식 + 적대적 경계(빈 입력/비문자열/중첩 줄바꿈/turn 내 중복).
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { parseReminderBodies, computeNewRemindersByTurn } from '../system-reminder';
 
 describe('parseReminderBodies — 블록 본문 추출(system-reminder.js:32)', () => {

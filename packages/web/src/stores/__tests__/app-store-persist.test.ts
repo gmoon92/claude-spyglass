@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { useAppStore } from '../app-store';
 
 // app-store-persist.test.ts — Zustand persist 미들웨어 검증 (P1-05).

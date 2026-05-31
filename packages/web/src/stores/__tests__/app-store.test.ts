@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { useAppStore } from '../app-store';
 
 // state.test.ts 14 case 1:1 동치 계승 (P1-04).

@@ -4,7 +4,7 @@
  * 원본: settings-view.js 인라인 분기. 각 케이스는 원본 파일:라인 근거를 동반(추측 없음).
  * 회귀 위험 5종 중 §4.2 라디오 유효성·상태 라벨 분기를 직접 커버.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import {
   versionRowStatus,
   isCommentHint,

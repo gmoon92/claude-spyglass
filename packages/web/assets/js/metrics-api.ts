@@ -26,13 +26,16 @@ function qs(params = {}) {
 /**
  * fetch + envelope unwrap. 실패 시 빈 객체 또는 빈 배열 반환.
  */
-async function getMetric(path: string, params: Record<string, any> = {}, fallback: any = null) {
+type MetricParams = Record<string, string | number | boolean | undefined>;
+
+async function getMetric<T>(path: string, params: MetricParams = {}, fallback: T): Promise<T> {
   try {
     const res  = await fetch(`${BASE}${path}${qs(params)}`, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error || 'metric error');
-    return json.data;
+    const json: unknown = await res.json();
+    const env = (json && typeof json === 'object') ? (json as { success?: unknown; data?: unknown; error?: unknown }) : {};
+    if (!env.success) throw new Error(typeof env.error === 'string' ? env.error : 'metric error');
+    return env.data as T;
   } catch {
     return fallback;
   }

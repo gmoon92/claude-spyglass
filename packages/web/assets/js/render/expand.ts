@@ -21,7 +21,7 @@ export const RECENT_REQ_COLS = 10; // + Session
  * @param {Element} target 클릭 타깃 (호출부에서 HTMLElement로 좁혀 전달)
  * @returns {Element|null}
  */
-export function resolveExpandTarget(target: any) {
+export function resolveExpandTarget(target: Element) {
   const direct = target.closest('[data-expand-id]');
   if (direct) return direct;
   const msgCell = target.closest('td[data-cell="msg"]');

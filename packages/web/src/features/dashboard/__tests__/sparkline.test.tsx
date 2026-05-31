@@ -6,7 +6,7 @@
  *  obs-panel 카드(BurnRate/CacheHealth/LivePulse)가 이 sparkline 을 소비하므로
  *  카드 골든마스터의 기반 동치를 먼저 고정한다.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { SparklineBars, SparklineLine } from '../Sparkline';
 import { computeSparkBars, computeSparkLine } from '../sparkline-data';

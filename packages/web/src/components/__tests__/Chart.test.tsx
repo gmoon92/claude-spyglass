@@ -9,7 +9,7 @@
  * 전략(search-box.test.tsx 계승): renderToStaticMarkup 으로 마크업 검증.
  *  useLayoutEffect 의 canvas 그리기는 SSR 에서 실행되지 않으므로(React 효과 미발화) throw 없이 통과.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { Chart } from '../Chart';

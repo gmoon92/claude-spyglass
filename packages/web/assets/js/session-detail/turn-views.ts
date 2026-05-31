@@ -496,7 +496,7 @@ export function jumpToChipRow(key: string) {
  * @param {object} turn  TurnItem
  * @param {string[]} newReminders  computeNewRemindersByTurn으로 얻은 신규 reminder 본문 배열
  */
-function buildTurnHaystack(turn: TurnItem, newReminders: string[]) {
+function buildTurnHaystack(turn: TurnItem, newReminders?: string[]) {
   const parts: string[] = [];
   parts.push(`T${turn.turn_index}`);
   if (turn.prompt?.preview) parts.push(turn.prompt.preview);
@@ -709,7 +709,7 @@ function triggerChipFlowStagger(doc: Document) {
  *
  * @param {{turns?: Array, badgeTurns?: Array}} [opts] turns 재공급 시 사용 — 미제공이면 state에서 조회
  */
-export function renderActiveTurn(opts: { turns?: any[]; badgeTurns?: any[] } = {}) {
+export function renderActiveTurn(opts: { turns?: TurnItem[]; badgeTurns?: TurnItem[] } = {}) {
   const turns      = opts.turns      || getDetailTurns();
   const badgeTurns = opts.badgeTurns || turns;
   if (!turns || turns.length === 0) return;
@@ -1057,7 +1057,7 @@ export function renderTurnCards(turns: TurnItem[], badgeTurns: TurnItem[], allRe
  *    .turn-line 단위로 옮겨 동일 검색 어휘를 유지.
  *  - applyTurnCardSearch가 query 매칭 안 되는 turn-line을 display:none으로 숨김.
  */
-function attachHaystackToTurnLines(turns: any[], newRemindersByTurn: Map<any, any>) {
+function attachHaystackToTurnLines(turns: TurnItem[], newRemindersByTurn: Map<string, string[]>) {
   const spineEl = document.getElementById('turnSpine');
   if (!spineEl) return;
   const byId = new Map(turns.map(t => [t.turn_id, t]));

@@ -8,7 +8,7 @@
  *  - 소문자 normalize + 16KB 절단.
  *  - newReminders 우선, 없으면 turn.system_reminder.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { buildTurnHaystack, HAYSTACK_MAX } from '../turn-haystack';
 
 describe('buildTurnHaystack — 특성화', () => {

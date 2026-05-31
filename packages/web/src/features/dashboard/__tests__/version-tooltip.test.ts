@@ -3,7 +3,7 @@
  *
  * 원본 version-check.js normalizeTag/isSameVersion + tooltip position 산술 골든마스터.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { normalizeTag, isSameVersion, tSafe, resolveBadgeState } from '../version-check-logic';
 import {
   positionNearCursor,

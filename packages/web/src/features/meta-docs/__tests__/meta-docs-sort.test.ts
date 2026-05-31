@@ -8,7 +8,7 @@
  * 회귀 게이트: null/orphan 끝자리 정책(view.js:1289,1309), type 동률 invocations desc 보조(view.js:1285),
  *   검색 부분일치 소문자(view.js:1014) — "검색 필터 회귀 0" done_criteria 직접 근거.
  */
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll } from 'vitest';
 import {
   applySort,
   nextSort,

@@ -22,7 +22,7 @@
  *
  * @module components/Chart
  */
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import {
   computeDonutSlices,
@@ -282,10 +282,17 @@ export function drawTimelineToCanvas(
 }
 
 /**
- * Chart 컴포넌트 — 타임라인 + 도넛 캔버스를 useRef 로 캡슐화.
+ * Chart 컴포넌트 본체 — 타임라인 + 도넛 캔버스를 useRef 로 캡슐화.
  * 그리기는 useLayoutEffect(레이아웃 측정 후 paint 전). resize 는 rAF 디바운스 ResizeObserver.
+ *
+ * P5-04 성능: 본체는 ChartImpl 로 두고 export 는 React.memo(ChartImpl)(아래). BrowseLayout 이
+ *   고주기 SSE(new_request 5-20/s)로 `sessions` 만 갱신해 re-render 될 때, Chart 의 입력
+ *   (dataByKind useMemo·donutMode 원시값·tokens 모듈 상수·timelineBuckets 안정 ref)이 불변이면
+ *   shallow 비교로 본체 실행 자체를 건너뛴다 → 캔버스 effect 재실행/ResizeObserver 재등록 churn 제거.
+ *   memo 가 효과를 내려면 호출처가 `timelineBuckets` 등 모든 prop 의 ref 안정성을 보장해야 한다
+ *   (BrowseLayout 이 인라인 `[]` → 모듈 상수로 교체). 출력은 불변(메모는 re-render 회피일 뿐).
  */
-export function Chart({
+function ChartImpl({
   dataByKind,
   donutMode,
   timelineBuckets,
@@ -349,3 +356,9 @@ export function Chart({
     </>
   );
 }
+
+/**
+ * Chart — 공개 진입점(메모화). 본체 ChartImpl 을 React.memo 로 감싸 prop shallow-equal 시 re-render 회피.
+ * 타입·이름·출력은 비메모 버전과 동일(소비처 무영향). 메모는 순수 성능 최적화이며 동작을 바꾸지 않는다.
+ */
+export const Chart = memo(ChartImpl);

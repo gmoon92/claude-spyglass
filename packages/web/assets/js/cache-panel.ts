@@ -27,7 +27,13 @@ function dismissCachePanelSkeleton() {
   });
 }
 
-export function renderCachePanel(data: any) {
+interface CachePanelData {
+  hitRate?: number | null;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+}
+
+export function renderCachePanel(data: CachePanelData | null | undefined) {
   if (!data) return;
   dismissCachePanelSkeleton();
 
@@ -120,7 +126,15 @@ export function renderCachePanel(data: any) {
  * @param {Array} requests — 세션 내 모든 요청 (_detailAllRequests)
  * @returns {Object} renderCachePanel가 받는 형태
  */
-export function computeSessionCacheStats(requests: any) {
+export function computeSessionCacheStats(
+  requests: Array<{
+    event_type?: string | null;
+    type?: string | null;
+    cache_read_tokens?: number;
+    cache_creation_tokens?: number;
+    tokens_input?: number;
+  }> | null | undefined,
+) {
   let cacheRead = 0, cacheCreate = 0, input = 0;
   for (const r of requests || []) {
     // pre_tool 행 제외 — PreToolUse는 토큰=0 미완성 레코드.

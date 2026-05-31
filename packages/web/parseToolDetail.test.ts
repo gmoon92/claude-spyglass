@@ -11,7 +11,7 @@
  *  "복제본 ≡ SSoT" 를 증명한다(입력→출력 불변). + JSON 중첩값 직렬화 케이스 1건 보강(총 10).
  */
 
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 // SSoT 단일화 — 인라인 복제본 제거, extract.js export 재사용.
 import { parseToolDetail } from './assets/js/render/extract.js';
 

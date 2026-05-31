@@ -4,7 +4,7 @@
  *
  * 원본 .js 와 병존 import 로 동치 비교(회귀 0).
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { formatContextWindowLabel, DEFAULT_CONTEXT_WINDOW } from '../context-window';
 import { subTypeOf, isAnchorTool, SUB_TYPES } from '../request-types';
 import { getToolColor, readToolColorsFromCss, TOOL_COLORS } from '../tool-colors';

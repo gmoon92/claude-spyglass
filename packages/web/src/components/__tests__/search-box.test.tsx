@@ -11,7 +11,7 @@
  *  - 스토어 연동: value prop = store.searchQuery, onSearch 콜백 = setSearchQuery 배선 →
  *    getState().searchQuery 갱신 end-to-end 증명(search ↔ app-store).
  */
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Fragment } from 'react';
 import type { ReactElement } from 'react';

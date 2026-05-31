@@ -28,6 +28,7 @@ import { initColResize } from './col-resize.js';
 import { renderSortHead } from './design-system/markers/sort-head.js';
 import { renderCloseBtn } from './design-system/primitives/close-button.js';
 import { getCollator } from './i18n-utils.js';
+import { errMessage } from './util/errors.js';
 
 const CONTAINER_ID = 'sysLibBody';
 const DEFAULT_LIMIT = 100;
@@ -64,8 +65,18 @@ const DEFAULT_DIR = {
   last_seen_at:   'desc',
 };
 
-// 디스플레이 레이어 loose 타입 — system-prompt 라이브러리 행 JSON bag. 파싱 계약은 P5-03(Zod).
-type LibRow = Record<string, any>;
+// any 제거(P5-03): /api/system-prompts 행의 표시·정렬에 실제 접근하는 필드를 명시 타입으로 고정.
+// 서버 응답에 필드가 더 붙어도 깨지지 않도록 index signature 는 unknown(any 금지)으로 둔다.
+interface LibRow {
+  hash: string;
+  byte_size?: number | null;
+  segment_count?: number | null;
+  ref_count?: number | null;
+  first_seen_at?: number | null;
+  last_seen_at?: number | null;
+  content?: string | null;
+  [k: string]: unknown;
+}
 
 let _sortKey = 'last_seen_at';
 let _sortDir = 'desc';
@@ -86,9 +97,9 @@ export async function loadSystemPromptLibrary() {
     const res = await fetchJson(`/api/system-prompts?orderBy=${encodeURIComponent(INITIAL_FETCH_ORDER)}&limit=${DEFAULT_LIMIT}`);
     _rows = Array.isArray(res?.data) ? res.data : [];
     renderContainer(container);
-  } catch (err: any) {
+  } catch (err: unknown) {
     const t = window.I18n?.t ?? ((k: string) => k);
-    container.innerHTML = `<div class="state-empty"><span class="state-empty-title">${t('ui.syslib.load-failed', { message: escHtml(String(err?.message ?? err)) })}</span></div>`;
+    container.innerHTML = `<div class="state-empty"><span class="state-empty-title">${t('ui.syslib.load-failed', { message: escHtml(errMessage(err)) })}</span></div>`;
   }
 }
 
@@ -275,8 +286,8 @@ async function showDetailModal(hash: string) {
         <pre class="syslib-detail-content">${escHtml(row.content ?? '')}</pre>
       `);
     }
-  } catch (err: any) {
-    modal.innerHTML = renderModalShell(`<p class="syslib-dim">${t('ui.syslib.modal-load-failed', { message: escHtml(String(err?.message ?? err)) })}</p>`);
+  } catch (err: unknown) {
+    modal.innerHTML = renderModalShell(`<p class="syslib-dim">${t('ui.syslib.modal-load-failed', { message: escHtml(errMessage(err)) })}</p>`);
   }
 
   // ── 닫기 동작: × 버튼 / 외부 클릭(backdrop) / ESC ── (web-design-balance-pass ADR-007)
@@ -311,7 +322,8 @@ async function fetchJson(url: string) {
   return await res.json();
 }
 
-function formatBytes(n: number) {
+// 파라미터는 number|null|undefined — 본문이 typeof 가드로 비숫자를 처리한다(any 제거 후 호출부 nullable 반영).
+function formatBytes(n: number | null | undefined) {
   if (typeof n !== 'number' || !isFinite(n)) return '-';
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
@@ -326,14 +338,14 @@ function formatBytes(n: number) {
  * @param {number} n  byte_size
  * @returns {string}  '' (정상) | 'syslib-size-warn' (>16KB) | 'syslib-size-large' (>32KB)
  */
-function sizeClassFor(n: number) {
+function sizeClassFor(n: number | null | undefined) {
   if (typeof n !== 'number' || !isFinite(n)) return '';
   if (n > SIZE_LARGE_THRESHOLD) return 'syslib-size-large';
   if (n > SIZE_WARN_THRESHOLD)  return 'syslib-size-warn';
   return '';
 }
 
-function formatTime(ms: number) {
+function formatTime(ms: number | null | undefined) {
   if (typeof ms !== 'number' || !isFinite(ms)) return '-';
   const d = new Date(ms);
   const pad = (n: number) => String(n).padStart(2, '0');

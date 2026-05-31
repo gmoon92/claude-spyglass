@@ -11,7 +11,7 @@
  *   effect 미실행) 본 테스트는 *정적 골격 계약* 만 검증한다. 드래그→너비유지 런타임 확인은
  *   수동 verify(§4.2 가드 #3, P3-01 resize 패턴) 로 보강한다.
  */
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { SessionLog, LOG_TABLE_COLS } from '../SessionLog';
 

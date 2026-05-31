@@ -5,7 +5,7 @@
  * 셀렉터 계약을 renderToStaticMarkup 으로 고정한다. 컨트롤드(props) — store 무참조 leaf.
  * window.I18n 스텁(MetaDocTypeBadge 가 toolIconHtml 경유 ToolIcon 사용, getCollator 의존 없음).
  */
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MetaDocsCatalog } from '../MetaDocsCatalog';
 import { MetaDocTypeBadge } from '../MetaDocTypeBadge';

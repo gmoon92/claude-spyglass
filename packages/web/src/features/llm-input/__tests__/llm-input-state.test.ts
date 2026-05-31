@@ -16,7 +16,7 @@
  *    <MIN_LEN 은 open 상태 불변).
  *  - previewFromContent / messageHaystack / formatBytes / splitHighlight 순수 헬퍼.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import {
   SUMMARY_PREVIEW_LEN,
   SEARCH_MIN_LEN,

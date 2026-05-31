@@ -28,12 +28,53 @@
 
 import { escHtml } from '../formatters.js';
 import { makeRequestRow } from '../render/rows.js';
+import type { RequestView } from '../view-types.js';
 import { subTypeOf, isAnchorTool } from '../request-types.js';
 
-// 디스플레이 레이어 loose 타입 — 서버 JSON 파생 요청/턴/흐름. 파싱 계약은 P5-03(Zod).
-type Req = Record<string, any>;
-type Turn = Record<string, any>;
-type FlowItem = Record<string, any>;
+// makeRequestRow 는 RequestView 를 받지만, 본 모듈은 서버 JSON 파생 loose 행(Req)을 다룬다.
+// 원본(Record<string,any>)이 암묵 허용하던 구조적 호환을 명시 캐스트로 대체(any 제거, 런타임 무변경).
+// makeRequestRow 내부는 필드 부재를 방어적으로 처리(P2-04 RowLike 동형).
+const asView = (r: Req): RequestView => r as unknown as RequestView;
+
+// any 제거(P5-03): 디스플레이 레이어가 실제 접근하는 필드만 명시하고 나머지는 index signature(unknown).
+// src/features/session-detail/TurnRows.tsx 의 RowLike/TurnLike 패턴과 동형(legacy → src 단방향 import 라 재선언).
+/** 서버 JSON 파생 요청 행(NormalizedRequest 부분). chip/그룹화에 읽는 필드만 명시. */
+interface Req {
+  id?: string | null;
+  type?: string | null;
+  tool_name?: string | null;
+  tool_detail?: string | null;
+  timestamp?: string | number | null;
+  payload?: { tool_input?: { status?: unknown; [k: string]: unknown }; [k: string]: unknown } | null;
+  [k: string]: unknown;
+}
+/** 서버 JSON 파생 턴. 인터리브 소스(items) 또는 폴백(tool_calls/responses). */
+interface Turn {
+  prompt?: Req | null;
+  items?: FlowItem[] | null;
+  tool_calls?: Req[] | null;
+  responses?: Req[] | null;
+  [k: string]: unknown;
+}
+/** 인터리빙된 흐름 항목. 두 형태를 겸한다: {kind,request} 또는 그룹 {kind,name,items,count,...}. */
+interface FlowItem {
+  kind?: string;
+  request?: Req;
+  name?: string;
+  items?: Req[];
+  count?: number;
+  [k: string]: unknown;
+}
+/** chipFromRequest 산출 chip 메타(chipKey/chipHtml 공유 SSoT). */
+interface Chip {
+  type: string;
+  respSeq?: number;
+  id?: string;
+  status?: string;
+  label?: string;
+  fullName?: string;
+  [k: string]: unknown;
+}
 interface ToolGroup { key: string; name: string; count: number; isAgent: boolean; agentName: string; items: Req[]; kinds?: string[]; isGroup?: boolean; }
 
 // =============================================================================
@@ -159,7 +200,8 @@ function makeNeutralGroup(groups: FlowItem[]) {
   const seen = new Set<string>();
   const kinds: string[] = [];
   for (const g of groups) {
-    if (!seen.has(g.name)) { seen.add(g.name); kinds.push(g.name); }
+    const nm = g.name ?? '';
+    if (!seen.has(nm)) { seen.add(nm); kinds.push(nm); }
   }
   const head = kinds.slice(0, 3).join('·');
   const name = kinds.length > 3 ? `${head}·…` : head;
@@ -176,7 +218,9 @@ function makeNeutralGroup(groups: FlowItem[]) {
   };
 }
 
-function compressItemsFlow(items: Req[]) {
+// items 는 인터리브 흐름 항목(FlowItem: {kind, request}) — Req[] 오타정정(호출처 turn.items:FlowItem[]).
+// it.request 가 Req|undefined 로 정확히 좁혀져 캐스트 없이 SSoT 정합.
+function compressItemsFlow(items: FlowItem[]) {
   const flow: FlowItem[] = [];
   let toolBuf: Req[] = [];
   const flushTools = () => {
@@ -186,7 +230,7 @@ function compressItemsFlow(items: Req[]) {
     }
   };
   for (const it of items) {
-    if (it.kind === 'tool') toolBuf.push(it.request);
+    if (it.kind === 'tool' && it.request) toolBuf.push(it.request);
     else if (it.kind === 'response') {
       flushTools();
       flow.push({ kind: 'response', request: it.request });
@@ -197,8 +241,9 @@ function compressItemsFlow(items: Req[]) {
 }
 
 function compressLegacyFlow(toolCalls: Req[], responses: Req[]) {
-  const tools = toolCalls.slice().sort((a: Req, b: Req) => (a.timestamp || 0) - (b.timestamp || 0));
-  const resps = responses.slice().sort((a: Req, b: Req) => (a.timestamp || 0) - (b.timestamp || 0));
+  // timestamp 는 string|number — 원본 동작(`|| 0` 후 산술, ISO는 NaN→no-op) 보존 위해 number 캐스트.
+  const tools = toolCalls.slice().sort((a: Req, b: Req) => ((a.timestamp || 0) as number) - ((b.timestamp || 0) as number));
+  const resps = responses.slice().sort((a: Req, b: Req) => ((a.timestamp || 0) as number) - ((b.timestamp || 0) as number));
   if (resps.length === 0) {
     return compressContinuousTools(tools).map(g => ({ kind: 'tool', ...g }));
   }
@@ -251,7 +296,7 @@ function parseTaskId(r: Req) {
  * @param {number} respSeq 응답일 때 턴 내 ◆ 등장 순번 (1-based)
  * @returns {object|null} chip 메타
  */
-export function chipFromRequest(r: Req, respSeq?: number): Record<string, any> | null {
+export function chipFromRequest(r: Req, respSeq?: number): Chip | null {
   if (!r) return null;
   if (r.type === 'response') return { type: 'response', respSeq };
   if (r.type !== 'tool_call') return null;
@@ -259,7 +304,7 @@ export function chipFromRequest(r: Req, respSeq?: number): Record<string, any> |
 
   if (r.tool_name === 'TaskUpdate') {
     const id = parseTaskId(r);
-    const status = r?.payload?.tool_input?.status || '';
+    const status = String(r?.payload?.tool_input?.status ?? '');
     return id ? { type: 'task-event', id, status } : null;
   }
   const sub = subTypeOf(r);
@@ -287,7 +332,7 @@ export function chipFromRequest(r: Req, respSeq?: number): Record<string, any> |
  *
  * @see ADR-turn-view-revamp-003
  */
-export function chipKey(chip: Record<string, any> | null) {
+export function chipKey(chip: Chip | null) {
   if (!chip) return '';
   switch (chip.type) {
     case 'response':   return chip.respSeq ? `resp:${chip.respSeq}` : '';
@@ -347,13 +392,13 @@ function injectChipKey(rowHtml: string, key: string) {
  *
  * @see ADR-turn-view-revamp-004: 하단 표는 기존 요청 탭 모듈(`makeRequestRow`) 100% 재사용.
  */
-export function makeTurnLogRows(turn: any, opts: { anomalyFlags?: Map<string, Set<string>>; showSession?: boolean } = {}) {
+export function makeTurnLogRows(turn: Turn | null | undefined, opts: { anomalyFlags?: Map<string, Set<string>>; showSession?: boolean } = {}) {
   if (!turn) return '';
   const anomalyMap = opts.anomalyFlags || null;
   const showSession = !!opts.showSession; // 기본 false — 활성 턴 좁힘 정책(Option α).
   const rowOpts = (r: Req) => ({
     showSession,
-    anomalyFlags: anomalyMap?.get(r.id) || null,
+    anomalyFlags: (r.id != null ? anomalyMap?.get(r.id) : null) || null,
   });
 
   const parts: string[] = [];
@@ -361,7 +406,7 @@ export function makeTurnLogRows(turn: any, opts: { anomalyFlags?: Map<string, Se
   // 1) prompt 행 — chip-key 없음 (prompt에는 spine 칩이 존재하지 않음).
   if (turn.prompt) {
     const promptReq = { ...turn.prompt, type: 'prompt' };
-    parts.push(makeRequestRow(promptReq, rowOpts(promptReq)));
+    parts.push(makeRequestRow(asView(promptReq), rowOpts(promptReq)));
   }
 
   // 2) 본문 행 — 서버 인터리빙 items[] 우선, 미제공 시 시간순 머지로 폴백.
@@ -375,11 +420,11 @@ export function makeTurnLogRows(turn: any, opts: { anomalyFlags?: Map<string, Se
       respSeq += 1;
       const req = { ...it.request, type: 'response' };
       const key = chipKeyForRequest(req, respSeq);
-      parts.push(injectChipKey(makeRequestRow(req, rowOpts(req)), key));
+      parts.push(injectChipKey(makeRequestRow(asView(req), rowOpts(req)), key));
     } else if (it.kind === 'tool') {
       const req = { ...it.request, type: 'tool_call' };
       const key = chipKeyForRequest(req, respSeq);
-      parts.push(injectChipKey(makeRequestRow(req, rowOpts(req)), key));
+      parts.push(injectChipKey(makeRequestRow(asView(req), rowOpts(req)), key));
     }
   }
 
@@ -393,8 +438,9 @@ export function makeTurnLogRows(turn: any, opts: { anomalyFlags?: Map<string, Se
  * 새 데이터 경로는 서버 SSoT의 items[]를 우선 사용 — 본 함수는 미세한 누락만 보정.
  */
 function legacyInterleave(toolCalls: Req[], responses: Req[]) {
-  const tools = toolCalls.slice().sort((a: Req, b: Req) => (a.timestamp || 0) - (b.timestamp || 0));
-  const resps = responses.slice().sort((a: Req, b: Req) => (a.timestamp || 0) - (b.timestamp || 0));
+  // timestamp 는 string|number — 원본 동작(`|| 0` 후 산술, ISO는 NaN→no-op) 보존 위해 number 캐스트.
+  const tools = toolCalls.slice().sort((a: Req, b: Req) => ((a.timestamp || 0) as number) - ((b.timestamp || 0) as number));
+  const resps = responses.slice().sort((a: Req, b: Req) => ((a.timestamp || 0) as number) - ((b.timestamp || 0) as number));
   const out: FlowItem[] = [];
   let i = 0;
   for (const r of resps) {

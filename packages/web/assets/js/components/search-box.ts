@@ -3,6 +3,14 @@
 import { svgSearch } from '../render/icons.js';
 import { renderCloseBtn } from '../design-system/primitives/close-button.js';
 
+/** createSearchBox 반환 핸들의 공개 표면 — 소비처(getValue/clear/focus/element)가 쓰는 메서드. */
+export interface SearchBoxHandle {
+  getValue(): string;
+  clear(): void;
+  focus(): void;
+  element(): HTMLInputElement;
+}
+
 /**
  * @param {string} containerId
  * @param {{ placeholder?: string, onSearch: (query: string) => void }} opts

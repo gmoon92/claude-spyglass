@@ -117,7 +117,7 @@ export function modelChipLabel(model: string | null | undefined, cls: string): s
  *   기존에는 tokens_source==='unavailable' 시 칩 옆 dashed "추정" 라벨을 부착했으나,
  *   명칭 오용 + transient 상태라 제거. trustOf 분기에서도 'estimated'가 사라졌다.
  */
-export function modelChipHtml(r: any, opts: { mini?: boolean } = {}) {
+export function modelChipHtml(r: { model?: string | null } | null | undefined, opts: { mini?: boolean } = {}) {
   const cls     = modelClassOf(r?.model);
   const label   = modelChipLabel(r?.model, cls);
   const title   = r?.model || window.I18n.t('badges.renderers.model.no-info');

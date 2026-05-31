@@ -8,6 +8,7 @@
 
 import { fetchRequests } from '../../api.js';
 import { createSearchBox } from '../../components/search-box.js';
+import type { SearchBoxHandle } from '../../components/search-box.js';
 import { FEED_UPDATED } from '../../events.js';
 import { observeTimelineResize } from './chart-policy.js';
 import {
@@ -25,7 +26,7 @@ import { wireKeyboard } from './keyboard.js';
 export function initDefaultView({ onSelectSession, onCloseDetail, onGoHome }: { onSelectSession: (id: string) => void, onCloseDetail: () => void, onGoHome: () => void }) {
   // 클로저 상태 — 검색 박스 핸들. 필터 바 onChange 가 박스 생성 전에 호출될
   // 수 있으므로 getter 로 감싸서 다른 모듈에 넘긴다.
-  let feedSearchBox: any = null;
+  let feedSearchBox: SearchBoxHandle | null = null;
   const getFeedSearchBox  = () => feedSearchBox;
   const getSearchValue    = () => feedSearchBox?.getValue() ?? '';
 

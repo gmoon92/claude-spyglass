@@ -3,7 +3,7 @@
  *
  * 원본: settings-view.js:1546-1568. SSoT 1:1 이식(재구현 금지) 검증 — 경계값 포함.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { formatBytes, formatUptime, formatRelTime } from '../settings-format';
 
 describe('formatBytes (settings-view.js:1546)', () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { makeRequestRow, makeTargetCell, makeSessionRow } from '../renderers.js';
 
 // ── 환경 mock ─────────────────────────────────────────────────────────────────

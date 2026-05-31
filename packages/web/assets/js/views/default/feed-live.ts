@@ -11,6 +11,7 @@ import {
 } from '../../infra.js';
 import { FEED_UPDATED } from '../../events.js';
 import { getDateRange } from '../../api.js';
+import type { RequestView } from '../../view-types.js';
 
 // 피드 테이블에 유지할 최대 행 수. 초과 시 가장 오래된 행부터 제거.
 const FEED_ROW_CAP = 200;
@@ -29,7 +30,7 @@ const ROW_FLASH_DURATION_MS = 600;
  * 셀 갱신 범위: `data-cell="time|action|target|model|msg|in|out|cache|duration|sess"`
  * 모든 셀을 다시 만들어 교체. 셀 빌더는 SSoT(`makeRequestRow` 내부와 동일).
  */
-export function prependRequest(r: any) {
+export function prependRequest(r: RequestView) {
   // date-range-filter ADR-009: SSE 클라이언트 필터링 단일 진입점.
   // 활성 range 밖 레코드는 prepend/inplace 모두 skip — stale 데이터 노출 방지.
   // dr가 {} (=전체)일 때는 통과. inplace 업데이트도 차단해야 하므로 함수 맨 앞에서 가드.
@@ -99,7 +100,7 @@ export function prependRequest(r: any) {
  *
  * 옵션 `showSession`은 컨테이너에 따라 유추 — 기존 행에 .cell-sess가 있으면 true.
  */
-function replaceRowCells(existing: Element, r: any) {
+function replaceRowCells(existing: Element, r: RequestView) {
   const showSession = !!existing.querySelector('.cell-sess');
   const tmp = document.createElement('tbody');
   tmp.innerHTML = makeRequestRow(r, { showSession });

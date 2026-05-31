@@ -5,7 +5,7 @@
  * 전략: filter-bar/icons-equivalence 선례 계승 — renderToStaticMarkup 으로 셀렉터/속성/escape 검증.
  *   이 leaf 들은 P2-07(Graph/SQLite/Proxy)이 재사용하므로 계약을 여기서 못박는다.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { SettingsRow } from '../SettingsRow';
 import { HealthBadge } from '../HealthBadge';

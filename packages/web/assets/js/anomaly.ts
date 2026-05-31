@@ -17,6 +17,8 @@
 //
 // @see .claude/docs/plans/anomaly-bloated-sys/adr.md ADR-003
 
+import type { RowAnomalyReader } from './view-types.js';
+
 /**
  * 행 객체에서 서버가 채운 anomaly 플래그 Set 을 추출 (표시용).
  *
@@ -33,21 +35,22 @@
  * @param {object} r — NormalizedRequest 형태의 응답 행
  * @returns {Set<'bloated-sys-warn'|'bloated-sys-critical'|'agent-spike'|'spike'|'loop'|'slow'>}
  */
-export function getAnomalyFlagsForRow(r: any) {
+export function getAnomalyFlagsForRow(r: unknown) {
   const flags = new Set<string>();
-  if (!r) return flags;
+  if (!r || typeof r !== 'object') return flags;
+  const row = r as RowAnomalyReader;
 
-  const bs = r.bloated_sys;
+  const bs = row.bloated_sys;
   if (bs && bs.stage === 'warn') flags.add('bloated-sys-warn');
   if (bs && bs.stage === 'critical') flags.add('bloated-sys-critical');
 
-  const as = r.agent_spike;
+  const as = row.agent_spike;
   if (as && as.stage === 'spike') flags.add('agent-spike');
 
   // v2.0.1 회귀 복원 — spike/loop/slow 행 필드 부착 매핑.
-  if (r.spike && r.spike.stage === 'spike') flags.add('spike');
-  if (r.loop  && r.loop.stage  === 'loop')  flags.add('loop');
-  if (r.slow  && r.slow.stage  === 'slow')  flags.add('slow');
+  if (row.spike && row.spike.stage === 'spike') flags.add('spike');
+  if (row.loop  && row.loop.stage  === 'loop')  flags.add('loop');
+  if (row.slow  && row.slow.stage  === 'slow')  flags.add('slow');
 
   return flags;
 }
@@ -65,7 +68,7 @@ export function getAnomalyFlagsForRow(r: any) {
  * @param {Element} rowEl
  * @param {Set<string>} flags
  */
-export function applyAnomalyBadgesToRow(rowEl: any, flags: any) {
+export function applyAnomalyBadgesToRow(rowEl: Element | null | undefined, flags: Set<string> | null | undefined) {
   if (!rowEl || !flags || flags.size === 0) return;
   const targetCell = rowEl.querySelector('.cell-target');
   const tokenCells = rowEl.querySelectorAll('.cell-token.num');

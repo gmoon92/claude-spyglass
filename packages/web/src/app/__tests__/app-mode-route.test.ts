@@ -7,7 +7,7 @@
  *
  * 순수 함수 — 라우터/effect 무의존. SSR/노드 환경에서 그대로 실행.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import {
   ROUTE_PATHS,
   APP_MODE_PATHS,

@@ -35,6 +35,7 @@ import { skLlmInputCards } from './render/skeleton.js';
 import { getSelectedSession } from './state.js';
 import { svgSearch, svgChevron, svgInfo } from './render/icons.js';
 import { renderCloseBtn } from './design-system/primitives/close-button.js';
+import { errMessage } from './util/errors.js';
 
 const CONTAINER_ID = 'llmInputBody';
 
@@ -187,8 +188,8 @@ export async function showLatestLlmInput() {
       return;
     }
     await renderLlmInput(list[0].id);
-  } catch (err: any) {
-    container.innerHTML = `<div class="state-empty"><span class="state-empty-title">${t('ui.llm-input.load-failed', { message: escHtml(String(err?.message ?? err)) })}</span></div>`;
+  } catch (err: unknown) {
+    container.innerHTML = `<div class="state-empty"><span class="state-empty-title">${t('ui.llm-input.load-failed', { message: escHtml(errMessage(err)) })}</span></div>`;
   }
 }
 
@@ -257,8 +258,8 @@ export async function renderLlmInput(requestId: string) {
     });
 
     bindAccordionEvents(container);
-  } catch (err: any) {
-    container.innerHTML = `<div class="state-empty"><span class="state-empty-title">${t('ui.llm-input.load-failed', { message: escHtml(String(err?.message ?? err)) })}</span></div>`;
+  } catch (err: unknown) {
+    container.innerHTML = `<div class="state-empty"><span class="state-empty-title">${t('ui.llm-input.load-failed', { message: escHtml(errMessage(err)) })}</span></div>`;
   }
 }
 
@@ -652,10 +653,10 @@ async function openRefsPopover(chipEl: HTMLElement, hash: string) {
     if (_refsPopoverEl !== popover) return; // 다른 액션으로 이미 닫힘
     renderRefsPopoverBody(popover, refs, hash);
     positionRefsPopover(popover, chipEl); // 본문 크기 바뀌면 재정렬
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (_refsPopoverEl !== popover) return;
     const body = popover.querySelector('.llm-input-refs-popover-body');
-    if (body) body.innerHTML = `<p class="llm-input-dim" style="padding:var(--space-3);color:var(--error)">${t('ui.llm-input.refs-popover-load-failed', { message: escHtml(String(err?.message ?? err)) })}</p>`;
+    if (body) body.innerHTML = `<p class="llm-input-dim" style="padding:var(--space-3);color:var(--error)">${t('ui.llm-input.refs-popover-load-failed', { message: escHtml(errMessage(err)) })}</p>`;
   }
 }
 

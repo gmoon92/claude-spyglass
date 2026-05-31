@@ -8,7 +8,7 @@
  *   - now 주입으로 TZ 의존 제거 (computeRange 순수 함수)
  */
 
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import {
   computeRange,
   setActiveRange, getActiveRange, getDateRange,

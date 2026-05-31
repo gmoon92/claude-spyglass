@@ -11,7 +11,7 @@
  *
  * 순수 — EventSource/DOM 무의존(콜백을 직접 호출).
  */
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { buildAppSSECallbacks } from '../app-sse';
 import { useSSEStore, initialSSEState } from '../../stores/sse-store';
 import type { NewRequestEvent } from '../../schema/sse-schema';

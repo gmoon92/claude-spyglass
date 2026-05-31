@@ -43,8 +43,8 @@ export function initToolColors() {
   TOOL_COLORS.default   = def;
 }
 
-export function getToolColor(toolName: any) {
+export function getToolColor(toolName: string | null | undefined) {
   if (!toolName) return TOOL_COLORS.default;
-  const base = toolName.split('__').pop();
+  const base = toolName.split('__').pop() ?? '';
   return (TOOL_COLORS as Record<string, string>)[base] || TOOL_COLORS.default;
 }

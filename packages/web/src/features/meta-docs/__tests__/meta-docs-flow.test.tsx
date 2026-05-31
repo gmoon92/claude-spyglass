@@ -8,7 +8,7 @@
  *
  * 회귀 게이트: flow-region id(셀렉터 계약), activeRow 단방향(catalog→flow), centerKind 매핑.
  */
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { MetaDocsFlow, activeRowToFlowArgs } from '../MetaDocsFlow';

@@ -4,7 +4,7 @@
  * 정렬 SSoT(nextSort/applySort)·행 산술(computeMatrixView)·임계(sizeClassFor) 결정론 고정 +
  * ToolStatsMatrix/SystemPromptLibrary 마크업 계약. window.I18n 스텁(getCollator 의존).
  */
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   applySort as tsApplySort,

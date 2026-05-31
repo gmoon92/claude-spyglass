@@ -1,4 +1,10 @@
-import { describe, it, expect } from 'bun:test';
+// @vitest-environment node
+//
+// P5-07: 이 파일의 두 케이스는 모두 "비-DOM(document 미존재) 환경"의 import/평가 안전성을 검증한다
+//   (T08 버그 A). jsdom 기본 환경은 globalThis.document 를 항상 주입하므로 "document 부재" 계약을
+//   그대로 재현할 수 없다 → 이 파일만 node 환경으로 고정해 bun test 와 동일한 무-DOM 의미를 보존한다.
+//   (케이스 2 는 자체 document 스텁을 주입하므로 node 환경에서도 동일하게 동작한다.)
+import { describe, it, expect } from 'vitest';
 // 정적 import 자체가 회귀 가드다(T08 버그 A):
 // left-panel.js의 top-level `document.addEventListener`가 비-DOM(bun test) 환경에서
 // throw하면 이 import가 실패해 파일 전체가 로드되지 않는다. import가 성공한다는 것은

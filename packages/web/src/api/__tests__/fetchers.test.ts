@@ -22,9 +22,10 @@
  * @see packages/web/src/schema/api-schema.ts (P1-07 Zod 재사용)
  * @see packages/web/docs/react-migration/_panel/dependency-safety.md §5 위험 #1
  */
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { dirname, resolve as resolvePath } from 'node:path';
 import {
   fetchDashboard,
   fetchRequests,
@@ -290,8 +291,12 @@ describe('fetchProxyRequests / fetchProxyStats (이미 pure, 이식 동일성)',
 // =============================================================================
 
 describe('데이터 흐름 역전 — render 사이드이펙트/store 역참조 부재', () => {
+  // P5-07: Vitest 는 모듈 변환 시 `new URL(rel, import.meta.url)` 의 상대 경로를 dev-server
+  //   base(http://localhost)로 재작성하므로 fileURLToPath 가 'scheme file' 오류를 던진다.
+  //   테스트 파일 자신의 file:// URL 만 변환(fileURLToPath(import.meta.url))한 뒤 path.resolve 로
+  //   대상 소스를 가리키면 두 러너(bun/Vitest) 모두에서 동일한 절대 경로를 얻는다.
   const RAW = readFileSync(
-    fileURLToPath(new URL('../fetchers.ts', import.meta.url)),
+    resolvePath(dirname(fileURLToPath(import.meta.url)), '../fetchers.ts'),
     'utf8',
   );
   // 주석을 제거한 **실행 코드만** 검사한다. 문서 헤더는 "제거한 9개 사이드이펙트"를

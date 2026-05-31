@@ -5,7 +5,7 @@
  * 순수 함수로 고정한다. DOM 의존 0 — highlight 정확도 + cycle 안전 회귀 게이트.
  * arch §4.2: highlight 의 BFS 는 lib/flow-graph.ts 로 1:1 추출, DOM 토글은 컴포넌트 effect.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import {
   buildAdjacency,
   bfsCollect,

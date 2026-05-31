@@ -22,7 +22,7 @@
  *
  * @module features/browse/Sidebar
  */
-import { cloneElement, useEffect } from 'react';
+import { cloneElement, memo, useEffect } from 'react';
 import type { ReactElement } from 'react';
 import { fmt, fmtToken } from '../../../assets/js/formatters.js';
 import { SessionRow } from '../../components/render/SessionRow';
@@ -238,6 +238,10 @@ export interface ProjectListProps {
  *  - browse 모드 + 빈 목록 → table-empty 행(colspan 3).
  *  - metadocs 모드 → 최상단 가상 global 행 + 프로젝트별 meta 행.
  *  - browse 모드 → token bar 행(maxT 정규화는 원본 :83 동일).
+ *
+ * 직접 호출(white-box) 테스트 계약 유지: 본 함수는 plain 함수로 보존한다(sidebar.test.tsx 가
+ *   `ProjectList({...})` 로 직접 호출해 element tree 를 walk). 메모화는 Sidebar 의 렌더 경로에만
+ *   적용한다(아래 MemoProjectList) — public API/타입/출력 불변, 메모는 호출처 결합으로 격리.
  */
 export function ProjectList({
   projects,
@@ -290,6 +294,18 @@ export function ProjectList({
     </>
   );
 }
+
+/**
+ * 메모화 프로젝트 리스트 — Sidebar 렌더 경로 전용(P5-04 성능).
+ *
+ * BrowseLayout 이 고주기 SSE(new_request 5-20/s)로 `sessions` 만 갱신해 Sidebar 가 re-render 될 때,
+ *   ProjectList 의 입력(projects 는 마운트 1회 fetch 후 불변 ref · selectedProject 원시값 ·
+ *   isMetaMode/metaCounts 리터럴 · labeler useMemo · onSelectProject 미지정)이 불변이면 shallow
+ *   비교로 프로젝트 행 재계산(maxT 정규화 등)을 건너뛴다. SessionList 는 sessions 변경이 곧 데이터
+ *   갱신이므로 의도적으로 메모하지 않는다(정당한 re-render — over-engineering 가드).
+ * 출력은 ProjectList 와 동일(메모는 re-render 회피일 뿐 동작 무변경).
+ */
+const MemoProjectList = memo(ProjectList);
 
 export interface SessionListProps {
   /** 세션 목록(원본 _allSessions) — 호출처 주입(controlled). */
@@ -385,7 +401,7 @@ export function Sidebar({
 
   return (
     <>
-      <ProjectList
+      <MemoProjectList
         projects={projects}
         selectedProject={selectedProject}
         isMetaMode={isMetaMode}

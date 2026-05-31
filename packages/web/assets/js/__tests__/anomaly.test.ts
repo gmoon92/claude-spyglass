@@ -13,7 +13,7 @@
  * @see .claude/docs/plans/anomaly-bloated-sys/adr.md ADR-003
  */
 
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { getAnomalyFlagsForRow } from '../anomaly.js';
 
 describe('getAnomalyFlagsForRow — bloated_sys 매핑 (ADR-001/003)', () => {

@@ -12,7 +12,7 @@
  * 회귀 게이트 귀속(tasks.json P3-01 test_strategy): context-window.test.ts(6 case)는
  *   본 task 명시 회귀 게이트. 본 파일은 신규 데이터 변환 골든마스터(addition).
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import {
   chartModeToDonutMode,
   donutItemCount,

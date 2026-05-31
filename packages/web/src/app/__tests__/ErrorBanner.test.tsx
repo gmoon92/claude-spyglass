@@ -7,7 +7,7 @@
  * 전략(무 DOM 하네스): 마크업/가시성은 renderToStaticMarkup, retry 배선은 onClick 직접 invoke.
  *   신규 계약: visible prop 으로 가시성 선언(원본 el.style.display 명령적 토글 대체).
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 import { ErrorBanner } from '../ErrorBanner';

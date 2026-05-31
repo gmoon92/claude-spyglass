@@ -8,6 +8,7 @@ import { escHtml, fmtToken, shortModelName } from '../formatters.js';
 import { typeBadge, toolIconHtml, toolStatusBadge, agentSpikeBadgeHtml } from './badges.js';
 import { skTableRows } from './skeleton.js';
 import { svgToolDot } from '../design-system/icons/_index.js';
+import type { RowCellReader } from '../view-types.js';
 
 /**
  * 호환 wrapper — skeleton-loading T-03 (ADR-003).
@@ -15,12 +16,12 @@ import { svgToolDot } from '../design-system/icons/_index.js';
  * skTableRows 로 위임한다. 신규 호출은 가능한 skTableRows(colSpecs, count) 의
  * Array<%> 모드를 사용해 컬럼별 폭을 흉내내는 것을 권장.
  */
-export function makeSkeletonRows(cols: any, count = 2) {
+export function makeSkeletonRows(cols: number | Array<string | number>, count = 2) {
   return skTableRows(cols, count);
 }
 
-export function makeActionCell(r: any) {
-  return typeBadge(r.type);
+export function makeActionCell(r: RowCellReader) {
+  return typeBadge(typeof r.type === 'string' ? r.type : '');
 }
 
 /**
@@ -40,7 +41,7 @@ export function makeActionCell(r: any) {
  *
  * 호출자: rows.js :: makeTargetCellWithBadges, cells.js :: makeTargetCell
  */
-export function targetInnerHtml(r: any) {
+export function targetInnerHtml(r: RowCellReader) {
   if (r.type === 'prompt') {
     return { html: `<span class="target-cell-inner target-role-user"><span class="action-name">${svgToolDot({ size: 12 })}user</span></span>`, empty: false };
   }
@@ -71,14 +72,14 @@ export function targetInnerHtml(r: any) {
   return { html: `<span class="target-cell-inner">${nameHtml}${statusBadge}${agentSpike}</span>`, empty: false };
 }
 
-export function makeTargetCell(r: any) {
+export function makeTargetCell(r: RowCellReader) {
   const { html, empty } = targetInnerHtml(r);
   return empty
     ? `<td class="cell-target cell-empty" data-cell="target">${html}</td>`
     : `<td class="cell-target" data-cell="target">${html}</td>`;
 }
 
-export function makeCacheCell(r: any) {
+export function makeCacheCell(r: RowCellReader) {
   if (r.type !== 'prompt' || !r.cache_read_tokens || r.cache_read_tokens <= 0) {
     return `<td class="cell-token num cell-empty" data-cell="cache">—</td>`;
   }

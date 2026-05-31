@@ -4,7 +4,7 @@
  * 원본 meta-docs-flow.js 의 computePositions/contentBBox(flow.js:318,1142) 동치.
  * arch §4.2: lib/flow-layout.ts 순수. column/slot 매핑 결정론 회귀 게이트.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import {
   computePositions,
   contentBBox,

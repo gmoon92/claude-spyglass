@@ -7,7 +7,7 @@
  *   SUB_TYPES/subTypeOf/getAnomalyFlagsForRow 는 동일 SSoT 를 import 하므로 분류·플래그 자체는
  *   원본과 자동 동치.
  */
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { computeDetailFilterResult } from '../filter-result';
 
 beforeAll(() => {

@@ -5,7 +5,7 @@
  * 전략: 데이터 페칭(useSettingsDiag, AbortController)과 분리된 *뷰* 컴포넌트를 data prop 으로
  *   주입해 renderToStaticMarkup 으로 마크업/셀렉터/jump 배선을 검증(effect 미실행 환경 우회).
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 import { DiagPanelView } from '../DiagPanelView';

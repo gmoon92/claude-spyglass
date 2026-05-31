@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, mock, jest, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { connectSSE } from '../sse.js';
 
 // ── MockEventSource ──────────────────────────────────────────────────────────
@@ -37,23 +37,23 @@ class MockEventSource {
 // ── 테스트 ───────────────────────────────────────────────────────────────────
 describe('connectSSE', () => {
   let src: MockEventSource;
-  let onNewRequest: ReturnType<typeof mock>;
-  let onOpen: ReturnType<typeof mock>;
-  let onError: ReturnType<typeof mock>;
+  let onNewRequest: ReturnType<typeof vi.fn>;
+  let onOpen: ReturnType<typeof vi.fn>;
+  let onError: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     MockEventSource._last = null;
-    onNewRequest = mock(() => {});
-    onOpen       = mock(() => {});
-    onError      = mock(() => {});
+    onNewRequest = vi.fn(() => {});
+    onOpen       = vi.fn(() => {});
+    onError      = vi.fn(() => {});
     connectSSE({ onNewRequest, onOpen, onError });
     src = MockEventSource._last!;
   });
 
   afterEach(() => {
-    jest.clearAllTimers();
-    jest.useRealTimers();
+    vi.clearAllTimers();
+    vi.useRealTimers();
   });
 
   it('EventSource를 /events URL로 생성', () => {
@@ -83,7 +83,7 @@ describe('connectSSE', () => {
   it('onerror 후 5초 경과 → 재연결(새 EventSource 생성)', () => {
     src.fireError();
     const prevSrc = src;
-    jest.advanceTimersByTime(5000);
+    vi.advanceTimersByTime(5000);
     const newSrc = MockEventSource._last!;
     expect(newSrc).not.toBe(prevSrc);
     expect(newSrc.url).toBe('/events');
@@ -91,14 +91,14 @@ describe('connectSSE', () => {
 
   it('재연결 후 onOpen 재호출', () => {
     src.fireError();
-    jest.advanceTimersByTime(5000);
+    vi.advanceTimersByTime(5000);
     const newSrc = MockEventSource._last!;
     newSrc.fireOpen();
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
   it('connectSSE 재호출 시 기존 source 닫힘', () => {
-    const newOpen = mock(() => {});
+    const newOpen = vi.fn(() => {});
     connectSSE({ onNewRequest, onOpen: newOpen, onError });
     expect(src.closed).toBe(true);
     expect(MockEventSource._last).not.toBe(src);
@@ -110,7 +110,7 @@ describe('connectSSE', () => {
     connectSSE({ onNewRequest, onOpen, onError });
     const secondSrc = MockEventSource._last!;
     // 타이머를 5s 진행해도 세 번째 인스턴스가 생기지 않아야 함
-    jest.advanceTimersByTime(5000);
+    vi.advanceTimersByTime(5000);
     expect(MockEventSource._last).toBe(secondSrc);
   });
 });

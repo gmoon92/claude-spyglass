@@ -16,6 +16,14 @@ let _appMode          = 'browse';
 // 'docs' | 'tools' 2-way만 유효. 과거 'flow' 값이 sessionStorage에 남아 있으면 'docs'로 폴백.
 let _metaSubTab       = 'docs';        // 'docs' | 'tools' (ADR-004 meta-docs-tool-stats)
 interface PrevState { rightView: string; detailTab: string; sessionId: string | null; }
+/**
+ * FilterBar 핸들 — createFilterBar/createFeedFilterBar 반환 객체의 공개 표면.
+ * 소비처(keyboard.ts: buttons(), detail-view.ts: setActive())가 쓰는 메서드만 명시.
+ */
+export interface FilterBarHandle {
+  setActive(filter: string): void;
+  buttons(): NodeListOf<HTMLElement>;
+}
 let _prevState: PrevState | null        = null;          // { rightView, detailTab, sessionId } | null
 let _rightView        = 'default';
 // ADR-turn-view-revamp-004: '턴 뷰' + '요청' 두 탭을 단일 '로그' 탭으로 통합.
@@ -24,8 +32,8 @@ let _rightView        = 'default';
 let _detailTab        = 'log';
 let _selectedProject: string | null  = null;
 let _selectedSession: string | null  = null;
-let _feedFilterBar: any    = null;
-let _detailFilterBar: any  = null;
+let _feedFilterBar: FilterBarHandle | null    = null;
+let _detailFilterBar: FilterBarHandle | null  = null;
 
 // sessionStorage 복원 — 모듈 로드 시 1회. 실패 시(접근 거부 등) 기본값 유지.
 try {
@@ -77,7 +85,7 @@ export function getSelectedSession()  { return _selectedSession; }
 export function setSelectedSession(s: string | null) { _selectedSession = s; }
 
 export function getFeedFilterBar()    { return _feedFilterBar; }
-export function setFeedFilterBar(b: any)   { _feedFilterBar = b; }
+export function setFeedFilterBar(b: FilterBarHandle)   { _feedFilterBar = b; }
 
 export function getDetailFilterBar()  { return _detailFilterBar; }
-export function setDetailFilterBar(b: any) { _detailFilterBar = b; }
+export function setDetailFilterBar(b: FilterBarHandle) { _detailFilterBar = b; }

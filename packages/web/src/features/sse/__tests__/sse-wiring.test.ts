@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { createSSEStoreCallbacks } from '../sse-wiring';
 import { useSSEStore, initialSSEState, FEED_CAP } from '../../../stores/sse-store';
 import type { NewRequestEvent, NewProxyRequestEvent, SessionUpdateEvent } from '../../../schema/sse-schema';

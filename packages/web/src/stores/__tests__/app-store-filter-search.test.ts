@@ -9,7 +9,7 @@
  *
  * 회귀 가드: 신규 계약(P2-08). app-store.test.ts 14 케이스 무수정·병존. baseline(261) 비회귀.
  */
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { useAppStore } from '../app-store';
 
 beforeEach(() => {

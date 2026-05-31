@@ -12,7 +12,7 @@
  *    위치가 다를 수 있다. HTML 속성 순서는 spec 상 무의미하므로 정렬로 흡수(동치의 충분조건).
  *  - 거짓통과 가드로 "구조/속성/값 차이는 여전히 잡힘"을 별도 증명.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { TurnRows } from '../TurnRows';

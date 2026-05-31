@@ -17,10 +17,12 @@ import { setActiveRange } from '../api.js';
 const STORAGE_KEY = 'cs.dateRange';
 const SCHEMA_VERSION = 1;
 
-/**
- * @param {{type:'preset', value:string} | {type:'custom', from:number, to:number}} activeRange
- */
-export function saveDateRange(activeRange: any) {
+/** 활성 range — preset(영속) 또는 custom(휘발). */
+type ActiveRange =
+  | { type: 'preset'; value: string }
+  | { type: 'custom'; from: number; to: number };
+
+export function saveDateRange(activeRange: ActiveRange | null | undefined) {
   if (typeof localStorage === 'undefined') return;
   if (!activeRange || activeRange.type !== 'preset') return; // custom 휘발
   try {

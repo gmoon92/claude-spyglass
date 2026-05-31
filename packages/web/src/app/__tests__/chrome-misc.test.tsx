@@ -8,7 +8,7 @@
  *
  * 전략(무 DOM 하네스): 마크업/가시성 renderToStaticMarkup, 콜백 배선 onClick 직접 invoke.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 import { Footer } from '../Footer';

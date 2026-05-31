@@ -17,10 +17,10 @@ import {
  * date-range-filter ADR-007: range 인자가 문자열(legacy) / ActiveRange 객체 모두 흡수.
  * 호출자 인터페이스 불변 — main.js의 setActiveRange 이벤트 핸들러도 label key 전달 가능.
  */
-export function applyRangeLabels(rangeArg = getActiveRange()) {
+export function applyRangeLabels(rangeArg: string | { type?: string; value?: string } = getActiveRange()) {
   const key = typeof rangeArg === 'string'
     ? rangeArg
-    : ((rangeArg && (rangeArg as any).type === 'custom') ? 'custom' : ((rangeArg as any)?.value ?? 'all'));
+    : ((rangeArg && rangeArg.type === 'custom') ? 'custom' : (rangeArg?.value ?? 'all'));
   const rangeText = (RANGE_LABELS as Record<string, string>)[key] || RANGE_LABELS.all;
   const groups = document.querySelectorAll('#timelineMeta .timeline-meta-group');
   groups.forEach((group, i) => {

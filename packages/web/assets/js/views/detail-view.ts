@@ -15,6 +15,7 @@ import { setChartMode, renderRightPanel } from './default-view.js';
 import { skTurnCardList } from '../render/skeleton.js';
 import { bloatedSysBadgeFullHtml, contextSaturationBadgeFullHtml } from '../render/badges.js';
 import { setBloatedSysFor } from '../state/anomaly-cache.js';
+import { isAbortError } from '../util/errors.js';
 
 let _abortController: AbortController | null = null;
 
@@ -55,7 +56,7 @@ export async function loadSession(id: string) {
   if (llmViewEl)    llmViewEl.style.display    = 'none';
   if (sysLibViewEl) sysLibViewEl.style.display = 'none';
 
-  const session = getAllSessions().find((s: any) => s.id === id);
+  const session = getAllSessions().find((s) => s.id === id);
   const detailIdEl = asEl(document.getElementById('detailSessionId'));
   detailIdEl.textContent = id.slice(0, 8) + '…';
   detailIdEl.title = id;
@@ -93,8 +94,8 @@ export async function loadSession(id: string) {
       document.dispatchEvent(new CustomEvent('session-anomalies-loaded', {
         detail: { sessionId: id, bloatedSys: bs, contextSaturation: ctxSat, turnCount },
       }));
-    } catch (e: any) {
-      if (e?.name === 'AbortError') return;
+    } catch (e: unknown) {
+      if (isAbortError(e)) return;
     }
   })();
 
@@ -103,8 +104,8 @@ export async function loadSession(id: string) {
 
   try {
     await loadSessionDetail(id, { signal });
-  } catch (e: any) {
-    if (e.name === 'AbortError') return;
+  } catch (e: unknown) {
+    if (isAbortError(e)) return;
     applyDetailFilter();
   } finally {
     if (!signal.aborted) {
@@ -138,7 +139,7 @@ export function abortCurrentSession() {
  * @param {{ stage, context_tokens, window_max, pct, threshold_warn, threshold_critical } | null} ctxSat
  * @param {number | null} turnCount
  */
-export function applyContextSaturationHeader(ctxSat: any, turnCount: number | null) {
+export function applyContextSaturationHeader(ctxSat: unknown, turnCount: number | null) {
   const host = document.getElementById('detailBadges');
   if (!host) return;
   // 기존 잔재 제거 — 세션 전환 시 이전 값 박힌 채로 남지 않도록.
@@ -163,7 +164,7 @@ export function applyContextSaturationHeader(ctxSat: any, turnCount: number | nu
   }
 }
 
-export function applyBloatedSysHeader(bloatedSys: any) {
+export function applyBloatedSysHeader(bloatedSys: unknown) {
   const host = document.getElementById('detailBadges');
   if (!host) return;
   // 기존 bloated-sys 뱃지 제거 (세션 전환 시)

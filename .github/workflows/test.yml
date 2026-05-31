@@ -14,7 +14,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [storage, server, web]
+        # P5-07: web 은 러너를 Vitest 로 전환(아래 web-unit job). storage/server 는 bun test 유지.
+        package: [storage, server]
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -28,6 +29,22 @@ jobs:
       - run: bun test packages/${{ matrix.package }} --bail
         env:
           TMPDIR: /tmp/spyglass-ci-${{ matrix.package }}-${{ github.run_id }}
+
+  web-unit:
+    name: unit (web — Vitest)
+    runs-on: ubuntu-latest
+    # P5-07: Vite 생태계 통일 — web 단위 테스트 러너를 bun test → Vitest 로 전환(단계적 전환의 마지막).
+    #   package.json "test": "vitest run" 을 bun 으로 구동. jsdom 환경·TZ=UTC 는 vitest.config.ts/setup 에서 고정.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: '1.2.x' }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - run: bun run --cwd packages/web test
 
   web-typecheck:
     name: web typecheck (checkJs, blocking)

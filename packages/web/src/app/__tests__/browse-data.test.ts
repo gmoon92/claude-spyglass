@@ -11,7 +11,7 @@
  *   2) donut type: dashboard.types 를 count desc 정렬(api.js:277 1:1) DonutDatum[] 로.
  *   3) null/누락 dashboard → 빈 결과(컨트롤드 기본값과 동치).
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { deriveBrowseData } from '../browse-data';
 import type { DashboardData } from '../../schema/api-schema';
 

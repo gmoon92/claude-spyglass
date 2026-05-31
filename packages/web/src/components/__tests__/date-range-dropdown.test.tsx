@@ -11,7 +11,7 @@
  *
  * date-range 회귀 0: 원본 .js 무수정·병존. api.js setActiveRange/getActiveRange 계약 불변.
  */
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 import { DateRangeDropdown, DATE_RANGE_PRESETS } from '../DateRangeDropdown';

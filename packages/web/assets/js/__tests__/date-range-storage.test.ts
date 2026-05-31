@@ -7,7 +7,7 @@
  *   - parse 실패 / 미지원 버전 / type=custom 저장값 → null 반환 (default 폴백)
  */
 
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { saveDateRange, loadDateRange } from '../util/date-range-storage.js';
 
 // in-memory localStorage mock

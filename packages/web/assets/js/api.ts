@@ -70,6 +70,7 @@ import { getAnomalyFlagsForRow } from './anomaly.js';
 import { renderCachePanel } from './cache-panel.js';
 import { fetchModelUsage } from './metrics-api.js';
 import { FEED_UPDATED } from './events.js';
+import { errMessage } from './util/errors.js';
 
 export const API = '';
 
@@ -273,7 +274,12 @@ export async function fetchDashboard() {
     }
 
     renderProjects(d.projects || []);
-    setTypeData((d.types || []).sort((a: any, b: any) => b.count - a.count));
+    // any 제거: d 가 res.json()(any) 유래라 콜백 파라미터를 명시 타입으로 좁힌다(/api/dashboard types 행 shape).
+    setTypeData(
+      (d.types || []).sort(
+        (a: { count: number }, b: { count: number }) => b.count - a.count,
+      ),
+    );
 
     // v21 fix: SSE 도착 시 도넛 갱신 보장 — model 분포는 별도 metrics 엔드포인트라
     //   default-view.setChartMode가 페이지 로드 시 1회만 fetch했던 한계로 SSE 도착 후
@@ -293,8 +299,8 @@ export async function fetchDashboard() {
     // 옵저빌리티 패널은 dashboard 갱신 트리거에 맞춰 함께 갱신
     // (left-panel-observability-revamp ADR-003 — 별도 Promise.all 병렬)
     fetchObservability();
-  } catch (err: any) {
-    showError(window.I18n.t('common.api-error.dashboard-load-failed', { message: err.message }));
+  } catch (err: unknown) {
+    showError(window.I18n.t('common.api-error.dashboard-load-failed', { message: errMessage(err) }));
   }
 }
 
@@ -364,7 +370,7 @@ export async function fetchSessionsByProject(projectName: string) {
   try {
     const res  = await fetch(buildQuery(`${API}/api/projects/${encodeURIComponent(projectName)}/sessions`, { limit: 200 }));
     const json = await res.json();
-    const others = getAllSessions().filter((s: any) => s.project_name !== projectName);
+    const others = getAllSessions().filter((s) => s.project_name !== projectName);
     setAllSessions([...others, ...(json.data || [])]);
     renderBrowserSessions();
   } catch { /* silent */ }

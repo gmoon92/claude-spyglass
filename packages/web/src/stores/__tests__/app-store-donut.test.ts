@@ -5,7 +5,7 @@
  *   chart-policy.js setChartMode 매핑(default→model, detail→cache)을 스토어 액션으로 검증.
  *   기존 app-store.test.ts(14 case)는 무수정 — 본 파일은 신규 슬라이스 addition.
  */
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { useAppStore } from '../app-store';
 
 beforeEach(() => {

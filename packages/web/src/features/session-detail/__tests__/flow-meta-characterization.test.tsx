@@ -10,8 +10,16 @@
  *  - 칩 6분기 자체의 렌더 동치는 turn-spine-equivalence.test.tsx 가 exported oracle 로 보증.
  */
 import './_dom-stub';
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve as resolvePath } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
+
+// P5-07: Bun.file(...).text() (bun 전용) → Node fs 포팅. Vitest 는 `new URL(rel, import.meta.url)` 의
+//   상대경로를 http base 로 재작성하므로, 테스트 파일 file:// URL 만 변환 후 path.resolve 로 대상 지정.
+const readSource = (rel: string): string =>
+  readFileSync(resolvePath(dirname(fileURLToPath(import.meta.url)), rel), 'utf8');
 import { FlowHead } from '../FlowHead';
 import { PrologueCard } from '../PrologueCard';
 import { SystemReminderChip } from '../SystemReminderChip';
@@ -148,7 +156,7 @@ describe('SessionBadges — updateSessionBadges(turn-views.js:839) + 순환 차�
   });
 
   it('detail-view 를 import 하지 않는다(순환 차단 — 소스 정적 확인)', async () => {
-    const src = await Bun.file(new URL('../SessionBadges.tsx', import.meta.url)).text();
+    const src = readSource('../SessionBadges.tsx');
     expect(src).not.toMatch(/from ['"].*detail-view/);
     expect(src).not.toMatch(/import.*applyBloatedSysHeader/);
   });

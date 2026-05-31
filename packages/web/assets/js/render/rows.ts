@@ -12,6 +12,10 @@ import { makeActionCell, makeTargetCell, makeCacheCell } from './cells.js';
 import { contextPreview, extractFirstPrompt, extractPromptText, extractAssistantText } from './extract.js';
 import { RECENT_REQ_COLS } from './expand.js';
 import { svgStatusActive, svgStatusStale, svgStatusEnded } from '../design-system/icons/_index.js';
+import type { RequestView, SessionView } from '../view-types.js';
+
+/** anomaly 플래그 키(spike/loop/slow 등) Set — getAnomalyFlagsForRow 반환과 동형. */
+type AnomalyFlagSet = Set<string>;
 
 /**
  * 검색 haystack SSoT — 행에 박을 `data-search-haystack` 속성용 문자열을 만든다.
@@ -30,7 +34,7 @@ import { svgStatusActive, svgStatusStale, svgStatusEnded } from '../design-syste
  * 외부에서 별도 검색용 인덱스를 두지 않는 이유: 행 자체가 SSoT이므로 SSE in-place 업데이트나
  * append 같은 비동기 렌더에도 row dataset이 자연스럽게 따라간다.
  */
-function buildSearchHaystack(r: any) {
+function buildSearchHaystack(r: RequestView) {
   const parts = [];
   if (r.tool_name)   parts.push(r.tool_name);
   if (r.tool_detail) parts.push(r.tool_detail);
@@ -49,7 +53,10 @@ function buildSearchHaystack(r: any) {
  * 셀 빌더(`makeActionCell`/`makeTargetCell`/`makeModelCell`/`makeCacheCell`)는 SSoT —
  * turn 변형(`makeTurnRow`)도 동일 빌더를 호출하여 분기 일치 보장.
  */
-export function makeRequestRow(r: any, opts: { fmtTime?: any; anomalyFlags?: any; showSession?: boolean } = {}) {
+export function makeRequestRow(
+  r: RequestView,
+  opts: { fmtTime?: (ts: number) => string; anomalyFlags?: AnomalyFlagSet | null; showSession?: boolean } = {},
+) {
   const fmtTs  = opts.fmtTime || fmtTimestamp;
   const flags  = opts.anomalyFlags || null;
   const sessTd = opts.showSession
@@ -97,14 +104,14 @@ export function makeRequestRow(r: any, opts: { fmtTime?: any; anomalyFlags?: any
   </tr>`;
 }
 
-function makeTargetCellWithBadges(r: any, extraBadges: any) {
+function makeTargetCellWithBadges(r: RequestView, extraBadges: string) {
   if (!extraBadges) return makeTargetCell(r);
   const base = makeTargetCell(r);
   // </td> 직전에 배지 삽입
   return base.replace(/<\/td>$/, `${extraBadges}</td>`);
 }
 
-export function makeSessionRow(s: any, isSelected: boolean) {
+export function makeSessionRow(s: SessionView, isSelected: boolean) {
   // 사이드바 활성도 마커 — 서버가 결정한 live_state 단일 분기.
   //   ● live   : 라이브 세션 (storage._shared.buildLiveStateColumn에서 산출)
   //   ◐ stale  : SessionEnd 누락 의심 — reactivateSession 흐름에서 새 hook 도달 시 자동 ●로 복귀
@@ -143,15 +150,23 @@ export function makeSessionRow(s: any, isSelected: boolean) {
   </tr>`;
 }
 
-export function renderRequests(container: HTMLElement, list: any[], anomalyMap = new Map()) {
+export function renderRequests(
+  container: HTMLElement,
+  list: RequestView[],
+  anomalyMap: Map<string, AnomalyFlagSet> = new Map(),
+) {
   if (!list.length) {
     container.innerHTML = `<tr><td colspan="${RECENT_REQ_COLS}" class="table-empty">${window.I18n.t('session.rows.no-data')}</td></tr>`;
     return;
   }
-  container.innerHTML = list.map((r: any) => makeRequestRow(r, { showSession: true, anomalyFlags: anomalyMap.get(r.id) || null })).join('');
+  container.innerHTML = list.map((r) => makeRequestRow(r, { showSession: true, anomalyFlags: anomalyMap.get(r.id) || null })).join('');
 }
 
-export function appendRequests(container: HTMLElement, list: any[], anomalyMap = new Map()) {
+export function appendRequests(
+  container: HTMLElement,
+  list: RequestView[],
+  anomalyMap: Map<string, AnomalyFlagSet> = new Map(),
+) {
   if (!list.length) return;
-  container.insertAdjacentHTML('beforeend', list.map((r: any) => makeRequestRow(r, { showSession: true, anomalyFlags: anomalyMap.get(r.id) || null })).join(''));
+  container.insertAdjacentHTML('beforeend', list.map((r) => makeRequestRow(r, { showSession: true, anomalyFlags: anomalyMap.get(r.id) || null })).join(''));
 }

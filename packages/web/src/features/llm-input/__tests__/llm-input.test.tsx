@@ -12,7 +12,7 @@
  *  - ref_count 칩: data-refs-hash + aria-expanded
  *  - 검색 하이라이트: <mark class="llm-input-mark">
  */
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { LLMInput } from '../LLMInput';
 import type { MessageLike } from '../llm-input-state';

@@ -10,6 +10,41 @@
 import { escHtml } from '../formatters.js';
 import { subTypeOf } from '../request-types.js';
 import { svgToolDot, svgAgentDot, svgSkillDot, svgMcpDot } from '../design-system/icons/_index.js';
+import type { RowResponseReader, RowChipReader } from '../view-types.js';
+
+/**
+ * anomaly 필드(bloated_sys/agent_spike/context_saturation)에서 단계 문자열을 안전 추출.
+ * 서버 컨트랙트는 `stage`(ADR-003), 과거 `status` 별칭도 호환 — 기존 `x && (x.stage ?? x.status)` 와 동치.
+ * 입력은 서버 wire 객체(형태 보장 약함)라 unknown 으로 받아 내부에서 좁힌다.
+ */
+function anomalyStage(x: unknown): string | null {
+  if (!x || typeof x !== 'object') return null;
+  const o = x as { stage?: unknown; status?: unknown };
+  const s = o.stage ?? o.status;
+  return typeof s === 'string' ? s : null;
+}
+
+/** anomaly 객체에서 number 필드를 안전 추출(없으면 NaN — 기존 Number(undefined) 동치). */
+function anomalyNum(x: unknown, ...keys: string[]): number {
+  if (!x || typeof x !== 'object') return NaN;
+  const o = x as Record<string, unknown>;
+  for (const k of keys) { if (o[k] != null) return Number(o[k]); }
+  return NaN;
+}
+
+/**
+ * tool_response 파싱본 — payload.tool_response 의 JSON 형태(도구별 상이).
+ * 접근하는 필드만 optional 로 둔다(stderr/content/is_error/totalLines 등). 나머지는 index 로 허용.
+ */
+interface ToolResponse {
+  stderr?: unknown;
+  content?: unknown;
+  is_error?: unknown;
+  totalLines?: unknown; total_lines?: unknown;
+  numFiles?: unknown; num_files?: unknown;
+  filenames?: unknown; results?: unknown; paths?: unknown;
+  [k: string]: unknown;
+}
 
 export function typeBadge(type: string) {
   const known = ['prompt', 'tool_call', 'system', 'response'];
@@ -79,26 +114,42 @@ export function toolIconHtml(toolName: string | null | undefined, eventType: str
 }
 
 // payload에서 tool_response 추출
-function getToolResponse(r: any) {
+function getToolResponse(r: Pick<RowResponseReader, 'payload'>): ToolResponse | null {
   if (!r.payload) return null;
   try {
     const p = typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
-    return p?.tool_response ?? null;
+    return (p as { tool_response?: ToolResponse } | null)?.tool_response ?? null;
   } catch { return null; }
 }
 
+/** Bash stderr 등 "문자열이면서 trim 후 비어있지 않은가" 판정 — unknown 안전 좁히기. */
+function nonEmptyStr(v: unknown): boolean {
+  return typeof v === 'string' && v.trim().length > 0;
+}
+
+/**
+ * i18n vars 로 넘길 수 있는 number|string 값만 통과, 그 외(객체/null/undefined)는 null.
+ * 기존 `x != null ? t(.., {n:x})` 와 동치(원시값은 그대로, null/undefined 는 미표시).
+ */
+function numVar(v: unknown): number | string | null {
+  return typeof v === 'number' || typeof v === 'string' ? v : null;
+}
+
 // 상태 배지: 오류만 표시 (Signal over Noise 원칙)
-export function toolStatusBadge(r: any) {
+export function toolStatusBadge(r: RowResponseReader) {
   const tr = getToolResponse(r);
   if (!tr) return ''; // tool_response 없으면 미표시 (실행 전/중)
   const tn = r.tool_name || '';
   let hasError = false;
   if (tn === 'Bash') {
-    hasError = !!(tr.stderr && tr.stderr.trim());
+    hasError = nonEmptyStr(tr.stderr);
   } else if (tn === 'Agent' || tn === 'Skill') {
     try {
       const content = Array.isArray(tr.content) ? tr.content : (tr.content ? [tr.content] : []);
-      hasError = content.some((c: any) => c?.type === 'tool_result' && c?.is_error);
+      hasError = content.some((c: unknown) => {
+        const o = c as { type?: unknown; is_error?: unknown } | null;
+        return o?.type === 'tool_result' && !!o?.is_error;
+      });
       if (!hasError && tr.is_error) hasError = true;
     } catch { hasError = !!tr.is_error; }
   } else {
@@ -108,28 +159,28 @@ export function toolStatusBadge(r: any) {
 }
 
 // 도구별 결과 힌트: "[202줄]" 등
-export function toolResponseHint(r: any) {
+export function toolResponseHint(r: RowResponseReader) {
   const tr = getToolResponse(r);
   if (!tr) return ''; // tool_response 없으면 미표시
   const tn = r.tool_name || '';
   try {
     if (tn === 'Read') {
-      const lines = tr.totalLines ?? tr.total_lines;
+      const lines = numVar(tr.totalLines ?? tr.total_lines);
       if (lines != null) return window.I18n.t('badges.renderers.tool-hint.lines', { n: lines });
     }
     if (tn === 'Bash') {
-      return (tr.stderr && tr.stderr.trim()) ? window.I18n.t('badges.renderers.tool-hint.error') : '';
+      return nonEmptyStr(tr.stderr) ? window.I18n.t('badges.renderers.tool-hint.error') : '';
     }
     if (tn === 'Edit' || tn === 'Write' || tn === 'MultiEdit') {
       return window.I18n.t('badges.renderers.tool-hint.saved');
     }
     if (tn === 'Grep') {
-      const num = tr.numFiles ?? tr.num_files;
+      const num = numVar(tr.numFiles ?? tr.num_files);
       if (num != null) return window.I18n.t('badges.renderers.tool-hint.files', { n: num });
     }
     if (tn === 'Glob') {
       const arr = Array.isArray(tr.filenames ?? tr.results ?? tr.paths ?? tr) ? (tr.filenames ?? tr.results ?? tr.paths) : null;
-      if (arr != null) return window.I18n.t('badges.renderers.tool-hint.matches', { n: arr.length });
+      if (Array.isArray(arr)) return window.I18n.t('badges.renderers.tool-hint.matches', { n: arr.length });
     }
     if (tn === 'Agent' || tn === 'Skill') {
       return tr.is_error ? window.I18n.t('badges.renderers.tool-hint.failed') : '';
@@ -168,26 +219,26 @@ export function anomalyBadgesHtml(flags: Set<string> | null | undefined) {
  *   - full: views/detail-view.js (세션 헤더 detailBadges)
  *   - dot:  left-panel.js (사이드바 세션 리스트)
  */
-export function bloatedSysBadgeMiniHtml(bloatedSys: any) {
+export function bloatedSysBadgeMiniHtml(bloatedSys: unknown) {
   return _bloatedBadge(bloatedSys, 'mini');
 }
-export function bloatedSysBadgeFullHtml(bloatedSys: any) {
+export function bloatedSysBadgeFullHtml(bloatedSys: unknown) {
   return _bloatedBadge(bloatedSys, 'full');
 }
-export function bloatedSysBadgeDotHtml(bloatedSys: any) {
+export function bloatedSysBadgeDotHtml(bloatedSys: unknown) {
   // 사이드바 dot은 critical만 노출 (ADR-005)
   // 서버 컨트랙트는 `stage` (anomaly-bloated-sys ADR-003). 과거 `status` 별칭도 호환.
-  const stage = bloatedSys && (bloatedSys.stage ?? bloatedSys.status);
-  if (stage !== 'critical') return '';
+  if (anomalyStage(bloatedSys) !== 'critical') return '';
   return _bloatedBadge(bloatedSys, 'dot');
 }
 
-function _bloatedBadge(bs: any, variant: string) {
+function _bloatedBadge(bs: unknown, variant: string) {
   // 서버 컨트랙트 `stage` 우선 (anomaly-bloated-sys ADR-003), 과거 `status` 별칭도 호환.
-  const status = bs && (bs.stage ?? bs.status);
+  const status = anomalyStage(bs);
   if (!status || (status !== 'warn' && status !== 'critical')) return '';
+  const pctVal = anomalyNum(bs, 'pct');
   // pct 는 서버에서 0~1 fraction. label은 정수 % 기대 → 100배 환산.
-  const pctRaw = (bs.pct != null && Number.isFinite(bs.pct)) ? bs.pct : null;
+  const pctRaw = Number.isFinite(pctVal) ? pctVal : null;
   const pct    = pctRaw == null ? '?' : Math.round(pctRaw > 1 ? pctRaw : pctRaw * 100);
   const tone   = status === 'critical' ? 'error' : 'warn';
   const stageCls = status === 'critical' ? ' is-critical' : ' is-warn';
@@ -225,10 +276,11 @@ function _bloatedBadge(bs: any, variant: string) {
  * 호출자:
  *   - full: views/detail-view.js (세션 헤더 detailBadges 영역)
  */
-export function contextSaturationBadgeFullHtml(ctxSat: any) {
-  const stage = ctxSat && (ctxSat.stage ?? null);
+export function contextSaturationBadgeFullHtml(ctxSat: unknown) {
+  const stage = anomalyStage(ctxSat);
   if (stage !== 'warn' && stage !== 'critical') return '';
-  const pctRaw = (ctxSat.pct != null && Number.isFinite(ctxSat.pct)) ? ctxSat.pct : null;
+  const pctVal = anomalyNum(ctxSat, 'pct');
+  const pctRaw = Number.isFinite(pctVal) ? pctVal : null;
   const pct    = pctRaw == null ? '?' : Math.round(pctRaw > 1 ? pctRaw : pctRaw * 100);
   const tone   = stage === 'critical' ? 'error' : 'warn';
   const stageCls = stage === 'critical' ? ' is-critical' : ' is-warn';
@@ -257,12 +309,12 @@ export function contextSaturationBadgeFullHtml(ctxSat: any) {
  *
  * 반환: HTML 또는 ''.  '' 반환 시 호출 측이 기본 spike 표지를 그대로 유지하면 됨.
  */
-export function agentSpikeBadgeHtml(agentSpike: any) {
+export function agentSpikeBadgeHtml(agentSpike: unknown) {
   // 서버 컨트랙트: stage='spike'(트리거) | null. ratio 대신 multiplier 사용.
   // 과거 status='critical'/ratio 별칭도 호환.
-  const stage = agentSpike && (agentSpike.stage ?? agentSpike.status);
+  const stage = anomalyStage(agentSpike);
   if (stage !== 'spike' && stage !== 'critical') return '';
-  const ratio = Number(agentSpike.multiplier ?? agentSpike.ratio);
+  const ratio = anomalyNum(agentSpike, 'multiplier', 'ratio');
   if (!Number.isFinite(ratio) || ratio < 3) return '';
   const n = Math.round(ratio);
   // 라벨 SSoT는 i18n 키이나, 시각 출력은 `↑` glyph + 수식 자식(.agent-spike-count)으로 분리해
@@ -286,11 +338,11 @@ export function agentSpikeBadgeHtml(agentSpike: any) {
  * @param {object} agentSpike
  * @param {number[]} samples — 최대 20개 자식 토큰 시계열 (옵션)
  */
-export function turnSpikeSummaryHtml(agentSpike: any, samples: number[]) {
+export function turnSpikeSummaryHtml(agentSpike: unknown, samples: number[]) {
   // 서버 컨트랙트: stage='spike' / multiplier. 과거 status/ratio 별칭 호환.
-  const stage = agentSpike && (agentSpike.stage ?? agentSpike.status);
+  const stage = anomalyStage(agentSpike);
   if (stage !== 'spike' && stage !== 'critical') return '';
-  const ratio = Number(agentSpike.multiplier ?? agentSpike.ratio);
+  const ratio = anomalyNum(agentSpike, 'multiplier', 'ratio');
   if (!Number.isFinite(ratio) || ratio < 3) return '';
   const n = Math.round(ratio);
   const label = window.I18n.t('ui.anomaly.agent-spike.summary', { n });
@@ -358,9 +410,14 @@ function _spikeSparklineSvg(samples: number[]) {
  * @param {object} r 행 raw 데이터 (tool_name / tool_detail / tool_input 사용)
  * @returns {string} chip HTML 또는 '' (빈 sub_type)
  */
-export function subTypeBadgeHtml(r: any) {
+export function subTypeBadgeHtml(r: RowChipReader) {
   const sub = subTypeOf(r);
   if (!sub) return '';
+  // tool_input 필드(파싱본)에서 문자열만 안전 추출 — 기존 `r.tool_input?.X || ...` 와 동치(비문자열은 폴백).
+  const tiStr = (key: string): string => {
+    const v = r.tool_input?.[key];
+    return typeof v === 'string' ? v : '';
+  };
   let label;
   let fullId;
   // ADR-003 left-rail-meta-docs: agent/skill chip은 Behavior Definitions 딥링크 트리거.
@@ -371,12 +428,12 @@ export function subTypeBadgeHtml(r: any) {
     fullId = r.tool_name || 'mcp__?';
   } else if (sub === 'agent') {
     label  = 'Agent';
-    const detail = r.tool_detail || r.tool_input?.subagent_type || '?';
+    const detail = r.tool_detail || tiStr('subagent_type') || '?';
     fullId = `Agent · ${detail}`;
     deepLinkAttrs = ` data-meta-doc-type="agent" data-meta-doc-id="${escHtml(detail)}" role="button" tabindex="0"`;
   } else if (sub === 'skill') {
     label  = 'Skill';
-    const detail = r.tool_detail || r.tool_input?.skill || '?';
+    const detail = r.tool_detail || tiStr('skill') || '?';
     fullId = `Skill · ${detail}`;
     deepLinkAttrs = ` data-meta-doc-type="skill" data-meta-doc-id="${escHtml(detail)}" role="button" tabindex="0"`;
   } else if (sub === 'task') {

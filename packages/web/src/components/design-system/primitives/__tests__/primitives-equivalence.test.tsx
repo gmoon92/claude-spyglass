@@ -22,7 +22,7 @@
  *
  * 회귀 가드: 신규 계약(P2-02). 원본 js 무수정·병존. baseline(261) 비회귀.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { MouseEvent, MouseEventHandler, ReactElement } from 'react';
 

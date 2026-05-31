@@ -12,7 +12,7 @@
  *  - 스토어 연동: active prop = store.feedFilter, onChange 콜백 = setFeedFilter 배선 →
  *    getState().feedFilter 갱신 + aria-pressed 동기화 end-to-end 증명(filter ↔ app-store).
  */
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 import { FilterBar, FILTER_GROUPS } from '../FilterBar';

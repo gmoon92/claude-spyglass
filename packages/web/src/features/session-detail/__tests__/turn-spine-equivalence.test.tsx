@@ -13,7 +13,7 @@
 // DOM 스텁을 oracle 보다 먼저 평가 — §5 순환으로 끌려오는 flat-view.js 모듈 최상위
 // document.addEventListener(flat-view.js:142) 가 깨지지 않게 한다(import hoisting 순서 보장).
 import './_dom-stub';
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { TurnLine, TurnSpine } from '../TurnSpine';

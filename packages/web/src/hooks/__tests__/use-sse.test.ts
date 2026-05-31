@@ -14,12 +14,12 @@
  *   2. 언마운트 cleanup — stop() 이 EventSource.close + 재연결 타이머 clearTimeout 수행
  *      (원본 sse.js 모듈 싱글톤은 미보장). 클로저 캡슐화로 마운트별 독립.
  *
- * MockEventSource/globalThis.EventSource 주입 + jest.useFakeTimers 는 sse.test.ts 와 동일.
+ * MockEventSource/globalThis.EventSource 주입 + vi.useFakeTimers 는 sse.test.ts 와 동일.
  *
  * @see packages/web/assets/js/__tests__/sse.test.ts (connectSSE 8 case 동치 기준)
  * @see packages/web/src/schema/sse-schema.ts (P1-07 parseSSEMessage)
  */
-import { describe, it, expect, beforeEach, afterEach, mock, jest } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createSSEController, useSSE } from '../use-sse';
@@ -129,22 +129,22 @@ function envelope(type: string, data: unknown) {
 
 // ── createSSEController (동작 SSoT) ─────────────────────────────────────────────
 describe('createSSEController — 결선/재연결/Zod 검증/cleanup', () => {
-  let onNewRequest: ReturnType<typeof mock>;
-  let onNewProxyRequest: ReturnType<typeof mock>;
-  let onSessionUpdate: ReturnType<typeof mock>;
-  let onOpen: ReturnType<typeof mock>;
-  let onError: ReturnType<typeof mock>;
+  let onNewRequest: ReturnType<typeof vi.fn>;
+  let onNewProxyRequest: ReturnType<typeof vi.fn>;
+  let onSessionUpdate: ReturnType<typeof vi.fn>;
+  let onOpen: ReturnType<typeof vi.fn>;
+  let onError: ReturnType<typeof vi.fn>;
   let ctrl: { stop: () => void };
 
   beforeEach(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     MockEventSource._last = null;
     MockEventSource._count = 0;
-    onNewRequest = mock(() => {});
-    onNewProxyRequest = mock(() => {});
-    onSessionUpdate = mock(() => {});
-    onOpen = mock(() => {});
-    onError = mock(() => {});
+    onNewRequest = vi.fn(() => {});
+    onNewProxyRequest = vi.fn(() => {});
+    onSessionUpdate = vi.fn(() => {});
+    onOpen = vi.fn(() => {});
+    onError = vi.fn(() => {});
     ctrl = createSSEController({
       onNewRequest,
       onNewProxyRequest,
@@ -156,8 +156,8 @@ describe('createSSEController — 결선/재연결/Zod 검증/cleanup', () => {
 
   afterEach(() => {
     ctrl.stop();
-    jest.clearAllTimers();
-    jest.useRealTimers();
+    vi.clearAllTimers();
+    vi.useRealTimers();
   });
 
   const src = () => MockEventSource._last!;
@@ -233,7 +233,7 @@ describe('createSSEController — 결선/재연결/Zod 검증/cleanup', () => {
   it('onerror 후 5초 경과 → 재연결(새 EventSource 생성)', () => {
     const prev = src();
     src().fireError();
-    jest.advanceTimersByTime(5000);
+    vi.advanceTimersByTime(5000);
     expect(MockEventSource._last).not.toBe(prev);
     expect(MockEventSource._last!.url).toBe('/events');
   });
@@ -241,7 +241,7 @@ describe('createSSEController — 결선/재연결/Zod 검증/cleanup', () => {
   // 9. 재연결 후 onOpen 재호출 (connectSSE 동치)
   it('재연결 후 onOpen 재호출', () => {
     src().fireError();
-    jest.advanceTimersByTime(5000);
+    vi.advanceTimersByTime(5000);
     src().fireOpen();
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
@@ -254,7 +254,7 @@ describe('createSSEController — 결선/재연결/Zod 검증/cleanup', () => {
     expect(closedAfterError).toBe(true);
     // stop 후 5s 진행해도 새 EventSource 가 생기지 않아야 함(타이머 clearTimeout).
     const countBefore = MockEventSource._count;
-    jest.advanceTimersByTime(5000);
+    vi.advanceTimersByTime(5000);
     expect(MockEventSource._count).toBe(countBefore);
   });
 

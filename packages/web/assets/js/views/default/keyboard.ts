@@ -27,10 +27,10 @@ function toggleKbdHelp() {
   else showKbdHelp();
 }
 
-function isTypingTarget(el: any) {
-  if (!el) return false;
+function isTypingTarget(el: EventTarget | null) {
+  if (!el || !(el instanceof Element)) return false;
   const tag = el.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || !!(el as HTMLElement).isContentEditable;
 }
 
 /**

@@ -37,6 +37,15 @@ const FALLBACK_TOKENS: ChartTokens = {
   typeColors: { prompt: '#d97757', tool_call: '#4ade80', system: '#f59e0b' },
 };
 
+/**
+ * 타임라인 버킷 폴백(빈) — 안정 ref(모듈 상수). 30분 sliding SSE 버퍼 결선은 후속(별도 소스).
+ *
+ * P5-04 성능: 인라인 `timelineBuckets={[]}` 는 매 렌더 새 배열 신원을 만들어 React.memo(Chart)의
+ *   shallow 비교를 매번 깨고, Chart 의 timeline effect(dep=[timelineBuckets])를 SSE 이벤트마다
+ *   재실행 + ResizeObserver 재등록 churn(5-20/s)을 유발했다. 안정 ref 로 교체해 memo 가 작동한다.
+ */
+const EMPTY_TIMELINE_BUCKETS: number[] = [];
+
 export function BrowseLayout(): ReactElement {
   // 좌측 세션 캐시 — sse-store SSoT(라이브 갱신). 초기 history 는 아래 effect 가 setSessions 로 시드.
   const sessions = useSSEStore((s) => s.sessions);
@@ -106,7 +115,7 @@ export function BrowseLayout(): ReactElement {
           <Chart
             dataByKind={dataByKind}
             donutMode={donutMode}
-            timelineBuckets={[]}
+            timelineBuckets={EMPTY_TIMELINE_BUCKETS}
             tokens={FALLBACK_TOKENS}
           />
         </section>

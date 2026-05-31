@@ -16,7 +16,7 @@
  * @see packages/web/src/schema/api-schema.ts
  */
 
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import {
   NewRequestEventSchema,
   NewProxyRequestEventSchema,

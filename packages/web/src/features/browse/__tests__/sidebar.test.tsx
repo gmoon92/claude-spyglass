@@ -11,7 +11,7 @@
  *    누수 가드 검증. 이는 원본 left-panel.js 가 미보장한 신규 계약이다(Gap: 원본 top-level
  *    addEventListener 는 영구 등록·해제 없음 — 컴포넌트 언마운트 시 해제로 SPA 누수 차단).
  */
-import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'bun:test';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 import {
@@ -134,10 +134,19 @@ describe('sortSessions — 활성 우선 → 최근 활동 desc 정렬', () => {
 // ── createAnomalySubscription — 마운트/언마운트 cleanup (신규 계약, Gap) ───────
 describe('createAnomalySubscription — 구독 등록/해제 누수 가드 (신규 계약)', () => {
   it('document 부재 환경에서 throw 없이 noop cleanup 을 반환(api.js TDZ 연쇄 차단 계승)', () => {
-    expect(typeof globalThis.document).toBe('undefined');
-    const cleanup = createAnomalySubscription(() => {});
-    expect(typeof cleanup).toBe('function');
-    expect(() => cleanup()).not.toThrow();
+    // P5-07: jsdom 환경은 globalThis.document 를 주입하므로, "document 부재" 계약을 재현하려면
+    //   이 케이스 동안만 전역 document 를 제거했다가 복원한다(bun test 의 무-DOM 의미 보존).
+    const savedDoc = globalThis.document;
+    // 비-DOM 환경 재현을 위해 전역 document 임시 제거(캐스트로 타입 우회).
+    delete (globalThis as { document?: Document }).document;
+    try {
+      expect(typeof globalThis.document).toBe('undefined');
+      const cleanup = createAnomalySubscription(() => {});
+      expect(typeof cleanup).toBe('function');
+      expect(() => cleanup()).not.toThrow();
+    } finally {
+      (globalThis as { document?: Document }).document = savedDoc;
+    }
   });
 
   it('mount 시 session-anomalies-loaded 리스너를 등록, cleanup 시 해제한다', () => {

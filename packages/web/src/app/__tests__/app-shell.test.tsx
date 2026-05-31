@@ -8,7 +8,7 @@
  *   useEffect 미발화 → SSE/폴링 fetch 미생성(EventSource/네트워크 안전). 배지 초기 loading 렌더.
  *   AppRail/Footer/UpdateBadge/UpdateModal 마운트 + 콘텐츠(children) 슬롯을 단정한다.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactElement } from 'react';

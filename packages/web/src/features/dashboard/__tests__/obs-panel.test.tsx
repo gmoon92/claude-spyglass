@@ -11,7 +11,7 @@
  *
  * 전략(filter-bar/Chart 계승): renderToStaticMarkup 마크업 계약 검증.
  */
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   BurnRateCard,

@@ -13,12 +13,15 @@
 // 라이프사이클:
 //   세션 ID 키로 누적. 명시 초기화는 별도 호출 없음 — 모듈 수준 메모리는 페이지 새로고침으로 리셋.
 
-const _bloatedSysCache = new Map();
+import type { BloatedSysView } from '../view-types.js';
 
-export function getBloatedSysFor(sessionId: any) {
+const _bloatedSysCache = new Map<string, BloatedSysView | null>();
+
+export function getBloatedSysFor(sessionId: string): BloatedSysView | null {
   return _bloatedSysCache.get(sessionId) || null;
 }
 
-export function setBloatedSysFor(sessionId: any, bloatedSys: any) {
-  _bloatedSysCache.set(sessionId, bloatedSys || null);
+export function setBloatedSysFor(sessionId: string, bloatedSys: unknown) {
+  // 입력은 서버 anomaly 응답(파싱 계약 약함) — 캐시는 BloatedSysView 형태로만 저장.
+  _bloatedSysCache.set(sessionId, (bloatedSys as BloatedSysView) || null);
 }

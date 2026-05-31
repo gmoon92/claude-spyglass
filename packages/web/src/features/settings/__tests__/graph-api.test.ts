@@ -5,7 +5,7 @@
  * 전략(tasks.json:338): apiFetch(fetch) mock 후 입력→호출 인자(URL/method/body) 검증 +
  *   성공/실패 분기. SSE 는 mock reader 로 parseSseBuffer/consumeInstallStream 직접 검증.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   fetchGraphDbStatus,
   setGraphMode,

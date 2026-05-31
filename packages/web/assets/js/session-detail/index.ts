@@ -19,6 +19,7 @@
  */
 
 import { createSearchBox } from '../components/search-box.js';
+import type { SearchBoxHandle } from '../components/search-box.js';
 import { clearContextChart } from '../context-chart.js';
 import {
   setCurrentSessionId, setDetailRequests, setDetailTurns, setDetailPrologue,
@@ -47,7 +48,7 @@ export const API = '';
  * detailSearchBox — createSearchBox로 만든 인스턴스 한 개를 모듈 수준에서 공유.
  * 외부(main.js)가 인스턴스를 직접 참조해 .clear() 등을 호출하므로 mutable export 유지.
  */
-export let detailSearchBox: any = null;
+export let detailSearchBox: SearchBoxHandle | null = null;
 
 /**
  * 진행 중 세션을 다시 fetch해 갱신한다 (SSE 업데이트 후 등).

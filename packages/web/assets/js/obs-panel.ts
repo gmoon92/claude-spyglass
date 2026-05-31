@@ -14,13 +14,36 @@ import { sparklineBars, sparklineLine } from './sparkline.js';
 import { svgChevron } from './render/icons.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 공통 헬퍼
+// 페이로드 타입 — /api/metrics/* 응답의 data 필드(서버 SSoT). web 표시 전용 형태라
+//   @spyglass/types 에 도메인 SSoT 가 없다 → 여기서 소비 필드만 명시(나머지는 무시).
+//   모든 필드 optional — early-return 가드가 누락을 처리한다.
 // ─────────────────────────────────────────────────────────────────────────────
+
+interface BurnRatePayload {
+  buckets?: Array<{ tokens?: number }>;
+  current_total?: number;
+  yesterday_same_window?: number;
+  delta_pct?: number | null;
+}
+interface CacheHealthPayload {
+  buckets?: Array<{ hit_rate?: number }>;
+  hit_rate_now?: number | null;
+  savings_tokens_total?: number;
+}
+interface LivePulsePayload {
+  active_count?: number;
+  last_event_ts?: number | null;
+  recent_calls?: number[];
+}
+interface ToolCategory { category?: string; request_count?: number; percentage?: number }
+interface MetaDocsToolPayload { mode: 'meta-docs'; items?: Array<{ name?: string; invocations?: number }> }
+type ToolCategoriesPayload = ToolCategory[] | MetaDocsToolPayload | null;
+interface AnomalyBadgePayload { total?: number }
 
 const SPARK_W = 76;
 const SPARK_H = 24;
 
-function deltaIconHtml(deltaPct: any) {
+function deltaIconHtml(deltaPct: number | null | undefined) {
   if (deltaPct == null || !Number.isFinite(deltaPct) || deltaPct === 0) {
     return `<span class="obs-card-trend">—</span>`;
   }
@@ -34,7 +57,7 @@ function deltaIconHtml(deltaPct: any) {
 }
 
 /** 빈 상태 — 카드 라벨이 없으므로 dim 텍스트 한 줄만 노출 (의미는 hover 툴팁) */
-function emptyCard(msg: any) {
+function emptyCard(msg: string) {
   return `<span class="obs-card-empty">${escHtml(msg)}</span>`;
 }
 
@@ -49,16 +72,16 @@ function emptyCard(msg: any) {
  *   - yesterday_same_window: number
  *   - delta_pct: number|null
  */
-export function renderBurnRate(payload: any) {
+export function renderBurnRate(payload: BurnRatePayload | null) {
   const el = document.getElementById('cardBurnRate');
   if (!el) return;
   if (!payload || !Array.isArray(payload.buckets) || payload.buckets.length === 0 || payload.current_total === 0) {
     el.innerHTML = emptyCard(window.I18n.t('ui.obs-panel.no-data'));
     return;
   }
-  const values = payload.buckets.map((b: any) => b.tokens || 0);
+  const values = payload.buckets.map((b) => b.tokens || 0);
   const total  = payload.current_total || 0;
-  const sub    = payload.yesterday_same_window > 0
+  const sub    = (payload.yesterday_same_window ?? 0) > 0
     ? window.I18n.t('ui.obs-panel.yesterday', { val: fmtToken(payload.yesterday_same_window) })
     : '';
   el.innerHTML = `
@@ -79,7 +102,7 @@ export function renderBurnRate(payload: any) {
  *   - hit_rate_now: number|null  (0..1)
  *   - savings_tokens_total: number
  */
-export function renderCacheHealth(payload: any) {
+export function renderCacheHealth(payload: CacheHealthPayload | null) {
   const el = document.getElementById('cardCacheHealth');
   if (!el) return;
   if (!payload || !Array.isArray(payload.buckets) || payload.hit_rate_now == null) {
@@ -87,7 +110,7 @@ export function renderCacheHealth(payload: any) {
     return;
   }
   const hitPct = (payload.hit_rate_now * 100).toFixed(1);
-  const series = payload.buckets.map((b: any) => b.hit_rate);
+  const series = payload.buckets.map((b) => b.hit_rate ?? null);
   const sub    = window.I18n.t('ui.obs-panel.savings', { val: fmtToken(payload.savings_tokens_total || 0) });
 
   // hit_rate 임계 (cache-panel-tooltip와 동일 정책): ≥0.7 success / ≥0.3 mid / <0.3 warn
@@ -113,7 +136,7 @@ export function renderCacheHealth(payload: any) {
  *   - last_event_ts: number|null  (epoch ms)
  *   - recent_calls?: number[]  (5분창 sparkline 입력, Phase 2)
  */
-export function renderLivePulse(payload: any) {
+export function renderLivePulse(payload: LivePulsePayload | null) {
   const el = document.getElementById('cardLivePulse');
   if (!el) return;
   if (!payload || (payload.active_count === 0 && !payload.last_event_ts)) {
@@ -128,7 +151,7 @@ export function renderLivePulse(payload: any) {
 
   el.innerHTML = `
     <span class="obs-card-value">${escHtml(lastTxt)}</span>
-    <span class="obs-card-trend ${payload.active_count > 0 ? 'is-up' : ''}">
+    <span class="obs-card-trend ${(payload.active_count ?? 0) > 0 ? 'is-up' : ''}">
       <span class="obs-card-trend-icon">●</span>${fmt(payload.active_count || 0)}
     </span>
     <span class="obs-card-sub">${window.I18n.t('ui.obs-panel.recent-activity')}</span>
@@ -175,7 +198,7 @@ export function resetToolCategoriesMode() {
  *
  * @param {Array<{category?: string, request_count?: number, percentage?: number}>|{mode: string, items: Array<{name: string, invocations: number}>}} payload
  */
-export function renderToolCategoriesCard(payload: any) {
+export function renderToolCategoriesCard(payload: ToolCategoriesPayload) {
   const el = document.getElementById('cardToolCategories');
   if (!el) return;
 
@@ -187,8 +210,8 @@ export function renderToolCategoriesCard(payload: any) {
       el.innerHTML = emptyCard(window.I18n.t('ui.obs-panel.no-behavior-defs'));
       return;
     }
-    const max = Math.max(1, ...items.map((i: any) => i.invocations || 0));
-    const rows = items.map((i: any) => {
+    const max = Math.max(1, ...items.map((i) => i.invocations || 0));
+    const rows = items.map((i) => {
       const pct = Math.round((i.invocations || 0) / max * 100);
       // 이중 클래스: 기존 obs-cat-bar-fill obs-cat-bar-fill--agent 보존
       // + ds-bar-fill + data-tone="warn" (agent/skill → warn)
@@ -215,7 +238,7 @@ export function renderToolCategoriesCard(payload: any) {
   const max = Math.max(1, ...categories.map(c => c.request_count || 0));
   const rows = categories.map(c => {
     const pct = Math.round((c.request_count || 0) / max * 100);
-    const cls = CATEGORY_CLASS[c.category] || 'native';
+    const cls = (c.category && CATEGORY_CLASS[c.category]) || 'native';
     const label = c.percentage != null ? `${(c.percentage).toFixed(1)}%` : `${c.request_count}`;
     // 카테고리별 행에도 obs-tooltip 부여 → 카테고리 의미 hover 노출
     // 이중 클래스: 기존 obs-cat-bar-fill obs-cat-bar-fill--${cls} 보존
@@ -241,7 +264,7 @@ export function renderToolCategoriesCard(payload: any) {
  *   - counts: { high_error_rate, repeated_failure, deep_subagent, token_spike }
  *   - total: number
  */
-export function renderAnomalyBadge(payload: any) {
+export function renderAnomalyBadge(payload: AnomalyBadgePayload | null) {
   const el = document.getElementById('anomalyBadge');
   if (!el) return;
   const total = payload?.total ?? 0;

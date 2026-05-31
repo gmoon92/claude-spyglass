@@ -8,7 +8,7 @@
  *  - 6분기(response/task-event/agent/skill/mcp/tool) 전부 커버.
  *  - chipKey/chipFromRequest 도 같은 모듈에서 import 해 단위 검증(재구현본이 아님을 확정).
  */
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { TurnRows } from '../TurnRows';
 import {

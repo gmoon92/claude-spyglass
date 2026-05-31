@@ -11,8 +11,17 @@
  *    onBloatedSysHeader 콜백이 SessionBadges 로 위임됨.
  */
 import './_dom-stub';
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve as resolvePath } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
+
+// P5-07: Bun.file(...).text() (bun 런타임 전용) → Node fs 로 포팅. `new URL(rel, import.meta.url)` 은
+//   Vitest 모듈 변환에서 dev-server base(http) 로 재작성되므로, 테스트 파일 자신의 file:// URL 만
+//   변환한 뒤 path.resolve 로 대상 소스를 가리킨다(두 러너에서 동일 절대 경로).
+const readSource = (rel: string): string =>
+  readFileSync(resolvePath(dirname(fileURLToPath(import.meta.url)), rel), 'utf8');
 import { parseAnomaliesResponse } from '../detail-view';
 import { DetailView, SessionDetailHeader } from '../DetailView';
 
@@ -179,7 +188,7 @@ describe('DetailView — P3-06 FlowPane + P3-05 SessionLog 조립', () => {
 // ── 순환 해소 (§5 핵심) ──────────────────────────────────────────────────────────
 describe('순환 해소 — turn-views ⇄ detail-view 단절', () => {
   it('DetailView.tsx 는 views/detail-view.js·turn-views.js·session-detail.js facade 를 import 하지 않는다', async () => {
-    const src = await Bun.file(new URL('../DetailView.tsx', import.meta.url)).text();
+    const src = readSource('../DetailView.tsx');
     expect(src).not.toMatch(/from ['"].*views\/detail-view/);
     expect(src).not.toMatch(/from ['"].*turn-views/);
     expect(src).not.toMatch(/from ['"].*\/session-detail['"]/); // 루트 facade
@@ -187,7 +196,7 @@ describe('순환 해소 — turn-views ⇄ detail-view 단절', () => {
   });
 
   it('detail-view.ts 로직 모듈도 facade/turn-views 를 import 하지 않는다', async () => {
-    const src = await Bun.file(new URL('../detail-view.ts', import.meta.url)).text();
+    const src = readSource('../detail-view.ts');
     expect(src).not.toMatch(/from ['"].*turn-views/);
     expect(src).not.toMatch(/from ['"].*\/session-detail['"]/);
   });

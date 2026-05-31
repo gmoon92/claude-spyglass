@@ -10,11 +10,14 @@
  * 의존성: 없음 (순수 상태 보관)
  */
 
+import type { SearchBoxHandle } from '../components/search-box.js';
+
 // =============================================================================
 // 필터/세션/검색 (1차 입력)
 // =============================================================================
 
-// 디스플레이 레이어 loose 타입 — 서버 JSON 파생 요청/턴. 파싱 계약은 P5-03(Zod).
+// 디스플레이 레이어 loose 타입 — 서버 JSON 파생 요청/턴. 파싱 계약(Zod)은 경계부에 적용,
+// 이 디스플레이 bag 은 다형 접근이 많아 loose alias 를 유지한다(turn-views.ts 와 동일 정책).
 type Req = Record<string, any>;
 type Turn = Record<string, any>;
 
@@ -24,7 +27,7 @@ let _detailAllRequests: Req[] = [];
 let _detailAllTurns: Turn[]    = [];
 let _detailSearchQuery = '';
 let _expandedTurnIds   = new Set<string>();
-let _detailSearchBox: any   = null;
+let _detailSearchBox: SearchBoxHandle | null   = null;
 
 // =============================================================================
 // 처리 결과 캐시 (2차 — applyDetailFilter가 채우고 리스너가 읽음)
@@ -65,7 +68,7 @@ export function setSearchQuery(q: string)       { _detailSearchQuery = q; }
 export function getExpandedTurnIds()    { return _expandedTurnIds; }
 export function clearExpandedTurnIds()  { _expandedTurnIds.clear(); }
 export function getSearchBox()          { return _detailSearchBox; }
-export function setSearchBox(box: any)       { _detailSearchBox = box; }
+export function setSearchBox(box: SearchBoxHandle)       { _detailSearchBox = box; }
 
 // =============================================================================
 // 2차 처리 결과 — getter/setter

@@ -11,7 +11,7 @@
  *     주입 가능한 최소 DOM 인터페이스로 happy-dom 없이 검증.
  *   훅 자체(useSystemReminderPopover)의 useEffect 부착/cleanup 은 소스 정적 + 컨트롤러 위임으로 보증.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import {
   computePopoverPosition,
   createPopoverController,

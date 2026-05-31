@@ -20,14 +20,14 @@
 
 import { escHtml } from '../../formatters.js';
 
-/** @typedef {'idle' | 'asc' | 'desc'} SortState */
+type SortState = 'idle' | 'asc' | 'desc';
 
 /**
  * 정렬 상태에 따른 화살표 글리프를 반환한다.
  * @param {SortState} sort
  * @returns {string}
  */
-function arrowGlyph(sort: any) {
+function arrowGlyph(sort: SortState) {
   if (sort === 'asc') return '↑';
   if (sort === 'desc') return '↓';
   return '↕';
@@ -38,7 +38,7 @@ function arrowGlyph(sort: any) {
  * @param {SortState} sort
  * @returns {string}
  */
-function ariaSort(sort: any) {
+function ariaSort(sort: SortState) {
   if (sort === 'asc') return 'ascending';
   if (sort === 'desc') return 'descending';
   return 'none';
@@ -60,7 +60,7 @@ function ariaSort(sort: any) {
 export function renderSortHead({ label, sort = 'idle', key }: { label: string; sort?: string; key: string }) {
   const safeLabel = escHtml(String(label ?? ''));
   const safeKey   = escHtml(String(key   ?? ''));
-  const safeSortState = ['idle', 'asc', 'desc'].includes(sort) ? sort : 'idle';
+  const safeSortState: SortState = (['idle', 'asc', 'desc'] as const).includes(sort as SortState) ? (sort as SortState) : 'idle';
 
   return `<button class="ds-sort-head" data-sort="${safeSortState}" data-sort-key="${safeKey}" aria-sort="${ariaSort(safeSortState)}" type="button">${safeLabel} <span class="arrow">${arrowGlyph(safeSortState)}</span></button>`;
 }

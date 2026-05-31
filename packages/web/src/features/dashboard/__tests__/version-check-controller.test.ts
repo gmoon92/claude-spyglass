@@ -7,7 +7,7 @@
  *
  * 전략: fetchVersion 을 주입(가짜)해 타이머/네트워크 없이 결정적 검증. start() 1회 호출 시 onState 통지.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { createVersionCheckController, type VersionPayload } from '../version-check-controller';
 
 function makeFetch(payload: VersionPayload | null) {

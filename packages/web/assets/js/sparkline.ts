@@ -11,7 +11,7 @@
  */
 
 /** 빈/잘못된 입력 → 가운데 가는 baseline만 그려진 placeholder SVG */
-function emptySvg(width: any, height: any, color: any) {
+function emptySvg(width: number, height: number, color: string) {
   const cy = height - 1;
   return (
     `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">` +

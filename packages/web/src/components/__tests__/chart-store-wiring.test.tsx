@@ -7,7 +7,7 @@
  *  - 본 테스트는 "store.donutMode → Chart prop" 컨트롤드 바인딩과 setChartMode/setDonutMode 갱신을
  *    end-to-end 로 증명한다(SearchBox value=store.searchQuery 선례 1:1 계승).
  */
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { Chart } from '../Chart';

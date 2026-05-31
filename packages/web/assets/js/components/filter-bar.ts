@@ -83,7 +83,7 @@ export function createFilterBar(containerId: string, { dataAttr, onChange }: { d
       });
     },
     buttons() {
-      return container.querySelectorAll('.type-filter-btn');
+      return container.querySelectorAll<HTMLElement>('.type-filter-btn');
     },
   };
 }

@@ -7,7 +7,7 @@
  *  - SessionLog 의 flowPane 슬롯에 주입 시 flow-pane 이 log-pane 보다 앞에 온다(SSoT 슬롯 계약).
  */
 import './_dom-stub';
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { FlowPane } from '../FlowPane';
 import { SessionLog } from '../SessionLog';

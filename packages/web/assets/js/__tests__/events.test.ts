@@ -1,4 +1,4 @@
-import { describe, it, expect, mock, beforeAll } from 'bun:test';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { DETAIL_FILTER_CHANGED, FEED_UPDATED } from '../events.js';
 
 // Bun 테스트 환경은 DOM이 없으므로 EventTarget 기반 document mock 제공
@@ -20,7 +20,7 @@ describe('events.js 상수', () => {
 
 describe('DETAIL_FILTER_CHANGED pub-sub', () => {
   it('detail:filterChanged 발행 시 구독자 콜백 호출', () => {
-    const handler = mock(() => {});
+    const handler = vi.fn(() => {});
     doc.addEventListener(DETAIL_FILTER_CHANGED, handler);
     doc.dispatchEvent(new CustomEvent(DETAIL_FILTER_CHANGED, {
       detail: { allTurns: [], flatFiltered: [] }
@@ -42,7 +42,7 @@ describe('DETAIL_FILTER_CHANGED pub-sub', () => {
   });
 
   it('이중 발행 시 구독자 2회 호출', () => {
-    const handler = mock(() => {});
+    const handler = vi.fn(() => {});
     doc.addEventListener(DETAIL_FILTER_CHANGED, handler);
     doc.dispatchEvent(new CustomEvent(DETAIL_FILTER_CHANGED));
     doc.dispatchEvent(new CustomEvent(DETAIL_FILTER_CHANGED));
@@ -51,7 +51,7 @@ describe('DETAIL_FILTER_CHANGED pub-sub', () => {
   });
 
   it('removeEventListener 후 콜백 호출 안 됨', () => {
-    const handler = mock(() => {});
+    const handler = vi.fn(() => {});
     doc.addEventListener(DETAIL_FILTER_CHANGED, handler);
     doc.removeEventListener(DETAIL_FILTER_CHANGED, handler);
     doc.dispatchEvent(new CustomEvent(DETAIL_FILTER_CHANGED));

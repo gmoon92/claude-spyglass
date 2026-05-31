@@ -15,8 +15,26 @@ import { asEl } from './dom.js';
  *
  * 반환값: { size, label, model } — UI 라벨링 일관성을 위해 함께 묶어 반환.
  */
-// 디스플레이 레이어 loose 타입 — 서버 JSON 파생 턴/포인트. 파싱 계약은 P5-03(Zod).
-type Turn = Record<string, any>;
+// any 제거(P5-03): 차트가 실제로 읽는 턴/프롬프트 필드를 명시. 미지 필드는 index signature(unknown).
+// 원본 Record<string,any> 가정(필드는 항상 존재, 값은 자유)을 보존하기 위해
+// 차트가 숫자/문자로 직접 연산하는 leaf 필드는 required 로 둔다(서버가 prompt 턴에 항상 채움).
+// 런타임 가드(Number.isFinite/필터)는 그대로 유지 — 타입만 any→구체화.
+/** turns 응답 턴의 prompt 페이로드(차트가 읽는 필드만 명시, 나머지 보존). */
+interface TurnPrompt {
+  model: string | null;
+  window_max: number;
+  context_tokens: number;
+  tokens_input: number;
+  bloated_sys?: unknown;
+  [k: string]: unknown;
+}
+/** turns 응답 단일 턴. prompt 는 선택(필터로 존재 보장 후 접근). */
+interface Turn {
+  prompt?: TurnPrompt;
+  turn_index: number;
+  bloated_sys?: unknown;
+  [k: string]: unknown;
+}
 interface PointData { cx: number; cy: number; turnIndex: number; value: number; delta: number | null; }
 
 function resolveSessionContextWindow(sortedTurns: Turn[]) {
@@ -44,8 +62,16 @@ let _lastTurns: Turn[] | null  = null;
  *  - 200ms 부드러운 트랜지션은 Canvas에서 단계적 재렌더로 표현 (간단 토글).
  */
 let _baselineGlow = false;
-/** session 헤더에서 dispatch한 bloated_sys 정보를 차트가 들고 풋터 split을 표현. */
-let _bloatedSysCache: Record<string, any> | null = null;
+/** session 헤더에서 dispatch한 bloated_sys 정보(차트 풋터 split·baseline 표시에 읽는 필드). any 제거(P5-03). */
+interface BloatedSysInfo {
+  stage?: unknown;
+  status?: unknown;
+  // pct/system_tokens 는 Number.isFinite 가드 후 산술에 쓰인다. 원본 any 가정(존재) 보존 위해 required number.
+  pct: number;
+  system_tokens: number;
+  [k: string]: unknown;
+}
+let _bloatedSysCache: BloatedSysInfo | null = null;
 /**
  * 현재 렌더된 세션의 context window 정보. _onCanvasMouseMove가 hover 툴팁에
  * "사용률 %"·"한도 label"을 함께 전달하기 위해 renderContextChart에서 갱신한다.
@@ -146,7 +172,11 @@ export function initContextChart() {
 function _extractBloatedSysFromTurns(turns: Turn[] | null | undefined) {
   if (!Array.isArray(turns) || turns.length === 0) return null;
   // 서버 컨트랙트 `stage` 우선, 과거 `status` 별칭 호환. null/'normal' 외에는 anomaly로 간주.
-  const _st = (x: any) => x && (x.stage ?? x.status);
+  const _st = (x: unknown): unknown => {
+    if (!x || typeof x !== 'object') return undefined;
+    const o = x as { stage?: unknown; status?: unknown };
+    return o.stage ?? o.status;
+  };
   for (const t of turns) {
     if (t?.prompt?.bloated_sys && _st(t.prompt.bloated_sys) && _st(t.prompt.bloated_sys) !== 'normal') return t.prompt.bloated_sys;
     if (t?.bloated_sys && _st(t.bloated_sys) && _st(t.bloated_sys) !== 'normal') return t.bloated_sys;
@@ -229,7 +259,11 @@ export function renderContextChart(turns: Turn[] | null | undefined) {
   setEmptyState(false);
 
   // ctx=0인 턴도 포함 — 성장 곡선의 시작점으로 표시 (필터 없이 prompt 있는 모든 턴 사용)
-  const sorted = (turns || []).filter(t => t.prompt).slice().sort((a, b) => a.turn_index - b.turn_index);
+  // 타입 가드 predicate 로 prompt 존재를 좁힌다(런타임 동일 — 단순 truthy 필터, any 제거 후 narrowing 위함).
+  const sorted = (turns || [])
+    .filter((t): t is Turn & { prompt: TurnPrompt } => Boolean(t.prompt))
+    .slice()
+    .sort((a, b) => a.turn_index - b.turn_index);
   const values = sorted.map(t => t.prompt.context_tokens || t.prompt.tokens_input || 0);
 
   // 모델 기반 실제 context window 한도 추론 — 200K 하드코딩 제거 (Opus 4.7은 1M GA 등)

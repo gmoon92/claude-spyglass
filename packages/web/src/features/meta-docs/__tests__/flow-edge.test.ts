@@ -5,7 +5,7 @@
  * 동치를 순수 함수로 고정한다. arch §4.2: lib/flow-edge.ts 순수 기하.
  * 회귀 게이트: 4면 앵커 선택 + 외곽 offset(마커 가림 방지, flow.js:653).
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import {
   chooseAnchors,
   anchorPoint,

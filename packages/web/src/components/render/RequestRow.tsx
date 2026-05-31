@@ -40,7 +40,8 @@ interface RowLike {
   session_id?: string | null;
   project_name?: string | null;
   model?: string | null;
-  timestamp?: string | null;
+  // SSoT(RequestRow.timestamp)=number(epoch ms). 과거 ISO string wire 호환도 수용(fmtTs 는 둘 다 처리).
+  timestamp?: string | number | null;
   tokens_input?: number;
   tokens_output?: number;
   duration_ms?: number;
@@ -54,7 +55,7 @@ interface RowLike {
 interface RequestRowOpts {
   showSession?: boolean;
   anomalyFlags?: Set<string> | null;
-  fmtTime?: (ts: string | null | undefined) => string;
+  fmtTime?: (ts: string | number | null | undefined) => string;
   /**
    * data-chip-key 주입 (P3-05 TurnRows 전용). 빈/미지정이면 속성 미부여 —
    * 원본 turn-rows.js#injectChipKey 와 동일(키 없으면 속성 생략).

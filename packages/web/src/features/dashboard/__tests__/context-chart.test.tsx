@@ -4,7 +4,7 @@
  * resolveSessionContextWindow/computeContextChartModel/computePoints/bloated-sys 산술 골든마스터.
  * 캔버스 명령형 그리기는 단위 불가(Chart.tsx Gap 동일) → null/ctx-null 가드만 검증.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   resolveSessionContextWindow,

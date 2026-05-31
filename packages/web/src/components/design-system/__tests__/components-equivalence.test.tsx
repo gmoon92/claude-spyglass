@@ -20,7 +20,7 @@
  * 회귀 가드: 신규 계약(P2-03). 원본 js 는 무수정·병존. 기존 261 통과분에 가산.
  * false-pass 가드: 정규화가 모든 차이를 삼켜 항상 통과하지 않음을, 의도적 불일치로 검증한다.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 

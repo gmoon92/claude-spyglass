@@ -6,7 +6,7 @@
  * 컴포넌트 effect 가 호출 — 본 테스트는 순수 계산부(fit/이징/즉시적용)만 고정.
  * 회귀 게이트: fit scale 클램프(camera.js:171), getBoundingClientRect 모킹.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import {
   easeInOutCubic,
   computeFitView,

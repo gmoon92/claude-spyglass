@@ -5,7 +5,7 @@
  * 셸이 docs/tools 탭 분기로 mount(view.js:316 loadProjectToolStats). 본 테스트는 위임 계약 + 탭 가시성.
  * 셀렉터 계약(ts-mx-*)은 ToolStatsMatrix(P3-09)에서 이미 고정 — 여기선 mount/empty/ToolIcon 슬롯만.
  */
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { MetaDocsToolStats } from '../MetaDocsToolStats';

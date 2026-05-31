@@ -29,7 +29,7 @@ const REMINDER_RE = /<system-reminder>([\s\S]*?)<\/system-reminder>/g;
  * @param {string|null|undefined} raw — TurnItem.system_reminder 그대로
  * @returns {string[]} 각 reminder 본문 (trim된 문자열). raw가 비어있으면 빈 배열.
  */
-export function parseReminderBodies(raw: any) {
+export function parseReminderBodies(raw: unknown): string[] {
   if (!raw || typeof raw !== 'string') return [];
   const out = [];
   let m;
@@ -51,23 +51,25 @@ export function parseReminderBodies(raw: any) {
  * @param {Array<{turn_id: string, turn_index: number, system_reminder?: string|null}>} turns
  * @returns {Map<string, string[]>} turn_id → 신규 reminder 본문 배열
  */
-export function computeNewRemindersByTurn(turns: any) {
-  const result = new Map();
+interface ReminderTurn { turn_id?: string; turn_index?: number; system_reminder?: string | null }
+
+export function computeNewRemindersByTurn(turns: ReminderTurn[] | null | undefined) {
+  const result = new Map<string, string[]>();
   if (!Array.isArray(turns) || turns.length === 0) return result;
 
   const asc = turns.slice().sort((a, b) => (a.turn_index ?? 0) - (b.turn_index ?? 0));
-  const seen = new Set();   // 세션 누적 dedup 집합
+  const seen = new Set<string>();   // 세션 누적 dedup 집합
 
   for (const t of asc) {
     const bodies = parseReminderBodies(t.system_reminder);
     if (bodies.length === 0) continue;
-    const fresh = [];
+    const fresh: string[] = [];
     for (const b of bodies) {
       if (seen.has(b)) continue;
       seen.add(b);
       fresh.push(b);
     }
-    if (fresh.length > 0) result.set(t.turn_id, fresh);
+    if (fresh.length > 0 && t.turn_id != null) result.set(t.turn_id, fresh);
   }
   return result;
 }

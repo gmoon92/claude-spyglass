@@ -63,8 +63,8 @@ export function applyDetailFilter() {
   const activeScope = activeTurnId ? requests.filter(r => r.turn_id === activeTurnId) : [];
   const countSource = activeScope.length ? activeScope : requests;
   const countMap: Record<string, number> = { all: countSource.length, prompt: 0, tool_call: 0, system: getSystemHashCount(), agent: 0, skill: 0, mcp: 0 };
-  countSource.forEach((r: any) => {
-    if (r.type in countMap && r.type !== 'system') countMap[r.type]++;
+  countSource.forEach((r) => {
+    if (typeof r.type === 'string' && r.type in countMap && r.type !== 'system') countMap[r.type]++;
     const sub = subTypeOf(r);
     if (sub) countMap[sub]++;
   });

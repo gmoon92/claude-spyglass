@@ -11,7 +11,7 @@
  * 신규 계약(원본 대비): rail 은 controlled — appMode prop 으로 aria-current 를 선언적으로 도출하고
  *   onSelect 콜백에 raw mode 만 전달(app-rail.js 의 applyAppMode 주입 패턴 1:1).
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 import { AppRail, APP_RAIL_MODES } from '../AppRail';

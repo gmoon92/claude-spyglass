@@ -17,7 +17,7 @@
  * 거짓통과 가드:
  *  - 정규화가 구조 차이까지 삼키지 않음을 별도 테스트로 증명(셀렉터/속성 의도적 변형 주입 시 불일치).
  */
-import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 // 신규 TSX(barrel 경유 — barrel 완전성 동시 검증).
@@ -99,15 +99,29 @@ const js = (s: string) => normalizeHtml(s);
 
 // ── 목 데이터 (renderers.test.ts 와 동일) ──────────────────────────────────────
 
+// 픽스처 SSoT 정합(P5-03): RequestView 는 NormalizedRequest(SSoT) 를 그대로 확장하므로
+// tokens_total / sub_type / trust_level / model_fallback_applied 가 필수다. 값은 서버
+// request-normalizer 의 derive* 규칙과 동일하게 채워 "정규화된 실제 행"을 정확히 재현한다:
+//   - tokens_total      = tokens_input + tokens_output (deriveTokensTotal 동치)
+//   - sub_type          = deriveSubType: Agent/Skill/Task/mcp__* 외 일반 도구·prompt 는 null
+//   - trust_level       = deriveTrustLevel: model 존재 prompt → 'trusted', model null tool → 'unknown'
+//   - model_fallback_applied = false (turn 컨텍스트 폴백 미적용 — 픽스처는 raw model 그대로)
+// 렌더 함수(render/rows·cells·badges)는 이 4필드를 런타임에 읽지 않으므로(서버 SSoT, 클라는
+// tool_name 기반 subTypeOf 로 칩 분기) 값 추가는 골든마스터 출력을 바꾸지 않는다.
 function prompt(id: string, session_id: string, tokens_input = 100) {
   return {
     id,
-    type: 'prompt',
+    type: 'prompt' as const, // RequestType 리터럴 보존(객체 리터럴 string 확장 방지)
     session_id,
     tokens_input,
     tokens_output: 0,
-    timestamp: '2026-04-28T10:00:00Z',
+    tokens_total: tokens_input + 0,
+    // RequestRow.timestamp(SSoT)=number(epoch ms). 동일 instant 로 변환 → fmtTs 출력 불변.
+    timestamp: Date.parse('2026-04-28T10:00:00Z'),
     model: 'claude-3-5-sonnet',
+    model_fallback_applied: false,
+    sub_type: null as 'agent' | 'skill' | 'task' | 'mcp' | null,
+    trust_level: 'trusted' as 'trusted' | 'unknown' | 'synthetic' | 'estimated',
     duration_ms: 50,
     cache_read_tokens: 0,
     cache_creation_tokens: 0,
@@ -117,12 +131,16 @@ function prompt(id: string, session_id: string, tokens_input = 100) {
 function tool_call(id: string, turn_id: string, tool_name = 'Read') {
   return {
     id,
-    type: 'tool_call',
+    type: 'tool_call' as const, // RequestType 리터럴 보존
     session_id: 's1',
     tokens_input: 0,
     tokens_output: 100,
-    timestamp: '2026-04-28T10:01:00Z',
+    tokens_total: 0 + 100,
+    timestamp: Date.parse('2026-04-28T10:01:00Z'),
     model: null,
+    model_fallback_applied: false,
+    sub_type: null as 'agent' | 'skill' | 'task' | 'mcp' | null,
+    trust_level: 'unknown' as 'trusted' | 'unknown' | 'synthetic' | 'estimated',
     tool_name,
     turn_id,
     duration_ms: 200,
@@ -132,10 +150,14 @@ function tool_call(id: string, turn_id: string, tool_name = 'Read') {
 function session(id: string, started_at = '2026-04-28T10:00:00Z', total_tokens = 5000) {
   return {
     id,
-    started_at,
-    ended_at: null as string | null,
+    // Session.started_at/ended_at(SSoT)=number. ISO→epoch 변환으로 fmtRelative 출력 불변.
+    started_at: Date.parse(started_at),
+    ended_at: null as number | null,
     first_prompt_payload: JSON.stringify({ preview: '첫 프롬프트 미리보기' }),
     total_tokens,
+    // SessionView extends Session(SSoT) — project_name: string(필수, non-null).
+    // '' = render 의 `escHtml(s.project_name||'')` 가 undefined 였을 때와 동일 출력.
+    project_name: '',
   };
 }
 
@@ -262,7 +284,7 @@ describe('SessionRow ≡ makeSessionRow (golden master 6)', () => {
   });
   it('종료된 세션', () => {
     const s = session('s3', '2026-04-28T08:00:00Z', 3000);
-    s.ended_at = '2026-04-28T08:30:00Z';
+    s.ended_at = Date.parse('2026-04-28T08:30:00Z'); // SSoT: ended_at=number(epoch ms)
     expect(tsx(<SessionRow s={s} isSelected={false} />)).toBe(js(makeSessionRow(s, false)));
   });
   it('미리보기 없는 세션', () => {

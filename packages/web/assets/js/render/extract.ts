@@ -9,24 +9,78 @@ import { escHtml } from '../formatters.js';
 import { toolResponseHint } from './badges.js';
 import { svgRadio } from '../design-system/icons/radio.js';
 import { svgCheck } from '../design-system/icons/check.js';
+import type { RowTextReader } from '../view-types.js';
 
 const PROMPT_CACHE_MAX = 500;
-export const _promptCache = new Map(); // export: togglePromptExpand 공유
+export const _promptCache = new Map<string, ExpandContent>(); // export: togglePromptExpand 공유
 
-export function getContextText(r: any) {
+/** 펼침 캐시/getDetailText 반환 — 텍스트 또는 HTML 모드. */
+type ExpandContent = string | { kind: 'html'; html: string };
+
+/** JSON.parse 결과를 읽기 전용 record 로 안전 취급(필드는 unknown). any 누출 방지. */
+type JsonRecord = Record<string, unknown>;
+
+/** payload 문자열/객체를 record 로 파싱(실패/비객체는 null). */
+function parsePayload(payload: unknown): JsonRecord | null {
+  try {
+    const p = typeof payload === 'string' ? JSON.parse(payload) : payload;
+    return p && typeof p === 'object' ? (p as JsonRecord) : null;
+  } catch { return null; }
+}
+
+/** record 필드를 문자열로만 안전 추출(비문자열은 null). */
+function strOf(o: JsonRecord | null, key: string): string | null {
+  const v = o?.[key];
+  return typeof v === 'string' ? v : null;
+}
+
+/**
+ * payload 를 파싱하여 tool_input record 를 반환. 기존 `(JSON.parse(payload)).tool_input || {}` 와 동치이되,
+ * 파싱/비객체 실패 시 null 을 반환해 호출부가 폴백하도록 한다(기존 try/catch → tool_detail 폴백과 동일).
+ */
+function parsePayloadToolInput(payload: unknown): JsonRecord | null {
+  const p = parsePayload(payload);
+  if (!p) return null;
+  const ti = p.tool_input;
+  return ti && typeof ti === 'object' ? (ti as JsonRecord) : {};
+}
+
+/**
+ * 본문 텍스트 추출 — 기존 `JSON.parse(payload)` 후 `keys ?? (parsed가 string이면 그 string)` 와 1:1.
+ * 파싱 실패(throw)는 null(원문 미채택 → preview 폴백). parsed 가 string 이면 그 자체가 본문.
+ */
+function parsePayloadText(payload: unknown, keys: string[]): string | null {
+  let parsed: unknown;
+  try {
+    parsed = typeof payload === 'string' ? JSON.parse(payload) : payload;
+  } catch {
+    return null; // 비 JSON 문자열 → 기존엔 throw 로 preview 폴백
+  }
+  if (parsed && typeof parsed === 'object') {
+    const o = parsed as JsonRecord;
+    for (const k of keys) {
+      const v = o[k];
+      if (typeof v === 'string') return v; // 첫 string 필드 채택(객체 tool_input 은 건너뜀 = 기존 동치)
+    }
+    return null;
+  }
+  // parsed 가 원시 string(payload 가 JSON 인코딩된 문자열)인 경우 — 기존 `?? (typeof p==='string'? p)`.
+  return typeof parsed === 'string' ? parsed : null;
+}
+
+export function getContextText(r: RowTextReader) {
   if (!r) return null;
   if (r.type === 'tool_call') {
     if (r.tool_name === 'Agent' || r.tool_name === 'Skill') {
-      try {
-        const p  = typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
-        const ti = p?.tool_input || {};
+      const ti = parsePayloadToolInput(r.payload);
+      if (ti) {
         // Skill은 args(실제 요청 내용)를 우선 노출 — TARGET 컬럼이 이미 skill 이름을 보여주므로
         // MESSAGE에 이름을 반복하지 않는다. args 없을 때만 tool_detail(=skill 이름)으로 폴백.
         const text = r.tool_name === 'Agent'
-          ? (ti.description || ti.prompt || r.tool_detail)
-          : (ti.args || r.tool_detail || ti.skill);
+          ? (strOf(ti, 'description') || strOf(ti, 'prompt') || r.tool_detail)
+          : (strOf(ti, 'args') || r.tool_detail || strOf(ti, 'skill'));
         return text || null;
-      } catch {}
+      }
       return r.tool_detail || null;
     }
     return r.tool_detail || null;
@@ -49,87 +103,91 @@ export function getContextText(r: any) {
  * 구조화 카드로 시각화한다 (web-design-balance-pass ADR-004).
  * 다른 도구는 모두 텍스트 모드 유지 (회귀 안전).
  */
-function getDetailText(r: any) {
+function getDetailText(r: RowTextReader | null | undefined): ExpandContent | null {
   if (!r) return null;
   if (r.type === 'tool_call') {
-    try {
-      const p  = typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
-      const ti = p?.tool_input || {};
-      if (r.tool_name === 'AskUserQuestion') {
+    const ti = parsePayloadToolInput(r.payload);
+    if (ti) {
+      const tn = r.tool_name;
+      if (tn === 'AskUserQuestion') {
         const html = buildAskUserQuestionHtml(ti);
         if (html) return { kind: 'html', html };
         // payload 파싱 실패 시 tool_detail 텍스트로 폴백.
         return r.tool_detail || null;
       }
-      if (r.tool_name === 'Agent') {
-        return ti.prompt || ti.description || r.tool_detail || null;
+      if (tn === 'Agent') {
+        return strOf(ti, 'prompt') || strOf(ti, 'description') || r.tool_detail || null;
       }
-      if (r.tool_name === 'Skill') {
+      if (tn === 'Skill') {
         // preview(getContextText)와 동일 우선순위 — args(실제 요청 내용) 우선, 없으면 skill 이름 폴백.
-        return ti.args || r.tool_detail || ti.skill || null;
+        return strOf(ti, 'args') || r.tool_detail || strOf(ti, 'skill') || null;
       }
-      if (r.tool_name === 'Bash') {
-        return ti.command || r.tool_detail || null;
+      if (tn === 'Bash') {
+        return strOf(ti, 'command') || r.tool_detail || null;
       }
-      if (['Read', 'Edit', 'Write', 'MultiEdit'].includes(r.tool_name)) {
-        return ti.file_path || r.tool_detail || null;
+      if (tn && ['Read', 'Edit', 'Write', 'MultiEdit'].includes(tn)) {
+        return strOf(ti, 'file_path') || r.tool_detail || null;
       }
-      if (r.tool_name === 'Grep') {
-        const parts = [ti.pattern, ti.path ? `in ${ti.path}` : null].filter(Boolean);
+      if (tn === 'Grep' || tn === 'Glob') {
+        const path = strOf(ti, 'path');
+        const parts = [strOf(ti, 'pattern'), path ? `in ${path}` : null].filter(Boolean);
         return parts.join(' ') || r.tool_detail || null;
       }
-      if (r.tool_name === 'Glob') {
-        const parts = [ti.pattern, ti.path ? `in ${ti.path}` : null].filter(Boolean);
-        return parts.join(' ') || r.tool_detail || null;
-      }
-      if (r.tool_name?.startsWith('mcp__')) {
-        const keys = Object.keys(ti);
-        if (keys.length > 0) return JSON.stringify(ti, null, 2);
+      if (tn?.startsWith('mcp__')) {
+        if (Object.keys(ti).length > 0) return JSON.stringify(ti, null, 2);
       }
       // ADR-001 P1 (UX): Task*/SendMessage/Web* 등은 subject·summary만 tool_detail로 들어와
       // 펼침이 행 미리보기와 동일해진다. payload.tool_input의 풍부한 필드를 합쳐 노출.
-      if (r.tool_name === 'TaskCreate') {
+      if (tn === 'TaskCreate') {
+        const subject = strOf(ti, 'subject');
+        const activeForm = strOf(ti, 'activeForm');
+        const description = strOf(ti, 'description');
         const lines = [
-          ti.subject ? `Subject: ${ti.subject}` : null,
-          ti.activeForm ? `Active form: ${ti.activeForm}` : null,
-          ti.description ? `\nDescription:\n${ti.description}` : null,
+          subject ? `Subject: ${subject}` : null,
+          activeForm ? `Active form: ${activeForm}` : null,
+          description ? `\nDescription:\n${description}` : null,
         ].filter(Boolean);
         return lines.length > 0 ? lines.join('\n') : (r.tool_detail || null);
       }
-      if (r.tool_name === 'TaskUpdate') {
+      if (tn === 'TaskUpdate') {
         const fields = ['status', 'subject', 'description', 'activeForm', 'owner']
           .filter((k) => ti[k] != null)
-          .map((k) => `${k}: ${typeof ti[k] === 'string' ? ti[k] : JSON.stringify(ti[k])}`);
-        const head = ti.taskId ? `Task #${ti.taskId}` : 'TaskUpdate';
+          .map((k) => `${k}: ${typeof ti[k] === 'string' ? (ti[k] as string) : JSON.stringify(ti[k])}`);
+        const head = ti.taskId != null ? `Task #${String(ti.taskId)}` : 'TaskUpdate';
         return [head, ...fields].join('\n') || (r.tool_detail || null);
       }
-      if (r.tool_name === 'SendMessage') {
-        const head = ti.to ? `→ ${ti.to}` : 'SendMessage';
-        const summary = ti.summary ? `Summary: ${ti.summary}` : null;
-        const body = typeof ti.message === 'string'
-          ? `\nMessage:\n${ti.message}`
-          : (ti.message ? `\nMessage:\n${JSON.stringify(ti.message, null, 2)}` : null);
-        const out = [head, summary, body].filter(Boolean).join('\n');
+      if (tn === 'SendMessage') {
+        const to = strOf(ti, 'to');
+        const summary = strOf(ti, 'summary');
+        const head = to ? `→ ${to}` : 'SendMessage';
+        const msg = ti.message;
+        const body = typeof msg === 'string'
+          ? `\nMessage:\n${msg}`
+          : (msg ? `\nMessage:\n${JSON.stringify(msg, null, 2)}` : null);
+        const out = [head, summary ? `Summary: ${summary}` : null, body].filter(Boolean).join('\n');
         return out || (r.tool_detail || null);
       }
-      if (r.tool_name === 'WebFetch') {
+      if (tn === 'WebFetch') {
+        const url = strOf(ti, 'url');
+        const prompt = strOf(ti, 'prompt');
         const out = [
-          ti.url ? `URL: ${ti.url}` : null,
-          ti.prompt ? `\nPrompt:\n${ti.prompt}` : null,
+          url ? `URL: ${url}` : null,
+          prompt ? `\nPrompt:\n${prompt}` : null,
         ].filter(Boolean).join('\n');
         return out || (r.tool_detail || null);
       }
-      if (r.tool_name === 'WebSearch') {
+      if (tn === 'WebSearch') {
+        const query = strOf(ti, 'query');
+        const allowed = ti.allowed_domains;
+        const blocked = ti.blocked_domains;
         const out = [
-          ti.query ? `Query: ${ti.query}` : null,
-          Array.isArray(ti.allowed_domains) && ti.allowed_domains.length
-            ? `Allowed: ${ti.allowed_domains.join(', ')}` : null,
-          Array.isArray(ti.blocked_domains) && ti.blocked_domains.length
-            ? `Blocked: ${ti.blocked_domains.join(', ')}` : null,
+          query ? `Query: ${query}` : null,
+          Array.isArray(allowed) && allowed.length ? `Allowed: ${allowed.join(', ')}` : null,
+          Array.isArray(blocked) && blocked.length ? `Blocked: ${blocked.join(', ')}` : null,
         ].filter(Boolean).join('\n');
         return out || (r.tool_detail || null);
       }
-    } catch {}
+    }
     return r.tool_detail || null;
   }
   if (r.type === 'prompt' || r.type === 'system') return extractPromptText(r) || null;
@@ -155,21 +213,24 @@ function getDetailText(r: any) {
  * @param {object} toolInput   payload.tool_input 객체.
  * @returns {string|null}      HTML 문자열 또는 questions가 비어있으면 null.
  */
-function buildAskUserQuestionHtml(toolInput: any) {
+function buildAskUserQuestionHtml(toolInput: JsonRecord | null) {
   const questions = Array.isArray(toolInput?.questions) ? toolInput.questions : null;
   if (!questions || questions.length === 0) return null;
-  const answers = (toolInput && typeof toolInput.answers === 'object' && toolInput.answers) || {};
+  const answersRaw = toolInput?.answers;
+  const answers: Record<string, unknown> =
+    answersRaw && typeof answersRaw === 'object' ? (answersRaw as Record<string, unknown>) : {};
 
-  const blocks = questions.map((q: any) => {
-    const qText  = typeof q?.question === 'string' ? q.question : '';
-    const header = typeof q?.header   === 'string' ? q.header   : '';
-    const multi  = !!q?.multiSelect;
-    const opts   = Array.isArray(q?.options) ? q.options : [];
+  const blocks = questions.map((q: unknown) => {
+    const qo     = (q && typeof q === 'object' ? q : {}) as JsonRecord;
+    const qText  = typeof qo.question === 'string' ? qo.question : '';
+    const header = typeof qo.header   === 'string' ? qo.header   : '';
+    const multi  = !!qo.multiSelect;
+    const opts   = Array.isArray(qo.options) ? qo.options : [];
 
     // answers는 question 텍스트를 키로, 선택된 label을 값으로 매핑.
     // multiSelect가 true면 콤마/세미콜론 구분 문자열로 저장될 수 있어 두 형태 모두 허용.
     const rawAnswer = answers[qText];
-    const selectedSet = new Set();
+    const selectedSet = new Set<string>();
     if (typeof rawAnswer === 'string' && rawAnswer.length > 0) {
       // 단일 답이라도 split 결과의 첫 원소만 들어가므로 세트 처리에 안전.
       rawAnswer.split(/\s*[,;]\s*/).forEach(v => { if (v) selectedSet.add(v); });
@@ -177,9 +238,10 @@ function buildAskUserQuestionHtml(toolInput: any) {
       rawAnswer.forEach(v => { if (typeof v === 'string') selectedSet.add(v); });
     }
 
-    const optsHtml = opts.map((opt: any) => {
-      const label    = typeof opt?.label       === 'string' ? opt.label       : '';
-      const desc     = typeof opt?.description === 'string' ? opt.description : '';
+    const optsHtml = opts.map((opt: unknown) => {
+      const oo       = (opt && typeof opt === 'object' ? opt : {}) as JsonRecord;
+      const label    = typeof oo.label       === 'string' ? oo.label       : '';
+      const desc     = typeof oo.description === 'string' ? oo.description : '';
       const selected = selectedSet.has(label);
       // marker: multiSelect=false → svgRadio, multiSelect=true → svgCheck
       const markerSvg = multi
@@ -209,31 +271,32 @@ function buildAskUserQuestionHtml(toolInput: any) {
   return `<div class="askq-block">${blocks}</div>`;
 }
 
-export function parseToolDetail(raw: any) {
+export function parseToolDetail(raw: unknown): string | null {
   if (!raw) return null;
-  try {
-    const obj = JSON.parse(raw);
-    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
-      return Object.entries(obj).slice(0, 3)
-        .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
-        .join(' · ');
-    }
-  } catch {}
-  try {
-    const lines = raw.split('\n').filter((l: string) => /^\w[\w\s]*=/.test(l.trim()));
-    if (lines.length) return lines.slice(0, 3).map((l: string) => l.trim()).join(' · ');
-  } catch {}
-  return raw;
+  if (typeof raw === 'string') {
+    try {
+      const obj = JSON.parse(raw);
+      if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+        return Object.entries(obj).slice(0, 3)
+          .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+          .join(' · ');
+      }
+    } catch { /* JSON 아님 → key=value 라인 파싱 시도 */ }
+    const lines = raw.split('\n').filter((l) => /^\w[\w\s]*=/.test(l.trim()));
+    if (lines.length) return lines.slice(0, 3).map((l) => l.trim()).join(' · ');
+    return raw;
+  }
+  // 비문자열 raw(객체 등): 기존엔 JSON.parse 가 throw → 그대로 반환했다. 동치로 String 화.
+  return typeof raw === 'string' ? raw : String(raw);
 }
 
-export function extractPromptText(r: any) {
+export function extractPromptText(r: RowTextReader) {
   // payload 우선: 원본 전체 텍스트 추출 (DB preview는 최대 2000자로 저장되나 payload는 무제한)
   if (r.payload) {
-    try {
-      const p = typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
-      const fromPayload = p?.prompt ?? p?.content ?? p?.tool_input ?? (typeof p === 'string' ? p : '');
-      if (fromPayload && typeof fromPayload === 'string' && fromPayload.trim()) return fromPayload;
-    } catch { /* 파싱 실패 시 fallback */ }
+    // 기존: JSON.parse 후 prompt ?? content ?? tool_input ?? (parsed가 string이면 그 string).
+    //   파싱 실패(비 JSON 문자열)는 throw → preview 폴백(원문 미채택)이었다. parsePrimary 로 1:1 보존.
+    const fromPayload = parsePayloadText(r.payload, ['prompt', 'content', 'tool_input']);
+    if (fromPayload && fromPayload.trim()) return fromPayload;
   }
   // fallback: DB에 저장된 preview (payload 파싱 실패 또는 prompt 필드 없을 때)
   if (r.preview && typeof r.preview === 'string' && r.preview.trim()) return r.preview;
@@ -242,26 +305,25 @@ export function extractPromptText(r: any) {
 
 // type='response' 행의 본문 추출 — Stop 훅의 last_assistant_message
 // payload 우선, preview fallback (extractPromptText와 같은 패턴)
-export function extractAssistantText(r: any) {
+export function extractAssistantText(r: RowTextReader) {
   if (r.payload) {
-    try {
-      const p = typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload;
-      const fromPayload = p?.last_assistant_message ?? p?.preview ?? '';
-      if (fromPayload && typeof fromPayload === 'string' && fromPayload.trim()) return fromPayload;
-    } catch { /* 파싱 실패 시 fallback */ }
+    const p = parsePayload(r.payload);
+    const fromPayload = strOf(p, 'last_assistant_message') ?? strOf(p, 'preview');
+    if (fromPayload && fromPayload.trim()) return fromPayload;
   }
   if (r.preview && typeof r.preview === 'string' && r.preview.trim()) return r.preview;
   return '';
 }
 
-export function contextPreview(r: any, maxLen = 60) {
+export function contextPreview(r: RowTextReader, maxLen = 60) {
   const rawText = getContextText(r);
   if (!rawText) return '';
   if (_promptCache.size >= PROMPT_CACHE_MAX) {
-    _promptCache.delete(_promptCache.keys().next().value);
+    const oldest = _promptCache.keys().next().value;
+    if (oldest !== undefined) _promptCache.delete(oldest);
   }
   const detailText = getDetailText(r) || rawText;
-  _promptCache.set(r.id, detailText);
+  _promptCache.set(r.id ?? '', detailText);
   const displayText = r.type === 'tool_call'
     ? (parseToolDetail(rawText) ?? rawText)
     : rawText;
@@ -276,14 +338,20 @@ export function contextPreview(r: any, maxLen = 60) {
   return `<span class="prompt-preview" data-expand-id="${escHtml(r.id)}" title="${escHtml(tooltip)}">${escHtml(display)}${flat.length > maxLen ? '…' : ''}${hintHtml}</span>`;
 }
 
-export function extractFirstPrompt(payload: any) {
+export function extractFirstPrompt(payload: unknown) {
   if (!payload) return '';
   function clean(text: string) {
     return text.replace(/<[^>]+>/g, '').replace(/[\n\r]+/g, ' ').trim().slice(0, 60);
   }
   try {
     const p    = typeof payload === 'string' ? JSON.parse(payload) : payload;
-    const text = p?.preview ?? p?.prompt ?? p?.content ?? (typeof p === 'string' ? p : '');
+    let text = '';
+    if (p && typeof p === 'object') {
+      const o = p as JsonRecord;
+      text = (strOf(o, 'preview') ?? strOf(o, 'prompt') ?? strOf(o, 'content')) ?? '';
+    } else if (typeof p === 'string') {
+      text = p;
+    }
     return text ? clean(text) : '';
   } catch {
     const m = typeof payload === 'string' && payload.match(/"prompt"\s*:\s*"((?:[^"\\]|\\.)*)"/);

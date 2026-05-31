@@ -11,7 +11,7 @@
  *
  * 레이아웃 셸은 각자 data-testid(browse-layout/meta-docs-layout/settings-layout)를 노출한다(SSoT 마커).
  */
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactElement } from 'react';

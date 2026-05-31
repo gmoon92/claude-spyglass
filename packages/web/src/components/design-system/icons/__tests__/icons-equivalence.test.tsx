@@ -13,7 +13,7 @@
  *
  * 회귀 가드: 이 파일은 신규 계약(P2-01). 원본 js 는 무수정, 병존.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 

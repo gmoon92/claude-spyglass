@@ -6,7 +6,7 @@
  * 전략(tasks.json:323): apiFetch(fetch) mock 후 입력→호출 인자(URL/method/body) 검증 +
  *   성공/실패/abort 분기. DOM 없이 순수 async 함수로 테스트.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { fetchDiag, hookPreview, hookApply, hookRestore } from '../hooks-api';
 
 // ── fetch mock 하네스 ─────────────────────────────────────────────────────────

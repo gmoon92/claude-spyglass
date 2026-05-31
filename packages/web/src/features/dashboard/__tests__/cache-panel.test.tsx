@@ -4,7 +4,7 @@
  * computeSessionCacheStats 는 원본 cache-panel.js 와 동치 비교(병존 import).
  * hit-rate 경계(>99/<1)·톤·비율 라벨은 cache-stats.ts 골든마스터로 고정.
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   computeSessionCacheStats,
