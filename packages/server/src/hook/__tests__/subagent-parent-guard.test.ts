@@ -220,4 +220,105 @@ describe('T8 Prevention 가드 — 모호 시 라이브 부모추측 보류', ()
     }));
     expect(getParent(db, 'T')).toBe('S');
   });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // T10 다양화 — 실 유입 데이터 형태(shape) 재현. 값은 전부 합성(toolu_test* 접두어
+  //   + crypto.randomUUID 세션), 실 경로/세션UUID/장문 toolu/실프롬프트 미사용.
+  // ───────────────────────────────────────────────────────────────────────
+
+  it('병렬 동일타입 3개 — 모호 가드가 2개를 넘어 N≥2 전반에 적용(자식 보류 NULL)', () => {
+    // 실 형태: 같은 turn 에 같은 agent_type(Explore) 인스턴스가 *서로 다른 toolu_** 로 3개
+    // 병렬 등장. 가드의 카운트는 DISTINCT tool_use_id 라 3개 모두 인스턴스로 계수 → 모호.
+    // 라이브 추측은 어느 인스턴스가 진짜 부모인지 분간 불가 → 보류(NULL). (권위 백필이
+    //   각 agent_id transcript 로 정확 귀속 — regression 테스트가 커버.)
+    saveRequest(db.instance, makeAgent({
+      id: 'agent-1', sessionId, toolUseId: 'toolu_testExplore1', agentType: 'Explore',
+      timestamp: now + 1000, eventType: 'tool',
+    }));
+    saveRequest(db.instance, makeAgent({
+      id: 'agent-2', sessionId, toolUseId: 'toolu_testExplore2', agentType: 'Explore',
+      timestamp: now + 1500, eventType: 'tool',
+    }));
+    saveRequest(db.instance, makeAgent({
+      id: 'agent-3', sessionId, toolUseId: 'toolu_testExplore3', agentType: 'Explore',
+      timestamp: now + 2000, eventType: 'pre_tool',
+    }));
+    // 자식 — 3개 형제라 모호 → 보류.
+    saveRequest(db.instance, makeChildLiveHook({
+      id: 'child-c', sessionId, toolUseId: 'toolu_testChildP3', agentType: 'Explore',
+      timestamp: now + 3000,
+    }));
+    expect(getParent(db, 'toolu_testChildP3')).toBeNull();
+  });
+
+  it('Pre+Post 페어 머지 — 단일 인스턴스 자식이 pre→post 머지 1행 + 부모 보존', () => {
+    // 실 형태: 한 자식 tool_use_id 가 PreToolUse(pre_tool) + PostToolUse(tool) 두 이벤트로
+    //   도착 → saveRequest 가 1행으로 머지. 단일 Agent 인스턴스라 pre_tool INSERT 시점에
+    //   rolling-parent 2순위로 부모(Agent)가 채택되고, post 머지는 parent 를 보존해야 한다.
+    saveRequest(db.instance, makeAgent({
+      id: 'agent-1', sessionId, toolUseId: 'toolu_testAgentPP', agentType: 'backend-agent',
+      timestamp: now + 1000, eventType: 'tool',
+    }));
+    // 자식 PreToolUse 도착(pre_tool) — 단일 인스턴스라 부모 추측 채택.
+    saveRequest(db.instance, makeChildLiveHook({
+      id: 'child-pre', sessionId, toolUseId: 'toolu_testChildPP', agentType: 'backend-agent',
+      timestamp: now + 2000,
+    }));
+    // (makeChildLiveHook 은 event_type='tool' 이므로 pre_tool 변형을 직접 구성)
+    // → 위 호출은 post-first 1행을 만든다. 부모는 단일 인스턴스 추측으로 채택돼야 한다.
+    expect(getParent(db, 'toolu_testChildPP')).toBe('toolu_testAgentPP');
+    // 같은 tool_use_id 로 PostToolUse 가 다시 도착해도(머지/멱등) 단일 행 + 부모 불변.
+    saveRequest(db.instance, {
+      id: 'child-post', session_id: sessionId, project_name: 'guard-test',
+      timestamp: now + 2500, event_type: 'tool', request_type: 'tool_call',
+      tool_name: 'Bash', tool_detail: 'ls', tokens_input: 0, tokens_output: 0,
+      tokens_total: 0, duration_ms: 5, payload: JSON.stringify({ tool_use_id: 'toolu_testChildPP' }),
+      source: 'claude-code-hook', cache_creation_tokens: 0, cache_read_tokens: 0,
+      tokens_confidence: 'high', tokens_source: 'transcript', agent_type: 'backend-agent',
+    });
+    const cnt = db.instance.query(
+      'SELECT COUNT(*) AS c FROM requests WHERE tool_use_id = ?',
+    ).get('toolu_testChildPP') as { c: number };
+    expect(cnt.c).toBe(1);
+    expect(getParent(db, 'toolu_testChildPP')).toBe('toolu_testAgentPP');
+  });
+
+  it('Pre+Post 진짜 머지 — pre_tool 행을 post 가 UPDATE(1행) + 부모 보존', () => {
+    // 정확히 pre_tool 먼저 → post 가 같은 행을 UPDATE 하는 Upsert 경로를 검증.
+    saveRequest(db.instance, makeAgent({
+      id: 'agent-1', sessionId, toolUseId: 'toolu_testAgentMG', agentType: 'general-purpose',
+      timestamp: now + 1000, eventType: 'tool',
+    }));
+    // 자식 PreToolUse (event_type='pre_tool') — rolling-parent 로 부모 채택.
+    saveRequest(db.instance, {
+      id: 'child-pre', session_id: sessionId, project_name: 'guard-test',
+      timestamp: now + 2000, event_type: 'pre_tool', request_type: 'tool_call',
+      tool_name: 'Read', tool_detail: 'noop', tokens_input: 0, tokens_output: 0,
+      tokens_total: 0, duration_ms: 0, payload: JSON.stringify({ tool_use_id: 'toolu_testChildMG' }),
+      source: 'claude-code-hook', cache_creation_tokens: 0, cache_read_tokens: 0,
+      tokens_confidence: 'high', tokens_source: 'transcript', agent_type: 'general-purpose',
+    });
+    expect(getParent(db, 'toolu_testChildMG')).toBe('toolu_testAgentMG');
+    // PostToolUse 가 같은 tool_use_id 로 도착 → pre_tool 행 UPDATE(머지).
+    const res = saveRequest(db.instance, {
+      id: 'child-post', session_id: sessionId, project_name: 'guard-test',
+      timestamp: now + 2500, event_type: 'tool', request_type: 'tool_call',
+      tool_name: 'Read', tool_detail: 'noop', tokens_input: 10, tokens_output: 20,
+      tokens_total: 30, duration_ms: 7, payload: JSON.stringify({ tool_use_id: 'toolu_testChildMG' }),
+      source: 'claude-code-hook', cache_creation_tokens: 0, cache_read_tokens: 0,
+      tokens_confidence: 'high', tokens_source: 'transcript', agent_type: 'general-purpose',
+    });
+    expect(res.wasUpsert).toBe(true);
+    const cnt = db.instance.query(
+      'SELECT COUNT(*) AS c FROM requests WHERE tool_use_id = ?',
+    ).get('toolu_testChildMG') as { c: number };
+    expect(cnt.c).toBe(1);
+    // 머지 후에도 부모 보존 + 토큰은 post 값으로 갱신.
+    expect(getParent(db, 'toolu_testChildMG')).toBe('toolu_testAgentMG');
+    const row = db.instance.query(
+      "SELECT event_type, tokens_total FROM requests WHERE tool_use_id = ?",
+    ).get('toolu_testChildMG') as { event_type: string; tokens_total: number };
+    expect(row.event_type).toBe('tool');
+    expect(row.tokens_total).toBe(30);
+  });
 });

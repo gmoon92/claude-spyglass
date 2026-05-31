@@ -326,6 +326,173 @@ describe('G5 회귀 — 형제 서브에이전트 부모 오귀속 권위 교정
     expect(res.backfilled).toBe(1);
   });
 
+  // ───────────────────────────────────────────────────────────────────────
+  // T10 다양화 — 실 유입 데이터 형태(shape) 재현. 값은 전부 합성(toolu_test* 접두어
+  //   + crypto.randomUUID 세션), 실 경로/세션UUID/장문 toolu/실프롬프트 미사용.
+  // ───────────────────────────────────────────────────────────────────────
+
+  it('병렬 동일타입 3개 권위 백필 — 각 자식이 자기 인스턴스로 귀속, 형제 오염 0', () => {
+    // 실 형태: 같은 turn 에 Explore 인스턴스 3개(서로 다른 toolu_*). 각 인스턴스의
+    //   sub-transcript 에서 추출된 자식은 그 인스턴스 context.parentToolUseId 로 권위 귀속.
+    //   라이브는 모호로 보류(NULL)했다가, 권위 백필이 각자 정확히 채운다.
+    const A1 = 'toolu_testExploreA1';
+    const A2 = 'toolu_testExploreA2';
+    const A3 = 'toolu_testExploreA3';
+    saveRequest(db.instance, makeAgent({
+      id: 'agent-1', sessionId, toolUseId: A1, agentType: 'Explore',
+      timestamp: now + 1000, eventType: 'tool',
+    }));
+    saveRequest(db.instance, makeAgent({
+      id: 'agent-2', sessionId, toolUseId: A2, agentType: 'Explore',
+      timestamp: now + 1500, eventType: 'tool',
+    }));
+    saveRequest(db.instance, makeAgent({
+      id: 'agent-3', sessionId, toolUseId: A3, agentType: 'Explore',
+      timestamp: now + 2000, eventType: 'pre_tool',
+    }));
+    // 각 인스턴스의 자식 1개씩(모호 → 라이브 보류 NULL).
+    const Y1 = 'toolu_testChildY1';
+    const Y2 = 'toolu_testChildY2';
+    const Y3 = 'toolu_testChildY3';
+    for (const [id, tu] of [['c-Y1', Y1], ['c-Y2', Y2], ['c-Y3', Y3]] as const) {
+      saveRequest(db.instance, makeChildLiveHook({
+        id, sessionId, toolUseId: tu, agentType: 'Explore', timestamp: now + 3000,
+      }));
+      expect(getParent(db.instance, tu)).toBeNull();
+    }
+
+    // 권위 백필: 인스턴스별 호출(각자 자기 Agent tool_use_id 가 context).
+    persistSubagentChildren(db.instance, [makeChildCall({ toolUseId: Y1, timestampMs: now + 3000 })], { parentToolUseId: A1, sessionId, turnId });
+    persistSubagentChildren(db.instance, [makeChildCall({ toolUseId: Y2, timestampMs: now + 3000 })], { parentToolUseId: A2, sessionId, turnId });
+    persistSubagentChildren(db.instance, [makeChildCall({ toolUseId: Y3, timestampMs: now + 3000 })], { parentToolUseId: A3, sessionId, turnId });
+
+    // 각 자식은 자기 인스턴스로만 귀속 — 형제 간 오염 0.
+    expect(getParent(db.instance, Y1)).toBe(A1);
+    expect(getParent(db.instance, Y2)).toBe(A2);
+    expect(getParent(db.instance, Y3)).toBe(A3);
+  });
+
+  it('PostToolUseFailure 자식 — 실패한 도구 호출(agent_id 보유)도 권위 귀속 대상', () => {
+    // 실 형태: 서브에이전트 내부에서 실패한 도구도 agent_id/agent_type 를 보유한 'tool' 행으로
+    //   적재된다. 모호(형제 2개)면 라이브 보류 → 권위 백필이 정확히 귀속해야 한다(누락 없음).
+    const A = 'toolu_testFailAgentA';
+    const B = 'toolu_testFailAgentB';
+    saveRequest(db.instance, makeAgent({
+      id: 'agent-A', sessionId, toolUseId: A, agentType: 'backend-agent',
+      timestamp: now + 1000, eventType: 'tool',
+    }));
+    saveRequest(db.instance, makeAgent({
+      id: 'agent-B', sessionId, toolUseId: B, agentType: 'backend-agent',
+      timestamp: now + 2000, eventType: 'pre_tool',
+    }));
+    // 실패한 자식 도구 행 — payload 에 합성 오류 라벨, agent_type 보유.
+    const F = 'toolu_testFailChild';
+    saveRequest(db.instance, {
+      id: 'child-fail', session_id: sessionId, project_name: 'sibling-test',
+      timestamp: now + 3000, event_type: 'tool', request_type: 'tool_call',
+      tool_name: 'Bash', tool_detail: 'noop', tokens_input: 0, tokens_output: 0,
+      tokens_total: 0, duration_ms: 1,
+      payload: JSON.stringify({ tool_use_id: F, error: 'synthetic failure' }),
+      source: 'claude-code-hook', cache_creation_tokens: 0, cache_read_tokens: 0,
+      tokens_confidence: 'high', tokens_source: 'transcript', agent_type: 'backend-agent',
+    });
+    // 모호 → 라이브 보류.
+    expect(getParent(db.instance, F)).toBeNull();
+
+    // 권위 백필: B 의 sub-transcript 에서 실패 도구 F 도 추출됨(실패도 tool_use 블록 존재).
+    const res = persistSubagentChildren(
+      db.instance,
+      [makeChildCall({ toolUseId: F, timestampMs: now + 3000 })],
+      { parentToolUseId: B, sessionId, turnId },
+    );
+    // 실패 행도 누락 없이 귀속.
+    expect(getParent(db.instance, F)).toBe(B);
+    expect(res.backfilled).toBe(1);
+  });
+
+  it('깊이3 Agent→Skill→다중 형제 도구 — 같은 인스턴스 형제 모두 Skill 부모', () => {
+    // 실 형태: 한 Agent 인스턴스 안에서 Skill 1개 + 그 아래 형제 도구 3개. 각 형제의
+    //   child.parentToolUseId 는 동일 Skill 이며 그 값이 권위로 보존돼야 한다.
+    const A = 'toolu_testDeepAgent';
+    const S = 'toolu_testDeepSkill';
+    saveRequest(db.instance, makeAgent({
+      id: 'agent-A', sessionId, toolUseId: A, agentType: 'pm',
+      timestamp: now + 1000, eventType: 'tool',
+    }));
+    // 형제 도구 3개 라이브 도착 — Skill 행 없어 부모=A 로 추측.
+    const sibs = ['toolu_testDeepC1', 'toolu_testDeepC2', 'toolu_testDeepC3'];
+    sibs.forEach((tu, i) => {
+      saveRequest(db.instance, makeChildLiveHook({
+        id: `child-${i}`, sessionId, toolUseId: tu, agentType: 'pm', timestamp: now + 3000 + i,
+      }));
+      expect(getParent(db.instance, tu)).toBe(A);
+    });
+
+    // 권위: transcript 는 세 형제의 직속 부모가 모두 Skill S 임을 안다.
+    const res = persistSubagentChildren(
+      db.instance,
+      sibs.map((tu, i) => makeChildCall({ toolUseId: tu, timestampMs: now + 3000 + i, parentToolUseId: S })),
+      { parentToolUseId: A, sessionId, turnId },
+    );
+    // 깊이3 보존: 세 형제 모두 Skill S 로 교정.
+    for (const tu of sibs) {
+      expect(getParent(db.instance, tu)).toBe(S);
+    }
+    expect(res.backfilled).toBe(3);
+  });
+
+  it('Pre+Post 머지 자식 후 모호 권위 백필 — 머지 1행 + 정확 부모(B)', () => {
+    // 실 형태: 모호(형제 2개)에서 자식이 pre→post 머지로 1행(parent NULL 보류)된 뒤,
+    //   B 의 sub-transcript 권위로 정확 귀속. 행은 여전히 1개여야 한다.
+    const A = 'toolu_testMergeAgentA';
+    const B = 'toolu_testMergeAgentB';
+    saveRequest(db.instance, makeAgent({
+      id: 'agent-A', sessionId, toolUseId: A, agentType: 'Explore',
+      timestamp: now + 1000, eventType: 'tool',
+    }));
+    saveRequest(db.instance, makeAgent({
+      id: 'agent-B', sessionId, toolUseId: B, agentType: 'Explore',
+      timestamp: now + 2000, eventType: 'tool',
+    }));
+    const C = 'toolu_testMergeChild';
+    // 자식 pre_tool — 모호라 보류(NULL).
+    saveRequest(db.instance, {
+      id: 'child-pre', session_id: sessionId, project_name: 'sibling-test',
+      timestamp: now + 3000, event_type: 'pre_tool', request_type: 'tool_call',
+      tool_name: 'Edit', tool_detail: 'noop', tokens_input: 0, tokens_output: 0,
+      tokens_total: 0, duration_ms: 0, payload: JSON.stringify({ tool_use_id: C }),
+      source: 'claude-code-hook', cache_creation_tokens: 0, cache_read_tokens: 0,
+      tokens_confidence: 'high', tokens_source: 'transcript', agent_type: 'Explore',
+    });
+    // 자식 post_tool — 같은 tool_use_id → pre 행 UPDATE(머지).
+    saveRequest(db.instance, {
+      id: 'child-post', session_id: sessionId, project_name: 'sibling-test',
+      timestamp: now + 3500, event_type: 'tool', request_type: 'tool_call',
+      tool_name: 'Edit', tool_detail: 'noop', tokens_input: 5, tokens_output: 5,
+      tokens_total: 10, duration_ms: 3, payload: JSON.stringify({ tool_use_id: C }),
+      source: 'claude-code-hook', cache_creation_tokens: 0, cache_read_tokens: 0,
+      tokens_confidence: 'high', tokens_source: 'transcript', agent_type: 'Explore',
+    });
+    expect(getParent(db.instance, C)).toBeNull();
+    const cntBefore = db.instance.query(
+      'SELECT COUNT(*) AS c FROM requests WHERE tool_use_id = ?',
+    ).get(C) as { c: number };
+    expect(cntBefore.c).toBe(1); // 머지로 1행.
+
+    // 권위 백필 → B.
+    const res = persistSubagentChildren(
+      db.instance,
+      [makeChildCall({ toolUseId: C, timestampMs: now + 3000, toolName: 'Edit' })],
+      { parentToolUseId: B, sessionId, turnId },
+    );
+    expect(getParent(db.instance, C)).toBe(B);
+    expect(res.backfilled).toBe(1);
+    const cntAfter = db.instance.query(
+      'SELECT COUNT(*) AS c FROM requests WHERE tool_use_id = ?',
+    ).get(C) as { c: number };
+    expect(cntAfter.c).toBe(1); // 백필 후에도 단일 행.
+  });
+
   it('무회귀 ④ — persistSubagentChildren 2회 멱등', () => {
     saveRequest(db.instance, makeAgent({
       id: 'agent-A', sessionId, toolUseId: 'A', agentType: 'Explore',

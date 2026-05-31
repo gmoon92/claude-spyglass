@@ -233,4 +233,56 @@ describe('T9 — backfill-subagent-parents 권위 재도출', () => {
     expect(res.updated).toBe(0);
     expect(countOutbox('c-Y')).toBe(0);
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // T10 다양화 — 실 유입 데이터 형태(shape) 재현. toolu_test* 합성 id + agent_id 별
+  //   sub-transcript 픽스처. 실 경로/세션UUID/장문 toolu/실프롬프트 미사용.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  it('(6) 여러 agent_id 혼재 — 한 run 에서 각 자식이 자기 transcript 권위로 정확 귀속(형제 오염 0)', () => {
+    // 동일타입(Explore) Agent 2개가 서로 다른 agent_id 로 병렬. 각 자식은 *자기* agent_id
+    //   sub-transcript 권위로 귀속돼야 한다 — agent_id 로 인스턴스를 정확히 분간.
+    const A = 'toolu_testMixA';
+    const B = 'toolu_testMixB';
+    insertAgent({ id: 'a-A', toolUseId: A, agentType: 'Explore', agentId: 'agMixA', timestamp: Date.now() - 9000 });
+    insertAgent({ id: 'a-B', toolUseId: B, agentType: 'Explore', agentId: 'agMixB', timestamp: Date.now() - 8000 });
+    // 각 인스턴스 sub-transcript: Skill 없음 → Agent 폴백(자기 Agent tool_use_id).
+    writeSubTranscript('agMixA', [{ id: 'toolu_testMixYA', name: 'Bash', ts: Date.now() - 7000 }]);
+    writeSubTranscript('agMixB', [{ id: 'toolu_testMixYB', name: 'Read', ts: Date.now() - 6000 }]);
+    // 두 자식 모두 *틀린* 형제로 오귀속(YA→B, YB→A) 상태로 적재 → 교정 대상.
+    insertChild({
+      id: 'c-YA', toolUseId: 'toolu_testMixYA', agentId: 'agMixA', agentType: 'Explore',
+      timestamp: Date.now() - 7000, parentToolUseId: B,
+    });
+    insertChild({
+      id: 'c-YB', toolUseId: 'toolu_testMixYB', agentId: 'agMixB', agentType: 'Explore',
+      timestamp: Date.now() - 6000, parentToolUseId: A, toolName: 'Read',
+    });
+    expect(getParent('toolu_testMixYA')).toBe(B);
+    expect(getParent('toolu_testMixYB')).toBe(A);
+
+    const res = runBackfill(db.instance, { dryRun: false, limit: null });
+    // 각자 자기 agent_id transcript 권위로 정확 교정 — 형제 오염 0.
+    expect(getParent('toolu_testMixYA')).toBe(A);
+    expect(getParent('toolu_testMixYB')).toBe(B);
+    expect(res.updated).toBe(2);
+    expect(countOutbox('c-YA')).toBeGreaterThanOrEqual(1);
+    expect(countOutbox('c-YB')).toBeGreaterThanOrEqual(1);
+  });
+
+  it('(7) PostToolUseFailure 자식 — 실패 도구(agent_id 보유)도 후보로 잡혀 권위 교정', () => {
+    // 실패한 도구도 sub-transcript 에 tool_use 블록으로 남고 agent_id 를 보유한다.
+    //   parent NULL 로 적재된 실패 자식이 권위값으로 채워져야 한다(누락 없음).
+    insertAgent({ id: 'a-A', toolUseId: 'toolu_testFailA', agentType: 'backend-agent', agentId: 'agFail', timestamp: Date.now() - 8000 });
+    writeSubTranscript('agFail', [{ id: 'toolu_testFailY', name: 'Bash', ts: Date.now() - 6000 }]);
+    insertChild({
+      id: 'c-fail', toolUseId: 'toolu_testFailY', agentId: 'agFail', agentType: 'backend-agent',
+      timestamp: Date.now() - 6000, parentToolUseId: null,
+    });
+    expect(getParent('toolu_testFailY')).toBeNull();
+
+    const res = runBackfill(db.instance, { dryRun: false, limit: null });
+    expect(getParent('toolu_testFailY')).toBe('toolu_testFailA');
+    expect(res.updated).toBe(1);
+  });
 });
