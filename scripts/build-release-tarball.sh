@@ -172,8 +172,19 @@ fi
 ARCHIVE_PATH="${OUT_DIR}/${TARBALL_NAME}.${ARCHIVE_EXT}"
 if [[ "$ARCHIVE_EXT" == "zip" ]]; then
   echo "[build] packing zip..."
-  # -r 재귀, -q 조용히. 상대 경로 보존 위해 OUT_DIR 기준에서 실행.
-  ( cd "${OUT_DIR}" && rm -f "${TARBALL_NAME}.zip" && zip -r -q "${TARBALL_NAME}.zip" "${TARBALL_NAME}" )
+  # windows git-bash 에는 zip 이 없을 수 있다(exit 127). zip 있으면 사용, 없으면 PowerShell
+  # Compress-Archive 폴백. 둘 다 OUT_DIR 기준 상대경로로 실행해 경로 변환/최상위 폴더 보존.
+  if command -v zip >/dev/null 2>&1; then
+    ( cd "${OUT_DIR}" && rm -f "${TARBALL_NAME}.zip" && zip -r -q "${TARBALL_NAME}.zip" "${TARBALL_NAME}" )
+  elif command -v powershell >/dev/null 2>&1; then
+    echo "[build]   zip 미탑재 → PowerShell Compress-Archive 폴백"
+    ( cd "${OUT_DIR}" && rm -f "${TARBALL_NAME}.zip" \
+      && powershell -NoProfile -NonInteractive -Command \
+         "Compress-Archive -Path '${TARBALL_NAME}' -DestinationPath '${TARBALL_NAME}.zip' -Force" )
+  else
+    echo "[build] ERROR: zip 도 powershell 도 없음 — windows 아카이브 불가" >&2
+    exit 1
+  fi
 else
   echo "[build] packing tarball..."
   tar -czf "${ARCHIVE_PATH}" -C "${OUT_DIR}" "${TARBALL_NAME}"

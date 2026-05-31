@@ -36,8 +36,31 @@ permissions:
   contents: write   # GitHub Release 생성
 
 jobs:
+  # 릴리스를 단 한 번만 생성한다. 매트릭스 빌드 잡들이 동시에 softprops 로 생성하면
+  # tag_name already_exists race(Validation Failed)로 일부 잡이 finalize 실패한다.
+  # 생성을 이 잡 1곳으로 모으고, build 잡들은 gh release upload(추가만)로 자산만 올린다.
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Create release if absent
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "[release] $TAG 이미 존재 — 재사용(자산은 build 잡이 --clobber 업로드)"
+          else
+            PRE=""; [[ "$TAG" == *-* ]] && PRE="--prerelease"
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "$TAG" --generate-notes $PRE
+          fi
+
   build:
     name: Build ${{ matrix.os }}-${{ matrix.arch }}
+    needs: create-release
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
 
@@ -107,18 +130,17 @@ jobs:
           # spctl 은 ad-hoc 서명을 거부하지만, 검증 출력 자체는 정보로 남김.
           spctl --assess --type execute "$BIN" 2>&1 || echo "[release] spctl: ad-hoc signature (expected — not Developer ID)"
 
-      # 산출물 확장자: darwin/linux=tar.gz, windows=zip. glob 으로 둘 다 매칭.
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/release/spyglass-${{ steps.ver.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
-            dist/release/spyglass-${{ steps.ver.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}.tar.gz.sha256
-            dist/release/spyglass-${{ steps.ver.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}.zip
-            dist/release/spyglass-${{ steps.ver.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}.zip.sha256
-          # darwin/linux 은 .tar.gz 만, windows 는 .zip 만 생성 → 매칭 안 되는 glob 이 정상 존재.
-          # 매칭 0 인 glob 으로 job 이 실패하지 않게 한다(누락 산출물 무시).
-          fail_on_unmatched_files: false
-          draft: false
-          prerelease: ${{ steps.ver.outputs.is_prerelease }}
-          generate_release_notes: true
+      # 자산 업로드: create-release 가 만든 릴리스에 추가만 한다(생성 race 없음).
+      #   darwin/linux=.tar.gz(+.sha256), windows=.zip(+.sha256). `.*` glob 으로 존재 산출물만 매칭
+      #   (확장자 없는 staging 디렉토리는 매칭 제외). --clobber 로 재실행 시 덮어쓰기 멱등.
+      - name: Upload assets to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VER: ${{ steps.ver.outputs.version }}
+          OSN: ${{ matrix.os }}
+          ARCHN: ${{ matrix.arch }}
+        run: |
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+            dist/release/spyglass-${VER}-${OSN}-${ARCHN}.*
