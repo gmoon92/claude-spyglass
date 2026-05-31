@@ -107,7 +107,10 @@ describe('SessionDetailContainer — 상세 탭바 + 기본 본문', () => {
     expect(html).toContain('data-tab-value="syslib"');
     expect(html).toContain('tab-llm-title'); // llm 탭 title 속성.
     // 기본 탭(log) 본문 = DetailView(turn-spine 골격).
-    expect(html).toContain('id="detailView"');
+    //   #detailView(.right-view) switcher 슬롯은 BrowseLayout 소유 — 본 컨테이너는 그 직계 자식
+    //   (tab-bar + .detail-view 본문)만 렌더한다(중첩 .right-view 가 opacity:0 으로 본문을 가리던 회귀 수정).
+    expect(html).toContain('class="detail-view"');
+    expect(html).not.toContain('id="detailView"');
     expect(html).toContain('turn-spine');
   });
 

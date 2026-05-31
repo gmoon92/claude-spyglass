@@ -186,7 +186,7 @@ export function DetailView({
   );
 
   return (
-    <div className="detail-view" id="detailView">
+    <div className="detail-view">
       <SessionDetailHeader
         sessionId={sessionId}
         projectName={projectName}

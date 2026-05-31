@@ -24,7 +24,7 @@
  * @see packages/web/assets/js/session-detail/turn-views.js#setDetailView (원본 탭 스위치, :569-585)
  * @see packages/web/assets/js/views/detail-view.js#loadSession (원본 세션 로드)
  */
-import { useCallback, type ReactElement } from 'react';
+import { Fragment, useCallback, type ReactElement } from 'react';
 import { useAppStore } from '../../stores/app-store';
 import { LLMInput } from '../llm-input/LLMInput';
 import { SystemPromptLibrary } from '../dashboard/SystemPromptLibrary';
@@ -132,8 +132,14 @@ export function SessionDetailContainer({
     );
   };
 
+  // ★빈 본문 회귀 수정★: BrowseLayout 이 이미 switcher 슬롯
+  //   `<div id="detailView" className="right-view card active">` 를 소유한다(BrowseLayout:404).
+  //   여기서 다시 `.right-view card #detailView` 로 감싸면 안쪽 .right-view 는 `.active` 가 없어
+  //   default-view.css `.right-view { opacity:0; pointer-events:none; position:absolute }` 에 걸려
+  //   탭바·로그 행이 DOM 엔 있으나 화면엔 안 보인다(레거시는 #detailView 가 단일 .right-view).
+  //   따라서 본 컨테이너는 switcher 직계 자식(tab-bar + body)만 Fragment 로 렌더한다.
   return (
-    <div className="right-view card" id="detailView">
+    <Fragment>
       <div className="view-tab-bar" id="detailTabBar">
         <div className="view-tab-group" id="viewTabGroup" role="tablist">
           {TABS.map(({ value, labelKey, titleKey }) => {
@@ -157,6 +163,6 @@ export function SessionDetailContainer({
         </div>
       </div>
       {renderBody()}
-    </div>
+    </Fragment>
   );
 }
