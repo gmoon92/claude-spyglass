@@ -7,6 +7,11 @@
  * @module app
  */
 export { App, AppRoutes, AppModeSync, AppRoutesWithMemoryRouter } from './App';
+export { AppShell } from './AppShell';
+export { AppRail, APP_RAIL_MODES, type AppRailProps } from './AppRail';
+export { ErrorBanner, type ErrorBannerProps } from './ErrorBanner';
+export { Footer, type FooterProps } from './Footer';
+export { DashboardWarning, SHALLOW_FIX_COMMAND, type DashboardWarningProps } from './DashboardWarning';
 export { BrowseLayout } from './BrowseLayout';
 export { MetaDocsLayout } from './MetaDocsLayout';
 export { SettingsLayout } from './SettingsLayout';

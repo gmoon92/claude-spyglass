@@ -74,7 +74,18 @@ export {
 export { fetchModelUsage, fetchToolCategories, buildMetricQuery } from './metrics-fetchers';
 
 // ── version-check / infra / request-types / tool-colors ──
-export { normalizeTag, isSameVersion, resolveBadgeState } from './version-check-logic';
+export { normalizeTag, isSameVersion, resolveBadgeState, tSafe } from './version-check-logic';
+export type { BadgeState } from './version-check-logic';
+// version-check 모달/배지/폴링 (P4-09 chrome 이식)
+export { UpdateBadge, type UpdateBadgeProps } from './UpdateBadge';
+export { UpdateModal, type UpdateModalProps } from './UpdateModal';
+export {
+  createVersionCheckController,
+  type VersionPayload,
+  type VersionViewState,
+  type VersionCheckController,
+} from './version-check-controller';
+export { useVersionCheck, type UseVersionCheckResult, type UseVersionCheckOptions } from './use-version-check';
 export {
   incrementScrollLock,
   resetScrollLock,

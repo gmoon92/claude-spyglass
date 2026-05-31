@@ -11,6 +11,8 @@
  *
  * @module features/settings
  */
+export { SettingsHeader, type SettingsHeaderProps } from './SettingsHeader';
+
 export { DiagPanel, type DiagPanelProps } from './DiagPanel';
 export { HooksPanel, type HooksPanelProps } from './HooksPanel';
 export { ServerPanel, type ServerPanelProps } from './ServerPanel';

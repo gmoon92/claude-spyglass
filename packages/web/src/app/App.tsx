@@ -24,13 +24,12 @@ import {
   BrowserRouter, MemoryRouter, Routes, Route,
   useLocation, useNavigate,
 } from 'react-router-dom';
-import { useSSE } from '../hooks/use-sse';
 import { useAppStore } from '../stores/app-store';
-import { buildAppSSECallbacks } from './app-sse';
 import { ROUTE_PATHS, appModeToPath, pathToAppMode } from './app-mode-route';
 import { BrowseLayout } from './BrowseLayout';
 import { MetaDocsLayout } from './MetaDocsLayout';
 import { SettingsLayout } from './SettingsLayout';
+import { AppShell } from './AppShell';
 
 /**
  * appMode ↔ URL 양방향 동기 — main.js applyAppMode(body[data-app-mode]) 의 선언적 대체.
@@ -89,26 +88,20 @@ export function AppRoutes(): ReactElement {
 }
 
 /**
- * SSE 바인딩 — 최상위 마운트 1회 연결(useSSE), 데이터는 sse-store 로 결선(buildAppSSECallbacks).
- *   onOpen/onError 의 fetch 오케스트레이션/스크롤락 결선은 F3 역전(P4-07)에서 호출처가 합성한다.
- *   본 페이즈는 연결 생명주기 자리만 확보(미주입 — useSSE 안전 호출).
- * 렌더 없음(effect 전용). SSR 에서는 useEffect 미발화 → EventSource 미생성(테스트 안전).
- */
-function SSEBinding(): null {
-  useSSE(buildAppSSECallbacks({}));
-  return null;
-}
-
-/**
- * App 최상위 — BrowserRouter 컨텍스트 + SSE 바인딩 + 모드 동기 + Routes.
- * (실 entry 마운트는 P4-07 — 본 컴포넌트는 작성/테스트 단계 병존.)
+ * App 최상위 — BrowserRouter 컨텍스트 + 모드 동기 + chrome 셸(AppShell)로 감싼 Routes.
+ *
+ * P4-09: SSE 바인딩은 AppShell 내부로 이관됐다(connected 상태를 ErrorBanner 에 결선 —
+ *   onOpen/onError 가 셸의 가시성 상태를 갱신). chrome(rail/footer/modal/banner/warning)이
+ *   AppRoutes(좌/우 패널 레이아웃)를 children 으로 감싸 페이지 전체 chrome 을 복원한다.
+ * (실 entry 마운트·index.html 진입 전환은 후속 — 본 트리는 작성/테스트 병존, 회귀 0.)
  */
 export function App(): ReactElement {
   return (
     <BrowserRouter>
-      <SSEBinding />
       <AppModeSync />
-      <AppRoutes />
+      <AppShell>
+        <AppRoutes />
+      </AppShell>
     </BrowserRouter>
   );
 }
