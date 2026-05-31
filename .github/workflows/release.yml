@@ -1,29 +1,26 @@
 #
-# release.yml — tag push 시 멀티플랫폼 standalone bin 자동 빌드 · GitHub Release 게시 (tarball-only 배포).
+# release.yml — tag push 시 macOS standalone bin 자동 빌드 · GitHub Release 게시 (tarball-only 배포).
+#
+# 지원 범위: **macOS 전용** (darwin-arm64, darwin-x64). windows/linux 및 앱·설치형 배포는 미지원.
 #
 # 책임:
-#   1) matrix runner(macos-14 / ubuntu / windows) 에서 standalone bun bin + 자원 staging.
-#      - darwin-arm64, darwin-x64, linux-x64, linux-arm64, windows-x64.
-#   2) 각 산출물(tar.gz | windows zip) + sha256 을 동일 GitHub Release 에 업로드.
-#      배포는 GitHub Release 직접 다운로드(tarball-only). homebrew tap 자동 bump 미사용(tap repo 부재).
+#   1) macos-14 runner 에서 standalone bun bin(darwin arm64/x64) + 자원 staging.
+#   2) 각 tar.gz + sha256 을 동일 GitHub Release 에 업로드(GitHub Release 직접 다운로드 배포).
 #
 # 트리거:
 #   git tag v3.1.0 && git push origin v3.1.0
 #
 # 의존성:
-#   - scripts/build-release-tarball.sh (--os/--arch 파라미터화, web staging 은 tar 파이프 — rsync 비의존)
-#   - oven-sh/setup-bun@v2
-#   - softprops/action-gh-release@v2
+#   - scripts/build-release-tarball.sh (web staging 은 tar 파이프 — rsync 비의존)
+#   - oven-sh/setup-bun@v2, gh CLI(릴리스 생성/업로드)
 #
 # 비범위:
-#   - 코드 서명(Apple Developer ID), notarization, windows authenticode 서명은 본 워크플로 범위 밖.
-#     darwin 은 ad-hoc codesign 만, linux/windows 는 서명 없음.
-#   - homebrew 배포: tap repo 미설정으로 tarball-only. 추후 homebrew 도입 시 bump 잡 + tap repo 별도 구성.
+#   - 코드 서명(Apple Developer ID)·notarization 범위 밖 — darwin ad-hoc codesign 만.
+#   - homebrew tap·windows/linux 빌드·앱/설치형 배포 미지원.
 #
-# 회귀 가드 (R6 멀티플랫폼):
-#   - fail-fast: false — 한 OS runner 빌드 실패가 다른 OS 게시를 막지 않게 한다.
-#   - 로컬에서는 호스트 크로스 컴파일(bun --target=bun-linux-x64 등)로 산출물 아키텍처(ELF/PE32+)만 확인 가능.
-#     5개 OS runner 의 실제 게시는 tag push 에서 검증된다.
+# 동시성 가드:
+#   - 릴리스 생성은 create-release 잡 1곳(매트릭스 동시 생성 race 방지). build 잡은 추가 업로드만.
+#   - fail-fast: false — 한 arch 빌드 실패가 다른 arch 게시를 막지 않게 한다.
 
 name: release
 
@@ -65,26 +62,17 @@ jobs:
     timeout-minutes: 20
 
     strategy:
-      # 한 OS 빌드 실패가 다른 OS(특히 darwin-arm64) 게시를 막지 않게 한다.
+      # 한 arch 빌드 실패가 다른 arch(특히 darwin-arm64) 게시를 막지 않게 한다.
       fail-fast: false
       matrix:
         include:
-          # darwin-arm64 — 기존 단일 job 과 동일. 회귀 0 기준선.
+          # macOS 전용 — Apple Silicon + Intel.
           - os: darwin
             arch: arm64
             runner: macos-14
           - os: darwin
             arch: x64
             runner: macos-14
-          - os: linux
-            arch: x64
-            runner: ubuntu-latest
-          - os: linux
-            arch: arm64
-            runner: ubuntu-24.04-arm
-          - os: windows
-            arch: x64
-            runner: windows-latest
 
     steps:
       - name: Checkout
@@ -108,7 +96,7 @@ jobs:
       - name: Install workspace deps
         run: bun install --frozen-lockfile
 
-      # build-release-tarball.sh 는 bash 스크립트 — windows runner 에서도 setup-bun + git-bash 로 실행.
+      # build-release-tarball.sh 는 bash 스크립트 — macos-14 runner 에서 실행.
       - name: Build release archive (${{ matrix.os }}-${{ matrix.arch }})
         shell: bash
         run: |
@@ -131,8 +119,8 @@ jobs:
           spctl --assess --type execute "$BIN" 2>&1 || echo "[release] spctl: ad-hoc signature (expected — not Developer ID)"
 
       # 자산 업로드: create-release 가 만든 릴리스에 추가만 한다(생성 race 없음).
-      #   darwin/linux=.tar.gz(+.sha256), windows=.zip(+.sha256). `.*` glob 으로 존재 산출물만 매칭
-      #   (확장자 없는 staging 디렉토리는 매칭 제외). --clobber 로 재실행 시 덮어쓰기 멱등.
+      #   darwin=.tar.gz(+.sha256). `.*` glob 으로 존재 산출물만 매칭(확장자 없는 staging 디렉토리 제외).
+      #   --clobber 로 재실행 시 덮어쓰기 멱등.
       - name: Upload assets to GitHub Release
         shell: bash
         env:

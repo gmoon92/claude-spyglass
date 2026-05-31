@@ -1,32 +1,30 @@
 #!/usr/bin/env bash
 #
-# build-release-tarball.sh — Homebrew/멀티플랫폼 배포용 아카이브 빌드.
+# build-release-tarball.sh — macOS 배포용 tarball 빌드 (mac 전용, windows 미지원).
 #
 # 책임:
-#   1) Bun standalone executable 컴파일 (packages/server → bin/spyglass[.exe]).
+#   1) Bun standalone executable 컴파일 (packages/server → bin/spyglass).
 #      - Bun 1.3.12 darwin-arm64 code-sign 버그 우회: BUN_NO_CODESIGN_MACHO_BINARY=1 + ad-hoc codesign.
 #   2) 자원 디렉터리 staging (web, storage/migrations).
-#   3) 아카이브(tar.gz 또는 windows .zip) + .sha256 산출.
+#   3) tar.gz 아카이브 + .sha256 산출.
 #
 # 사용:
-#   ./scripts/build-release-tarball.sh --version 3.0.7 --arch arm64 [--os darwin] [--out-dir dist/release]
+#   ./scripts/build-release-tarball.sh --version 3.1.0 --arch arm64 [--os darwin] [--out-dir dist/release]
 #   (기본값: package.json 의 version, 호스트 arch, os=darwin)
 #
-#   멀티플랫폼 예시:
+#   예시(mac):
 #     --os darwin  --arch arm64   → spyglass-<v>-darwin-arm64.tar.gz   (codesign O)
 #     --os darwin  --arch x64     → spyglass-<v>-darwin-x64.tar.gz     (codesign O)
-#     --os linux   --arch x64     → spyglass-<v>-linux-x64.tar.gz      (codesign X)
-#     --os linux   --arch arm64   → spyglass-<v>-linux-arm64.tar.gz    (codesign X)
-#     --os windows --arch x64     → spyglass-<v>-windows-x64.zip       (codesign X, bin=spyglass.exe)
+#   (--os linux 도 동작하나 릴리스 matrix 는 darwin 만 사용. windows 는 미지원.)
 #
 # 산출:
-#   <out-dir>/spyglass-<version>-<os>-<arch>.<tar.gz|zip>
-#   <out-dir>/spyglass-<version>-<os>-<arch>.<tar.gz|zip>.sha256
+#   <out-dir>/spyglass-<version>-<os>-<arch>.tar.gz
+#   <out-dir>/spyglass-<version>-<os>-<arch>.tar.gz.sha256
 #
-# 의존성: bun, codesign(macOS darwin 만), tar(darwin/linux), zip(windows), shasum
+# 의존성: bun, codesign(macOS darwin 만), tar, shasum
 #
 # 호출 흐름:
-#   .github/workflows/release.yml      → 본 스크립트 → bun build --compile → (darwin)codesign → tar/zip → shasum
+#   .github/workflows/release.yml      → 본 스크립트 → bun build --compile → (darwin)codesign → tar → shasum
 #   (개발자) 로컬 검증                  → 본 스크립트 → 동일 (--skip-codesign 옵션으로 codesign 생략 가능)
 #
 # 회귀 가드:
@@ -74,8 +72,8 @@ if [[ -z "$OS" ]]; then
   OS="darwin"
 fi
 case "$OS" in
-  darwin|linux|windows) ;;
-  *) echo "Unsupported --os: $OS (expected darwin|linux|windows)" >&2; exit 1 ;;
+  darwin|linux) ;;
+  *) echo "Unsupported --os: $OS (expected darwin|linux)" >&2; exit 1 ;;
 esac
 
 if [[ -z "$ARCH" ]]; then
@@ -92,14 +90,9 @@ BUN_TARGET="bun-${OS}-${ARCH}"
 TARBALL_NAME="spyglass-${VERSION}-${OS}-${ARCH}"
 STAGE_DIR="${OUT_DIR}/${TARBALL_NAME}"
 
-# windows 는 .exe 바이너리 + .zip 패키징, 그 외는 확장자 없는 bin + .tar.gz.
-if [[ "$OS" == "windows" ]]; then
-  BIN_NAME="spyglass.exe"
-  ARCHIVE_EXT="zip"
-else
-  BIN_NAME="spyglass"
-  ARCHIVE_EXT="tar.gz"
-fi
+# 산출물: 확장자 없는 bin + .tar.gz. mac 전용 — windows(.exe/.zip) 미지원.
+BIN_NAME="spyglass"
+ARCHIVE_EXT="tar.gz"
 
 echo "[build] version=${VERSION} os=${OS} arch=${ARCH} target=${BUN_TARGET}"
 echo "[build] stage=${STAGE_DIR} archive=${ARCHIVE_EXT} bin=${BIN_NAME}"
@@ -166,29 +159,11 @@ if [[ -f LICENSE ]]; then
 fi
 
 # -----------------------------------------------------------------------------
-# 4) 아카이브(tar.gz | zip) + sha256
-#    darwin/linux → tar.gz, windows → zip.
+# 4) 아카이브(tar.gz) + sha256 — mac 전용 단일 포맷.
 # -----------------------------------------------------------------------------
 ARCHIVE_PATH="${OUT_DIR}/${TARBALL_NAME}.${ARCHIVE_EXT}"
-if [[ "$ARCHIVE_EXT" == "zip" ]]; then
-  echo "[build] packing zip..."
-  # windows git-bash 에는 zip 이 없을 수 있다(exit 127). zip 있으면 사용, 없으면 PowerShell
-  # Compress-Archive 폴백. 둘 다 OUT_DIR 기준 상대경로로 실행해 경로 변환/최상위 폴더 보존.
-  if command -v zip >/dev/null 2>&1; then
-    ( cd "${OUT_DIR}" && rm -f "${TARBALL_NAME}.zip" && zip -r -q "${TARBALL_NAME}.zip" "${TARBALL_NAME}" )
-  elif command -v powershell >/dev/null 2>&1; then
-    echo "[build]   zip 미탑재 → PowerShell Compress-Archive 폴백"
-    ( cd "${OUT_DIR}" && rm -f "${TARBALL_NAME}.zip" \
-      && powershell -NoProfile -NonInteractive -Command \
-         "Compress-Archive -Path '${TARBALL_NAME}' -DestinationPath '${TARBALL_NAME}.zip' -Force" )
-  else
-    echo "[build] ERROR: zip 도 powershell 도 없음 — windows 아카이브 불가" >&2
-    exit 1
-  fi
-else
-  echo "[build] packing tarball..."
-  tar -czf "${ARCHIVE_PATH}" -C "${OUT_DIR}" "${TARBALL_NAME}"
-fi
+echo "[build] packing tarball..."
+tar -czf "${ARCHIVE_PATH}" -C "${OUT_DIR}" "${TARBALL_NAME}"
 
 # BSD shasum (macOS) 와 GNU shasum 모두 같은 출력 형식
 SHA256_HEX="$(shasum -a 256 "${ARCHIVE_PATH}" | awk '{print $1}')"
