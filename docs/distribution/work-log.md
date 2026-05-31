@@ -55,7 +55,19 @@
 **머지 주의**: `tap-template/Formula`는 React 무관(충돌 없음). tap repo는 별도 repo라 머지 대상 아님.
 **커밋**: (아래 워크트리 커밋)
 
-### D2 — LadybugDB 번들 (다음, 필수)
-- D2-01 resolution 결정 → D2-02 `build-release-tarball.sh` native 동봉 → D2-03 Formula `GRAPH_MODE` → D2-04 graph 스모크.
+### D2 — LadybugDB 번들 · ✅ 완료 (2026-05-31, 필수)
+**resolution 결정**: (a) NODE_PATH (gap-report D2-01). PoC — standalone bin이 `NODE_PATH`로 `@ladybugdb/core` 로드 성공(Connection/Database API 노출), 미설정 시 "Cannot find module". client.ts 무수정.
+**변경**:
+- `scripts/build-release-tarball.sh`: migrations 다음에 native staging — arch별 `@ladybugdb/core` + `core-${OS}-${ARCH}` → `share/spyglass/native/node_modules/@ladybugdb` (`cp -RL` .bun 캐시).
+- `tap-template/Formula/spyglass.rb`: `write_env_script`에 `NODE_PATH=share/spyglass/native/node_modules`, `SPYGLASS_GRAPH_MODE` `off`→`shadow`, 헤더/install 주석 정합.
+- `.distribution-gap-report.md`: D2-01 결정 기록.
+**빌드 검증**: `./scripts/build-release-tarball.sh --arch arm64` → `native staged: core core-darwin-arm64`, tarball 31M(native 포함).
+**graph 스모크**: 격리 serve(port 9988·임시 HOME·GRAPH_MODE=shadow·NODE_PATH 주입) → `/health` ok, `/api/graph/status` mode=shadow·circuit CLOSED·sync running, `[graph-sync] worker starting`. native 로드·projection 동작 확인.
+**⚠️ 함정 기록**: `--skip-codesign` 빌드 bin은 불완전 서명(flags=runtime, non-adhoc)이라 macOS가 SIGKILL(출력·로그 0, 즉시 종료). `codesign --sign -` ad-hoc 재서명 후 정상. **실제 release.yml/build script 정상 경로는 ad-hoc codesign 포함이라 무영향** — 로컬 검증 시 `--skip-codesign` 주의.
+**머지 주의**: build script·Formula·client.ts(무수정) 모두 React 무관. native 동봉은 `packages/web`과 독립.
+**커밋**: (아래)
+
+### D3 — 업데이트 일원화 (다음)
+- D3-01 install.sh git clone 격하 → D3-02 /api/update brew 가드 → D3-03 version-checker 정합 → D3-04 web brew 배너(React 충돌 가능 — 머지 후 재확인 가능).
 
 <!-- 이후 태스크(D2 ~ D6) 진행 시 본 로그에 동일 형식으로 추가 -->

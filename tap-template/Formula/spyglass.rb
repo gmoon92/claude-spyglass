@@ -10,7 +10,8 @@
 #
 # 의존성:
 #   - 동봉된 standalone bin 안에 Bun 런타임이 포함되어 있어 시스템 bun 불필요.
-#   - native deps 없음 (storage-graph @ladybugdb 는 SPYGLASS_GRAPH_MODE=off 로 dormant).
+#   - LadybugDB native(@ladybugdb/core + core-darwin-<arch>) 동봉 — share/spyglass/native/node_modules.
+#     NODE_PATH 주입으로 graph projection(SPYGLASS_GRAPH_MODE=shadow) 활성. 실패 시 SQLite 자동 폴백.
 #
 # 호출 흐름:
 #   brew tap gmoon92/claude-code-spyglass
@@ -58,13 +59,16 @@ class Spyglass < Formula
 
     # wrapper script — env 주입을 단일 진입점으로 고정.
     #   - 사용자가 `spyglass <cmd>` 로 호출하든 brew services 가 호출하든 동일한 env 보장.
-    #   - SPYGLASS_GRAPH_MODE=off: native @ladybugdb 는 brew tarball 에 미동봉이므로 dormant.
-    #     storage-graph 의 circuit breaker 가 동작하지만 첫 부팅 에러 로그를 피하려 명시.
+    #   - NODE_PATH: 동봉된 @ladybugdb native(share/spyglass/native/node_modules)를 가리켜
+    #     client.ts 의 동적 import('@ladybugdb/core') 가 resolve 되게 한다(PoC 검증 D2-01).
+    #   - SPYGLASS_GRAPH_MODE=shadow: native 동봉 완료 → graph projection 활성(SQLite 100% 유지 +
+    #     백그라운드 sync). 실패 시 circuit breaker 가 SQLite 로 자동 폴백하므로 사용자 영향 0.
     (bin/"spyglass").write_env_script libexec/"spyglass-bin",
       SPYGLASS_WEB_ROOT:        share/"spyglass/web",
       SPYGLASS_MIGRATIONS_ROOT: share/"spyglass/migrations",
+      NODE_PATH:                share/"spyglass/native/node_modules",
       SPYGLASS_APP_VERSION:     version.to_s,
-      SPYGLASS_GRAPH_MODE:      "off",
+      SPYGLASS_GRAPH_MODE:      "shadow",
       SPYGLASS_UPDATE_CHANNEL:  "brew"
   end
 
