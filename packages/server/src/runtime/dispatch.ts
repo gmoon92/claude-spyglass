@@ -25,7 +25,7 @@ import type { SpyglassDatabase } from '@spyglass/storage';
  */
 const WEB_ROOT: string = process.env.SPYGLASS_WEB_ROOT
   ? process.env.SPYGLASS_WEB_ROOT
-  : fileURLToPath(new URL('../../../web/', import.meta.url));
+  : fileURLToPath(new URL('../../../web/dist/', import.meta.url));
 
 /** web 디렉토리 안 파일을 Bun.file 로 반환. subPath 는 '/' 로 시작하는 URL path. */
 function webFile(subPath: string) {
@@ -131,7 +131,8 @@ export async function handleRequest(req: Request, db: SpyglassDatabase): Promise
       );
     }
 
-    // 정적 자산 서빙 (/assets/ prefix → packages/web/assets/)
+    // 정적 자산 서빙 (/assets/ prefix → WEB_ROOT/assets/ = packages/web/dist/assets/)
+    // dist/assets 에는 Vite 번들(index-<hash>.js[.map])과 classic 자산(css/·js/, vite.config closeBundle 복사)이 공존.
     if (path.startsWith('/assets/')) {
       const safePath = path.split('?')[0].replace(/\.\./g, '');
       const file = webFile(safePath);
@@ -142,6 +143,9 @@ export async function handleRequest(req: Request, db: SpyglassDatabase): Promise
           css: 'text/css',
           svg: 'image/svg+xml',
           ico: 'image/x-icon',
+          // P4-10/P1-02 §4: Vite sourcemap(dist/assets/index-<hash>.js.map) 산출됨.
+          // octet-stream 으로 서빙되면 브라우저가 sourcemap 로드를 거부할 수 있음.
+          map: 'application/json',
         };
         return new Response(file, {
           headers: { 'Content-Type': mimeMap[ext] ?? 'application/octet-stream' },
@@ -171,6 +175,19 @@ export async function handleRequest(req: Request, db: SpyglassDatabase): Promise
         const ext = fileName.split('.').pop();
         const mime = ext === 'svg' ? 'image/svg+xml' : 'image/x-icon';
         return new Response(file, { headers: { 'Content-Type': mime } });
+      }
+    }
+
+    // SPA fallback (P4-10 / P1-02 §5-2): React Router v6 직접진입·새로고침(/meta-docs, /settings 등)이
+    // 404 가 되지 않도록 잔여 GET 을 index.html 로 폴백한다. api/events/collect/v1/health/assets/locales/
+    // favicon 분기는 이 지점 이전에 이미 return 하므로, 여기 도달하는 건 라우터가 클라이언트에서
+    // 처리할 경로뿐이다. Accept 가 application/json 인 GET(프로그램 호출)은 폴백에서 제외 → 404 유지.
+    if (req.method === 'GET' && !(req.headers.get('accept') ?? '').includes('application/json')) {
+      const file = webFile('/index.html');
+      if (await file.exists()) {
+        return new Response(file, {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        });
       }
     }
 
