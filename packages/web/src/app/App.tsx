@@ -18,7 +18,7 @@
 //
 // 레이어(architecture.md §1.3): app → features/hooks/stores/components 정방향(역참조 0).
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ReactElement } from 'react';
 import {
   BrowserRouter, MemoryRouter, Routes, Route,
@@ -55,7 +55,16 @@ export function AppModeSync(): null {
   }, [location.pathname]);
 
   // store → URL: appMode 가 가리키는 경로로 navigate(현재 경로의 모드와 다를 때만).
+  //   ★초기 마운트 skip(deep-link-race-fix): 마운트 시 URL→store effect 가 store 를 아직 정정하기 전이라
+  //   appMode 는 기본값('browse')이다. 그 상태로 navigate 하면 /meta-docs 직접 진입이 즉시 / 로 클로버된다.
+  //   마운트 시점에는 URL 이 SSoT — 첫 렌더에서는 navigate 하지 않고, 이후 사용자 액션(rail 클릭 등)으로
+  //   appMode 가 *변할 때*만 navigate 한다(딥링크/뒤로가기 정합 유지).
+  const didMountModeSync = useRef(false);
   useEffect(() => {
+    if (!didMountModeSync.current) {
+      didMountModeSync.current = true;
+      return;
+    }
     const targetPath = appModeToPath(appMode);
     if (pathToAppMode(location.pathname) !== appMode) {
       navigate(targetPath);

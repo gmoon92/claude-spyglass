@@ -1,49 +1,306 @@
-// app/MetaDocsLayout.tsx — metadocs 모드 레이아웃 셸 + 카탈로그 population 결선 (P4-06 셸 / P4-07 결선)
+// app/MetaDocsLayout.tsx — metadocs 모드 레이아웃 조립 (P4-06 셸 / P4-07 결선 / meta-docs-view 콘텐츠)
 //
-// 원본: main.js enterMetaDocsMode + meta-docs-view.js loadMetaDocsLibrary(:460-515) fetch 결선.
-//   본 셸은 카탈로그 region 마운트 구조를 확정하고, 카탈로그 rows 를 fetchMetaDocs 로 채운다.
-//   서브탭(docs/tools) 전환은 app-store.metaSubTab SSoT.
+// 원본: index.html 의 좌측 .left-panel(metadocs 축약: 프로젝트 + 요약 카드) + #metaDocsRoot(:779).
+//   #metaDocsRoot(2ae3c39:index.html :779~):
+//     .meta-tabs(#metaTabBar) — .meta-tabs-list(docs/tools 탭) + .meta-tabs-actions(date/lang 슬롯)
+//     #metaDocsBody(.meta-docs-body, role=tabpanel) — docs 탭 본문:
+//       #metaDocsFlowRegion(ego-graph) + #metaDocsFlowHandle(resize) + .meta-docs-catalog-area(filters+search+table)
+//     #metaToolStatsBody(.meta-tool-stats-body, role=tabpanel) — tools 탭 본문(매트릭스)
+//   meta-docs-view.js renderHtml(:647)/renderFilters(:836)/initMetaSubTabs(:82)/applyMetaSubTab(:309)
+//     /autoLoadFirstRowFlow(:557) 의 DOM 조립을 React 선언 렌더로 1:1 재현 — meta-docs.css/flow-diagram.css 적용.
 //
-// 데이터 population (P4-07 — P4-06 boundary 닫기):
-//   - 마운트/프로젝트 변경 시 fetchMetaDocs(project) → setState(rows) → MetaDocsCatalog 주입.
-//   - flow/tool-stats 매트릭스(metaSubTab==='tools')·source_root 2단계 매칭·검색/필터/정렬 상태 결선은
-//     별도 결선 범위(빈/기본값 유지 — 정렬/표시필터는 MetaDocsCatalog 가 controlled 기본으로 처리).
-//   - fetch 는 useEffect 안에서만(SSR effect 미발화 → 빈 rows 로 결정적 렌더). AbortController cleanup.
+// 결선:
+//   - 카탈로그 population: 마운트/프로젝트 변경 시 fetchMetaDocs(project) → rows. SSR effect 미발화 → 빈 결정적 렌더.
+//   - 좌측 패널(left-panel): browse 와 동형 Sidebar 를 isMetaMode=true 로. projects 는 fetchDashboard 시드,
+//     metaCounts 는 카탈로그 rows 에서 동기 계산(원본 pushLeftCounts:580 동치 — source_root basename 그룹핑).
+//   - 서브탭(docs/tools): app-store.metaSubTab SSoT. 탭 클릭 → setMetaSubTab. tools 본문은 hidden 토글(원본 applyMetaSubTab).
+//   - 카탈로그 컨트롤(type/display/includeDeleted/sort/search/activeRow)은 레이아웃 로컬 상태(원본 모듈 state 동치).
+//     정렬 클릭 → nextSort 전이. 검색 → searchText. 행 클릭 → activeRow(flow 재중심).
+//   - flow ego-graph: 정렬 결과 첫 "초점" 행 자동 중심(원본 autoLoadFirstRowFlow:557 우선순위 — id!=null && inv>0 → id!=null).
+//     행 클릭/재중심(onRecenter)으로 activeRow 갱신(loadFlow re-fetch 동치).
 //
-// 레이어(architecture.md §1.3): app → features(meta-docs) + stores 정방향.
+// 비책임(후속 결선):
+//   - tools 탭 도구 통계 매트릭스 데이터(loadProjectToolStats fetch)는 TS fetcher 미존재 → stats=null(미로드 빈 매트릭스).
+//   - date-filter/lang-switcher DOM 이동(원본 meta-tabs-actions 슬롯)은 별도 chrome(빈 슬롯 유지).
+//
+// 레이어(architecture.md §1.3): app → features(meta-docs/browse/dashboard) + stores 정방향.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
-import { MetaDocsCatalog, type MetaDocRow } from '../features/meta-docs';
+import {
+  MetaDocsCatalog,
+  MetaDocsFilterBar,
+  MetaDocsSearch,
+  MetaDocsFlow,
+  MetaDocsToolStats,
+  nextSort,
+  DEFAULT_SORT,
+  type MetaDocRow,
+  type MetaDocSortKey,
+  type SortDir,
+  type DisplayFilter,
+  type TypeFilter,
+  type MetaFilterGroup,
+  type FlowActiveRow,
+} from '../features/meta-docs';
+import { Sidebar, type ProjectLike, type SidebarLabeler, type MetaCounts } from '../features/browse/Sidebar';
 import { useAppStore } from '../stores/app-store';
-import { tt } from './i18n-labeler';
-import { fetchMetaDocs } from '../api/fetchers';
+import { tt, makeI18nLabeler } from './i18n-labeler';
+import { deriveBrowseData } from './browse-data';
+import { fetchMetaDocs, fetchDashboard } from '../api/fetchers';
+
+/** GLOBAL_PROJECT_KEY(left-panel.js:17 / fetchers GLOBAL_PROJECT_KEY) — userSettings 글로벌 집계 키. */
+const GLOBAL_PROJECT_KEY = '__global__';
+
+/**
+ * 좌측 프로젝트 카운트 계산 — 원본 pushLeftCounts(meta-docs-view.js:580) 동치(순수).
+ *   source==='userSettings' || source_root==null → global. 그 외 source_root basename 그룹핑.
+ */
+function computeMetaCounts(rows: MetaDocRow[]): MetaCounts {
+  const projects: Record<string, number> = Object.create(null);
+  let global = 0;
+  for (const r of rows) {
+    const src = (r as { source?: unknown }).source;
+    const root = r.source_root;
+    if (src === 'userSettings' || root == null) {
+      global += 1;
+      continue;
+    }
+    const base = String(root).split('/').filter(Boolean).pop();
+    if (!base) continue;
+    projects[base] = (projects[base] ?? 0) + 1;
+  }
+  return { projects, global, total: rows.length };
+}
+
+/**
+ * 정렬 결과 첫 "초점" 행 → flow activeRow 변환 — 원본 autoLoadFirstRowFlow(meta-docs-view.js:557) 우선순위.
+ *   1) id!=null && invocations>0  2) id!=null. 둘 다 없으면 null(빈 flow).
+ */
+/** MetaDocRow.id(number|string|null) → FlowActiveRow.id(number|null) 정규화. 비수치/null → null. */
+function toFlowId(id: number | string | null | undefined): number | null {
+  if (typeof id === 'number') return Number.isFinite(id) ? id : null;
+  if (typeof id === 'string') {
+    const n = Number(id);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function pickFlowRow(rows: MetaDocRow[]): FlowActiveRow | null {
+  let pick = rows.find((r) => r.id != null && (r.invocations ?? 0) > 0);
+  if (!pick) pick = rows.find((r) => r.id != null);
+  if (!pick || !pick.name || !pick.type) return null;
+  return { type: pick.type, name: pick.name, id: toFlowId(pick.id) };
+}
 
 export function MetaDocsLayout(): ReactElement {
+  // 라우팅/스코프 SSoT — app-store.
   const metaSubTab = useAppStore((s) => s.metaSubTab);
+  const setMetaSubTab = useAppStore((s) => s.setMetaSubTab);
   const selectedProject = useAppStore((s) => s.selectedProject);
+  const setSelectedProject = useAppStore((s) => s.setSelectedProject);
 
+  // 카탈로그 데이터 + 좌측 프로젝트 시드.
   const [rows, setRows] = useState<MetaDocRow[]>([]);
+  const [projects, setProjects] = useState<ProjectLike[]>([]);
+
+  // 카탈로그 컨트롤 — 원본 모듈 state(meta-docs-view.js:46) 동치(레이아웃 로컬).
+  const [type, setType] = useState<TypeFilter>('all');
+  const [display, setDisplay] = useState<DisplayFilter>('all');
+  const [includeDeleted, setIncludeDeleted] = useState(false);
+  const [sort, setSort] = useState<{ key: MetaDocSortKey; dir: SortDir }>(DEFAULT_SORT);
+  const [searchTerm, setSearchTerm] = useState('');
+  // flow 활성 행 — null 이면 첫 행 자동 중심(pickFlowRow). 행 클릭/재중심 시 명시 지정.
+  const [activeRow, setActiveRow] = useState<FlowActiveRow | null>(null);
+
+  const labeler: SidebarLabeler = useMemo(() => makeI18nLabeler(), []);
+
+  // 타입 필터 적용 — 원본 state.type(meta-docs-view.js:858) 동치. all 이면 통과.
+  const typeFiltered = useMemo(
+    () => (type === 'all' ? rows : rows.filter((r) => String(r.type ?? '') === type)),
+    [rows, type],
+  );
+
+  // 좌측 카운트 — 전체 카탈로그(type 필터 전) 기준(원본 pushLeftCounts 는 probe rows 전체).
+  const metaCounts = useMemo(() => computeMetaCounts(rows), [rows]);
+
+  // flow 활성 행 — 명시 지정 우선, 없으면 정렬 대상 첫 초점 행 자동 선택.
+  const flowRow = activeRow ?? pickFlowRow(typeFiltered);
 
   // 카탈로그 population — 프로젝트 변경 시 재조회(전체 기간). SSR 미발화 → 빈 rows 결정적 렌더.
   useEffect(() => {
     const ctrl = new AbortController();
+    const { signal } = ctrl;
     (async () => {
-      const list = await fetchMetaDocs({ project: selectedProject, signal: ctrl.signal });
-      if (ctrl.signal.aborted) return;
+      const [list, dashboard] = await Promise.all([
+        fetchMetaDocs({ project: selectedProject, signal }),
+        fetchDashboard({}, signal),
+      ]);
+      if (signal.aborted) return;
       setRows(list as unknown as MetaDocRow[]);
+      setProjects(deriveBrowseData(dashboard).projects);
+      setActiveRow(null); // 프로젝트 변경 시 자동 첫 행 중심으로 리셋.
     })().catch(() => {
-      /* silent — fetchMetaDocs 가 이미 [] 폴백. 빈 카탈로그 유지(원본 silent catch 동치). */
+      /* silent — fetcher 가 이미 안전 폴백([]/null). 빈 카탈로그 유지(원본 silent catch 동치). */
     });
     return () => ctrl.abort();
   }, [selectedProject]);
 
+  // 정렬 헤더 클릭 → nextSort 전이(meta-docs-sort SSoT).
+  const onSort = (key: MetaDocSortKey): void => setSort((prev) => nextSort(prev, key));
+
+  // 필터 버튼 클릭 → 그룹별 상태 갱신(원본 onMetaContainerClick 분기 동치).
+  const onFilterChange = (group: MetaFilterGroup, value: string): void => {
+    if (group === 'type') setType(value as TypeFilter);
+    else setDisplay(value as DisplayFilter);
+  };
+
+  // 행 클릭 → flow 재중심(orphan 은 catalog 가 무시 — id null). 명시 activeRow 지정.
+  const onRowClick = (row: MetaDocRow): void => {
+    if (row.id == null || !row.name || !row.type) return;
+    setActiveRow({ type: row.type, name: row.name, id: toFlowId(row.id) });
+  };
+
+  const showTools = metaSubTab === 'tools';
+
   return (
-    <div className="meta-docs-layout" data-testid="meta-docs-layout" data-meta-subtab={metaSubTab}>
-      <section className="meta-docs-main" data-testid="meta-docs-catalog">
-        <MetaDocsCatalog rows={rows} project={selectedProject} t={tt} />
+    // Fragment — .main-layout grid 직계 자식으로 left-panel·metaDocsRoot 전개(원본 grid-column 3/4).
+    <>
+      <aside className="left-panel" data-testid="meta-docs-sidebar">
+        <table className="browser-projects-table">
+          <tbody>
+            <Sidebar
+              projects={projects}
+              sessions={[]}
+              selectedProject={selectedProject}
+              selectedSession={null}
+              isMetaMode={true}
+              metaCounts={metaCounts}
+              labeler={labeler}
+              onSelectProject={(p) => setSelectedProject(p)}
+              onSelectSession={() => {
+                /* metadocs 모드에는 세션 행이 없음(원본 좌측 축약). no-op. */
+              }}
+            />
+          </tbody>
+        </table>
+      </aside>
+
+      {/* ── metaDocsRoot(원본 :779) — Behavior Definitions 카탈로그 컨테이너(grid-column 3/4). ── */}
+      <section
+        id="metaDocsRoot"
+        className="meta-docs-root"
+        aria-label="Behavior Definitions catalog"
+        data-testid="meta-docs-root"
+        data-meta-subtab={metaSubTab}
+      >
+        {/* meta-tabs(원본 :794 / initMetaSubTabs:82) — docs/tools 서브탭 + actions 슬롯. */}
+        <div className="meta-tabs" role="tablist" aria-label="Behavior Definitions sub-tabs" id="metaTabBar">
+          <div className="meta-tabs-list" role="presentation">
+            <button
+              type="button"
+              className={metaSubTab === 'docs' ? 'ds-tab meta-tab active' : 'ds-tab meta-tab'}
+              id="metaTabDocs"
+              role="tab"
+              aria-selected={metaSubTab === 'docs' ? 'true' : 'false'}
+              aria-controls="metaDocsBody"
+              data-meta-subtab="docs"
+              data-tab-value="docs"
+              onClick={() => setMetaSubTab('docs')}
+            >
+              {tt('ui.meta-docs-view.tab-docs-label') || 'Behavior Definitions'}
+            </button>
+            <button
+              type="button"
+              className={metaSubTab === 'tools' ? 'ds-tab meta-tab active' : 'ds-tab meta-tab'}
+              id="metaTabToolStats"
+              role="tab"
+              aria-selected={metaSubTab === 'tools' ? 'true' : 'false'}
+              aria-controls="metaToolStatsBody"
+              data-meta-subtab="tools"
+              data-tab-value="tools"
+              onClick={() => setMetaSubTab('tools')}
+            >
+              {tt('ui.meta-docs-view.tab-tools-label') || 'Tools'}
+            </button>
+          </div>
+          <div className="meta-tabs-actions">
+            {/* date-filter / lang-switcher DOM 이동(원본 meta-tabs-actions) 은 별도 chrome — 빈 슬롯 유지. */}
+            <div id="metaTabsDateRange" className="meta-tabs-date-range" />
+            <div id="metaTabsLangSwitcher" className="meta-tabs-lang-switcher" />
+          </div>
+        </div>
+
+        {/* docs 본문(원본 :797) — flow region + 핸들 + .meta-docs-catalog-area(filters+search+table). */}
+        <div
+          id="metaDocsBody"
+          className="meta-docs-body"
+          role="tabpanel"
+          aria-labelledby="metaTabDocs"
+          aria-label="Behavior Definitions body"
+          {...(showTools ? { hidden: true } : {})}
+        >
+          {/* flow ego-graph(원본 renderHtml flowRegion:661) — MetaDocsFlow 가 #metaDocsFlowRegion 내부 SVG 빌드. */}
+          <MetaDocsFlow
+            activeRow={flowRow}
+            project={selectedProject}
+            onRecenter={(row) => setActiveRow(row)}
+            t={tt}
+          />
+          {/* resize 핸들(원본 flowHandle:662) — left-panel-vertical-resize 부착은 후속(시각 핸들만). */}
+          <div
+            className="panel-vertical-handle meta-docs-flow-handle"
+            id="metaDocsFlowHandle"
+            title="Drag to resize height"
+          />
+          {/* 카탈로그 영역(원본 .meta-docs-catalog-area:673) — 1fr + overflow-y:auto. */}
+          <div className="meta-docs-catalog-area">
+            {/* 필터 바(원본 renderFilters:836) — type/display/includeDeleted + 검색(.meta-docs-filters 내부). */}
+            <div className="meta-docs-filters">
+              <MetaDocsFilterBar
+                type={type}
+                display={display}
+                includeDeleted={includeDeleted}
+                onFilterChange={onFilterChange}
+                onIncludeDeletedChange={setIncludeDeleted}
+                t={tt}
+              />
+              <MetaDocsSearch
+                value={searchTerm}
+                placeholder={tt('ui.meta-docs-view.search-placeholder')}
+                clearLabel={tt('ui.meta-docs-view.search-placeholder')}
+                onSearch={setSearchTerm}
+              />
+            </div>
+            {/* 카탈로그 테이블(원본 head:680) — 정렬/표시필터/검색 위임(meta-docs-sort). */}
+            <MetaDocsCatalog
+              rows={typeFiltered}
+              sort={sort}
+              display={display}
+              searchTerm={searchTerm}
+              project={selectedProject}
+              matched={typeFiltered.length > 0}
+              onSort={onSort}
+              onRowClick={onRowClick}
+              activeRowName={flowRow?.name ?? null}
+              t={tt}
+            />
+          </div>
+        </div>
+
+        {/* tools 본문(원본 :809) — 도구 통계 매트릭스. stats=null(미로드) — fetcher 미존재(후속 결선). */}
+        <div
+          id="metaToolStatsBody"
+          className="meta-tool-stats-body"
+          role="tabpanel"
+          aria-labelledby="metaTabToolStats"
+          aria-label="Project tool stats"
+          {...(showTools ? {} : { hidden: true })}
+        >
+          {showTools ? <MetaDocsToolStats stats={null} t={tt} /> : null}
+        </div>
       </section>
-      {/* tool-stats(metaSubTab==='tools') / flow 마운트는 후속 결선에서. */}
-    </div>
+    </>
   );
 }
