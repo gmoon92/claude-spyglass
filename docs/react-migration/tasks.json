@@ -123,7 +123,8 @@
         "P5-05",
         "P5-07",
         "P5-06",
-        "P5-08"
+        "P5-08",
+        "P5-09"
       ],
       "merge_order_note": " | P5-07(Vitest 전환)을 P5-06 최종 게이트 직전 배치 — 휴먼 결정(단계적 전환): bun test 보루 유지 후 Vite 생태계 통일."
     }
@@ -730,6 +731,20 @@
       "worktree": false,
       "risk": "low",
       "done_criteria": "파일 직접 충돌 0(배포=release.yml/scripts/Formula, react=packages/web·server·desktop). tarball web staging이 Vite dist 산출 stage. release.yml→tarball→electron-builder(P4-08 dist) 배포 파이프라인 정합. 머지 후 build-release-tarball.sh 실행 + brew install smoke 검증. 연계 문서: claude-spyglass-dist/docs/distribution/handoff.md"
+    },
+    {
+      "id": "P5-09",
+      "title": "fix/subagent-sibling-parent 머지 정합 (G5 서브에이전트 부모 귀속)",
+      "phase": 5,
+      "path": "packages/server·storage-graph (배포/머지 시점, react-migration 범위 밖)",
+      "depends_on": [
+        "P5-06"
+      ],
+      "status": "pending",
+      "test_strategy": "handoff: subagent-parent-attribution/handoff.md. React 충돌 0(packages/web 변경 0건). 머지 순서 무관. 머지 후 통합 상태에서 bun test packages/server packages/storage-graph 387 pass 유지 + typecheck baseline 12 유지 재실행.",
+      "worktree": false,
+      "risk": "low",
+      "done_criteria": "fix/subagent-sibling-parent(9커밋) main 통합. packages/web 무침범이라 React와 파일 충돌 0. 머지 후 합쳐진 상태 회귀 게이트(server+storage-graph 387 pass/typecheck 12) 재실행. 라이브 마이그레이션 1회 실행 + 재현 0 검증(배포 단계). 연계: .claude/docs/spyglass/subagent-parent-attribution/handoff.md"
     }
   ]
 }
