@@ -51,3 +51,18 @@ export {
   type SessionAnomalies,
   type UseSessionLoadOptions,
 } from './detail-view';
+
+// P3-07 — 세션 상세 데이터 배선(turns fetch + 턴뷰 결선 + 상세 탭바).
+//   lead 가 BrowseLayout #detailView 안에서 <SessionDetailContainer/> 로 마운트한다(DetailView 직접
+//   마운트를 대체). turns 는 colocated turns-fetcher → useSessionDetail 로 흐른다.
+export { SessionDetailContainer, type SessionDetailContainerProps } from './SessionDetailContainer';
+export {
+  useSessionDetail,
+  type UseSessionDetailResult,
+} from './use-session-detail';
+export {
+  fetchSessionTurns,
+  type SessionTurnsResult,
+  type TurnRow,
+  type PrologueRow,
+} from './turns-fetcher';
