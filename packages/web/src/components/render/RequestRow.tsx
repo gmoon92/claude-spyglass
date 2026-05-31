@@ -13,7 +13,7 @@
  *
  * @module render/RequestRow
  */
-import type { ReactElement, ReactNode } from 'react';
+import { Fragment, useState, type MouseEvent, type ReactElement, type ReactNode } from 'react';
 import {
   escHtml,
   fmtToken,
@@ -31,6 +31,10 @@ import { bloatedSysBadgeMiniHtml } from '../../../assets/js/render/badges.js';
 import { ActionBadge, CacheCell, targetInner } from './cells';
 import { ModelCell } from './model';
 import { AnomalyBadges, SlowBadge } from './badges';
+import { PromptExpandRow } from './PromptExpandRow';
+
+/** feed 뷰 expand td colspan — 원본 expand.ts#RECENT_REQ_COLS(10: + Session). */
+const FEED_EXPAND_COLS = 10;
 
 declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
 
@@ -62,13 +66,28 @@ interface RequestRowOpts {
    * 원본은 `<tr `의 첫 속성 위치에 삽입하므로 JSX 도 className 보다 앞에 둔다(속성 순서 동치).
    */
   chipKey?: string;
+  /**
+   * 세션 이동 콜백 (기능 1) — Session 셀(`sess-id-link`) 클릭 시 호출.
+   * 원본 feed-interactions.js#wireDefaultViewClicks 의 위임 핸들러를 props 콜백으로 승격.
+   *   - 미주입이면 셀은 일반 텍스트처럼 동작(무동작) — 안전(원본 위임 미등록 상태와 동치).
+   *   - lead 가 BrowseLayout 에서 주입(setSelectedProject + setSelectedSession + detail 전환).
+   * @param sessionId   data-goto-session (r.session_id).
+   * @param projectName data-goto-project (r.project_name) — 프로젝트 전환 판단은 호출 측 책임.
+   */
+  onGotoSession?: (sessionId: string, projectName: string) => void;
+  /**
+   * 펼침 행 colspan(기능 2) — 미지정이면 feed 뷰 기본 10(원본 RECENT_REQ_COLS).
+   * 컬럼 수가 다른 변형(예: showSession=false flat 뷰 9컬럼)에서 상위가 조정 주입.
+   */
+  expandCols?: number;
 }
 
 /**
  * 검색 haystack — 원본 rows.js#buildSearchHaystack 의 합성 로직 1:1.
  * 하위 추출은 exported SSoT(extractPromptText/extractAssistantText) 재사용(재구현 아님).
+ * BrowseLayout 피드 검색 필터도 동일 haystack 을 SSoT 로 소비(분기 중복 방지) → export.
  */
-function buildSearchHaystack(r: RowLike): string {
+export function buildSearchHaystack(r: RowLike): string {
   const parts: string[] = [];
   if (r.tool_name) parts.push(r.tool_name);
   if (r.tool_detail) parts.push(r.tool_detail);
@@ -102,6 +121,31 @@ function TargetCellWithBadges({ r, extra }: { r: RowLike; extra: ReactNode }): R
 export function RequestRow({ r, opts = {} }: { r: RowLike; opts?: RequestRowOpts }): ReactElement {
   const fmtTs = opts.fmtTime || fmtTimestamp;
   const flags = opts.anomalyFlags || null;
+  const rid = r.id ?? '';
+
+  // 기능 2 — 프롬프트/메시지 펼침 상태(행 단위 로컬). 원본 togglePromptExpand 의
+  //   container.dataset.expanded 를 React state 로 대체. 같은 preview 재클릭 시 닫힘(토글) 보존.
+  const [expanded, setExpanded] = useState(false);
+
+  // msg 셀 클릭 위임 — 원본 resolveExpandTarget(expand.ts) 와 동치:
+  //   클릭 타깃이 [data-expand-id] 를 (자신 또는 조상으로) 가지면 토글.
+  //   msg 셀 innerHTML 안의 `.prompt-preview[data-expand-id]` 에 React onClick 을 직접 달 수
+  //   없으므로(dangerouslySetInnerHTML), 원본과 같이 closest 위임으로 해결한다.
+  const onMsgCellClick = (e: MouseEvent<HTMLTableCellElement>): void => {
+    if (!rid) return;
+    const el = (e.target as HTMLElement).closest('[data-expand-id]');
+    if (!el) return;
+    setExpanded((v) => !v);
+  };
+
+  // 기능 1 — Session 셀 클릭 → onGotoSession. 미주입이면 핸들러 자체를 달지 않아 무동작(안전).
+  const gotoSession = opts.onGotoSession;
+  const onSessClick = gotoSession
+    ? (e: MouseEvent<HTMLSpanElement>): void => {
+        e.stopPropagation();
+        gotoSession(r.session_id || '', r.project_name || '');
+      }
+    : undefined;
 
   // contextPreview 는 이미 완성된 `<span class="prompt-preview">…</span>` HTML 을 반환한다.
   //   원본 makeRequestRow 는 이 HTML 을 td innerHTML 로 직접 삽입한다(래퍼 span 없음).
@@ -137,6 +181,7 @@ export function RequestRow({ r, opts = {} }: { r: RowLike; opts?: RequestRowOpts
   const chipKeyAttr = opts.chipKey ? opts.chipKey : undefined;
 
   return (
+    <Fragment>
     <tr
       data-chip-key={chipKeyAttr}
       className={rowCls}
@@ -159,7 +204,12 @@ export function RequestRow({ r, opts = {} }: { r: RowLike; opts?: RequestRowOpts
       )}
       <ModelCell r={r} />
       {msgPreviewHtml ? (
-        <td className="cell-msg" data-cell="msg" dangerouslySetInnerHTML={{ __html: msgPreviewHtml }} />
+        <td
+          className="cell-msg"
+          data-cell="msg"
+          onClick={onMsgCellClick}
+          dangerouslySetInnerHTML={{ __html: msgPreviewHtml }}
+        />
       ) : (
         <td className="cell-msg" data-cell="msg">
           <span className="cell-msg-empty" aria-label={window.I18n.t('session.rows.empty-message')} />
@@ -183,12 +233,15 @@ export function RequestRow({ r, opts = {} }: { r: RowLike; opts?: RequestRowOpts
             data-goto-session={r.session_id || ''}
             data-goto-project={r.project_name || ''}
             title={r.session_id || ''}
+            onClick={onSessClick}
           >
             {r.session_id ? r.session_id.slice(0, 12) + '…' : '—'}
           </span>
         </td>
       ) : null}
     </tr>
+    {expanded && rid ? <PromptExpandRow rid={rid} cols={opts.expandCols ?? FEED_EXPAND_COLS} /> : null}
+    </Fragment>
   );
 }
 

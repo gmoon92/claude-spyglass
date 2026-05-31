@@ -19,4 +19,5 @@ export { TypeBadge, ToolIcon, AnomalyBadges, SlowBadge } from './badges';
 export { ModelChip, ModelCell } from './model';
 export { ActionBadge, TargetCell, CacheCell, targetInner } from './cells';
 export { RequestRow } from './RequestRow';
+export { PromptExpandRow } from './PromptExpandRow';
 export { SessionRow } from './SessionRow';
