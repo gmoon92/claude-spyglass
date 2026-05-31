@@ -309,6 +309,30 @@ export function recordRequestState(buckets: number[], lastBucketMinute: number, 
   return { buckets: next, lastBucketMinute: last };
 }
 
+/**
+ * 요청 timestamp(ms) 목록 → 30분 sliding 버킷(분단위 카운트) 일괄 산출.
+ *
+ * 원본 chart.js 는 recordRequest 로 한 건씩 증분 기록했지만(SSE prepend 시), React 는
+ * feed 배열(라이브+시드)을 SSoT 로 들고 매 렌더 파생하는 게 단순/결정론적이다. 따라서
+ * 증분 누적(recordRequestState) 대신 현재 feed 의 timestamp 들을 현재 분 기준 버킷에
+ * 분배하는 순수 함수로 둔다. 인덱스 i 는 (curMinute - (BUCKETS-1-i)) 분에 대응 —
+ * 마지막 버킷(i=BUCKETS-1)이 현재 분. 창(window) 밖 timestamp 는 무시.
+ *
+ * @param timestampsMs 요청 발생 시각(ms epoch) 목록. 비유한수는 스킵.
+ * @param nowMs Date.now() 주입(결정론 — 컴포넌트가 계산해 전달).
+ * @param buckets 버킷 수(기본 TIMELINE_BUCKETS=30).
+ */
+export function bucketizeByMinute(timestampsMs: number[], nowMs: number, buckets = TIMELINE_BUCKETS): number[] {
+  const curMin = nowMinute(nowMs);
+  const out = new Array<number>(buckets).fill(0);
+  for (const ts of timestampsMs) {
+    if (!Number.isFinite(ts)) continue;
+    const idx = buckets - 1 - (curMin - nowMinute(ts));
+    if (idx >= 0 && idx < buckets) out[idx] += 1;
+  }
+  return out;
+}
+
 /** 타임라인 점 산출(chart.js drawTimeline pts) — x 등간격, y 는 maxVal 정규화. */
 export function computeTimelinePoints(buckets: number[], dims: TimelineDims): TimelinePoint[] {
   const { padL, padR, padT, padB, width, height } = dims;
