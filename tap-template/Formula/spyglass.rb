@@ -13,7 +13,7 @@
 #   - native deps 없음 (storage-graph @ladybugdb 는 SPYGLASS_GRAPH_MODE=off 로 dormant).
 #
 # 호출 흐름:
-#   brew tap gmoon92/spyglass
+#   brew tap gmoon92/claude-code-spyglass
 #   brew install spyglass                  →  tarball 다운로드 → bin/share 배치
 #   spyglass start                         →  background daemonize wrapper
 #   spyglass status / stop                 →  PID/LISTEN 기반 lifecycle
