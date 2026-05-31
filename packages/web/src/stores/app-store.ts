@@ -15,6 +15,8 @@
 
 import { create } from 'zustand';
 import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware';
+// 도넛 모드 SSoT 는 lib/chart-mode(universal leaf, architecture.md §1.3) — store→lib 는 정방향.
+import { chartModeToDonutMode, DONUT_MODES, type DonutMode, type ChartMode } from '../lib/chart-mode';
 
 /**
  * 앱 모드 (state.js:6-9, ADR-003 left-rail-meta-docs + settings-page).
@@ -76,6 +78,10 @@ export interface AppStoreState {
   feedFilter: string;
   detailFilter: string;
   searchQuery: string;
+  // ── 도넛 모드 슬라이스 (P3-01): chart.js donutMode 모듈 변수 SSoT 를 스토어로 승격. in-memory(휘발). ──
+  //   Chart 컴포넌트는 leaf(스토어 무참조) — 호출처가 이 값을 donutMode prop 으로 주입(컨트롤드).
+  //   초기값 'model'(chart.js:39, default 모드가 첫 화면).
+  donutMode: DonutMode;
 
   // ── 액션 (state.js accessor 1:1) ──
   setAppMode: (m: AppMode) => void;
@@ -92,6 +98,11 @@ export interface AppStoreState {
   setFeedFilter: (f: string) => void;
   setDetailFilter: (f: string) => void;
   setSearchQuery: (q: string) => void;
+  // ── 도넛 모드 액션 (P3-01) ──
+  /** 도넛 모드 직접 지정 — 유효값('type'|'model'|'cache')만 허용, 무효값 무시(setAppMode 가드 패턴). */
+  setDonutMode: (m: DonutMode) => void;
+  /** 차트 섹션 모드(default/detail) → 도넛 모드 매핑 후 적용(chart-policy.js setChartMode SSoT). */
+  setChartMode: (mode: ChartMode) => void;
 }
 
 /**
@@ -115,6 +126,8 @@ export const initialState = {
   feedFilter: 'all',
   detailFilter: 'all',
   searchQuery: '',
+  // 도넛 모드 초기값 'model' (chart.js:39 — default 모드가 첫 화면).
+  donutMode: 'model' as DonutMode,
 };
 
 /**
@@ -213,6 +226,14 @@ export const useAppStore = create<AppStoreState>()(persist((set) => ({
   setFeedFilter: (f) => set({ feedFilter: f }),
   setDetailFilter: (f) => set({ detailFilter: f }),
   setSearchQuery: (q) => set({ searchQuery: q }),
+
+  // ── donutMode (P3-01) — 유효값 가드(setAppMode 패턴), 무효값 무시. partialize 비대상(휘발). ──
+  setDonutMode: (m) => {
+    if (!DONUT_MODES.includes(m)) return;
+    set({ donutMode: m });
+  },
+  // chart-policy.js setChartMode SSoT: default→model, detail→cache 매핑 후 적용.
+  setChartMode: (mode) => set({ donutMode: chartModeToDonutMode(mode) }),
 }), {
   name: STORAGE_KEY,
   version: SCHEMA_VERSION,
