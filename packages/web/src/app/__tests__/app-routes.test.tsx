@@ -44,14 +44,14 @@ describe('AppRoutes — 경로 → 레이아웃 마운트 매핑', () => {
     // BrowseLayout 은 Fragment(래퍼 div 없음) — .main-layout grid 직계로 left-panel/right-panel 전개.
     expect(html).toContain('data-testid="browse-sidebar"');
     expect(html).toContain('data-testid="browse-main"');
-    expect(html).not.toContain('data-testid="meta-docs-layout"');
+    expect(html).not.toContain('data-testid="meta-docs-root"');
     expect(html).not.toContain('data-testid="settings-layout"');
   });
 
   it('"/meta-docs" → MetaDocsLayout 마운트', () => {
     const html = renderAt('/meta-docs');
-    expect(html).toContain('data-testid="meta-docs-layout"');
-    expect(html).not.toContain('data-testid="browse-layout"');
+    expect(html).toContain('data-testid="meta-docs-root"');
+    expect(html).not.toContain('data-testid="browse-main"');
   });
 
   it('"/settings" → SettingsLayout 마운트', () => {
@@ -77,7 +77,7 @@ describe('레이아웃 마운트 계약 — 핵심 컨테이너 region', () => {
 
   it('MetaDocsLayout 은 메타 카탈로그 region 을 마운트한다', () => {
     const html = renderAt('/meta-docs');
-    expect(html).toContain('data-testid="meta-docs-catalog"');
+    expect(html).toContain('class="meta-docs-catalog-area"');
   });
 
   it('SettingsLayout 은 6 패널 네비 + 활성 패널 region 을 마운트한다', () => {
