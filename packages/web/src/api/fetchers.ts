@@ -286,3 +286,47 @@ export async function fetchProxyStats(since?: number, signal?: AbortSignal): Pro
   const url = `${API}/api/proxy-requests/stats?since=${sinceMs}`;
   return fetchParsed<ProxyStats, null>(url, ProxyStatsEnvelope, null, signal);
 }
+
+// =============================================================================
+// 7. Meta docs — /api/meta-docs 카탈로그 raw rows (P4-07 데이터 population 결선)
+// =============================================================================
+//
+// 원본: assets/js/meta-docs-view.js loadMetaDocsLibrary(:460-515) 의 fetch 부분.
+//   원본은 fetch 직후 pushLeftCounts/renderHtml/applyDisplayFilter 등 DOM·카운트 사이드이펙트를
+//   동기 호출했다. 본 fetcher 는 fetch→파싱→raw rows 만 반환(P3-03 fetchers 동형 — render 0).
+//   query 키 이름은 원본 1:1 보존: range 는 fromTs/toTs(:462-464), project 매칭 시 project(:502).
+//     - 본 fetcher 는 단일 호출(probe/본 fetch 2단계 + source_root 매칭은 호출처 책임으로 단순화).
+//       카탈로그 population 의 최소 계약(project 필터 + range)만 담당한다.
+
+/** 메타 문서 카탈로그 행(/api/meta-docs) — 정렬/필터에 필요한 최소 필드, 나머지 passthrough. */
+const MetaDocRowSchema = z.object({}).passthrough();
+type MetaDocRowRaw = z.infer<typeof MetaDocRowSchema>;
+const MetaDocListEnvelope = ApiListEnvelopeSchema(MetaDocRowSchema);
+
+/** GLOBAL_PROJECT_KEY(left-panel.js:17) — 가상 'user(global)' 행. project 쿼리 미부착 신호. */
+const GLOBAL_PROJECT_KEY = '__global__';
+
+/** fetchMetaDocs 파라미터. project null/global → 전체 카탈로그(project 쿼리 생략). */
+export interface FetchMetaDocsParams {
+  /** 선택 프로젝트(매칭 시 ?project= 부착). null/GLOBAL_PROJECT_KEY → 전체. */
+  project?: string | null;
+  /** 날짜 range — 원본 fromTs/toTs 키로 직렬화(meta-docs-view.js:462-464). */
+  range?: RangeParams;
+  signal?: AbortSignal;
+}
+
+/**
+ * GET /api/meta-docs — 카탈로그 raw rows 반환.
+ * 원본(meta-docs-view.js:510)의 pushLeftCounts/renderHtml/applySort/applyDisplayFilter render·DOM
+ * 사이드이펙트는 **제거** — 정렬/표시필터/검색/카운트는 호출처(MetaDocsCatalog + meta-docs-sort) 책임.
+ */
+export async function fetchMetaDocs(params: FetchMetaDocsParams = {}): Promise<MetaDocRowRaw[]> {
+  const { project = null, range = {}, signal } = params;
+  const useProject = project != null && project !== GLOBAL_PROJECT_KEY;
+  const url = withQuery(`${API}/api/meta-docs`, {
+    project: useProject ? project : undefined,
+    fromTs: range.from,
+    toTs: range.to,
+  });
+  return fetchParsed<MetaDocRowRaw[], MetaDocRowRaw[]>(url, MetaDocListEnvelope, [], signal);
+}

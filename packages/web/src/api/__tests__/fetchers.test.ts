@@ -34,6 +34,7 @@ import {
   fetchObservability,
   fetchProxyRequests,
   fetchProxyStats,
+  fetchMetaDocs,
 } from '../fetchers';
 
 // ── fetch mock 하네스 (hooks-api.test.ts 1:1) ──────────────────────────────────
@@ -335,5 +336,62 @@ describe('데이터 흐름 역전 — render 사이드이펙트/store 역참조 
   it('DOM 사이드이펙트 없음 (document/window 미참조)', () => {
     expect(SRC.includes('document.')).toBe(false);
     expect(SRC.includes('dispatchEvent')).toBe(false);
+  });
+});
+
+// =============================================================================
+// 9. fetchMetaDocs — /api/meta-docs 카탈로그 raw rows (P4-07 데이터 population 결선)
+// =============================================================================
+//
+// 원본: assets/js/meta-docs-view.js loadMetaDocsLibrary(:460-515) 의 fetch 부분.
+//   원본은 fetch 직후 pushLeftCounts/renderHtml/applyDisplayFilter 등 DOM·카운트 사이드이펙트를
+//   동기 호출했다. 본 fetcher 는 fetch→파싱→raw rows 만 반환(P3-03 fetchers 동형 — render 0).
+//   query: project(매칭 시) / fromTs·toTs(range) — 원본 :462-464,500-502 1:1(키 이름 보존).
+describe('fetchMetaDocs (meta-docs-view.js:460 데이터 역전)', () => {
+  it('GET /api/meta-docs → rows(raw) 반환 (render/카운트 사이드이펙트 없이)', async () => {
+    responder = () => ({ data: [{ id: 1, name: 'commit', type: 'skill' }, { name: 'orphan-x', type: 'agent' }] });
+    const rows = await fetchMetaDocs();
+    expect(calls[0].url).toContain('/api/meta-docs');
+    expect(rows.map((r) => r.name)).toEqual(['commit', 'orphan-x']);
+    // orphan(id 부재) 행도 그대로 보존 — 숨김/필터는 호출처(MetaDocsCatalog) 책임.
+    expect(rows[1].id).toBeUndefined();
+  });
+
+  it('project 인자 → ?project= 부착(meta-docs-project-filter-parity)', async () => {
+    responder = () => ({ data: [] });
+    await fetchMetaDocs({ project: 'claude-code-system' });
+    expect(calls[0].url).toContain('project=claude-code-system');
+  });
+
+  it("project 가 GLOBAL_PROJECT_KEY/null 이면 ?project= 미부착(전체 카탈로그)", async () => {
+    responder = () => ({ data: [] });
+    await fetchMetaDocs({ project: null });
+    expect(calls[0].url).not.toContain('project=');
+  });
+
+  it('range → fromTs/toTs 쿼리 부착 (원본 키 이름 보존)', async () => {
+    responder = () => ({ data: [] });
+    await fetchMetaDocs({ range: { from: 111, to: 222 } });
+    expect(calls[0].url).toContain('fromTs=111');
+    expect(calls[0].url).toContain('toTs=222');
+  });
+
+  it('무효 payload(data 비배열) → [] 안전 폴백(throw 금지)', async () => {
+    responder = () => ({ data: { not: 'an array' } });
+    const rows = await fetchMetaDocs();
+    expect(rows).toEqual([]);
+  });
+
+  it('HTTP 실패 → [] 폴백', async () => {
+    respondOk = () => false;
+    const rows = await fetchMetaDocs();
+    expect(rows).toEqual([]);
+  });
+
+  it('signal 전달 — 언마운트 cleanup 계약', async () => {
+    responder = () => ({ data: [] });
+    const ctrl = new AbortController();
+    await fetchMetaDocs({ signal: ctrl.signal });
+    expect(calls[0].init?.signal).toBe(ctrl.signal);
   });
 });
