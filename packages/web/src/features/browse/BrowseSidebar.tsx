@@ -43,6 +43,7 @@ import {
 } from '../dashboard';
 import { useObsCards } from './use-obs-cards';
 import { usePanelResize } from './use-panel-resize';
+import { tt } from '../../app/i18n-labeler';
 
 /** 패널 크롬 라벨(thead/세션 panel-label) — 레거시 정적 i18n(ui.html.left-panel / session-panel.label).
  *  SidebarLabeler(공유)에는 없는 chrome-only 라벨이라 별도 옵셔널 prop 으로 주입(미지정 시 레거시 영문 폴백). */
@@ -105,10 +106,13 @@ export function BrowseSidebar({
     ? labeler.sessionCount(selectedProject, sessions.filter((s) => s.project_name === selectedProject).length)
     : labeler.selectProject();
 
-  const thProject = chromeLabels?.thProject ?? 'Project';
-  const thSession = chromeLabels?.thSession ?? 'Sessions';
-  const thToken = chromeLabels?.thToken ?? 'Tokens';
-  const sessionPanelLabel = chromeLabels?.sessionPanelLabel ?? 'Sessions';
+  // 패널 크롬 라벨(thead/세션 panel-label) — 레거시 정적 i18n 1:1 (index.html data-i18n).
+  //   chromeLabels prop 으로 명시 주입되면 그것을 우선(테스트·호출처 override), 미지정 시 i18n 어댑터
+  //   tt() 로 해석(window.I18n 부재 시 key passthrough — 레거시 data-i18n 미해석 폴백과 동치).
+  const thProject = chromeLabels?.thProject ?? tt('ui.html.left-panel.th-project');
+  const thSession = chromeLabels?.thSession ?? tt('ui.html.left-panel.th-session');
+  const thToken = chromeLabels?.thToken ?? tt('ui.html.left-panel.th-token');
+  const sessionPanelLabel = chromeLabels?.sessionPanelLabel ?? tt('ui.html.session-panel.label');
 
   return (
     <aside className="left-panel" data-testid="browse-sidebar" ref={panelRef}>

@@ -93,6 +93,69 @@ describe('BrowseSidebar — left-panel 골격 + 리사이저 셀렉터 계약', 
   });
 });
 
+describe('BrowseSidebar — 프로젝트 테이블 thead-browse(colgroup + 3컬럼 헤더)', () => {
+  it('browser-projects-table 에 colgroup + thead.thead-browse 를 렌더한다(레거시 골격)', () => {
+    const html = render();
+    // colgroup 3컬럼 + thead-browse 1행.
+    expect(html).toContain('<colgroup>');
+    expect(html).toContain('class="thead-browse"');
+    // thead 가 tbody(browserProjectsBody) 보다 먼저 등장(헤더 → 행 순서).
+    expect(html.indexOf('thead-browse')).toBeLessThan(html.indexOf('id="browserProjectsBody"'));
+  });
+
+  it('thead-browse 라벨이 i18n 키(ui.html.left-panel.th-*)로 해석된다', () => {
+    // 테스트 스텁 I18n.t 는 key passthrough → tt() 가 키를 그대로 반환하는지로 i18n 경로 입증.
+    const html = render();
+    expect(html).toContain('ui.html.left-panel.th-project');
+    expect(html).toContain('ui.html.left-panel.th-session');
+    expect(html).toContain('ui.html.left-panel.th-token');
+  });
+
+  it('세션 panel-label 이 i18n 키(ui.html.session-panel.label)로 해석된다', () => {
+    const html = render();
+    expect(html).toContain('ui.html.session-panel.label');
+  });
+
+  it('window.I18n.t 가 번역값을 주면 thead/panel-label 이 그 값으로 렌더된다', () => {
+    // 로케일 해석 입증: 임시로 I18n.t 를 한국어 값 반환으로 교체.
+    const dict: Record<string, string> = {
+      'ui.html.left-panel.th-project': '프로젝트',
+      'ui.html.left-panel.th-session': '세션',
+      'ui.html.left-panel.th-token': '토큰',
+      'ui.html.session-panel.label': '세션',
+    };
+    const win = (globalThis as unknown as { window: { I18n: { t: (k: string) => string } } }).window;
+    const orig = win.I18n.t;
+    win.I18n.t = (key: string) => dict[key] ?? key;
+    try {
+      const html = render();
+      expect(html).toContain('>프로젝트</th>');
+      expect(html).toContain('>토큰</th>');
+      expect(html).toContain('class="panel-label">세션</span>');
+    } finally {
+      win.I18n.t = orig;
+    }
+  });
+
+  it('chromeLabels prop 이 주어지면 i18n 해석보다 우선한다(호출처 override 계약)', () => {
+    const html = renderToStaticMarkup(
+      <BrowseSidebar
+        projects={[{ project_name: 'alpha', total_tokens: 1000, active_count: 2 }]}
+        sessions={[]}
+        selectedProject={null}
+        selectedSession={null}
+        labeler={labeler}
+        obsIntervalMs={0}
+        chromeLabels={{ thProject: 'P!', thSession: 'S!', thToken: 'T!', sessionPanelLabel: 'SP!' }}
+      />,
+    );
+    expect(html).toContain('>P!</th>');
+    expect(html).toContain('>S!</th>');
+    expect(html).toContain('>T!</th>');
+    expect(html).toContain('class="panel-label">SP!</span>');
+  });
+});
+
 describe('BrowseSidebar — left-panel-footer + update-badge', () => {
   it('footer 에 update-badge 를 마운트한다(레거시 .left-panel-footer)', () => {
     const html = render();
