@@ -57,7 +57,8 @@ const ENABLED = (() => {
   return v === '1' || v === 'true';
 })();
 
-const DEFAULT_LOG_DIR = resolve(process.cwd(), '.claude', '.tmp', 'logs');
+const HOME = process.env.HOME || process.env.USERPROFILE || process.cwd();
+const DEFAULT_LOG_DIR = resolve(HOME, '.spyglass', 'logs');
 const LOG_DIR = process.env.SPYGLASS_DIAG_LOG_DIR || DEFAULT_LOG_DIR;
 
 let initialized = false;
