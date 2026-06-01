@@ -307,6 +307,63 @@ export function ProjectList({
  */
 const MemoProjectList = memo(ProjectList);
 
+export interface MetaProjectListProps {
+  /** 프로젝트 목록(원본 _allProjects) — 호출처 주입(controlled). */
+  projects: readonly ProjectLike[];
+  /** 선택 프로젝트(원본 getSelectedProject()). null = 미선택. */
+  selectedProject: string | null;
+  /** metadocs 항목 수(원본 _metaCounts). */
+  metaCounts: MetaCounts | null;
+  labeler: SidebarLabeler;
+  /** 행 클릭 통지(원본 main.js data-project 위임 대체). */
+  onSelectProject?: (project: string) => void;
+}
+
+/**
+ * metadocs 전용 프로젝트 리스트 — 가상 global 행 + MetaProjectRow 만 노출.
+ *
+ * 분리 근거(meta-docs 좌측 패널 truncate 회귀):
+ *  - 기존 MetaDocsLayout 은 공유 `Sidebar`(ProjectList + SessionList)를 좌측 프로젝트 테이블의
+ *    <tbody> 에 통째로 주입했다. metadocs 모드에서 SessionList 는 selectedProject 가 metadocs
+ *    가상 키일 때 `<td colSpan={4}>` 빈 행을 내보내는데, 이 4-span 셀이 3-col colgroup
+ *    (이름 가변 | 52px | 92px) 의 table-layout:fixed 계산에 4번째 phantom 컬럼을 끼워 넣어
+ *    이름 col 폭을 절반(legacy 64px → 32px)으로 깎았다. 결과적으로 'claude-code-system' 이
+ *    'claud…' 로 잘림.
+ *  - 본 컴포넌트는 SessionList 를 포함하지 않으므로 colspan=4 누수가 사라지고, 이름 col 이
+ *    원래대로 가변 폭(나머지 폭 전부)을 차지한다 — 레거시 metadocs 좌측과 1:1.
+ *  - browse 경로(`Sidebar`/`ProjectList`/`SessionList`)는 일절 건드리지 않는다(공유 회귀 금지).
+ *  - GlobalRow/MetaProjectRow 렌더 함수를 그대로 재사용(직접 마크업 작성 금지 — 캡슐화 원칙).
+ *
+ * 출력은 ProjectList(isMetaMode=true) 의 프로젝트 부분과 동일하되 SessionList 가 빠진 것.
+ */
+export function MetaProjectList({
+  projects,
+  selectedProject,
+  metaCounts,
+  labeler,
+  onSelectProject,
+}: MetaProjectListProps): ReactElement {
+  return (
+    <>
+      <GlobalRow
+        selected={selectedProject === GLOBAL_PROJECT_KEY}
+        total={metaCounts?.total ?? 0}
+        labeler={labeler}
+        onSelect={onSelectProject}
+      />
+      {projects.map((p) => (
+        <MetaProjectRow
+          key={p.project_name}
+          p={p}
+          selected={selectedProject === p.project_name}
+          count={metaCounts?.projects?.[p.project_name] ?? 0}
+          onSelect={onSelectProject}
+        />
+      ))}
+    </>
+  );
+}
+
 export interface SessionListProps {
   /** 세션 목록(원본 _allSessions) — 호출처 주입(controlled). */
   sessions: readonly SessionLike[];

@@ -63,7 +63,7 @@ import {
   type ToolStatsSortKey,
   type SortDir as ToolSortDir,
 } from '../features/dashboard/tool-stats-sort';
-import { Sidebar, type ProjectLike, type SidebarLabeler, type MetaCounts } from '../features/browse/Sidebar';
+import { MetaProjectList, type ProjectLike, type SidebarLabeler, type MetaCounts } from '../features/browse/Sidebar';
 import { useAppStore } from '../stores/app-store';
 import { tt, makeI18nLabeler } from './i18n-labeler';
 import { deriveBrowseData } from './browse-data';
@@ -330,19 +330,18 @@ export function MetaDocsLayout(): ReactElement {
                   </th>
                 </tr>
               </thead>
+              {/* metadocs 전용 프로젝트 리스트 — 가상 global 행 + MetaProjectRow 만(SessionList 없음).
+                  공유 Sidebar(ProjectList+SessionList)를 쓰면 SessionList 의 colSpan=4 빈 행이
+                  3-col colgroup 의 fixed 레이아웃에 phantom 컬럼을 끼워 이름 col 을 절반으로 깎아
+                  'claude-code-system' 이 잘렸다. 세션 행이 없는 metadocs 좌측을 전용 컴포넌트로 분리해
+                  이름 col 이 가변 폭(나머지 전부)을 그대로 차지하도록 한다(레거시 1:1, browse 불변). */}
               <tbody>
-                <Sidebar
+                <MetaProjectList
                   projects={projects}
-                  sessions={[]}
                   selectedProject={selectedProject}
-                  selectedSession={null}
-                  isMetaMode={true}
                   metaCounts={metaCounts}
                   labeler={labeler}
                   onSelectProject={(p) => setSelectedProject(p)}
-                  onSelectSession={() => {
-                    /* metadocs 모드에는 세션 행이 없음(원본 좌측 축약). no-op. */
-                  }}
                 />
               </tbody>
             </table>
