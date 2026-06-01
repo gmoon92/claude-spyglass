@@ -26,7 +26,7 @@
  */
 
 import { SpyglassDatabase, getDatabase } from '@spyglass/storage';
-import { diagJson } from '../diag-log';
+import { diagJson, isDiagEnabled } from '../diag-log';
 import type { ClaudeHookPayload, NormalizedHookPayload, HookProcessResult } from './types';
 import type { HookContext } from './event-handler';
 import { dispatchHookEvent } from './dispatcher';
@@ -65,15 +65,18 @@ export async function handleHookHttpRequest(
 
   const { hook_event_name, session_id, cwd, tool_name, tool_use_id } = raw;
 
-  console.log(`[RECV] ${hook_event_name} session=${session_id}`);
-
-  // hook_event_name 없는 페이로드는 처리 불가 — 조기 거부
+  // hook_event_name 없는 페이로드는 처리 불가 — 조기 거부 (경고는 항상 출력)
   if (!hook_event_name) {
     console.warn(`[RECV] payload missing hook_event_name — discarded`);
     return new Response(
       JSON.stringify({ success: false, error: 'Missing hook_event_name' }),
       { status: 400, headers: { 'Content-Type': 'application/json' } },
     );
+  }
+
+  // [RECV] 정상 수신 로그 — DIAG ON 시에만 출력 (운영 중 tool 호출마다 찍히는 노이즈 방지)
+  if (isDiagEnabled()) {
+    console.log(`[RECV] ${hook_event_name} session=${session_id}`);
   }
 
   // 진단: 훅 raw payload 전체를 jsonl 한 줄로 보존 (proxy 채널과 사후 비교용)
