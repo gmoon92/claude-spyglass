@@ -2,7 +2,21 @@
 //   테스트 지원). jsdom 에는 /locales 서버가 없어 백엔드 fetch 가 실패→빈 리소스→키 폴백을 반환하므로,
 //   기존 골든 단언(키 passthrough; window.I18n stub `t:(k)=>k` 와 동치)이 변환 후에도 그대로 통과한다.
 //   (import 부수효과로 i18next.init 발화 — Phase C 변환 컴포넌트가 useTranslation 으로 인스턴스 참조.)
-import './src/lib/i18n';
+import { i18next } from './src/lib/i18n';
+
+// 테스트 한정 — i18next 의 t/getFixedT 를 레거시 window.I18n.t(테스트 stub) 로 **완전 위임**한다(vars 포함).
+//   목적: 골든/특성/동치 테스트가 바닐라(window.I18n) ↔ TSX(useTranslation) 를 비교하므로, 두 경로의
+//   i18n 출처를 테스트에서 일치시킨다. window.I18n 부재 시 key 폴백. 프로덕션 i18n.ts 는 무영향(여기서만 패치).
+//   window.I18n 은 각 테스트 beforeAll 에서 세팅되므로, 위임 함수는 호출(렌더) 시점에 lazy 조회한다.
+{
+  const delegate = (key: unknown, opts?: unknown): string => {
+    const legacy = (globalThis as { window?: { I18n?: { t?: (k: string, v?: unknown) => string } } }).window?.I18n;
+    const k = Array.isArray(key) ? String(key[0]) : String(key);
+    return legacy?.t ? legacy.t(k, opts as never) : k;
+  };
+  (i18next as unknown as { t: unknown }).t = delegate;
+  (i18next as unknown as { getFixedT: unknown }).getFixedT = () => delegate;
+}
 
 // P5-07: 테스트 타임존을 UTC 로 고정한다.
 //

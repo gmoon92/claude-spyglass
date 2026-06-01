@@ -14,6 +14,7 @@
  * @module render/RequestRow
  */
 import { Fragment, memo, useMemo, useState, type MouseEvent, type ReactElement, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   escHtml,
   fmtToken,
@@ -36,7 +37,6 @@ import { PromptExpandRow } from './PromptExpandRow';
 /** feed 뷰 expand td colspan — 원본 expand.ts#RECENT_REQ_COLS(10: + Session). */
 const FEED_EXPAND_COLS = 10;
 
-declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
 
 interface RowLike {
   id?: string | null;
@@ -120,6 +120,7 @@ function TargetCellWithBadges({ r, extra }: { r: RowLike; extra: ReactNode }): R
  * memo: feed 200행이 SSE 이벤트마다 재렌더되는 비용을 props 안정 시 생략.
  */
 export const RequestRow = memo(function RequestRow({ r, opts = {} }: { r: RowLike; opts?: RequestRowOpts }): ReactElement {
+  const { t } = useTranslation();
   const fmtTs = opts.fmtTime || fmtTimestamp;
   const flags = opts.anomalyFlags || null;
   const rid = r.id ?? '';
@@ -218,7 +219,7 @@ export const RequestRow = memo(function RequestRow({ r, opts = {} }: { r: RowLik
         />
       ) : (
         <td className="cell-msg" data-cell="msg">
-          <span className="cell-msg-empty" aria-label={window.I18n.t('session.rows.empty-message')} />
+          <span className="cell-msg-empty" aria-label={t('session.rows.empty-message')} />
         </td>
       )}
       <td className="cell-token num" data-cell="in">

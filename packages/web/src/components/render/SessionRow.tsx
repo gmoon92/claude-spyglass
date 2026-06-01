@@ -19,7 +19,9 @@ import { bloatedSysBadgeDotHtml } from '../../../assets/js/render/badges.js';
 import { getBloatedSysFor } from '../../../assets/js/state/anomaly-cache.js';
 import { StatusActive, StatusStale, StatusEnded } from '../design-system/icons';
 
-declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
+/** i18n 번역 함수 시그니처 — SessionRow 는 SessionList 가 함수로 호출(JSX 아님)하므로 useTranslation 훅
+ *  대신 t 를 prop 으로 주입받는다(rules-of-hooks 회피). */
+type TFn = (key: string, vars?: Record<string, unknown>) => string;
 
 interface SessionLike {
   id: string;
@@ -35,8 +37,12 @@ interface SessionLike {
  * 세션 행 — 원본 rows.js#makeSessionRow.
  * @param s 세션 데이터
  * @param isSelected 선택 강조 여부('row-selected')
+ * @param t i18n 번역 함수(호출처 SessionList 가 useTranslation 으로 주입). 미주입 시 레거시 window.I18n.t
+ *   폴백 — SessionRow 는 함수/JSX 양쪽으로 호출되고, 골든 동치 테스트는 t 미주입으로 렌더하므로 안전 폴백.
  */
-export function SessionRow({ s, isSelected }: { s: SessionLike; isSelected: boolean }): ReactElement {
+export function SessionRow({ s, isSelected, t: tProp }: { s: SessionLike; isSelected: boolean; t?: TFn }): ReactElement {
+  // t 해석 — prop 우선, 없으면 레거시 전역 window.I18n.t(전환기 폴백).
+  const t: TFn = tProp ?? ((k) => (globalThis as { I18n?: { t?: (k: string) => string } }).I18n?.t?.(k) ?? k);
   // live_state 단일 분기 — 클라 자체 stale 판정 금지(서버 권위). 구버전 폴백: ended_at 기준.
   const liveState = s.live_state || (s.ended_at ? 'ended' : 'live');
   let statusGlyph: ReactElement;
@@ -46,17 +52,17 @@ export function SessionRow({ s, isSelected }: { s: SessionLike; isSelected: bool
   if (liveState === 'ended') {
     statusGlyph = <StatusEnded size={12} />;
     statusCls = '';
-    statusTitle = window.I18n.t('session.rows.status.ended');
+    statusTitle = t('session.rows.status.ended');
     statusTone = 'ended';
   } else if (liveState === 'stale') {
     statusGlyph = <StatusStale size={12} />;
     statusCls = ' stale';
-    statusTitle = window.I18n.t('session.rows.status.stale');
+    statusTitle = t('session.rows.status.stale');
     statusTone = 'stale';
   } else {
     statusGlyph = <StatusActive size={12} />;
     statusCls = ' active';
-    statusTitle = window.I18n.t('session.rows.status.live');
+    statusTitle = t('session.rows.status.live');
     statusTone = 'active';
   }
   const shortId = s.id.slice(0, 8);

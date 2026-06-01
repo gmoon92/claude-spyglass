@@ -18,10 +18,9 @@
  * @module render/PromptExpandRow
  */
 import type { ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 import { escHtml } from '../../../assets/js/formatters.js';
 import { _promptCache } from '../../../assets/js/render/extract.js';
-
-declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
 
 /**
  * 펼침 행 — 원본 expand.ts#togglePromptExpand 의 table 모드 출력(boxHtml 포함)과 동치.
@@ -30,6 +29,7 @@ declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>)
  * @param cols  expand td colspan (원본 RECENT_REQ_COLS=10 — feed 뷰 컬럼 수).
  */
 export function PromptExpandRow({ rid, cols }: { rid: string; cols: number }): ReactElement {
+  const { t } = useTranslation();
   const cached = _promptCache.get(rid);
   const isHtmlMode =
     !!cached && typeof cached === 'object' && cached.kind === 'html' && typeof cached.html === 'string';

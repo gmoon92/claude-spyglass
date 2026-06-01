@@ -11,12 +11,9 @@
  * @module render/model
  */
 import type { ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 // SSoT 재사용 — 분류/라벨/신뢰도 판정 로직은 원본 JS 단일 출처.
 import { modelClassOf, modelChipLabel } from '../../../assets/js/render/model.js';
-
-// 원본 model.js 와 동일하게 전역 window.I18n.t 를 라벨 출처로 사용(골든마스터 동치).
-// 테스트는 window.I18n 를 mock 한다(renderers.test.ts 와 동일 패턴).
-declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
 
 interface RowLike {
   model?: string | null;
@@ -29,9 +26,10 @@ interface RowLike {
  *  title 은 r.model || 'badges.renderers.model.no-info'.
  */
 export function ModelChip({ r, mini = false }: { r: RowLike; mini?: boolean }): ReactElement {
+  const { t } = useTranslation();
   const cls = modelClassOf(r?.model ?? null);
   const label = modelChipLabel(r?.model ?? null, cls);
-  const title = r?.model || window.I18n.t('badges.renderers.model.no-info');
+  const title = r?.model || t('badges.renderers.model.no-info');
   const sizeCls = mini ? ' model-chip-mini' : '';
   return (
     <span className={`model-chip model-chip-${cls}${sizeCls} ds-chip`} data-tone={cls} title={title}>

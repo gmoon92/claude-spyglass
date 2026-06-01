@@ -17,9 +17,8 @@
  * @module features/session-detail/SessionBadges
  */
 import { useEffect, type ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 import { fmtToken } from '../../../assets/js/formatters.js';
-
-declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
 
 interface TurnSummary {
   total_tokens?: number;
@@ -53,6 +52,7 @@ export function SessionBadges({
   selectedSessionId = null,
   onBloatedSysHeader,
 }: SessionBadgesProps): ReactElement | null {
+  const { t } = useTranslation();
   // bloated-sys 헤더 재부착 — 콜백으로 위임(순환 차단). 렌더 후 1회(원본 updateSessionBadges 말미).
   useEffect(() => {
     if (sessionTotalTokens > 0 && selectedSessionId && onBloatedSysHeader) {
@@ -83,9 +83,9 @@ export function SessionBadges({
       <span
         className="detail-agg-badge ds-badge"
         data-tone="neutral"
-        title={window.I18n.t('session.session-detail.turn-views.max-cost-badge-title')}
+        title={t('session.session-detail.turn-views.max-cost-badge-title')}
       >
-        {window.I18n.t('session.session-detail.turn-views.max-cost-badge', {
+        {t('session.session-detail.turn-views.max-cost-badge', {
           n: maxCostTurn.turn_index,
           tokens: fmtToken(maxCostTurn.summary.total_tokens),
         })}
@@ -94,9 +94,9 @@ export function SessionBadges({
         <span
           className="detail-agg-badge ds-badge"
           data-tone="neutral"
-          title={window.I18n.t('session.session-detail.turn-views.top-tool-badge-title')}
+          title={t('session.session-detail.turn-views.top-tool-badge-title')}
         >
-          {window.I18n.t('session.session-detail.turn-views.top-tool-badge', {
+          {t('session.session-detail.turn-views.top-tool-badge', {
             name: topTool[0],
             count: topTool[1],
           })}

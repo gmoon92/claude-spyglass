@@ -98,8 +98,14 @@ void i18next
     // 레거시 {var} 단일 중괄호 보간(locales JSON 포맷) — i18next 기본 {{var}} 와 다름.
     interpolation: { escapeValue: false, prefix: '{', suffix: '}' },
     returnNull: false,
-    // 미스 시 key 반환(레거시 t 폴백·테스트 stub `t:(k)=>k` 와 동치).
-    parseMissingKeyHandler: (key) => key,
+    // 전환기 폴백(태스크 #12): i18next 리소스에 없는 키는 레거시 전역 window.I18n.t 로 위임한다.
+    //   - 프로덕션: i18next 리소스 로드 전(또는 누락) 키-플래시 없이 이미 로드된 window.I18n 값 사용.
+    //   - 테스트: 바닐라(window.I18n stub)와 TSX(useTranslation) 의 i18n 출처를 일치시켜 골든 동치 보존
+    //     (renderers/turn-rows equivalence 가 동일 번역을 비교). window.I18n 부재 시 key 그대로.
+    parseMissingKeyHandler: (key) => {
+      const legacy = (globalThis as { I18n?: { t?: (k: string) => string } }).I18n;
+      return legacy?.t ? legacy.t(key) : key;
+    },
     // SSR/테스트(renderToStaticMarkup)에서 렌더 중 suspend 회피 — 미로드 시 key 폴백 렌더.
     react: { useSuspense: false },
   });
