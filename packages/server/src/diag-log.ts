@@ -45,6 +45,7 @@ import {
   truncateSync,
 } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { shouldSuppressNonEssentialWrites } from '@spyglass/storage';
 
 /**
  * 플래그 평가 — '1' 또는 'true'(대소문자 무관)면 활성.
@@ -60,6 +61,21 @@ const DEFAULT_LOG_DIR = resolve(process.cwd(), '.claude', '.tmp', 'logs');
 const LOG_DIR = process.env.SPYGLASS_DIAG_LOG_DIR || DEFAULT_LOG_DIR;
 
 let initialized = false;
+
+/**
+ * 디스크 critical(기본 <200MB) 이면 진단 기록을 중단한다 — raw payload 폭주가 디스크 풀 →
+ * write I/O hang 의 주범이므로 여기서 차단. statfs 비용을 줄이려 5초 throttle 캐시.
+ */
+let lastDiskCheckTs = 0;
+let lastDiskSuppress = false;
+function diskSuppressed(): boolean {
+  const now = Date.now();
+  if (now - lastDiskCheckTs > 5000) {
+    lastDiskSuppress = shouldSuppressNonEssentialWrites(LOG_DIR);
+    lastDiskCheckTs = now;
+  }
+  return lastDiskSuppress;
+}
 
 function ensureDir(): void {
   if (initialized) return;
@@ -90,7 +106,7 @@ export function isDiagEnabled(): boolean {
 
 /** 사람이 읽는 단일 라인 trace. 플래그 OFF면 no-op. */
 export function diagLog(category: string, message: string): void {
-  if (!ENABLED) return;
+  if (!ENABLED || diskSuppressed()) return;
   try {
     ensureDir();
     const ts = new Date().toISOString();
@@ -103,7 +119,7 @@ export function diagLog(category: string, message: string): void {
 
 /** 1줄 = 1 JSON 객체 (jsonl). 자동으로 ts 필드 추가. 플래그 OFF면 no-op. */
 export function diagJson(category: string, payload: Record<string, unknown>): void {
-  if (!ENABLED) return;
+  if (!ENABLED || diskSuppressed()) return;
   try {
     ensureDir();
     const line = JSON.stringify({ ts: new Date().toISOString(), ...payload }) + '\n';
