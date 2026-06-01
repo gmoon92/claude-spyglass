@@ -471,6 +471,7 @@
   },
   "filter-bar": {
     "all": "All",
+    "all-title": "Show all requests",
     "request-type": "Request type",
     "tool-category": "Tool category",
     "prompt": "User input",

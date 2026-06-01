@@ -471,6 +471,7 @@
   },
   "filter-bar": {
     "all": "全部",
+    "all-title": "显示所有请求",
     "request-type": "请求类型",
     "tool-category": "工具分类",
     "prompt": "用户输入",

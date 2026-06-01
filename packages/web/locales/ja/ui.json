@@ -471,6 +471,7 @@
   },
   "filter-bar": {
     "all": "全て",
+    "all-title": "すべてのリクエストを表示",
     "request-type": "リクエスト種別",
     "tool-category": "ツール分類",
     "prompt": "ユーザー入力",

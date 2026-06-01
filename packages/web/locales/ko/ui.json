@@ -471,6 +471,7 @@
   },
   "filter-bar": {
     "all": "전체",
+    "all-title": "모든 요청 표시",
     "request-type": "요청 종류",
     "tool-category": "도구 분류",
     "prompt": "사용자 입력",
