@@ -85,6 +85,7 @@ export {
   deleteSessions,
   deleteOldSessions,
   deleteOldData,
+  runRetentionCycle,
   // 집계
   getSessionStats,
   getProjectStats,

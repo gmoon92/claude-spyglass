@@ -11,9 +11,7 @@
  *   bun run scripts/daily-cleanup.ts -- --force  # 강제 실행 (날짜 무시)
  */
 
-import {
-  SpyglassDatabase,
-} from '../packages/storage/src/connection';
+import { SpyglassDatabase } from '../packages/storage/src/connection';
 import {
   runCleanupNow,
   getLastCleanupDate,

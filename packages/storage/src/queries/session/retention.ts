@@ -73,3 +73,18 @@ export function deleteOldData(db: Database, beforeTimestamp: number): number {
 
   return changes;
 }
+
+/**
+ * 보존 기간 초과 데이터 삭제 + VACUUM — 일일 정리의 단일 사이클 SSoT.
+ *
+ * delete → vacuum 은 한 묶음으로 수행해야 디스크가 실제로 회수된다.
+ * 이 사이클의 동작을 변경할 때(쿼리 추가, vacuum 전략 변경 등) 이 파일만 수정하면 된다.
+ *
+ * @returns 삭제된 sessions 행 수
+ */
+export function runRetentionCycle(db: Database, beforeTimestamp: number): number {
+  const deleted = deleteOldData(db, beforeTimestamp);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (db as any).run('PRAGMA VACUUM');
+  return deleted;
+}

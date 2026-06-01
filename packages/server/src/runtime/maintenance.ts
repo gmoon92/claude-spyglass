@@ -14,7 +14,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
   SpyglassDatabase,
-  deleteOldData,
+  runRetentionCycle,
   getRetentionDays,
   getRetentionCutoffTs,
   getRawLogRetentionDays,
@@ -102,8 +102,7 @@ export interface CleanupResult {
 export async function runCleanupNow(database: SpyglassDatabase): Promise<CleanupResult> {
   const retentionDays = getRetentionDays();
   const cutoff = getRetentionCutoffTs();
-  const deletedSessions = deleteOldData(database.instance, cutoff);
-  database.instance.run('PRAGMA VACUUM');
+  const deletedSessions = runRetentionCycle(database.instance, cutoff);
 
   await deleteOldGraphData(cutoff).catch((err) => {
     console.warn('[Maintenance] graph retention skipped:', err);
