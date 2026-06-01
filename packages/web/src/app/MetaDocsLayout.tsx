@@ -46,6 +46,8 @@ import {
   nextSort,
   DEFAULT_SORT,
   applyDisplayFilter,
+  filterMetaDocsByProject,
+  isGlobalMetaDoc,
   type MetaDocRow,
   type MetaDocSortKey,
   type SortDir,
@@ -65,9 +67,13 @@ import {
 } from '../features/dashboard/tool-stats-sort';
 import { MetaProjectList, type ProjectLike, type SidebarLabeler, type MetaCounts } from '../features/browse/Sidebar';
 import { useAppStore } from '../stores/app-store';
+import type { PresetValue } from '../stores/app-store';
 import { tt, makeI18nLabeler } from './i18n-labeler';
 import { deriveBrowseData } from './browse-data';
+import { rangeToParams } from './compute-range';
 import { fetchMetaDocs, fetchDashboard } from '../api/fetchers';
+import { DateRangeDropdown, type DateRangeLabeler } from '../components/DateRangeDropdown';
+import { LangSwitcherSlot } from '../components/LangSwitcherSlot';
 
 /** GLOBAL_PROJECT_KEY(left-panel.js:17 / fetchers GLOBAL_PROJECT_KEY) — userSettings 글로벌 집계 키. */
 const GLOBAL_PROJECT_KEY = '__global__';
@@ -80,13 +86,13 @@ function computeMetaCounts(rows: MetaDocRow[]): MetaCounts {
   const projects: Record<string, number> = Object.create(null);
   let global = 0;
   for (const r of rows) {
-    const src = (r as { source?: unknown }).source;
-    const root = r.source_root;
-    if (src === 'userSettings' || root == null) {
+    // isGlobalMetaDoc / source_root basename 그룹핑은 project-filter.ts SSoT 와 동일 판정을 공유한다
+    // (좌측 카운트와 우측 노출 행이 어긋나지 않도록).
+    if (isGlobalMetaDoc(r)) {
       global += 1;
       continue;
     }
-    const base = String(root).split('/').filter(Boolean).pop();
+    const base = String(r.source_root).split('/').filter(Boolean).pop();
     if (!base) continue;
     projects[base] = (projects[base] ?? 0) + 1;
   }
@@ -157,10 +163,17 @@ export function MetaDocsLayout(): ReactElement {
   const setMetaSubTab = useAppStore((s) => s.setMetaSubTab);
   const selectedProject = useAppStore((s) => s.selectedProject);
   const setSelectedProject = useAppStore((s) => s.setSelectedProject);
+  // 날짜 필터 SSoT — browse 차트 헤더와 동일 app-store.activeRange(persist cs.dateRange) 공유.
+  //   과거 vanilla(6341d2b)는 글로벌 #dateFilter 를 메타 모드에서도 노출(meta-tabs-actions 슬롯)했으나
+  //   React 이식에서 슬롯이 빈 채로 남아 누락 — 카탈로그/도구 통계가 같은 기간 분모를 쓰도록 복원한다.
+  const activeRange = useAppStore((s) => s.activeRange);
+  const setActiveRange = useAppStore((s) => s.setActiveRange);
 
   // 카탈로그 데이터 + 좌측 프로젝트 시드.
   const [rows, setRows] = useState<MetaDocRow[]>([]);
   const [projects, setProjects] = useState<ProjectLike[]>([]);
+  // 카탈로그 fetch 대기 — true 면 빈 상태 대신 스켈레톤(프로젝트 전환/초기 로딩 오해 방지).
+  const [catalogLoading, setCatalogLoading] = useState(false);
 
   // 카탈로그 컨트롤 — 원본 모듈 state(meta-docs-view.js:46) 동치(레이아웃 로컬).
   const [type, setType] = useState<TypeFilter>('all');
@@ -181,9 +194,44 @@ export function MetaDocsLayout(): ReactElement {
 
   // tools 탭 도구 통계 — null=미로드(빈 매트릭스). 정렬은 컨트롤드(원본 tool-stats.js 전역 폐기).
   const [toolStats, setToolStats] = useState<ToolStatRow[] | null>(null);
+  const [toolsLoading, setToolsLoading] = useState(false);
   const [toolSort, setToolSort] = useState<{ key: ToolStatsSortKey; dir: ToolSortDir }>(DEFAULT_TOOL_SORT);
 
   const labeler: SidebarLabeler = useMemo(() => makeI18nLabeler(), []);
+
+  // date-filter 드롭다운 열림(트리거 토글 + 바깥클릭 닫기) — BrowseLayout 과 동일 패턴.
+  const [dateOpen, setDateOpen] = useState(false);
+  useEffect(() => {
+    if (!dateOpen) return undefined;
+    const onDocDown = (e: MouseEvent): void => {
+      const t = e.target as HTMLElement | null;
+      if (t && !t.closest('#dateFilter')) setDateOpen(false);
+    };
+    const doc = (globalThis as { document?: Document }).document;
+    doc?.addEventListener('mousedown', onDocDown);
+    return () => doc?.removeEventListener('mousedown', onDocDown);
+  }, [dateOpen]);
+
+  // date-filter i18n 라벨러 — BrowseLayout dateLabeler(ui.main.date-filter.*) 1:1.
+  const dateLabeler: DateRangeLabeler = useMemo(
+    () => ({
+      presetLabel: (v) => tt(`ui.main.date-filter.${v}.label`),
+      presetTitle: (v) => tt(`ui.main.date-filter.${v}.title`),
+      triggerAria: () => tt('ui.main.date-filter.trigger-aria'),
+      customFrom: () => tt('ui.main.date-filter.custom.from'),
+      customTo: () => tt('ui.main.date-filter.custom.to'),
+      customApply: () => tt('ui.main.date-filter.custom.apply'),
+      customLabel: () => tt('ui.main.date-filter.custom.label'),
+      formatCustom: (from, to) => {
+        const fmt = (ms: number): string => {
+          const d = new Date(ms);
+          return Number.isFinite(ms) ? d.toISOString().slice(0, 10) : '';
+        };
+        return `${fmt(from)} ~ ${fmt(to)}`;
+      },
+    }),
+    [],
+  );
 
   // 리사이저 결선(레거시 미결선 갭 — react-resize.md §2.2) — browse 와 동일 메커니즘 재사용.
   //   vTopHandleRef → #panelVerticalHandle(프로젝트 ↔ 요약카드), flowHandleRef → #metaDocsFlowHandle
@@ -192,13 +240,22 @@ export function MetaDocsLayout(): ReactElement {
   // 카탈로그 테이블 컬럼 리사이즈(원본 col-resize.js, storageKey='metadocs') — 테이블 ref 는 레이아웃 소유.
   const catalogTableRef = useRef<HTMLTableElement>(null);
 
-  // 타입 필터 적용 — 원본 state.type(meta-docs-view.js:858) 동치. all 이면 통과.
-  const typeFiltered = useMemo(
-    () => (type === 'all' ? rows : rows.filter((r) => String(r.type ?? '') === type)),
-    [rows, type],
+  // 프로젝트(source_root) 필터 — 좌측에서 특정 프로젝트 선택 시 그 경로 문서로 좁힌다.
+  //   서버 project 파라미터는 usage 집계만 좁히고 행 목록은 전체 source_root 를 반환하므로
+  //   (다른 프로젝트의 동명 문서 혼입), 행 자체를 source_root basename 기준으로 추가로 좁힌다.
+  //   전체/전역키 선택 시 통과(filterMetaDocsByProject SSoT).
+  const projectFiltered = useMemo(
+    () => filterMetaDocsByProject(rows, selectedProject, GLOBAL_PROJECT_KEY),
+    [rows, selectedProject],
   );
 
-  // 좌측 카운트 — 전체 카탈로그(type 필터 전) 기준(원본 pushLeftCounts 는 probe rows 전체).
+  // 타입 필터 적용 — 원본 state.type(meta-docs-view.js:858) 동치. all 이면 통과.
+  const typeFiltered = useMemo(
+    () => (type === 'all' ? projectFiltered : projectFiltered.filter((r) => String(r.type ?? '') === type)),
+    [projectFiltered, type],
+  );
+
+  // 좌측 카운트 — 전체 카탈로그(프로젝트/type 필터 전) 기준(원본 pushLeftCounts 는 probe rows 전체).
   const metaCounts = useMemo(() => computeMetaCounts(rows), [rows]);
 
   // flow 활성 행 — 명시 지정 우선, 없으면 정렬 대상 첫 초점 행 자동 선택.
@@ -217,9 +274,10 @@ export function MetaDocsLayout(): ReactElement {
   useEffect(() => {
     const ctrl = new AbortController();
     const { signal } = ctrl;
+    setCatalogLoading(true);
     (async () => {
       const [list, dashboard] = await Promise.all([
-        fetchMetaDocs({ project: selectedProject, signal }),
+        fetchMetaDocs({ project: selectedProject, range: rangeToParams(activeRange), signal }),
         fetchDashboard({}, signal),
       ]);
       if (signal.aborted) return;
@@ -231,10 +289,13 @@ export function MetaDocsLayout(): ReactElement {
         /* silent — fetcher 가 이미 안전 폴백([]/null). 빈 카탈로그 유지(원본 silent catch 동치). */
       })
       .finally(() => {
-        if (!signal.aborted) setSyncing(false); // in-flight 완료 → 버튼 복원(레거시 finally 동치).
+        if (!signal.aborted) {
+          setSyncing(false); // in-flight 완료 → 버튼 복원(레거시 finally 동치).
+          setCatalogLoading(false);
+        }
       });
     return () => ctrl.abort();
-  }, [selectedProject, refreshKey]);
+  }, [selectedProject, refreshKey, activeRange]);
 
   // tools 탭 도구 통계 population — 원본 tool-stats.js loadProjectToolStats(view.js:311 onActivate).
   //   탭 진입('tools') / 프로젝트 변경 시 재조회(전체 기간 — 카탈로그 fetch 와 동형, range 미부착).
@@ -243,15 +304,21 @@ export function MetaDocsLayout(): ReactElement {
     if (metaSubTab !== 'tools') return;
     const ctrl = new AbortController();
     const { signal } = ctrl;
+    setToolsLoading(true);
     (async () => {
-      const rows = await fetchProjectToolStats({ project: selectedProject, signal });
+      const range = rangeToParams(activeRange);
+      const rows = await fetchProjectToolStats({ project: selectedProject, from: range.from, to: range.to, signal });
       if (signal.aborted) return;
       setToolStats(rows);
-    })().catch(() => {
-      /* silent — fetcher 가 이미 [] 안전 폴백. 미로드 유지(원본 silent catch 동치). */
-    });
+    })()
+      .catch(() => {
+        /* silent — fetcher 가 이미 [] 안전 폴백. 미로드 유지(원본 silent catch 동치). */
+      })
+      .finally(() => {
+        if (!signal.aborted) setToolsLoading(false);
+      });
     return () => ctrl.abort();
-  }, [selectedProject, metaSubTab]);
+  }, [selectedProject, metaSubTab, activeRange]);
 
   // 정렬 헤더 클릭 → nextSort 전이(meta-docs-sort SSoT).
   const onSort = (key: MetaDocSortKey): void => setSort((prev) => nextSort(prev, key));
@@ -409,9 +476,33 @@ export function MetaDocsLayout(): ReactElement {
             </button>
           </div>
           <div className="meta-tabs-actions">
-            {/* date-filter / lang-switcher DOM 이동(원본 meta-tabs-actions) 은 별도 chrome — 빈 슬롯 유지. */}
-            <div id="metaTabsDateRange" className="meta-tabs-date-range" />
-            <div id="metaTabsLangSwitcher" className="meta-tabs-lang-switcher" />
+            {/* date-filter(원본 meta-tabs-shared-date-filter, 6341d2b) — 글로벌 activeRange 를 메타 모드에서도
+                노출. 카탈로그/도구 통계가 같은 기간 분모를 쓴다(위 fetch effect 에 range 전달). */}
+            <div
+              id="dateFilter"
+              className="meta-tabs-date-range"
+              onClick={(e) => {
+                if ((e.target as HTMLElement).closest('.ds-dropdown-trigger')) setDateOpen((v) => !v);
+              }}
+            >
+              <DateRangeDropdown
+                activeRange={activeRange}
+                labeler={dateLabeler}
+                open={dateOpen}
+                onSelectPreset={(v: PresetValue) => {
+                  setActiveRange({ type: 'preset', value: v });
+                  setDateOpen(false);
+                }}
+                onApplyCustom={(from, to) => {
+                  setActiveRange({ type: 'custom', from, to });
+                  setDateOpen(false);
+                }}
+              />
+            </div>
+            {/* lang-switcher — 전역 classic island 를 메타 탭 액션 슬롯으로 DOM 이동(BrowseLayout 과 동일 컴포넌트). */}
+            <div id="metaTabsLangSwitcher" className="meta-tabs-lang-switcher">
+              <LangSwitcherSlot />
+            </div>
           </div>
         </div>
 
@@ -472,6 +563,7 @@ export function MetaDocsLayout(): ReactElement {
               onRowClick={onRowClick}
               activeRowName={flowRow?.name ?? null}
               tableRef={catalogTableRef}
+              loading={catalogLoading}
               t={tt}
             />
             {/* col-resize 결선기 — 테이블이 실제 존재할 때만 마운트(catalogHasRows key 로 등장 시 재부착). */}
@@ -494,7 +586,7 @@ export function MetaDocsLayout(): ReactElement {
           {...(showTools ? {} : { hidden: true })}
         >
           {showTools ? (
-            <MetaDocsToolStats stats={toolStats} sort={toolSort} onSort={onToolSort} t={tt} />
+            <MetaDocsToolStats stats={toolStats} sort={toolSort} onSort={onToolSort} t={tt} loading={toolsLoading} />
           ) : null}
         </div>
       </section>

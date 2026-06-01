@@ -38,6 +38,8 @@ export {
   type MetaDocsBehaviorBarsProps,
 } from './MetaDocsSummaryCards';
 export { fetchProjectToolStats, type FetchProjectToolStatsParams } from './tool-stats-fetcher';
+// 프로젝트(source_root) 카탈로그 필터 — 좌측 프로젝트 선택 시 해당 경로 문서로 좁힘(순수 SSoT).
+export { filterMetaDocsByProject, isGlobalMetaDoc, metaDocProjectKey } from './project-filter';
 // flow 순수 lib (arch §4.2 추출 — 컴포넌트 effect 가 호출).
 export { computeFitView, animateToView, applyImmediate, easeInOutCubic, viewBoxStr, type ViewState } from './flow-camera';
 export { collectFullPathNodes, collectHoverPathNodes, collectEdgesBetween, buildAdjacency, bfsCollect, type FlowEdge } from './flow-graph';
