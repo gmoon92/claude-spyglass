@@ -224,6 +224,41 @@ describe('metricsRouter — 데이터 반영', () => {
     expect(byModel.beta.percentage).toBe(33.3);
   });
 
+  it('model-usage: project 파라미터로 프로젝트별 스코프', async () => {
+    // 두 프로젝트의 세션 — 같은 model 이지만 다른 프로젝트.
+    createSession(db.instance, { id: 'sess-a', project_name: 'proj-a', started_at: T0 - HOUR });
+    createSession(db.instance, { id: 'sess-b', project_name: 'proj-b', started_at: T0 - HOUR });
+    createRequest(db.instance, {
+      id: 'pa1', session_id: 'sess-a', timestamp: T0, type: 'prompt',
+      model: 'alpha', tokens_input: 100, tokens_total: 100,
+    });
+    createRequest(db.instance, {
+      id: 'pa2', session_id: 'sess-a', timestamp: T0 + 1000, type: 'prompt',
+      model: 'alpha', tokens_input: 100, tokens_total: 100,
+    });
+    createRequest(db.instance, {
+      id: 'pb1', session_id: 'sess-b', timestamp: T0 + 2000, type: 'prompt',
+      model: 'beta', tokens_input: 50, tokens_total: 50,
+    });
+
+    const win = `from=${T0 - HOUR}&to=${T0 + HOUR}`;
+    // project 미지정 → 전역(두 모델 모두).
+    const all = (await (await call(`/api/metrics/model-usage?${win}`))!.json()).data;
+    expect(all.map((r: any) => r.model).sort()).toEqual(['alpha', 'beta']);
+    // project=proj-a → alpha 만, request_count=2, percentage=100.
+    const a = (await (await call(`/api/metrics/model-usage?${win}&project=proj-a`))!.json()).data;
+    expect(a.map((r: any) => r.model)).toEqual(['alpha']);
+    expect(a[0].request_count).toBe(2);
+    expect(a[0].percentage).toBe(100);
+    // project=proj-b → beta 만.
+    const b = (await (await call(`/api/metrics/model-usage?${win}&project=proj-b`))!.json()).data;
+    expect(b.map((r: any) => r.model)).toEqual(['beta']);
+    expect(b[0].request_count).toBe(1);
+    // 미존재 프로젝트 → 빈 배열.
+    const none = (await (await call(`/api/metrics/model-usage?${win}&project=nope`))!.json()).data;
+    expect(none).toEqual([]);
+  });
+
   it('anomalies-timeseries: bucket=day 파라미터 전달 동작', async () => {
     // 데이터 없어도 라우팅·파라미터 경로가 깨지지 않음을 고정
     const res = await call('/api/metrics/anomalies-timeseries?range=all&bucket=day');

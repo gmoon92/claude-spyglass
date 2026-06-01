@@ -21,25 +21,40 @@ import type {
  * - prompt 레코드 기준 (실제 모델 호출 1회 = 1 request)
  * - tokens_confidence='high' 만 토큰 합산
  * - percentage는 응답 단계에서 계산 (요청 수 기준)
+ * - project 지정 시 sessions JOIN 으로 project_name 스코프 (도넛 프로젝트별 분포).
+ *   project 는 requests 에 없고 sessions 에만 있으므로(requests.session_id → sessions.id),
+ *   project 인자가 있을 때만 JOIN 한다(미지정 시 전역 — 기존 동작 보존).
  */
 export function getModelUsageStats(
   db: Database,
   fromTs?: number,
-  toTs?: number
+  toTs?: number,
+  project?: string
 ): ModelUsageRow[] {
-  const params: number[] = [];
-  const conds = ["type = 'prompt'", 'model IS NOT NULL', "model NOT LIKE '<%>'"];
-  conds.push(...buildTimeWindow('timestamp', fromTs, toTs, params));
+  const params: (number | string)[] = [];
+  // project 스코프 시 sessions alias 필요 → 컬럼에 r. 접두사 부여(JOIN 모호성 회피).
+  const scoped = project != null && project !== '';
+  const col = (c: string): string => (scoped ? `r.${c}` : c);
+  const conds = [`${col('type')} = 'prompt'`, `${col('model')} IS NOT NULL`, `${col('model')} NOT LIKE '<%>'`];
+  conds.push(...buildTimeWindow(col('timestamp'), fromTs, toTs, params as number[]));
+  if (scoped) {
+    conds.push('s.project_name = ?');
+    params.push(project);
+  }
+
+  const from = scoped
+    ? 'requests r JOIN sessions s ON s.id = r.session_id'
+    : 'requests';
 
   return db.query(`
     SELECT
-      model,
+      ${col('model')} AS model,
       COUNT(*) AS request_count,
-      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE 0 END), 0) AS total_tokens,
-      COALESCE(AVG(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE NULL END), 0) AS avg_tokens
-    FROM requests
+      COALESCE(SUM(CASE WHEN ${col('tokens_confidence')}='high' THEN ${col('tokens_total')} ELSE 0 END), 0) AS total_tokens,
+      COALESCE(AVG(CASE WHEN ${col('tokens_confidence')}='high' THEN ${col('tokens_total')} ELSE NULL END), 0) AS avg_tokens
+    FROM ${from}
     WHERE ${conds.join(' AND ')}
-    GROUP BY model
+    GROUP BY ${col('model')}
     ORDER BY request_count DESC
   `).all(...params) as ModelUsageRow[];
 }

@@ -68,7 +68,9 @@ export async function metricsRouter(req: Request, db: Database): Promise<Respons
   // 1) 모델 사용량 비율 (Donut)
   // -------------------------------------------------------------------------
   if (path === '/api/metrics/model-usage') {
-    const rows = getModelUsageStats(db, window.from, window.to);
+    // project 스코프(도넛 프로젝트별 분포) — 미지정 시 전역(기존 동작).
+    const project = url.searchParams.get('project') || undefined;
+    const rows = getModelUsageStats(db, window.from, window.to, project);
     const total = rows.reduce((s, r) => s + r.request_count, 0);
     const data = rows.map(r => ({
       model: r.model,
