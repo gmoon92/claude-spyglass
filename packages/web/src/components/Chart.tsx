@@ -61,6 +61,8 @@ export interface ChartProps {
   locale?: string;
   /** 도넛 캔버스 wrapper 스타일(옵션). */
   donutStyle?: CSSProperties;
+  /** .chart-wrap 안 timeline canvas '위'에 렌더할 슬롯(레거시 #timelineMeta 복원 — 호출처 주입). */
+  timelineMeta?: import('react').ReactNode;
 }
 
 // 원본 chart.js COLORS — CSS 변수 미주입 영역(축선/배경/텍스트)의 폴백 상수.
@@ -300,6 +302,7 @@ function ChartImpl({
   totalLabel = 'total',
   locale = 'en-US',
   donutStyle,
+  timelineMeta,
 }: ChartProps) {
   const timelineRef = useRef<HTMLCanvasElement>(null);
   const donutRef = useRef<HTMLCanvasElement>(null);
@@ -351,6 +354,8 @@ function ChartImpl({
   return (
     <>
       <div className="chart-wrap" data-ctx-tooltip="context-growth">
+        {/* 레거시 복원 — timeline-meta 요약 통계 블록이 canvas '위'에 위치(index.html :443). */}
+        {timelineMeta}
         <canvas id="timelineChart" ref={timelineRef} height={64} />
       </div>
       <div className="donut-section">

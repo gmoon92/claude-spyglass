@@ -9,8 +9,14 @@
  *    skeleton dismiss(초기 깜빡임 제거)는 React 마운트가 곧 실제 값으로 렌더하므로 불요.
  *
  * 신규 계약: data prop 주입(무전역). i18n 정밀 툴팁은 t prop(기본 window.I18n.t).
- * 셀렉터 계약 유지: id(cacheHitFill/cacheHitPct/cacheRatioCreate/cacheRatioRead/cacheRatioLabel),
- *   cache-bar-fill/ds-bar-fill/data-tone, cache-ratio-creation/read.
+ * 셀렉터 계약 유지: id(cachePanel/cachePanelOverall/cacheHitFill/cacheHitPct/cacheRatioCreate/
+ *   cacheRatioRead/cacheRatioLabel), cache-panel/cache-panel-overall/cache-section/cache-panel-label/
+ *   cache-bar-wrap/cache-bar-fill/cache-bar-pct/cache-ratio-wrap/cache-ratio-creation/read/cache-ratio-label.
+ *
+ * DOM 구조는 cache-panel.css 와 1:1 — index.html 레거시 마크업(.cache-panel > .cache-panel-overall >
+ *   .cache-section > .cache-panel-label + .cache-bar-wrap > .cache-bar-fill + .cache-bar-pct)을 그대로
+ *   복원한다. (이전 평면 span 구조는 .cache-bar-wrap 트랙·.cache-section 보더가 없어 CSS 가 적용되지 않았다.)
+ *   skeleton(data-skeleton) 표지는 React 마운트가 곧 실제 값으로 렌더하므로 불요(원본 dismiss 동치).
  *
  * @module features/dashboard/CachePanel
  */
@@ -41,33 +47,47 @@ export function CachePanel({ data, t = defaultT }: CachePanelProps): ReactElemen
   const precisionTip = t('ui.cache-panel.precision-tooltip', { pct: hr.pctExact.toFixed(2) });
 
   return (
-    <div id="cachePanel">
-      {/* Hit Rate 바 */}
-      <span
-        id="cacheHitFill"
-        className={`cache-bar-fill ${hr.legacyToneCls} ds-bar-fill`}
-        data-tone={hr.dsTone}
-        style={{ width: `${hr.pct}%` }}
-        title={precisionTip}
-      />
-      <span id="cacheHitPct" title={precisionTip}>
-        {hr.labelText}
-      </span>
+    <div className="cache-panel" id="cachePanel">
+      <div className="cache-panel-overall" id="cachePanelOverall">
+        {/* Hit Rate 섹션 */}
+        <div className="cache-section" data-cache-panel-tooltip="hit-rate">
+          <span className="cache-panel-label">Hit Rate</span>
+          <div className="cache-bar-wrap">
+            <div
+              id="cacheHitFill"
+              className={`cache-bar-fill ${hr.legacyToneCls} ds-bar-fill`}
+              data-tone={hr.dsTone}
+              style={{ width: `${hr.pct}%` }}
+              title={precisionTip}
+            />
+          </div>
+          <span className="cache-bar-pct" id="cacheHitPct" title={precisionTip}>
+            {hr.labelText}
+          </span>
+        </div>
 
-      {/* Creation vs Read 비율 바 */}
-      <span
-        id="cacheRatioCreate"
-        className="ds-bar-fill"
-        data-tone="creation"
-        style={{ width: `${ratio.createPct}%` }}
-      />
-      <span
-        id="cacheRatioRead"
-        className="ds-bar-fill"
-        data-tone="read"
-        style={{ width: `${ratio.readPct}%` }}
-      />
-      <span id="cacheRatioLabel">{ratio.ratioLabel}</span>
+        {/* Creation vs Read 비율 섹션 */}
+        <div className="cache-section" data-cache-panel-tooltip="ratio">
+          <span className="cache-panel-label">Creation / Read</span>
+          <div className="cache-ratio-wrap">
+            <div
+              id="cacheRatioCreate"
+              className="cache-ratio-creation ds-bar-fill"
+              data-tone="creation"
+              style={{ width: `${ratio.createPct}%` }}
+            />
+            <div
+              id="cacheRatioRead"
+              className="cache-ratio-read ds-bar-fill"
+              data-tone="read"
+              style={{ width: `${ratio.readPct}%` }}
+            />
+          </div>
+          <span className="cache-ratio-label" id="cacheRatioLabel">
+            {ratio.ratioLabel}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

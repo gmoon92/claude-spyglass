@@ -87,6 +87,8 @@ const DashboardDataSchema = z
 export const DashboardEnvelopeSchema = ApiObjectEnvelopeSchema(DashboardDataSchema);
 
 export type DashboardData = z.infer<typeof DashboardDataSchema>;
+/** /api/dashboard summary 블록 — timeline-meta 통계 6종(품질 3 + 누적 3) SoT. */
+export type DashboardSummary = z.infer<typeof DashboardSummarySchema>;
 
 // =============================================================================
 // 안전 파싱 API

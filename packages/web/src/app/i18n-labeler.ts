@@ -19,9 +19,12 @@ export function tt(key: string, vars?: Record<string, unknown>): string {
 export function makeI18nLabeler(): SidebarLabeler {
   return {
     noData: () => tt('ui.left-panel.no-data'),
-    liveCount: (count) => tt('ui.left-panel.live-count', { n: count }),
+    // 보간 var 명은 locale 템플릿과 일치해야 한다: ui.left-panel.live-count="라이브 {count}개",
+    //   session-count="{project} · {count}개". 과거 'n' 으로 넘겨 {count} 가 치환되지 않고
+    //   리터럴 노출되던 버그(sessionPaneHint '… {count}개')를 'count' 로 정정(legacy left-panel.js 1:1).
+    liveCount: (count) => tt('ui.left-panel.live-count', { count }),
     selectProject: () => tt('ui.left-panel.select-project'),
-    sessionCount: (project, count) => tt('ui.left-panel.session-count', { project, n: count }),
+    sessionCount: (project, count) => tt('ui.left-panel.session-count', { project, count }),
     globalRowLabel: () => tt('ui.left-panel.global-row-label'),
     globalRowTitle: () => tt('ui.left-panel.global-row-title'),
   };

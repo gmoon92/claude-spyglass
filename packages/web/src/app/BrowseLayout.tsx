@@ -43,8 +43,19 @@ import { useAppStore } from '../stores/app-store';
 import type { PresetValue } from '../stores/app-store';
 import { makeI18nLabeler, tt } from './i18n-labeler';
 import { deriveBrowseData } from './browse-data';
-import { fetchDashboard, fetchAllSessions, fetchRequests, type RequestRow as RequestRowData } from '../api/fetchers';
+import {
+  fetchDashboard,
+  fetchAllSessions,
+  fetchRequests,
+  fetchCacheStats,
+  type RequestRow as RequestRowData,
+} from '../api/fetchers';
 import { fetchModelUsage } from '../features/dashboard/metrics-fetchers';
+import { CachePanel } from '../features/dashboard/CachePanel';
+import type { CacheStats } from '../features/dashboard/cache-stats';
+import type { DashboardSummary } from '../schema/api-schema';
+import { TimelineMeta } from '../components/TimelineMeta';
+import { LangSwitcherSlot } from '../components/LangSwitcherSlot';
 
 /**
  * Chart 색 토큰 폴백 — design-tokens.css 주입 전(SSR/초기) 안전 기본.
@@ -86,6 +97,10 @@ export function BrowseLayout(): ReactElement {
   const [donutModel, setDonutModel] = useState<DonutDatum[]>([]);
   // 피드 시드 — 초기 /api/requests. 이후 SSE feed 가 우선(id-dedup 병합).
   const [seedRequests, setSeedRequests] = useState<RequestRowData[]>([]);
+  // 차트 헤더 timeline-meta 통계(/api/dashboard summary) — 레거시 fetchDashboard stat 쓰기 복원.
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  // cache-panel-overall(/api/stats/cache) — 레거시 fetchCacheStats→renderCachePanel 복원.
+  const [cacheStats, setCacheStats] = useState<CacheStats | null>(null);
 
   const labeler: SidebarLabeler = useMemo(() => makeI18nLabeler(), []);
 
@@ -199,6 +214,23 @@ export function BrowseLayout(): ReactElement {
     [],
   );
 
+  // timeline-meta i18n 라벨러 — 원본 index.html data-i18n 키(ui.html.timeline-meta.*) 1:1.
+  const timelineMetaLabeler = useMemo(
+    () => ({
+      aria: () => tt('ui.html.timeline-meta.aria'),
+      qualityGroupAria: () => tt('ui.html.timeline-meta.quality-group-aria'),
+      qualityGroupLabel: () => tt('ui.html.timeline-meta.quality-group-label'),
+      avgLabel: () => tt('ui.html.timeline-meta.avg-label'),
+      errorRateLabel: () => tt('ui.html.timeline-meta.error-rate-label'),
+      volumeGroupAria: () => tt('ui.html.timeline-meta.volume-group-aria'),
+      volumeGroupLabel: () => tt('ui.html.timeline-meta.volume-group-label'),
+      sessionsLabel: () => tt('ui.html.timeline-meta.sessions-label'),
+      requestsLabel: () => tt('ui.html.timeline-meta.requests-label'),
+      tokensLabel: () => tt('ui.html.timeline-meta.tokens-label'),
+    }),
+    [],
+  );
+
   // detail 활성 판정 — rightView==='detail' && 선택 세션 존재.
   const detailActive = rightView === 'detail' && !!selectedSession;
 
@@ -207,11 +239,12 @@ export function BrowseLayout(): ReactElement {
     const ctrl = new AbortController();
     const { signal } = ctrl;
     (async () => {
-      const [dashboard, modelUsage, allSessions, requests] = await Promise.all([
+      const [dashboard, modelUsage, allSessions, requests, cache] = await Promise.all([
         fetchDashboard({}, signal),
         fetchModelUsage({}),
         fetchAllSessions({}, 500, signal),
         fetchRequests({ limit: 200 }, signal),
+        fetchCacheStats({}, signal),
       ]);
       if (signal.aborted) return;
       const derived = deriveBrowseData(dashboard);
@@ -220,11 +253,35 @@ export function BrowseLayout(): ReactElement {
       setDonutModel((modelUsage as DonutDatum[]) ?? []);
       setSessions(allSessions as unknown as Parameters<typeof setSessions>[0]);
       setSeedRequests(requests);
+      // timeline-meta 통계 — fetchDashboard summary 재사용(별도 /api/stats 불요, api.js 와 동일 SoT).
+      setSummary((dashboard?.summary as DashboardSummary | undefined) ?? null);
+      // cache-panel-overall — /api/stats/cache 응답(camelCase hitRate/cacheReadTokens/cacheCreationTokens).
+      setCacheStats((cache as unknown as CacheStats | null) ?? null);
     })().catch(() => {
       /* silent — fetcher 가 이미 안전 폴백(null/[]). UI 는 빈 상태 유지(원본 silent catch 동치). */
     });
     return () => ctrl.abort();
   }, [setSessions]);
+
+  // 진입 시 프로젝트 auto-select — 레거시 autoActivateProject(main.js:242) 1:1.
+  //   selectedProject 가 비어있고 데이터가 도착하면 가장 최근 활동 프로젝트를 선택해 세션 리스트를 노출한다
+  //   (미선택 → '프로젝트를 선택하세요' 빈 상태 회귀 방지). 우선순위:
+  //     1) 가장 최근 활동(last_activity_at || started_at) 세션의 project_name
+  //     2) 폴백: 첫 프로젝트(projects[0])
+  //   (레거시의 localStorage 저장 키는 app-store 가 selectedProject 를 persist 하지 않으므로 생략 — 매 진입
+  //    시 최근 활동 기준으로 재선택. stores 불변 유지.)
+  //   detail 뷰로의 전환은 하지 않는다(세션은 사용자가 클릭) — 좌측 세션 리스트 노출이 목적.
+  useEffect(() => {
+    if (selectedProject) return;
+    if (!projects.length) return;
+    const latest = sessions.reduce<(typeof sessions)[number] | null>((best, s) => {
+      const act = Number(s.last_activity_at ?? s.started_at ?? 0) || 0;
+      const bestAct = best ? Number(best.last_activity_at ?? best.started_at ?? 0) || 0 : -1;
+      return act > bestAct ? s : best;
+    }, null);
+    const target = latest?.project_name || projects[0]?.project_name;
+    if (target) setSelectedProject(target);
+  }, [selectedProject, projects, sessions, setSelectedProject]);
 
   return (
     // Fragment — .main-layout(AppShell) grid 직계 자식으로 left-panel·right-panel 전개.
@@ -285,8 +342,9 @@ export function BrowseLayout(): ReactElement {
                   }}
                 />
               </div>
-              {/* lang-switcher 는 index.html 정적 classic i18n island(#lang-switcher, lang-switcher.js 바인딩)이
-                  SSoT — 여기서 중복 렌더하면 동일 id 충돌로 island 바인딩이 깨진다. 따라서 미렌더(island 유지). */}
+              {/* lang-switcher(레거시 복원) — index.html 정적 classic island(#lang-switcher, lang-switcher.js 바인딩)을
+                  여기 슬롯으로 DOM 이동해 차트 헤더에 노출한다(중복 id 회피 + 바인딩 보존). LangSwitcherSlot 참조. */}
+              <LangSwitcherSlot />
               <button
                 className="btn-toggle"
                 id="btnToggleChart"
@@ -310,7 +368,11 @@ export function BrowseLayout(): ReactElement {
               donutMode={donutMode}
               timelineBuckets={timelineBuckets}
               tokens={FALLBACK_TOKENS}
+              timelineMeta={<TimelineMeta summary={summary} labeler={timelineMetaLabeler} />}
             />
+            {/* cache-panel-overall(원본 index.html :520~543) — charts-inner 3번째 행(.cache-panel grid 1/-1 전체폭).
+                fetchCacheStats 결과 결선. CachePanel 이 .cache-panel 래퍼까지 출력하므로 추가 래핑하지 않는다. */}
+            <CachePanel data={cacheStats} />
           </div>
         </div>
 
