@@ -18,6 +18,8 @@ export interface MetricParams {
   from?: number | string;
   to?: number | string;
   bucket?: string;
+  /** 프로젝트 스코프(도넛 프로젝트별 모델 분포). 미지정 시 전역(서버 기본). */
+  project?: string;
 }
 
 /** range/from/to/bucket → query string(null/'' 키 생략, 원본 qs 동치). */

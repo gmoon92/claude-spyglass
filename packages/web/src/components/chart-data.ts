@@ -253,6 +253,65 @@ export function computeDonutSlices(data: DonutDatum[], mode: DonutMode, color: C
   return slices;
 }
 
+// ── 범례 (chart.js renderTypeLegend) ────────────────────────────────────────────
+/** cache 모드에서 안정 id → ui.chart.label.<id> 로 매핑하는 슬라이스 id 집합(chart.js CACHE_SLICE_IDS 1:1). */
+export const CACHE_SLICE_IDS: ReadonlySet<string> = new Set([
+  'cache', 'others', 'total', 'input', 'hit', 'creation', 'hit-rate',
+]);
+
+/** 범례 1행 뷰모델(chart.js renderTypeLegend 의 legend-item 1:1). */
+export interface DonutLegendRow {
+  /** legend-dot 배경색. */
+  color: string;
+  /** legend-name 표시 텍스트(이미 i18n 해석됨 — 호출처 labeler 적용). */
+  name: string;
+  /** legend-name title 속성(전체 텍스트, ellipsis 보완). */
+  title: string;
+  /** legend-val — 카운트(count.toLocaleString). */
+  count: number;
+  /** legend-pct — round(count/total*100). */
+  pct: number;
+}
+
+/** 범례 전체 뷰모델 — rows + 하단 total(donut-total #typeTotal). */
+export interface DonutLegendModel {
+  rows: DonutLegendRow[];
+  /** 하단 #typeTotal 카운트(donutTotal). 0 이면 비어있음(no-data). */
+  total: number;
+  /** 데이터 유무(빈 배열이면 false → 호출처 no-data 표시). */
+  hasData: boolean;
+}
+
+/**
+ * 도넛 데이터 → 범례 뷰모델(chart.js renderTypeLegend 순수화).
+ *  - count = donutItemCount, pct = round(count/total*100)(보색 관계 — 슬라이스와 동일 값).
+ *  - 라벨: cache + 안정 id ∈ CACHE_SLICE_IDS 면 labelForCacheId(id)(ui.chart.label.<id>),
+ *    그 외엔 raw(cache=label / model=model / type=type). raw 누락 시 donutItemKey 폴백.
+ *  - 색은 donutItemColor(슬라이스와 동일 토큰).
+ *
+ * i18n 해석은 호출처(컴포넌트)가 labelForCacheId 로 주입 — 본 모듈은 무전역(leaf) 유지.
+ */
+export function buildDonutLegend(
+  data: DonutDatum[],
+  mode: DonutMode,
+  color: ColorContext,
+  labelForCacheId: (id: string) => string,
+): DonutLegendModel {
+  const total = donutTotal(data, mode);
+  if (!data.length) return { rows: [], total: 0, hasData: false };
+  const denom = total || 1;
+  const rows = data.map((d, idx) => {
+    const count = donutItemCount(d, mode);
+    const pct = Math.round((count / denom) * 100);
+    const raw = mode === 'cache' ? d.label : mode === 'model' ? d.model : d.type;
+    const resolved =
+      mode === 'cache' && d.id && CACHE_SLICE_IDS.has(d.id) ? labelForCacheId(d.id) : raw;
+    const name = resolved || donutItemKey(d, mode);
+    return { color: donutItemColor(d, idx, mode, color), name, title: name, count, pct };
+  });
+  return { rows, total, hasData: true };
+}
+
 // ── 캐시 hit-rate (drawDonut cache 중앙 지표) ───────────────────────────────────
 /** creation 추출 우선순위: _cacheCreation 메타 → id=creation tokens → label='Cache Write' tokens → 0. */
 export function cacheCreationOf(data: DonutDatum[]): number {

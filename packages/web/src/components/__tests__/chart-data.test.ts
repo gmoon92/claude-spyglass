@@ -26,6 +26,8 @@ import {
   donutItemColor,
   donutTotal,
   computeDonutSlices,
+  buildDonutLegend,
+  CACHE_SLICE_IDS,
   cacheHitRateLabel,
   cacheCreationOf,
   formatDonutCenter,
@@ -230,6 +232,50 @@ describe('computeDonutSlices — 슬라이스 spec (drawDonut 호출 계약)', (
     const data: DonutDatum[] = [{ type: 'prompt', count: 1 }];
     const slices = computeDonutSlices(data, 'type', ctx(data));
     expect(slices[0].color).toBe(TYPE_COLORS.prompt);
+  });
+});
+
+describe('buildDonutLegend — 범례 뷰모델 (chart.js renderTypeLegend)', () => {
+  const cacheLabel = (id: string) => ({ cache: '캐시', others: '그 외' }[id] ?? id);
+
+  it('model 모드: 모델명/호출수/% + total = donutTotal', () => {
+    const data: DonutDatum[] = [
+      { model: 'claude-opus-4-8', request_count: 49 },
+      { model: 'claude-haiku-4-5-20251001', request_count: 2 },
+    ];
+    const lg = buildDonutLegend(data, 'model', ctx(data), cacheLabel);
+    expect(lg.hasData).toBe(true);
+    expect(lg.total).toBe(51);
+    expect(lg.rows.map((r) => r.name)).toEqual(['claude-opus-4-8', 'claude-haiku-4-5-20251001']);
+    expect(lg.rows.map((r) => r.count)).toEqual([49, 2]);
+    // pct = round(count/total*100): 49/51=96.07→96, 2/51=3.92→4.
+    expect(lg.rows.map((r) => r.pct)).toEqual([96, 4]);
+  });
+
+  it('cache 모드: 안정 id → cacheLabel, 토큰수 count, total = 토큰합', () => {
+    const data: DonutDatum[] = [
+      { id: 'cache', label: 'X', tokens: 278922, _cacheCreation: 278922 },
+      { id: 'others', label: 'Y', tokens: 1328004 },
+    ];
+    const lg = buildDonutLegend(data, 'cache', ctx(data), cacheLabel);
+    expect(lg.total).toBe(1606926);
+    expect(lg.rows.map((r) => r.name)).toEqual(['캐시', '그 외']); // 안정 id 우선(label 무시)
+    expect(lg.rows.map((r) => r.count)).toEqual([278922, 1328004]);
+    // 17% / 83% (round(278922/1606926*100)=17, round(1328004/...)=83)
+    expect(lg.rows.map((r) => r.pct)).toEqual([17, 83]);
+  });
+
+  it('빈 데이터 → hasData=false, total=0', () => {
+    const lg = buildDonutLegend([], 'model', ctx([]), cacheLabel);
+    expect(lg.hasData).toBe(false);
+    expect(lg.total).toBe(0);
+    expect(lg.rows).toEqual([]);
+  });
+
+  it('CACHE_SLICE_IDS 는 cache/others/... 안정 id 집합', () => {
+    expect(CACHE_SLICE_IDS.has('cache')).toBe(true);
+    expect(CACHE_SLICE_IDS.has('others')).toBe(true);
+    expect(CACHE_SLICE_IDS.has('model-x')).toBe(false);
   });
 });
 

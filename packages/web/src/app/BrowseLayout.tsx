@@ -29,14 +29,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { ProjectLike, SidebarLabeler } from '../features/browse/Sidebar';
 import { BrowseSidebar } from '../features/browse';
-import { Chart, type ChartTokens } from '../components/Chart';
+import { Chart, type ChartTokens, type ChartLegendLabeler } from '../components/Chart';
 import { useColResize } from '../components/use-col-resize';
 import { bucketizeByMinute, type DataByKind, type DonutDatum } from '../components/chart-data';
 import { RequestRow, buildSearchHaystack } from '../components/render/RequestRow';
 import { SearchBox } from '../components/SearchBox';
 import { FilterBar, type FilterBarLabeler } from '../components/FilterBar';
 import { subTypeOf, SUB_TYPES } from '../features/dashboard/request-types';
-import { SessionDetailContainer } from '../features/session-detail';
+import { SessionDetailContainer, useSessionDetail } from '../features/session-detail';
+import { ContextChart } from '../features/dashboard/ContextChart';
+import { toContextTurns, buildCacheDonut, type SessionTurnLike } from '../features/dashboard/detail-chart-data';
 import { DateRangeDropdown, type DateRangeLabeler } from '../components/DateRangeDropdown';
 import { useSSEStore } from '../stores/sse-store';
 import { useAppStore } from '../stores/app-store';
@@ -80,6 +82,7 @@ export function BrowseLayout(): ReactElement {
   const selectedSession = useAppStore((s) => s.selectedSession);
   const rightView = useAppStore((s) => s.rightView);
   const donutMode = useAppStore((s) => s.donutMode);
+  const setChartMode = useAppStore((s) => s.setChartMode);
   const setSelectedProject = useAppStore((s) => s.setSelectedProject);
   const setSelectedSession = useAppStore((s) => s.setSelectedSession);
   const setRightView = useAppStore((s) => s.setRightView);
@@ -105,9 +108,45 @@ export function BrowseLayout(): ReactElement {
 
   const labeler: SidebarLabeler = useMemo(() => makeI18nLabeler(), []);
 
+  // detail 활성 판정 — rightView==='detail' && 선택 세션 존재.
+  const detailActive = rightView === 'detail' && !!selectedSession;
+
+  // ── 이슈1: detail 모드 차트 데이터 — 선택 세션 turns 에서 파생 ──
+  //   레거시 setChartMode('detail')(chart-policy.ts) + flat-view.ts(DETAIL_FILTER_CHANGED)가
+  //   세션 turns/requests 로 cache 도넛 + #contextGrowthChart 를 채우던 경로 복원.
+  //   useSessionDetail(read import)로 선택 세션 turns 를 가져온다. selectedSession 이 없으면 빈 turns.
+  //   (SessionDetailContainer 도 동일 훅을 쓰지만 turns-fetcher 가 AbortController + silent 폴백이라
+  //    중복 호출은 안전 — projection 캐시 없는 legacy read 경로의 read-only 조회.)
+  const { turns: detailTurns } = useSessionDetail(detailActive ? selectedSession : null);
+
+  // ContextChart 입력(누적 토큰) — turns 의 prompt 통과(toContextTurns). default 모드엔 빈 배열.
+  const contextTurns = useMemo(
+    () => (detailActive ? toContextTurns(detailTurns as unknown as SessionTurnLike[]) : []),
+    [detailActive, detailTurns],
+  );
+
+  // cache 도넛 2-슬라이스(레거시 flat-view.ts SSoT) — i18n 라벨 주입. default 모드엔 빈 배열.
+  const donutCache: DonutDatum[] = useMemo(
+    () =>
+      detailActive
+        ? buildCacheDonut(detailTurns as unknown as SessionTurnLike[], {
+            cache: tt('ui.chart.label.cache'),
+            others: tt('ui.chart.label.others'),
+          })
+        : [],
+    [detailActive, detailTurns],
+  );
+
+  // 차트 모드 → 도넛 모드 SSoT 동기(레거시 setChartMode: detail→cache / default→model).
+  //   store.donutMode 를 단일 진실로 유지하기 위해 detailActive 변화 시 setChartMode 로 흘린다
+  //   (Chart 는 donutMode prop 컨트롤드 — dataByKind 와 함께 모드별 활성셋 선택).
+  useEffect(() => {
+    setChartMode(detailActive ? 'detail' : 'default');
+  }, [detailActive, setChartMode]);
+
   const dataByKind: DataByKind = useMemo(
-    () => ({ type: donutType, model: donutModel, cache: [] }),
-    [donutType, donutModel],
+    () => ({ type: donutType, model: donutModel, cache: donutCache }),
+    [donutType, donutModel, donutCache],
   );
 
   // 피드 행 — 라이브 feed(head=최신) + 초기 시드 병합. 동일 id 는 라이브 우선.
@@ -215,6 +254,18 @@ export function BrowseLayout(): ReactElement {
     [],
   );
 
+  // 도넛 범례/하단 total i18n 라벨러(레거시 renderTypeLegend 복원) — Chart 가 무전역 leaf 라 주입.
+  //   cacheLabel: cache 슬라이스 안정 id → ui.chart.label.<id>(cache='캐시'/others='그 외').
+  //   countUnit: 하단 #typeTotal — ui.chart.count-unit('{count}건'). noData: ui.chart.no-data.
+  const donutLegendLabeler: ChartLegendLabeler = useMemo(
+    () => ({
+      cacheLabel: (id) => tt(`ui.chart.label.${id}`),
+      countUnit: (countText) => tt('ui.chart.count-unit', { count: countText }),
+      noData: () => tt('ui.chart.no-data'),
+    }),
+    [],
+  );
+
   // timeline-meta i18n 라벨러 — 원본 index.html data-i18n 키(ui.html.timeline-meta.*) 1:1.
   const timelineMetaLabeler = useMemo(
     () => ({
@@ -232,8 +283,6 @@ export function BrowseLayout(): ReactElement {
     [],
   );
 
-  // detail 활성 판정 — rightView==='detail' && 선택 세션 존재.
-  const detailActive = rightView === 'detail' && !!selectedSession;
 
   // population — activeRange 기준 로드. 마운트 1회 + activeRange 변경 시 재조회(date-filter-propagation).
   //   레거시 api.js: range 변경 → cs:active-range-changed → buildQuery(getDateRange()) 로 요청/통계/세션
@@ -248,10 +297,13 @@ export function BrowseLayout(): ReactElement {
     const { signal } = ctrl;
     const restRange = rangeToParams(activeRange);
     const metricRange = rangeToMetricParams(activeRange);
+    // 도넛 모델 분포 프로젝트 스코프(이슈2) — selectedProject 를 metrics 파라미터로 전파.
+    //   서버 /api/metrics/model-usage 가 project 를 sessions JOIN 으로 스코프(미지정 시 전역).
+    const modelUsageParams = selectedProject ? { ...metricRange, project: selectedProject } : metricRange;
     (async () => {
       const [dashboard, modelUsage, allSessions, requests, cache] = await Promise.all([
         fetchDashboard(restRange, signal),
-        fetchModelUsage(metricRange),
+        fetchModelUsage(modelUsageParams),
         fetchAllSessions(restRange, 500, signal),
         fetchRequests({ limit: 200, range: restRange }, signal),
         fetchCacheStats(restRange, signal),
@@ -271,7 +323,7 @@ export function BrowseLayout(): ReactElement {
       /* silent — fetcher 가 이미 안전 폴백(null/[]). UI 는 빈 상태 유지(원본 silent catch 동치). */
     });
     return () => ctrl.abort();
-  }, [setSessions, activeRange]);
+  }, [setSessions, activeRange, selectedProject]);
 
   // 진입 시 프로젝트 auto-select — 레거시 autoActivateProject(main.js:242) 1:1.
   //   selectedProject 가 비어있고 데이터가 도착하면 가장 최근 활동 프로젝트를 선택해 세션 리스트를 노출한다
@@ -310,16 +362,24 @@ export function BrowseLayout(): ReactElement {
       />
 
       <main className="right-panel" data-testid="browse-main">
-        {/* ── chartSection(원본 :395) — 차트 섹션 카드. CSS 는 #chartSection/.view-section 키. ── */}
-        <div className={`view-section card card--compact${chartCollapsed ? ' chart-collapsed' : ''}`} id="chartSection">
+        {/* ── chartSection(원본 :395) — 차트 섹션 카드. CSS 는 #chartSection/.view-section 키. ──
+            이슈1: detail 모드(세션 선택) 시 chart-mode-detail 클래스 부여(레거시 setChartMode).
+            CSS(default-view.css :88~95,:254~258)가 이 클래스로 timeline/timeline-meta/chart-default-meta 를
+            숨기고 #contextGrowthChart 를 노출 + 도넛은 아래 donutMode(cache)로 전환. */}
+        <div
+          className={`view-section card card--compact${chartCollapsed ? ' chart-collapsed' : ''}${detailActive ? ' chart-mode-detail' : ''}`}
+          id="chartSection"
+        >
           <div className="view-section-header">
             {/* default-meta(원본 chart-default-meta) — 30분 sliding 타임라인 고정 라벨. */}
             <div className="chart-default-meta">
               <span className="panel-label">{tt('ui.html.chart-section.label')}</span>
               <span className="panel-hint" id="chartSubtitle">{tt('ui.html.chart-section.subtitle')}</span>
             </div>
-            {/* detail-meta(원본 chart-detail-meta) — 세션 선택 시 세션ID/프로젝트 노출(CSS 가 모드별 토글). */}
-            <div className="chart-detail-meta">
+            {/* detail-meta(원본 chart-detail-meta) — 세션 선택 시 세션ID/프로젝트 노출.
+                레거시 setChartMode 가 hidden 속성을 토글(default-view.css :87 .chart-detail-meta[hidden]).
+                default 모드에선 hidden 으로 숨기고 detail 모드에서 노출(chart-default-meta 와 자리 교대). */}
+            <div className="chart-detail-meta" hidden={!detailActive}>
               <span className="detail-session-id" id="detailSessionId" title={selectedSession ?? ''}>
                 {selectedSession ? `${selectedSession.slice(0, 8)}…` : ''}
               </span>
@@ -379,6 +439,8 @@ export function BrowseLayout(): ReactElement {
               timelineBuckets={timelineBuckets}
               tokens={FALLBACK_TOKENS}
               timelineMeta={<TimelineMeta summary={summary} labeler={timelineMetaLabeler} />}
+              contextSlot={<ContextChart turns={contextTurns} />}
+              legendLabeler={donutLegendLabeler}
             />
             {/* cache-panel-overall(원본 index.html :520~543) — charts-inner 3번째 행(.cache-panel grid 1/-1 전체폭).
                 fetchCacheStats 결과 결선. CachePanel 이 .cache-panel 래퍼까지 출력하므로 추가 래핑하지 않는다. */}
