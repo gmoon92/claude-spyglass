@@ -13,6 +13,9 @@ import {
   DEFAULT_RETENTION_DAYS,
   getRetentionDays,
   getRetentionCutoffTs,
+  DEFAULT_RAW_LOG_RETENTION_DAYS,
+  getRawLogRetentionDays,
+  getRawLogRetentionCutoffTs,
 } from '../runtime/retention';
 
 describe('SPYGLASS_RETENTION_DAYS', () => {
@@ -91,5 +94,44 @@ describe('getRetentionCutoffTs', () => {
     const expectedMax = after - 30 * 24 * 60 * 60 * 1000;
     expect(cutoff).toBeGreaterThanOrEqual(expectedMin);
     expect(cutoff).toBeLessThanOrEqual(expectedMax);
+  });
+});
+
+describe('SPYGLASS_RAW_LOG_RETENTION_DAYS', () => {
+  let original: string | undefined;
+
+  beforeEach(() => {
+    original = process.env.SPYGLASS_RAW_LOG_RETENTION_DAYS;
+    delete process.env.SPYGLASS_RAW_LOG_RETENTION_DAYS;
+  });
+
+  afterEach(() => {
+    if (original === undefined) {
+      delete process.env.SPYGLASS_RAW_LOG_RETENTION_DAYS;
+    } else {
+      process.env.SPYGLASS_RAW_LOG_RETENTION_DAYS = original;
+    }
+  });
+
+  test('env 미지정 시 기본값 7 (RDB 30일과 별개로 더 짧음)', () => {
+    expect(getRawLogRetentionDays()).toBe(DEFAULT_RAW_LOG_RETENTION_DAYS);
+    expect(DEFAULT_RAW_LOG_RETENTION_DAYS).toBe(7);
+  });
+
+  test('유효한 양의 정수 적용', () => {
+    process.env.SPYGLASS_RAW_LOG_RETENTION_DAYS = '14';
+    expect(getRawLogRetentionDays()).toBe(14);
+  });
+
+  test('0 / 음수 / non-numeric / 빈 문자열은 default 폴백', () => {
+    for (const bad of ['0', '-3', 'abc', '']) {
+      process.env.SPYGLASS_RAW_LOG_RETENTION_DAYS = bad;
+      expect(getRawLogRetentionDays()).toBe(DEFAULT_RAW_LOG_RETENTION_DAYS);
+    }
+  });
+
+  test('getRawLogRetentionCutoffTs = now - days * 86400000 (default 7일)', () => {
+    const now = 1_700_000_000_000;
+    expect(getRawLogRetentionCutoffTs(now)).toBe(now - 7 * 24 * 60 * 60 * 1000);
   });
 });

@@ -44,3 +44,27 @@ export function getRetentionDays(): number {
 export function getRetentionCutoffTs(now: number = Date.now()): number {
   return now - getRetentionDays() * 24 * 60 * 60 * 1000;
 }
+
+/**
+ * hook raw 원장(`~/.spyglass/logs/hook-raw/YYYY-MM-DD.jsonl`) 버킷 보존 기간 기본값.
+ *
+ *   raw 원장은 서버 다운 시 수동 복구용 디버그 안전망(write-only) — replay 코드 없음.
+ *   영구 자산이 아니므로 RDB(30일)보다 짧게 잡아 디스크 비대화를 막는다.
+ */
+export const DEFAULT_RAW_LOG_RETENTION_DAYS = 7;
+
+/**
+ * raw 원장 버킷 보존 일수. `SPYGLASS_RAW_LOG_RETENTION_DAYS` 오버라이드.
+ * 잘못된 값(0/음수/non-numeric)은 default 폴백 (RDB retention 과 동일 가드).
+ */
+export function getRawLogRetentionDays(): number {
+  const raw = parseInt(process.env.SPYGLASS_RAW_LOG_RETENTION_DAYS ?? '', 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_RAW_LOG_RETENTION_DAYS;
+}
+
+/**
+ * raw 원장 버킷 cutoff 타임스탬프(ms). 이 시각 이전에 끝난 버킷이 삭제 대상.
+ */
+export function getRawLogRetentionCutoffTs(now: number = Date.now()): number {
+  return now - getRawLogRetentionDays() * 24 * 60 * 60 * 1000;
+}

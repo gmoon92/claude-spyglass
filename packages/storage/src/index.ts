@@ -362,7 +362,22 @@ export {
   DEFAULT_RETENTION_DAYS,
   getRetentionDays,
   getRetentionCutoffTs,
+  DEFAULT_RAW_LOG_RETENTION_DAYS,
+  getRawLogRetentionDays,
+  getRawLogRetentionCutoffTs,
 } from './runtime/retention';
+
+// 디스크 가드 (서버 diag-log·maintenance + hook 이 동일 임계치 참조하는 SoT)
+export {
+  DEFAULT_DISK_MIN_FREE_MB,
+  DEFAULT_DISK_WARN_FREE_MB,
+  getDiskMinFreeBytes,
+  getDiskWarnFreeBytes,
+  getDiskFreeBytes,
+  getDiskStatus,
+  shouldSuppressNonEssentialWrites,
+} from './runtime/disk-space';
+export type { DiskStatus, DiskSpaceReport } from './runtime/disk-space';
 
 // =============================================================================
 // At-rest 컬럼 암호화 (R3) — AES-256-GCM + payload_algo 분기 codec SSoT
