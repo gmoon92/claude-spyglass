@@ -30,6 +30,9 @@
  */
 import { useEffect } from 'react';
 import { tt } from '../app/i18n-labeler';
+import { positionAbovePoint } from '../features/dashboard/tooltip';
+import type { CtxPointHoverDetail } from '../features/dashboard/context-chart-data';
+import type { TimelineHoverDetail } from '../components/Chart';
 
 /** 툴팁 내용 — title/desc 2단(desc 는 \n → <br> 치환). */
 interface TooltipContent {
@@ -126,6 +129,47 @@ function positionAtCursor(el: HTMLElement, clientX: number, clientY: number, fal
 }
 
 /**
+ * 점 위 배치 — 위치 산술 SSoT(tooltip.ts positionAbovePoint)에 위임하고 el 에 적용.
+ * ctx-point-hover 수치 툴팁 전용(레거시 stat-tooltip.js positionAt 동치).
+ */
+function positionAbove(el: HTMLElement, clientX: number, clientY: number, fallbackW: number): void {
+  const size = { width: el.offsetWidth || fallbackW, height: el.offsetHeight || 60 };
+  const { x, y } = positionAbovePoint(
+    { x: clientX, y: clientY },
+    size,
+    { width: window.innerWidth, height: window.innerHeight },
+  );
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+}
+
+/**
+ * ctx-point-hover detail → .stat-tooltip HTML. 차트 데이터 포인트 수치 툴팁 본문.
+ *  - title: "Turn N"(ui.stat-tooltip.point-hover.title)
+ *  - 1행: window 정보가 있으면 한도·사용률 포함(accumulated-with-limit), 없으면 누적량만(accumulated)
+ *  - delta/model 행은 값이 있을 때만 추가(\n → renderStatHtml 에서 <br>)
+ */
+function renderPointHoverHtml(detail: CtxPointHoverDetail): string {
+  const ns = 'ui.stat-tooltip.point-hover';
+  const title = tt(`${ns}.title`, { turn: detail.turnIndex });
+  const lines: string[] = [];
+  if (detail.windowLabel && detail.usagePercent !== null) {
+    lines.push(
+      tt(`${ns}.accumulated-with-limit`, {
+        value: detail.formattedValue,
+        limit: detail.windowLabel,
+        percent: detail.usagePercent,
+      }),
+    );
+  } else {
+    lines.push(tt(`${ns}.accumulated`, { value: detail.formattedValue }));
+  }
+  if (detail.formattedDelta) lines.push(tt(`${ns}.delta`, { delta: detail.formattedDelta }));
+  if (detail.windowModel) lines.push(tt(`${ns}.model`, { model: detail.windowModel }));
+  return renderStatHtml({ title, desc: lines.join('\n') });
+}
+
+/**
  * 전역 호버 툴팁 훅 — AppShell 에서 1회 호출.
  *
  * document 위임으로 [data-stat-tooltip] / [data-ctx-tooltip] / [data-mini-badge-tooltip] /
@@ -149,6 +193,10 @@ export function useTooltip(): void {
     cacheEl.className = 'cache-tooltip';
     cacheEl.style.display = 'none';
     doc.body.appendChild(cacheEl);
+
+    // 차트 데이터 포인트 호버 중 플래그 — 활성 시 설명(data-*-tooltip) 툴팁을 억제해
+    //   수치 툴팁(ctx-point-hover)과 충돌하지 않게 한다(레거시 stat-tooltip.js _pointHoverActive).
+    let pointHoverActive = false;
 
     /** 가장 가까운 트리거 element 와 분류를 해석. 우선순위는 레거시 mouseover 분기 순서 1:1. */
     function resolve(target: EventTarget | null): { el: HTMLElement; kind: 'stat'; content: TooltipContent | null } | { el: HTMLElement; kind: 'cache'; read: number; write: number } | null {
@@ -207,6 +255,7 @@ export function useTooltip(): void {
     }
 
     function onMouseOver(e: MouseEvent): void {
+      if (pointHoverActive) return; // 포인트 수치 툴팁 표시 중에는 설명 툴팁 억제
       const hit = resolve(e.target);
       if (!hit) return;
       if (hit.kind === 'cache') {
@@ -216,7 +265,47 @@ export function useTooltip(): void {
       }
     }
 
+    /**
+     * 차트 데이터 포인트 호버 — 수치 툴팁으로 전환(레거시 stat-tooltip.js ctx-point-hover 구독).
+     * detail=null(이탈)이면 플래그 해제 + 툴팁 숨김(다음 mouseover 가 설명 툴팁 복원).
+     */
+    function onPointHover(ev: Event): void {
+      const detail = (ev as CustomEvent).detail as CtxPointHoverDetail | null;
+      if (detail && typeof detail.turnIndex === 'number') {
+        pointHoverActive = true;
+        cacheEl.style.display = 'none';
+        statEl.innerHTML = renderPointHoverHtml(detail);
+        statEl.style.display = 'block';
+        positionAbove(statEl, detail.clientX, detail.clientY, 220);
+      } else {
+        pointHoverActive = false;
+        statEl.style.display = 'none';
+      }
+    }
+
+    /**
+     * 전체 요청 타임라인 포인트 호버 — "시각 · N건" 툴팁(Chart.tsx timeline-point-hover 구독).
+     * ctx-point-hover 와 동일하게 pointHoverActive 로 설명 툴팁을 억제하고 positionAbove 로 배치.
+     */
+    function onTimelineHover(ev: Event): void {
+      const detail = (ev as CustomEvent).detail as TimelineHoverDetail | null;
+      if (detail && typeof detail.count === 'number') {
+        pointHoverActive = true;
+        cacheEl.style.display = 'none';
+        statEl.innerHTML = renderStatHtml({
+          title: detail.label,
+          desc: tt('ui.chart.count-unit', { count: detail.count.toLocaleString() }),
+        });
+        statEl.style.display = 'block';
+        positionAbove(statEl, detail.clientX, detail.clientY, 160);
+      } else {
+        pointHoverActive = false;
+        statEl.style.display = 'none';
+      }
+    }
+
     function onMouseMove(e: MouseEvent): void {
+      if (pointHoverActive) return; // 포인트 수치 툴팁은 ctx-point-hover 가 위치까지 직접 관리
       const statVisible = statEl.style.display !== 'none';
       const cacheVisible = cacheEl.style.display !== 'none';
       if (!statVisible && !cacheVisible) return;
@@ -247,11 +336,15 @@ export function useTooltip(): void {
     doc.addEventListener('mouseover', onMouseOver);
     doc.addEventListener('mousemove', onMouseMove);
     doc.addEventListener('mouseout', onMouseOut);
+    doc.addEventListener('ctx-point-hover', onPointHover);
+    doc.addEventListener('timeline-point-hover', onTimelineHover);
 
     return () => {
       doc.removeEventListener('mouseover', onMouseOver);
       doc.removeEventListener('mousemove', onMouseMove);
       doc.removeEventListener('mouseout', onMouseOut);
+      doc.removeEventListener('ctx-point-hover', onPointHover);
+      doc.removeEventListener('timeline-point-hover', onTimelineHover);
       statEl.remove();
       cacheEl.remove();
     };

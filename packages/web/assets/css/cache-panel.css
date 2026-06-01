@@ -50,7 +50,8 @@
 .cache-bar-fill {
   height: 100%;
   border-radius: var(--radius-sm);
-  transition: width 0.6s ease, background-color 0.3s;
+  /* obs-panel .obs-cat-bar-fill 과 동일 모션 토큰 — 세션 전환 시 width 가 은은하게 보간(prefers-reduced-motion 존중). */
+  transition: width var(--dur-drawer) var(--ease), background-color var(--dur-base) var(--ease);
   background: var(--neutral);
 }
 
@@ -107,14 +108,14 @@
   height: 100%;
   background: var(--cache-creation-color);
   box-shadow: var(--cache-creation-glow);
-  transition: width 0.6s ease;
+  transition: width var(--dur-drawer) var(--ease);
 }
 
 .cache-ratio-read {
   height: 100%;
   background: var(--cache-read-color);
   box-shadow: var(--cache-read-glow);
-  transition: width 0.6s ease;
+  transition: width var(--dur-drawer) var(--ease);
 }
 
 .cache-ratio-label {
@@ -157,4 +158,14 @@
 .cache-ratio-label[data-skeleton="1"] {
   /* 텍스트 자리(min-width)는 유지하되 색상은 sk가 자체 표현 */
   color: transparent;
+}
+
+/* prefers-reduced-motion — width 보간 무력화(turn-view/obs-panel 접근성 정책 SSoT 와 동일 결).
+ *   바는 최종 너비로 즉시 표시. 값 자체는 보존(애니메이션만 제거). */
+@media (prefers-reduced-motion: reduce) {
+  .cache-bar-fill,
+  .cache-ratio-creation,
+  .cache-ratio-read {
+    transition: none;
+  }
 }

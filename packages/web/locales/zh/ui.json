@@ -531,6 +531,7 @@
       "title": "错误率"
     },
     "point-hover": {
+      "title": "回合 {turn}",
       "accumulated-with-limit": "累计 {value} / {limit} tokens（{percent}%）",
       "accumulated": "累计 {value} tokens",
       "delta": "较上一轮 {delta} tokens",

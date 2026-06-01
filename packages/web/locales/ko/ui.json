@@ -531,6 +531,7 @@
       "title": "오류율"
     },
     "point-hover": {
+      "title": "턴 {turn}",
       "accumulated-with-limit": "누적 {value} / {limit} tokens ({percent}%)",
       "accumulated": "누적 {value} tokens",
       "delta": "전 턴 대비 {delta} tokens",

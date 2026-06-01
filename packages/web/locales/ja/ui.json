@@ -531,6 +531,7 @@
       "title": "エラー率"
     },
     "point-hover": {
+      "title": "ターン {turn}",
       "accumulated-with-limit": "累積 {value} / {limit} tokens ({percent}%)",
       "accumulated": "累積 {value} tokens",
       "delta": "前ターン比 {delta} tokens",

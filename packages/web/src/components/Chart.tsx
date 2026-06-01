@@ -22,8 +22,9 @@
  *
  * @module components/Chart
  */
-import { memo, useEffect, useLayoutEffect, useRef } from 'react';
-import type { CSSProperties } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
+import { useChartReveal } from '../hooks/use-chart-reveal';
 import {
   computeDonutSlices,
   computeTimelinePoints,
@@ -96,6 +97,21 @@ const DONUT_SIZE = 90;
 const DONUT_R = 36;
 const DONUT_INNER = 22;
 
+/** 타임라인 포인트 호버 이벤트 detail — use-tooltip 이 구독해 "시각 · N건" 툴팁으로 표시. */
+export interface TimelineHoverDetail {
+  label: string;
+  count: number;
+  clientX: number;
+  clientY: number;
+}
+
+/** timeline-point-hover CustomEvent 발행(SSR/test 가드). detail=null 은 호버 해제. */
+function dispatchTimelineHover(detail: TimelineHoverDetail | null): void {
+  const doc = (globalThis as { document?: Document }).document;
+  if (!doc) return;
+  doc.dispatchEvent(new CustomEvent('timeline-point-hover', { detail }));
+}
+
 /**
  * isomorphic layout effect — 클라이언트는 useLayoutEffect(측정 후 paint 전, 깜빡임 방지),
  * 서버(renderToStaticMarkup)는 useEffect 로 폴백해 "useLayoutEffect does nothing on the server"
@@ -121,6 +137,7 @@ export function drawDonutToCanvas(
   donutMode: DonutMode,
   tokens: ChartTokens,
   totalLabel = 'total',
+  progress = 1,
 ): void {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -153,10 +170,15 @@ export function drawDonutToCanvas(
     typeColors: tokens.typeColors,
     items: data,
   });
+  // reveal sweep — 12시(-π/2)부터 시계방향으로 progress 만큼 차오른다. 각 슬라이스 끝각을 sweepLimit 로 클램프.
+  //   progress=1 이면 sweepLimit=3π/2 라 전체 슬라이스가 그대로(무영향).
+  const sweepLimit = -Math.PI / 2 + progress * Math.PI * 2;
   slices.forEach((s) => {
+    const end = Math.min(s.endAngle, sweepLimit);
+    if (end <= s.startAngle) return; // 아직 sweep 이 도달 안 한 슬라이스
     ctx.beginPath();
-    ctx.arc(cx, cy, DONUT_R, s.startAngle, s.endAngle);
-    ctx.arc(cx, cy, DONUT_INNER, s.endAngle, s.startAngle, true);
+    ctx.arc(cx, cy, DONUT_R, s.startAngle, end);
+    ctx.arc(cx, cy, DONUT_INNER, end, s.startAngle, true);
     ctx.closePath();
     ctx.shadowColor = s.color;
     ctx.shadowBlur = 10;
@@ -171,15 +193,18 @@ export function drawDonutToCanvas(
   if (donutMode === 'cache') {
     const creation = cacheCreationOf(data);
     const denom = data.reduce((sum, d) => sum + (d.tokens || 0), 0) || 1;
-    const label = cacheHitRateLabel(creation, denom);
+    // 가운데 % 카운트업 — 분자에 progress 를 곱해 0%→최종% 로 자연스럽게 증가.
+    const label = cacheHitRateLabel(creation * progress, denom);
     ctx.fillStyle = tokens.cacheTokens.read;
     ctx.font = 'bold 18px monospace';
     ctx.fillText(label, cx, cy - 4);
   } else {
     const total = donutTotal(data, donutMode);
+    // total 카운트업 — progress 비율만큼 증가(반올림). 폰트 크기는 최종 total 기준 고정(흔들림 방지).
+    const shown = Math.round(total * progress);
     ctx.fillStyle = COLORS.text;
     ctx.font = `bold ${total >= 1000 ? 12 : 15}px monospace`;
-    ctx.fillText(formatDonutCenter(total), cx, cy - 3);
+    ctx.fillText(formatDonutCenter(shown), cx, cy - 3);
     ctx.fillStyle = COLORS.textDim;
     ctx.font = '8px monospace';
     ctx.fillText(totalLabel, cx, cy + 9);
@@ -194,23 +219,30 @@ export interface TimelineDrawOpts {
   locale: string;
 }
 
+/** 타임라인 점 1개 — x 좌표(CSS px) + 버킷 인덱스(호버 hit-test 용). */
+export interface TimelineHitPoint {
+  x: number;
+  index: number;
+}
+
 /**
  * 타임라인(sparkline) 캔버스 명령형 그리기(drawTimeline). null/ctx-null/width<=0 가드.
  * 점 좌표는 computeTimelinePoints(순수) 가 결정.
+ * @returns 그린 점의 x 좌표 + 버킷 인덱스 배열(컴포넌트가 mousemove hit-test 에 재사용). 미그림 시 null.
  */
 export function drawTimelineToCanvas(
   canvas: HTMLCanvasElement | null,
   buckets: number[],
   opts: TimelineDrawOpts,
-): void {
-  if (!canvas) return;
+): TimelineHitPoint[] | null {
+  if (!canvas) return null;
   const parent = canvas.parentElement;
   const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
   const w = (parent ? parent.clientWidth : 0) - 32;
   const h = 100;
-  if (w <= 0 || !buckets.length) return;
+  if (w <= 0 || !buckets.length) return null;
   const ctx = canvas.getContext('2d');
-  if (!ctx) return;
+  if (!ctx) return null;
 
   canvas.width = w * dpr;
   canvas.height = h * dpr;
@@ -301,6 +333,8 @@ export function drawTimelineToCanvas(
     ctx.textAlign = 'left';
     ctx.fillText(String(data[data.length - 1]), last.x + 5, last.y + 3);
   }
+
+  return pts.map((p, i) => ({ x: p.x, index: i }));
 }
 
 /**
@@ -328,6 +362,8 @@ function ChartImpl({
 }: ChartProps) {
   const timelineRef = useRef<HTMLCanvasElement>(null);
   const donutRef = useRef<HTMLCanvasElement>(null);
+  // 타임라인 호버 hit-test 좌표(draw 가 반환) — mousemove 가 동일 좌표계로 nearest 버킷을 찾는다.
+  const timelineHitsRef = useRef<TimelineHitPoint[]>([]);
 
   // 범례 + 하단 total 뷰모델(레거시 renderTypeLegend) — 활성 도넛셋(dataByKind[donutMode]) 기준.
   //   labeler 미주입 시 미렌더(폴백). i18n 해석은 labeler.cacheLabel/countUnit/noData 에 위임(leaf 무전역).
@@ -341,14 +377,18 @@ function ChartImpl({
       }, legendLabeler.cacheLabel)
     : null;
 
-  // 도넛: 데이터/모드/토큰 변경 시 재그림(레이아웃 측정 불필요하나, 동일 타이밍 일관성 위해 layout effect).
-  useIsomorphicLayoutEffect(() => {
-    drawDonutToCanvas(donutRef.current, dataByKind, donutMode, tokens, totalLabel);
-  }, [dataByKind, donutMode, tokens, totalLabel]);
+  // 도넛: 데이터/모드/토큰 변경 시 reveal(슬라이스 sweep + 가운데 카운트업, ease-out 600ms).
+  //   prefers-reduced-motion 이면 즉시 완성(useChartReveal 내부 처리). 세션 전환 시 딱딱한 점프 제거.
+  useChartReveal(
+    (p) => drawDonutToCanvas(donutRef.current, dataByKind, donutMode, tokens, totalLabel, p),
+    [dataByKind, donutMode, tokens, totalLabel],
+    600,
+  );
 
   // 타임라인: 버킷/locale 변경 시 재그림(부모 clientWidth 측정 필요 → layout effect 로 깜빡임 방지).
   useIsomorphicLayoutEffect(() => {
-    drawTimelineToCanvas(timelineRef.current, timelineBuckets, { now: Date.now(), locale });
+    timelineHitsRef.current =
+      drawTimelineToCanvas(timelineRef.current, timelineBuckets, { now: Date.now(), locale }) ?? [];
   }, [timelineBuckets, locale]);
 
   // resize: 타임라인 부모 크기/DPR 변화에 rAF 디바운스 redraw. cleanup 으로 누수 방지.
@@ -360,9 +400,10 @@ function ChartImpl({
     let rafId = 0;
     const redraw = () => {
       cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() =>
-        drawTimelineToCanvas(timelineRef.current, timelineBuckets, { now: Date.now(), locale }),
-      );
+      rafId = requestAnimationFrame(() => {
+        timelineHitsRef.current =
+          drawTimelineToCanvas(timelineRef.current, timelineBuckets, { now: Date.now(), locale }) ?? [];
+      });
     };
     if (typeof window.ResizeObserver !== 'undefined') {
       const ro = new ResizeObserver(redraw);
@@ -379,6 +420,37 @@ function ChartImpl({
     };
   }, [timelineBuckets, locale]);
 
+  // 타임라인 호버 — 마우스 x 위치의 버킷(=그 시점 요청 수)을 잡아 "시각 · N건" 툴팁 이벤트 발행.
+  //   표시는 use-tooltip 이 timeline-point-hover 구독으로 처리(차트=발행 / 툴팁=표시 단일책임 분리).
+  const handleTimelineMove = useCallback(
+    (e: ReactMouseEvent<HTMLCanvasElement>) => {
+      const canvas = timelineRef.current;
+      const hits = timelineHitsRef.current;
+      if (!canvas || !hits.length) return;
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      let idx = -1;
+      let min = Infinity;
+      for (const hp of hits) {
+        const d = Math.abs(hp.x - mx);
+        if (d < min) {
+          min = d;
+          idx = hp.index;
+        }
+      }
+      if (idx < 0) return;
+      const n = timelineBuckets.length;
+      const count = timelineBuckets[idx] ?? 0;
+      const curMin = nowMinute(Date.now());
+      const ts = new Date((curMin - (n - 1 - idx)) * 60000);
+      const label = ts.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+      dispatchTimelineHover({ label, count, clientX: e.clientX, clientY: e.clientY });
+    },
+    [timelineBuckets, locale],
+  );
+
+  const handleTimelineLeave = useCallback(() => dispatchTimelineHover(null), []);
+
   // 레거시 default-view.css 의 .charts-inner(grid 2fr 1fr) 2-셀 구조를 그대로 출력한다(WP14).
   //   - 좌(2fr): .chart-wrap > #timelineChart — timeline canvas. data-ctx-tooltip 은 호출처가
   //     타임라인 영역에 붙이던 context-growth 툴팁 앵커(원본 index.html .chart-wrap 과 1:1).
@@ -390,7 +462,13 @@ function ChartImpl({
       <div className="chart-wrap" data-ctx-tooltip="context-growth">
         {/* 레거시 복원 — timeline-meta 요약 통계 블록이 canvas '위'에 위치(index.html :443). */}
         {timelineMeta}
-        <canvas id="timelineChart" ref={timelineRef} height={64} />
+        <canvas
+          id="timelineChart"
+          ref={timelineRef}
+          height={64}
+          onMouseMove={handleTimelineMove}
+          onMouseLeave={handleTimelineLeave}
+        />
         {/* detail 모드 #contextGrowthChart — timeline canvas 형제. CSS(.chart-mode-detail)가 display 토글:
             default 모드는 contextSlot 숨김·timeline 노출, detail 모드는 그 반대(default-view.css :254~258). */}
         {contextSlot}

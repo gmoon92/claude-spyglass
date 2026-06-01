@@ -155,6 +155,86 @@ export function computePoints(
   }));
 }
 
+/**
+ * 마우스 좌표(캔버스 상대 px) → 가장 가까운 점 인덱스. 임계(기본 15px) 초과면 -1.
+ * (원본 context-chart.js _onCanvasMouseMove 의 nearest hit-test 동치)
+ *
+ * @deprecated 점 근처(유클리드 15px)에서만 잡혀 노출 범위가 좁다. 라인 차트 호버는
+ *   nearestPointByX(마우스 x 위치의 y 데이터) 가 더 자연스럽다 — 신규 코드는 그쪽을 쓴다.
+ */
+export function hitTestPoint(
+  pts: ReadonlyArray<ChartPoint>,
+  mx: number,
+  my: number,
+  threshold = 15,
+): number {
+  let nearestIdx = -1;
+  let minDist = Infinity;
+  pts.forEach((pt, i) => {
+    const d = Math.hypot(pt.cx - mx, pt.cy - my);
+    if (d < minDist) {
+      minDist = d;
+      nearestIdx = i;
+    }
+  });
+  return minDist < threshold ? nearestIdx : -1;
+}
+
+/**
+ * 마우스 x 좌표(캔버스 상대 px) → x축으로 가장 가까운 점 인덱스. y 는 무시(라인 차트 표준 호버).
+ * 그래프 영역 어디에 올려도 해당 x 위치의 점(=그 시점의 y 데이터)을 잡아 노출 범위가 넓다.
+ * 빈 배열이면 -1.
+ */
+export function nearestPointByX(pts: ReadonlyArray<ChartPoint>, mx: number): number {
+  let nearestIdx = -1;
+  let minDist = Infinity;
+  pts.forEach((pt, i) => {
+    const d = Math.abs(pt.cx - mx);
+    if (d < minDist) {
+      minDist = d;
+      nearestIdx = i;
+    }
+  });
+  return nearestIdx;
+}
+
+/**
+ * ctx-point-hover 이벤트 detail — 수치 툴팁(use-tooltip)이 읽는 필드 SSoT.
+ * (원본 context-chart.js _onCanvasMouseMove 의 dispatch payload 동치)
+ */
+export interface CtxPointHoverDetail {
+  turnIndex: number;
+  formattedValue: string;
+  formattedDelta: string | null;
+  windowLabel: string | null;
+  windowModel: string | null;
+  usagePercent: string | null;
+  clientX: number;
+  clientY: number;
+}
+
+/**
+ * 호버된 점 + context-window + 커서 좌표 → 툴팁 detail.
+ * usagePercent = value/window*100(1자리), window<=0 이면 null(NaN 회피). (원본 pctOfWindow 산술)
+ */
+export function buildCtxPointHoverDetail(
+  pt: ChartPoint,
+  windowInfo: ContextWindowInfo,
+  clientX: number,
+  clientY: number,
+): CtxPointHoverDetail {
+  return {
+    turnIndex: pt.turnIndex,
+    formattedValue: fmtK(pt.value),
+    formattedDelta: pt.delta !== null ? fmtDelta(pt.delta) : null,
+    windowLabel: windowInfo.label || null,
+    windowModel: windowInfo.model || null,
+    usagePercent: windowInfo.size > 0 ? ((pt.value / windowInfo.size) * 100).toFixed(1) : null,
+    clientX,
+    clientY,
+  };
+}
+
 /** 'NK'(>=1000) / 정수 문자열(원본 fmtK). */
 export function fmtK(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;

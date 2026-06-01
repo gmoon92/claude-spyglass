@@ -531,6 +531,7 @@
       "title": "Error rate"
     },
     "point-hover": {
+      "title": "Turn {turn}",
       "accumulated-with-limit": "Accumulated {value} / {limit} tokens ({percent}%)",
       "accumulated": "Accumulated {value} tokens",
       "delta": "{delta} tokens vs. previous turn",

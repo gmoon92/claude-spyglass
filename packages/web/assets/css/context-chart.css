@@ -14,11 +14,44 @@
 #contextGrowthChart {
   width: 100%;
   height: 120px;
+  /* .chart-wrap[data-ctx-tooltip]의 cursor:help(badges.css) 상속을 override — 차트 위는 데이터 탐색(crosshair). */
+  cursor: crosshair;
+}
+
+/* 전체 요청 타임라인도 호버 데이터 툴팁이 떠 cursor:help 상속을 crosshair 로 교정. */
+#timelineChart {
+  cursor: crosshair;
 }
 
 /* 빈 상태 토글 (legacy 호환 — 현재 main.js에서는 hidden 속성 토글 사용) */
 #contextGrowthChart.context-chart-hidden { display: none; }
 .context-chart-empty--visible { display: flex !important; }
+
+/* 로딩 shimmer — 세션 turns fetch 대기 중 canvas 가 빈 채로 "데이터 없음"처럼 보이는 오해를 막는다.
+   데이터 도착 시 호출처가 is-loading 을 제거하고 canvas 에 차트를 그린다(shimmer 위로 덮임).
+   prefers-reduced-motion 존중(정적 톤). */
+#contextGrowthChart.is-loading {
+  background-image: linear-gradient(
+    90deg,
+    var(--surface, #161616) 25%,
+    var(--border, #272727) 50%,
+    var(--surface, #161616) 75%
+  );
+  background-size: 200% 100%;
+  border-radius: var(--radius-sm, 6px);
+  animation: ctx-chart-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes ctx-chart-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #contextGrowthChart.is-loading {
+    animation: none;
+    background-image: none;
+    background-color: var(--surface, #161616);
+  }
+}
 
 #ctxUsageIndicator {
   font-size: var(--font-meta);

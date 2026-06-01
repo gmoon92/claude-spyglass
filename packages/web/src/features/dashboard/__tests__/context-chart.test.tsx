@@ -16,8 +16,12 @@ import {
   bloatedSysSplit,
   fmtK,
   fmtDelta,
+  nearestPointByX,
+  buildCtxPointHoverDetail,
   type ContextTurn,
   type ChartDims,
+  type ChartPoint,
+  type ContextWindowInfo,
 } from '../context-chart-data';
 import { ContextChart, drawContextChartToCanvas } from '../ContextChart';
 import { DEFAULT_CONTEXT_WINDOW } from '../context-window';
@@ -120,6 +124,58 @@ describe('fmtK / fmtDelta', () => {
   });
 });
 
+describe('nearestPointByX — x축 nearest(라인 차트 호버)', () => {
+  const pts: ChartPoint[] = [
+    { cx: 10, cy: 10, turnIndex: 0, value: 100, delta: null },
+    { cx: 50, cy: 40, turnIndex: 1, value: 200, delta: 100 },
+    { cx: 90, cy: 70, turnIndex: 2, value: 300, delta: 100 },
+  ];
+  it('x 로 가장 가까운 점(y 무시)', () => {
+    expect(nearestPointByX(pts, 52)).toBe(1); // x=52 → cx=50
+    expect(nearestPointByX(pts, 11)).toBe(0);
+    expect(nearestPointByX(pts, 88)).toBe(2);
+  });
+  it('y 가 멀어도 x 만으로 잡힌다(노출 범위 확대)', () => {
+    expect(nearestPointByX(pts, 50)).toBe(1); // y 어디든 x=50 → idx 1
+  });
+  it('범위 밖 x 도 nearest 끝점', () => {
+    expect(nearestPointByX(pts, -100)).toBe(0); // 좌측 밖 → 첫 점
+    expect(nearestPointByX(pts, 9999)).toBe(2); // 우측 밖 → 마지막 점
+  });
+  it('빈 배열 → -1', () => {
+    expect(nearestPointByX([], 10)).toBe(-1);
+  });
+});
+
+describe('buildCtxPointHoverDetail — 툴팁 detail', () => {
+  const win: ContextWindowInfo = { size: 1_000_000, label: '1M', model: 'claude-opus' };
+  it('window 있으면 사용률 % + 라벨 + 모델', () => {
+    const pt: ChartPoint = { cx: 0, cy: 0, turnIndex: 2, value: 12000, delta: 4000 };
+    const d = buildCtxPointHoverDetail(pt, win, 100, 200);
+    expect(d).toEqual({
+      turnIndex: 2,
+      formattedValue: '12.0K',
+      formattedDelta: '+4.0K',
+      windowLabel: '1M',
+      windowModel: 'claude-opus',
+      usagePercent: '1.2',
+      clientX: 100,
+      clientY: 200,
+    });
+  });
+  it('delta null → formattedDelta null', () => {
+    const pt: ChartPoint = { cx: 0, cy: 0, turnIndex: 0, value: 1000, delta: null };
+    expect(buildCtxPointHoverDetail(pt, win, 0, 0).formattedDelta).toBeNull();
+  });
+  it('window.size 0 → usagePercent null(NaN 회피)', () => {
+    const pt: ChartPoint = { cx: 0, cy: 0, turnIndex: 0, value: 1000, delta: null };
+    const d = buildCtxPointHoverDetail(pt, { size: 0, label: '', model: null }, 0, 0);
+    expect(d.usagePercent).toBeNull();
+    expect(d.windowLabel).toBeNull();
+    expect(d.windowModel).toBeNull();
+  });
+});
+
 describe('ContextChart / drawContextChartToCanvas — 가드', () => {
   it('canvas=null no-op', () => {
     expect(() => drawContextChartToCanvas(null, turns)).not.toThrow();
@@ -144,5 +200,14 @@ describe('ContextChart / drawContextChartToCanvas — 가드', () => {
     const html = renderToStaticMarkup(<ContextChart turns={turns} />);
     expect(html).toContain('id="contextGrowthChart"');
     expect(html).toContain('<canvas');
+  });
+  it('loading=true → is-loading 클래스 + aria-busy(빈 상태 오해 방지 shimmer)', () => {
+    const html = renderToStaticMarkup(<ContextChart turns={[]} loading />);
+    expect(html).toContain('is-loading');
+    expect(html).toContain('aria-busy="true"');
+  });
+  it('loading 미지정 → is-loading 없음', () => {
+    const html = renderToStaticMarkup(<ContextChart turns={turns} />);
+    expect(html).not.toContain('is-loading');
   });
 });
