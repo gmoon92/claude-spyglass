@@ -108,8 +108,10 @@ describe('SessionDetailContainer — 상세 탭바 + 기본 본문', () => {
     expect(html).toContain('tab-llm-title'); // llm 탭 title 속성.
     // 기본 탭(log) 본문 = DetailView(turn-spine 골격).
     //   #detailView(.right-view) switcher 슬롯은 BrowseLayout 소유 — 본 컨테이너는 그 직계 자식
-    //   (tab-bar + .detail-view 본문)만 렌더한다(중첩 .right-view 가 opacity:0 으로 본문을 가리던 회귀 수정).
-    expect(html).toContain('class="detail-view"');
+    //   (tab-bar + #turnUnifiedBody 본문)만 렌더한다(중첩 .right-view 가 opacity:0 으로 본문을 가리던 회귀 수정).
+    //   본문 래퍼는 레거시 #turnUnifiedBody(turn-view.css flex column SSoT) — 과거 phantom `.detail-view`
+    //   래퍼는 매칭 CSS 가 없어 flow-pane/log-pane flex 축을 끊어 로그 영역 스크롤이 사라졌었다(legacy 정합).
+    expect(html).toContain('id="turnUnifiedBody"');
     expect(html).not.toContain('id="detailView"');
     expect(html).toContain('turn-spine');
   });

@@ -189,8 +189,14 @@ export function DetailView({
     />
   );
 
+  // ★로그 영역 스크롤 복원(legacy 정합)★: 본 래퍼는 레거시 #turnUnifiedBody 다.
+  //   turn-view.css `#turnUnifiedBody { flex:1; min-height:0; display:flex; flex-direction:column }`
+  //   가 #detailTurnView.detail-content(flex column, overflow:hidden) 안에서 flow-pane/log-pane 의
+  //   flex 축을 만든다. flow-pane=flex:0 0 auto(고정), log-pane=flex:1 1 auto + log-table-wrap
+  //   overflow-y:auto(스크롤). 과거 클래스 `.detail-view` 는 어떤 CSS 도 매칭되지 않아 flex 컨텍스트가
+  //   끊겨(자식 min-height:0 없음) log-table-wrap 이 스크롤되지 않았다.
   return (
-    <div className="detail-view">
+    <div id="turnUnifiedBody">
       <SessionDetailHeader
         sessionId={sessionId}
         projectName={projectName}
