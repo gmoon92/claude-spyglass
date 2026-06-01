@@ -65,6 +65,8 @@ export interface BrowseSidebarProps {
   labeler: SidebarLabeler;
   onSelectProject?: (project: string) => void;
   onSelectSession?: (id: string) => void;
+  /** 세션 목록 초기/전환 fetch 대기 — 빈 목록을 스켈레톤으로(SessionList 로 위임). */
+  sessionsLoading?: boolean;
   /** 통계카드 폴링 주기(ms) — 미지정 시 30s(use-obs-cards 기본). 테스트에서 0(폴링 없음) 주입 가능. */
   obsIntervalMs?: number;
   /** 패널 크롬 라벨(thead/세션 헤더) — 미지정 시 레거시 영문 폴백. */
@@ -89,6 +91,7 @@ export function BrowseSidebar({
   labeler,
   onSelectProject,
   onSelectSession,
+  sessionsLoading,
   obsIntervalMs,
   chromeLabels,
   versionT,
@@ -187,6 +190,7 @@ export function BrowseSidebar({
                 selectedSession={selectedSession}
                 labeler={labeler}
                 onSelectSession={onSelectSession}
+                loading={sessionsLoading}
               />
             </tbody>
           </table>

@@ -15,6 +15,7 @@
  */
 import type { ReactElement, ReactNode } from 'react';
 import { fmtToken } from '../../../assets/js/formatters.js';
+import { SkeletonRows } from '../../components/Skeleton';
 import { computeMatrixView } from './tool-stats-view';
 import {
   applySort,
@@ -38,6 +39,8 @@ export interface ToolStatsMatrixProps {
   t?: TFunc;
   /** 도구 아이콘 슬롯(원본 toolIconHtml). 미주입 시 폴백 없음(텍스트만). */
   renderIcon?: (toolName: string) => ReactNode;
+  /** fetch 대기 중 여부 — true 면 빈 상태("데이터 없음") 대신 스켈레톤(로딩 오해 방지). */
+  loading?: boolean;
 }
 
 const HEADERS: Array<{ key: ToolStatsSortKey; label: string; cls: string }> = [
@@ -57,7 +60,12 @@ export function ToolStatsMatrix({
   onSort,
   t = defaultT,
   renderIcon,
+  loading = false,
 }: ToolStatsMatrixProps): ReactElement {
+  // 로딩 중(아직 데이터 없음) → 스켈레톤. "데이터 없음" 빈 상태가 fetch 대기 중 뜨는 오해를 막는다.
+  if (loading && (!stats || stats.length === 0)) {
+    return <SkeletonRows rows={6} className="ts-mx-skeleton" />;
+  }
   if (!stats || stats.length === 0) {
     return (
       <div className="state-empty">

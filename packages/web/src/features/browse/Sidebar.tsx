@@ -26,6 +26,7 @@ import { cloneElement, memo, useEffect } from 'react';
 import type { ReactElement } from 'react';
 import { fmt, fmtToken } from '../../../assets/js/formatters.js';
 import { SessionRow } from '../../components/render/SessionRow';
+import { Skeleton } from '../../components/Skeleton';
 
 /** 가상 'user (global)' 행 식별자 — 원본 left-panel.js:17 GLOBAL_PROJECT_KEY 1:1. metadocs 전용. */
 export const GLOBAL_PROJECT_KEY = '__global__';
@@ -374,6 +375,8 @@ export interface SessionListProps {
   labeler: SidebarLabeler;
   /** 세션 행 클릭 통지(원본 main.js data-session-id 위임 대체). */
   onSelectSession?: (id: string) => void;
+  /** 초기/전환 fetch 대기 중 여부 — 빈 목록을 no-data 대신 스켈레톤 행으로(로딩 오해 방지). */
+  loading?: boolean;
 }
 
 /**
@@ -388,6 +391,7 @@ export function SessionList({
   selectedSession,
   labeler,
   onSelectSession,
+  loading = false,
 }: SessionListProps): ReactElement {
   if (!selectedProject) {
     return (
@@ -400,6 +404,20 @@ export function SessionList({
   }
   const list = sortSessions(sessions.filter((s) => s.project_name === selectedProject));
   if (!list.length) {
+    // 로딩 중 → 스켈레톤 행(테이블 구조 유지). "데이터 없음"이 fetch 대기 중 뜨는 오해를 막는다.
+    if (loading) {
+      return (
+        <>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <tr key={i} className="sk-session-row" aria-busy="true">
+              <td colSpan={4}>
+                <Skeleton variant="line" />
+              </td>
+            </tr>
+          ))}
+        </>
+      );
+    }
     return (
       <tr>
         <td colSpan={4} className="table-empty" title={labeler.sessionCount(selectedProject, 0)}>
@@ -431,6 +449,8 @@ export interface SidebarProps {
   onSelectSession?: (id: string) => void;
   /** anomaly 구독 통지(원본 left-panel.js 핸들러의 _allSessions 변이 → 상위 상태 위임). */
   onAnomalyUpdate?: (sessionId: string, bloatedSys: unknown) => void;
+  /** 세션 목록 초기/전환 fetch 대기 — 빈 목록을 스켈레톤으로(SessionList 로 위임). */
+  sessionsLoading?: boolean;
 }
 
 /**
@@ -450,6 +470,7 @@ export function Sidebar({
   onSelectProject,
   onSelectSession,
   onAnomalyUpdate,
+  sessionsLoading = false,
 }: SidebarProps): ReactElement {
   useEffect(() => {
     if (!onAnomalyUpdate) return;
@@ -472,6 +493,7 @@ export function Sidebar({
         selectedSession={selectedSession}
         labeler={labeler}
         onSelectSession={onSelectSession}
+        loading={sessionsLoading}
       />
     </>
   );

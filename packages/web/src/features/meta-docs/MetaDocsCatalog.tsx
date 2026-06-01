@@ -18,6 +18,7 @@
  */
 import type { ReactElement, RefObject } from 'react';
 import { SortHead, type SortState } from '../../components/design-system/markers/SortHead';
+import { SkeletonRows } from '../../components/Skeleton';
 import { MetaDocTypeBadge } from './MetaDocTypeBadge';
 import {
   applyDisplayFilter,
@@ -65,6 +66,8 @@ export interface MetaDocsCatalogProps {
   activeRowName?: string | null;
   /** 카탈로그 <table> ref — 호출처(MetaDocsLayout)가 useColResize 로 컬럼 리사이즈 부착(병존). */
   tableRef?: RefObject<HTMLTableElement>;
+  /** fetch 대기 중 여부 — 미로드 시 스켈레톤(빈 상태 오해 방지). */
+  loading?: boolean;
   t?: TFunc;
 }
 
@@ -120,11 +123,17 @@ export function MetaDocsCatalog({
   onRowClick,
   activeRowName = null,
   tableRef,
+  loading = false,
   t = defaultT,
 }: MetaDocsCatalogProps): ReactElement {
   // 표시필터 → 정렬(순수 lib). 원본 loadMetaDocsLibrary 순서(view.js:521-522) 동치.
   const filtered = applyDisplayFilter(rows, display);
   const sorted = applySort(filtered, sort.key, sort.dir);
+
+  // 로딩 중(아직 데이터 없음) → 스켈레톤. "데이터 없음" 빈 상태가 fetch 대기 중 뜨는 오해를 막는다.
+  if (loading && sorted.length === 0) {
+    return <SkeletonRows rows={8} className="meta-docs-catalog-skeleton" />;
+  }
 
   // 빈 상태 — 프로젝트 미매칭/미동기화 (view.js:665-673).
   if (sorted.length === 0) {

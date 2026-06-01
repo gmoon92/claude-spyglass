@@ -91,3 +91,13 @@
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* prefers-reduced-motion — shimmer slide 무력화, 정적 dim 톤만 유지(접근성 정책 SSoT). */
+@media (prefers-reduced-motion: reduce) {
+  .sk,
+  .skeleton {
+    animation: none;
+    background-image: none;
+    background-color: var(--sk-base, var(--border));
+  }
+}

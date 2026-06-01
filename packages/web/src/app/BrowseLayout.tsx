@@ -76,6 +76,9 @@ export function BrowseLayout(): ReactElement {
   // 좌측 세션 캐시 + 라이브 피드 — sse-store SSoT.
   const sessions = useSSEStore((s) => s.sessions);
   const setSessions = useSSEStore((s) => s.setSessions);
+  // 좌측 세션 목록 초기/전환 로딩 — 첫 시드 fetch 전(또는 프로젝트 전환 중) 빈 목록을 "데이터 없음" 대신
+  //   스켈레톤으로 보여주기 위한 표지. 초기값 true(마운트 직후 population fetch 예정).
+  const [sessionsLoading, setSessionsLoading] = useState(true);
   const feed = useSSEStore((s) => s.feed);
 
   const selectedProject = useAppStore((s) => s.selectedProject);
@@ -117,7 +120,7 @@ export function BrowseLayout(): ReactElement {
   //   useSessionDetail(read import)로 선택 세션 turns 를 가져온다. selectedSession 이 없으면 빈 turns.
   //   (SessionDetailContainer 도 동일 훅을 쓰지만 turns-fetcher 가 AbortController + silent 폴백이라
   //    중복 호출은 안전 — projection 캐시 없는 legacy read 경로의 read-only 조회.)
-  const { turns: detailTurns } = useSessionDetail(detailActive ? selectedSession : null);
+  const { turns: detailTurns, loading: detailLoading } = useSessionDetail(detailActive ? selectedSession : null);
 
   // ContextChart 입력(누적 토큰) — turns 의 prompt 통과(toContextTurns). default 모드엔 빈 배열.
   const contextTurns = useMemo(
@@ -319,9 +322,13 @@ export function BrowseLayout(): ReactElement {
       setSummary((dashboard?.summary as DashboardSummary | undefined) ?? null);
       // cache-panel-overall — /api/stats/cache 응답(camelCase hitRate/cacheReadTokens/cacheCreationTokens).
       setCacheStats((cache as unknown as CacheStats | null) ?? null);
-    })().catch(() => {
-      /* silent — fetcher 가 이미 안전 폴백(null/[]). UI 는 빈 상태 유지(원본 silent catch 동치). */
-    });
+    })()
+      .catch(() => {
+        /* silent — fetcher 가 이미 안전 폴백(null/[]). UI 는 빈 상태 유지(원본 silent catch 동치). */
+      })
+      .finally(() => {
+        if (!signal.aborted) setSessionsLoading(false);
+      });
     return () => ctrl.abort();
   }, [setSessions, activeRange, selectedProject]);
 
@@ -353,6 +360,7 @@ export function BrowseLayout(): ReactElement {
         sessions={sessions}
         selectedProject={selectedProject}
         selectedSession={selectedSession}
+        sessionsLoading={sessionsLoading}
         labeler={labeler}
         onSelectProject={(p) => setSelectedProject(p)}
         onSelectSession={(id) => {
@@ -439,7 +447,13 @@ export function BrowseLayout(): ReactElement {
               timelineBuckets={timelineBuckets}
               tokens={FALLBACK_TOKENS}
               timelineMeta={<TimelineMeta summary={summary} labeler={timelineMetaLabeler} />}
-              contextSlot={<ContextChart turns={contextTurns} />}
+              contextSlot={
+                <ContextChart
+                  turns={contextTurns}
+                  loading={detailActive && detailLoading && contextTurns.length === 0}
+                  sessionKey={selectedSession}
+                />
+              }
               legendLabeler={donutLegendLabeler}
             />
             {/* cache-panel-overall(원본 index.html :520~543) — charts-inner 3번째 행(.cache-panel grid 1/-1 전체폭).

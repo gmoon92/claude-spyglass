@@ -26,11 +26,13 @@ export interface MetaDocsToolStatsProps {
   /** 헤더 클릭 → 정렬 전이 통지(호출처가 nextSort 적용). */
   onSort?: (key: ToolStatsSortKey) => void;
   t?: TFunc;
+  /** fetch 대기 중 여부 — 미로드 시 스켈레톤(빈 상태 오해 방지). */
+  loading?: boolean;
 }
 
 /** 원본 toolIconHtml 위임 — ToolStatsMatrix renderIcon 슬롯에 ToolIcon(badges) 주입. */
 const renderIcon: ToolStatsMatrixProps['renderIcon'] = (toolName) => <ToolIcon toolName={toolName} />;
 
-export function MetaDocsToolStats({ stats, sort, onSort, t }: MetaDocsToolStatsProps): ReactElement {
-  return <ToolStatsMatrix stats={stats} sort={sort} onSort={onSort} t={t} renderIcon={renderIcon} />;
+export function MetaDocsToolStats({ stats, sort, onSort, t, loading }: MetaDocsToolStatsProps): ReactElement {
+  return <ToolStatsMatrix stats={stats} sort={sort} onSort={onSort} t={t} renderIcon={renderIcon} loading={loading} />;
 }
