@@ -1,3 +1,9 @@
+// i18n(태스크 #12) — react-i18next 인스턴스를 테스트 워커에서 초기화한다(useTranslation 사용 컴포넌트
+//   테스트 지원). jsdom 에는 /locales 서버가 없어 백엔드 fetch 가 실패→빈 리소스→키 폴백을 반환하므로,
+//   기존 골든 단언(키 passthrough; window.I18n stub `t:(k)=>k` 와 동치)이 변환 후에도 그대로 통과한다.
+//   (import 부수효과로 i18next.init 발화 — Phase C 변환 컴포넌트가 useTranslation 으로 인스턴스 참조.)
+import './src/lib/i18n';
+
 // P5-07: 테스트 타임존을 UTC 로 고정한다.
 //
 // 이유: renderers 골든마스터(renderers.test.ts.snap)의 cell-time 필드는 fmtTime →
