@@ -19,12 +19,13 @@
  *
  * @module features/session-detail/FlowPane
  */
-import type { ReactElement } from 'react';
+import { useEffect, useRef, type ReactElement } from 'react';
 import { turnSpikeSummaryHtml } from '../../../assets/js/render/badges.js';
 import { FlowHead } from './FlowHead';
 import { TurnSpine } from './TurnSpine';
 import { PrologueCard } from './PrologueCard';
 import { SystemReminderChip } from './SystemReminderChip';
+import { installChipDelegation } from './chip-jump';
 
 declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
 
@@ -51,6 +52,8 @@ interface FlowPaneProps {
   agentSpike?: unknown;
   /** spike sparkline 샘플(자식 토큰 시계열). */
   spikeSamples?: number[];
+  /** 비활성 마커 클릭 → 활성 턴 전환 위임(원본 main.js:803-804 toggleTurn). */
+  onMarkerClick?: (turnId: string) => void;
 }
 
 /** spike summary HTML(badges.js SSoT) 를 안전 주입 — 빈 문자열이면 미렌더. */
@@ -71,9 +74,15 @@ export function FlowPane({
   activeReminders = [],
   agentSpike = null,
   spikeSamples = [],
+  onMarkerClick,
 }: FlowPaneProps): ReactElement {
   const activeTurn = turns.find((t) => t.turn_id === activeTurnId) ?? null;
   const summaryLabel = window.I18n.t('session.session-detail.turn-views.meta-tool-count', { count: turns.length });
+
+  // 칩 클릭 위임 — 원본 main.js#initChipActivationDelegation 대응. flow-pane section 한 곳에 1회 부착해
+  //   turn-spine / flow-head 안 모든 [data-chip-key] 칩 클릭을 단일 핸들러로 처리(행 점프 + flash + 펼침).
+  const flowRef = useRef<HTMLElement | null>(null);
+  useEffect(() => installChipDelegation(flowRef.current), []);
 
   const extra = (
     <>
@@ -86,13 +95,14 @@ export function FlowPane({
     <>
       <PrologueCard prologue={prologue as never} />
       <section
+        ref={flowRef}
         className="flow-pane"
         aria-label={window.I18n.t('session.session-detail.turn-views.prologue-aria')}
         data-region="flow"
       >
         <FlowHead activeTurn={activeTurn} sessionTotalTokens={sessionTotalTokens} extra={extra} />
         <div className="turn-spine" id="turnSpine" role="tablist" aria-label={summaryLabel}>
-          <TurnSpine turns={turns} activeTurnId={activeTurnId} />
+          <TurnSpine turns={turns} activeTurnId={activeTurnId} onMarkerClick={onMarkerClick} />
         </div>
       </section>
     </>

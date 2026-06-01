@@ -11,10 +11,15 @@
  *      · syslib → SystemPromptLibrary(System 프롬프트 라이브러리)
  *    탭 상태는 app-store 의 detailTab(기본 'log', state.js:23) + setDetailTab(기존 action) 재사용.
  *
- * 비책임(후속 데이터흐름 역전 페이즈):
- *  - LLMInput payload(messages/system)·SystemPromptLibrary rows 의 fetch 오케스트레이션은 본 컨테이너
- *    소유 아님(architecture.md §1.3 features↛api). 레거시 .js 병존 — 본 배선은 turns(로그 탭)만 결선,
- *    보조 탭은 골격 마운트(빈 상태)로 두어 탭 전환 UX 만 복원한다.
+ * 보조 탭 데이터 결선(레거시 동작 복원):
+ *  - LLMInput payload(messages/system)·SystemPromptLibrary rows 는 colocated fetcher
+ *    (detail-aux-fetcher.ts) + 오케스트레이션 훅(use-detail-aux.ts)으로 결선한다. 탭이 활성일
+ *    때만 lazy fetch(원본 setDetailView('llm')/('syslib') 진입 시 showLatestLlmInput/
+ *    loadSystemPromptLibrary 와 동치). 공유 api/fetchers.ts 는 수정 금지라 보조 탭 전용 fetcher 는
+ *    features/session-detail 안에 colocate 한다.
+ *  - 탭 본문 컨테이너는 원본 index.html:668/725/744 구조(#detailTurnView/#detailLlmInputView/
+ *    #detailSysLibView + inner #llmInputBody.llm-input-body / #sysLibBody.syslib-body)를 복원한다
+ *    — CSS 스크롤/레이아웃 SSoT 가 이 셀렉터에 걸려 있다.
  *
  * 셀렉터 계약: 탭바는 레거시 detail-view.css 클래스(.view-tab-bar/.view-tab-group/.view-tab/
  *   .view-tab-bar-controls, index.html:646-657) + design-system Tab(ds-tab) 을 재사용.
@@ -24,14 +29,16 @@
  * @see packages/web/assets/js/session-detail/turn-views.js#setDetailView (원본 탭 스위치, :569-585)
  * @see packages/web/assets/js/views/detail-view.js#loadSession (원본 세션 로드)
  */
-import { Fragment, useCallback, type ReactElement } from 'react';
+import { Fragment, useCallback, useState, type ReactElement } from 'react';
 import { useAppStore } from '../../stores/app-store';
 import { LLMInput } from '../llm-input/LLMInput';
 import { SystemPromptLibrary } from '../dashboard/SystemPromptLibrary';
+import type { SysLibSortKey, SortDir } from '../dashboard/syslib-sort';
 import { Tab } from '../../components/design-system/primitives/Tab';
 import { DetailView } from './DetailView';
 import { useSessionDetail } from './use-session-detail';
 import { useSessionLoad, type SessionAnomalies } from './detail-view';
+import { useLlmInput, useSystemPromptLibrary } from './use-detail-aux';
 
 declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
 
@@ -81,11 +88,26 @@ export function SessionDetailContainer({
     turns,
     prologue,
     activeTurnId,
+    setActiveTurnId,
     activeTurn,
     activeReminders,
     agentSpike,
     spikeSamples,
   } = useSessionDetail(sessionId);
+
+  // 보조 탭 데이터(원본 setDetailView lazy 로드 대응) — 탭 활성일 때만 fetch.
+  const llm = useLlmInput(sessionId, detailTab === 'llm');
+  const syslib = useSystemPromptLibrary(detailTab === 'syslib');
+  // System 라이브러리 정렬(컨트롤드) — 원본 system-prompt-library.js 헤더 클릭 정렬.
+  const [sysSort, setSysSort] = useState<{ key: SysLibSortKey; dir: SortDir }>({
+    key: 'last_seen_at',
+    dir: 'desc',
+  });
+  const onSysSort = useCallback((key: SysLibSortKey) => {
+    setSysSort((prev) =>
+      prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' },
+    );
+  }, []);
 
   // 단건 anomaly fetch — 헤더 뱃지. detail-view.ts#useSessionLoad(AbortController) 재사용.
   //   콜백은 setBloatedSysFor 캐시 + session-anomalies-loaded 디스패치를 내부에서 수행하므로
@@ -99,36 +121,55 @@ export function SessionDetailContainer({
 
   const renderBody = (): ReactElement => {
     if (detailTab === 'llm') {
-      // API 페이로드 — payload fetch 오케스트레이션은 후속 페이즈(레거시 .js 병존). 골격 마운트.
+      // API 페이로드 — 원본 #detailLlmInputView.detail-content > #llmInputBody.llm-input-body 구조 복원.
+      //   inner wrapper(llm-input-body)는 llm-input.css 스크롤/레이아웃 SSoT 라 반드시 유지한다.
       return (
         <div id="detailLlmInputView" className="detail-content">
-          <LLMInput requestId="" messages={[]} />
+          <div id="llmInputBody" className="llm-input-body" role="region" aria-label="API payload">
+            <LLMInput
+              requestId={llm.requestId}
+              systemHash={llm.systemHash}
+              systemSize={llm.systemSize}
+              systemContent={llm.systemContent}
+              systemMeta={llm.systemMeta}
+              messages={llm.messages as never}
+              decodeError={llm.decodeError}
+              proxyList={llm.proxyList as never}
+              onSelectProxy={llm.selectProxy}
+            />
+          </div>
         </div>
       );
     }
     if (detailTab === 'syslib') {
-      // System 라이브러리 — rows fetch 는 후속 페이즈. 빈 상태(rows=null) 마운트.
+      // System 라이브러리 — 원본 #detailSysLibView.detail-content > #sysLibBody.syslib-body 구조 복원.
       return (
         <div id="detailSysLibView" className="detail-content">
-          <SystemPromptLibrary rows={null} />
+          <div id="sysLibBody" className="syslib-body" role="region" aria-label="System prompt library">
+            <SystemPromptLibrary rows={syslib.rows as never} sort={sysSort} onSort={onSysSort} />
+          </div>
         </div>
       );
     }
-    // log(턴뷰) — 본 데이터 배선의 1급 결선.
+    // log(턴뷰) — 본 데이터 배선의 1급 결선. 원본 #detailTurnView.detail-content 래퍼 복원
+    //   (탭 본문 컨테이너 SSoT — detail-view.css `.detail-content{flex:1;overflow-y:auto}`).
     return (
-      <DetailView
-        sessionId={sessionId}
-        projectName={projectName}
-        totalTokens={totalTokens}
-        endedAt={endedAt}
-        turns={turns as never}
-        activeTurnId={activeTurnId}
-        activeTurn={activeTurn as never}
-        prologue={prologue as never}
-        activeReminders={activeReminders}
-        agentSpike={agentSpike}
-        spikeSamples={spikeSamples}
-      />
+      <div id="detailTurnView" className="detail-content">
+        <DetailView
+          sessionId={sessionId}
+          projectName={projectName}
+          totalTokens={totalTokens}
+          endedAt={endedAt}
+          turns={turns as never}
+          activeTurnId={activeTurnId}
+          activeTurn={activeTurn as never}
+          prologue={prologue as never}
+          activeReminders={activeReminders}
+          agentSpike={agentSpike}
+          spikeSamples={spikeSamples}
+          onMarkerClick={setActiveTurnId}
+        />
+      </div>
     );
   };
 

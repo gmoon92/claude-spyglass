@@ -146,6 +146,8 @@ interface DetailViewProps {
    * import 그래프에서 turn-views→detail-view 간선을 제거하는 핵심 가드.
    */
   onBloatedSysHeader?: (sessionId: string) => void;
+  /** 비활성 마커 클릭 → 활성 턴 전환(원본 main.js:803-804 toggleTurn). FlowPane 으로 위임. */
+  onMarkerClick?: (turnId: string) => void;
 }
 
 /**
@@ -168,6 +170,7 @@ export function DetailView({
   turnCount = null,
   anomalyFlags = null,
   onBloatedSysHeader,
+  onMarkerClick,
 }: DetailViewProps): ReactElement {
   const sessionTotalTokens = totalTokens ?? 0;
   const resolvedActiveTurn =
@@ -182,6 +185,7 @@ export function DetailView({
       activeReminders={activeReminders}
       agentSpike={agentSpike}
       spikeSamples={spikeSamples}
+      onMarkerClick={onMarkerClick}
     />
   );
 

@@ -66,3 +66,31 @@ export {
   type TurnRow,
   type PrologueRow,
 } from './turns-fetcher';
+
+// 칩 클릭 → 행 점프 + 펼침(원본 main.js#handleChipActivation 복원).
+export {
+  installChipDelegation,
+  handleChipActivation,
+  findChipTarget,
+  findChipTargetByRequestId,
+  flashChipTarget,
+  CHIP_FLASH_MS,
+} from './chip-jump';
+
+// 보조 탭(LLM Input·System 라이브러리) colocated fetcher + 오케스트레이션 훅.
+export {
+  fetchSessionProxyList,
+  fetchProxyMessages,
+  fetchSystemPrompt,
+  fetchSystemPromptLibrary,
+  type ProxyMetaRow,
+  type ProxyMessagesResult,
+  type SystemPromptResult,
+  type SysLibRowRaw,
+} from './detail-aux-fetcher';
+export {
+  useLlmInput,
+  useSystemPromptLibrary,
+  type UseLlmInputResult,
+  type UseSystemPromptLibraryResult,
+} from './use-detail-aux';
