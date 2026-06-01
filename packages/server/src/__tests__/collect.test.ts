@@ -12,7 +12,7 @@ import {
   getAllRequests,
   getSessionById,
 } from '@spyglass/storage';
-import { processHookEvent, collectHandler, type NormalizedHookPayload } from '../hook';
+import { processHookEvent, collectHandler, handleHookHttpRequest, type NormalizedHookPayload } from '../hook';
 
 const TEST_DB_PATH = `/tmp/spyglass-collect-test-${Date.now()}.db`;
 
@@ -196,6 +196,58 @@ describe('Collect API', () => {
 
       const body = await res.json();
       expect(body.error).toBe('Invalid JSON payload');
+    });
+  });
+
+  describe('handleHookHttpRequest — raw hook payload', () => {
+    it('hook_event_name 누락 시 400 반환, 크래시 없음 (regression: TypeError on undefined.toLowerCase)', async () => {
+      const req = new Request('http://localhost:9999/collect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: undefined }),
+      });
+
+      const res = await handleHookHttpRequest(req, db);
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error).toBe('Missing hook_event_name');
+    });
+
+    it('빈 객체 페이로드 — hook_event_name 없으므로 400', async () => {
+      const req = new Request('http://localhost:9999/collect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      const res = await handleHookHttpRequest(req, db);
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+    });
+
+    it('정상 PreToolUse 페이로드 — 200', async () => {
+      const req = new Request('http://localhost:9999/collect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hook_event_name: 'PreToolUse',
+          session_id: 'raw-session-1',
+          cwd: '/tmp/test-project',
+          tool_name: 'Read',
+          tool_use_id: 'tool-1',
+          tool_input: { file_path: '/tmp/foo.ts' },
+        }),
+      });
+
+      const res = await handleHookHttpRequest(req, db);
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.success).toBe(true);
     });
   });
 

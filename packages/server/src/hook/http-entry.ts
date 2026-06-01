@@ -67,6 +67,15 @@ export async function handleHookHttpRequest(
 
   console.log(`[RECV] ${hook_event_name} session=${session_id}`);
 
+  // hook_event_name 없는 페이로드는 처리 불가 — 조기 거부
+  if (!hook_event_name) {
+    console.warn(`[RECV] payload missing hook_event_name — discarded`);
+    return new Response(
+      JSON.stringify({ success: false, error: 'Missing hook_event_name' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+
   // 진단: 훅 raw payload 전체를 jsonl 한 줄로 보존 (proxy 채널과 사후 비교용)
   diagJson('hook-payload', {
     hook_event_name,

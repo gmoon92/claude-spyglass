@@ -1,14 +1,14 @@
 {
   "name": "spyglass",
-  "version": "4.0.5",
+  "version": "4.0.6",
   "description": "Claude Code execution monitoring tool - token usage visualization",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
     "cleanup": "bun run scripts/daily-cleanup.ts",
-    "start": "bun run scripts/daily-cleanup.ts && bun run web:build && bun run packages/server/src/index.ts start",
-    "dev": "bun run scripts/daily-cleanup.ts && bun run web:build && bun run packages/server/src/index.ts restart",
+    "start": "bun run scripts/ensure-ladybug.ts && bun run scripts/daily-cleanup.ts && bun run web:build && bun run packages/server/src/index.ts start",
+    "dev": "bun run scripts/ensure-ladybug.ts && bun run scripts/daily-cleanup.ts && bun run web:build && bun run packages/server/src/index.ts restart",
     "stop": "bun run packages/server/src/index.ts stop",
     "status": "bun run packages/server/src/index.ts status",
     "doctor": "bun run packages/server/src/cli.ts doctor",
@@ -16,7 +16,7 @@
     "test": "bun run --filter '*' test",
     "typecheck": "tsc --noEmit",
     "prepare": "git config core.hooksPath .githooks",
-    "postinstall": "bun run scripts/daily-cleanup.ts && bun run web:build",
+    "postinstall": "bun run scripts/ensure-ladybug.ts && bun run scripts/daily-cleanup.ts && bun run web:build",
     "web:build": "bun run --cwd packages/web build",
     "web:dev": "bun run --cwd packages/web dev",
     "backfill:system-prompts": "bun run packages/server/scripts/backfill-system-prompts.ts",

@@ -31,7 +31,7 @@ export class SystemEventHandler implements HookEventHandler {
       session_id: raw.session_id,
       project_name: projectName,
       timestamp: now,
-      event_type: raw.hook_event_name.toLowerCase(),
+      event_type: (raw.hook_event_name ?? 'unknown').toLowerCase(),
       request_type: 'system',
       tokens_input: 0,
       tokens_output: 0,
