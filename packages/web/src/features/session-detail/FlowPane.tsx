@@ -19,7 +19,7 @@
  *
  * @module features/session-detail/FlowPane
  */
-import { useEffect, useRef, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, type ReactElement } from 'react';
 import { turnSpikeSummaryHtml } from '../../../assets/js/render/badges.js';
 import { FlowHead } from './FlowHead';
 import { TurnSpine } from './TurnSpine';
@@ -76,7 +76,11 @@ export function FlowPane({
   spikeSamples = [],
   onMarkerClick,
 }: FlowPaneProps): ReactElement {
-  const activeTurn = turns.find((t) => t.turn_id === activeTurnId) ?? null;
+  // 활성 턴 선형 탐색 — 활성 턴/턴목록 불변 시 재탐색 생략(턴 20+ 세션에서 매 렌더 O(n) 회피).
+  const activeTurn = useMemo(
+    () => turns.find((t) => t.turn_id === activeTurnId) ?? null,
+    [turns, activeTurnId],
+  );
   const summaryLabel = window.I18n.t('session.session-detail.turn-views.meta-tool-count', { count: turns.length });
 
   // 칩 클릭 위임 — 원본 main.js#initChipActivationDelegation 대응. flow-pane section 한 곳에 1회 부착해

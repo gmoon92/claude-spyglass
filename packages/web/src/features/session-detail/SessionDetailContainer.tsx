@@ -29,7 +29,7 @@
  * @see packages/web/assets/js/session-detail/turn-views.js#setDetailView (원본 탭 스위치, :569-585)
  * @see packages/web/assets/js/views/detail-view.js#loadSession (원본 세션 로드)
  */
-import { Fragment, useCallback, useMemo, useRef, useState, type ReactElement, type RefObject } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type RefObject } from 'react';
 import { useAppStore } from '../../stores/app-store';
 import { LLMInput } from '../llm-input/LLMInput';
 import { SystemPromptLibrary } from '../dashboard/SystemPromptLibrary';
@@ -39,6 +39,7 @@ import { Tab } from '../../components/design-system/primitives/Tab';
 import { useColResize } from '../../components/use-col-resize';
 import { DetailView } from './DetailView';
 import { useSessionDetail } from './use-session-detail';
+import type { TurnRow } from './turns-fetcher';
 import { useSessionLoad, type SessionAnomalies } from './detail-view';
 import { useLlmInput, useSystemPromptLibrary, useSysLibDetail } from './use-detail-aux';
 
@@ -113,6 +114,14 @@ export interface SessionDetailContainerProps {
   totalTokens?: number | null;
   /** 헤더 ended-at 라벨. */
   endedAt?: string | number | null;
+  /**
+   * 로드된 turns 상향 보고(성능 — turns API 중복 fetch 제거).
+   *   BrowseLayout 은 detail 모드 차트(ContextChart/cache 도넛)에 turns 가 필요하나, 본 컨테이너가
+   *   이미 useSessionDetail 로 fetch 한다. 별도로 useSessionDetail 을 또 호출하면 같은 세션 turns 를
+   *   2회 fetch 하게 되므로(주의 3), 본 컨테이너가 유일한 fetch 소유자로서 결과를 콜백으로 올려준다.
+   *   미주입이면 무동작(직접 SSR 렌더 등 단독 사용 시 안전) — 옵셔널 계약.
+   */
+  onDetailData?: (data: { turns: TurnRow[]; loading: boolean }) => void;
 }
 
 /**
@@ -124,6 +133,7 @@ export interface SessionDetailContainerProps {
 export function SessionDetailContainer({
   sessionId,
   totalTokens = null,
+  onDetailData,
 }: SessionDetailContainerProps): ReactElement {
   const detailTab = useAppStore((s) => s.detailTab);
   const setDetailTab = useAppStore((s) => s.setDetailTab);
@@ -137,7 +147,14 @@ export function SessionDetailContainer({
     activeReminders,
     agentSpike,
     spikeSamples,
+    loading,
   } = useSessionDetail(sessionId);
+
+  // 로드된 turns 상향 보고 — BrowseLayout 차트가 동일 turns 를 재fetch 하지 않도록(중복 제거).
+  //   turns/loading 변화 시에만 통지. onDetailData 는 호출처가 useCallback 으로 안정화(루프 방지).
+  useEffect(() => {
+    onDetailData?.({ turns, loading });
+  }, [turns, loading, onDetailData]);
 
   // 보조 탭 데이터(원본 setDetailView lazy 로드 대응) — 탭 활성일 때만 fetch.
   const llm = useLlmInput(sessionId, detailTab === 'llm');

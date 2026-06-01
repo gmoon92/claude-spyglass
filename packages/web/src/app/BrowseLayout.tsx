@@ -37,7 +37,8 @@ import { RequestRow, buildSearchHaystack } from '../components/render/RequestRow
 import { SearchBox } from '../components/SearchBox';
 import { FilterBar, type FilterBarLabeler } from '../components/FilterBar';
 import { subTypeOf, SUB_TYPES } from '../features/dashboard/request-types';
-import { SessionDetailContainer, useSessionDetail } from '../features/session-detail';
+import { SessionDetailContainer } from '../features/session-detail';
+import type { TurnRow } from '../features/session-detail/turns-fetcher';
 import { ContextChart } from '../features/dashboard/ContextChart';
 import { toContextTurns, buildCacheDonut, type SessionTurnLike } from '../features/dashboard/detail-chart-data';
 import { DateRangeDropdown, type DateRangeLabeler } from '../components/DateRangeDropdown';
@@ -118,10 +119,16 @@ export function BrowseLayout(): ReactElement {
   // ── 이슈1: detail 모드 차트 데이터 — 선택 세션 turns 에서 파생 ──
   //   레거시 setChartMode('detail')(chart-policy.ts) + flat-view.ts(DETAIL_FILTER_CHANGED)가
   //   세션 turns/requests 로 cache 도넛 + #contextGrowthChart 를 채우던 경로 복원.
-  //   useSessionDetail(read import)로 선택 세션 turns 를 가져온다. selectedSession 이 없으면 빈 turns.
-  //   (SessionDetailContainer 도 동일 훅을 쓰지만 turns-fetcher 가 AbortController + silent 폴백이라
-  //    중복 호출은 안전 — projection 캐시 없는 legacy read 경로의 read-only 조회.)
-  const { turns: detailTurns, loading: detailLoading } = useSessionDetail(detailActive ? selectedSession : null);
+  //   turns 의 fetch 소유자는 SessionDetailContainer(유일) — 동일 turns 를 onDetailData 콜백으로
+  //   상향 수신한다. 과거 여기서 useSessionDetail 을 또 호출해 같은 세션 turns 를 2회 fetch 하던
+  //   중복(주의 3)을 제거. selectedSession 없을 땐 컨테이너 미마운트 → 빈 기본값 유지.
+  const [detailData, setDetailData] = useState<{ turns: TurnRow[]; loading: boolean }>({
+    turns: [],
+    loading: false,
+  });
+  const onDetailData = useCallback((d: { turns: TurnRow[]; loading: boolean }) => setDetailData(d), []);
+  const detailTurns = detailData.turns;
+  const detailLoading = detailData.loading;
 
   // ContextChart 입력(누적 토큰) — turns 의 prompt 통과(toContextTurns). default 모드엔 빈 배열.
   const contextTurns = useMemo(
@@ -541,6 +548,7 @@ export function BrowseLayout(): ReactElement {
               <SessionDetailContainer
                 sessionId={selectedSession}
                 projectName={selectedProject ?? ''}
+                onDetailData={onDetailData}
               />
             ) : null}
           </div>

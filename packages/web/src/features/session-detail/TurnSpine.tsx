@@ -14,7 +14,7 @@
  *
  * @module features/session-detail/TurnSpine
  */
-import { Fragment, type ReactElement } from 'react';
+import { Fragment, memo, useMemo, type ReactElement } from 'react';
 import { ChipFlow } from './ChipFlow';
 import { SpineArrow } from './Chip';
 
@@ -35,7 +35,7 @@ interface TurnLike {
  *  - 칩(.chip-flow 안 [data-chip-key]) 클릭은 마커 핸들러가 아닌 FlowPane 의 칩 위임이 처리하므로,
  *    여기서는 마커 자체(.ds-turn-marker) 클릭만 onMarkerClick 으로 흘려보낸다(원본 분리 동선 보존).
  */
-export function TurnLine({
+export const TurnLine = memo(function TurnLine({
   turn,
   isActive,
   onMarkerClick,
@@ -86,7 +86,7 @@ export function TurnLine({
       </span>
     </span>
   );
-}
+});
 
 /**
  * 모든 턴을 turn-spine inline-flow 로 렌더. 원본 renderSpine(turn-views.js:292) 동치.
@@ -104,8 +104,13 @@ export function TurnSpine({
   /** 비활성 마커 클릭 → 활성 턴 전환 위임(원본 main.js:803-804 toggleTurn). */
   onMarkerClick?: (turnId: string) => void;
 }): ReactElement | null {
-  if (!turns || turns.length === 0) return null;
-  const sorted = turns.slice().sort((a, b) => b.turn_index - a.turn_index);
+  // turn_index 내림차순 정렬 — turns 불변 시 재정렬 생략(활성 턴 전환마다 전체 재정렬 회피).
+  //   훅 순서 보존을 위해 빈 목록 early-return 보다 먼저 useMemo 를 호출한다.
+  const sorted = useMemo(
+    () => (turns ? turns.slice().sort((a, b) => b.turn_index - a.turn_index) : []),
+    [turns],
+  );
+  if (sorted.length === 0) return null;
   return (
     <>
       {sorted.map((turn, i) => (
