@@ -33,13 +33,14 @@ import { Fragment, useCallback, useMemo, useRef, useState, type ReactElement, ty
 import { useAppStore } from '../../stores/app-store';
 import { LLMInput } from '../llm-input/LLMInput';
 import { SystemPromptLibrary } from '../dashboard/SystemPromptLibrary';
+import { SystemPromptDetailModal } from '../dashboard/SystemPromptDetailModal';
 import type { SysLibSortKey, SortDir, SysLibRow } from '../dashboard/syslib-sort';
 import { Tab } from '../../components/design-system/primitives/Tab';
 import { useColResize } from '../../components/use-col-resize';
 import { DetailView } from './DetailView';
 import { useSessionDetail } from './use-session-detail';
 import { useSessionLoad, type SessionAnomalies } from './detail-view';
-import { useLlmInput, useSystemPromptLibrary } from './use-detail-aux';
+import { useLlmInput, useSystemPromptLibrary, useSysLibDetail } from './use-detail-aux';
 
 /**
  * System 프롬프트 라이브러리 표 + 컬럼 리사이즈 결선(원본 system-prompt-library.js:107 initColResize 동치).
@@ -52,10 +53,13 @@ function SysLibPane({
   rows,
   sort,
   onSort,
+  onOpenRow,
 }: {
   rows: SysLibRow[] | null;
   sort: { key: SysLibSortKey; dir: SortDir };
   onSort: (key: SysLibSortKey) => void;
+  /** 행 클릭 → 본문 상세 모달(원본 .syslib-row 클릭 → showDetailModal). */
+  onOpenRow: (hash: string) => void;
 }): ReactElement {
   const bodyRef = useRef<HTMLDivElement>(null);
   // useColResize 가 effect 안에서 1회 읽는 tableRef.current 를 #sysLibBody 내부 .syslib-table 로 lazy resolve.
@@ -70,7 +74,7 @@ function SysLibPane({
   const hasRows = !!rows && rows.length > 0;
   return (
     <div id="sysLibBody" className="syslib-body" role="region" aria-label="System prompt library" ref={bodyRef}>
-      <SystemPromptLibrary rows={rows} sort={sort} onSort={onSort} />
+      <SystemPromptLibrary rows={rows} sort={sort} onSort={onSort} onOpenRow={onOpenRow} />
       {hasRows ? <SysLibColResize key={`syslib-colresize-${String(hasRows)}`} tableRef={tableRef} /> : null}
     </div>
   );
@@ -140,6 +144,8 @@ export function SessionDetailContainer({
   // 보조 탭 데이터(원본 setDetailView lazy 로드 대응) — 탭 활성일 때만 fetch.
   const llm = useLlmInput(sessionId, detailTab === 'llm');
   const syslib = useSystemPromptLibrary(detailTab === 'syslib');
+  // System 라이브러리 행 클릭 → 본문 상세 모달(원본 showDetailModal). hash 로 lazy-fetch.
+  const sysDetail = useSysLibDetail();
   // System 라이브러리 정렬(컨트롤드) — 원본 system-prompt-library.js 헤더 클릭 정렬.
   const [sysSort, setSysSort] = useState<{ key: SysLibSortKey; dir: SortDir }>({
     key: 'last_seen_at',
@@ -187,7 +193,20 @@ export function SessionDetailContainer({
       // System 라이브러리 — 원본 #detailSysLibView.detail-content > #sysLibBody.syslib-body 구조 복원.
       return (
         <div id="detailSysLibView" className="detail-content">
-          <SysLibPane rows={syslib.rows as never} sort={sysSort} onSort={onSysSort} />
+          <SysLibPane
+            rows={syslib.rows as never}
+            sort={sysSort}
+            onSort={onSysSort}
+            onOpenRow={sysDetail.open}
+          />
+          {/* 본문 상세 모달 — hash 활성일 때만 렌더(원본 #sysLibDetailModal). */}
+          <SystemPromptDetailModal
+            hash={sysDetail.openHash}
+            loading={sysDetail.loading}
+            detail={sysDetail.detail}
+            error={sysDetail.error}
+            onClose={sysDetail.close}
+          />
         </div>
       );
     }

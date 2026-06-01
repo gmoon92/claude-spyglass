@@ -43,6 +43,24 @@ describe('LLMInput — 골격/헤더', () => {
     expect(out).toContain('<svg'); // info 아이콘
   });
 
+  it('banner 텍스트에 <strong> 이 포함되면 escape 되지 않고 실제 태그로 렌더 (결함 #1)', () => {
+    // 레거시 i18n 키(ui.llm-input.banner-text)는 <strong> 강조 태그를 포함한다.
+    // 기본 텍스트 보간은 이를 escape 해 `&lt;strong&gt;` 문자로 노출(버그). dangerouslySetInnerHTML 로 복원.
+    const prev = (globalThis as any).window.I18n.t;
+    (globalThis as any).window.I18n.t = (k: string) =>
+      k === 'ui.llm-input.banner-text'
+        ? '이 탭은 proxy가 전송한 <strong>원본 페이로드</strong>입니다.'
+        : k;
+    try {
+      const out = html(<LLMInput {...baseProps} />);
+      // 실제 <strong> 엘리먼트로 렌더 — escape 된 &lt;strong&gt; 가 아님.
+      expect(out).toContain('<strong>원본 페이로드</strong>');
+      expect(out).not.toContain('&lt;strong&gt;');
+    } finally {
+      (globalThis as any).window.I18n.t = prev;
+    }
+  });
+
   it('header: request id + system hash 12자 slice + size', () => {
     const out = html(<LLMInput {...baseProps} />);
     expect(out).toContain('class="llm-input-header"');

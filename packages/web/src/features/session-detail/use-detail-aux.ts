@@ -155,3 +155,84 @@ export function useSystemPromptLibrary(enabled: boolean): UseSystemPromptLibrary
 
   return useMemo(() => ({ rows }), [rows]);
 }
+
+/** 행 클릭으로 연 본문 상세(원본 showDetailModal 의 fetch+표시 상태). */
+export interface SysLibDetail {
+  hash: string;
+  content?: string | null;
+  byte_size?: number | null;
+  segment_count?: number | null;
+  ref_count?: number | null;
+}
+
+/** useSysLibDetail 반환 — SystemPromptDetailModal props 묶음. */
+export interface UseSysLibDetailResult {
+  /** 열린 hash(null = 모달 닫힘). */
+  openHash: string | null;
+  loading: boolean;
+  detail: SysLibDetail | null;
+  error: string | null;
+  /** 행 클릭(원본 .syslib-row 클릭 → showDetailModal(hash)). */
+  open: (hash: string) => void;
+  /** ×/backdrop/ESC 닫기(원본 close()). */
+  close: () => void;
+}
+
+/**
+ * useSysLibDetail — System 라이브러리 행 클릭 시 본문 lazy-fetch(원본 showDetailModal).
+ *  - open(hash) → /api/system-prompts/:hash 로 content+meta fetch → 모달 본문.
+ *  - 새 hash 로 다시 열면 이전 fetch 는 AbortController 로 취소(잔여 응답 혼입 방지).
+ *  - 실패는 error 로, 응답 없음은 detail=null(원본 not-found 분기).
+ */
+export function useSysLibDetail(): UseSysLibDetailResult {
+  const [openHash, setOpenHash] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [detail, setDetail] = useState<SysLibDetail | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!openHash) {
+      setLoading(false);
+      setDetail(null);
+      setError(null);
+      return;
+    }
+    const controller = new AbortController();
+    setLoading(true);
+    setDetail(null);
+    setError(null);
+    (async () => {
+      try {
+        const res = await fetchSystemPrompt(openHash, controller.signal);
+        if (controller.signal.aborted) return;
+        if (!res.meta && res.content == null) {
+          setDetail(null); // 원본 not-found
+        } else {
+          const m = (res.meta ?? {}) as {
+            byte_size?: number | null;
+            segment_count?: number | null;
+            ref_count?: number | null;
+          };
+          setDetail({
+            hash: openHash,
+            content: res.content,
+            byte_size: m.byte_size ?? null,
+            segment_count: m.segment_count ?? null,
+            ref_count: m.ref_count ?? null,
+          });
+        }
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        setError(String((err as { message?: string })?.message ?? err));
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    })();
+    return () => controller.abort();
+  }, [openHash]);
+
+  const open = useCallback((hash: string) => setOpenHash(hash), []);
+  const close = useCallback(() => setOpenHash(null), []);
+
+  return { openHash, loading, detail, error, open, close };
+}

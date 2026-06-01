@@ -62,6 +62,8 @@ export { computeMatrixView } from './tool-stats-view';
 
 // ── System Prompt Library ──
 export { SystemPromptLibrary } from './SystemPromptLibrary';
+export { SystemPromptDetailModal } from './SystemPromptDetailModal';
+export type { SystemPromptDetail, SystemPromptDetailModalProps } from './SystemPromptDetailModal';
 export {
   applySort as applySysLibSort,
   nextSort as nextSysLibSort,

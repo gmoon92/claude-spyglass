@@ -417,7 +417,17 @@ export function LLMInput(props: LLMInputProps): ReactElement {
         <span className="llm-input-banner-icon" aria-hidden="true">
           <Info size={12} className="ds-icon" />
         </span>
-        <span className="llm-input-banner-text">{t('ui.llm-input.banner-text')}</span>
+        {/*
+         * 배너 문자열은 i18n 키(ui.llm-input.banner-text)에 <strong> 강조 태그가 포함된
+         * 신뢰 가능한 내부 리소스다. 레거시 llm-input-view.js 는 innerHTML 로 렌더해 태그가
+         * 살아났지만, React 의 기본 텍스트 보간({...})은 이를 escape 해 `<strong>` 이 문자
+         * 그대로 노출된다(P3 결함 #1). 키 신뢰를 전제로 dangerouslySetInnerHTML 로 렌더해
+         * 레거시와 동등한 강조 표시를 복원한다(사용자 입력 아님 — XSS 표면 없음).
+         */}
+        <span
+          className="llm-input-banner-text"
+          dangerouslySetInnerHTML={{ __html: t('ui.llm-input.banner-text') }}
+        />
       </div>
 
       {/* 세션 proxy 셀렉터 — 세션 컨텍스트(props) 있을 때만 */}
