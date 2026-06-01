@@ -22,21 +22,21 @@ beforeAll(() => {
   (globalThis as any).window.I18n = { t: (key: string) => key };
 });
 
+// bun test 양립: vi.stubGlobal 부재 → globalThis.fetch 직접 할당 + 원복(WP33 패턴).
+const realFetch = globalThis.fetch;
 afterEach(() => {
   vi.restoreAllMocks();
+  globalThis.fetch = realFetch;
 });
 
 const r = (el: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(el);
 
 function mockFetch(status: number, body: unknown): void {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => ({
-      ok: status >= 200 && status < 300,
-      status,
-      json: async () => body,
-    })) as unknown as typeof fetch,
-  );
+  globalThis.fetch = vi.fn(async () => ({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  })) as unknown as typeof fetch;
 }
 
 // ── fetchSessionTurns (turns-fetcher.ts) ─────────────────────────────────────
@@ -68,7 +68,7 @@ describe('fetchSessionTurns — turns/prologue 파싱', () => {
 
   it('falsy sessionId → fetch 미호출, 빈 결과', async () => {
     const spy = vi.fn();
-    vi.stubGlobal('fetch', spy as unknown as typeof fetch);
+    globalThis.fetch = spy as unknown as typeof fetch;
     const out = await fetchSessionTurns('');
     expect(out).toEqual({ turns: [], prologue: [] });
     expect(spy).not.toHaveBeenCalled();

@@ -137,26 +137,22 @@ describe('DetailView — P3-06 FlowPane + P3-05 SessionLog 조립', () => {
     },
   ];
 
-  it('헤더 + flow-pane + log-pane + detailBadges 모두 포함', () => {
+  it('turnUnifiedBody + flow-pane + log-pane 조립(헤더/badges 는 chart-detail-meta SSoT)', () => {
     const html = r(
-      <DetailView
-        sessionId="sess1234abcd"
-        projectName="proj"
-        totalTokens={40}
-        turns={turns}
-        activeTurnId="t1"
-      />,
+      <DetailView sessionId="sess1234abcd" totalTokens={40} turns={turns} activeTurnId="t1" />,
     );
-    expect(html).toContain('id="detailSessionId"');
+    expect(html).toContain('id="turnUnifiedBody"');
     expect(html).toContain('class="flow-pane"');
     expect(html).toContain('class="log-pane"');
     expect(html).toContain('id="turnLogTable"');
-    expect(html).toContain('id="detailBadges"');
+    // 헤더(detailSessionId)·집계뱃지(detailBadges)는 본문에서 제거 — chart-detail-meta(BrowseLayout) 소유.
+    expect(html).not.toContain('id="detailSessionId"');
+    expect(html).not.toContain('id="detailBadges"');
   });
 
   it('flow-pane 이 log-pane 보다 앞(슬롯 계약)', () => {
     const html = r(
-      <DetailView sessionId="s" projectName="p" totalTokens={40} turns={turns} activeTurnId="t1" />,
+      <DetailView sessionId="s" totalTokens={40} turns={turns} activeTurnId="t1" />,
     );
     const flowIdx = html.indexOf('class="flow-pane"');
     const logIdx = html.indexOf('class="log-pane"');
@@ -168,7 +164,6 @@ describe('DetailView — P3-06 FlowPane + P3-05 SessionLog 조립', () => {
     const html = r(
       <DetailView
         sessionId="s"
-        projectName="p"
         totalTokens={40}
         turns={turns}
         activeTurnId="t1"
@@ -178,9 +173,9 @@ describe('DetailView — P3-06 FlowPane + P3-05 SessionLog 조립', () => {
     expect(html).toContain('id="turn-sysrem-chip-2"');
   });
 
-  it('빈 turns → 골격 유지(헤더+빈 body)', () => {
-    const html = r(<DetailView sessionId="s" projectName="p" totalTokens={0} turns={[]} activeTurnId={null} />);
-    expect(html).toContain('id="detailSessionId"');
+  it('빈 turns → 골격 유지(빈 body)', () => {
+    const html = r(<DetailView sessionId="s" totalTokens={0} turns={[]} activeTurnId={null} />);
+    expect(html).toContain('id="turnUnifiedBody"');
     expect(html).toContain('class="log-pane"');
   });
 });
@@ -201,20 +196,17 @@ describe('순환 해소 — turn-views ⇄ detail-view 단절', () => {
     expect(src).not.toMatch(/from ['"].*\/session-detail['"]/);
   });
 
-  it('bloated-sys 헤더 재부착은 onBloatedSysHeader 콜백으로 SessionBadges 에 위임(주입 시 호출됨)', () => {
-    // DetailView 에 onBloatedSysHeader 를 주입하면 SessionBadges 의 useEffect 가 이를 호출(콜백 위임 경로 존재).
-    // SSR(renderToStaticMarkup)은 useEffect 미실행이므로, 여기선 prop 전달 경로만 정적으로 확인한다.
+  it('헤더/뱃지 제거 후에도 본문(turnUnifiedBody)이 throw 없이 렌더', () => {
+    // 헤더·집계뱃지(SessionBadges)는 chart-detail-meta(BrowseLayout) 소유로 이전 — DetailView 본문은
+    // turnUnifiedBody(flow-pane + log-pane)만 렌더. 단일 턴 입력에도 throw 없이 통과해야 한다.
     const turns: any = [{ turn_index: 1, summary: { total_tokens: 10 }, tool_calls: [] }];
-    // 렌더가 throw 없이 통과 = onBloatedSysHeader prop 배선 정상.
     expect(() =>
       r(
         <DetailView
           sessionId="s"
-          projectName="p"
           totalTokens={10}
           turns={turns}
           activeTurnId={null}
-          onBloatedSysHeader={() => {}}
         />,
       ),
     ).not.toThrow();

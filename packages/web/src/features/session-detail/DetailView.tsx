@@ -3,17 +3,21 @@
  *
  * 원본: assets/js/views/detail-view.js#loadSession (세션 헤더 텍스트/뱃지 + body) +
  *   turn-views.js#renderTurnCards 가 주입하던 flow-pane/log-pane 골격.
- * 조립 대상:
+ * 조립 대상(레거시 #turnUnifiedBody 1:1):
  *  - P3-06 FlowPane(turn-spine/flow-head/chip/reminder) + P3-05 SessionLog(9컬럼 log-pane).
- *  - P3-06 SessionBadges(헤더 집계 뱃지) — onBloatedSysHeader 콜백 주입으로 순환 차단.
  *
- * ★순환 해소(P3-04 §5, 본 task 핵심)★:
- *  - 원본 turn-views.js:60 → views/detail-view.js#applyBloatedSysHeader 직접 import,
- *    detail-view.js:12 → 루트 facade → index → re-export turn-views 로 모듈 순환.
- *  - DetailView 는 views/detail-view.js·turn-views.js·루트 facade 를 **import 하지 않는다**.
- *    bloated-sys 헤더 재부착은 SessionBadges 의 onBloatedSysHeader 콜백(store action 어댑터)으로
- *    호출부가 주입 → import 그래프에서 turn-views↔detail-view 간선 소멸.
- *  - 헤더 뱃지 자체는 SessionDetailHeader 가 badges.js HTML SSoT 를 선언적으로 렌더(DOM 변이 폐기).
+ * ★detail-header 오포함 제거(레거시 정합)★:
+ *  - 레거시 detail-view.css:2 "기존 .detail-header DOM은 제거됨. .chart-detail-meta 자손으로 동작" —
+ *    세션 id/project/tokens/ended-at/집계 뱃지는 chartSection 의 `.chart-detail-meta`(BrowseLayout 소유,
+ *    index.html:403-409) 가 단일 SSoT 다. 레거시 `#turnUnifiedBody`(turn-views.js:972-1012)는
+ *    prologue + flow-pane + log-pane 만 담는다 — 본문 안에 detail-header/detailBadges 가 없다.
+ *  - 과거 React DetailView 가 본문(#turnUnifiedBody) 안에 SessionDetailHeader(.detail-header)+SessionBadges
+ *    (#detailBadges)를 함께 렌더해 (a) BrowseLayout 의 chart-detail-meta 와 id(detailSessionId/detailBadges)
+ *    가 **중복**되고 (b) 두 비-flow 자식이 `#turnUnifiedBody` flex column 에 끼어 log-pane(flex:1) 의
+ *    스크롤 축을 무너뜨려, 턴 뱃지 클릭으로 행 수가 늘면 log-table-wrap 이 스크롤 대신 찌그러졌다.
+ *    → 본문에서 두 컴포넌트를 제거하고 레거시처럼 flow-pane + log-pane 만 남긴다.
+ *  - SessionDetailHeader 컴포넌트 자체는 헤더 뱃지 선언 렌더 SSoT 로 export 유지(단독 단위 검증 대상).
+ *    헤더 영역 렌더 책임은 BrowseLayout `.chart-detail-meta` 가 갖는다(본 컴포넌트 범위 밖).
  *
  * 비책임(상위/슬롯):
  *  - 세션 선택/AbortController/탭 전환·skeleton 등 명령형 부수효과 → useSessionLoad(detail-view.ts) +
@@ -27,7 +31,6 @@ import { fmtToken, fmtDate } from '../../../assets/js/formatters.js';
 import { bloatedSysBadgeFullHtml, contextSaturationBadgeFullHtml } from '../../../assets/js/render/badges.js';
 import { SessionLog } from './SessionLog';
 import { FlowPane } from './FlowPane';
-import { SessionBadges } from './SessionBadges';
 
 declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
 
@@ -118,10 +121,10 @@ export function SessionDetailHeader({
 }
 
 interface DetailViewProps {
-  sessionId: string;
-  projectName?: string | null;
+  /** 선택 세션 id — 호출부 식별용(본문 렌더에는 미사용, 헤더는 chart-detail-meta 가 소유). */
+  sessionId?: string;
+  /** 세션 누적 토큰(flow-head 비용 % 산출 — FlowPane 으로 전달). */
   totalTokens?: number | null;
-  endedAt?: string | number | null;
   /** 필터 결과 턴 목록. */
   turns: TurnLike[];
   /** 현재 활성 턴 ID. */
@@ -135,29 +138,19 @@ interface DetailViewProps {
   /** 활성 턴 agent_spike + sparkline 샘플. */
   agentSpike?: unknown;
   spikeSamples?: number[];
-  /** 단건 fetch 도착 anomaly(헤더 뱃지). */
-  bloatedSys?: unknown;
-  contextSaturation?: unknown;
-  turnCount?: number | null;
   /** turn 단위 anomaly flags(log-pane). */
   anomalyFlags?: Map<string, Set<string>> | null;
-  /**
-   * bloated-sys 헤더 재부착 어댑터(§5 순환 차단). SessionBadges 로 위임 — 미주입이면 재부착 생략.
-   * import 그래프에서 turn-views→detail-view 간선을 제거하는 핵심 가드.
-   */
-  onBloatedSysHeader?: (sessionId: string) => void;
   /** 비활성 마커 클릭 → 활성 턴 전환(원본 main.js:803-804 toggleTurn). FlowPane 으로 위임. */
   onMarkerClick?: (turnId: string) => void;
 }
 
 /**
- * 세션 상세 조립체. 헤더 + (FlowPane → SessionLog) body + SessionBadges(콜백 위임).
+ * 세션 상세 본문 조립체 — 레거시 #turnUnifiedBody 1:1(prologue + flow-pane + log-pane).
+ *  - 헤더(세션 id/project/tokens/ended-at/집계 뱃지)는 chart-detail-meta(BrowseLayout) SSoT 라
+ *    본문에 포함하지 않는다(detail-header 오포함 제거 — 모듈 상단 주석 참조).
  */
 export function DetailView({
-  sessionId,
-  projectName = '',
   totalTokens = 0,
-  endedAt = null,
   turns,
   activeTurnId,
   activeTurn,
@@ -165,11 +158,7 @@ export function DetailView({
   activeReminders = [],
   agentSpike = null,
   spikeSamples = [],
-  bloatedSys = null,
-  contextSaturation = null,
-  turnCount = null,
   anomalyFlags = null,
-  onBloatedSysHeader,
   onMarkerClick,
 }: DetailViewProps): ReactElement {
   const sessionTotalTokens = totalTokens ?? 0;
@@ -193,26 +182,11 @@ export function DetailView({
   //   turn-view.css `#turnUnifiedBody { flex:1; min-height:0; display:flex; flex-direction:column }`
   //   가 #detailTurnView.detail-content(flex column, overflow:hidden) 안에서 flow-pane/log-pane 의
   //   flex 축을 만든다. flow-pane=flex:0 0 auto(고정), log-pane=flex:1 1 auto + log-table-wrap
-  //   overflow-y:auto(스크롤). 과거 클래스 `.detail-view` 는 어떤 CSS 도 매칭되지 않아 flex 컨텍스트가
-  //   끊겨(자식 min-height:0 없음) log-table-wrap 이 스크롤되지 않았다.
+  //   overflow-y:auto(스크롤). 본문에 비-flow 자식(detail-header/detailBadges)을 끼우면 log-pane 의
+  //   flex:1 분배가 어긋나 행이 많은 턴으로 전환 시 log-table-wrap 이 스크롤 대신 찌그러진다 —
+  //   레거시처럼 flow-pane + log-pane 만 직계 자식으로 둔다.
   return (
     <div id="turnUnifiedBody">
-      <SessionDetailHeader
-        sessionId={sessionId}
-        projectName={projectName}
-        totalTokens={totalTokens}
-        endedAt={endedAt}
-        bloatedSys={bloatedSys}
-        contextSaturation={contextSaturation}
-        turnCount={turnCount}
-      />
-      {/* 헤더 집계 뱃지 + bloated-sys 재부착 콜백 위임(순환 차단). */}
-      <SessionBadges
-        badgeTurns={turns as never}
-        sessionTotalTokens={sessionTotalTokens}
-        selectedSessionId={sessionId}
-        onBloatedSysHeader={onBloatedSysHeader}
-      />
       <SessionLog activeTurn={resolvedActiveTurn as never} anomalyFlags={anomalyFlags} flowPane={flowPane} />
     </div>
   );

@@ -123,9 +123,7 @@ export interface SessionDetailContainerProps {
  */
 export function SessionDetailContainer({
   sessionId,
-  projectName = '',
   totalTokens = null,
-  endedAt = null,
 }: SessionDetailContainerProps): ReactElement {
   const detailTab = useAppStore((s) => s.detailTab);
   const setDetailTab = useAppStore((s) => s.setDetailTab);
@@ -216,9 +214,7 @@ export function SessionDetailContainer({
       <div id="detailTurnView" className="detail-content">
         <DetailView
           sessionId={sessionId}
-          projectName={projectName}
           totalTokens={totalTokens}
-          endedAt={endedAt}
           turns={turns as never}
           activeTurnId={activeTurnId}
           activeTurn={activeTurn as never}

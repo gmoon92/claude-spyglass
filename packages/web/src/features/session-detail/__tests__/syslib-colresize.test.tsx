@@ -6,6 +6,7 @@
  *   useColResize 에 전달한다. 본 테스트는 동일 결선(셀렉터 resolve + useColResize)을 jsdom 마운트해
  *   .col-resize-handle 개수 > 0 을 입증한다(storageKey='syslib').
  */
+import './_dom-stub'; // bun test 양립: createRoot 마운트용 전역 DOM 보장(vitest 에선 no-op).
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { createElement, useMemo, useRef, act, type RefObject } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
