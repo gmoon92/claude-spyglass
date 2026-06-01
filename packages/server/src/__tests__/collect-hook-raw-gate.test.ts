@@ -12,15 +12,9 @@
 import { describe, test, expect, afterEach } from 'bun:test';
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { mkdtempSync, existsSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 
 const SCRIPT = resolve(import.meta.dir, '../../../../hooks/spyglass-collect.sh');
-
-function todayBucket(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
 
 const createdHomes: string[] = [];
 
@@ -46,8 +40,20 @@ async function runCollect(
   return home;
 }
 
-function rawBucketPath(home: string): string {
-  return join(home, '.spyglass', 'logs', 'hook-raw', `${todayBucket()}.jsonl`);
+function hookRawDir(home: string): string {
+  return join(home, '.spyglass', 'logs', 'hook-raw');
+}
+
+/**
+ * hook-raw 디렉토리의 일자 버킷(`YYYY-MM-DD.jsonl`) 파일 목록.
+ *   날짜명을 JS 로 계산해 비교하지 않는다 — `bun test` 는 UTC(getTimezoneOffset=0)로 실행되는
+ *   반면 collect.sh 는 OS 로컬타임(`date '+%Y-%m-%d'`)으로 버킷을 만들어, UTC 자정~로컬 자정
+ *   구간에서 날짜가 어긋나기 때문(TZ flake). 디렉토리 내용으로 검증해 TZ 비의존화한다.
+ */
+function rawBucketFiles(home: string): string[] {
+  const dir = hookRawDir(home);
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).filter((n) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(n));
 }
 
 afterEach(() => {
@@ -64,20 +70,20 @@ afterEach(() => {
 describe('spyglass-collect.sh raw 원장 게이트', () => {
   test('DIAG 미설정 → raw 기록 안 함 (디렉토리도 없음)', async () => {
     const home = await runCollect({});
-    expect(existsSync(rawBucketPath(home))).toBe(false);
-    expect(existsSync(join(home, '.spyglass', 'logs', 'hook-raw'))).toBe(false);
+    expect(existsSync(hookRawDir(home))).toBe(false);
+    expect(rawBucketFiles(home).length).toBe(0);
   });
 
   test('SPYGLASS_DIAG_ENABLED=1 → 일자별 버킷에 payload 기록', async () => {
     const home = await runCollect({ SPYGLASS_DIAG_ENABLED: '1' });
-    const f = rawBucketPath(home);
-    expect(existsSync(f)).toBe(true);
-    expect(readFileSync(f, 'utf8')).toContain('"t":"x"');
+    const files = rawBucketFiles(home);
+    expect(files.length).toBe(1);
+    expect(readFileSync(join(hookRawDir(home), files[0]), 'utf8')).toContain('"t":"x"');
   });
 
   test('SPYGLASS_DIAG_ENABLED=true (대소문자 무관) → 기록', async () => {
     const home = await runCollect({ SPYGLASS_DIAG_ENABLED: 'TRUE' });
-    expect(existsSync(rawBucketPath(home))).toBe(true);
+    expect(rawBucketFiles(home).length).toBe(1);
   });
 
   test('DIAG 활성이어도 디스크 critical 이면 skip', async () => {
@@ -86,6 +92,6 @@ describe('spyglass-collect.sh raw 원장 게이트', () => {
       SPYGLASS_DIAG_ENABLED: '1',
       SPYGLASS_DISK_MIN_FREE_MB: String(1024 * 1024 * 1024), // 1PB
     });
-    expect(existsSync(rawBucketPath(home))).toBe(false);
+    expect(rawBucketFiles(home).length).toBe(0);
   });
 });
