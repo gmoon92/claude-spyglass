@@ -249,7 +249,7 @@ describe('normalizeTurns — items[] 인터리빙', () => {
   test('items에 prompt는 포함되지 않음 (헤더 책임 분리, ADR-005)', () => {
     const turn = makeTurnItem({
       prompt: {
-        id: 'p-1', timestamp: 500, tokens_input: 100, tokens_output: 0, tokens_total: 100,
+        id: 'p-1', preview: null, timestamp: 500, tokens_input: 100, tokens_output: 0, tokens_total: 100,
         duration_ms: 0, model: 'claude-opus-4-7', payload: null,
         cache_read_tokens: 0, cache_creation_tokens: 0, context_tokens: 100,
         tokens_confidence: 'high', anthropic_beta: null,
@@ -271,7 +271,7 @@ describe('normalizeTurns — items[] 인터리빙', () => {
   test('turn 안 tool_call의 model NULL이 같은 turn의 prompt model로 폴백됨', () => {
     const turn = makeTurnItem({
       prompt: {
-        id: 'p-1', timestamp: 500, tokens_input: 0, tokens_output: 0, tokens_total: 0,
+        id: 'p-1', preview: null, timestamp: 500, tokens_input: 0, tokens_output: 0, tokens_total: 0,
         duration_ms: 0, model: 'claude-opus-4-7', payload: null,
         cache_read_tokens: 0, cache_creation_tokens: 0, context_tokens: 0,
         tokens_confidence: 'high', anthropic_beta: null,

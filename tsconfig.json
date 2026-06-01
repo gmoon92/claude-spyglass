@@ -18,5 +18,6 @@
     "types": ["bun", "node"]
   },
   "include": ["packages/**/*", "scripts/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "comment-exclude-web": "packages/web 는 자체 tsconfig(paths @spyglass/types, lib DOM.Iterable, 테스트 exclude)와 typecheck 스크립트를 갖는다. 루트 tsc 가 web 전용 설정 없이 검사하면 @spyglass/types 미해석·NodeListOf 이터러블 등 64개 노이즈가 발생하므로 루트 검사 대상에서 제외한다(web 은 `bun run --cwd packages/web typecheck` + vite build 로 검증).",
+  "exclude": ["node_modules", "dist", "packages/web"]
 }
