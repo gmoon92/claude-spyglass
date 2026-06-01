@@ -20,12 +20,14 @@
  * @module features/session-detail/Chip
  */
 import type { ReactElement, ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Diamond } from '../../components/design-system/icons';
 import { ToolIcon } from '../../components/render';
 import { chipFromRequest, chipKey } from '../../../assets/js/session-detail/turn-rows.js';
 import { subTypeOf } from '../../../assets/js/request-types.js';
 
-declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
+/** i18n 번역 함수 시그니처(react-i18next t / 레거시 window.I18n.t 공통). */
+type TFn = (key: string, vars?: Record<string, unknown>) => string;
 
 /** flow item — compressFlowWithResponses(turn-rows.js) 의 반환 요소. */
 export interface FlowItem {
@@ -107,8 +109,8 @@ function actionLabel(label: string | undefined, count: number | undefined): Reac
  *  - key 가 빈 문자열이면 data-chip-key 미부여(원본 동일), role/tabindex 는 유지.
  *  - aria-label = "<labelText> <suffix>" (suffix i18n).
  */
-function a11yProps(key: string, labelText: string): Record<string, string | number> {
-  const suffix = window.I18n.t('session.session-detail.turn-views.chip-aria-suffix');
+function a11yProps(key: string, labelText: string, t: TFn): Record<string, string | number> {
+  const suffix = t('session.session-detail.turn-views.chip-aria-suffix');
   const aria = `${labelText} ${suffix}`;
   const base: Record<string, string | number> = { tabIndex: 0, role: 'button', 'aria-label': aria };
   if (key) base['data-chip-key'] = key;
@@ -123,13 +125,14 @@ function a11yProps(key: string, labelText: string): Record<string, string | numb
  * @param respSeq 응답 칩의 turn 내 등장 순번(1-based). 응답이 아니면 무시.
  */
 export function Chip({ item, respSeq }: { item: FlowItem; respSeq: number }): ReactElement {
+  const { t } = useTranslation();
   // 응답 칩 — ◆ 글리프 (turn-views.js:132-138).
   if (item.kind === 'response') {
     const meta = chipFromRequest({ ...(item.request ?? {}), type: 'response' }, respSeq);
     const key = chipKey(meta);
-    const label = window.I18n.t('session.session-detail.turn-views.response-chip-label');
+    const label = t('session.session-detail.turn-views.response-chip-label');
     return (
-      <span className="tool-chip response-chip ds-chip" data-tone="info" title={label} {...a11yProps(key, label)}>
+      <span className="tool-chip response-chip ds-chip" data-tone="info" title={label} {...a11yProps(key, label, t)}>
         <Diamond size={10} />
       </span>
     );
@@ -159,15 +162,15 @@ export function Chip({ item, respSeq }: { item: FlowItem; respSeq: number }): Re
   if (isGroup) {
     const groupAria =
       (count ?? 0) > 1
-        ? window.I18n.t('session.session-detail.turn-views.chip-group-multi', { name, count })
-        : window.I18n.t('session.session-detail.turn-views.chip-group-single', { name, count: 1 });
+        ? t('session.session-detail.turn-views.chip-group-multi', { name, count })
+        : t('session.session-detail.turn-views.chip-group-single', { name, count: 1 });
     const titleText = (item.kinds || []).join(' · ');
     return (
       <span
         className="tool-chip tool-chip-group ds-chip"
         data-tone="tool"
         title={titleText}
-        {...a11yProps(key, groupAria)}
+        {...a11yProps(key, groupAria, t)}
         {...targetIdProps}
       >
         {actionLabel(name, count)}
@@ -184,7 +187,7 @@ export function Chip({ item, respSeq }: { item: FlowItem; respSeq: number }): Re
         className={`tool-chip agent-chip${subCls} ds-chip`}
         data-tone={tone}
         title={fullLabel}
-        {...a11yProps(key, aria)}
+        {...a11yProps(key, aria, t)}
         {...targetIdProps}
       >
         <ToolIcon toolName={name} />
@@ -202,7 +205,7 @@ export function Chip({ item, respSeq }: { item: FlowItem; respSeq: number }): Re
         className={`tool-chip agent-chip${subCls} ds-chip`}
         data-tone={tone}
         title={name}
-        {...a11yProps(key, fullLabel)}
+        {...a11yProps(key, fullLabel, t)}
         {...targetIdProps}
       >
         <ToolIcon toolName={name} />
@@ -215,7 +218,7 @@ export function Chip({ item, respSeq }: { item: FlowItem; respSeq: number }): Re
   // plain 도구 칩 (turn-views.js:194-196).
   const aria = (count ?? 0) > 1 ? `${baseName} ×${count}` : baseName;
   return (
-    <span className={`tool-chip${subCls} ds-chip`} data-tone={tone} {...a11yProps(key, aria)} {...targetIdProps}>
+    <span className={`tool-chip${subCls} ds-chip`} data-tone={tone} {...a11yProps(key, aria, t)} {...targetIdProps}>
       {actionLabel(baseName, count)}
     </span>
   );

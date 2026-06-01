@@ -16,9 +16,11 @@
  * @module features/session-detail/FlowHead
  */
 import { fmtToken } from '../../../assets/js/formatters.js';
+import { useTranslation } from 'react-i18next';
 import type { ReactElement, ReactNode } from 'react';
 
-declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
+/** i18n 번역 함수 시그니처(react-i18next t / 레거시 window.I18n.t 공통). */
+type TFn = (key: string, vars?: Record<string, unknown>) => string;
 
 interface TurnSummary {
   tokens_input?: number;
@@ -32,13 +34,13 @@ interface TurnLike {
   [k: string]: unknown;
 }
 
-/** 복잡도 라벨/톤 — 원본 updateFlowHead(turn-views.js:340-355) 분기 1:1. */
-function complexityOf(toolCount: number): { label: string; tone: string } {
+/** 복잡도 라벨/톤 — 원본 updateFlowHead(turn-views.js:340-355) 분기 1:1. t 는 호출처(컴포넌트)가 주입. */
+function complexityOf(toolCount: number, t: TFn): { label: string; tone: string } {
   if (toolCount > 15) {
-    return { label: window.I18n.t('session.session-detail.turn-views.complexity-high'), tone: 'warn' };
+    return { label: t('session.session-detail.turn-views.complexity-high'), tone: 'warn' };
   }
   if (toolCount > 5) {
-    return { label: window.I18n.t('session.session-detail.turn-views.complexity-mid'), tone: 'info' };
+    return { label: t('session.session-detail.turn-views.complexity-mid'), tone: 'info' };
   }
   return { label: '', tone: 'neutral' };
 }
@@ -57,10 +59,11 @@ export function FlowHead({
   /** fhExtra 슬롯 — 리마인더 칩 + spike summary(FlowPane 주입). */
   extra?: ReactNode;
 }): ReactElement {
+  const { t } = useTranslation();
   const promptText = activeTurn?.prompt?.preview || '';
   const summary = activeTurn?.summary ?? null;
   const toolCount = summary?.tool_call_count || 0;
-  const { label: complexityLabel, tone: complexityTone } = complexityOf(toolCount);
+  const { label: complexityLabel, tone: complexityTone } = complexityOf(toolCount, t);
   const costPct =
     sessionTotalTokens > 0 ? `${Math.round(((summary?.total_tokens || 0) / sessionTotalTokens) * 100)}%` : '—';
 

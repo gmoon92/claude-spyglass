@@ -20,14 +20,13 @@
  * @module features/session-detail/FlowPane
  */
 import { useEffect, useMemo, useRef, type ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 import { turnSpikeSummaryHtml } from '../../../assets/js/render/badges.js';
 import { FlowHead } from './FlowHead';
 import { TurnSpine } from './TurnSpine';
 import { PrologueCard } from './PrologueCard';
 import { SystemReminderChip } from './SystemReminderChip';
 import { installChipDelegation } from './chip-jump';
-
-declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
 
 interface TurnLike {
   turn_id: string;
@@ -76,12 +75,13 @@ export function FlowPane({
   spikeSamples = [],
   onMarkerClick,
 }: FlowPaneProps): ReactElement {
+  const { t } = useTranslation();
   // 활성 턴 선형 탐색 — 활성 턴/턴목록 불변 시 재탐색 생략(턴 20+ 세션에서 매 렌더 O(n) 회피).
   const activeTurn = useMemo(
     () => turns.find((t) => t.turn_id === activeTurnId) ?? null,
     [turns, activeTurnId],
   );
-  const summaryLabel = window.I18n.t('session.session-detail.turn-views.meta-tool-count', { count: turns.length });
+  const summaryLabel = t('session.session-detail.turn-views.meta-tool-count', { count: turns.length });
 
   // 칩 클릭 위임 — 원본 main.js#initChipActivationDelegation 대응. flow-pane section 한 곳에 1회 부착해
   //   turn-spine / flow-head 안 모든 [data-chip-key] 칩 클릭을 단일 핸들러로 처리(행 점프 + flash + 펼침).
@@ -101,7 +101,7 @@ export function FlowPane({
       <section
         ref={flowRef}
         className="flow-pane"
-        aria-label={window.I18n.t('session.session-detail.turn-views.prologue-aria')}
+        aria-label={t('session.session-detail.turn-views.prologue-aria')}
         data-region="flow"
       >
         <FlowHead activeTurn={activeTurn} sessionTotalTokens={sessionTotalTokens} extra={extra} />

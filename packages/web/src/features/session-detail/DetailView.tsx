@@ -27,12 +27,11 @@
  * @module features/session-detail/DetailView
  */
 import type { ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 import { fmtToken, fmtDate } from '../../../assets/js/formatters.js';
 import { bloatedSysBadgeFullHtml, contextSaturationBadgeFullHtml } from '../../../assets/js/render/badges.js';
 import { SessionLog } from './SessionLog';
 import { FlowPane } from './FlowPane';
-
-declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
 
 interface TurnLike {
   turn_id: string;
@@ -76,11 +75,12 @@ export function SessionDetailHeader({
   contextSaturation = null,
   turnCount = null,
 }: SessionDetailHeaderProps): ReactElement {
+  const { t } = useTranslation();
   const bloatedHtml = bloatedSysBadgeFullHtml(bloatedSys) || '';
   const ctxSatHtml = contextSaturationBadgeFullHtml(contextSaturation) || '';
   const showTurnHint = Number.isFinite(turnCount) && (turnCount as number) >= 20;
   const turnHint = showTurnHint
-    ? window.I18n.t('ui.detail-view.turn-count-hint', { count: turnCount as number })
+    ? t('ui.detail-view.turn-count-hint', { count: turnCount as number })
     : '';
   const badgesHidden = !bloatedHtml && !ctxSatHtml && !showTurnHint;
 
@@ -92,11 +92,11 @@ export function SessionDetailHeader({
       <span id="detailProject">{projectName ?? ''}</span>
       <span id="detailTokens">
         {totalTokens != null
-          ? window.I18n.t('ui.detail-view.total-tokens', { tokens: fmtToken(totalTokens) })
+          ? t('ui.detail-view.total-tokens', { tokens: fmtToken(totalTokens) })
           : ''}
       </span>
       <span id="detailEndedAt">
-        {endedAt ? window.I18n.t('ui.detail-view.ended-at', { time: fmtDate(endedAt) }) : ''}
+        {endedAt ? t('ui.detail-view.ended-at', { time: fmtDate(endedAt) }) : ''}
       </span>
       <div
         id="detailBadges"

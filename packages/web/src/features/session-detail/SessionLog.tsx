@@ -22,10 +22,9 @@
  * @module features/session-detail/SessionLog
  */
 import { useEffect, useRef, type ReactNode, type ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 import { initColResize } from '../../../assets/js/col-resize.js';
 import { TurnRows } from './TurnRows';
-
-declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
 
 interface RowLike {
   id?: string | null;
@@ -75,6 +74,7 @@ export function SessionLog({
   showSession = false,
   flowPane,
 }: SessionLogProps): ReactElement {
+  const { t } = useTranslation();
   const tableRef = useRef<HTMLTableElement | null>(null);
 
   // col-resize 핸들 부착 — mount 1회(원본 turn-views.js:1023 "골격 1회 부착").
@@ -87,7 +87,7 @@ export function SessionLog({
       {flowPane}
       <section
         className="log-pane"
-        aria-label={window.I18n.t('session.session-detail.turn-views.active-turn-log-aria')}
+        aria-label={t('session.session-detail.turn-views.active-turn-log-aria')}
         data-region="log"
       >
         <div className="log-table-wrap">

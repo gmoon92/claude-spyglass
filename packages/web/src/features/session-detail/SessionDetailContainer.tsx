@@ -30,6 +30,7 @@
  * @see packages/web/assets/js/views/detail-view.js#loadSession (원본 세션 로드)
  */
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type RefObject } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../../stores/app-store';
 import { LLMInput } from '../llm-input/LLMInput';
 import { SystemPromptLibrary } from '../dashboard/SystemPromptLibrary';
@@ -87,8 +88,6 @@ function SysLibColResize({ tableRef }: { tableRef: RefObject<HTMLTableElement> }
   return null;
 }
 
-declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
-
 /** 탭 정의 — 원본 initDetailTabBar TABS(turn-views.js:534-538) 1:1(value/i18n 키/title). */
 interface TabDef {
   value: string;
@@ -135,6 +134,7 @@ export function SessionDetailContainer({
   totalTokens = null,
   onDetailData,
 }: SessionDetailContainerProps): ReactElement {
+  const { t } = useTranslation();
   const detailTab = useAppStore((s) => s.detailTab);
   const setDetailTab = useAppStore((s) => s.setDetailTab);
 
@@ -260,11 +260,11 @@ export function SessionDetailContainer({
             return (
               <Tab
                 key={value}
-                label={window.I18n.t(labelKey)}
+                label={t(labelKey)}
                 value={value}
                 selected={selected}
                 className={selected ? 'ds-tab view-tab active' : 'ds-tab view-tab'}
-                title={titleKey ? window.I18n.t(titleKey) : undefined}
+                title={titleKey ? t(titleKey) : undefined}
                 onClick={() => setDetailTab(value)}
               />
             );
