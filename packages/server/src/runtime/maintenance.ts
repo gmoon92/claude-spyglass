@@ -22,14 +22,13 @@ import {
   getDiskStatus,
 } from '@spyglass/storage';
 import { deleteOldGraphData } from '@spyglass/storage-graph';
+import { PRUNE_TARGETS, LEGACY_FLAT_LOGS } from './log-paths';
 
 const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000; // 1시간마다 조건 체크
 
 const SPYGLASS_DIR = join(homedir(), '.spyglass');
 /** 날짜 추적 파일 — `scripts/daily-cleanup.ts` 와 공유 SSoT. */
 export const MAINTENANCE_STATE_FILE = join(SPYGLASS_DIR, 'maintenance-state.json');
-const RAW_LOG_DIR = join(homedir(), '.spyglass', 'logs', 'hook-raw');
-const RAW_LOG_BUCKET_RE = /^(\d{4})-(\d{2})-(\d{2})\.jsonl$/;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 function todayDateString(): string {
@@ -53,22 +52,22 @@ export function setLastCleanupDate(date: string): void {
 }
 
 /**
- * hook raw 원장 버킷(`logs/hook-raw/YYYY-MM-DD.jsonl`) 중 보존 기간(기본 7일)을
- * 넘긴 파일을 삭제한다. `collect.sh` 가 로컬 날짜로 버킷명을 만들므로 여기서도 로컬
- * 자정으로 해석한다. 버킷이 다루는 날의 끝(다음날 0시)까지 cutoff 이전이어야 삭제 —
- * 경계에서 절대 일찍 지우지 않는다. 파일명 정규식에 맞는 것만 건드려 다른 로그는 안전.
+ * 일자 버킷 디렉토리(`<dir>/YYYY-MM-DD.{log,jsonl}`)에서 보존 기간(cutoff) 초과 파일을 삭제한다.
+ * server·collect·hook-raw 가 공유하는 단일 prune 로직 — 파일명 정규식에 맞는 것만 건드려
+ * 다른 파일은 안전하다. `collect.sh`·`log-paths.ts` 가 로컬 날짜로 버킷명을 만들므로 여기서도
+ * 로컬 자정으로 해석하고, 버킷이 다루는 날의 끝(다음날 0시)까지 cutoff 이전이어야 삭제한다
+ * (경계에서 절대 일찍 지우지 않음).
  */
-function pruneRawLogBuckets(now: number = Date.now()): number {
-  if (!existsSync(RAW_LOG_DIR)) return 0;
-  const cutoff = getRawLogRetentionCutoffTs(now);
+function pruneLogBuckets(dir: string, re: RegExp, cutoff: number): number {
+  if (!existsSync(dir)) return 0;
   let removed = 0;
-  for (const name of readdirSync(RAW_LOG_DIR)) {
-    const m = RAW_LOG_BUCKET_RE.exec(name);
+  for (const name of readdirSync(dir)) {
+    const m = re.exec(name);
     if (!m) continue;
     const bucketStart = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime();
     if (bucketStart + ONE_DAY_MS <= cutoff) {
       try {
-        unlinkSync(join(RAW_LOG_DIR, name));
+        unlinkSync(join(dir, name));
         removed++;
       } catch {
         // 동시 회전/권한 등으로 실패해도 다음 날 재시도 — 흡수.
@@ -78,12 +77,25 @@ function pruneRawLogBuckets(now: number = Date.now()): number {
   return removed;
 }
 
+/** 버킷화 이전의 단일 누적 로그 파일(고아) 1회성 제거 — best-effort, 실패 흡수. */
+function removeLegacyFlatLogs(): void {
+  for (const file of LEGACY_FLAT_LOGS) {
+    try {
+      if (existsSync(file)) unlinkSync(file);
+    } catch {
+      // 권한/경합 실패는 흡수 — 다음 cleanup 에서 재시도.
+    }
+  }
+}
+
 export interface CleanupResult {
   date: string;
   deletedSessions: number;
   retentionDays: number;
-  prunedRawLogs: number;
-  rawLogRetentionDays: number;
+  /** server·collect·hook-raw 일자 버킷에서 삭제한 파일 총합. */
+  prunedLogBuckets: number;
+  /** 로그 버킷 보존 일수 (raw 원장 SSoT 공유, 기본 7일). */
+  logRetentionDays: number;
 }
 
 /**
@@ -95,9 +107,9 @@ export interface CleanupResult {
  * SPYGLASS_RETENTION_DAYS 환경변수로 보존 기간 설정 (기본: 30일, SSoT: storage/runtime/retention.ts)
  *
  * 순서:
- *   1) RDB 정리 (`deleteOldData`) + VACUUM
+ *   1) RDB 정리 (`runRetentionCycle`) + VACUUM
  *   2) 그래프 정리 (`deleteOldGraphData`) — 비동기, 실패는 흡수
- *   3) raw-log 버킷 정리 — 실패는 흡수
+ *   3) 로그 버킷 정리 (server·collect·hook-raw) + 레거시 평탄 파일 제거 — 실패는 흡수
  */
 export async function runCleanupNow(database: SpyglassDatabase): Promise<CleanupResult> {
   const retentionDays = getRetentionDays();
@@ -108,19 +120,23 @@ export async function runCleanupNow(database: SpyglassDatabase): Promise<Cleanup
     console.warn('[Maintenance] graph retention skipped:', err);
   });
 
-  let prunedRawLogs = 0;
+  let prunedLogBuckets = 0;
   try {
-    prunedRawLogs = pruneRawLogBuckets();
+    const logCutoff = getRawLogRetentionCutoffTs();
+    for (const { dir, re } of PRUNE_TARGETS) {
+      prunedLogBuckets += pruneLogBuckets(dir, re, logCutoff);
+    }
+    removeLegacyFlatLogs();
   } catch (err) {
-    console.warn('[Maintenance] raw-log prune skipped:', err);
+    console.warn('[Maintenance] log-bucket prune skipped:', err);
   }
 
   return {
     date: todayDateString(),
     deletedSessions,
     retentionDays,
-    prunedRawLogs,
-    rawLogRetentionDays: getRawLogRetentionDays(),
+    prunedLogBuckets,
+    logRetentionDays: getRawLogRetentionDays(),
   };
 }
 
@@ -138,7 +154,7 @@ async function runDailyMaintenanceIfNeeded(database: SpyglassDatabase): Promise<
     setLastCleanupDate(today);
     console.log(
       `[Maintenance] Cleanup done (${result.date}): removed ${result.deletedSessions} sessions older than ${result.retentionDays}d (RDB + graph), ` +
-        `pruned ${result.prunedRawLogs} raw-log buckets older than ${result.rawLogRetentionDays}d`
+        `pruned ${result.prunedLogBuckets} log buckets older than ${result.logRetentionDays}d`
     );
   } catch (err) {
     console.warn('[Maintenance] Cleanup failed:', err);

@@ -48,6 +48,8 @@ import { getInFlightCount } from './in-flight';
 import { doctor } from '../cli/doctor';
 import { analyze } from '../cli/analyze';
 import { openCommand } from '../cli/open';
+import { isDiagEnabled } from '../diag-log';
+import { serverLogBucketForToday } from './log-paths';
 
 /** double-signal 보호 플래그 — 두 번째 신호는 force-quit로 해석 */
 let shuttingDown = false;
@@ -168,16 +170,23 @@ async function commandStart(pidFile: string): Promise<void> {
   }
 
   // 4. 자기 자신을 `serve` 모드로 detached spawn 한다.
-  //    child 의 stdout/stderr 는 ~/.spyglass/server.log 로 append.
-  //    `SPYGLASS_DAEMON_LOG` env 로 override 가능.
-  const logDir = path.join(process.env.HOME || '', '.spyglass');
-  fs.mkdirSync(logDir, { recursive: true });
-  const logPath = process.env.SPYGLASS_DAEMON_LOG || path.join(logDir, 'server.log');
-  const logFd = fs.openSync(logPath, 'a');
+  //    DIAG 게이트(collect.sh·stdio-mirror 와 통일):
+  //      - OFF(기본): child stdout/stderr 를 콘솔로 inherit — 영구 파일 적재 없음.
+  //      - ON: `logs/server/YYYY-MM-DD.log` 일자 버킷에 append. `SPYGLASS_DAEMON_LOG` 로 고정 경로 override.
+  //    (detached child 는 spawn 시 fd 가 고정되므로 자정 롤오버는 안 됨 — restart 마다 새 일자 파일.)
+  const diagOn = isDiagEnabled();
+  let logPath: string | null = null;
+  let childStdio: ('ignore' | 'inherit' | number)[] = ['ignore', 'inherit', 'inherit'];
+  if (diagOn) {
+    logPath = process.env.SPYGLASS_DAEMON_LOG || serverLogBucketForToday();
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    const logFd = fs.openSync(logPath, 'a');
+    childStdio = ['ignore', logFd, logFd];
+  }
 
   const { cmd, args } = buildRespawnCommand();
   const child = nodeSpawn(cmd, args, {
-    stdio: ['ignore', logFd, logFd],
+    stdio: childStdio,
     detached: true,
     env: process.env,
   });
@@ -188,7 +197,11 @@ async function commandStart(pidFile: string): Promise<void> {
   writePidFile(pidFile, child.pid);
   console.log(`[Server] Started (PID: ${child.pid}) — manual mode`);
   console.log(`[Server] Endpoint: http://${HOST}:${PORT}`);
-  console.log(`[Server] Logs: ${logPath}`);
+  console.log(
+    logPath
+      ? `[Server] Logs: ${logPath}`
+      : `[Server] Logs: console (set SPYGLASS_DIAG_ENABLED=1 to persist to logs/server/)`
+  );
   console.log('Tip: `brew services start spyglass` for auto-start at login');
   process.exit(0);
 }

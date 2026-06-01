@@ -34,7 +34,7 @@ try {
   setLastCleanupDate(today);
   console.log(
     `[Cleanup] Done: removed ${result.deletedSessions} sessions older than ${result.retentionDays}d, ` +
-      `pruned ${result.prunedRawLogs} raw-log buckets older than ${result.rawLogRetentionDays}d`
+      `pruned ${result.prunedLogBuckets} log buckets older than ${result.logRetentionDays}d`
   );
 } catch (err) {
   console.error('[Cleanup] Failed:', err);
