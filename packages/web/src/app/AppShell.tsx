@@ -89,6 +89,9 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
 
   // 모달 open 셸 로컬 상태 — available 배지 클릭 시 진입(openModal 가드 1:1).
   const [modalOpen, setModalOpen] = useState(false);
+  // 모달 토글 콜백 — memo(UpdateBadge/UpdateModal) 가 유효하도록 참조 안정화(인라인 화살표 제거).
+  const openModal = useCallback(() => setModalOpen(true), []);
+  const closeModal = useCallback(() => setModalOpen(false), []);
 
   // 좌측 패널 접기(#btnPanelCollapse + ⌘B) — 원본 main.js#toggleLeftPanel(:911) + 단축키(:917).
   //   .main-layout 에 left-panel-hidden 클래스를 토글(원본 클래스 1:1).
@@ -167,7 +170,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
         state={view.badge}
         currentVersion={view.currentVersion}
         latestTag={view.latestTag}
-        onOpen={() => setModalOpen(true)}
+        onOpen={openModal}
         t={tt}
       />
       <UpdateModal
@@ -175,8 +178,8 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
         currentVersion={cache?.currentVersion ?? view.currentVersion}
         latestTag={cache?.latestTag ?? view.latestTag}
         onConfirm={onConfirmUpdate}
-        onCancel={() => setModalOpen(false)}
-        onClose={() => setModalOpen(false)}
+        onCancel={closeModal}
+        onClose={closeModal}
         t={tt}
       />
 

@@ -302,8 +302,8 @@ export function ProjectList({
  * BrowseLayout 이 고주기 SSE(new_request 5-20/s)로 `sessions` 만 갱신해 Sidebar 가 re-render 될 때,
  *   ProjectList 의 입력(projects 는 마운트 1회 fetch 후 불변 ref · selectedProject 원시값 ·
  *   isMetaMode/metaCounts 리터럴 · labeler useMemo · onSelectProject 미지정)이 불변이면 shallow
- *   비교로 프로젝트 행 재계산(maxT 정규화 등)을 건너뛴다. SessionList 는 sessions 변경이 곧 데이터
- *   갱신이므로 의도적으로 메모하지 않는다(정당한 re-render — over-engineering 가드).
+ *   비교로 프로젝트 행 재계산(maxT 정규화 등)을 건너뛴다. SessionList 도 동일 이유로 메모화한다
+ *   (아래 MemoSessionList — feed-only 재렌더 시 sortSessions 재계산 차단, onSelectSession 안정화 전제).
  * 출력은 ProjectList 와 동일(메모는 re-render 회피일 뿐 동작 무변경).
  */
 const MemoProjectList = memo(ProjectList);
@@ -437,6 +437,19 @@ export function SessionList({
   );
 }
 
+/**
+ * 메모화 세션 리스트 — Sidebar 렌더 경로 전용(Chunk-3 성능).
+ *
+ * BrowseLayout 이 고주기 SSE feed(new_request 5-20/s)로 re-render 될 때, sessions 자체는
+ *   불변(store selector ref 안정)인데도 부모 재렌더가 Sidebar→SessionList 까지 전파돼
+ *   sortSessions(filter+sort) 가 매번 재실행됐다. onSelectSession 이 호출처(BrowseLayout)에서
+ *   useCallback 으로 안정화됐고 labeler 는 useMemo, selectedProject/Session 은 원시값이라
+ *   sessions 불변 시 shallow 비교로 목록 재계산을 건너뛴다(feed-only 재렌더 차단).
+ *   sessions 가 실제로 갱신되면 ref 가 바뀌어 정상 재렌더된다(데이터 갱신은 그대로 반영).
+ * 출력은 SessionList 와 동일(메모는 re-render 회피일 뿐 동작 무변경).
+ */
+const MemoSessionList = memo(SessionList);
+
 export interface SidebarProps {
   projects: readonly ProjectLike[];
   sessions: readonly SessionLike[];
@@ -487,7 +500,7 @@ export function Sidebar({
         labeler={labeler}
         onSelectProject={onSelectProject}
       />
-      <SessionList
+      <MemoSessionList
         sessions={sessions}
         selectedProject={selectedProject}
         selectedSession={selectedSession}

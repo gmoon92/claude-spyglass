@@ -9,21 +9,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { ReactElement } from 'react';
 import { ErrorBanner } from '../ErrorBanner';
-
-function findFirst(node: unknown, pred: (el: ReactElement) => boolean): ReactElement | null {
-  if (!node || typeof node !== 'object') return null;
-  if (Array.isArray(node)) {
-    for (const c of node) { const r = findFirst(c, pred); if (r) return r; }
-    return null;
-  }
-  const el = node as ReactElement & { type?: unknown; props?: Record<string, unknown> };
-  if (el.props && pred(el)) return el;
-  if (typeof el.type === 'function') return findFirst((el.type as (p: unknown) => unknown)(el.props ?? {}), pred);
-  if (el.props && el.props.children !== undefined) return findFirst(el.props.children, pred);
-  return null;
-}
+import { findFirst } from '../../test-support/react-element-walk';
 
 const t = (key: string) => key;
 

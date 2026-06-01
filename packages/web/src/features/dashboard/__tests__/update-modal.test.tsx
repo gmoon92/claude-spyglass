@@ -12,19 +12,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 import { UpdateBadge } from '../UpdateBadge';
 import { UpdateModal } from '../UpdateModal';
+import { findFirst } from '../../../test-support/react-element-walk';
 
-function findFirst(node: unknown, pred: (el: ReactElement) => boolean): ReactElement | null {
-  if (!node || typeof node !== 'object') return null;
-  if (Array.isArray(node)) {
-    for (const c of node) { const r = findFirst(c, pred); if (r) return r; }
-    return null;
-  }
-  const el = node as ReactElement & { type?: unknown; props?: Record<string, unknown> };
-  if (el.props && pred(el)) return el;
-  if (typeof el.type === 'function') return findFirst((el.type as (p: unknown) => unknown)(el.props ?? {}), pred);
-  if (el.props && el.props.children !== undefined) return findFirst(el.props.children, pred);
-  return null;
-}
 const byClassFrag = (frag: string) => (el: ReactElement) => {
   const cls = (el.props as { className?: string })?.className ?? '';
   return typeof cls === 'string' && cls.split(' ').includes(frag);

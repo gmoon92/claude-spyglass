@@ -11,7 +11,7 @@
 //
 // 제안 명령(git fetch --unshallow)은 비번역 코드 블록(version-check.js T-10 1:1, 라벨만 i18n).
 
-import type { ReactElement } from 'react';
+import { memo, type ReactElement } from 'react';
 
 export type WarningLabeler = (key: string, vars?: Record<string, unknown>) => string;
 
@@ -41,8 +41,9 @@ function CopyIcon(): ReactElement {
 
 /**
  * shallow clone 경고 배너 — #dashboardShallowWarning 1:1. visible=false 면 미렌더.
+ * memo: AppShell 로컬 state(connected/leftPanelHidden/modalOpen) 변화로부터 격리 — visible/콜백 불변 시 재렌더 생략.
  */
-export function DashboardWarning({ visible, onDismiss, onCopy, t }: DashboardWarningProps): ReactElement | null {
+export const DashboardWarning = memo(function DashboardWarning({ visible, onDismiss, onCopy, t }: DashboardWarningProps): ReactElement | null {
   if (!visible) return null;
   return (
     <div className="dashboard-warning dashboard-warning--shallow" role="status" aria-live="polite">
@@ -81,4 +82,4 @@ export function DashboardWarning({ visible, onDismiss, onCopy, t }: DashboardWar
       </button>
     </div>
   );
-}
+});

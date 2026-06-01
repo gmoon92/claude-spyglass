@@ -7,7 +7,7 @@
 // 신규 계약: state(resolveBadgeState 결과) + 버전 props 주입. available 일 때만 onOpen 발화(openModal 가드 1:1).
 //   3 아이콘은 원본대로 동시 마크업 — CSS 가 모디파이어별 1종만 노출(SSoT 유지).
 
-import type { ReactElement } from 'react';
+import { memo, type ReactElement } from 'react';
 import { normalizeTag, tSafe, type BadgeState } from './version-check-logic';
 
 export type BadgeLabeler = (key: string, vars?: Record<string, unknown>) => string;
@@ -52,8 +52,12 @@ function resolveLabel(
   };
 }
 
-/** 버전 상태 배지 — #updateBadge 1:1. available 클릭 시에만 onOpen. */
-export function UpdateBadge({ state, currentVersion, latestTag, onOpen, t }: UpdateBadgeProps): ReactElement {
+/**
+ * 버전 상태 배지 — #updateBadge 1:1. available 클릭 시에만 onOpen.
+ * memo: AppShell 로컬 state(connected/leftPanelHidden/modalOpen) 변화로부터 격리 — 폴링 결과(state/version)
+ *   불변 시 재렌더 생략(props 안정 전제: 호출처가 onOpen/t 를 안정 참조로 주입).
+ */
+export const UpdateBadge = memo(function UpdateBadge({ state, currentVersion, latestTag, onOpen, t }: UpdateBadgeProps): ReactElement {
   const { label, aria } = resolveLabel(state, currentVersion, latestTag, t);
   const className = `update-badge update-badge--${state}`;
   return (
@@ -81,4 +85,4 @@ export function UpdateBadge({ state, currentVersion, latestTag, onOpen, t }: Upd
       <span className="update-badge-text">{label}</span>
     </button>
   );
-}
+});

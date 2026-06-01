@@ -10,7 +10,7 @@
 //
 // 레이어: features 컴포넌트(controlled, 무전역).
 
-import type { ReactElement } from 'react';
+import { memo, type ReactElement } from 'react';
 
 export type ModalLabeler = (key: string, vars?: Record<string, unknown>) => string;
 
@@ -33,8 +33,11 @@ export interface UpdateModalProps {
   successMessage?: string;
 }
 
-/** 업데이트 확인 모달 — #updateModal 1:1. open 으로 .open 토글. */
-export function UpdateModal({
+/**
+ * 업데이트 확인 모달 — #updateModal 1:1. open 으로 .open 토글.
+ * memo: AppShell 로컬 state(connected/leftPanelHidden) 변화로부터 격리 — open/버전/콜백 불변 시 재렌더 생략.
+ */
+export const UpdateModal = memo(function UpdateModal({
   open, currentVersion, latestTag, onConfirm, onCancel, onClose, t, errorMessage, successMessage,
 }: UpdateModalProps): ReactElement {
   const overlayClass = `update-modal-overlay${open ? ' open' : ''}`;
@@ -94,4 +97,4 @@ export function UpdateModal({
       </div>
     </div>
   );
-}
+});

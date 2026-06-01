@@ -78,6 +78,8 @@ export function BrowseLayout(): ReactElement {
   // 좌측 세션 캐시 + 라이브 피드 — sse-store SSoT.
   const sessions = useSSEStore((s) => s.sessions);
   const setSessions = useSSEStore((s) => s.setSessions);
+  // SSE 캐시미스 신호(sse-store) — true 면 좌측 세션 목록을 네트워크로 재시드해야 한다(기능 결함 #11).
+  const needsSessionsRefetch = useSSEStore((s) => s.needsSessionsRefetch);
   // 좌측 세션 목록 초기/전환 로딩 — 첫 시드 fetch 전(또는 프로젝트 전환 중) 빈 목록을 "데이터 없음" 대신
   //   스켈레톤으로 보여주기 위한 표지. 초기값 true(마운트 직후 population fetch 예정).
   const [sessionsLoading, setSessionsLoading] = useState(true);
@@ -345,6 +347,24 @@ export function BrowseLayout(): ReactElement {
       });
     return () => ctrl.abort();
   }, [setSessions, activeRange, selectedProject]);
+
+  // SSE 캐시미스 → 세션 목록 재시드(기능 결함 #11) — sse-store.needsSessionsRefetch 구독·처리.
+  //   SSE 가 캐시에 없는 세션을 참조하면 store 가 needsSessionsRefetch=true 로 신호한다(sse-store).
+  //   이를 관찰해 fetchAllSessions → setSessions 로 닫는다(setSessions 가 신호를 false 로 리셋 → 루프 없음).
+  //   현재 activeRange 스코프를 그대로 사용(전체 population effect 와 동일 파라미터)해 일관 시드.
+  useEffect(() => {
+    if (!needsSessionsRefetch) return;
+    const ctrl = new AbortController();
+    const { signal } = ctrl;
+    (async () => {
+      const allSessions = await fetchAllSessions(rangeToParams(activeRange), 500, signal);
+      if (signal.aborted) return;
+      setSessions(allSessions as unknown as Parameters<typeof setSessions>[0]);
+    })().catch(() => {
+      /* silent — fetcher 안전 폴백. 신호는 다음 setSessions(다른 경로) 또는 재신호 시 닫힘. */
+    });
+    return () => ctrl.abort();
+  }, [needsSessionsRefetch, activeRange, setSessions]);
 
   // 진입 시 프로젝트 auto-select — 레거시 autoActivateProject(main.js:242) 1:1.
   //   selectedProject 가 비어있고 데이터가 도착하면 가장 최근 활동 프로젝트를 선택해 세션 리스트를 노출한다
