@@ -11,9 +11,8 @@
  * @module features/session-detail/SystemReminderChip
  */
 import type { ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Note } from '../../components/design-system/icons';
-
-declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
 
 /**
  * 신규 reminder 칩 + 팝오버. 원본 buildSystemReminderChip(turn-views.js:794) 동치.
@@ -27,6 +26,7 @@ export function SystemReminderChip({
   turnIndex: number;
   reminders: string[] | null | undefined;
 }): ReactElement | null {
+  const { t } = useTranslation();
   if (!reminders || reminders.length === 0) return null;
   const count = reminders.length;
   const chipId = `turn-sysrem-chip-${turnIndex}`;
@@ -42,7 +42,7 @@ export function SystemReminderChip({
         aria-expanded="false"
         aria-controls={popoverId}
         data-sysrem-toggle={popoverId}
-        title={window.I18n.t('session.session-detail.turn-views.sysrem-chip-title', { count })}
+        title={t('session.session-detail.turn-views.sysrem-chip-title', { count })}
       >
         <Note size={12} />
         <span className="turn-system-reminder-count">{count}</span>
@@ -57,15 +57,15 @@ export function SystemReminderChip({
       >
         <header className="turn-system-reminder-popover-header">
           <span className="turn-system-reminder-popover-title">
-            <strong>{window.I18n.t('session.session-detail.turn-views.sysrem-title')}</strong>
+            <strong>{t('session.session-detail.turn-views.sysrem-title')}</strong>
             <span className="turn-system-reminder-popover-count">
-              {window.I18n.t('session.session-detail.turn-views.sysrem-count', { count })}
+              {t('session.session-detail.turn-views.sysrem-count', { count })}
             </span>
           </span>
           <button
             type="button"
             className="turn-system-reminder-popover-close"
-            aria-label={window.I18n.t('session.session-detail.turn-views.sysrem-close')}
+            aria-label={t('session.session-detail.turn-views.sysrem-close')}
             data-sysrem-close={popoverId}
           >
             ×

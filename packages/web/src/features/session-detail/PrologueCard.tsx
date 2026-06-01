@@ -15,11 +15,10 @@
  * @module features/session-detail/PrologueCard
  */
 import type { ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 import { fmtTime } from '../../../assets/js/formatters.js';
 import { contextPreview } from '../../../assets/js/render/extract.js';
 import { targetInner } from '../../components/render';
-
-declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
 
 interface PrologueRow {
   id?: string;
@@ -39,26 +38,27 @@ function PreviewHtml({ r }: { r: PrologueRow }): ReactElement {
  * 세션 프롤로그 카드. 원본 renderPrologueCardHtml(turn-views.js:758) 동치.
  */
 export function PrologueCard({ prologue }: { prologue: PrologueRow[] | null | undefined }): ReactElement | null {
+  const { t } = useTranslation();
   if (!prologue || prologue.length === 0) return null;
 
   return (
     <div
       className="turn-prologue-card"
       role="region"
-      aria-label={window.I18n.t('session.session-detail.turn-views.prologue-aria')}
+      aria-label={t('session.session-detail.turn-views.prologue-aria')}
     >
       <div className="turn-prologue-header">
         <span className="turn-prologue-title">
-          {window.I18n.t('session.session-detail.turn-views.prologue-title')}
+          {t('session.session-detail.turn-views.prologue-title')}
         </span>
         <span className="turn-prologue-count">
-          {window.I18n.t('ui.chart.count-unit', { count: prologue.length })}
+          {t('ui.chart.count-unit', { count: prologue.length })}
         </span>
         <span
           className="turn-prologue-hint"
-          title={window.I18n.t('session.session-detail.turn-views.prologue-hint-title')}
+          title={t('session.session-detail.turn-views.prologue-hint-title')}
         >
-          {window.I18n.t('session.session-detail.turn-views.prologue-hint')}
+          {t('session.session-detail.turn-views.prologue-hint')}
         </span>
       </div>
       <div className="turn-prologue-body">
@@ -68,7 +68,7 @@ export function PrologueCard({ prologue }: { prologue: PrologueRow[] | null | un
             r.source === 'transcript-assistant-text' ? (
               <span
                 className="prologue-source-tag"
-                title={window.I18n.t('session.session-detail.turn-views.prologue-transcript-tag')}
+                title={t('session.session-detail.turn-views.prologue-transcript-tag')}
               >
                 transcript
               </span>

@@ -85,9 +85,11 @@ describe('FlowHead — 복잡도/비용 분기(updateFlowHead turn-views.js:340-
 // ── PrologueCard ────────────────────────────────────────────────────────────
 
 describe('PrologueCard — renderPrologueCardHtml(turn-views.js:758)', () => {
-  it('빈 prologue → null', () => {
-    expect(PrologueCard({ prologue: [] })).toBeNull();
-    expect(PrologueCard({ prologue: null })).toBeNull();
+  it('빈 prologue → null(빈 마크업)', () => {
+    // useTranslation(훅) 사용 → 컴포넌트로 렌더해야 한다(직접 함수 호출 시 invalid hook call).
+    //   null 반환은 renderToStaticMarkup 에서 빈 문자열.
+    expect(r(<PrologueCard prologue={[]} />)).toBe('');
+    expect(r(<PrologueCard prologue={null} />)).toBe('');
   });
 
   it('행마다 prologue-row + data-type + 시간, transcript 소스 태그', () => {
@@ -107,9 +109,10 @@ describe('PrologueCard — renderPrologueCardHtml(turn-views.js:758)', () => {
 // ── SystemReminderChip ────────────────────────────────────────────────────────
 
 describe('SystemReminderChip — buildSystemReminderChip(turn-views.js:794)', () => {
-  it('reminders 빈/null → null(원본 빈 문자열)', () => {
-    expect(SystemReminderChip({ turnIndex: 1, reminders: [] })).toBeNull();
-    expect(SystemReminderChip({ turnIndex: 1, reminders: null })).toBeNull();
+  it('reminders 빈/null → null(빈 마크업)', () => {
+    // useTranslation(훅) 사용 → 컴포넌트로 렌더(직접 함수 호출 금지). null 반환은 빈 문자열.
+    expect(r(<SystemReminderChip turnIndex={1} reminders={[]} />)).toBe('');
+    expect(r(<SystemReminderChip turnIndex={1} reminders={null} />)).toBe('');
   });
 
   it('N>0 → 칩 id/popover id/count + pre 본문', () => {
