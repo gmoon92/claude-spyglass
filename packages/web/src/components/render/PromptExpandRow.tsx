@@ -40,8 +40,8 @@ export function PromptExpandRow({ rid, cols }: { rid: string; cols: number }): R
     : `<pre class="prompt-expand-content" style="margin:0;white-space:pre-wrap;word-break:break-all">${escHtml(typeof cached === 'string' ? cached : '')}</pre>`;
 
   // 복사 버튼 + 본문 박스 — 원본 boxHtml 1:1 (onclick 인라인·i18n 키 동일).
-  const copyLabel = window.I18n.t('ui.main.expand.copy');
-  const copiedLabel = window.I18n.t('ui.main.expand.copied');
+  const copyLabel = t('ui.main.expand.copy');
+  const copiedLabel = t('ui.main.expand.copied');
   const boxHtml =
     `<div class="prompt-expand-box"><button class="expand-copy-btn" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent).then(()=>{this.textContent='${escHtml(copiedLabel)}';setTimeout(()=>{this.textContent='${escHtml(copyLabel)}'},1500)})">${escHtml(copyLabel)}</button>${contentHtml}</div>`;
 
