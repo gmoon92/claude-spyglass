@@ -29,9 +29,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { ProjectLike, SidebarLabeler } from '../features/browse/Sidebar';
 import { BrowseSidebar } from '../features/browse';
-import { Chart, type ChartTokens, type ChartLegendLabeler } from '../components/Chart';
+import { type ChartTokens, type ChartLegendLabeler } from '../components/Chart';
+import { TimelineChart } from '../components/TimelineChart';
 import { useColResize } from '../components/use-col-resize';
-import { bucketizeByMinute, type DataByKind, type DonutDatum } from '../components/chart-data';
+import { type DataByKind, type DonutDatum } from '../components/chart-data';
 import { RequestRow, buildSearchHaystack } from '../components/render/RequestRow';
 import { SearchBox } from '../components/SearchBox';
 import { FilterBar, type FilterBarLabeler } from '../components/FilterBar';
@@ -159,20 +160,16 @@ export function BrowseLayout(): ReactElement {
     return [...(feed as unknown as FeedRowLike[]), ...(seedTail as unknown as FeedRowLike[])];
   }, [feed, seedRequests]);
 
-  // 타임라인 sliding window tick — 1분마다 now 갱신해 버킷이 좌로 흐르게(원본 advanceBuckets 의 시간경과 대응).
-  const [nowTick, setNowTick] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNowTick(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
-
-  // 30분 sliding 타임라인 버킷 — feed timestamp 를 현재 분 기준 30버킷에 분배(원본 recordRequest 증분 → 파생).
-  const timelineBuckets: number[] = useMemo(() => {
-    const ts = feedRows
-      .map((r) => (typeof r.timestamp === 'number' ? r.timestamp : Number(r.timestamp)))
-      .filter((n) => Number.isFinite(n)) as number[];
-    return bucketizeByMinute(ts, nowTick);
-  }, [feedRows, nowTick]);
+  // 타임라인 버킷 입력(feed timestamp epoch ms 배열) — feed 변경 시에만 갱신(ref 안정).
+  //   30초 sliding window tick 과 bucketizeByMinute 파생은 TimelineChart 가 로컬 소유한다(병목 #2):
+  //   tick state 를 여기서 빼내 30초 갱신이 BrowseLayout(=피드 테이블)을 재렌더하지 않게 한다.
+  const feedTimestamps: number[] = useMemo(
+    () =>
+      feedRows
+        .map((r) => (typeof r.timestamp === 'number' ? r.timestamp : Number(r.timestamp)))
+        .filter((n) => Number.isFinite(n)) as number[],
+    [feedRows],
+  );
 
   // 피드 type 필터 + 검색 — 원본 feed-interactions.js: sub-type 키는 data-sub-type, 그 외는 data-type 매칭 + haystack.includes.
   const filteredFeedRows: FeedRowLike[] = useMemo(() => {
@@ -448,10 +445,10 @@ export function BrowseLayout(): ReactElement {
               .donut-section>.donut-wrap(donut) 2-셀을 직접 출력하므로 여기서 추가 래핑하지 않는다
               (래핑하면 직계 자식이 1개 → 2fr/1fr grid 붕괴, 도넛이 타임라인 아래로 어긋남 — WP14 버그). */}
           <div className="charts-inner">
-            <Chart
+            <TimelineChart
               dataByKind={dataByKind}
               donutMode={donutMode}
-              timelineBuckets={timelineBuckets}
+              feedTimestamps={feedTimestamps}
               tokens={FALLBACK_TOKENS}
               timelineMeta={<TimelineMeta summary={summary} labeler={timelineMetaLabeler} />}
               contextSlot={
