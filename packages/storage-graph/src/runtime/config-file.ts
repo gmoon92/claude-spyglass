@@ -29,8 +29,8 @@
  *   추가는 *기존 필드 보존 + 누락된 필드 default 주입* 방식의 마이그레이션으로 처리.
  */
 
-import { readFile, writeFile, rename, mkdir, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readFile, writeFile, rename, mkdir, unlink, access } from 'node:fs/promises';
+import { join, dirname } from 'node:path';
 
 import type { GraphMode } from './flag';
 
@@ -41,6 +41,8 @@ import type { GraphMode } from './flag';
 /** 디렉토리 이름 — paths.ts 의 SPYGLASS_HOME_DIRNAME 과 동일. 순환 의존 없도록 자체 상수. */
 const SPYGLASS_HOME_DIRNAME = '.spyglass';
 const CONFIG_FILENAME = 'server-config.json';
+/** 설정 파일 전용 서브디렉토리 — 루트 정돈을 위해 config/ 아래로 모은다(state/ 와 분리). */
+const CONFIG_SUBDIR = 'config';
 const TMP_SUBDIR = 'tmp';
 
 /** 현재 스키마 버전. 새 필드 추가 시에도 1 유지 (마이그레이션은 누락 필드 주입 방식). */
@@ -66,8 +68,16 @@ function getSpyglassRoot(): string {
   return alreadyRoot ? home : join(home, SPYGLASS_HOME_DIRNAME);
 }
 
-/** server-config.json 절대 경로. 테스트/외부 노출용. */
+/** server-config.json 절대 경로 (`~/.spyglass/config/server-config.json`). 테스트/외부 노출용. */
 export function getServerConfigPath(): string {
+  return join(getSpyglassRoot(), CONFIG_SUBDIR, CONFIG_FILENAME);
+}
+
+/**
+ * 버킷화 이전 레거시 경로 (`~/.spyglass/server-config.json`, 루트 직속).
+ * 업데이트한 기존 사용자의 설정을 config/ 로 1회 이전하기 위한 마이그레이션 소스.
+ */
+function getLegacyServerConfigPath(): string {
   return join(getSpyglassRoot(), CONFIG_FILENAME);
 }
 
@@ -119,7 +129,37 @@ const DEFAULT_CONFIG: ServerConfig = {
  *   파일이 있고 graphMode 가 정상이면 그 값을 신뢰. version 이 미래값(>1) 이어도
  *   현재 알고 있는 필드만 읽어 진행 — 다운그레이드 호환.
  */
+/**
+ * 레거시 루트 경로(`~/.spyglass/server-config.json`)를 config/ 로 1회 이전한다.
+ *
+ *   업데이트한 기존 사용자가 graphMode 설정을 잃지 않도록, 신규 경로가 없고 레거시가 있을
+ *   때만 rename(같은 파티션, atomic) 한다. 신규가 이미 있으면 no-op. 실패는 치명 아님 —
+ *   load 가 DEFAULT 로 폴백하고 다음 기회에 재시도. (모든 사용자가 업데이트해도 동작 보장)
+ */
+async function migrateLegacyConfigIfNeeded(): Promise<void> {
+  const target = getServerConfigPath();
+  try {
+    await access(target);
+    return; // 신규 경로 존재 — 이전 불필요.
+  } catch { /* 신규 없음 — 레거시 확인 */ }
+
+  const legacy = getLegacyServerConfigPath();
+  try {
+    await access(legacy);
+  } catch {
+    return; // 레거시도 없음 — 첫 부팅.
+  }
+
+  try {
+    await mkdir(dirname(target), { recursive: true });
+    await rename(legacy, target);
+  } catch {
+    // 권한/경합 실패 흡수 — load 는 DEFAULT 폴백, 다음 부팅에 재시도.
+  }
+}
+
 export async function loadServerConfig(): Promise<ServerConfig> {
+  await migrateLegacyConfigIfNeeded();
   const path = getServerConfigPath();
   let text: string;
   try {
@@ -181,8 +221,9 @@ export async function saveServerConfig(patch: Partial<Omit<ServerConfig, 'versio
   const targetPath = getServerConfigPath();
   const tmpDir = getServerConfigTmpDir();
   await mkdir(tmpDir, { recursive: true });
-  // 목적지 디렉토리도 보장 (SPYGLASS_HOME override 환경에서 spyglass root 가 없을 수도).
-  await mkdir(getSpyglassRoot(), { recursive: true });
+  // 목적지 디렉토리(config/) 보장 — rename target 이 존재해야 하며, SPYGLASS_HOME override
+  // 환경에서 spyglass root 자체가 없을 수도 있으므로 recursive 로 한 번에 생성.
+  await mkdir(dirname(targetPath), { recursive: true });
 
   const tmpPath = join(tmpDir, `${CONFIG_FILENAME}.${Math.random().toString(36).slice(2, 10)}`);
   const body = JSON.stringify(next, null, 2) + '\n';

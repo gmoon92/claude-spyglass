@@ -9,9 +9,9 @@
  *     경로는 본 시스템에 존재하지 않는다 (자동 throw-away · 수동 reset 모두 제거).
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
   SpyglassDatabase,
   runRetentionCycle,
@@ -27,16 +27,38 @@ import { PRUNE_TARGETS, LEGACY_FLAT_LOGS } from './log-paths';
 const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000; // 1시간마다 조건 체크
 
 const SPYGLASS_DIR = join(homedir(), '.spyglass');
-/** 날짜 추적 파일 — `scripts/daily-cleanup.ts` 와 공유 SSoT. */
-export const MAINTENANCE_STATE_FILE = join(SPYGLASS_DIR, 'maintenance-state.json');
+/**
+ * 날짜 추적 파일 — `scripts/daily-cleanup.ts` 와 공유 SSoT.
+ * 런타임 *상태(state)* 이므로 설정(config/)과 구분해 `state/` 아래 둔다.
+ */
+export const MAINTENANCE_STATE_FILE = join(SPYGLASS_DIR, 'state', 'maintenance-state.json');
+/** 버킷화 이전 레거시 경로(루트 직속) — 업데이트한 기존 사용자 state 를 1회 이전. */
+const LEGACY_MAINTENANCE_STATE_FILE = join(SPYGLASS_DIR, 'maintenance-state.json');
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 function todayDateString(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * 레거시 루트 state 파일을 `state/` 로 1회 이전한다. 신규 경로가 없고 레거시가 있을 때만
+ * rename(같은 파티션). 실패는 치명 아님 — 누락 시 cleanup 이 한 번 더 도는 수준(무해).
+ * (모든 사용자가 업데이트해도 마지막 cleanup 날짜를 잃지 않도록 보장)
+ */
+function migrateLegacyStateIfNeeded(): void {
+  if (existsSync(MAINTENANCE_STATE_FILE)) return;
+  if (!existsSync(LEGACY_MAINTENANCE_STATE_FILE)) return;
+  try {
+    mkdirSync(dirname(MAINTENANCE_STATE_FILE), { recursive: true });
+    renameSync(LEGACY_MAINTENANCE_STATE_FILE, MAINTENANCE_STATE_FILE);
+  } catch {
+    // 권한/경합 실패 흡수 — 다음 기회 재시도.
+  }
+}
+
 /** `MAINTENANCE_STATE_FILE` 에서 마지막 cleanup 날짜를 읽는다. 없거나 파싱 실패 시 null. */
 export function getLastCleanupDate(): string | null {
+  migrateLegacyStateIfNeeded();
   try {
     const raw = readFileSync(MAINTENANCE_STATE_FILE, 'utf-8');
     return (JSON.parse(raw) as { last_cleanup_date?: string }).last_cleanup_date ?? null;
@@ -45,9 +67,9 @@ export function getLastCleanupDate(): string | null {
   }
 }
 
-/** 마지막 cleanup 날짜를 `MAINTENANCE_STATE_FILE` 에 기록한다. 디렉토리 없으면 생성. */
+/** 마지막 cleanup 날짜를 `MAINTENANCE_STATE_FILE` 에 기록한다. 디렉토리(state/) 없으면 생성. */
 export function setLastCleanupDate(date: string): void {
-  mkdirSync(SPYGLASS_DIR, { recursive: true });
+  mkdirSync(dirname(MAINTENANCE_STATE_FILE), { recursive: true });
   writeFileSync(MAINTENANCE_STATE_FILE, JSON.stringify({ last_cleanup_date: date }), 'utf-8');
 }
 

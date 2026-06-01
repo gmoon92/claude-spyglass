@@ -4,7 +4,7 @@
  *
  * 핵심 로직: `packages/server/src/runtime/maintenance.ts#runCleanupNow` (SSoT)
  *   - RDB 삭제 + VACUUM + 그래프 정리 + raw-log 버킷 정리
- *   - 날짜 추적: `~/.spyglass/maintenance-state.json` (서버 런타임과 공유)
+ *   - 날짜 추적: `~/.spyglass/state/maintenance-state.json` (서버 런타임과 공유, 레거시 자동 이전)
  *
  * 사용:
  *   bun run scripts/daily-cleanup.ts            # 하루 1회 (날짜 체크)

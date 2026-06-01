@@ -67,7 +67,7 @@ describe('loadServerConfig — 안전 폴백', () => {
 
   it('깨진 JSON 위에서도 throw 없이 default 폴백', async () => {
     const cfgPath = getServerConfigPath();
-    mkdirSync(join(tmpHome, '.spyglass'), { recursive: true });
+    mkdirSync(join(tmpHome, '.spyglass', 'config'), { recursive: true });
     writeFileSync(cfgPath, '{ broken json');
     const cfg = await loadServerConfig();
     expect(cfg.graphMode).toBeUndefined();
@@ -75,7 +75,7 @@ describe('loadServerConfig — 안전 폴백', () => {
 
   it('Array root 같은 비정상 JSON 도 default 폴백', async () => {
     const cfgPath = getServerConfigPath();
-    mkdirSync(join(tmpHome, '.spyglass'), { recursive: true });
+    mkdirSync(join(tmpHome, '.spyglass', 'config'), { recursive: true });
     writeFileSync(cfgPath, JSON.stringify([1, 2, 3]));
     const cfg = await loadServerConfig();
     expect(cfg.graphMode).toBeUndefined();
@@ -83,7 +83,7 @@ describe('loadServerConfig — 안전 폴백', () => {
 
   it('graphMode 가 알 수 없는 문자열이면 undefined 로 폴백 (다른 필드는 보존)', async () => {
     const cfgPath = getServerConfigPath();
-    mkdirSync(join(tmpHome, '.spyglass'), { recursive: true });
+    mkdirSync(join(tmpHome, '.spyglass', 'config'), { recursive: true });
     writeFileSync(cfgPath, JSON.stringify({ version: 1, graphMode: 'invalid', updatedAt: 123 }));
     const cfg = await loadServerConfig();
     expect(cfg.graphMode).toBeUndefined();
@@ -92,11 +92,41 @@ describe('loadServerConfig — 안전 폴백', () => {
 
   it('정상 파일은 graphMode + updatedAt 그대로 반환', async () => {
     const cfgPath = getServerConfigPath();
-    mkdirSync(join(tmpHome, '.spyglass'), { recursive: true });
+    mkdirSync(join(tmpHome, '.spyglass', 'config'), { recursive: true });
     writeFileSync(cfgPath, JSON.stringify({ version: 1, graphMode: 'primary', updatedAt: 1234567890 }));
     const cfg = await loadServerConfig();
     expect(cfg.graphMode).toBe('primary');
     expect(cfg.updatedAt).toBe(1234567890);
+  });
+});
+
+// =============================================================================
+// 레거시 마이그레이션 (root → config/) — 업데이트한 기존 사용자 보호
+// =============================================================================
+
+describe('레거시 마이그레이션 (root → config/)', () => {
+  it('레거시 루트 server-config.json 을 config/ 로 이전하고 값 보존', async () => {
+    // 업데이트 전 사용자: 설정이 루트 직속에 존재.
+    mkdirSync(join(tmpHome, '.spyglass'), { recursive: true });
+    const legacyPath = join(tmpHome, '.spyglass', 'server-config.json');
+    writeFileSync(legacyPath, JSON.stringify({ version: 1, graphMode: 'primary', updatedAt: 999 }));
+
+    const cfg = await loadServerConfig();
+
+    expect(cfg.graphMode).toBe('primary'); // 값 보존
+    expect(cfg.updatedAt).toBe(999);
+    expect(existsSync(getServerConfigPath())).toBe(true); // config/ 로 이전됨
+    expect(existsSync(legacyPath)).toBe(false);           // 레거시 제거됨
+  });
+
+  it('신규 config/ 경로가 이미 있으면 레거시를 무시한다 (no-op)', async () => {
+    mkdirSync(join(tmpHome, '.spyglass', 'config'), { recursive: true });
+    writeFileSync(getServerConfigPath(), JSON.stringify({ version: 1, graphMode: 'shadow', updatedAt: 1 }));
+    const legacyPath = join(tmpHome, '.spyglass', 'server-config.json');
+    writeFileSync(legacyPath, JSON.stringify({ version: 1, graphMode: 'primary', updatedAt: 2 }));
+
+    const cfg = await loadServerConfig();
+    expect(cfg.graphMode).toBe('shadow'); // 신규 우선 — 레거시 미반영
   });
 });
 
@@ -193,7 +223,7 @@ describe('flag.ts 우선순위 (env > file > default)', () => {
 
   it('file 의 graphMode 가 undefined 이고 env 도 없으면 default', async () => {
     // graphMode 필드 자체가 누락된 file.
-    mkdirSync(join(tmpHome, '.spyglass'), { recursive: true });
+    mkdirSync(join(tmpHome, '.spyglass', 'config'), { recursive: true });
     writeFileSync(
       getServerConfigPath(),
       JSON.stringify({ version: 1, updatedAt: Date.now() }),
