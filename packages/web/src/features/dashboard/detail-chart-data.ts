@@ -3,12 +3,17 @@
  *
  * 차트 섹션이 detail 모드(세션 선택)일 때 노출하는 두 차트의 입력을 선택 세션 turns 에서 파생한다.
  *  1) ContextChart(#contextGrowthChart) — 턴별 누적 토큰 라인. turns 의 prompt 필드를 ContextTurn 으로 통과.
- *  2) cache 도넛 — 세션 캐시 분포 2-슬라이스('cache'=creation / 'others'=denom-creation).
- *     레거시 session-detail/flat-view.ts(DETAIL_FILTER_CHANGED 핸들러, :164~191) SSoT 1:1:
+ *  2) cache 도넛 — 세션 캐시 분포 2-슬라이스('cache'=read+creation / 'others'=input).
  *       - computeSessionCacheStats(allRequests) 로 read/creation/input 합산(서버 aggregate-cache 와 동일 공식).
- *       - cacheDenom = read + creation + input. 슬라이스: cache=creation, others=denom-creation.
- *       - _cacheCreation 메타로 도넛 가운데 hit-rate(= creation/denom) 계산값을 전달(분모 = 슬라이스 합).
- *       - tokens<=0 슬라이스는 제거(레거시 .filter(d => d.tokens > 0)).
+ *       - cacheDenom = read + creation + input.
+ *       - 슬라이스: cache = cacheRead + cacheCreation(캐시 적중 + 신규 등록 = 캐시 관련 토큰 전체),
+ *         others = input(순수 비캐시 입력) = denom - cache.
+ *       - _cacheCreation 메타로 도넛 가운데 '캐시 적용 비율'(= (read+creation)/denom) 분자를 전달(분모 = 슬라이스 합).
+ *         좌측 cache-panel HIT RATE(= read/denom)와 일관된 방향 — 도넛도 캐시 활용도를 직관적으로 표현.
+ *       - tokens<=0 슬라이스는 제거(.filter(d => d.tokens > 0)).
+ *
+ *     ※ 과거(레거시 flat-view.ts)는 cache=creation 만 세어 read 적중분이 others 로 빠져, HIT RATE 97% 인
+ *       세션도 도넛은 <1% 로 보이는 오해가 있었다. cache=read+creation 으로 변경해 두 지표 방향을 정합화한다.
  *
  * 레거시는 flat /api/requests 의 allRequests 를 입력으로 썼다. React BrowseLayout 은 useSessionDetail 의
  *   turns 만 보유하므로, 각 턴의 (prompt + tool_calls + responses) 하위 레코드를 CacheRequestLike 로
@@ -63,8 +68,9 @@ export function toCacheRequests(
 }
 
 /**
- * 선택 세션 turns → cache 도넛 데이터(2-슬라이스). 레거시 flat-view.ts SSoT 1:1.
- *  - 슬라이스 합 = cacheDenom(read+creation+input), 가운데 % = creation/denom(_cacheCreation 메타).
+ * 선택 세션 turns → cache 도넛 데이터(2-슬라이스).
+ *  - cache = read + creation(캐시 적중 + 신규 등록), others = input(비캐시 입력).
+ *  - 슬라이스 합 = cacheDenom(read+creation+input), 가운데 % = (read+creation)/denom(_cacheCreation 메타).
  *  - tokens<=0 슬라이스 제거.
  */
 export function buildCacheDonut(
@@ -73,9 +79,10 @@ export function buildCacheDonut(
 ): DonutDatum[] {
   const stats = computeSessionCacheStats(toCacheRequests(turns));
   const cacheDenom = stats.cacheReadTokens + stats.cacheCreationTokens + stats.totalInputTokens;
-  const cacheCreation = stats.cacheCreationTokens;
+  // '캐시'는 적중(read) + 신규 등록(creation) 합 — 캐시 관련 토큰 전체. 가운데 % 분자도 동일(_cacheCreation).
+  const cached = stats.cacheReadTokens + stats.cacheCreationTokens;
   return [
-    { id: 'cache', label: labels.cache, tokens: cacheCreation, _cacheCreation: cacheCreation },
-    { id: 'others', label: labels.others, tokens: Math.max(0, cacheDenom - cacheCreation) },
+    { id: 'cache', label: labels.cache, tokens: cached, _cacheCreation: cached },
+    { id: 'others', label: labels.others, tokens: Math.max(0, cacheDenom - cached) },
   ].filter((d) => (d.tokens ?? 0) > 0);
 }
