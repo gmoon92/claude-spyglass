@@ -9,14 +9,12 @@
  *     경로는 본 시스템에 존재하지 않는다 (자동 throw-away · 수동 reset 모두 제거).
  */
 
-import { existsSync, readdirSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
   SpyglassDatabase,
   deleteOldData,
-  getMetadata,
-  setMetadata,
   getRetentionDays,
   getRetentionCutoffTs,
   getRawLogRetentionDays,
@@ -26,15 +24,32 @@ import {
 import { deleteOldGraphData } from '@spyglass/storage-graph';
 
 const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000; // 1시간마다 조건 체크
-const METADATA_KEY_LAST_CLEANUP = 'last_cleanup_date'; // 저장 형식: YYYY-MM-DD
 
 const SPYGLASS_DIR = join(homedir(), '.spyglass');
+/** 날짜 추적 파일 — `scripts/daily-cleanup.ts` 와 공유 SSoT. */
+export const MAINTENANCE_STATE_FILE = join(SPYGLASS_DIR, 'maintenance-state.json');
 const RAW_LOG_DIR = join(homedir(), '.spyglass', 'logs', 'hook-raw');
 const RAW_LOG_BUCKET_RE = /^(\d{4})-(\d{2})-(\d{2})\.jsonl$/;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 function todayDateString(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/** `MAINTENANCE_STATE_FILE` 에서 마지막 cleanup 날짜를 읽는다. 없거나 파싱 실패 시 null. */
+export function getLastCleanupDate(): string | null {
+  try {
+    const raw = readFileSync(MAINTENANCE_STATE_FILE, 'utf-8');
+    return (JSON.parse(raw) as { last_cleanup_date?: string }).last_cleanup_date ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** 마지막 cleanup 날짜를 `MAINTENANCE_STATE_FILE` 에 기록한다. 디렉토리 없으면 생성. */
+export function setLastCleanupDate(date: string): void {
+  mkdirSync(SPYGLASS_DIR, { recursive: true });
+  writeFileSync(MAINTENANCE_STATE_FILE, JSON.stringify({ last_cleanup_date: date }), 'utf-8');
 }
 
 /**
@@ -63,46 +78,68 @@ function pruneRawLogBuckets(now: number = Date.now()): number {
   return removed;
 }
 
+export interface CleanupResult {
+  date: string;
+  deletedSessions: number;
+  retentionDays: number;
+  prunedRawLogs: number;
+  rawLogRetentionDays: number;
+}
+
 /**
- * 오늘 아직 cleanup을 실행하지 않았으면 실행한다.
- * - 서버 시작 시 즉시 호출
- * - 이후 1시간 간격 인터벌에서도 호출 (날짜가 바뀐 시점을 놓치지 않기 위해)
+ * 실제 정리 작업 SSoT — RDB 삭제 + VACUUM + 그래프 정리 + raw-log 버킷 정리.
+ *
+ * `scripts/daily-cleanup.ts`(CLI 흐름)와 `runDailyMaintenanceIfNeeded`(서버 런타임) 양쪽이
+ * 이 함수를 공유한다. 날짜 체크·기록은 호출자 책임이므로 이 함수는 항상 실행한다.
  *
  * SPYGLASS_RETENTION_DAYS 환경변수로 보존 기간 설정 (기본: 30일, SSoT: storage/runtime/retention.ts)
  *
  * 순서:
- *   1) RDB 정리 (`deleteOldData`) + VACUUM — 정상적이고 빠르게 끝나는 동기 경로.
- *   2) 그래프 정리 (`deleteOldGraphData`) — 비동기, 실패는 흡수 (graph 미가용 시에도 RDB 정리는 정상).
+ *   1) RDB 정리 (`deleteOldData`) + VACUUM
+ *   2) 그래프 정리 (`deleteOldGraphData`) — 비동기, 실패는 흡수
+ *   3) raw-log 버킷 정리 — 실패는 흡수
+ */
+export async function runCleanupNow(database: SpyglassDatabase): Promise<CleanupResult> {
+  const retentionDays = getRetentionDays();
+  const cutoff = getRetentionCutoffTs();
+  const deletedSessions = deleteOldData(database.instance, cutoff);
+  database.instance.run('PRAGMA VACUUM');
+
+  await deleteOldGraphData(cutoff).catch((err) => {
+    console.warn('[Maintenance] graph retention skipped:', err);
+  });
+
+  let prunedRawLogs = 0;
+  try {
+    prunedRawLogs = pruneRawLogBuckets();
+  } catch (err) {
+    console.warn('[Maintenance] raw-log prune skipped:', err);
+  }
+
+  return {
+    date: todayDateString(),
+    deletedSessions,
+    retentionDays,
+    prunedRawLogs,
+    rawLogRetentionDays: getRawLogRetentionDays(),
+  };
+}
+
+/**
+ * 오늘 아직 cleanup을 실행하지 않았으면 실행한다.
+ * - 서버 시작 시 즉시 호출
+ * - 이후 1시간 간격 인터벌에서도 호출 (날짜가 바뀐 시점을 놓치지 않기 위해)
  */
 async function runDailyMaintenanceIfNeeded(database: SpyglassDatabase): Promise<void> {
   try {
     const today = todayDateString();
-    const lastRun = getMetadata(database.instance, METADATA_KEY_LAST_CLEANUP);
-    if (lastRun === today) return;
+    if (getLastCleanupDate() === today) return;
 
-    const retentionDays = getRetentionDays();
-    const cutoff = getRetentionCutoffTs();
-    const deleted = deleteOldData(database.instance, cutoff);
-    database.instance.run('PRAGMA VACUUM');
-
-    // 그래프 DB 도 같은 cutoff 로 정리 — 실패해도 RDB 정리는 이미 끝났으므로 흡수.
-    //   mode='off' / circuit OPEN / Ladybug 미설치는 deleteOldGraphData 가 자체 no-op 처리.
-    await deleteOldGraphData(cutoff).catch((err) => {
-      console.warn('[Maintenance] graph retention skipped:', err);
-    });
-
-    // hook raw 원장 버킷 정리 — RDB/graph 와 별개 cutoff(기본 7일). 실패는 흡수.
-    let prunedRawLogs = 0;
-    try {
-      prunedRawLogs = pruneRawLogBuckets();
-    } catch (err) {
-      console.warn('[Maintenance] raw-log prune skipped:', err);
-    }
-
-    setMetadata(database.instance, METADATA_KEY_LAST_CLEANUP, today);
+    const result = await runCleanupNow(database);
+    setLastCleanupDate(today);
     console.log(
-      `[Maintenance] Cleanup done (${today}): removed ${deleted} sessions older than ${retentionDays}d (RDB + graph), ` +
-        `pruned ${prunedRawLogs} raw-log buckets older than ${getRawLogRetentionDays()}d`
+      `[Maintenance] Cleanup done (${result.date}): removed ${result.deletedSessions} sessions older than ${result.retentionDays}d (RDB + graph), ` +
+        `pruned ${result.prunedRawLogs} raw-log buckets older than ${result.rawLogRetentionDays}d`
     );
   } catch (err) {
     console.warn('[Maintenance] Cleanup failed:', err);
