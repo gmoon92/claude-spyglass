@@ -147,4 +147,15 @@ describe('기능 2 — 프롬프트/메시지 펼치기', () => {
     expect(btn).toBeTruthy();
     expect(btn!.textContent).toBe('복사');
   });
+
+  it('expandCols=9 주입 → colspan=9 (세션 상세 9컬럼 테이블 일치)', () => {
+    // TurnRows 가 showSession=false 일 때 expandCols=9 를 RequestRow 에 주입한다.
+    // colspan 이 테이블 컬럼 수를 초과하면 마지막 컬럼이 테이블 밖으로 밀려 레이아웃이 깨진다.
+    act(() => { root.render(<RequestRow r={promptRow()} opts={{ expandCols: 9 }} />); });
+    const preview = container.querySelector<HTMLElement>('.prompt-preview[data-expand-id="req-1"]');
+    act(() => { preview!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+
+    const expandRow = container.querySelector<HTMLElement>('tr.prompt-expand-row');
+    expect(expandRow!.querySelector('td')!.getAttribute('colspan')).toBe('9');
+  });
 });

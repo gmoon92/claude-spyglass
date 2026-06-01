@@ -79,9 +79,14 @@ function legacyInterleave(toolCalls: RowLike[], responses: RowLike[]): TurnItemL
 export function TurnRows({ turn, anomalyFlags = null, showSession = false }: TurnRowsProps): ReactElement | null {
   if (!turn) return null;
 
+  // 세션 상세 뷰는 9컬럼(showSession=false) 또는 10컬럼(showSession=true).
+  // 기본값 FEED_EXPAND_COLS=10 이 9컬럼 테이블에 걸리면 레이아웃이 깨지므로 명시 주입.
+  const expandCols = showSession ? 10 : 9;
+
   const rowOpts = (r: RowLike) => ({
     showSession,
     anomalyFlags: anomalyFlags?.get(String(r.id)) ?? null,
+    expandCols,
   });
 
   const rows: ReactElement[] = [];

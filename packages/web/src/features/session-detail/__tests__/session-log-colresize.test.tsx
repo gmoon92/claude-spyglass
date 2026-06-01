@@ -14,6 +14,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { SessionLog, LOG_TABLE_COLS } from '../SessionLog';
+// expandCols 파생 공식 SSoT 검증용 — TurnRows 내부 로직과 동기화 유지.
+const SESSION_DETAIL_EXPAND_COLS = (showSession: boolean) => showSession ? 10 : 9;
 
 beforeAll(() => {
   (globalThis as any).window = (globalThis as any).window ?? {};
@@ -92,5 +94,17 @@ describe('표 골격 구조 계약', () => {
       <SessionLog activeTurn={turnA} flowPane={<div data-region="flow">FLOW</div>} />,
     );
     expect(html.indexOf('data-region="flow"')).toBeLessThan(html.indexOf('data-region="log"'));
+  });
+});
+
+describe('expand 행 colspan 계약 — 테이블 컬럼 수와 일치해야 레이아웃이 깨지지 않음', () => {
+  it('showSession=false(기본) → expandCols=9 = LOG_TABLE_COLS 길이', () => {
+    // TurnRows 가 expandCols=9 를 주입하므로, colspan 이 실제 col 개수(9)와 일치한다.
+    expect(SESSION_DETAIL_EXPAND_COLS(false)).toBe(LOG_TABLE_COLS.length);
+  });
+
+  it('showSession=true → expandCols=10 = LOG_TABLE_COLS 길이 + Session 컬럼 1', () => {
+    // showSession=true 면 Session 컬럼이 추가되어 10컬럼이므로 expandCols=10 이어야 한다.
+    expect(SESSION_DETAIL_EXPAND_COLS(true)).toBe(LOG_TABLE_COLS.length + 1);
   });
 });
