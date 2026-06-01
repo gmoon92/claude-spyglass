@@ -366,6 +366,45 @@ export function BrowseLayout(): ReactElement {
     return () => ctrl.abort();
   }, [needsSessionsRefetch, activeRange, setSessions]);
 
+  // ── 브라우즈 차트 라이브 갱신(레거시 dashboard refresh on new_request, React 포트 미이식분 복원) ──
+  //   진행 중 새 요청이 SSE 로 도착하면(feed prepend) 대시보드 파생 차트 — 도넛(type/model) · timeline-meta
+  //   통계 · cache panel — 를 디바운스 재fetch 한다. feed 기반 타임라인은 이미 라이브지만, 이 차트들은
+  //   fetchDashboard/fetchModelUsage/fetchCacheStats 로 마운트·activeRange 변경 시에만 받아 진행 중엔 stale 됐다.
+  //   sessions/seed 는 SSE·needsSessionsRefetch 가 유지하므로 재fetch 제외. detail 모드 차트는 turns 파생
+  //   (use-session-detail 이 SSE 로 갱신)이라 default 모드에서만 동작. feed 스토어는 마운트 시 빈 배열이라
+  //   feedHeadId 가드로 초기 중복 fetch 도 자연 회피(첫 SSE 요청부터 작동).
+  const feedHeadId = feed.length > 0 ? String((feed[0] as { id?: unknown }).id ?? feed.length) : '';
+  useEffect(() => {
+    if (detailActive || !feedHeadId) return;
+    const ctrl = new AbortController();
+    const { signal } = ctrl;
+    const restRange = rangeToParams(activeRange);
+    const metricRange = rangeToMetricParams(activeRange);
+    const modelUsageParams = selectedProject ? { ...metricRange, project: selectedProject } : metricRange;
+    // SSE 버스트 합치기(차트는 즉시성 less 중요) — 1.5s 디바운스.
+    const id = setTimeout(() => {
+      (async () => {
+        const [dashboard, modelUsage, cache] = await Promise.all([
+          fetchDashboard(restRange, signal),
+          fetchModelUsage(modelUsageParams),
+          fetchCacheStats(restRange, signal),
+        ]);
+        if (signal.aborted) return;
+        const derived = deriveBrowseData(dashboard);
+        setDonutType(derived.donutType);
+        setDonutModel((modelUsage as DonutDatum[]) ?? []);
+        setSummary((dashboard?.summary as DashboardSummary | undefined) ?? null);
+        setCacheStats((cache as unknown as CacheStats | null) ?? null);
+      })().catch(() => {
+        /* silent — fetcher 안전 폴백(null/[]). 차트는 직전 값 유지. */
+      });
+    }, 1500);
+    return () => {
+      clearTimeout(id);
+      ctrl.abort();
+    };
+  }, [feedHeadId, detailActive, activeRange, selectedProject]);
+
   // 진입 시 프로젝트 auto-select — 레거시 autoActivateProject(main.js:242) 1:1.
   //   selectedProject 가 비어있고 데이터가 도착하면 가장 최근 활동 프로젝트를 선택해 세션 리스트를 노출한다
   //   (미선택 → '프로젝트를 선택하세요' 빈 상태 회귀 방지). 우선순위:

@@ -19,9 +19,10 @@
  * @see packages/web/assets/js/session-detail/turn-views.js#renderTurnCards (원본 파생, :918-941)
  * @see packages/web/src/features/session-detail/detail-view.ts (useSessionLoad — AbortController 패턴)
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { computeNewRemindersByTurn, type ReminderTurn } from '../../lib/system-reminder';
 import { fetchSessionTurns, type TurnRow, type PrologueRow } from './turns-fetcher';
+import { useSSEStore } from '../../stores/sse-store';
 
 /** useSessionDetail 반환 — DetailView 가 필요한 props 묶음. */
 export interface UseSessionDetailResult {
@@ -93,6 +94,47 @@ export function useSessionDetail(sessionId: string | null | undefined): UseSessi
     })();
     return () => controller.abort();
   }, [sessionId]);
+
+  // ── SSE 라이브 갱신(레거시 refreshDetailSession 등가, React 포트 미이식분 복원) ──
+  //   진행 중 세션 상세를 보는 동안 새 요청이 SSE 로 도착하면(sse-store.feed 에 prepend), 그 세션의
+  //   turns 를 디바운스 재fetch 해 턴 스파인·로그·파생 차트(ContextChart/도넛)가 라이브로 갱신되게 한다.
+  //   turns 자체를 SSE 로 패치하는 채널은 없으므로(turns 는 단건 fetch SSoT), 재fetch 가 정공법이다.
+  //   새 turns 배열은 useMemo([turns])/React.memo(TurnLine) 를 정상 무효화한다.
+  const feed = useSSEStore((s) => s.feed);
+  // 현재 세션 head(최신) feed 이벤트 id — 새 요청 prepend 시 변함(라이브 신호).
+  const liveSignal = useMemo(() => {
+    if (!sessionId) return '';
+    const head = feed.find((r) => (r as { session_id?: string }).session_id === sessionId);
+    return head ? String((head as { id?: unknown }).id ?? '') : '';
+  }, [feed, sessionId]);
+
+  // 세션 진입/전환 run 은 초기 fetch effect 가 담당하므로 라이브 재fetch 를 건너뛰고, 같은 세션에서
+  //   liveSignal 이 변할 때(새 요청)만 디바운스 재fetch 한다(초기 중복 fetch 방지).
+  const liveSessionRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!sessionId) {
+      liveSessionRef.current = sessionId;
+      return;
+    }
+    if (liveSessionRef.current !== sessionId) {
+      liveSessionRef.current = sessionId; // 세션 진입/전환 — 초기 fetch effect 가 처리. skip.
+      return;
+    }
+    const ctrl = new AbortController();
+    const id = setTimeout(() => {
+      fetchSessionTurns(sessionId, ctrl.signal)
+        .then((result) => {
+          if (ctrl.signal.aborted) return;
+          setTurns(result.turns);
+          setPrologue(result.prologue);
+        })
+        .catch(() => { /* silent — 레거시 refreshDetailSession catch 동치 */ });
+    }, 400);
+    return () => {
+      clearTimeout(id);
+      ctrl.abort();
+    };
+  }, [sessionId, liveSignal]);
 
   // 활성 턴 ID — 명시값 우선, 없으면 최신 턴(turn-views.js:923-925).
   const activeTurnId = useMemo(() => resolveActiveTurnId(turns, explicitTurnId), [turns, explicitTurnId]);
