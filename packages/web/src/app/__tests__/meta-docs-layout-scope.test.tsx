@@ -23,8 +23,15 @@ import { createRoot, type Root } from 'react-dom/client';
 
 import { MetaDocsLayout } from '../MetaDocsLayout';
 import { useAppStore } from '../../stores/app-store';
+import { ensureDom } from '../../test-support/ensure-dom';
+
+// 루트 bun test 에는 jsdom 전역이 없으므로 라이브 DOM 을 보장한다(vitest 에서는 no-op).
+ensureDom();
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// fetch 목 원복용 핸들(bun test 에 vi.stubGlobal/vi.unstubAllGlobals 부재 → 직접 교체·복원).
+const realFetch = globalThis.fetch;
 
 // 요청 URL 캡처 — fetch 목. /api/meta-docs 호출만 추적(대시보드/tool-stats 등은 빈 봉투).
 const metaDocsUrls: string[] = [];
@@ -47,7 +54,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   metaDocsUrls.length = 0;
-  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString();
     if (url.includes('/api/meta-docs')) {
       metaDocsUrls.push(url);
@@ -73,7 +80,7 @@ beforeEach(() => {
     }
     // tool-stats 등 기타 — 빈 배열 봉투.
     return jsonResponse({ data: [] });
-  }));
+  }) as unknown as typeof fetch;
   useAppStore.setState({
     selectedProject: null,
     selectedSession: null,
@@ -88,7 +95,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
-  vi.unstubAllGlobals();
+  globalThis.fetch = realFetch;
 });
 
 async function mountLayout(): Promise<void> {

@@ -9,15 +9,16 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { fetchProjectToolStats } from '../tool-stats-fetcher';
 
+// fetch 목 패턴(fetchers.test.ts / hooks-api.test.ts 1:1): bun test 에 vi.stubGlobal 이 없으므로
+//   globalThis.fetch 를 직접 교체하고 afterEach 에서 원복한다(러너 양립).
+const realFetch = globalThis.fetch;
 afterEach(() => {
+  globalThis.fetch = realFetch;
   vi.restoreAllMocks();
 });
 
 function mockFetchOnce(body: unknown, ok = true): void {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => ({ ok, json: async () => body }) as unknown as Response),
-  );
+  globalThis.fetch = vi.fn(async () => ({ ok, json: async () => body }) as unknown as Response) as unknown as typeof fetch;
 }
 
 describe('fetchProjectToolStats — 프로젝트 도구 통계 colocated fetcher', () => {
@@ -30,7 +31,7 @@ describe('fetchProjectToolStats — 프로젝트 도구 통계 colocated fetcher
 
   it('project null → fetch 생략 → []', async () => {
     const spy = vi.fn();
-    vi.stubGlobal('fetch', spy);
+    globalThis.fetch = spy as unknown as typeof fetch;
     const rows = await fetchProjectToolStats({ project: null });
     expect(rows).toEqual([]);
     expect(spy).not.toHaveBeenCalled();
@@ -50,7 +51,7 @@ describe('fetchProjectToolStats — 프로젝트 도구 통계 colocated fetcher
 
   it('from/to range → URL 쿼리 부착', async () => {
     const spy = vi.fn(async (_url: string) => ({ ok: true, json: async () => ({ success: true, data: [] }) }) as unknown as Response);
-    vi.stubGlobal('fetch', spy);
+    globalThis.fetch = spy as unknown as typeof fetch;
     await fetchProjectToolStats({ project: 'my proj', from: 100, to: 200 });
     const url = String(spy.mock.calls[0]?.[0]);
     expect(url).toContain('/api/projects/my%20proj/tool-stats');

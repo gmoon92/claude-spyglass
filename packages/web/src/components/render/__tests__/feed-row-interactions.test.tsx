@@ -13,6 +13,11 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { RequestRow } from '../RequestRow';
+import { ensureDom } from '../../../test-support/ensure-dom';
+
+// 루트 bun test 에는 jsdom 전역이 없으므로 라이브 DOM 을 보장한다(vitest 에서는 no-op).
+//   원본 위임(closest) 경로를 그대로 재현하려면 실제 DOM 마운트가 필요하다.
+ensureDom();
 
 declare const window: { I18n: { t: (k: string, v?: Record<string, unknown>) => string }; IS_REACT_ACT_ENVIRONMENT?: boolean };
 

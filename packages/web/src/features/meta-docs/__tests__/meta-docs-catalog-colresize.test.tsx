@@ -11,6 +11,10 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MetaDocsCatalog } from '../MetaDocsCatalog';
 import { useColResize } from '../../../components/use-col-resize';
 import type { MetaDocRow } from '../meta-docs-sort';
+import { ensureDom } from '../../../test-support/ensure-dom';
+
+// 루트 bun test 에는 jsdom 전역이 없으므로 라이브 DOM 을 보장한다(vitest 에서는 no-op).
+ensureDom();
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

@@ -17,6 +17,11 @@ import { createElement, useRef, act } from 'react';
 import type { RefObject } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { useColResize, type UseColResizeOptions } from '../use-col-resize';
+import { ensureDom } from '../../test-support/ensure-dom';
+
+// 루트 bun test 에는 jsdom 전역이 없으므로(vitest 는 environment:'jsdom') 라이브 DOM 을 보장한다.
+//   vitest 에서는 no-op — 두 러너 모두에서 동일한 createRoot 마운트·MouseEvent dispatch 가 동작한다.
+ensureDom();
 
 // React 18 act() 환경 플래그(경고 억제 + 동기 flush).
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

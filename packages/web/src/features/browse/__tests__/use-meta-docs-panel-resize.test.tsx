@@ -15,6 +15,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createElement, act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { useMetaDocsPanelResize } from '../use-panel-resize';
+import { ensureDom } from '../../../test-support/ensure-dom';
+
+// 루트 bun test 에는 jsdom 전역이 없으므로 라이브 DOM(+ requestAnimationFrame)을 보장한다.
+//   vitest 에서는 no-op. 두 러너 모두에서 동일한 드래그/rAF 복원 경로가 동작한다.
+ensureDom();
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
