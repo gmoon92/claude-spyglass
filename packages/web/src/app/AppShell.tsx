@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useSSE } from '../hooks/use-sse';
+import { useTooltip } from '../hooks/use-tooltip';
 import { useAppStore } from '../stores/app-store';
 import { buildAppSSECallbacks } from './app-sse';
 import { pathToAppMode } from './app-mode-route';
@@ -78,6 +79,10 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
     [],
   );
   useSSE(useMemo(() => buildAppSSECallbacks(lifecycle), [lifecycle]));
+
+  // 전역 호버 툴팁(레거시 stat-tooltip/obs-tooltip/cache-panel-tooltip/cache-tooltip 통합 포팅).
+  //   document 위임으로 [data-*-tooltip] / .cache-cell 감지 — per-component JSX 수정 없음.
+  useTooltip();
 
   // 버전 폴링 — 배지/캐시/shallow. SSR 에서는 effect 미발화 → 초기 loading/null/false.
   const { view, cache, isShallow } = useVersionCheck();
