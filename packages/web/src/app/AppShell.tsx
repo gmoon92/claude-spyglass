@@ -25,7 +25,7 @@ import { useTooltip } from '../hooks/use-tooltip';
 import { useAppStore } from '../stores/app-store';
 import { buildAppSSECallbacks } from './app-sse';
 import { pathToAppMode } from './app-mode-route';
-import { tt } from './i18n-labeler';
+import { useTranslation } from 'react-i18next';
 import { AppRail } from './AppRail';
 import { ErrorBanner } from './ErrorBanner';
 import { Footer } from './Footer';
@@ -56,6 +56,10 @@ function readShallowDismissed(): boolean {
  * 라우터 컨텍스트 안에서 마운트해야 한다(useLocation/AppModeSync 의존).
  */
 export function AppShell({ children }: { children: ReactNode }): ReactElement {
+  // i18n(태스크 #12) — 언어 변경 시 chrome 재렌더 구독. t 는 i18next(미스 키는 window.I18n 폴백).
+  //   memo 된 chrome(UpdateBadge/UpdateModal/DashboardWarning)에 t={t} 로 주입 → 언어 변경 시 t ref 변화로
+  //   memo 가 풀려 라벨이 갱신된다(t={t} 안정 ref 였다면 memo 가 막아 stale).
+  const { t } = useTranslation();
   const location = useLocation();
   const setAppMode = useAppStore((s) => s.setAppMode);
 
@@ -146,17 +150,17 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
     <>
       <div className="app-shell" data-testid="app-shell">
       {/* 연결 실패 배너 — .app-shell grid row1(auto). main-layout 보다 먼저 와야 row 정합. */}
-      <ErrorBanner visible={!connected} onRetry={onRetry} t={tt} />
+      <ErrorBanner visible={!connected} onRetry={onRetry} t={t} />
 
       <div className={`main-layout${leftPanelHidden ? ' left-panel-hidden' : ''}`}>
-        <AppRail appMode={activeMode} onSelect={setAppMode} t={tt} />
+        <AppRail appMode={activeMode} onSelect={setAppMode} t={t} />
         {/* 좌측 패널 접기 토글(원본 sidebar-edge-toggle) — ⌘B 단축키와 동작 공유. */}
         <button
           className="sidebar-edge-toggle"
           id="btnPanelCollapse"
           type="button"
-          title={tt('ui.html.sidebar-toggle.title')}
-          aria-label={tt('ui.html.sidebar-toggle.aria')}
+          title={t('ui.html.sidebar-toggle.title')}
+          aria-label={t('ui.html.sidebar-toggle.aria')}
           onClick={toggleLeftPanel}
         >
           <svg className="ds-chevron" data-dir={leftPanelHidden ? 'right' : 'left'} aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -167,7 +171,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
         {children}
       </div>
 
-      <Footer onHelp={onHelp} t={tt} />
+      <Footer onHelp={onHelp} t={t} />
       </div>
 
       {/* fallback 배지(버그 #6) — 사이드바가 없는 모드(settings)에서만 노출한다. browse/metadocs 는
@@ -182,7 +186,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
           currentVersion={view.currentVersion}
           latestTag={view.latestTag}
           onOpen={openModal}
-          t={tt}
+          t={t}
         />
       </div>
       <UpdateModal
@@ -192,14 +196,14 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
         onConfirm={onConfirmUpdate}
         onCancel={closeModal}
         onClose={closeModal}
-        t={tt}
+        t={t}
       />
 
       <DashboardWarning
         visible={isShallow && !shallowDismissed}
         onDismiss={onDismissShallow}
         onCopy={onCopyShallow}
-        t={tt}
+        t={t}
       />
     </>
   );

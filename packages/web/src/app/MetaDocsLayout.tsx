@@ -34,6 +34,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement, RefObject } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   MetaDocsCatalog,
   MetaDocsFilterBar,
@@ -158,6 +159,9 @@ function MetaCatalogColResize({ tableRef }: { tableRef: RefObject<HTMLTableEleme
 }
 
 export function MetaDocsLayout(): ReactElement {
+  // i18n(태스크 #12) — 언어 변경 구독. i18n.language 를 labeler 의존성으로 memo 된 자식(MetaProjectList 등)
+  //   갱신 + 직접 tt() 는 재렌더로 재평가(window.I18n 동기). reload 불요.
+  const { i18n } = useTranslation();
   // 라우팅/스코프 SSoT — app-store.
   const metaSubTab = useAppStore((s) => s.metaSubTab);
   const setMetaSubTab = useAppStore((s) => s.setMetaSubTab);
@@ -197,7 +201,7 @@ export function MetaDocsLayout(): ReactElement {
   const [toolsLoading, setToolsLoading] = useState(false);
   const [toolSort, setToolSort] = useState<{ key: ToolStatsSortKey; dir: ToolSortDir }>(DEFAULT_TOOL_SORT);
 
-  const labeler: SidebarLabeler = useMemo(() => makeI18nLabeler(), []);
+  const labeler: SidebarLabeler = useMemo(() => makeI18nLabeler(), [i18n.language]);
 
   // date-filter 드롭다운 열림(트리거 토글 + 바깥클릭 닫기) — BrowseLayout 과 동일 패턴.
   const [dateOpen, setDateOpen] = useState(false);

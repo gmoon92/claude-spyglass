@@ -42,6 +42,7 @@ import {
 import { useVersionStore } from '../../stores/version-store';
 import { useObsCards } from './use-obs-cards';
 import { usePanelResize } from './use-panel-resize';
+import { useTranslation } from 'react-i18next';
 import { tt } from '../../app/i18n-labeler';
 
 /** 패널 크롬 라벨(thead/세션 panel-label) — 레거시 정적 i18n(ui.html.left-panel / session-panel.label).
@@ -93,6 +94,8 @@ export function BrowseSidebar({
   chromeLabels,
   versionT,
 }: BrowseSidebarProps): ReactElement {
+  // i18n(태스크 #12) — 언어 변경 구독(재렌더 → tt 재평가, window.I18n 동기값 반영).
+  useTranslation();
   const obs = useObsCards(obsIntervalMs != null ? { intervalMs: obsIntervalMs } : {});
   const { panelRef, widthHandleRef, vTopHandleRef, vBottomHandleRef, vProjectsRef, vSessionsRef, vToolsRef } =
     usePanelResize();

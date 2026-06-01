@@ -26,6 +26,7 @@
 // 레이어(architecture.md §1.3): app → features(browse/dashboard/session-detail) + stores 정방향.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ReactElement } from 'react';
 import type { ProjectLike, SidebarLabeler } from '../features/browse/Sidebar';
 import { BrowseSidebar } from '../features/browse';
@@ -75,6 +76,9 @@ const FALLBACK_TOKENS: ChartTokens = {
 type FeedRowLike = { id?: string | null; [k: string]: unknown };
 
 export function BrowseLayout(): ReactElement {
+  // i18n(태스크 #12) — 언어 변경 구독. i18n.language 를 labeler useMemo 의존성으로 사용해 memo 된 자식
+  //   (BrowseSidebar→MemoProjectList/MemoSessionList · 메모 Chart)에 새 labeler ref 를 전달, reload 없이 갱신.
+  const { i18n } = useTranslation();
   // 좌측 세션 캐시 + 라이브 피드 — sse-store SSoT.
   const sessions = useSSEStore((s) => s.sessions);
   const setSessions = useSSEStore((s) => s.setSessions);
@@ -113,7 +117,7 @@ export function BrowseLayout(): ReactElement {
   // cache-panel-overall(/api/stats/cache) — 레거시 fetchCacheStats→renderCachePanel 복원.
   const [cacheStats, setCacheStats] = useState<CacheStats | null>(null);
 
-  const labeler: SidebarLabeler = useMemo(() => makeI18nLabeler(), []);
+  const labeler: SidebarLabeler = useMemo(() => makeI18nLabeler(), [i18n.language]);
 
   // detail 활성 판정 — rightView==='detail' && 선택 세션 존재.
   const detailActive = rightView === 'detail' && !!selectedSession;
@@ -282,7 +286,7 @@ export function BrowseLayout(): ReactElement {
       countUnit: (countText) => tt('ui.chart.count-unit', { count: countText }),
       noData: () => tt('ui.chart.no-data'),
     }),
-    [],
+    [i18n.language],
   );
 
   // timeline-meta i18n 라벨러 — 원본 index.html data-i18n 키(ui.html.timeline-meta.*) 1:1.

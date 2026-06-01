@@ -17,6 +17,7 @@ import {
   SettingsHeader,
 } from '../features/settings';
 import { Toast } from '../components/settings/Toast';
+import { useTranslation } from 'react-i18next';
 import { tt } from './i18n-labeler';
 
 /** 6 sub-tab 식별자(settings-view.js 탭 순서 1:1). */
@@ -60,6 +61,8 @@ function renderPanel(
 }
 
 export function SettingsLayout(): ReactElement {
+  // i18n(태스크 #12) — 언어 변경 구독(재렌더 → tt/renderPanel 재평가, window.I18n 동기값 반영, reload 불요).
+  useTranslation();
   const [tab, setTab] = useState<SettingsTab>('diag');
   // 새로고침 카운터 — 증가 시 활성 패널을 remount 시켜 useAsyncResource 재페치(원본 renderActiveTab 재실행 :131).
   const [refreshKey, setRefreshKey] = useState(0);
