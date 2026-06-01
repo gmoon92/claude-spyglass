@@ -16,7 +16,7 @@
     "test": "bun run --filter '*' test",
     "typecheck": "tsc --noEmit",
     "prepare": "git config core.hooksPath .githooks",
-    "postinstall": "bun run web:build",
+    "postinstall": "bun run scripts/daily-cleanup.ts && bun run web:build",
     "web:build": "bun run --cwd packages/web build",
     "web:dev": "bun run --cwd packages/web dev",
     "backfill:system-prompts": "bun run packages/server/scripts/backfill-system-prompts.ts",
