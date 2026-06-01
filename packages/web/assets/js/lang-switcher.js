@@ -42,13 +42,14 @@
     syncSelect(el, i18n.getLang());
 
     // 사용자가 드롭다운 변경 시 언어 전환
+    //   (태스크 #12) 과거 setLang 후 window.location.reload() 로 SPA 를 통째로 새로고침했다. 이제
+    //   React 측이 react-i18next 로 반응형 전환한다: setLang → I18n.onChange 리스너(main.tsx 브릿지)가
+    //   i18next.changeLanguage 를 호출 → useTranslation 구독 컴포넌트가 reload 없이 재렌더된다.
+    //   따라서 하드 리로드를 제거한다(SPA 상태 보존).
     el.addEventListener('change', function () {
       const selected = el.value;
       if (selected && i18n.getSupportedLangs().includes(selected)) {
-        i18n.setLang(selected).then(function () {
-          // setLang 완료 후 페이지 리로드(i18n.js setLang 구현에 따라 리로드 없으면 수동 실행)
-          window.location.reload();
-        }).catch(function (err) {
+        i18n.setLang(selected).catch(function (err) {
           console.error('[lang-switcher] setLang failed:', err);
         });
       }
