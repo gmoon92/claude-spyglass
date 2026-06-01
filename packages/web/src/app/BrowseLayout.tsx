@@ -43,6 +43,7 @@ import { useAppStore } from '../stores/app-store';
 import type { PresetValue } from '../stores/app-store';
 import { makeI18nLabeler, tt } from './i18n-labeler';
 import { deriveBrowseData } from './browse-data';
+import { rangeToParams, rangeToMetricParams } from './compute-range';
 import {
   fetchDashboard,
   fetchAllSessions,
@@ -234,17 +235,26 @@ export function BrowseLayout(): ReactElement {
   // detail 활성 판정 — rightView==='detail' && 선택 세션 존재.
   const detailActive = rightView === 'detail' && !!selectedSession;
 
-  // 마운트 1회 population — 전체 기간({}) 기준 초기 로드.
+  // population — activeRange 기준 로드. 마운트 1회 + activeRange 변경 시 재조회(date-filter-propagation).
+  //   레거시 api.js: range 변경 → cs:active-range-changed → buildQuery(getDateRange()) 로 요청/통계/세션
+  //   재조회. React 에선 activeRange 를 effect 의존성으로 두어 동일 재조회를 선언적으로 재현한다.
+  //   range→params 변환은 compute-range(app 계층 어댑터, 레거시 computeRange/getMetricRangeParams 1:1):
+  //     - REST(requests/dashboard/sessions/stats/cache): rangeToParams → {} | {from,to}
+  //     - metrics(model-usage donut): rangeToMetricParams → {from,to} | {range:'all'}
+  //   'all'/null 은 {} (전체) — 서버 기본. 재조회 결과가 빈 배열이어도 셸/피드 테이블 구조는 유지되어
+  //   콘텐츠가 사라지지 않는다(행만 0개). fetcher 는 실패 시 안전 폴백([]/null)이라 throw 로 언마운트 없음.
   useEffect(() => {
     const ctrl = new AbortController();
     const { signal } = ctrl;
+    const restRange = rangeToParams(activeRange);
+    const metricRange = rangeToMetricParams(activeRange);
     (async () => {
       const [dashboard, modelUsage, allSessions, requests, cache] = await Promise.all([
-        fetchDashboard({}, signal),
-        fetchModelUsage({}),
-        fetchAllSessions({}, 500, signal),
-        fetchRequests({ limit: 200 }, signal),
-        fetchCacheStats({}, signal),
+        fetchDashboard(restRange, signal),
+        fetchModelUsage(metricRange),
+        fetchAllSessions(restRange, 500, signal),
+        fetchRequests({ limit: 200, range: restRange }, signal),
+        fetchCacheStats(restRange, signal),
       ]);
       if (signal.aborted) return;
       const derived = deriveBrowseData(dashboard);
@@ -261,7 +271,7 @@ export function BrowseLayout(): ReactElement {
       /* silent — fetcher 가 이미 안전 폴백(null/[]). UI 는 빈 상태 유지(원본 silent catch 동치). */
     });
     return () => ctrl.abort();
-  }, [setSessions]);
+  }, [setSessions, activeRange]);
 
   // 진입 시 프로젝트 auto-select — 레거시 autoActivateProject(main.js:242) 1:1.
   //   selectedProject 가 비어있고 데이터가 도착하면 가장 최근 활동 프로젝트를 선택해 세션 리스트를 노출한다

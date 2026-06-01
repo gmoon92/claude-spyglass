@@ -58,6 +58,20 @@ export interface DateRangeDropdownProps {
   onApplyCustom?: (from: number, to: number) => void;
 }
 
+/**
+ * input[type=date] 의 ISO(YYYY-MM-DD) → 로컬 자정 ms. 레거시 isoDateToLocalMs 1:1.
+ *   Date.parse(ISO) 는 UTC 자정으로 해석되어 TZ 만큼 어긋나므로 쓰지 않는다(원본 동일 회피).
+ *   endOfDay=true 면 23:59:59.999 로 — 종료일을 그날 전체 포함(레거시 to 계약).
+ */
+function isoDateToLocalMs(iso: string, endOfDay = false): number {
+  if (!iso) return NaN;
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return NaN;
+  const dt = new Date(y, m - 1, d, 0, 0, 0, 0);
+  if (endOfDay) dt.setHours(23, 59, 59, 999);
+  return dt.getTime();
+}
+
 /** 활성 range 에서 현재 선택 프리셋 값(custom 이면 매칭 없음 → null). */
 function selectedPreset(ar: ActiveRange): string | null {
   if (ar && ar.type === 'preset') return ar.value;
@@ -132,14 +146,15 @@ export function DateRangeDropdown({
             className="ds-dropdown-footer-apply"
             data-role="custom-apply"
             onClick={(e) => {
-              // 명령형 검증(90일/순서)은 후속 hooks. 여기선 인접 input 값을 읽어 통지만.
+              // 인접 input 값을 읽어 로컬 자정(from)/종일(to) ms 로 변환 후 통지(레거시 applyCustomRange 1:1).
+              //   from <= to 순서 가드(레거시 동치) — 역순/무효는 무시(no-op). 90일 경고는 후속 hooks.
               const footer = (e.currentTarget.closest('.ds-dropdown-footer') as HTMLElement) ?? null;
               const fromEl = footer?.querySelector<HTMLInputElement>('[data-role="custom-from"]');
               const toEl = footer?.querySelector<HTMLInputElement>('[data-role="custom-to"]');
               if (!fromEl || !toEl) return;
-              const from = Date.parse(fromEl.value);
-              const to = Date.parse(toEl.value);
-              if (Number.isFinite(from) && Number.isFinite(to)) onApplyCustom?.(from, to);
+              const from = isoDateToLocalMs(fromEl.value, false);
+              const to = isoDateToLocalMs(toEl.value, true);
+              if (Number.isFinite(from) && Number.isFinite(to) && from <= to) onApplyCustom?.(from, to);
             }}
           >
             {labeler.customApply()}
