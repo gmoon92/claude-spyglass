@@ -138,29 +138,41 @@ const PROJECT_TOOL_LABEL_EXPR = `
  *   - 신뢰도/event_type/type 필터는 `getSessionToolStats`와 동일 유지(SSoT).
  *   - Agent/Skill 세분화: `PROJECT_TOOL_LABEL_EXPR` 참조 (subagent_type / skill 이름 단위 행 분리).
  */
+/**
+ * 프로젝트 단위(또는 전체) 도구 통계.
+ * @param projectName 프로젝트명. null 이면 모든 프로젝트 합산(전체 집계 — 메타 '전체' 선택 대응).
+ */
 export function getProjectToolStats(
   db: Database,
-  projectName: string,
+  projectName: string | null,
   fromTs?: number,
   toTs?: number
 ): SessionToolStats[] {
+  // projectName null → project_name 필터 제거(전체 세션). 그 외엔 sessions JOIN 으로 프로젝트 한정.
+  const hasProject = projectName != null;
+  const projectClause = hasProject
+    ? 'session_id IN (SELECT id FROM sessions WHERE project_name = ?)'
+    : '1=1';
+
   const tsConds: string[] = [];
-  const params: (number | string)[] = [projectName];
-  if (fromTs) { tsConds.push('timestamp >= ?'); params.push(fromTs); }
-  if (toTs)   { tsConds.push('timestamp <= ?'); params.push(toTs); }
+  if (fromTs) tsConds.push('timestamp >= ?');
+  if (toTs)   tsConds.push('timestamp <= ?');
   const tsWhereExtra = tsConds.length ? ' AND ' + tsConds.join(' AND ') : '';
 
-  // CTE는 같은 timestamp 범위를 다시 적용 — 세션 단위 함수와 동일 패턴(전체 분모 = 동일 필터 합).
-  // params 순서: project(CTE), [from(CTE)], [to(CTE)], project(main), [from(main)], [to(main)]
-  const cteParams: (number | string)[] = [projectName];
+  // params 순서: [project(CTE)], [from(CTE)], [to(CTE)], [project(main)], [from(main)], [to(main)].
+  //   projectClause 가 1=1 이면 project 바인딩은 생략한다.
+  const cteParams: (number | string)[] = hasProject ? [projectName as string] : [];
   if (fromTs) cteParams.push(fromTs);
   if (toTs)   cteParams.push(toTs);
+  const params: (number | string)[] = hasProject ? [projectName as string] : [];
+  if (fromTs) params.push(fromTs);
+  if (toTs)   params.push(toTs);
 
   return db.query(`
     WITH project_total AS (
       SELECT COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE 0 END), 1) AS total
       FROM requests
-      WHERE session_id IN (SELECT id FROM sessions WHERE project_name = ?)
+      WHERE ${projectClause}
         AND (event_type IS NULL OR event_type = 'tool')
         ${tsWhereExtra}
     )
@@ -176,7 +188,7 @@ export function getProjectToolStats(
       SUM(CASE WHEN tokens_confidence='error' THEN 1 ELSE 0 END) AS confidence_error_count,
       ROUND(COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE 0 END), 0) * 100.0 / (SELECT total FROM project_total), 1) AS pct_of_total_tokens
     FROM requests
-    WHERE session_id IN (SELECT id FROM sessions WHERE project_name = ?)
+    WHERE ${projectClause}
       AND type = 'tool_call'
       AND tool_name IS NOT NULL
       AND (event_type IS NULL OR event_type = 'tool')

@@ -379,7 +379,10 @@ const helperFallthrough: RouteHandler = (_req, db, url, path, method) => {
   // 프로젝트 단위 도구별 성능 매트릭스. getSessionToolStats와 동일 컬럼 + has_low_confidence 파생.
   const projectToolStatsMatch = path.match(/^\/api\/projects\/([^/]+)\/tool-stats$/);
   if (projectToolStatsMatch && method === 'GET') {
-    const projectName = decodeURIComponent(projectToolStatsMatch[1]);
+    const projectNameRaw = decodeURIComponent(projectToolStatsMatch[1]);
+    // 전체 보기 sentinel(클라이언트 GLOBAL_PROJECT_KEY) → null = 모든 프로젝트 합산 도구 통계.
+    //   (메타 '전체' 선택 시 도구 탭이 빈 상태로 보이던 회귀 수정.)
+    const projectName = projectNameRaw === '__global__' || projectNameRaw === '__all__' ? null : projectNameRaw;
     const fromTs = url.searchParams.get('from') ? parseInt(url.searchParams.get('from')!, 10) : undefined;
     const toTs   = url.searchParams.get('to')   ? parseInt(url.searchParams.get('to')!,   10) : undefined;
     const rows = getProjectToolStats(db, projectName, fromTs, toTs);
