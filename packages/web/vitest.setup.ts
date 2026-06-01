@@ -9,3 +9,46 @@
 //   TZ=UTC 고정 → (1) 기존 골든마스터와 byte 동치 보존, (2) 개발자 머신·CI 무관 결정론 확보.
 //   setupFiles 는 각 테스트 워커에서 테스트 평가 전에 실행되므로 toLocaleTimeString 호출 시점에 적용된다.
 process.env.TZ = 'UTC';
+
+// ── Node 22.4+/25 네이티브 webstorage 차폐 해소 ──
+//
+// 이유: Node 22.4+ 는 `--experimental-webstorage` 기능으로 전역 `localStorage`/`sessionStorage` 를
+//   lazy getter(configurable) 로 globalThis 에 선점 정의한다. 이 getter 는 `--localstorage-file`
+//   플래그 없이 접근하면 `SecurityError: Cannot initialize local storage without a --localstorage-file
+//   path` 를 던지며, vitest 의 jsdom 환경이 깔아 둔 localStorage 를 가린다(globalThis === window 라
+//   window.localStorage 접근도 동일하게 throw). → 24개 모듈이 의존하는 storage 테스트가 호스트 Node
+//   버전에 따라 전부 실패하거나(Node 22.4+) 통과(Node 20)하는 비결정성이 생긴다.
+//
+//   해소: getter 가 configurable 이므로 결정론적 in-memory Storage 로 재정의한다. TZ 고정과 동일한
+//   "개발자 머신·CI 무관 결정론" 범주의 테스트 인프라 보정이다(검증 의도 보존, 단언 약화 없음).
+class MemoryStorage implements Storage {
+  private readonly store = new Map<string, string>();
+  get length(): number {
+    return this.store.size;
+  }
+  clear(): void {
+    this.store.clear();
+  }
+  getItem(key: string): string | null {
+    return this.store.has(key) ? (this.store.get(key) as string) : null;
+  }
+  key(index: number): string | null {
+    return [...this.store.keys()][index] ?? null;
+  }
+  removeItem(key: string): void {
+    this.store.delete(key);
+  }
+  setItem(key: string, value: string): void {
+    this.store.set(String(key), String(value));
+  }
+  [name: string]: unknown;
+}
+
+for (const name of ['localStorage', 'sessionStorage'] as const) {
+  Object.defineProperty(globalThis, name, {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value: new MemoryStorage(),
+  });
+}
