@@ -244,7 +244,7 @@ export function BrowseLayout(): ReactElement {
 
       <main className="right-panel" data-testid="browse-main">
         {/* ── chartSection(원본 :395) — 차트 섹션 카드. CSS 는 #chartSection/.view-section 키. ── */}
-        <div className={`view-section card card--compact${chartCollapsed ? ' collapsed' : ''}`} id="chartSection">
+        <div className={`view-section card card--compact${chartCollapsed ? ' chart-collapsed' : ''}`} id="chartSection">
           <div className="view-section-header">
             {/* default-meta(원본 chart-default-meta) — 30분 sliding 타임라인 고정 라벨. */}
             <div className="chart-default-meta">
@@ -301,15 +301,16 @@ export function BrowseLayout(): ReactElement {
               </button>
             </div>
           </div>
+          {/* charts-inner(원본 default-view.css) — grid 2fr/1fr. Chart 가 .chart-wrap(timeline) +
+              .donut-section>.donut-wrap(donut) 2-셀을 직접 출력하므로 여기서 추가 래핑하지 않는다
+              (래핑하면 직계 자식이 1개 → 2fr/1fr grid 붕괴, 도넛이 타임라인 아래로 어긋남 — WP14 버그). */}
           <div className="charts-inner">
-            <div className="chart-wrap" data-ctx-tooltip="context-growth">
-              <Chart
-                dataByKind={dataByKind}
-                donutMode={donutMode}
-                timelineBuckets={timelineBuckets}
-                tokens={FALLBACK_TOKENS}
-              />
-            </div>
+            <Chart
+              dataByKind={dataByKind}
+              donutMode={donutMode}
+              timelineBuckets={timelineBuckets}
+              tokens={FALLBACK_TOKENS}
+            />
           </div>
         </div>
 

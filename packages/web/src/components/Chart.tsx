@@ -342,17 +342,29 @@ function ChartImpl({
     };
   }, [timelineBuckets, locale]);
 
+  // 레거시 default-view.css 의 .charts-inner(grid 2fr 1fr) 2-셀 구조를 그대로 출력한다(WP14).
+  //   - 좌(2fr): .chart-wrap > #timelineChart — timeline canvas. data-ctx-tooltip 은 호출처가
+  //     타임라인 영역에 붙이던 context-growth 툴팁 앵커(원본 index.html .chart-wrap 과 1:1).
+  //   - 우(1fr): .donut-section > .donut-wrap > #typeChart.donut-canvas — donut canvas + border-left.
+  //   두 캔버스의 레이아웃 관계는 Chart 가 단독 소유하므로 wrapper 도 컴포넌트 내부에 캡슐화한다
+  //   (호출처가 .chart-wrap 으로 한 번 더 감싸면 .charts-inner 직계 자식이 1개가 되어 grid 가 붕괴).
   return (
     <>
-      <canvas id="timelineChart" ref={timelineRef} height={64} />
-      <canvas
-        id="typeChart"
-        className="donut-canvas"
-        ref={donutRef}
-        width={DONUT_SIZE}
-        height={DONUT_SIZE}
-        style={donutStyle}
-      />
+      <div className="chart-wrap" data-ctx-tooltip="context-growth">
+        <canvas id="timelineChart" ref={timelineRef} height={64} />
+      </div>
+      <div className="donut-section">
+        <div className="donut-wrap">
+          <canvas
+            id="typeChart"
+            className="donut-canvas"
+            ref={donutRef}
+            width={DONUT_SIZE}
+            height={DONUT_SIZE}
+            style={donutStyle}
+          />
+        </div>
+      </div>
     </>
   );
 }

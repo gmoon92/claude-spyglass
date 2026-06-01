@@ -104,6 +104,23 @@ canvas { display: block; }
   margin-left: auto;
 }
 
+/* date-range-anchor (WP16) — browse 차트 헤더의 date-filter 드롭다운 위치 보정.
+ *   원시 .ds-dropdown-menu 는 position:fixed + top/left:0 으로, 레거시는 JS util/floating-position.js
+ *   (positionFloating, align:'end'·preferBelow:true)가 매 open 시 viewport 좌표를 갱신해 트리거 하단에
+ *   띄웠다. React 진입에는 그 JS 가 없어 메뉴가 화면 좌상단에 고정되는 회귀가 발생한다.
+ *   여기선 #dateFilter 컨텍스트로만 스코프해 CSS 앵커(트리거를 positioned ancestor 로) 로 대체한다 —
+ *   공유 primitive(dropdown.css) 와 meta 컨텍스트는 건드리지 않는다(SSoT 분리).
+ *   align:'end' → right:0, preferBelow + GAP(4px) → top: calc(100% + 4px). */
+#chartSection #dateFilter .ds-dropdown {
+  position: relative;
+}
+#chartSection #dateFilter .ds-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: auto;
+}
+
 /* ── HEADER STAT chip — 단일 위계 inline-flex baseline (ADR-007) ────────────
    `.header-stat*` 시각 클래스 SSoT 유지 (api.js / stat-tooltip.js / 상태 클래스 호환).
    라벨/값 순서: 값 → 라벨 (큰 숫자 먼저). chip은 어디 있든 동일 외관.
