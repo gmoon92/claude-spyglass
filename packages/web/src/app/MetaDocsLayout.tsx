@@ -111,6 +111,32 @@ function pickFlowRow(rows: MetaDocRow[]): FlowActiveRow | null {
   return { type: pick.type, name: pick.name, id: toFlowId(pick.id) };
 }
 
+/**
+ * 동기화 아이콘 — 원본 svgRefresh({size:12})(design-system/icons/refresh.ts) 1:1 JSX 이식.
+ *   stroke-only currentColor, viewBox 0 0 16 16. is-loading 클래스에서 meta-docs-spin 회전(CSS).
+ *   MetaDocsFilterBar.TrashIcon 선례와 동일하게 dangerouslySetInnerHTML 대신 선언 JSX.
+ */
+function RefreshIcon(): ReactElement {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      width={12}
+      height={12}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2.5 8a5.5 5.5 0 0 1 9.4-3.9" />
+      <path d="M13.5 8a5.5 5.5 0 0 1-9.4 3.9" />
+      <path d="M9.5 4.5h2.5V2" />
+      <path d="M6.5 11.5H4V14" />
+    </svg>
+  );
+}
+
 export function MetaDocsLayout(): ReactElement {
   // 라우팅/스코프 SSoT — app-store.
   const metaSubTab = useAppStore((s) => s.metaSubTab);
@@ -131,6 +157,14 @@ export function MetaDocsLayout(): ReactElement {
   // flow 활성 행 — null 이면 첫 행 자동 중심(pickFlowRow). 행 클릭/재중심 시 명시 지정.
   const [activeRow, setActiveRow] = useState<FlowActiveRow | null>(null);
 
+  // 동기화(재스캔) 트리거 — 원본 thead-sync-btn[data-meta-left-refresh] runRefresh(meta-docs-view.js:1001).
+  //   레거시는 POST /api/meta-docs/refresh(재스캔) 후 loadMetaDocsLibrary(카탈로그 재조회). fetchers.ts 는
+  //   본 작업 범위 밖(수정 금지)이라 refresh 엔드포인트 호출은 두지 않고, 카탈로그 재fetch 만 동치로 결선한다
+  //   (refreshKey 증가 → 카탈로그 useEffect 재실행 = "알려진 cwd 재조회" 동등 — CLAUDE 지침).
+  //   syncing 은 in-flight 동안 버튼 disabled + .is-loading(스피너) 표시(레거시 runRefresh 의 disabled/is-loading 동치).
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+
   // tools 탭 도구 통계 — null=미로드(빈 매트릭스). 정렬은 컨트롤드(원본 tool-stats.js 전역 폐기).
   const [toolStats, setToolStats] = useState<ToolStatRow[] | null>(null);
   const [toolSort, setToolSort] = useState<{ key: ToolStatsSortKey; dir: ToolSortDir }>(DEFAULT_TOOL_SORT);
@@ -149,7 +183,9 @@ export function MetaDocsLayout(): ReactElement {
   // flow 활성 행 — 명시 지정 우선, 없으면 정렬 대상 첫 초점 행 자동 선택.
   const flowRow = activeRow ?? pickFlowRow(typeFiltered);
 
-  // 카탈로그 population — 프로젝트 변경 시 재조회(전체 기간). SSR 미발화 → 빈 rows 결정적 렌더.
+  // 카탈로그 population — 프로젝트 변경/동기화 클릭(refreshKey) 시 재조회(전체 기간).
+  //   SSR 미발화 → 빈 rows 결정적 렌더. refreshKey 증가도 본 effect 를 재실행해 카탈로그를 재조회한다
+  //   (원본 runRefresh→loadMetaDocsLibrary 동치 — 재스캔 결과를 카탈로그/좌측 카운트에 반영).
   useEffect(() => {
     const ctrl = new AbortController();
     const { signal } = ctrl;
@@ -162,11 +198,15 @@ export function MetaDocsLayout(): ReactElement {
       setRows(list as unknown as MetaDocRow[]);
       setProjects(deriveBrowseData(dashboard).projects);
       setActiveRow(null); // 프로젝트 변경 시 자동 첫 행 중심으로 리셋.
-    })().catch(() => {
-      /* silent — fetcher 가 이미 안전 폴백([]/null). 빈 카탈로그 유지(원본 silent catch 동치). */
-    });
+    })()
+      .catch(() => {
+        /* silent — fetcher 가 이미 안전 폴백([]/null). 빈 카탈로그 유지(원본 silent catch 동치). */
+      })
+      .finally(() => {
+        if (!signal.aborted) setSyncing(false); // in-flight 완료 → 버튼 복원(레거시 finally 동치).
+      });
     return () => ctrl.abort();
-  }, [selectedProject]);
+  }, [selectedProject, refreshKey]);
 
   // tools 탭 도구 통계 population — 원본 tool-stats.js loadProjectToolStats(view.js:311 onActivate).
   //   탭 진입('tools') / 프로젝트 변경 시 재조회(전체 기간 — 카탈로그 fetch 와 동형, range 미부착).
@@ -203,6 +243,14 @@ export function MetaDocsLayout(): ReactElement {
     setActiveRow({ type: row.type, name: row.name, id: toFlowId(row.id) });
   };
 
+  // 동기화 버튼 클릭 → 카탈로그 재조회 트리거(원본 runRefresh 재스캔+재조회 동치).
+  //   in-flight(syncing) 중 중복 클릭은 무시(레거시 buttonEl.disabled 가드 동치).
+  const onSync = (): void => {
+    if (syncing) return;
+    setSyncing(true);
+    setRefreshKey((k) => k + 1);
+  };
+
   const showTools = metaSubTab === 'tools';
 
   return (
@@ -222,6 +270,38 @@ export function MetaDocsLayout(): ReactElement {
         <div className="panel-section flex-section" id="browserProjectsSection">
           <div className="panel-body">
             <table className="browser-projects-table">
+              {/* colgroup — 원본 index.html(:178) 3컬럼 폭(이름 가변 | 항목 52px | 동기화 92px). */}
+              <colgroup>
+                <col />
+                <col style={{ width: '52px' }} />
+                <col style={{ width: '92px' }} />
+              </colgroup>
+              {/* metadocs thead(원본 tr.thead-metadocs, index.html:192) — [프로젝트 | 항목 | 동기화].
+                  browse thead 는 metadocs 전용 레이아웃이라 미렌더(원본은 body[data-app-mode] CSS 로 단일 행만
+                  노출했지만 본 컴포넌트는 metadocs 모드 전용이므로 metadocs thead 만 직접 렌더). 마지막 th 가
+                  동기화 셀(.thead-sync-cell) — 재스캔/재조회 버튼(원본 data-meta-left-refresh runRefresh). */}
+              <thead>
+                <tr className="thead-metadocs">
+                  <th>{tt('ui.html.left-panel.th-project') || 'Project'}</th>
+                  <th style={{ textAlign: 'right' }}>{tt('ui.html.left-panel.th-item') || 'Items'}</th>
+                  <th className="thead-sync-cell">
+                    <button
+                      type="button"
+                      className={syncing ? 'thead-sync-btn is-loading' : 'thead-sync-btn'}
+                      data-meta-left-refresh="1"
+                      title={tt('ui.html.left-panel.sync-title')}
+                      aria-label={tt('ui.html.left-panel.sync-title')}
+                      disabled={syncing}
+                      onClick={onSync}
+                    >
+                      <span className="thead-sync-icon" aria-hidden="true">
+                        <RefreshIcon />
+                      </span>
+                      <span className="thead-sync-label">{tt('ui.html.left-panel.sync-label') || 'Sync'}</span>
+                    </button>
+                  </th>
+                </tr>
+              </thead>
               <tbody>
                 <Sidebar
                   projects={projects}
