@@ -18,7 +18,7 @@
 //
 // 레이어(architecture.md §1.3): app → features/hooks/stores/components 정방향(역참조 0).
 
-import { useEffect, useRef } from 'react';
+import { Suspense, lazy, useEffect, useRef } from 'react';
 import type { ReactElement } from 'react';
 import {
   BrowserRouter, MemoryRouter, Routes, Route,
@@ -27,9 +27,13 @@ import {
 import { useAppStore } from '../stores/app-store';
 import { ROUTE_PATHS, appModeToPath, pathToAppMode } from './app-mode-route';
 import { BrowseLayout } from './BrowseLayout';
-import { MetaDocsLayout } from './MetaDocsLayout';
-import { SettingsLayout } from './SettingsLayout';
 import { AppShell } from './AppShell';
+
+// Chunk-6 지연 로딩(감사 §1) — MetaDocs/Settings 는 SSE 무관·사용자 탐색 시에만 진입하므로
+//   메인 번들에서 분리해 별도 청크로 lazy fetch 한다(browse 초기 로드 경량화). named export →
+//   default 로 래핑(React.lazy 계약). BrowseLayout 은 기본/폴백 경로라 동기 유지(분리 이득 낮음).
+const MetaDocsLayout = lazy(() => import('./MetaDocsLayout').then((m) => ({ default: m.MetaDocsLayout })));
+const SettingsLayout = lazy(() => import('./SettingsLayout').then((m) => ({ default: m.SettingsLayout })));
 
 /**
  * appMode ↔ URL 양방향 동기 — main.js applyAppMode(body[data-app-mode]) 의 선언적 대체.
@@ -84,15 +88,19 @@ export function AppModeSync(): null {
  */
 export function AppRoutes(): ReactElement {
   return (
-    <Routes>
-      <Route path={ROUTE_PATHS.browse} element={<BrowseLayout />} />
-      <Route path={ROUTE_PATHS.metadocs} element={<MetaDocsLayout />} />
-      <Route path={ROUTE_PATHS.settings} element={<SettingsLayout />} />
-      {/* 미지 경로 → BrowseLayout 직접 렌더(main.js applyAppMode 무효값 가드 1:1).
-          Navigate(리다이렉트) 대신 직접 마운트해 SSR 단일 렌더에서도 결정적으로 browse 를 노출하고,
-          클라이언트에서는 AppModeSync 가 store.appMode='browse' 로 정정하며 '/' 로 URL 을 정규화한다. */}
-      <Route path="*" element={<BrowseLayout />} />
-    </Routes>
+    // Suspense — lazy(MetaDocs/Settings) 청크 fetch 중 가림막. fallback=null(브라우저 전환 시 짧은 공백,
+    //   추가 마크업 없음). browse/미지 경로는 동기라 즉시 렌더(Suspense 무발화).
+    <Suspense fallback={null}>
+      <Routes>
+        <Route path={ROUTE_PATHS.browse} element={<BrowseLayout />} />
+        <Route path={ROUTE_PATHS.metadocs} element={<MetaDocsLayout />} />
+        <Route path={ROUTE_PATHS.settings} element={<SettingsLayout />} />
+        {/* 미지 경로 → BrowseLayout 직접 렌더(main.js applyAppMode 무효값 가드 1:1).
+            Navigate(리다이렉트) 대신 직접 마운트해 SSR 단일 렌더에서도 결정적으로 browse 를 노출하고,
+            클라이언트에서는 AppModeSync 가 store.appMode='browse' 로 정정하며 '/' 로 URL 을 정규화한다. */}
+        <Route path="*" element={<BrowseLayout />} />
+      </Routes>
+    </Suspense>
   );
 }
 
