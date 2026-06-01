@@ -16,7 +16,7 @@
  *
  * @module features/meta-docs/MetaDocsCatalog
  */
-import type { ReactElement } from 'react';
+import type { ReactElement, RefObject } from 'react';
 import { SortHead, type SortState } from '../../components/design-system/markers/SortHead';
 import { MetaDocTypeBadge } from './MetaDocTypeBadge';
 import {
@@ -63,6 +63,8 @@ export interface MetaDocsCatalogProps {
   onRowClick?: (row: MetaDocRow) => void;
   /** 활성 flow 행 식별(data-flow-active 표시 — P4-03 단방향 계약). name 매칭. */
   activeRowName?: string | null;
+  /** 카탈로그 <table> ref — 호출처(MetaDocsLayout)가 useColResize 로 컬럼 리사이즈 부착(병존). */
+  tableRef?: RefObject<HTMLTableElement>;
   t?: TFunc;
 }
 
@@ -117,6 +119,7 @@ export function MetaDocsCatalog({
   onSort,
   onRowClick,
   activeRowName = null,
+  tableRef,
   t = defaultT,
 }: MetaDocsCatalogProps): ReactElement {
   // 표시필터 → 정렬(순수 lib). 원본 loadMetaDocsLibrary 순서(view.js:521-522) 동치.
@@ -142,7 +145,7 @@ export function MetaDocsCatalog({
   }
 
   return (
-    <table className="meta-docs-table">
+    <table className="meta-docs-table" ref={tableRef}>
       <colgroup>
         {COL_WIDTHS.map((w, i) => (
           <col key={i} style={{ width: w }} />

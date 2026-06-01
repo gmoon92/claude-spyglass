@@ -32,8 +32,8 @@
 //
 // 레이어(architecture.md §1.3): app → features(meta-docs/browse/dashboard) + stores 정방향.
 
-import { useEffect, useMemo, useState } from 'react';
-import type { ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactElement, RefObject } from 'react';
 import {
   MetaDocsCatalog,
   MetaDocsFilterBar,
@@ -45,6 +45,7 @@ import {
   fetchProjectToolStats,
   nextSort,
   DEFAULT_SORT,
+  applyDisplayFilter,
   type MetaDocRow,
   type MetaDocSortKey,
   type SortDir,
@@ -53,6 +54,8 @@ import {
   type MetaFilterGroup,
   type FlowActiveRow,
 } from '../features/meta-docs';
+import { useColResize } from '../components/use-col-resize';
+import { useMetaDocsPanelResize } from '../features/browse/use-panel-resize';
 import {
   nextSort as nextToolSort,
   DEFAULT_SORT as DEFAULT_TOOL_SORT,
@@ -137,6 +140,17 @@ function RefreshIcon(): ReactElement {
   );
 }
 
+/**
+ * 카탈로그 테이블 컬럼 리사이즈 결선기 — useColResize(`[]` deps, 마운트 1회 부착)를
+ *   테이블이 실제 존재할 때만 마운트시키기 위한 얇은 래퍼. 호출처가 present(테이블 존재) 토글에
+ *   따라 key 를 바꿔 remount → 테이블 등장/구조 변화 시 핸들을 재부착(레거시 매-렌더 initColResize 동치).
+ *   storageKey='metadocs' 로 피드('feed')·syslib('syslib') 와 영속 분리.
+ */
+function MetaCatalogColResize({ tableRef }: { tableRef: RefObject<HTMLTableElement> }): null {
+  useColResize(tableRef, { storageKey: 'metadocs' });
+  return null;
+}
+
 export function MetaDocsLayout(): ReactElement {
   // 라우팅/스코프 SSoT — app-store.
   const metaSubTab = useAppStore((s) => s.metaSubTab);
@@ -171,6 +185,13 @@ export function MetaDocsLayout(): ReactElement {
 
   const labeler: SidebarLabeler = useMemo(() => makeI18nLabeler(), []);
 
+  // 리사이저 결선(레거시 미결선 갭 — react-resize.md §2.2) — browse 와 동일 메커니즘 재사용.
+  //   vTopHandleRef → #panelVerticalHandle(프로젝트 ↔ 요약카드), flowHandleRef → #metaDocsFlowHandle
+  //   (flow ↔ 카탈로그), catalogAreaRef → .meta-docs-catalog-area. vProjectsRef → #browserProjectsSection.
+  const { vTopHandleRef, vProjectsRef, flowHandleRef, catalogAreaRef } = useMetaDocsPanelResize();
+  // 카탈로그 테이블 컬럼 리사이즈(원본 col-resize.js, storageKey='metadocs') — 테이블 ref 는 레이아웃 소유.
+  const catalogTableRef = useRef<HTMLTableElement>(null);
+
   // 타입 필터 적용 — 원본 state.type(meta-docs-view.js:858) 동치. all 이면 통과.
   const typeFiltered = useMemo(
     () => (type === 'all' ? rows : rows.filter((r) => String(r.type ?? '') === type)),
@@ -182,6 +203,13 @@ export function MetaDocsLayout(): ReactElement {
 
   // flow 활성 행 — 명시 지정 우선, 없으면 정렬 대상 첫 초점 행 자동 선택.
   const flowRow = activeRow ?? pickFlowRow(typeFiltered);
+
+  // 카탈로그 테이블 렌더 여부(MetaDocsCatalog 가 표시필터 적용 후 행이 있으면 <table>, 없으면 empty-state).
+  //   col-resize 결선기(MetaCatalogColResize)는 테이블이 실제 존재할 때만 마운트해야 핸들이 thead 에 붙는다.
+  const catalogHasRows = useMemo(
+    () => applyDisplayFilter(typeFiltered, display).length > 0,
+    [typeFiltered, display],
+  );
 
   // 카탈로그 population — 프로젝트 변경/동기화 클릭(refreshKey) 시 재조회(전체 기간).
   //   SSR 미발화 → 빈 rows 결정적 렌더. refreshKey 증가도 본 effect 를 재실행해 카탈로그를 재조회한다
@@ -267,7 +295,7 @@ export function MetaDocsLayout(): ReactElement {
         {/* ── 프로젝트 섹션(원본 #browserProjectsSection) — panel-body 가 flex:1 + overflow-y:auto 로
             220px 고정 트랙 안에서 자체 스크롤(레거시 동치). 테이블을 직접 grid 자식으로 두면 self-scroll 이
             사라지고 row1 에 박혀 잘리던 회귀를 본 래퍼가 해소. ── */}
-        <div className="panel-section flex-section" id="browserProjectsSection">
+        <div className="panel-section flex-section" id="browserProjectsSection" ref={vProjectsRef}>
           <div className="panel-body">
             <table className="browser-projects-table">
               {/* colgroup — 원본 index.html(:178) 3컬럼 폭(이름 가변 | 항목 52px | 동기화 92px). */}
@@ -322,11 +350,13 @@ export function MetaDocsLayout(): ReactElement {
         </div>
 
         {/* ── 프로젝트 ↔ 요약카드 상하 분할 핸들(원본 #panelVerticalHandle, :260). metadocs grid row2(8px).
-            드래그 결선(left-panel-vertical-resize)은 본 레이아웃 범위 밖 — 시각 핸들만(레거시도 동일 마크업). ── */}
+            useMetaDocsPanelResize(vTopHandleRef)가 드래그 결선 — --projects-panel-height + spyglass:panel-split,
+            computeAvailable metadocs 분기로 .left-panel 전체 높이 clamp(원본 initPanelVerticalResize 동치). ── */}
         <div
           className="panel-vertical-handle"
           id="panelVerticalHandle"
           title="Drag to resize height"
+          ref={vTopHandleRef}
         />
 
         {/* 좌측 요약 카드(원본 #metaDocsSummaryCards / renderLeftSummaryCards:399) — 사용/미사용/orphan + behavior mini-bar.
@@ -402,14 +432,17 @@ export function MetaDocsLayout(): ReactElement {
             onRecenter={(row) => setActiveRow(row)}
             t={tt}
           />
-          {/* resize 핸들(원본 flowHandle:662) — left-panel-vertical-resize 부착은 후속(시각 핸들만). */}
+          {/* resize 핸들(원본 flowHandle:662) — useMetaDocsPanelResize(flowHandleRef)가 드래그 결선.
+              --meta-docs-flow-height + spyglass:meta-docs-flow-split, top=#metaDocsFlowRegion / bottom=.meta-docs-catalog-area
+              (원본 initMetaDocsFlowResize 동치 — topEl 이 .left-panel 자손이 아니라 normal-path 가용높이). */}
           <div
             className="panel-vertical-handle meta-docs-flow-handle"
             id="metaDocsFlowHandle"
             title="Drag to resize height"
+            ref={flowHandleRef}
           />
           {/* 카탈로그 영역(원본 .meta-docs-catalog-area:673) — 1fr + overflow-y:auto. */}
-          <div className="meta-docs-catalog-area">
+          <div className="meta-docs-catalog-area" ref={catalogAreaRef}>
             {/* 필터 바(원본 renderFilters:836) — type/display/includeDeleted + 검색(.meta-docs-filters 내부). */}
             <div className="meta-docs-filters">
               <MetaDocsFilterBar
@@ -427,7 +460,8 @@ export function MetaDocsLayout(): ReactElement {
                 onSearch={setSearchTerm}
               />
             </div>
-            {/* 카탈로그 테이블(원본 head:680) — 정렬/표시필터/검색 위임(meta-docs-sort). */}
+            {/* 카탈로그 테이블(원본 head:680) — 정렬/표시필터/검색 위임(meta-docs-sort).
+                tableRef 로 컬럼 리사이즈(useColResize) 부착(원본 col-resize.js, storageKey='metadocs'). */}
             <MetaDocsCatalog
               rows={typeFiltered}
               sort={sort}
@@ -438,8 +472,16 @@ export function MetaDocsLayout(): ReactElement {
               onSort={onSort}
               onRowClick={onRowClick}
               activeRowName={flowRow?.name ?? null}
+              tableRef={catalogTableRef}
               t={tt}
             />
+            {/* col-resize 결선기 — 테이블이 실제 존재할 때만 마운트(catalogHasRows key 로 등장 시 재부착). */}
+            {catalogHasRows ? (
+              <MetaCatalogColResize
+                key={`metadocs-colresize-${String(catalogHasRows)}`}
+                tableRef={catalogTableRef}
+              />
+            ) : null}
           </div>
         </div>
 

@@ -26,8 +26,12 @@ import type { RefObject } from 'react';
 const WIDTH_STORAGE_KEY = 'spyglass:panel-width';
 const SPLIT_TOP_STORAGE_KEY = 'spyglass:panel-split'; // 프로젝트 ↔ 세션 (원본 STORAGE_KEY)
 const SPLIT_BOTTOM_STORAGE_KEY = 'spyglass:panel-split-bottom'; // 세션 ↔ obs (원본 STORAGE_KEY_BOTTOM)
+const META_FLOW_STORAGE_KEY = 'spyglass:meta-docs-flow-split'; // flow ↔ 카탈로그 (원본 STORAGE_KEY_METADOCS)
 const PROJECTS_HEIGHT_VAR = '--projects-panel-height';
 const SESSIONS_HEIGHT_VAR = '--sessions-panel-height';
+const META_FLOW_HEIGHT_VAR = '--meta-docs-flow-height';
+const META_FLOW_REGION_ID = 'metaDocsFlowRegion'; // MetaDocsFlow 가 소유하는 ego-graph 컨테이너 id(셀렉터 계약)
+const META_SUMMARY_ID = 'metaDocsSummaryCards'; // MetaDocsSummaryCards 가 소유하는 요약카드 컨테이너 id(셀렉터 계약)
 const SECTION_MIN_PX = 80; // 각 상하 섹션 최소 높이(원본 left-panel-vertical-resize.js MIN_PX)
 
 /** design-tokens.css --panel-resize-min/max 읽기(원본 getMinMax, 폴백 180/480). */
@@ -47,8 +51,19 @@ function setLeftPanelWidth(px: number): number {
   return clamped;
 }
 
-/** 두 섹션 가용 높이(원본 computeAvailable 의 normal path — browse 모드). */
+/**
+ * 두 섹션 가용 높이(원본 computeAvailable 1:1).
+ *  - normal path(browse, 그리고 metadocs flow↔카탈로그): topEl + bottomEl 합.
+ *  - metadocs 좌측 패널(프로젝트 ↔ 요약카드): 하단 요약카드(~50px)가 너무 작아 available-MIN_PX<MIN_PX
+ *    가 되어 clamp 범위가 무너진다 → topEl 의 .left-panel 조상 전체 높이를 가용 공간으로 사용(원본 동치).
+ *    이 분기는 body[data-app-mode='metadocs'] 이고 topEl 이 .left-panel 자손일 때만 발동하므로
+ *    browse 동작·metadocs flow 핸들(topEl 이 .left-panel 자손이 아님)에는 영향이 없다.
+ */
 function computeAvailable(topEl: HTMLElement, bottomEl: HTMLElement): number {
+  if (document.body.dataset.appMode === 'metadocs') {
+    const panel = topEl.closest('.left-panel');
+    if (panel) return panel.getBoundingClientRect().height;
+  }
   return topEl.getBoundingClientRect().height + bottomEl.getBoundingClientRect().height;
 }
 
@@ -214,4 +229,54 @@ export function usePanelResize(): UsePanelResizeRefs {
   }, []);
 
   return { panelRef, widthHandleRef, vTopHandleRef, vBottomHandleRef, vProjectsRef, vSessionsRef, vToolsRef };
+}
+
+export interface UseMetaDocsPanelResizeRefs {
+  /** #panelVerticalHandle(metadocs) — 프로젝트 섹션 ↔ 요약카드 상하 분할 핸들. */
+  vTopHandleRef: RefObject<HTMLDivElement>;
+  /** #browserProjectsSection — 프로젝트 섹션(top 핸들의 위쪽). */
+  vProjectsRef: RefObject<HTMLDivElement>;
+  /** #metaDocsFlowHandle — flow-region ↔ 카탈로그 상하 분할 핸들. */
+  flowHandleRef: RefObject<HTMLDivElement>;
+  /** .meta-docs-catalog-area — flow 핸들의 아래쪽(카탈로그 영역). */
+  catalogAreaRef: RefObject<HTMLDivElement>;
+}
+
+/**
+ * metadocs 모드 좌측 패널·flow 리사이저 훅 — 레거시 미결선 2핸들을 browse 와 동일 메커니즘으로 결선.
+ *  - #panelVerticalHandle: 프로젝트 섹션 ↔ 요약카드(원본 initPanelVerticalResize, --projects-panel-height /
+ *    spyglass:panel-split). computeAvailable 의 metadocs 분기가 .left-panel 전체 높이로 clamp 범위를 확보한다.
+ *  - #metaDocsFlowHandle: flow-region ↔ 카탈로그(원본 initMetaDocsFlowResize, --meta-docs-flow-height /
+ *    spyglass:meta-docs-flow-split). topEl(#metaDocsFlowRegion)은 MetaDocsFlow 소유라 id 셀렉터로 resolve.
+ *
+ * browse 의 usePanelResize 와 동일한 wireVerticalHandle 을 재사용하므로 시그니처/동작은 변하지 않는다.
+ */
+export function useMetaDocsPanelResize(): UseMetaDocsPanelResizeRefs {
+  const vTopHandleRef = useRef<HTMLDivElement>(null);
+  const vProjectsRef = useRef<HTMLDivElement>(null);
+  const flowHandleRef = useRef<HTMLDivElement>(null);
+  const catalogAreaRef = useRef<HTMLDivElement>(null);
+
+  // ── 프로젝트 섹션 ↔ 요약카드(원본 initPanelVerticalResize, metadocs 좌측). ──
+  //   bottomEl(요약카드)은 MetaDocsSummaryCards 소유(#metaDocsSummaryCards)라 id 로 resolve.
+  //   metadocs 모드에서는 computeAvailable 이 .left-panel 전체 높이를 쓰므로 bottomEl 은 null-check 용.
+  useEffect(() => {
+    const handle = vTopHandleRef.current;
+    const topEl = vProjectsRef.current;
+    const bottomEl = document.getElementById(META_SUMMARY_ID) as HTMLElement | null;
+    if (!handle || !topEl || !bottomEl) return;
+    return wireVerticalHandle(handle, topEl, bottomEl, PROJECTS_HEIGHT_VAR, SPLIT_TOP_STORAGE_KEY);
+  }, []);
+
+  // ── flow-region ↔ 카탈로그(원본 initMetaDocsFlowResize). topEl 은 MetaDocsFlow 소유라 id 로 resolve. ──
+  //   카탈로그(catalogArea) 마운트 후에 발화. flow region 이 아직 없으면(미발화) no-op 후 정리.
+  useEffect(() => {
+    const handle = flowHandleRef.current;
+    const bottomEl = catalogAreaRef.current;
+    const topEl = document.getElementById(META_FLOW_REGION_ID) as HTMLElement | null;
+    if (!handle || !topEl || !bottomEl) return;
+    return wireVerticalHandle(handle, topEl, bottomEl, META_FLOW_HEIGHT_VAR, META_FLOW_STORAGE_KEY);
+  }, []);
+
+  return { vTopHandleRef, vProjectsRef, flowHandleRef, catalogAreaRef };
 }

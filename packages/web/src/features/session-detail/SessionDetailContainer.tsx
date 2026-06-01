@@ -29,16 +29,58 @@
  * @see packages/web/assets/js/session-detail/turn-views.js#setDetailView (원본 탭 스위치, :569-585)
  * @see packages/web/assets/js/views/detail-view.js#loadSession (원본 세션 로드)
  */
-import { Fragment, useCallback, useState, type ReactElement } from 'react';
+import { Fragment, useCallback, useMemo, useRef, useState, type ReactElement, type RefObject } from 'react';
 import { useAppStore } from '../../stores/app-store';
 import { LLMInput } from '../llm-input/LLMInput';
 import { SystemPromptLibrary } from '../dashboard/SystemPromptLibrary';
-import type { SysLibSortKey, SortDir } from '../dashboard/syslib-sort';
+import type { SysLibSortKey, SortDir, SysLibRow } from '../dashboard/syslib-sort';
 import { Tab } from '../../components/design-system/primitives/Tab';
+import { useColResize } from '../../components/use-col-resize';
 import { DetailView } from './DetailView';
 import { useSessionDetail } from './use-session-detail';
 import { useSessionLoad, type SessionAnomalies } from './detail-view';
 import { useLlmInput, useSystemPromptLibrary } from './use-detail-aux';
+
+/**
+ * System 프롬프트 라이브러리 표 + 컬럼 리사이즈 결선(원본 system-prompt-library.js:107 initColResize 동치).
+ *  - SystemPromptLibrary(dashboard 소유)는 tableRef 를 받지 않으므로 #sysLibBody 안의 `.syslib-table` 를
+ *    셀렉터로 resolve 하는 RefObject 를 useColResize 에 전달한다(SystemPromptLibrary 마크업 .syslib-table 계약).
+ *  - 표는 rows>0 일 때만 렌더되므로(빈 상태 분기), 본 래퍼는 rows 가 있을 때만 마운트해 핸들이 thead 에 붙게 한다.
+ *    storageKey='syslib' 로 피드('feed')·metadocs('metadocs') 와 영속 분리.
+ */
+function SysLibPane({
+  rows,
+  sort,
+  onSort,
+}: {
+  rows: SysLibRow[] | null;
+  sort: { key: SysLibSortKey; dir: SortDir };
+  onSort: (key: SysLibSortKey) => void;
+}): ReactElement {
+  const bodyRef = useRef<HTMLDivElement>(null);
+  // useColResize 가 effect 안에서 1회 읽는 tableRef.current 를 #sysLibBody 내부 .syslib-table 로 lazy resolve.
+  const tableRef = useMemo<RefObject<HTMLTableElement>>(
+    () => ({
+      get current(): HTMLTableElement | null {
+        return bodyRef.current?.querySelector<HTMLTableElement>('.syslib-table') ?? null;
+      },
+    }),
+    [],
+  );
+  const hasRows = !!rows && rows.length > 0;
+  return (
+    <div id="sysLibBody" className="syslib-body" role="region" aria-label="System prompt library" ref={bodyRef}>
+      <SystemPromptLibrary rows={rows} sort={sort} onSort={onSort} />
+      {hasRows ? <SysLibColResize key={`syslib-colresize-${String(hasRows)}`} tableRef={tableRef} /> : null}
+    </div>
+  );
+}
+
+/** useColResize(`[]` deps)를 표 존재 시점에 마운트하기 위한 얇은 결선기(MetaCatalogColResize 선례). */
+function SysLibColResize({ tableRef }: { tableRef: RefObject<HTMLTableElement> }): null {
+  useColResize(tableRef, { storageKey: 'syslib' });
+  return null;
+}
 
 declare const window: { I18n: { t: (key: string, vars?: Record<string, unknown>) => string } };
 
@@ -145,9 +187,7 @@ export function SessionDetailContainer({
       // System 라이브러리 — 원본 #detailSysLibView.detail-content > #sysLibBody.syslib-body 구조 복원.
       return (
         <div id="detailSysLibView" className="detail-content">
-          <div id="sysLibBody" className="syslib-body" role="region" aria-label="System prompt library">
-            <SystemPromptLibrary rows={syslib.rows as never} sort={sysSort} onSort={onSysSort} />
-          </div>
+          <SysLibPane rows={syslib.rows as never} sort={sysSort} onSort={onSysSort} />
         </div>
       );
     }
