@@ -25,7 +25,7 @@
 //
 // 레이어(architecture.md §1.3): app → features(browse/dashboard/session-detail) + stores 정방향.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { ProjectLike, SidebarLabeler } from '../features/browse/Sidebar';
 import { BrowseSidebar } from '../features/browse';
@@ -214,6 +214,16 @@ export function BrowseLayout(): ReactElement {
     [selectedProject, setSelectedProject, setSelectedSession, setRightView],
   );
 
+  // BrowseSidebar 콜백 — useCallback으로 안정화해 MemoProjectList/SessionList 의 memo를 보호.
+  const handleSelectProject = useCallback((p: string) => setSelectedProject(p), [setSelectedProject]);
+  const handleSelectSession = useCallback(
+    (id: string) => {
+      setSelectedSession(id);
+      setRightView('detail');
+    },
+    [setSelectedSession, setRightView],
+  );
+
   // 피드 테이블 컬럼 리사이즈(원본 col-resize.js) — useColResize 가 th 핸들 부착/드래그/영속.
   const feedTableRef = useRef<HTMLTableElement>(null);
   useColResize(feedTableRef, { storageKey: 'feed' });
@@ -362,11 +372,8 @@ export function BrowseLayout(): ReactElement {
         selectedSession={selectedSession}
         sessionsLoading={sessionsLoading}
         labeler={labeler}
-        onSelectProject={(p) => setSelectedProject(p)}
-        onSelectSession={(id) => {
-          setSelectedSession(id);
-          setRightView('detail');
-        }}
+        onSelectProject={handleSelectProject}
+        onSelectSession={handleSelectSession}
       />
 
       <main className="right-panel" data-testid="browse-main">
@@ -518,9 +525,9 @@ export function BrowseLayout(): ReactElement {
                     </tr>
                   </thead>
                   <tbody id="requestsBody">
-                    {filteredFeedRows.map((r) => (
+                    {filteredFeedRows.map((r, i) => (
                       <RequestRow
-                        key={(r.id as string) ?? Math.random()}
+                        key={(r.id as string) ?? i}
                         r={r}
                         opts={{ showSession: true, onGotoSession }}
                       />

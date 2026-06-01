@@ -13,7 +13,7 @@
  *
  * @module render/RequestRow
  */
-import { Fragment, useState, type MouseEvent, type ReactElement, type ReactNode } from 'react';
+import { Fragment, memo, useMemo, useState, type MouseEvent, type ReactElement, type ReactNode } from 'react';
 import {
   escHtml,
   fmtToken,
@@ -117,8 +117,9 @@ function TargetCellWithBadges({ r, extra }: { r: RowLike; extra: ReactNode }): R
 /**
  * 단일 요청 행 — 원본 rows.js#makeRequestRow.
  * 전체 피드 + 세션 flat 뷰 공용. 모든 td 에 data-cell 부여.
+ * memo: feed 200행이 SSE 이벤트마다 재렌더되는 비용을 props 안정 시 생략.
  */
-export function RequestRow({ r, opts = {} }: { r: RowLike; opts?: RequestRowOpts }): ReactElement {
+export const RequestRow = memo(function RequestRow({ r, opts = {} }: { r: RowLike; opts?: RequestRowOpts }): ReactElement {
   const fmtTs = opts.fmtTime || fmtTimestamp;
   const flags = opts.anomalyFlags || null;
   const rid = r.id ?? '';
@@ -164,7 +165,12 @@ export function RequestRow({ r, opts = {} }: { r: RowLike; opts?: RequestRowOpts
   else if (bsStage === 'critical') bloatedRowCls = ' row-bloated-critical';
 
   const trustCls = rowTrustClass(r);
-  const haystack = buildSearchHaystack(r);
+  // r 객체 참조가 바뀌어도 실제 검색 관련 필드가 변하지 않으면 재연산 생략.
+  const haystack = useMemo(
+    () => buildSearchHaystack(r),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [r.id, r.type, r.model, r.tool_name, r.tool_detail, r.preview],
+  );
   const rowCls = (trustCls + bloatedRowCls).trim();
 
   // 원본은 spikeLoopBadges(HTML) + bloatedMini(HTML) 를 Target 셀 </td> 직전에 합류.
@@ -243,7 +249,7 @@ export function RequestRow({ r, opts = {} }: { r: RowLike; opts?: RequestRowOpts
     {expanded && rid ? <PromptExpandRow rid={rid} cols={opts.expandCols ?? FEED_EXPAND_COLS} /> : null}
     </Fragment>
   );
-}
+});
 
 // escHtml 은 SSoT 재사용 명시(원본 행 속성 이스케이프와 동일 의미; React 자동 이스케이프로 동치).
 export { escHtml };
