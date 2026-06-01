@@ -12,7 +12,7 @@
     "status": "bun run packages/server/src/index.ts status",
     "doctor": "bun run packages/server/src/cli.ts doctor",
     "tui": "bun run packages/tui/src/index.tsx",
-    "test": "bun test",
+    "test": "bun run --filter '*' test",
     "typecheck": "tsc --noEmit",
     "prepare": "git config core.hooksPath .githooks",
     "backfill:system-prompts": "bun run packages/server/scripts/backfill-system-prompts.ts",
