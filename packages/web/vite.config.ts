@@ -129,10 +129,20 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     emptyOutDir: true,
-    sourcemap: true,
+    // 운영 빌드 소스맵 비활성(감사 §1) — 2MB+ .map 운영 노출 제거 + 빌드 산출 경량화.
+    //   디버깅이 필요하면 환경변수로 일시 활성: SPYGLASS_SOURCEMAP=1 npm run build.
+    sourcemap: process.env.SPYGLASS_SOURCEMAP === '1',
     rollupOptions: {
       // 운영 진입(P4-10): index.html(#react-root) 단일 엔트리. 구 index.react.html 은 P5-01 정리 대상.
       input: resolve(__dirname, 'index.html'),
+      output: {
+        // vendor 분리(감사 §1) — 변경 빈도 낮은 node_modules(react/router/zustand 등)를 별도 청크로
+        //   격리해 앱 코드 변경 시 vendor 청크 캐시 히트를 유지(브라우저 재다운로드 감소).
+        manualChunks(id) {
+          if (id.includes('node_modules')) return 'vendor';
+          return undefined;
+        },
+      },
     },
   },
   server: {
