@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
-import { MetaDocsSummaryCards } from '../MetaDocsSummaryCards';
+import { MetaDocsSummaryCards, MetaDocsBehaviorBars } from '../MetaDocsSummaryCards';
 import type { MetaDocRow, DisplayFilter } from '../meta-docs-sort';
 
 beforeAll(() => {
@@ -44,8 +44,24 @@ describe('MetaDocsSummaryCards — 좌측 요약 카드 (원본 renderLeftSummar
     expect(html).toContain('data-value="unused"');
     expect(html).toContain('data-value="orphan"');
   });
-  it('behavior mini-bar — obs-panel.js#renderToolCategoriesCard 모드 B 마크업(obs-cat-bar/obs-meta-row) 1:1', () => {
+  it('요약 카드 컨테이너는 카드만 직계로 — mini-bar 는 분리됨(레거시 #metaDocsToolStats 별도 트랙)', () => {
+    // 레거시 #metaDocsSummaryCards{flex-direction:row}+ .card{flex:1 1 0} 가 3카드를 가로 균등 분배하려면
+    // 카드가 직계 자식이어야 하고, mini-bar 는 별 트랙(#metaDocsToolStats)에 있어야 함. 카드 컨테이너에 bar 부재 가드.
     const html = renderToStaticMarkup(createElement(MetaDocsSummaryCards, { rows: ROWS, onSelectDisplay: noop }));
+    expect(html).toContain('id="metaDocsSummaryCards"');
+    expect(html).not.toContain('obs-meta-row');
+    // 중간 wrapper 제거 회귀 가드(flex 분배 깨짐 방지).
+    expect(html).not.toContain('meta-docs-summary-cards-row');
+  });
+});
+
+describe('MetaDocsBehaviorBars — behavior mini-bar (원본 #metaDocsToolStats / renderToolCategoriesCard 모드 B)', () => {
+  it('obs-panel.js#renderToolCategoriesCard 모드 B 마크업(obs-cat-bar/obs-meta-row) 1:1 + 별도 컨테이너', () => {
+    const html = renderToStaticMarkup(createElement(MetaDocsBehaviorBars, { rows: ROWS }));
+    // 레거시 좌측 툴스탯 컨테이너(#metaDocsToolStats > .obs-panel) — grid row4 트랙.
+    expect(html).toContain('id="metaDocsToolStats"');
+    expect(html).toContain('meta-docs-tool-stats');
+    expect(html).toContain('obs-panel');
     // 컨테이너 + 행 — obs-panel.css 가 grid 스타일을 가진 SSoT 클래스.
     expect(html).toContain('obs-card-tools obs-card-meta-docs');
     expect(html).toContain('obs-meta-row');
@@ -60,9 +76,8 @@ describe('MetaDocsSummaryCards — 좌측 요약 카드 (원본 renderLeftSummar
     expect(html).toContain('agent');
     expect(html).toContain('command');
   });
-  it('빈 rows → mini-bar 미렌더(카드만)', () => {
-    const html = renderToStaticMarkup(createElement(MetaDocsSummaryCards, { rows: [], onSelectDisplay: noop }));
-    expect(html).toContain('meta-docs-summary-cards');
-    expect(html).not.toContain('obs-meta-row');
+  it('빈 rows → null(미렌더 — grid 트랙 0px)', () => {
+    const html = renderToStaticMarkup(createElement(MetaDocsBehaviorBars, { rows: [] }));
+    expect(html).toBe('');
   });
 });

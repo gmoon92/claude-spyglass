@@ -31,7 +31,12 @@ export {
 // ── P4-03: flow(ego-graph) + tool-stats ─────────────────────────────────────
 export { MetaDocsFlow, activeRowToFlowArgs, type MetaDocsFlowProps, type FlowActiveRow, type FlowArgs } from './MetaDocsFlow';
 export { MetaDocsToolStats, type MetaDocsToolStatsProps } from './MetaDocsToolStats';
-export { MetaDocsSummaryCards, type MetaDocsSummaryCardsProps } from './MetaDocsSummaryCards';
+export {
+  MetaDocsSummaryCards,
+  MetaDocsBehaviorBars,
+  type MetaDocsSummaryCardsProps,
+  type MetaDocsBehaviorBarsProps,
+} from './MetaDocsSummaryCards';
 export { fetchProjectToolStats, type FetchProjectToolStatsParams } from './tool-stats-fetcher';
 // flow 순수 lib (arch §4.2 추출 — 컴포넌트 effect 가 호출).
 export { computeFitView, animateToView, applyImmediate, easeInOutCubic, viewBoxStr, type ViewState } from './flow-camera';

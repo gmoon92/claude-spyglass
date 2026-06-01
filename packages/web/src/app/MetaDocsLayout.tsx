@@ -41,6 +41,7 @@ import {
   MetaDocsFlow,
   MetaDocsToolStats,
   MetaDocsSummaryCards,
+  MetaDocsBehaviorBars,
   fetchProjectToolStats,
   nextSort,
   DEFAULT_SORT,
@@ -207,27 +208,57 @@ export function MetaDocsLayout(): ReactElement {
   return (
     // Fragment — .main-layout grid 직계 자식으로 left-panel·metaDocsRoot 전개(원본 grid-column 3/4).
     <>
+      {/* 좌측 패널(left-panel) — metadocs 모드 grid 골격을 레거시 index.html(:167~) 과 1:1 정합.
+          left-panel.css 의 .left-panel 은 6-row CSS grid 이고, meta-docs.css(:688) 가 metadocs 모드에서
+          grid-template-rows 를 `var(--projects-panel-height,220px) auto auto auto 1fr auto` 로 재정의한다.
+          이 grid 는 위치형(positional) 자식 6벌(프로젝트섹션 → 핸들 → 요약카드 → 툴스탯 → filler → footer)을
+          전제하므로, 자식이 2개뿐이면(이전 회귀) 테이블이 220px 트랙에 잘리고 요약카드가 auto 트랙에서 stretch 된다.
+          따라서 레거시와 동일하게 #browserProjectsSection(panel-section flex-section > panel-body) +
+          #panelVerticalHandle + #metaDocsSummaryCards 순서로 조립한다. */}
       <aside className="left-panel" data-testid="meta-docs-sidebar">
-        <table className="browser-projects-table">
-          <tbody>
-            <Sidebar
-              projects={projects}
-              sessions={[]}
-              selectedProject={selectedProject}
-              selectedSession={null}
-              isMetaMode={true}
-              metaCounts={metaCounts}
-              labeler={labeler}
-              onSelectProject={(p) => setSelectedProject(p)}
-              onSelectSession={() => {
-                /* metadocs 모드에는 세션 행이 없음(원본 좌측 축약). no-op. */
-              }}
-            />
-          </tbody>
-        </table>
+        {/* ── 프로젝트 섹션(원본 #browserProjectsSection) — panel-body 가 flex:1 + overflow-y:auto 로
+            220px 고정 트랙 안에서 자체 스크롤(레거시 동치). 테이블을 직접 grid 자식으로 두면 self-scroll 이
+            사라지고 row1 에 박혀 잘리던 회귀를 본 래퍼가 해소. ── */}
+        <div className="panel-section flex-section" id="browserProjectsSection">
+          <div className="panel-body">
+            <table className="browser-projects-table">
+              <tbody>
+                <Sidebar
+                  projects={projects}
+                  sessions={[]}
+                  selectedProject={selectedProject}
+                  selectedSession={null}
+                  isMetaMode={true}
+                  metaCounts={metaCounts}
+                  labeler={labeler}
+                  onSelectProject={(p) => setSelectedProject(p)}
+                  onSelectSession={() => {
+                    /* metadocs 모드에는 세션 행이 없음(원본 좌측 축약). no-op. */
+                  }}
+                />
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* ── 프로젝트 ↔ 요약카드 상하 분할 핸들(원본 #panelVerticalHandle, :260). metadocs grid row2(8px).
+            드래그 결선(left-panel-vertical-resize)은 본 레이아웃 범위 밖 — 시각 핸들만(레거시도 동일 마크업). ── */}
+        <div
+          className="panel-vertical-handle"
+          id="panelVerticalHandle"
+          title="Drag to resize height"
+        />
+
         {/* 좌측 요약 카드(원본 #metaDocsSummaryCards / renderLeftSummaryCards:399) — 사용/미사용/orphan + behavior mini-bar.
-            카드 클릭 → display 필터 전환(원본 data-meta-filter="display" 동치). 카운트 SSoT 는 전체 카탈로그 rows. */}
+            카드 클릭 → display 필터 전환(원본 data-meta-filter="display" 동치). 카운트 SSoT 는 전체 카탈로그 rows.
+            컴포넌트 root 가 id=metaDocsSummaryCards 를 부여 — meta-docs.css 의 #metaDocsSummaryCards{display:flex}
+            (id 셀렉터) 가 가로 1줄 배치를 적용하므로 grid row3(auto) 에 콘텐츠 높이만 차지. */}
         <MetaDocsSummaryCards rows={rows} onSelectDisplay={setDisplay} t={tt} />
+
+        {/* behavior mini-bar(원본 #metaDocsToolStats / cardToolCategories, :274) — grid row4(auto).
+            요약 카드와 별도 컨테이너여야 가로폭 전체를 써 막대가 노출된다(둘을 한 flex-row 에 같이 두면 카드 옆에
+            붙어 눌리던 회귀). rows 비면 미렌더(트랙 0px). */}
+        <MetaDocsBehaviorBars rows={rows} />
       </aside>
 
       {/* ── metaDocsRoot(원본 :779) — Behavior Definitions 카탈로그 컨테이너(grid-column 3/4). ── */}

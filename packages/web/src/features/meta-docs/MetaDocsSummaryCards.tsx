@@ -53,52 +53,76 @@ function groupInvocationsByType(rows: ReadonlyArray<MetaDocRow>): Array<{ type: 
   return TYPE_ORDER.filter((type) => sums.has(type)).map((type) => ({ type, calls: sums.get(type) ?? 0 }));
 }
 
+/**
+ * 좌측 요약 카드 3개(사용/미사용/orphan) — 레거시 #metaDocsSummaryCards(index.html :266) 1:1.
+ *   - 3 카드는 컨테이너의 **직계 자식**이어야 한다. meta-docs.css 의 .meta-docs-summary-cards{flex-direction:row}
+ *     + .meta-docs-summary-card{flex:1 1 0} 이 가로 균등 분배를 하므로, 중간 wrapper(.meta-docs-summary-cards-row)
+ *     를 끼우면 flex 분배가 깨져 카드가 세로로 눌리던 회귀가 발생했다(본 수정의 원인). wrapper 제거.
+ *   - behavior mini-bar 는 레거시에서 별도 #metaDocsToolStats 트랙(grid row4)에 위치하므로, 본 컴포넌트가 아닌
+ *     MetaDocsBehaviorBars 로 분리됐다(그 둘을 한 flex-row 컨테이너에 같이 두면 카드 옆에 바가 붙어 눌린다).
+ */
 export function MetaDocsSummaryCards({ rows, onSelectDisplay, t = defaultT }: MetaDocsSummaryCardsProps): ReactElement {
   const counts = computeRowCounts(rows);
-  const bars = groupInvocationsByType(rows);
-  const maxCalls = Math.max(...bars.map((b) => b.calls), 1);
 
   return (
-    <div className="meta-docs-summary-cards" data-testid="meta-docs-summary-cards">
-      <div className="meta-docs-summary-cards-row">
-        <button
-          type="button"
-          className="meta-docs-summary-card meta-docs-summary-card--used"
-          data-meta-filter="display"
-          data-value="all"
-          title={t('ui.meta-docs-view.card-used-title')}
-          onClick={() => onSelectDisplay('all')}
-        >
-          <span className="meta-docs-summary-card-value">{counts.used}</span>
-          <span className="meta-docs-summary-card-label">{t('ui.meta-docs-view.card-used-label')}</span>
-        </button>
-        <button
-          type="button"
-          className="meta-docs-summary-card meta-docs-summary-card--unused"
-          data-meta-filter="display"
-          data-value="unused"
-          title={t('ui.meta-docs-view.card-unused-title')}
-          onClick={() => onSelectDisplay('unused')}
-        >
-          <span className="meta-docs-summary-card-value">{counts.unused}</span>
-          <span className="meta-docs-summary-card-label">{t('ui.meta-docs-view.card-unused-label')}</span>
-        </button>
-        <button
-          type="button"
-          className="meta-docs-summary-card meta-docs-summary-card--orphan"
-          data-meta-filter="display"
-          data-value="orphan"
-          title={t('ui.meta-docs-view.card-orphan-title')}
-          onClick={() => onSelectDisplay('orphan')}
-        >
-          <span className="meta-docs-summary-card-value">{counts.orphan}</span>
-          <span className="meta-docs-summary-card-label">orphan</span>
-        </button>
-      </div>
-      {bars.length > 0 ? (
-        // obs-panel.js#renderToolCategoriesCard 모드 B 1:1 — .obs-card-tools.obs-card-meta-docs 컨테이너에
-        // type 그룹별 .obs-meta-row. fill 은 obs-cat-bar-fill--agent ds-bar-fill[data-tone=warn] 이중 클래스
-        // (레거시 동일 — 모든 behavior 정의는 warn 톤). width 는 그룹합/최대그룹합 비율.
+    <div className="meta-docs-summary-cards" id="metaDocsSummaryCards" data-testid="meta-docs-summary-cards">
+      <button
+        type="button"
+        className="meta-docs-summary-card meta-docs-summary-card--used"
+        data-meta-filter="display"
+        data-value="all"
+        title={t('ui.meta-docs-view.card-used-title')}
+        onClick={() => onSelectDisplay('all')}
+      >
+        <span className="meta-docs-summary-card-value">{counts.used}</span>
+        <span className="meta-docs-summary-card-label">{t('ui.meta-docs-view.card-used-label')}</span>
+      </button>
+      <button
+        type="button"
+        className="meta-docs-summary-card meta-docs-summary-card--unused"
+        data-meta-filter="display"
+        data-value="unused"
+        title={t('ui.meta-docs-view.card-unused-title')}
+        onClick={() => onSelectDisplay('unused')}
+      >
+        <span className="meta-docs-summary-card-value">{counts.unused}</span>
+        <span className="meta-docs-summary-card-label">{t('ui.meta-docs-view.card-unused-label')}</span>
+      </button>
+      <button
+        type="button"
+        className="meta-docs-summary-card meta-docs-summary-card--orphan"
+        data-meta-filter="display"
+        data-value="orphan"
+        title={t('ui.meta-docs-view.card-orphan-title')}
+        onClick={() => onSelectDisplay('orphan')}
+      >
+        <span className="meta-docs-summary-card-value">{counts.orphan}</span>
+        <span className="meta-docs-summary-card-label">orphan</span>
+      </button>
+    </div>
+  );
+}
+
+export interface MetaDocsBehaviorBarsProps {
+  /** 전체 카탈로그 행 — type별 invocations 합 mini-bar 파생 입력. */
+  rows: ReadonlyArray<MetaDocRow>;
+}
+
+/**
+ * behavior별(agent/skill/command) 호출수 mini-bar — 레거시 좌측 #metaDocsToolStats(index.html :274) 트랙.
+ *   metadocs grid row4(auto) 의 단독 컨테이너로, 요약 카드(row3)와 분리돼야 가로폭 전체를 써 막대가 보인다.
+ *   마크업 SSoT 는 obs-panel.js#renderToolCategoriesCard 모드 B 1:1 — .obs-card-tools.obs-card-meta-docs >
+ *   .obs-meta-row[.obs-meta-name + .obs-cat-bar(.obs-cat-bar-fill--agent ds-bar-fill[data-tone=warn]) + .obs-cat-pct].
+ *   외곽 컨테이너는 레거시 .meta-docs-tool-stats(#metaDocsToolStats) — meta-docs.css 가 metadocs 모드에서
+ *   display:block 으로 노출하고 내부 .obs-panel padding 을 제공. rows 가 비면 미렌더(grid 트랙만 0px).
+ */
+export function MetaDocsBehaviorBars({ rows }: MetaDocsBehaviorBarsProps): ReactElement | null {
+  const bars = groupInvocationsByType(rows);
+  if (bars.length === 0) return null;
+  const maxCalls = Math.max(...bars.map((b) => b.calls), 1);
+  return (
+    <div className="meta-docs-tool-stats" id="metaDocsToolStats" data-testid="meta-docs-tool-stats">
+      <div className="obs-panel">
         <div className="obs-card-tools obs-card-meta-docs" role="list" aria-label="behavior calls by type">
           {bars.map((b) => {
             const pct = Math.round((b.calls / maxCalls) * 100);
@@ -120,7 +144,7 @@ export function MetaDocsSummaryCards({ rows, onSelectDisplay, t = defaultT }: Me
             );
           })}
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }
