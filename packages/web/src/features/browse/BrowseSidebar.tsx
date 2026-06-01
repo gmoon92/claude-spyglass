@@ -25,7 +25,7 @@
 //   - data-testid / 셀렉터 계약(panel-resize-handle, panel-vertical-handle, panel-section, obs-panel,
 //     left-panel-footer, update-badge, browser-projects-table) 보존.
 
-import { useState, type ReactElement } from 'react';
+import { type ReactElement } from 'react';
 import {
   ProjectList,
   SessionList,
@@ -38,9 +38,8 @@ import {
   CacheHealthCard,
   LivePulseCard,
   UpdateBadge,
-  UpdateModal,
-  useVersionCheck,
 } from '../dashboard';
+import { useVersionStore } from '../../stores/version-store';
 import { useObsCards } from './use-obs-cards';
 import { usePanelResize } from './use-panel-resize';
 import { tt } from '../../app/i18n-labeler';
@@ -71,10 +70,8 @@ export interface BrowseSidebarProps {
   obsIntervalMs?: number;
   /** 패널 크롬 라벨(thead/세션 헤더) — 미지정 시 레거시 영문 폴백. */
   chromeLabels?: BrowseSidebarChromeLabels;
-  /** UpdateBadge/Modal i18n 라벨러 — 미지정 시 컴포넌트 영문 폴백(key passthrough 호환). */
+  /** UpdateBadge i18n 라벨러 — 미지정 시 컴포넌트 영문 폴백(key passthrough 호환). */
   versionT?: BrowseSidebarVersionT;
-  /** 버전 폴링 주기(ms) — 미지정 시 useVersionCheck 기본(10분). 테스트에서 주입 가능. */
-  versionIntervalMs?: number;
 }
 
 const DEFAULT_T: BrowseSidebarVersionT = (key) => key;
@@ -95,13 +92,14 @@ export function BrowseSidebar({
   obsIntervalMs,
   chromeLabels,
   versionT,
-  versionIntervalMs,
 }: BrowseSidebarProps): ReactElement {
   const obs = useObsCards(obsIntervalMs != null ? { intervalMs: obsIntervalMs } : {});
   const { panelRef, widthHandleRef, vTopHandleRef, vBottomHandleRef, vProjectsRef, vSessionsRef, vToolsRef } =
     usePanelResize();
-  const version = useVersionCheck(versionIntervalMs != null ? { intervalMs: versionIntervalMs } : {});
-  const [modalOpen, setModalOpen] = useState(false);
+  // 버전 배지 — version-store 구독(단일 폴러는 AppShell 소유, 버그 #6). 자체 폴링/모달 미보유:
+  //   사이드바는 배지(트리거)만 렌더하고, 클릭 시 store.openModal 로 AppShell 모달을 연다.
+  const view = useVersionStore((s) => s.view);
+  const openModal = useVersionStore((s) => s.openModal);
   const t = versionT ?? DEFAULT_T;
 
   // 세션 패널 hint — renderBrowserSessions(:155/169) 1:1: 미선택 → select-project, 선택 → session-count.
@@ -216,27 +214,17 @@ export function BrowseSidebar({
         </div>
       </div>
 
-      {/* ── 6) footer — update-badge(available 클릭 시 UpdateModal). 레거시 .left-panel-footer. ── */}
+      {/* ── 6) footer — update-badge(available 클릭 시 store.openModal → AppShell 모달). 레거시 .left-panel-footer.
+          모달(UpdateModal)은 AppShell 이 단일 소유(버그 #6) — 사이드바는 트리거 배지만 렌더한다. ── */}
       <div className="left-panel-footer">
         <UpdateBadge
-          state={version.view.badge}
-          currentVersion={version.view.currentVersion}
-          latestTag={version.view.latestTag}
-          onOpen={() => setModalOpen(true)}
+          state={view.badge}
+          currentVersion={view.currentVersion}
+          latestTag={view.latestTag}
+          onOpen={openModal}
           t={t}
         />
       </div>
-
-      {/* UpdateModal — footer 와 동거(overlay 는 fixed). available 배지 클릭 시 open. */}
-      <UpdateModal
-        open={modalOpen}
-        currentVersion={version.cache?.currentVersion ?? version.view.currentVersion}
-        latestTag={version.cache?.latestTag ?? version.view.latestTag}
-        onConfirm={() => setModalOpen(false)}
-        onCancel={() => setModalOpen(false)}
-        onClose={() => setModalOpen(false)}
-        t={t}
-      />
     </aside>
   );
 }

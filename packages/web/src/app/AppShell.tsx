@@ -35,6 +35,7 @@ import {
   UpdateModal,
   useVersionCheck,
 } from '../features/dashboard';
+import { useVersionStore } from '../stores/version-store';
 import { copyToClipboard } from '../lib/clipboard';
 
 /** shallow warning dismiss 영속 키 — version-check.js SHALLOW_DISMISS_KEY(:50) 1:1. */
@@ -84,14 +85,19 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
   //   document 위임으로 [data-*-tooltip] / .cache-cell 감지 — per-component JSX 수정 없음.
   useTooltip();
 
-  // 버전 폴링 — 배지/캐시/shallow. SSR 에서는 effect 미발화 → 초기 loading/null/false.
+  // 버전 폴링 — 단일 폴러(앱 전체에서 AppShell 1곳만). SSR 에서는 effect 미발화 → 초기 loading/null/false.
+  //   결과를 version-store 에 기록해, 위치가 분리된 사이드바 배지(트리거)와 셸 모달/경고(오버레이)가
+  //   동일 SSoT 를 구독하게 한다(버그 #6 — 배지 이중 렌더 + 폴러 중복 제거).
   const { view, cache, isShallow } = useVersionCheck();
+  const setVersion = useVersionStore((s) => s.setVersion);
+  useEffect(() => {
+    setVersion({ view, cache, isShallow });
+  }, [view, cache, isShallow, setVersion]);
 
-  // 모달 open 셸 로컬 상태 — available 배지 클릭 시 진입(openModal 가드 1:1).
-  const [modalOpen, setModalOpen] = useState(false);
-  // 모달 토글 콜백 — memo(UpdateBadge/UpdateModal) 가 유효하도록 참조 안정화(인라인 화살표 제거).
-  const openModal = useCallback(() => setModalOpen(true), []);
-  const closeModal = useCallback(() => setModalOpen(false), []);
+  // 모달 open 상태 — 사이드바 배지가 열 수 있도록 version-store 가 소유(위치 분리 트리거↔오버레이 결합).
+  const modalOpen = useVersionStore((s) => s.modalOpen);
+  const openModal = useVersionStore((s) => s.openModal);
+  const closeModal = useVersionStore((s) => s.closeModal);
 
   // 좌측 패널 접기(#btnPanelCollapse + ⌘B) — 원본 main.js#toggleLeftPanel(:911) + 단축키(:917).
   //   .main-layout 에 left-panel-hidden 클래스를 토글(원본 클래스 1:1).
@@ -164,15 +170,21 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
       <Footer onHelp={onHelp} t={tt} />
       </div>
 
-      {/* overlay(grid 흐름 밖) — UpdateBadge/Modal/Warning 은 자체 position. app-shell grid row 를
-          먹어 main-layout 1fr 을 압박하지 않도록 app-shell 형제로 분리. */}
-      <UpdateBadge
-        state={view.badge}
-        currentVersion={view.currentVersion}
-        latestTag={view.latestTag}
-        onOpen={openModal}
-        t={tt}
-      />
+      {/* fallback 배지(버그 #6) — 사이드바가 없는 모드(settings)에서만 노출한다. browse/metadocs 는
+          사이드바 footer(.left-panel-footer)가 배지를 소유하므로 여기선 숨긴다. 노드는 항상 마운트하고
+          body[data-app-mode] 게이트 CSS(.app-shell-update-badge — left-panel.css)로 visibility 만 제어:
+          (1) AppShell chrome 마운트 계약(app-shell.test SSR `update-badge--loading`) 보존,
+          (2) 과거 .app-shell 형제로 직접 둬 position 없는 width:100% 버튼이 footer 아래 전폭으로 깔리던
+              stray 제거. 배지는 version-store 구독(단일 폴러 결과)으로 controlled. */}
+      <div className="app-shell-update-badge">
+        <UpdateBadge
+          state={view.badge}
+          currentVersion={view.currentVersion}
+          latestTag={view.latestTag}
+          onOpen={openModal}
+          t={tt}
+        />
+      </div>
       <UpdateModal
         open={modalOpen}
         currentVersion={cache?.currentVersion ?? view.currentVersion}

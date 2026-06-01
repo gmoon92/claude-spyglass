@@ -254,3 +254,23 @@
   grid-row-end: -1;
   align-self: end;
 }
+
+/* 버그 #6 — AppShell fallback update-badge (사이드바 footer 가 배지를 소유하지 않는 모드용).
+   노드는 항상 마운트해 AppShell chrome 마운트 계약(app-shell.test SSR)을 보존하되,
+   기본 숨김으로 둔다: (1) browse 는 .left-panel-footer(BrowseSidebar)가 배지를 소유하므로 중복 제거,
+   (2) body[data-app-mode] 가 effect 로 세팅되기 전(초기 프레임)·SSR 에도 노출되지 않아 깜빡임 없음
+       — 과거 .app-shell 형제로 직접 둬 position 없는 width:100% 버튼이 footer 아래 전폭으로 깔리던 stray 제거.
+   사이드바 배지가 없는 모드(metadocs/settings)에서만 좌하단 고정 + 폭 컴팩트로 노출한다. */
+.app-shell-update-badge {
+  display: none;
+}
+body[data-app-mode="metadocs"] .app-shell-update-badge,
+body[data-app-mode="settings"] .app-shell-update-badge {
+  display: flex;
+  position: fixed;
+  left: calc(var(--space-4) + var(--app-rail-width));
+  bottom: var(--space-4);
+  width: auto;
+  max-width: 220px;
+  z-index: 40;
+}
