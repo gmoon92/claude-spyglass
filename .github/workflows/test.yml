@@ -29,7 +29,12 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
-      - run: bun test packages/${{ matrix.package }} --bail
+      # TMPDIR 을 격리 경로로 지정하되 *디렉토리를 먼저 생성*한다. node:os tmpdir() 이 TMPDIR env 를
+      #   그대로 반환하므로, mkdtempSync(join(tmpdir(),...)) 를 쓰는 테스트(config-file.test 등)는
+      #   부모 디렉토리가 없으면 ENOENT 로 실패한다(storage-graph 회귀의 원인).
+      - run: |
+          mkdir -p "$TMPDIR"
+          bun test packages/${{ matrix.package }} --bail
         env:
           TMPDIR: /tmp/spyglass-ci-${{ matrix.package }}-${{ github.run_id }}
 
