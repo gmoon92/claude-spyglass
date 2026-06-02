@@ -43,6 +43,7 @@ import type { TurnRow } from '../features/session-detail/turns-fetcher';
 import { ContextChart } from '../features/dashboard/ContextChart';
 import { toContextTurns, buildCacheDonut, type SessionTurnLike } from '../features/dashboard/detail-chart-data';
 import { DateRangeDropdown, type DateRangeLabeler } from '../components/DateRangeDropdown';
+import { useFloatingMenuPosition } from '../components/use-floating-menu-position';
 import { useSSEStore } from '../stores/sse-store';
 import { useAppStore } from '../stores/app-store';
 import type { PresetValue } from '../stores/app-store';
@@ -243,6 +244,10 @@ export function BrowseLayout(): ReactElement {
   const [chartCollapsed, setChartCollapsed] = useState(false);
   // date-filter 드롭다운 열림(트리거 클릭 토글 + 바깥클릭 닫기). 데이터 refilter 는 store activeRange 소비처 책임.
   const [dateOpen, setDateOpen] = useState(false);
+  // 메뉴(fixed) 위치 계산 — 트리거 기준 우측 정렬. 조상 overflow:hidden 클리핑 회피용 fixed.
+  const dateTriggerRef = useRef<HTMLButtonElement>(null);
+  const dateMenuRef = useRef<HTMLDivElement>(null);
+  useFloatingMenuPosition(dateOpen, dateTriggerRef, dateMenuRef);
 
   // date-filter 바깥 클릭 시 닫기(원본 dropdown outside-close).
   useEffect(() => {
@@ -484,6 +489,8 @@ export function BrowseLayout(): ReactElement {
                   activeRange={activeRange}
                   labeler={dateLabeler}
                   open={dateOpen}
+                  triggerRef={dateTriggerRef}
+                  menuRef={dateMenuRef}
                   onSelectPreset={(v: PresetValue) => {
                     setActiveRange({ type: 'preset', value: v });
                     setDateOpen(false);

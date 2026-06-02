@@ -23,6 +23,7 @@
  *
  * @module components/DateRangeDropdown
  */
+import type { RefObject } from 'react';
 import type { ActiveRange, PresetValue } from '../stores/app-store';
 
 /** 프리셋 순서 SSoT — 원본 date-range-dropdown.js:24 PRESETS 1:1 (custom 은 footer 로 분리). */
@@ -56,6 +57,10 @@ export interface DateRangeDropdownProps {
   onSelectPreset?: (value: PresetValue) => void;
   /** custom range 적용 통지. 호출처가 setActiveRange({type:'custom',from,to}) 로 스토어 갱신. */
   onApplyCustom?: (from: number, to: number) => void;
+  /** 트리거 ref — 호출처가 useFloatingMenuPosition 으로 메뉴 위치를 계산하기 위해 주입(선택). */
+  triggerRef?: RefObject<HTMLButtonElement>;
+  /** 메뉴(fixed) ref — 위치 계산 대상. 미주입 시 메뉴는 dropdown.css 기본 top/left(0,0). */
+  menuRef?: RefObject<HTMLDivElement>;
 }
 
 /**
@@ -94,6 +99,8 @@ export function DateRangeDropdown({
   menuId = 'cs-date-range-menu',
   onSelectPreset,
   onApplyCustom,
+  triggerRef,
+  menuRef,
 }: DateRangeDropdownProps) {
   const listboxId = `${menuId}-listbox`;
   const selected = selectedPreset(activeRange);
@@ -102,6 +109,7 @@ export function DateRangeDropdown({
   return (
     <div className="ds-dropdown" data-component="date-range-dropdown">
       <button
+        ref={triggerRef}
         id={triggerId}
         type="button"
         className="ds-dropdown-trigger"
@@ -114,7 +122,7 @@ export function DateRangeDropdown({
       >
         <span className="ds-dropdown-trigger-label">{triggerLabel(activeRange, labeler)}</span>
       </button>
-      <div id={menuId} className="ds-dropdown-menu" hidden={!open}>
+      <div ref={menuRef} id={menuId} className="ds-dropdown-menu" hidden={!open}>
         <ul id={listboxId} role="listbox" className="ds-dropdown-listbox" aria-labelledby={triggerId}>
           {DATE_RANGE_PRESETS.map((value, i) => (
             <li

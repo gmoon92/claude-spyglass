@@ -74,6 +74,7 @@ import { deriveBrowseData } from './browse-data';
 import { rangeToParams } from './compute-range';
 import { fetchMetaDocs, fetchDashboard } from '../api/fetchers';
 import { DateRangeDropdown, type DateRangeLabeler } from '../components/DateRangeDropdown';
+import { useFloatingMenuPosition } from '../components/use-floating-menu-position';
 import { LangSwitcherSlot } from '../components/LangSwitcherSlot';
 
 /** GLOBAL_PROJECT_KEY(left-panel.js:17 / fetchers GLOBAL_PROJECT_KEY) — userSettings 글로벌 집계 키. */
@@ -205,6 +206,10 @@ export function MetaDocsLayout(): ReactElement {
 
   // date-filter 드롭다운 열림(트리거 토글 + 바깥클릭 닫기) — BrowseLayout 과 동일 패턴.
   const [dateOpen, setDateOpen] = useState(false);
+  // 메뉴(fixed) 위치 계산 — 트리거 기준 우측 정렬. #metaDocsRoot overflow:hidden 클리핑 회피용 fixed.
+  const dateTriggerRef = useRef<HTMLButtonElement>(null);
+  const dateMenuRef = useRef<HTMLDivElement>(null);
+  useFloatingMenuPosition(dateOpen, dateTriggerRef, dateMenuRef);
   useEffect(() => {
     if (!dateOpen) return undefined;
     const onDocDown = (e: MouseEvent): void => {
@@ -493,6 +498,8 @@ export function MetaDocsLayout(): ReactElement {
                 activeRange={activeRange}
                 labeler={dateLabeler}
                 open={dateOpen}
+                triggerRef={dateTriggerRef}
+                menuRef={dateMenuRef}
                 onSelectPreset={(v: PresetValue) => {
                   setActiveRange({ type: 'preset', value: v });
                   setDateOpen(false);
