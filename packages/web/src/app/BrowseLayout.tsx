@@ -47,7 +47,7 @@ import { useFloatingMenuPosition } from '../components/use-floating-menu-positio
 import { useSSEStore } from '../stores/sse-store';
 import { useAppStore } from '../stores/app-store';
 import type { PresetValue } from '../stores/app-store';
-import { makeI18nLabeler, tt } from './i18n-labeler';
+import { makeI18nLabeler } from './i18n-labeler';
 import { deriveBrowseData } from './browse-data';
 import { rangeToParams, rangeToMetricParams } from './compute-range';
 import {
@@ -77,9 +77,15 @@ const FALLBACK_TOKENS: ChartTokens = {
 type FeedRowLike = { id?: string | null; [k: string]: unknown };
 
 export function BrowseLayout(): ReactElement {
-  // i18n(태스크 #12) — 언어 변경 구독. i18n.language 를 labeler useMemo 의존성으로 사용해 memo 된 자식
+  // i18n — react-i18next 단일 경로. i18n.language 를 labeler useMemo 의존성으로 사용해 memo 된 자식
   //   (BrowseSidebar→MemoProjectList/MemoSessionList · 메모 Chart)에 새 labeler ref 를 전달, reload 없이 갱신.
-  const { i18n } = useTranslation();
+  const { t: tBase, i18n } = useTranslation();
+  // 라벨러 TFunc prop + 직접 호출 통일 — react-i18next t 를 (key,vars)=>string 으로 래핑.
+  //   labeler useMemo 들은 i18n.language 를 이미 deps 로 가져(언어전환 시 재생성) tx 클로저도 함께 갱신된다.
+  const tx = useCallback(
+    (key: string, vars?: Record<string, unknown>): string => tBase(key, vars) as unknown as string,
+    [tBase],
+  );
   // 좌측 세션 캐시 + 라이브 피드 — sse-store SSoT.
   const sessions = useSSEStore((s) => s.sessions);
   const setSessions = useSSEStore((s) => s.setSessions);
@@ -148,8 +154,8 @@ export function BrowseLayout(): ReactElement {
     () =>
       detailActive
         ? buildCacheDonut(detailTurns as unknown as SessionTurnLike[], {
-            cache: tt('ui.chart.label.cache'),
-            others: tt('ui.chart.label.others'),
+            cache: tx('ui.chart.label.cache'),
+            others: tx('ui.chart.label.others'),
           })
         : [],
     [detailActive, detailTurns],
@@ -208,9 +214,9 @@ export function BrowseLayout(): ReactElement {
     const i18nKey = (key: string) => key.replace(/_/g, '-');
     return {
       groupAria: (group) =>
-        tt(group === 'request' ? 'ui.filter-bar.request-type' : 'ui.filter-bar.tool-category'),
-      itemLabel: (key) => tt(`ui.filter-bar.${i18nKey(key)}`),
-      itemTitle: (key) => tt(`ui.filter-bar.${i18nKey(key)}-title`),
+        tx(group === 'request' ? 'ui.filter-bar.request-type' : 'ui.filter-bar.tool-category'),
+      itemLabel: (key) => tx(`ui.filter-bar.${i18nKey(key)}`),
+      itemTitle: (key) => tx(`ui.filter-bar.${i18nKey(key)}-title`),
     };
   }, []);
 
@@ -264,13 +270,13 @@ export function BrowseLayout(): ReactElement {
   // date-filter i18n 라벨러 — 원본 date-range-dropdown.js 키(ui.main.date-filter.*) 1:1.
   const dateLabeler: DateRangeLabeler = useMemo(
     () => ({
-      presetLabel: (v) => tt(`ui.main.date-filter.${v}.label`),
-      presetTitle: (v) => tt(`ui.main.date-filter.${v}.title`),
-      triggerAria: () => tt('ui.main.date-filter.trigger-aria'),
-      customFrom: () => tt('ui.main.date-filter.custom.from'),
-      customTo: () => tt('ui.main.date-filter.custom.to'),
-      customApply: () => tt('ui.main.date-filter.custom.apply'),
-      customLabel: () => tt('ui.main.date-filter.custom.label'),
+      presetLabel: (v) => tx(`ui.main.date-filter.${v}.label`),
+      presetTitle: (v) => tx(`ui.main.date-filter.${v}.title`),
+      triggerAria: () => tx('ui.main.date-filter.trigger-aria'),
+      customFrom: () => tx('ui.main.date-filter.custom.from'),
+      customTo: () => tx('ui.main.date-filter.custom.to'),
+      customApply: () => tx('ui.main.date-filter.custom.apply'),
+      customLabel: () => tx('ui.main.date-filter.custom.label'),
       formatCustom: (from, to) => {
         const fmt = (ms: number): string => {
           const d = new Date(ms);
@@ -287,9 +293,9 @@ export function BrowseLayout(): ReactElement {
   //   countUnit: 하단 #typeTotal — ui.chart.count-unit('{count}건'). noData: ui.chart.no-data.
   const donutLegendLabeler: ChartLegendLabeler = useMemo(
     () => ({
-      cacheLabel: (id) => tt(`ui.chart.label.${id}`),
-      countUnit: (countText) => tt('ui.chart.count-unit', { count: countText }),
-      noData: () => tt('ui.chart.no-data'),
+      cacheLabel: (id) => tx(`ui.chart.label.${id}`),
+      countUnit: (countText) => tx('ui.chart.count-unit', { count: countText }),
+      noData: () => tx('ui.chart.no-data'),
     }),
     [i18n.language],
   );
@@ -297,16 +303,16 @@ export function BrowseLayout(): ReactElement {
   // timeline-meta i18n 라벨러 — 원본 index.html data-i18n 키(ui.html.timeline-meta.*) 1:1.
   const timelineMetaLabeler = useMemo(
     () => ({
-      aria: () => tt('ui.html.timeline-meta.aria'),
-      qualityGroupAria: () => tt('ui.html.timeline-meta.quality-group-aria'),
-      qualityGroupLabel: () => tt('ui.html.timeline-meta.quality-group-label'),
-      avgLabel: () => tt('ui.html.timeline-meta.avg-label'),
-      errorRateLabel: () => tt('ui.html.timeline-meta.error-rate-label'),
-      volumeGroupAria: () => tt('ui.html.timeline-meta.volume-group-aria'),
-      volumeGroupLabel: () => tt('ui.html.timeline-meta.volume-group-label'),
-      sessionsLabel: () => tt('ui.html.timeline-meta.sessions-label'),
-      requestsLabel: () => tt('ui.html.timeline-meta.requests-label'),
-      tokensLabel: () => tt('ui.html.timeline-meta.tokens-label'),
+      aria: () => tx('ui.html.timeline-meta.aria'),
+      qualityGroupAria: () => tx('ui.html.timeline-meta.quality-group-aria'),
+      qualityGroupLabel: () => tx('ui.html.timeline-meta.quality-group-label'),
+      avgLabel: () => tx('ui.html.timeline-meta.avg-label'),
+      errorRateLabel: () => tx('ui.html.timeline-meta.error-rate-label'),
+      volumeGroupAria: () => tx('ui.html.timeline-meta.volume-group-aria'),
+      volumeGroupLabel: () => tx('ui.html.timeline-meta.volume-group-label'),
+      sessionsLabel: () => tx('ui.html.timeline-meta.sessions-label'),
+      requestsLabel: () => tx('ui.html.timeline-meta.requests-label'),
+      tokensLabel: () => tx('ui.html.timeline-meta.tokens-label'),
     }),
     [],
   );
@@ -460,8 +466,8 @@ export function BrowseLayout(): ReactElement {
           <div className="view-section-header">
             {/* default-meta(원본 chart-default-meta) — 30분 sliding 타임라인 고정 라벨. */}
             <div className="chart-default-meta">
-              <span className="panel-label">{tt('ui.html.chart-section.label')}</span>
-              <span className="panel-hint" id="chartSubtitle">{tt('ui.html.chart-section.subtitle')}</span>
+              <span className="panel-label">{tx('ui.html.chart-section.label')}</span>
+              <span className="panel-hint" id="chartSubtitle">{tx('ui.html.chart-section.subtitle')}</span>
             </div>
             {/* detail-meta(원본 chart-detail-meta) — 세션 선택 시 세션ID/프로젝트 노출.
                 레거시 setChartMode 가 hidden 속성을 토글(default-view.css :87 .chart-detail-meta[hidden]).
@@ -508,8 +514,8 @@ export function BrowseLayout(): ReactElement {
                 className="btn-toggle"
                 id="btnToggleChart"
                 type="button"
-                title={tt('ui.html.chart-section.toggle-title')}
-                aria-label={tt('ui.html.chart-section.toggle-aria')}
+                title={tx('ui.html.chart-section.toggle-title')}
+                aria-label={tx('ui.html.chart-section.toggle-aria')}
                 onClick={() => setChartCollapsed((v) => !v)}
               >
                 <svg className="ds-chevron" data-dir={chartCollapsed ? 'up' : 'down'} aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -555,7 +561,7 @@ export function BrowseLayout(): ReactElement {
                     <SearchBox
                       value={searchQuery}
                       placeholder="model / tool / message"
-                      clearLabel={tt('ui.search-box.clear-label')}
+                      clearLabel={tx('ui.search-box.clear-label')}
                       onSearch={setSearchQuery}
                     />
                   </div>
