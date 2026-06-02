@@ -377,12 +377,15 @@ function ChartImpl({
       }, legendLabeler.cacheLabel)
     : null;
 
-  // 도넛: 데이터/모드/토큰 변경 시 reveal(슬라이스 sweep + 가운데 카운트업, ease-out 600ms).
-  //   prefers-reduced-motion 이면 즉시 완성(useChartReveal 내부 처리). 세션 전환 시 딱딱한 점프 제거.
+  // 도넛 reveal(슬라이스 sweep + 가운데 카운트업, ease-out 600ms)은 "모드 전환/마운트" 에서만.
+  //   prefers-reduced-motion 이면 즉시 완성(useChartReveal 내부 처리).
+  //   데이터/토큰 갱신(SSE 로 같은 세션 turns 증가 등)은 redrawDeps 로 reveal 없이 최종 프레임만 그린다 —
+  //   매 갱신마다 0→값 reveal 이 재생돼 도넛이 0 부터 다시 차오르던 회귀 차단(애니메이션 자체는 보존).
   useChartReveal(
     (p) => drawDonutToCanvas(donutRef.current, dataByKind, donutMode, tokens, totalLabel, p),
-    [dataByKind, donutMode, tokens, totalLabel],
+    [donutMode],
     600,
+    [dataByKind, tokens, totalLabel],
   );
 
   // 타임라인: 버킷/locale 변경 시 재그림(부모 clientWidth 측정 필요 → layout effect 로 깜빡임 방지).
