@@ -134,26 +134,13 @@ export class SpyglassDatabase {
 
   /** 디렉토리 생성 */
   private ensureDirectory(dir: string): void {
-    try {
-      // Bun.file API로 디렉토리 존재 여부 확인
-      const dirInfo = Bun.file(dir);
-      if (!dirInfo.exists) {
-        // Bun.write로 빈 디렉토리 마커 생성
-        Bun.write(`${dir}/.gitkeep`, '');
-        // 파일 삭제하고 디렉토리만 남기기
-        try {
-          require('fs').mkdirSync(dir, { recursive: true });
-        } catch {
-          // 이미 존재하면 무시
-        }
-      }
-    } catch (error) {
-      // Node.js fs fallback
-      const fs = require('fs');
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-    }
+    // dbPath 에 '/' 가 없으면(상대 파일명) dir 은 빈 문자열 — mkdir 대상 없음(cwd 사용).
+    if (!dir) return;
+    // mkdirSync({recursive:true}) 는 이미 존재하면 no-op(throw 없음), 중간 경로까지 한 번에 생성.
+    //   (이전 구현은 `Bun.file(dir).exists` 가 프로퍼티가 아닌 *메서드* 라 항상 truthy → mkdir 미진입.
+    //    로컬은 ~/.spyglass 가 우연히 존재해 통과했으나 CI 클린 HOME 에선 'unable to open database file'
+    //    로 실패하던 잠재 버그. 디렉토리 보장을 단일 표준 호출로 결정론화.)
+    require('fs').mkdirSync(dir, { recursive: true });
   }
 
   /** WAL 모드 활성화 */
