@@ -16,13 +16,20 @@
  */
 
 import { describe, it, expect, afterAll } from 'bun:test';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { SpyglassDatabase, closeDatabase } from '@spyglass/storage';
 import { handleRequest } from '../dispatch';
 
 const DIST_INDEX = fileURLToPath(new URL('../../../../web/dist/index.html', import.meta.url));
 const hasDist = existsSync(DIST_INDEX);
+
+// sourcemap(.map) 은 조건부 산출이다 — vite.config `sourcemap: process.env.SPYGLASS_SOURCEMAP === '1'`.
+//   기본/CI 빌드(env 미설정)는 .map 을 만들지 않으므로 .map mime 케이스를 무조건 단정하면 거짓 실패한다.
+//   dist/assets 에 .js.map 이 실재할 때만(=sourcemap on 빌드) 검증한다(검증 의도 보존, 빌드 설정과 정합).
+const DIST_ASSETS = fileURLToPath(new URL('../../../../web/dist/assets', import.meta.url));
+const hasSourcemap =
+  hasDist && existsSync(DIST_ASSETS) && readdirSync(DIST_ASSETS).some((f) => f.endsWith('.js.map'));
 
 const db = new SpyglassDatabase({ dbPath: `/tmp/spyglass-dispatch-${Date.now()}.db`, autoInit: true });
 afterAll(() => closeDatabase());
@@ -82,7 +89,7 @@ describe.if(hasDist)('dispatch 정적 서빙 — dist 진입/SPA fallback/mime (
     expect(html).toContain('/assets/css/design-system/_index.css');
   });
 
-  it('/assets/*.map sourcemap 은 application/json 으로 서빙(mimeMap .map)', async () => {
+  it.if(hasSourcemap)('/assets/*.map sourcemap 은 application/json 으로 서빙(mimeMap .map)', async () => {
     // dist 의 실제 해시 번들 .map 경로를 진입 HTML 의 module src 에서 도출.
     const html = await (await get('/')).text();
     const m = html.match(/\/assets\/(index-[A-Za-z0-9_-]+\.js)/);

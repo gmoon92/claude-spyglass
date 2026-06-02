@@ -2,7 +2,7 @@
 
 exports[`makeRequestRow > anomaly flag: slow만 포함 1`] = `
 "<tr class="" data-type="tool_call" data-sub-type="" data-trust="unknown" data-request-id="r8" data-search-haystack="write tool_call">
-    <td class="cell-time num" data-cell="time">04. 28. AM 10:01 · 5일 전</td>
+    <td class="cell-time num" data-cell="time">04. 28. 오전 10:01 · 5일 전</td>
     <td class="cell-action" data-cell="action"><span class="type-badge type-tool_call ds-badge" data-tone="success" title="tool_call" aria-label="tool_call">tool_call</span></td>
     <td class="cell-target" data-cell="target"><span class="target-cell-inner"><span class="action-name"><span class="tool-icon tool-icon-tool ds-icon"><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="3.5" fill="currentColor" stroke="none"/></svg></span>Write</span></span></td>
     <td class="cell-model cell-empty" data-cell="model">—</td>
@@ -17,7 +17,7 @@ exports[`makeRequestRow > anomaly flag: slow만 포함 1`] = `
 
 exports[`makeRequestRow > prompt 타입 with showSession: false 1`] = `
 "<tr class="" data-type="prompt" data-sub-type="" data-trust="trusted" data-request-id="r1" data-search-haystack="claude-3-5-sonnet prompt">
-    <td class="cell-time num" data-cell="time">04. 28. AM 10:00 · 6일 전</td>
+    <td class="cell-time num" data-cell="time">04. 28. 오전 10:00 · 6일 전</td>
     <td class="cell-action" data-cell="action"><span class="type-badge type-prompt ds-badge" data-tone="brand" title="prompt" aria-label="prompt">prompt</span></td>
     <td class="cell-target" data-cell="target"><span class="target-cell-inner target-role-user"><span class="action-name"><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="3.5" fill="currentColor" stroke="none"/></svg>user</span></span></td>
     <td class="cell-model" data-cell="model"><span class="model-chip model-chip-sonnet ds-chip" data-tone="sonnet" title="claude-3-5-sonnet">Sonnet 3.5</span></td>
@@ -32,7 +32,7 @@ exports[`makeRequestRow > prompt 타입 with showSession: false 1`] = `
 
 exports[`makeRequestRow > prompt 타입 with showSession: true 1`] = `
 "<tr class="" data-type="prompt" data-sub-type="" data-trust="trusted" data-request-id="r1" data-search-haystack="claude-3-5-sonnet prompt">
-    <td class="cell-time num" data-cell="time">04. 28. AM 10:00 · 6일 전</td>
+    <td class="cell-time num" data-cell="time">04. 28. 오전 10:00 · 6일 전</td>
     <td class="cell-action" data-cell="action"><span class="type-badge type-prompt ds-badge" data-tone="brand" title="prompt" aria-label="prompt">prompt</span></td>
     <td class="cell-target" data-cell="target"><span class="target-cell-inner target-role-user"><span class="action-name"><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="3.5" fill="currentColor" stroke="none"/></svg>user</span></span></td>
     <td class="cell-model" data-cell="model"><span class="model-chip model-chip-sonnet ds-chip" data-tone="sonnet" title="claude-3-5-sonnet">Sonnet 3.5</span></td>
@@ -47,7 +47,7 @@ exports[`makeRequestRow > prompt 타입 with showSession: true 1`] = `
 
 exports[`makeRequestRow > system 타입 (드물지만 포함) 1`] = `
 "<tr class="" data-type="system" data-sub-type="" data-trust="unknown" data-request-id="r4" data-search-haystack="system">
-    <td class="cell-time num" data-cell="time">04. 28. AM 10:02 · 5일 전</td>
+    <td class="cell-time num" data-cell="time">04. 28. 오전 10:02 · 5일 전</td>
     <td class="cell-action" data-cell="action"><span class="type-badge type-system ds-badge" data-tone="warn" title="system" aria-label="system">system</span></td>
     <td class="cell-target" data-cell="target"><span class="target-cell-inner target-role-system"><span class="action-name"><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="3.5" fill="currentColor" stroke="none"/></svg>system</span></span></td>
     <td class="cell-model cell-empty" data-cell="model">—</td>
@@ -62,7 +62,7 @@ exports[`makeRequestRow > system 타입 (드물지만 포함) 1`] = `
 
 exports[`makeRequestRow > tool_call 타입 with anomaly flags (spike + loop) 1`] = `
 "<tr class="" data-type="tool_call" data-sub-type="" data-trust="unknown" data-request-id="r3" data-search-haystack="bash tool_call">
-    <td class="cell-time num" data-cell="time">04. 28. AM 10:01 · 5일 전</td>
+    <td class="cell-time num" data-cell="time">04. 28. 오전 10:01 · 5일 전</td>
     <td class="cell-action" data-cell="action"><span class="type-badge type-tool_call ds-badge" data-tone="success" title="tool_call" aria-label="tool_call">tool_call</span></td>
     <td class="cell-target" data-cell="target"><span class="target-cell-inner"><span class="action-name"><span class="tool-icon tool-icon-tool ds-icon"><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="3.5" fill="currentColor" stroke="none"/></svg></span>Bash</span></span><span class="mini-badge badge-spike ds-badge" data-tone="warn" data-mini-badge-tooltip="spike">spike</span><span class="mini-badge badge-loop ds-badge" data-tone="info" data-mini-badge-tooltip="loop">loop</span></td>
     <td class="cell-model cell-empty" data-cell="model">—</td>
@@ -77,7 +77,7 @@ exports[`makeRequestRow > tool_call 타입 with anomaly flags (spike + loop) 1`]
 
 exports[`makeRequestRow > tool_call 타입 with 정상 응답 1`] = `
 "<tr class="" data-type="tool_call" data-sub-type="" data-trust="unknown" data-request-id="r2" data-search-haystack="read tool_call">
-    <td class="cell-time num" data-cell="time">04. 28. AM 10:01 · 5일 전</td>
+    <td class="cell-time num" data-cell="time">04. 28. 오전 10:01 · 5일 전</td>
     <td class="cell-action" data-cell="action"><span class="type-badge type-tool_call ds-badge" data-tone="success" title="tool_call" aria-label="tool_call">tool_call</span></td>
     <td class="cell-target" data-cell="target"><span class="target-cell-inner"><span class="action-name"><span class="tool-icon tool-icon-tool ds-icon"><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="3.5" fill="currentColor" stroke="none"/></svg></span>Read</span></span></td>
     <td class="cell-model cell-empty" data-cell="model">—</td>
@@ -92,7 +92,7 @@ exports[`makeRequestRow > tool_call 타입 with 정상 응답 1`] = `
 
 exports[`makeRequestRow > 모델명 없는 prompt (synthetic) 1`] = `
 "<tr class="row-trust-synthetic" data-type="prompt" data-sub-type="" data-trust="synthetic" data-request-id="r6" data-search-haystack="synthetic prompt">
-    <td class="cell-time num" data-cell="time">04. 28. AM 10:00 · 6일 전</td>
+    <td class="cell-time num" data-cell="time">04. 28. 오전 10:00 · 6일 전</td>
     <td class="cell-action" data-cell="action"><span class="type-badge type-prompt ds-badge" data-tone="brand" title="prompt" aria-label="prompt">prompt</span></td>
     <td class="cell-target" data-cell="target"><span class="target-cell-inner target-role-user"><span class="action-name"><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="3.5" fill="currentColor" stroke="none"/></svg>user</span></span></td>
     <td class="cell-model" data-cell="model"><span class="model-chip model-chip-synthetic ds-chip" data-tone="synthetic" title="synthetic">SDK 합성</span></td>
@@ -107,7 +107,7 @@ exports[`makeRequestRow > 모델명 없는 prompt (synthetic) 1`] = `
 
 exports[`makeRequestRow > 캐시 토큰 포함 1`] = `
 "<tr class="" data-type="prompt" data-sub-type="" data-trust="trusted" data-request-id="r7" data-search-haystack="claude-3-5-sonnet prompt">
-    <td class="cell-time num" data-cell="time">04. 28. AM 10:00 · 6일 전</td>
+    <td class="cell-time num" data-cell="time">04. 28. 오전 10:00 · 6일 전</td>
     <td class="cell-action" data-cell="action"><span class="type-badge type-prompt ds-badge" data-tone="brand" title="prompt" aria-label="prompt">prompt</span></td>
     <td class="cell-target" data-cell="target"><span class="target-cell-inner target-role-user"><span class="action-name"><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="3.5" fill="currentColor" stroke="none"/></svg>user</span></span></td>
     <td class="cell-model" data-cell="model"><span class="model-chip model-chip-sonnet ds-chip" data-tone="sonnet" title="claude-3-5-sonnet">Sonnet 3.5</span></td>
@@ -122,7 +122,7 @@ exports[`makeRequestRow > 캐시 토큰 포함 1`] = `
 
 exports[`makeRequestRow > 토큰 0 인 경우 (빈 셀) 1`] = `
 "<tr class="" data-type="prompt" data-sub-type="" data-trust="trusted" data-request-id="r5" data-search-haystack="claude-3-5-sonnet prompt">
-    <td class="cell-time num" data-cell="time">04. 28. AM 10:00 · 6일 전</td>
+    <td class="cell-time num" data-cell="time">04. 28. 오전 10:00 · 6일 전</td>
     <td class="cell-action" data-cell="action"><span class="type-badge type-prompt ds-badge" data-tone="brand" title="prompt" aria-label="prompt">prompt</span></td>
     <td class="cell-target" data-cell="target"><span class="target-cell-inner target-role-user"><span class="action-name"><svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="3.5" fill="currentColor" stroke="none"/></svg>user</span></span></td>
     <td class="cell-model" data-cell="model"><span class="model-chip model-chip-sonnet ds-chip" data-tone="sonnet" title="claude-3-5-sonnet">Sonnet 3.5</span></td>

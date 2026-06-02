@@ -11,6 +11,11 @@ const originalDateNow = Date.now;
 beforeAll(() => {
   (globalThis as any).window = (globalThis as any).window ?? {};
   (globalThis as any).window.I18n = {
+    // getLocale()(i18n-utils)은 window.I18n.getLang() 으로 시간/숫자 locale 을 결정한다.
+    //   stub 의 t() 가 한국어 텍스트를 반환하므로 getLang 도 'ko' 로 고정해 시간 포맷("오전 10:00")까지
+    //   일관시킨다. 누락 시 'ko' 폴백이라 출력은 같지만, 골든마스터의 locale 의도를 명시해 결정론을 확정한다
+    //   (과거 bun 런타임은 ICU 빈약으로 'ko'→en("AM") fallback, Node/Vitest 는 full ICU 로 "오전" — 환경 분기 차단).
+    getLang: () => 'ko',
     t: (key: string, vars?: Record<string, unknown>) => {
       const map: Record<string, string> = {
         // formatters
