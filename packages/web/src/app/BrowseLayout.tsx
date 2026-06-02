@@ -218,7 +218,7 @@ export function BrowseLayout(): ReactElement {
       itemLabel: (key) => tx(`ui.filter-bar.${i18nKey(key)}`),
       itemTitle: (key) => tx(`ui.filter-bar.${i18nKey(key)}-title`),
     };
-  }, []);
+  }, [i18n.language]);
 
   // 피드 Session 셀(sess-id-link) 클릭 → 상세 이동(원본 feed-interactions.js#wireDefaultViewClicks).
   //   프로젝트 전환 분기 포함(레거시: data-goto-project 가 현재와 다르면 프로젝트도 전환).
@@ -285,7 +285,7 @@ export function BrowseLayout(): ReactElement {
         return `${fmt(from)} ~ ${fmt(to)}`;
       },
     }),
-    [],
+    [i18n.language],
   );
 
   // 도넛 범례/하단 total i18n 라벨러(레거시 renderTypeLegend 복원) — Chart 가 무전역 leaf 라 주입.
@@ -314,7 +314,7 @@ export function BrowseLayout(): ReactElement {
       requestsLabel: () => tx('ui.html.timeline-meta.requests-label'),
       tokensLabel: () => tx('ui.html.timeline-meta.tokens-label'),
     }),
-    [],
+    [i18n.language],
   );
 
 
