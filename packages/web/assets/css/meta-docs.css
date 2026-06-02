@@ -853,6 +853,7 @@ body[data-app-mode="browse"] #metaDocsSummaryCards {
   gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
   flex: 0 0 auto;
+  justify-content: space-between; /* 3개 카드를 왼쪽/중앙/오른쪽에 균등 배치 — 여백이 커도 균형잡힘 */
 }
 
 .meta-docs-summary-card {
