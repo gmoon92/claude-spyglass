@@ -31,6 +31,8 @@ export interface UpdateModalProps {
   /** 에러/성공 메시지(doUpdate 결과 — 선택, 호출처 주입). */
   errorMessage?: string;
   successMessage?: string;
+  /** doUpdate 진행 중 — confirm 버튼 비활성 + 라벨을 updating 으로 교체(중복 POST 방지). */
+  busy?: boolean;
 }
 
 /**
@@ -38,7 +40,7 @@ export interface UpdateModalProps {
  * memo: AppShell 로컬 state(connected/leftPanelHidden) 변화로부터 격리 — open/버전/콜백 불변 시 재렌더 생략.
  */
 export const UpdateModal = memo(function UpdateModal({
-  open, currentVersion, latestTag, onConfirm, onCancel, onClose, t, errorMessage, successMessage,
+  open, currentVersion, latestTag, onConfirm, onCancel, onClose, t, errorMessage, successMessage, busy,
 }: UpdateModalProps): ReactElement {
   const overlayClass = `update-modal-overlay${open ? ' open' : ''}`;
   return (
@@ -88,8 +90,16 @@ export const UpdateModal = memo(function UpdateModal({
           <button type="button" className="update-modal-btn update-modal-btn-secondary" onClick={onCancel}>
             {t('ui.html.update-modal.cancel', undefined) || 'Cancel'}
           </button>
-          <button type="button" className="update-modal-btn update-modal-btn-primary" onClick={onConfirm}>
-            {t('ui.html.update-modal.confirm', undefined) || 'Update'}
+          <button
+            type="button"
+            className="update-modal-btn update-modal-btn-primary"
+            onClick={onConfirm}
+            disabled={busy}
+            aria-busy={busy}
+          >
+            {busy
+              ? (t('ui.html.update-modal.updating', undefined) || 'Updating…')
+              : (t('ui.html.update-modal.confirm', undefined) || 'Update')}
           </button>
         </div>
         {errorMessage ? <div className="update-modal-error">{errorMessage}</div> : null}

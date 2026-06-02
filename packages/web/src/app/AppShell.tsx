@@ -103,6 +103,19 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
   const openModal = useVersionStore((s) => s.openModal);
   const closeModal = useVersionStore((s) => s.closeModal);
 
+  // doUpdate 진행/결과 — POST /api/update 오케스트레이션 상태(원본 version-check.js doUpdate 결선).
+  const [updating, setUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState<string | undefined>(undefined);
+  const [updateSuccess, setUpdateSuccess] = useState<string | undefined>(undefined);
+
+  // 모달 닫기 — 진행 중(updating)엔 차단(재시작 응답 유실 방지) + 결과 메시지 초기화(다음 진입 잔여 방지).
+  const handleModalClose = useCallback(() => {
+    if (updating) return;
+    setUpdateError(undefined);
+    setUpdateSuccess(undefined);
+    closeModal();
+  }, [updating, closeModal]);
+
   // 좌측 패널 접기(#btnPanelCollapse + ⌘B) — 원본 main.js#toggleLeftPanel(:911) + 단축키(:917).
   //   .main-layout 에 left-panel-hidden 클래스를 토글(원본 클래스 1:1).
   const [leftPanelHidden, setLeftPanelHidden] = useState(false);
@@ -131,9 +144,37 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
     try { (globalThis as { location?: Location }).location?.reload(); } catch { /* noop */ }
   }, []);
 
-  const onConfirmUpdate = useCallback(() => {
-    // doUpdate(POST /api/update) 오케스트레이션은 후속 결선(본 범위: 모달 토글 + 진입). 안전 no-op.
-  }, []);
+  // 업데이트 확정 — POST /api/update(routes/version.ts): git pull + bun install 후 1.2s 뒤 서버 자기 재시작.
+  //   성공 응답은 재시작 "전"에 작성되므로(restarting:true), 성공 메시지 노출 후 잠시 뒤 reload 하여 새 버전 회수.
+  //   409(local_changes)·500(pull/install 실패)은 메시지 분기. updating 가드로 중복 POST 차단.
+  const onConfirmUpdate = useCallback(async () => {
+    if (updating) return;
+    setUpdating(true);
+    setUpdateError(undefined);
+    setUpdateSuccess(undefined);
+    try {
+      const res = await fetch('/api/update', { method: 'POST' });
+      const json = (await res.json().catch(() => null)) as
+        | { success?: boolean; error?: string }
+        | null;
+      if (res.ok && json?.success) {
+        setUpdateSuccess(t('ui.html.update-modal.success'));
+        // 서버 재시작(1.2s) + 부팅 여유 후 reload — 재시작 중 연결 실패는 SSE 재연결/이 reload 가 흡수.
+        setTimeout(() => {
+          try { (globalThis as { location?: Location }).location?.reload(); } catch { /* noop */ }
+        }, 4000);
+        return; // 성공 경로는 reload 까지 updating 유지(버튼 비활성 + "업데이트 중…").
+      }
+      const key = json?.error === 'local_changes'
+        ? 'ui.html.update-modal.error-local-changes'
+        : 'ui.html.update-modal.error-generic';
+      setUpdateError(t(key));
+      setUpdating(false);
+    } catch {
+      setUpdateError(t('ui.html.update-modal.error-generic'));
+      setUpdating(false);
+    }
+  }, [updating, t]);
 
   const onDismissShallow = useCallback(() => {
     try {
@@ -194,9 +235,12 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
         currentVersion={cache?.currentVersion ?? view.currentVersion}
         latestTag={cache?.latestTag ?? view.latestTag}
         onConfirm={onConfirmUpdate}
-        onCancel={closeModal}
-        onClose={closeModal}
+        onCancel={handleModalClose}
+        onClose={handleModalClose}
         t={t}
+        busy={updating}
+        errorMessage={updateError}
+        successMessage={updateSuccess}
       />
 
       <DashboardWarning
