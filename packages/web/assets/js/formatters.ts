@@ -51,7 +51,10 @@ export function fmtRelative(ts: string | number | null | undefined) {
 export function fmtTime(ts: string | number | null | undefined) {
   if (!ts) return '—';
   const d = new Date(toDateArg(ts));
-  return d.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  // hourCycle:'h23' — 24시간제 고정. ko 12시간제의 오전/오후(AM/PM) dayPeriod 표기는 ICU 버전마다
+  //   "오전" vs "AM" 으로 갈려(로컬 vs CI ICU78) 골든 스냅샷이 환경별로 깨졌다. 24시간제는 dayPeriod 가
+  //   없어 locale·ICU 무관 결정론이며, 옵저버빌리티 로그 시각 표기에도 더 적합하다.
+  return d.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
 }
 
 export function fmtDate(ts: string | number | null | undefined) {
@@ -67,7 +70,8 @@ export function fmtTimestamp(ts: string | number | null | undefined) {
   const d = new Date(toDateArg(ts));
   const isToday = d.toDateString() === new Date().toDateString();
   const locale = getLocale();
-  const time  = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  // hourCycle:'h23' — 24시간제 고정(fmtTime 주석 참조: ICU 버전 무관 결정론 + 로그 시각 적합).
+  const time  = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   const prefix = isToday ? '' : d.toLocaleDateString(locale, { month: '2-digit', day: '2-digit' }) + ' ';
   const rel    = fmtRelative(ts);
   return rel ? `${prefix}${time} · ${rel}` : `${prefix}${time}`;
