@@ -32,7 +32,7 @@
 //
 // 레이어(architecture.md §1.3): app → features(meta-docs/browse/dashboard) + stores 정방향.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement, RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -69,7 +69,7 @@ import {
 import { MetaProjectList, type ProjectLike, type SidebarLabeler, type MetaCounts } from '../features/browse/Sidebar';
 import { useAppStore } from '../stores/app-store';
 import type { PresetValue } from '../stores/app-store';
-import { tt, makeI18nLabeler } from './i18n-labeler';
+import { makeI18nLabeler } from './i18n-labeler';
 import { deriveBrowseData } from './browse-data';
 import { rangeToParams } from './compute-range';
 import { fetchMetaDocs, fetchDashboard } from '../api/fetchers';
@@ -160,9 +160,14 @@ function MetaCatalogColResize({ tableRef }: { tableRef: RefObject<HTMLTableEleme
 }
 
 export function MetaDocsLayout(): ReactElement {
-  // i18n(태스크 #12) — 언어 변경 구독. i18n.language 를 labeler 의존성으로 memo 된 자식(MetaProjectList 등)
-  //   갱신 + 직접 tt() 는 재렌더로 재평가(window.I18n 동기). reload 불요.
-  const { i18n } = useTranslation();
+  // i18n — react-i18next 단일 경로. i18n.language 를 labeler 의존성으로 memo 된 자식(MetaProjectList 등)
+  //   갱신 + 직접 t() 는 재렌더로 재평가. reload 불요.
+  const { t: tBase, i18n } = useTranslation();
+  // 패널/라벨러 TFunc prop + 직접 호출 통일 — react-i18next t 를 (key,vars)=>string 으로 래핑.
+  const tx = useCallback(
+    (key: string, vars?: Record<string, unknown>): string => tBase(key, vars) as unknown as string,
+    [tBase],
+  );
   // 라우팅/스코프 SSoT — app-store.
   const metaSubTab = useAppStore((s) => s.metaSubTab);
   const setMetaSubTab = useAppStore((s) => s.setMetaSubTab);
@@ -224,13 +229,13 @@ export function MetaDocsLayout(): ReactElement {
   // date-filter i18n 라벨러 — BrowseLayout dateLabeler(ui.main.date-filter.*) 1:1.
   const dateLabeler: DateRangeLabeler = useMemo(
     () => ({
-      presetLabel: (v) => tt(`ui.main.date-filter.${v}.label`),
-      presetTitle: (v) => tt(`ui.main.date-filter.${v}.title`),
-      triggerAria: () => tt('ui.main.date-filter.trigger-aria'),
-      customFrom: () => tt('ui.main.date-filter.custom.from'),
-      customTo: () => tt('ui.main.date-filter.custom.to'),
-      customApply: () => tt('ui.main.date-filter.custom.apply'),
-      customLabel: () => tt('ui.main.date-filter.custom.label'),
+      presetLabel: (v) => tx(`ui.main.date-filter.${v}.label`),
+      presetTitle: (v) => tx(`ui.main.date-filter.${v}.title`),
+      triggerAria: () => tx('ui.main.date-filter.trigger-aria'),
+      customFrom: () => tx('ui.main.date-filter.custom.from'),
+      customTo: () => tx('ui.main.date-filter.custom.to'),
+      customApply: () => tx('ui.main.date-filter.custom.apply'),
+      customLabel: () => tx('ui.main.date-filter.custom.label'),
       formatCustom: (from, to) => {
         const fmt = (ms: number): string => {
           const d = new Date(ms);
@@ -239,7 +244,7 @@ export function MetaDocsLayout(): ReactElement {
         return `${fmt(from)} ~ ${fmt(to)}`;
       },
     }),
-    [],
+    [tx],
   );
 
   // 리사이저 결선(레거시 미결선 갭 — react-resize.md §2.2) — browse 와 동일 메커니즘 재사용.
@@ -390,22 +395,22 @@ export function MetaDocsLayout(): ReactElement {
                   동기화 셀(.thead-sync-cell) — 재스캔/재조회 버튼(원본 data-meta-left-refresh runRefresh). */}
               <thead>
                 <tr className="thead-metadocs">
-                  <th>{tt('ui.html.left-panel.th-project') || 'Project'}</th>
-                  <th style={{ textAlign: 'right' }}>{tt('ui.html.left-panel.th-item') || 'Items'}</th>
+                  <th>{tx('ui.html.left-panel.th-project') || 'Project'}</th>
+                  <th style={{ textAlign: 'right' }}>{tx('ui.html.left-panel.th-item') || 'Items'}</th>
                   <th className="thead-sync-cell">
                     <button
                       type="button"
                       className={syncing ? 'thead-sync-btn is-loading' : 'thead-sync-btn'}
                       data-meta-left-refresh="1"
-                      title={tt('ui.html.left-panel.sync-title')}
-                      aria-label={tt('ui.html.left-panel.sync-title')}
+                      title={tx('ui.html.left-panel.sync-title')}
+                      aria-label={tx('ui.html.left-panel.sync-title')}
                       disabled={syncing}
                       onClick={onSync}
                     >
                       <span className="thead-sync-icon" aria-hidden="true">
                         <RefreshIcon />
                       </span>
-                      <span className="thead-sync-label">{tt('ui.html.left-panel.sync-label') || 'Sync'}</span>
+                      <span className="thead-sync-label">{tx('ui.html.left-panel.sync-label') || 'Sync'}</span>
                     </button>
                   </th>
                 </tr>
@@ -442,7 +447,7 @@ export function MetaDocsLayout(): ReactElement {
             카드 클릭 → display 필터 전환(원본 data-meta-filter="display" 동치). 카운트 SSoT 는 전체 카탈로그 rows.
             컴포넌트 root 가 id=metaDocsSummaryCards 를 부여 — meta-docs.css 의 #metaDocsSummaryCards{display:flex}
             (id 셀렉터) 가 가로 1줄 배치를 적용하므로 grid row3(auto) 에 콘텐츠 높이만 차지. */}
-        <MetaDocsSummaryCards rows={rows} onSelectDisplay={setDisplay} t={tt} />
+        <MetaDocsSummaryCards rows={rows} onSelectDisplay={setDisplay} t={tx} />
 
         {/* behavior mini-bar(원본 #metaDocsToolStats / cardToolCategories, :274) — grid row4(auto).
             요약 카드와 별도 컨테이너여야 가로폭 전체를 써 막대가 노출된다(둘을 한 flex-row 에 같이 두면 카드 옆에
@@ -472,7 +477,7 @@ export function MetaDocsLayout(): ReactElement {
               data-tab-value="docs"
               onClick={() => setMetaSubTab('docs')}
             >
-              {tt('ui.meta-docs-view.tab-docs-label') || 'Behavior Definitions'}
+              {tx('ui.meta-docs-view.tab-docs-label') || 'Behavior Definitions'}
             </button>
             <button
               type="button"
@@ -485,7 +490,7 @@ export function MetaDocsLayout(): ReactElement {
               data-tab-value="tools"
               onClick={() => setMetaSubTab('tools')}
             >
-              {tt('ui.meta-docs-view.tab-tools-label') || 'Tools'}
+              {tx('ui.meta-docs-view.tab-tools-label') || 'Tools'}
             </button>
           </div>
           <div className="meta-tabs-actions">
@@ -536,7 +541,7 @@ export function MetaDocsLayout(): ReactElement {
             project={selectedProject}
             onRecenter={(row) => setActiveRow(row)}
             dateRange={flowRange}
-            t={tt}
+            t={tx}
           />
           {/* resize 핸들(원본 flowHandle:662) — useMetaDocsPanelResize(flowHandleRef)가 드래그 결선.
               --meta-docs-flow-height + spyglass:meta-docs-flow-split, top=#metaDocsFlowRegion / bottom=.meta-docs-catalog-area
@@ -557,12 +562,12 @@ export function MetaDocsLayout(): ReactElement {
                 includeDeleted={includeDeleted}
                 onFilterChange={onFilterChange}
                 onIncludeDeletedChange={setIncludeDeleted}
-                t={tt}
+                t={tx}
               />
               <MetaDocsSearch
                 value={searchTerm}
-                placeholder={tt('ui.meta-docs-view.search-placeholder')}
-                clearLabel={tt('ui.meta-docs-view.search-placeholder')}
+                placeholder={tx('ui.meta-docs-view.search-placeholder')}
+                clearLabel={tx('ui.meta-docs-view.search-placeholder')}
                 onSearch={setSearchTerm}
               />
             </div>
@@ -580,7 +585,7 @@ export function MetaDocsLayout(): ReactElement {
               activeRowName={flowRow?.name ?? null}
               tableRef={catalogTableRef}
               loading={catalogLoading}
-              t={tt}
+              t={tx}
             />
             {/* col-resize 결선기 — 테이블이 실제 존재할 때만 마운트(catalogHasRows key 로 등장 시 재부착). */}
             {catalogHasRows ? (
@@ -602,7 +607,7 @@ export function MetaDocsLayout(): ReactElement {
           {...(showTools ? {} : { hidden: true })}
         >
           {showTools ? (
-            <MetaDocsToolStats stats={toolStats} sort={toolSort} onSort={onToolSort} t={tt} loading={toolsLoading} />
+            <MetaDocsToolStats stats={toolStats} sort={toolSort} onSort={onToolSort} t={tx} loading={toolsLoading} />
           ) : null}
         </div>
       </section>
