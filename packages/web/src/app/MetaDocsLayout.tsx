@@ -270,6 +270,10 @@ export function MetaDocsLayout(): ReactElement {
   // flow 활성 행 — 명시 지정 우선, 없으면 정렬 대상 첫 초점 행 자동 선택.
   const flowRow = activeRow ?? pickFlowRow(typeFiltered);
 
+  // flow 날짜 범위 — 카탈로그와 동일 activeRange→{from,to}. MetaDocsFlow 에 주입해 unified-flow
+  //   fetch 의 fromTs/toTs 로 전파(폐기된 window.__getDateRange 전역 대체). activeRange 변경 시만 재계산.
+  const flowRange = useMemo(() => rangeToParams(activeRange), [activeRange]);
+
   // 카탈로그 테이블 렌더 여부(MetaDocsCatalog 가 표시필터 적용 후 행이 있으면 <table>, 없으면 empty-state).
   //   col-resize 결선기(MetaCatalogColResize)는 테이블이 실제 존재할 때만 마운트해야 핸들이 thead 에 붙는다.
   const catalogHasRows = useMemo(
@@ -531,6 +535,7 @@ export function MetaDocsLayout(): ReactElement {
             activeRow={flowRow}
             project={selectedProject}
             onRecenter={(row) => setActiveRow(row)}
+            dateRange={flowRange}
             t={tt}
           />
           {/* resize 핸들(원본 flowHandle:662) — useMetaDocsPanelResize(flowHandleRef)가 드래그 결선.

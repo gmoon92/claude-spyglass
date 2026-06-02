@@ -109,6 +109,9 @@ export interface MetaDocsFlowProps {
   onRecenter?: (row: FlowActiveRow) => void;
   /** flow fetch depth(기본 3). */
   depth?: number;
+  /** 날짜 범위(app-store.activeRange→rangeToParams). flow fetch 의 fromTs/toTs 로 전파.
+   *   호출처(MetaDocsLayout)가 주입 — 미주입 시 전체 기간(레거시 window.__getDateRange 폐기 대체). */
+  dateRange?: { from?: number; to?: number };
   t?: TFunc;
 }
 
@@ -460,7 +463,7 @@ function findEdgeAncestor(target: EventTarget | null): HTMLElement | null {
  * MetaDocsFlow — useRef SVG escape-hatch. activeRow 변경 → effect fetch+render+bind.
  * 명령형 전부 effect 내부(SSR 비발화). 컨테이너 div(metaDocsFlowRegion)만 JSX 선언.
  */
-export function MetaDocsFlow({ activeRow, project = null, onRecenter, depth = 3, t = defaultT }: MetaDocsFlowProps) {
+export function MetaDocsFlow({ activeRow, project = null, onRecenter, depth = 3, dateRange, t = defaultT }: MetaDocsFlowProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<FlowState>(emptyState());
   // onRecenter 최신값 — effect 재구독 없이 콜백만 갱신(stale closure 방지).
@@ -486,11 +489,9 @@ export function MetaDocsFlow({ activeRow, project = null, onRecenter, depth = 3,
     }
 
     container.innerHTML = skeletonHtml();
-    const getDateRange = () => {
-      // 글로벌 active-range — api.js getDateRange 와 동치(flow.js:297). 미주입 환경은 전체.
-      const g = (window as unknown as { __getDateRange?: () => { from?: number; to?: number } }).__getDateRange;
-      return typeof g === 'function' ? g() : {};
-    };
+    // 날짜 범위 — prop 주입(app-store.activeRange→rangeToParams). 폐기된 window.__getDateRange 전역을
+    //   대체: 그 전역은 setter 가 어디에도 없어 항상 undefined→{}→flow 가 날짜 필터를 무시하던 버그.
+    const getDateRange = () => dateRange ?? {};
 
     fetchUnifiedFlow(args, getDateRange)
       .then((payload) => {
@@ -509,7 +510,10 @@ export function MetaDocsFlow({ activeRow, project = null, onRecenter, depth = 3,
       cancelled = true;
       for (const [type, fn] of winListeners) window.removeEventListener(type, fn);
     };
-  }, [activeRow, project, depth, t]);
+    // dateRange.from/to 는 원시값으로 deps 에 둔다 — 날짜 필터 적용 시 flow 재fetch(기간 반영).
+    //   객체 자체가 아닌 원시값이라 호출처가 매 렌더 새 객체를 줘도 값이 같으면 재실행 안 함.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRow, project, depth, t, dateRange?.from, dateRange?.to]);
 
   return <div id={CONTAINER_ID} ref={containerRef} className="meta-docs-flow-region" />;
 }
