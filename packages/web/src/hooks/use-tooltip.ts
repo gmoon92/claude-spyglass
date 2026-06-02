@@ -16,8 +16,8 @@
  *   이미 data-*-tooltip 속성·.cache-cell 마크업이 존재한다. 본 훅은 핸들러만 document 에 위임으로
  *   붙이므로 컴포넌트 JSX 수정이 필요 없다.
  *
- * i18n: 레거시 콘텐츠는 전부 window.I18n.t('ui.stat-tooltip.*' / 'ui.obs-tooltip.*' /
- *   'ui.cache-panel.*') 키였다. tt() 어댑터(i18n-labeler)가 동일 전역을 감싸므로 키를 그대로 재사용.
+ * i18n: 콘텐츠 키는 'ui.stat-tooltip.*' / 'ui.obs-tooltip.*' / 'ui.cache-panel.*'. react-i18next
+ *   t 를 hook 에서 받아 모듈 헬퍼(statContent 등)에 인자로 주입(레거시 window.I18n/tt 직접참조 폐기).
  *
  * 위치: 레거시는 커서 추종(position(e): clientX+8 / clientY+12, viewport 충돌 시 반대편 뒤집기)을
  *   썼다 — 본 포팅도 동일(트리거 기준 anchor 가 아닌 커서 기준이 레거시 동작). pointer-events:none
@@ -26,10 +26,10 @@
  * cleanup: useEffect 반환에서 document 리스너 제거 + 생성한 floating 요소 2개 removeChild.
  *   SSR 안전(document 부재 시 no-op).
  *
- * 레이어(architecture.md §1.3): hooks leaf. app(AppShell)이 유일 소비처. tt 어댑터만 import.
+ * 레이어(architecture.md §1.3): hooks leaf. app(AppShell)이 유일 소비처. useTranslation 으로 t 취득.
  */
-import { useEffect } from 'react';
-import { tt } from '../app/i18n-labeler';
+import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { positionAbovePoint } from '../features/dashboard/tooltip';
 import type { CtxPointHoverDetail } from '../features/dashboard/context-chart-data';
 import type { TimelineHoverDetail } from '../components/Chart';
@@ -40,36 +40,39 @@ interface TooltipContent {
   desc: string;
 }
 
+/** i18n 라벨 함수 계약 — react-i18next t 를 (key, vars)=>string 시그니처로 받는다(헬퍼 무전역 주입). */
+type TFunc = (key: string, vars?: Record<string, unknown>) => string;
+
 /**
  * data-stat-tooltip 값 → i18n 키. 레거시 STAT_TOOLTIP_CONTENT(stat-tooltip.js:17) 1:1.
  * timeline-meta 통계 카드: sessions / requests / tokens / active / avg-duration / p95 / err.
  */
-function statContent(key: string): TooltipContent | null {
+function statContent(key: string, t: TFunc): TooltipContent | null {
   const ns = `ui.stat-tooltip.${key}`;
-  const title = tt(`${ns}.title`);
-  // tt 는 키 부재 시 키 자체를 passthrough — 알 수 없는 key 는 무시(레거시 content map 미존재 동치).
+  const title = t(`${ns}.title`);
+  // t 는 키 부재 시 키 자체를 passthrough — 알 수 없는 key 는 무시(레거시 content map 미존재 동치).
   if (title === `${ns}.title`) return null;
-  return { title, desc: tt(`${ns}.desc`) };
+  return { title, desc: t(`${ns}.desc`) };
 }
 
 /**
  * data-ctx-tooltip 값 → i18n 키. 레거시 CTX_TOOLTIP_CONTENT(stat-tooltip.js:2) 1:1.
  * 차트 영역(chart-wrap): context-growth.
  */
-function ctxContent(key: string): TooltipContent | null {
+function ctxContent(key: string, t: TFunc): TooltipContent | null {
   const ns = `ui.stat-tooltip.${key}`;
-  const title = tt(`${ns}.title`);
+  const title = t(`${ns}.title`);
   if (title === `${ns}.title`) return null;
-  return { title, desc: tt(`${ns}.desc`) };
+  return { title, desc: t(`${ns}.desc`) };
 }
 
 /**
  * data-mini-badge-tooltip 값 → i18n 키. 레거시 MINI_BADGE_TOOLTIP(stat-tooltip.js:9) 1:1.
  * anomaly mini-badge: spike / loop / slow / error / cache (desc 만, title 없음).
  */
-function miniBadgeContent(key: string): TooltipContent | null {
+function miniBadgeContent(key: string, t: TFunc): TooltipContent | null {
   const ns = `ui.stat-tooltip.badge.${key}`;
-  const desc = tt(ns);
+  const desc = t(ns);
   if (desc === ns) return null;
   return { desc };
 }
@@ -79,22 +82,22 @@ function miniBadgeContent(key: string): TooltipContent | null {
  * obs 카드/카테고리/anomaly: burn-rate / cache-health / live-pulse / tool-categories /
  *   cat-Agent / cat-Skill / cat-MCP / cat-Native / anomaly.
  */
-function obsContent(key: string): TooltipContent | null {
+function obsContent(key: string, t: TFunc): TooltipContent | null {
   const ns = `ui.obs-tooltip.${key}`;
-  const title = tt(`${ns}.title`);
+  const title = t(`${ns}.title`);
   if (title === `${ns}.title`) return null;
-  return { title, desc: tt(`${ns}.desc`) };
+  return { title, desc: t(`${ns}.desc`) };
 }
 
 /**
  * data-cache-panel-tooltip 값 → i18n 키. 레거시 CACHE_PANEL_TOOLTIP_CONTENT(cache-panel-tooltip.js:2) 1:1.
  * Cache Intelligence Panel: hit-rate / ratio.
  */
-function cachePanelContent(key: string): TooltipContent | null {
+function cachePanelContent(key: string, t: TFunc): TooltipContent | null {
   const ns = `ui.cache-panel.${key}`;
-  const title = tt(`${ns}.title`);
+  const title = t(`${ns}.title`);
   if (title === `${ns}.title`) return null;
-  return { title, desc: tt(`${ns}.desc`) };
+  return { title, desc: t(`${ns}.desc`) };
 }
 
 /** 천단위 콤마(en-US) — 레거시 cache-tooltip.js fmtNum 1:1. */
@@ -149,23 +152,23 @@ function positionAbove(el: HTMLElement, clientX: number, clientY: number, fallba
  *  - 1행: window 정보가 있으면 한도·사용률 포함(accumulated-with-limit), 없으면 누적량만(accumulated)
  *  - delta/model 행은 값이 있을 때만 추가(\n → renderStatHtml 에서 <br>)
  */
-function renderPointHoverHtml(detail: CtxPointHoverDetail): string {
+function renderPointHoverHtml(detail: CtxPointHoverDetail, t: TFunc): string {
   const ns = 'ui.stat-tooltip.point-hover';
-  const title = tt(`${ns}.title`, { turn: detail.turnIndex });
+  const title = t(`${ns}.title`, { turn: detail.turnIndex });
   const lines: string[] = [];
   if (detail.windowLabel && detail.usagePercent !== null) {
     lines.push(
-      tt(`${ns}.accumulated-with-limit`, {
+      t(`${ns}.accumulated-with-limit`, {
         value: detail.formattedValue,
         limit: detail.windowLabel,
         percent: detail.usagePercent,
       }),
     );
   } else {
-    lines.push(tt(`${ns}.accumulated`, { value: detail.formattedValue }));
+    lines.push(t(`${ns}.accumulated`, { value: detail.formattedValue }));
   }
-  if (detail.formattedDelta) lines.push(tt(`${ns}.delta`, { delta: detail.formattedDelta }));
-  if (detail.windowModel) lines.push(tt(`${ns}.model`, { model: detail.windowModel }));
+  if (detail.formattedDelta) lines.push(t(`${ns}.delta`, { delta: detail.formattedDelta }));
+  if (detail.windowModel) lines.push(t(`${ns}.model`, { model: detail.windowModel }));
   return renderStatHtml({ title, desc: lines.join('\n') });
 }
 
@@ -177,6 +180,11 @@ function renderPointHoverHtml(detail: CtxPointHoverDetail): string {
  *   툴팁을 표시한다(레거시 4개 init* 통합).
  */
 export function useTooltip(): void {
+  // react-i18next t 를 ref 로 최신 유지 — 언어전환 시 리스너 재등록 없이 다음 hover 가 최신 t 를 본다
+  //   (useEffect deps=[] 보존, 레거시 tt(window.I18n) 직접참조 폐기).
+  const { t } = useTranslation();
+  const tRef = useRef(t);
+  tRef.current = t;
   useEffect(() => {
     const doc = (globalThis as { document?: Document }).document;
     if (!doc) return;
@@ -203,19 +211,19 @@ export function useTooltip(): void {
       if (!(target instanceof Element)) return null;
 
       const ctx = target.closest<HTMLElement>('[data-ctx-tooltip]');
-      if (ctx) return { el: ctx, kind: 'stat', content: ctxContent(ctx.dataset.ctxTooltip ?? '') };
+      if (ctx) return { el: ctx, kind: 'stat', content: ctxContent(ctx.dataset.ctxTooltip ?? '', tRef.current) };
 
       const badge = target.closest<HTMLElement>('[data-mini-badge-tooltip]');
-      if (badge) return { el: badge, kind: 'stat', content: miniBadgeContent(badge.dataset.miniBadgeTooltip ?? '') };
+      if (badge) return { el: badge, kind: 'stat', content: miniBadgeContent(badge.dataset.miniBadgeTooltip ?? '', tRef.current) };
 
       const stat = target.closest<HTMLElement>('[data-stat-tooltip]');
-      if (stat) return { el: stat, kind: 'stat', content: statContent(stat.dataset.statTooltip ?? '') };
+      if (stat) return { el: stat, kind: 'stat', content: statContent(stat.dataset.statTooltip ?? '', tRef.current) };
 
       const obs = target.closest<HTMLElement>('[data-obs-tooltip]');
-      if (obs) return { el: obs, kind: 'stat', content: obsContent(obs.dataset.obsTooltip ?? '') };
+      if (obs) return { el: obs, kind: 'stat', content: obsContent(obs.dataset.obsTooltip ?? '', tRef.current) };
 
       const cachePanel = target.closest<HTMLElement>('[data-cache-panel-tooltip]');
-      if (cachePanel) return { el: cachePanel, kind: 'stat', content: cachePanelContent(cachePanel.dataset.cachePanelTooltip ?? '') };
+      if (cachePanel) return { el: cachePanel, kind: 'stat', content: cachePanelContent(cachePanel.dataset.cachePanelTooltip ?? '', tRef.current) };
 
       const cacheCell = target.closest<HTMLElement>('.cache-cell');
       if (cacheCell) {
@@ -274,7 +282,7 @@ export function useTooltip(): void {
       if (detail && typeof detail.turnIndex === 'number') {
         pointHoverActive = true;
         cacheEl.style.display = 'none';
-        statEl.innerHTML = renderPointHoverHtml(detail);
+        statEl.innerHTML = renderPointHoverHtml(detail, tRef.current);
         statEl.style.display = 'block';
         positionAbove(statEl, detail.clientX, detail.clientY, 220);
       } else {
@@ -294,7 +302,7 @@ export function useTooltip(): void {
         cacheEl.style.display = 'none';
         statEl.innerHTML = renderStatHtml({
           title: detail.label,
-          desc: tt('ui.chart.count-unit', { count: detail.count.toLocaleString() }),
+          desc: tRef.current('ui.chart.count-unit', { count: detail.count.toLocaleString() }),
         });
         statEl.style.display = 'block';
         positionAbove(statEl, detail.clientX, detail.clientY, 160);
