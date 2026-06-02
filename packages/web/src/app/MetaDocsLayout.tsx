@@ -207,7 +207,7 @@ export function MetaDocsLayout(): ReactElement {
   const [toolsLoading, setToolsLoading] = useState(false);
   const [toolSort, setToolSort] = useState<{ key: ToolStatsSortKey; dir: ToolSortDir }>(DEFAULT_TOOL_SORT);
 
-  const labeler: SidebarLabeler = useMemo(() => makeI18nLabeler(), [i18n.language]);
+  const labeler: SidebarLabeler = useMemo(() => makeI18nLabeler(tx), [i18n.language, tx]);
 
   // date-filter 드롭다운 열림(트리거 토글 + 바깥클릭 닫기) — BrowseLayout 과 동일 패턴.
   const [dateOpen, setDateOpen] = useState(false);

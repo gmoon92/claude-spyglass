@@ -124,7 +124,7 @@ export function BrowseLayout(): ReactElement {
   // cache-panel-overall(/api/stats/cache) — 레거시 fetchCacheStats→renderCachePanel 복원.
   const [cacheStats, setCacheStats] = useState<CacheStats | null>(null);
 
-  const labeler: SidebarLabeler = useMemo(() => makeI18nLabeler(), [i18n.language]);
+  const labeler: SidebarLabeler = useMemo(() => makeI18nLabeler(tx), [i18n.language, tx]);
 
   // detail 활성 판정 — rightView==='detail' && 선택 세션 존재.
   const detailActive = rightView === 'detail' && !!selectedSession;

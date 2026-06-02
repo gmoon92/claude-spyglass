@@ -1,31 +1,29 @@
-// app/i18n-labeler.ts — window.I18n 을 컴포넌트 라벨러 계약으로 감싸는 어댑터 (P4-06)
+// app/i18n-labeler.ts — Sidebar 라벨러 빌더 (react-i18next t 주입)
 //
-// 컴포넌트는 무전역(FilterBar/Sidebar 선례: window.I18n 직접 참조 금지, labeler/t 주입). App 셸이
-//   유일하게 window.I18n(전역 IIFE, architecture.md F5) 을 읽어 컴포넌트 계약 형태로 변환한다.
-//   i18n 전역의 ESM 흡수(F5)는 후속 페이즈 — 본 어댑터가 그때까지의 단일 경계다.
+// 컴포넌트는 무전역(labeler/t 주입). 호출처(App 셸: MetaDocsLayout/BrowseLayout)가 useTranslation 의
+//   t 를 주입해 SidebarLabeler 계약으로 변환한다.
+// (구 window.I18n 어댑터 tt 는 전 React 컴포넌트의 useTranslation 전환 완료로 제거됨 — #5.
+//   vanilla(assets/js) 뷰는 여전히 window.I18n 을 쓰나 본 모듈과 무관하다.)
 //
-// 레이어: app leaf(순수 변환). 전역 접근은 안전 폴백(window/I18n 부재 시 key passthrough).
+// 레이어: app leaf(순수 변환). 무전역 — 전역 접근 없음.
 
 import type { SidebarLabeler } from '../features/browse/Sidebar';
 
-/** window.I18n.t 안전 접근 — 전역/네임스페이스 부재 시 key 를 그대로 반환(SSR/스텁 안전). */
-export function tt(key: string, vars?: Record<string, unknown>): string {
-  const g = globalThis as unknown as { window?: { I18n?: { t?: (k: string, v?: Record<string, unknown>) => string } } };
-  const fn = g.window?.I18n?.t;
-  return typeof fn === 'function' ? fn(key, vars) : key;
-}
+/** i18n 라벨 함수 계약 — react-i18next t 를 (key, vars)=>string 으로 받는다. */
+export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
 
-/** Sidebar 라벨러 — window.I18n 키를 SidebarLabeler 계약으로 매핑(left-panel.js 라벨 SSoT). */
-export function makeI18nLabeler(): SidebarLabeler {
+/**
+ * Sidebar 라벨러 — i18n 키를 SidebarLabeler 계약으로 매핑(left-panel.js 라벨 SSoT). t 는 호출처 주입.
+ *   보간 var 명은 locale 템플릿과 일치해야 한다: ui.left-panel.live-count="라이브 {count}개",
+ *   session-count="{project} · {count}개"(과거 'n' 오용으로 {count} 미치환되던 버그를 'count' 로 정정).
+ */
+export function makeI18nLabeler(t: TFunc): SidebarLabeler {
   return {
-    noData: () => tt('ui.left-panel.no-data'),
-    // 보간 var 명은 locale 템플릿과 일치해야 한다: ui.left-panel.live-count="라이브 {count}개",
-    //   session-count="{project} · {count}개". 과거 'n' 으로 넘겨 {count} 가 치환되지 않고
-    //   리터럴 노출되던 버그(sessionPaneHint '… {count}개')를 'count' 로 정정(legacy left-panel.js 1:1).
-    liveCount: (count) => tt('ui.left-panel.live-count', { count }),
-    selectProject: () => tt('ui.left-panel.select-project'),
-    sessionCount: (project, count) => tt('ui.left-panel.session-count', { project, count }),
-    globalRowLabel: () => tt('ui.left-panel.global-row-label'),
-    globalRowTitle: () => tt('ui.left-panel.global-row-title'),
+    noData: () => t('ui.left-panel.no-data'),
+    liveCount: (count) => t('ui.left-panel.live-count', { count }),
+    selectProject: () => t('ui.left-panel.select-project'),
+    sessionCount: (project, count) => t('ui.left-panel.session-count', { project, count }),
+    globalRowLabel: () => t('ui.left-panel.global-row-label'),
+    globalRowTitle: () => t('ui.left-panel.global-row-title'),
   };
 }
