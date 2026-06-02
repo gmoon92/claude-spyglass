@@ -18,7 +18,6 @@ import {
 } from '../features/settings';
 import { Toast } from '../components/settings/Toast';
 import { useTranslation } from 'react-i18next';
-import { tt } from './i18n-labeler';
 
 /** 6 sub-tab 식별자(settings-view.js 탭 순서 1:1). */
 type SettingsTab = 'diag' | 'hooks' | 'server' | 'graph' | 'sqlite' | 'proxy';
@@ -47,22 +46,29 @@ function renderPanel(
   tab: SettingsTab,
   onJump: (t: SettingsTab) => void,
   onCopy: (text: string) => void,
+  t: (key: string, vars?: Record<string, unknown>) => string,
 ): ReactElement {
   switch (tab) {
-    case 'hooks': return <HooksPanel t={tt} />;
-    case 'server': return <ServerPanel t={tt} onCopy={onCopy} />;
-    case 'graph': return <GraphPanel t={tt} onCopy={onCopy} />;
-    case 'sqlite': return <SqlitePanel t={tt} onCopy={onCopy} />;
-    case 'proxy': return <ProxyPanel t={tt} onCopy={onCopy} />;
+    case 'hooks': return <HooksPanel t={t} />;
+    case 'server': return <ServerPanel t={t} onCopy={onCopy} />;
+    case 'graph': return <GraphPanel t={t} onCopy={onCopy} />;
+    case 'sqlite': return <SqlitePanel t={t} onCopy={onCopy} />;
+    case 'proxy': return <ProxyPanel t={t} onCopy={onCopy} />;
     case 'diag':
     default:
-      return <DiagPanel t={tt} onJump={(x) => onJump(x as SettingsTab)} onCopy={onCopy} />;
+      return <DiagPanel t={t} onJump={(x) => onJump(x as SettingsTab)} onCopy={onCopy} />;
   }
 }
 
 export function SettingsLayout(): ReactElement {
-  // i18n(태스크 #12) — 언어 변경 구독(재렌더 → tt/renderPanel 재평가, window.I18n 동기값 반영, reload 불요).
-  useTranslation();
+  // i18n — react-i18next 단일 경로. 언어 변경 시 useTranslation 구독으로 재렌더 → t() 재평가(reload 불요).
+  const { t } = useTranslation();
+  // 패널/헤더(모듈 함수 renderPanel 경유)는 TFunc 계약((key,vars)=>string)을 prop 으로 받는다.
+  //   react-i18next t 를 그 시그니처로 래핑 — 레거시 tt 주입을 대체(window.I18n 비참조).
+  const tx = useCallback(
+    (key: string, vars?: Record<string, unknown>): string => t(key, vars) as unknown as string,
+    [t],
+  );
   const [tab, setTab] = useState<SettingsTab>('diag');
   // 새로고침 카운터 — 증가 시 활성 패널을 remount 시켜 useAsyncResource 재페치(원본 renderActiveTab 재실행 :131).
   const [refreshKey, setRefreshKey] = useState(0);
@@ -73,13 +79,13 @@ export function SettingsLayout(): ReactElement {
   const onCopy = useCallback((text: string) => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(text).then(
-        () => setToast(tt('ui.settings-view.proxy.copied')),
+        () => setToast(t('ui.settings-view.proxy.copied')),
         () => setToast('Copy failed'),
       );
     } else {
-      setToast(tt('ui.settings-view.proxy.copied'));
+      setToast(t('ui.settings-view.proxy.copied'));
     }
-  }, []);
+  }, [t]);
 
   // 컨테이너 셸 — 원본 index.html `<section id="settingsView" class="settings-view">`(:814) 1:1.
   //   설정 CSS(settings-view.css) 가 `#settingsView.settings-view` 셀렉터로 grid-column:3/4 +
@@ -93,7 +99,7 @@ export function SettingsLayout(): ReactElement {
       data-testid="settings-layout"
       aria-label="Settings panel"
     >
-      <SettingsHeader onRefresh={onRefresh} t={tt} />
+      <SettingsHeader onRefresh={onRefresh} t={tx} />
       {/* 본문 2-column grid — 좌 .settings-nav(200px) + 우 .settings-content(1fr). 원본 :829. */}
       <div className="settings-body">
         <nav className="settings-nav" data-testid="settings-nav" role="tablist" aria-label="Settings sub-tabs">
@@ -107,14 +113,14 @@ export function SettingsLayout(): ReactElement {
               className={`settings-nav-btn${tab === key ? ' is-active' : ''}`}
               onClick={() => setTab(key)}
             >
-              {tt(labelKey)}
+              {t(labelKey)}
             </button>
           ))}
         </nav>
         <div className="settings-content" data-testid="settings-panel" role="tabpanel">
           {/* key=tab:refreshKey — 탭 전환·새로고침 모두 패널 remount → useAsyncResource 재페치(원본 :131). */}
           <div key={`${tab}:${refreshKey}`} className="settings-content-body">
-            {renderPanel(tab, setTab, onCopy)}
+            {renderPanel(tab, setTab, onCopy, tx)}
           </div>
         </div>
       </div>
