@@ -43,7 +43,6 @@ import { useVersionStore } from '../../stores/version-store';
 import { useObsCards } from './use-obs-cards';
 import { usePanelResize } from './use-panel-resize';
 import { useTranslation } from 'react-i18next';
-import { tt } from '../../app/i18n-labeler';
 
 /** 패널 크롬 라벨(thead/세션 panel-label) — 레거시 정적 i18n(ui.html.left-panel / session-panel.label).
  *  SidebarLabeler(공유)에는 없는 chrome-only 라벨이라 별도 옵셔널 prop 으로 주입(미지정 시 레거시 영문 폴백). */
@@ -94,8 +93,9 @@ export function BrowseSidebar({
   chromeLabels,
   versionT,
 }: BrowseSidebarProps): ReactElement {
-  // i18n(태스크 #12) — 언어 변경 구독(재렌더 → tt 재평가, window.I18n 동기값 반영).
-  useTranslation();
+  // i18n — react-i18next 단일 경로. 언어 변경 시 useTranslation 구독으로 재렌더 → tr() 재평가.
+  //   (지역 t 는 버전배지 라벨러 versionT 가 이미 점유 → react-i18next t 는 tr 로 받는다.)
+  const { t: tr } = useTranslation();
   const obs = useObsCards(obsIntervalMs != null ? { intervalMs: obsIntervalMs } : {});
   const { panelRef, widthHandleRef, vTopHandleRef, vBottomHandleRef, vProjectsRef, vSessionsRef, vToolsRef } =
     usePanelResize();
@@ -112,11 +112,11 @@ export function BrowseSidebar({
 
   // 패널 크롬 라벨(thead/세션 panel-label) — 레거시 정적 i18n 1:1 (index.html data-i18n).
   //   chromeLabels prop 으로 명시 주입되면 그것을 우선(테스트·호출처 override), 미지정 시 i18n 어댑터
-  //   tt() 로 해석(window.I18n 부재 시 key passthrough — 레거시 data-i18n 미해석 폴백과 동치).
-  const thProject = chromeLabels?.thProject ?? tt('ui.html.left-panel.th-project');
-  const thSession = chromeLabels?.thSession ?? tt('ui.html.left-panel.th-session');
-  const thToken = chromeLabels?.thToken ?? tt('ui.html.left-panel.th-token');
-  const sessionPanelLabel = chromeLabels?.sessionPanelLabel ?? tt('ui.html.session-panel.label');
+  //   t() 로 해석(react-i18next, 키 부재 시 key passthrough — 레거시 data-i18n 미해석 폴백과 동치).
+  const thProject = chromeLabels?.thProject ?? tr('ui.html.left-panel.th-project');
+  const thSession = chromeLabels?.thSession ?? tr('ui.html.left-panel.th-session');
+  const thToken = chromeLabels?.thToken ?? tr('ui.html.left-panel.th-token');
+  const sessionPanelLabel = chromeLabels?.sessionPanelLabel ?? tr('ui.html.session-panel.label');
 
   return (
     <aside className="left-panel" data-testid="browse-sidebar" ref={panelRef}>
