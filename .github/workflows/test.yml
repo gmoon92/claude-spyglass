@@ -14,8 +14,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # P5-07: web 은 러너를 Vitest 로 전환(아래 web-unit job). storage/server 는 bun test 유지.
-        package: [storage, server]
+        # P5-07: web 은 러너를 Vitest 로 전환(아래 web-unit job). storage/server/storage-graph 는 bun test 유지.
+        # storage-graph: flow 쿼리(unified-flow 등)가 storage→storage-graph 분리로 이동(refactor 1f2b782).
+        #   기존 flow-patterns 잡이 삭제된 meta-document-flow-patterns.test.ts 를 가리켜 깨졌으므로,
+        #   storage-graph 를 정식 unit 매트릭스로 승격(137 테스트, Ladybug 미설치 환경에서도 통과).
+        package: [storage, server, storage-graph]
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -76,24 +79,6 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
       - run: bun install --frozen-lockfile
       - run: bun test packages/server/src/__tests__/read-endpoint-contract.test.ts
-
-  flow-patterns:
-    name: flow pattern (shard ${{ matrix.shard }})
-    runs-on: ubuntu-latest
-    needs: [unit]
-    strategy:
-      matrix:
-        shard: [1, 2, 3]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with: { bun-version: '1.2.x' }
-      - uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-      - run: bun install --frozen-lockfile
-      - run: bun test packages/storage/src/__tests__/meta-document-flow-patterns.test.ts
 
   isolation-grep:
     name: isolation gate (grep)
