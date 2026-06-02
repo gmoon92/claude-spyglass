@@ -8,8 +8,8 @@
       "aria": "アプリモード",
       "browse-aria": "ブラウズ（セッション・リクエスト表示）",
       "browse-title": "ブラウズ",
-      "metadocs-aria": "Behavior Definitions カタログ",
-      "metadocs-title": "Behavior Definitions",
+      "metadocs-aria": "メタドキュメント カタログ",
+      "metadocs-title": "メタドキュメント",
       "settings-aria": "設定 — 診断、Hook、Graph DB",
       "settings-title": "設定"
     },
@@ -171,7 +171,7 @@
     "system-none": "system なし"
   },
   "meta-docs-view": {
-    "tab-docs-label": "Behavior Definitions",
+    "tab-docs-label": "メタドキュメント",
     "tab-tools-label": "ツール",
     "flow": {
       "scope-center": "中心",
