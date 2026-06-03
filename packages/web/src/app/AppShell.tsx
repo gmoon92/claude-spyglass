@@ -29,6 +29,8 @@ import { useTranslation } from 'react-i18next';
 import { AppRail } from './AppRail';
 import { ErrorBanner } from './ErrorBanner';
 import { Footer } from './Footer';
+import { KeyboardHelpModal } from './KeyboardHelpModal';
+import { useKeyboardShortcuts } from './use-keyboard-shortcuts';
 import { DashboardWarning } from './DashboardWarning';
 import {
   UpdateBadge,
@@ -131,9 +133,13 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
   // shallow dismiss 로컬 상태 — 초기값은 localStorage 영속분 반영(원본 applyShallowWarning dismiss 판정).
   const [shallowDismissed, setShallowDismissed] = useState<boolean>(() => readShallowDismissed());
 
-  const onHelp = useCallback(() => {
-    // keyboard-help 오버레이는 후속 chrome — 진입점만 노출(본 범위 밖). 안전 no-op.
-  }, []);
+  // 키보드 단축키 도움말 모달(레거시 keyboard.js + renderKbdHelpModal 복원) — footer `?` 버튼과
+  //   `?` 키 모두 토글(레거시 btnHelpOpen→toggleKbdHelp 1:1). 전역 keydown(/·⌘F·1-7·ESC 체인)은
+  //   use-keyboard-shortcuts 훅이 단일 소유.
+  const [helpOpen, setHelpOpen] = useState(false);
+  const onHelp = useCallback(() => setHelpOpen((v) => !v), []);
+  const onCloseHelp = useCallback(() => setHelpOpen(false), []);
+  useKeyboardShortcuts({ helpOpen, onToggleHelp: onHelp, onCloseHelp });
 
   const onRetry = useCallback(() => {
     // 원본 retryBtn → 재연결. SSE 컨트롤러는 자체 5초 backoff 재연결하므로, 즉시 재시도는 reload 동치.
@@ -245,6 +251,9 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
         onCopy={onCopyShallow}
         t={t}
       />
+
+      {/* 키보드 단축키 도움말 모달(레거시 #kbdHelpBackdrop) — footer `?` 버튼·`?` 키 토글, ESC/백드롭/× 닫기. */}
+      <KeyboardHelpModal open={helpOpen} onClose={onCloseHelp} t={t} />
 
       {/* 전역 호버 툴팁(B-1 — React Portal). document 위임으로 [data-*-tooltip]/.cache-cell 감지 +
           tooltip-store point-hover 구독 → createPortal(body) 로 .stat-tooltip/.cache-tooltip 표시.
