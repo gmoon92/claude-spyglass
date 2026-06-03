@@ -66,6 +66,7 @@ import {
   type ToolStatsSortKey,
   type SortDir as ToolSortDir,
 } from '../features/dashboard/tool-stats-sort';
+import { SidebarVersionFooter } from '../features/dashboard';
 import { MetaProjectList, type ProjectLike, type SidebarLabeler, type MetaCounts } from '../features/browse/Sidebar';
 import { useAppStore } from '../stores/app-store';
 import type { PresetValue } from '../stores/app-store';
@@ -453,6 +454,12 @@ export function MetaDocsLayout(): ReactElement {
             요약 카드와 별도 컨테이너여야 가로폭 전체를 써 막대가 노출된다(둘을 한 flex-row 에 같이 두면 카드 옆에
             붙어 눌리던 회귀). rows 비면 미렌더(트랙 0px). */}
         <MetaDocsBehaviorBars rows={rows} />
+
+        {/* footer — update-badge(metadocs grid row6, meta-docs.css 가 예약한 마지막 트랙).
+            browse 와 동일한 SidebarVersionFooter 단일 출처로 렌더해, 과거 footer 미렌더로 인해
+            AppShell .app-shell-update-badge(fixed 좌하단) 폴백이 대신 뜨며 위치/스타일이 어긋나던
+            update-badge-position 회귀를 해소한다. version-store 구독·모달 결선은 컴포넌트가 캡슐화. */}
+        <SidebarVersionFooter t={tx} />
       </aside>
 
       {/* ── metaDocsRoot(원본 :779) — Behavior Definitions 카탈로그 컨테이너(grid-column 3/4). ── */}

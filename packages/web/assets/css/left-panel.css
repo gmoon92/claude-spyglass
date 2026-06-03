@@ -257,14 +257,16 @@
 
 /* 버그 #6 — AppShell fallback update-badge (사이드바 footer 가 배지를 소유하지 않는 모드용).
    노드는 항상 마운트해 AppShell chrome 마운트 계약(app-shell.test SSR)을 보존하되,
-   기본 숨김으로 둔다: (1) browse 는 .left-panel-footer(BrowseSidebar)가 배지를 소유하므로 중복 제거,
+   기본 숨김으로 둔다: (1) browse·metadocs 는 .left-panel-footer(SidebarVersionFooter)가 배지를 소유하므로 중복 제거,
    (2) body[data-app-mode] 가 effect 로 세팅되기 전(초기 프레임)·SSR 에도 노출되지 않아 깜빡임 없음
        — 과거 .app-shell 형제로 직접 둬 position 없는 width:100% 버튼이 footer 아래 전폭으로 깔리던 stray 제거.
-   사이드바 배지가 없는 모드(metadocs/settings)에서만 좌하단 고정 + 폭 컴팩트로 노출한다. */
+
+   update-badge-position 회귀: 과거 metadocs 는 좌측 패널 footer 를 렌더하지 않아 이 fixed 폴백이
+   대신 노출됐고, browse 의 사이드바 in-flow footer 와 위치/스타일이 어긋났다. 이제 metadocs 도
+   SidebarVersionFooter 를 grid 마지막 트랙에 렌더하므로 폴백은 사이드바 자체가 없는 settings 에서만 노출한다. */
 .app-shell-update-badge {
   display: none;
 }
-body[data-app-mode="metadocs"] .app-shell-update-badge,
 body[data-app-mode="settings"] .app-shell-update-badge {
   display: flex;
   position: fixed;
