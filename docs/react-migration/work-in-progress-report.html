@@ -178,7 +178,7 @@ export function TurnSpikeSummary({ agentSpike, samples }) { ... }  // _spikeSpar
 
       <div class="task-card">
         <div class="task-header"><span class="task-title">A-2. CustomEvent 제거</span><span class="badge badge-warn">난이도 하 · 격리</span></div>
-        <div class="task-desc"><code>ContextChart.tsx</code> <code>ctx-point-hover</code> → 콜백 prop. <code>Sidebar.tsx</code> <code>session-anomalies-loaded</code> → Zustand 구독. 2곳, 격리도 높아 단독 진행 적합.</div>
+        <div class="task-desc"><strong>3종</strong>(실측): <code>ContextChart.tsx</code> <code>ctx-point-hover</code> + <code>Chart.tsx</code> <code>timeline-point-hover</code> → 콜백 prop(둘 다 <code>use-tooltip.ts</code>가 <code>addEventListener</code>로 구독). <code>detail-view.ts</code>→<code>Sidebar.tsx</code> <code>session-anomalies-loaded</code> → Zustand 구독. ⚠ 발행↔구독 양쪽을 함께 교체해야 함(use-tooltip B-1과 연동).</div>
       </div>
       <div class="task-card">
         <div class="task-header"><span class="task-title">A-1. chip-jump.ts React화</span><span class="badge badge-warn">난이도 하</span></div>
@@ -186,7 +186,7 @@ export function TurnSpikeSummary({ agentSpike, samples }) { ... }  // _spikeSpar
       </div>
       <div class="task-card">
         <div class="task-header"><span class="task-title">D-1. window.I18n fallback 제거</span><span class="badge badge-ghost">난이도 하 · 광범위</span></div>
-        <div class="task-desc">8개 컴포넌트의 <code>defaultT = (k, vars) =&gt; window.I18n?.t?.(k, vars) ?? k</code> → <code>useTranslation()</code>. i18next 리소스 완비 확인 선행. (classic i18n 3종 island 제거는 별개 — FOUC/server drift 테스트 의존, 후순위.)</div>
+        <div class="task-desc"><strong>~20개 파일</strong>(실측 — 다른 세션 audit의 "8개"는 과소평가)의 <code>defaultT = (k, vars) =&gt; window.I18n?.t?.(k, vars) ?? k</code> → <code>useTranslation()</code>. i18next 리소스 완비 확인 선행. <em>예외(유지)</em>: <code>lib/i18n.ts</code>(parseMissingKeyHandler)·<code>lib/i18n-legacy-bridge.ts</code>는 classic↔react 브릿지 SSoT라 의도적 잔존. (classic i18n 3종 island 제거는 별개 — FOUC/server drift 테스트 의존, 후순위.)</div>
       </div>
       <div class="task-card">
         <div class="task-header"><span class="task-title">B-1. use-tooltip.ts React Portal화</span><span class="badge badge-info">난이도 중</span></div>
