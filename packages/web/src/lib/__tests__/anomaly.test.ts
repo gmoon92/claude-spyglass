@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { getAnomalyFlagsForRow } from '../anomaly.js';
+import { getAnomalyFlagsForRow } from '../anomaly';
 
 describe('getAnomalyFlagsForRow — bloated_sys 매핑 (ADR-001/003)', () => {
   it('stage="warn" → "bloated-sys-warn" 플래그', () => {

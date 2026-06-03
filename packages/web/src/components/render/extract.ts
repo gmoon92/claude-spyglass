@@ -5,11 +5,11 @@
 //
 // 외부 노출: _promptCache (turn-views.js), contextPreview/extractPromptText/extractAssistantText/extractFirstPrompt/parseToolDetail (turn-rows·flat-view).
 
-import { escHtml } from '../formatters.js';
-import { toolResponseHint } from './badges.js';
-import { svgRadio } from '../design-system/icons/radio.js';
-import { svgCheck } from '../design-system/icons/check.js';
-import type { RowTextReader } from '../view-types.js';
+import { escHtml } from '../../../assets/js/formatters.js';
+import { toolResponseHint } from '../../../assets/js/render/badges.js';
+import { svgRadio } from '../../../assets/js/design-system/icons/radio.js';
+import { svgCheck } from '../../../assets/js/design-system/icons/check.js';
+import type { RowTextReader } from '../../../assets/js/view-types.js';
 
 const PROMPT_CACHE_MAX = 500;
 export const _promptCache = new Map<string, ExpandContent>(); // export: togglePromptExpand 공유

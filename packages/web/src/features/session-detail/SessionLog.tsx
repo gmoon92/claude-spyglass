@@ -23,7 +23,7 @@
  */
 import { useEffect, useRef, type ReactNode, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
-import { initColResize } from '../../../assets/js/col-resize.js';
+import { initColResize } from '../../lib/col-resize';
 import { TurnRows } from './TurnRows';
 
 interface RowLike {

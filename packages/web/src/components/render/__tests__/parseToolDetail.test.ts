@@ -13,7 +13,7 @@
 
 import { describe, it, expect } from 'vitest';
 // SSoT 단일화 — 인라인 복제본 제거, extract.js export 재사용.
-import { parseToolDetail } from './assets/js/render/extract.js';
+import { parseToolDetail } from '../extract';
 
 describe('parseToolDetail (SSoT = render/extract.js)', () => {
   it('JSON 객체 — key: value 포맷으로 변환', () => {

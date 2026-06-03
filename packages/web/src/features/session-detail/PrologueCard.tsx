@@ -17,7 +17,7 @@
 import type { ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fmtTime } from '../../../assets/js/formatters.js';
-import { contextPreview } from '../../../assets/js/render/extract.js';
+import { contextPreview } from '../../components/render/extract';
 import { targetInner } from '../../components/render';
 
 interface PrologueRow {

@@ -13,7 +13,7 @@
 import type { ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 // SSoT 재사용 — 분류/라벨/신뢰도 판정 로직은 원본 JS 단일 출처.
-import { modelClassOf, modelChipLabel } from '../../../assets/js/render/model.js';
+import { modelClassOf, modelChipLabel } from './model-classify';
 
 interface RowLike {
   model?: string | null;

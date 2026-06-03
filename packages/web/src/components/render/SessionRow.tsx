@@ -14,7 +14,7 @@
  */
 import type { ReactElement } from 'react';
 import { fmtToken, fmtRelative } from '../../../assets/js/formatters.js';
-import { extractFirstPrompt } from '../../../assets/js/render/extract.js';
+import { extractFirstPrompt } from './extract';
 import { bloatedSysBadgeDotHtml } from '../../../assets/js/render/badges.js';
 import { getBloatedSysFor } from '../../../assets/js/state/anomaly-cache.js';
 import { StatusActive, StatusStale, StatusEnded } from '../design-system/icons';

@@ -20,7 +20,7 @@
 import type { ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { escHtml } from '../../../assets/js/formatters.js';
-import { _promptCache } from '../../../assets/js/render/extract.js';
+import { _promptCache } from './extract';
 
 /**
  * 펼침 행 — 원본 expand.ts#togglePromptExpand 의 table 모드 출력(boxHtml 포함)과 동치.

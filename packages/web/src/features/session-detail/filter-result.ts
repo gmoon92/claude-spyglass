@@ -13,7 +13,7 @@
  * @module features/session-detail/filter-result
  */
 import { subTypeOf, SUB_TYPES } from '../../../assets/js/request-types.js';
-import { getAnomalyFlagsForRow } from '../../../assets/js/anomaly.js';
+import { getAnomalyFlagsForRow } from '../../lib/anomaly';
 
 interface RequestLike {
   id?: string | null;

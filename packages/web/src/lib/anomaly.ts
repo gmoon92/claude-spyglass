@@ -17,7 +17,7 @@
 //
 // @see .claude/docs/plans/anomaly-bloated-sys/adr.md ADR-003
 
-import type { RowAnomalyReader } from './view-types.js';
+import type { RowAnomalyReader } from '../../assets/js/view-types.js';
 
 /**
  * 행 객체에서 서버가 채운 anomaly 플래그 Set 을 추출 (표시용).

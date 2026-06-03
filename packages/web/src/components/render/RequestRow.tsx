@@ -22,12 +22,12 @@ import {
   fmtTimestamp,
 } from '../../../assets/js/formatters.js';
 import { subTypeOf } from '../../../assets/js/request-types.js';
-import { trustOf, rowTrustClass } from '../../../assets/js/render/model.js';
+import { trustOf, rowTrustClass } from './model-classify';
 import {
   contextPreview,
   extractPromptText,
   extractAssistantText,
-} from '../../../assets/js/render/extract.js';
+} from './extract';
 import { bloatedSysBadgeMiniHtml } from '../../../assets/js/render/badges.js';
 import { ActionBadge, CacheCell, targetInner } from './cells';
 import { ModelCell } from './model';

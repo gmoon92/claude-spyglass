@@ -15,7 +15,7 @@
  *
  * @module features/session-detail/turn-haystack
  */
-import { extractPromptText, extractAssistantText } from '../../../assets/js/render/extract.js';
+import { extractPromptText, extractAssistantText } from '../../components/render/extract';
 
 interface PromptLike {
   preview?: string;
