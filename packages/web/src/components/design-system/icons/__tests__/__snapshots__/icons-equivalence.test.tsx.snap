@@ -1,0 +1,59 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`icons golden — 20개 아이콘 default 출력 > AgentDot (stroke-only 이중 원, size 12) 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"></circle><circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.5"></circle></svg>"`;
+
+exports[`icons golden — 20개 아이콘 default 출력 > Bolt (단일 path, size 14) 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 1.5L3 9h4.5L6.5 14.5L13 7H8.5L9.5 1.5z"></path></svg>"`;
+
+exports[`icons golden — 20개 아이콘 default 출력 > Check (rect only, size 12) 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="2"></rect></svg>"`;
+
+exports[`icons golden — 20개 아이콘 default 출력 > Chevron (viewBox 12, sw 1.6, data-dir right) 1`] = `"<svg aria-hidden="true" data-dir="right" viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2L8.5 6L4.5 10"></path></svg>"`;
+
+exports[`icons golden — 20개 아이콘 default 출력 > Diamond (fill-only, size 10) 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="10" height="10" fill="none"><path d="M8 1L15 8L8 15L1 8z" fill="currentColor"></path></svg>"`;
+
+exports[`icons golden — 20개 아이콘 default 출력 > ErrorIcon (circle + X, size 14) 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5"></circle><line x1="5.5" y1="5.5" x2="10.5" y2="10.5"></line><line x1="10.5" y1="5.5" x2="5.5" y2="10.5"></line></svg>"`;
+
+exports[`icons golden — 20개 아이콘 default 출력 > Info (circle + line + dot, size 14) 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5"></circle><line x1="8" y1="5" x2="8" y2="9"></line><circle cx="8" cy="11.5" r="0.6" fill="currentColor" stroke="none"></circle></svg>"`;
+
+exports[`icons golden — 20개 아이콘 default 출력 > McpDot (4 dots + center, size 12) 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="4" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="12" cy="4" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="4" cy="12" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="8" cy="8" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"></circle></svg>"`;
+
+exports[`icons golden — 20개 아이콘 default 출력 > Note (viewBox 12, xmlns, default className) 1`] = `"<svg class="turn-system-reminder-icon" aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.25 1.75 H7.5 L9.75 4 V10.25 H2.25 Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M7.5 1.75 V4 H9.75" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M4 6.25 H7.75 M4 8.25 H6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>"`;
+
+exports[`icons golden — 20개 아이콘 default 출력 > Radio (outline circle, no cap/join, size 12) 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"></circle></svg>"`;
+
+exports[`icons golden — 20개 아이콘 default 출력 > Refresh (4 arcs, size 12 passthrough) 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8a5.5 5.5 0 0 1 9.4-3.9"></path><path d="M13.5 8a5.5 5.5 0 0 1-9.4 3.9"></path><path d="M9.5 4.5h2.5V2"></path><path d="M6.5 11.5H4V14"></path></svg>"`;
+
+exports[`icons golden — 20개 아이콘 default 출력 > Search (circle + handle, size 14) 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="4.5"></circle><line x1="10.5" y1="10.5" x2="14" y2="14"></line></svg>"`;
+
+exports[`icons golden — 20개 아이콘 default 출력 > SkillDot (fish-eye, size 12) 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"></circle><circle cx="8" cy="8" r="3.5" fill="currentColor" stroke="none"></circle></svg>"`;
+
+exports[`icons golden — 20개 아이콘 default 출력 > StatusActive (filled circle, size 12) 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5" fill="currentColor"></circle></svg>"`;
+
+exports[`icons golden — 20개 아이콘 default 출력 > StatusEnded (outline circle, size 12) 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.5"></circle></svg>"`;
+
+exports[`icons golden — 20개 아이콘 default 출력 > StatusStale (outline + half-fill, size 12) 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.5"></circle><path d="M8 3 A5 5 0 0 1 8 13 Z" fill="currentColor" stroke="none"></path></svg>"`;
+
+exports[`icons golden — 20개 아이콘 default 출력 > ToolDot (fish-eye, size 12) 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"></circle><circle cx="8" cy="8" r="3.5" fill="currentColor" stroke="none"></circle></svg>"`;
+
+exports[`icons golden — 20개 아이콘 default 출력 > Trash (4 paths, size 12 passthrough) 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5l1 9a1.2 1.2 0 0 0 1.2 1H10.8a1.2 1.2 0 0 0 1.2-1l1-9"></path><path d="M2 4.5h12"></path><path d="M6 4.5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5"></path><path d="M6.5 7.5v4M9.5 7.5v4"></path></svg>"`;
+
+exports[`icons golden — 20개 아이콘 default 출력 > Warn (triangle + bang, size 12 passthrough) 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5L14.5 13.5H1.5L8 2.5Z"></path><path d="M8 7v3.2"></path><path d="M8 12.2v0.01"></path></svg>"`;
+
+exports[`icons golden — 옵션 분기(selected/dir/size/className/ariaLabel) > AgentDot className + ariaLabel → role=img + aria-label 1`] = `"<svg class="x" role="img" aria-label="agent" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"></circle><circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.5"></circle></svg>"`;
+
+exports[`icons golden — 옵션 분기(selected/dir/size/className/ariaLabel) > Bolt size override 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 1.5L3 9h4.5L6.5 14.5L13 7H8.5L9.5 1.5z"></path></svg>"`;
+
+exports[`icons golden — 옵션 분기(selected/dir/size/className/ariaLabel) > Check selected=true → rect + 체크 path 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="2"></rect><path d="M5 8.5L7.5 11L11.5 5.5"></path></svg>"`;
+
+exports[`icons golden — 옵션 분기(selected/dir/size/className/ariaLabel) > Chevron dir="down" → rotate(90deg) 1`] = `"<svg aria-hidden="true" style="transform:rotate(90deg)" data-dir="down" viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2L8.5 6L4.5 10"></path></svg>"`;
+
+exports[`icons golden — 옵션 분기(selected/dir/size/className/ariaLabel) > Chevron dir="left" → rotate(180deg) 1`] = `"<svg aria-hidden="true" style="transform:rotate(180deg)" data-dir="left" viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2L8.5 6L4.5 10"></path></svg>"`;
+
+exports[`icons golden — 옵션 분기(selected/dir/size/className/ariaLabel) > Chevron dir="up" → rotate(270deg) 1`] = `"<svg aria-hidden="true" style="transform:rotate(270deg)" data-dir="up" viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2L8.5 6L4.5 10"></path></svg>"`;
+
+exports[`icons golden — 옵션 분기(selected/dir/size/className/ariaLabel) > Diamond size override 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="24" height="24" fill="none"><path d="M8 1L15 8L8 15L1 8z" fill="currentColor"></path></svg>"`;
+
+exports[`icons golden — 옵션 분기(selected/dir/size/className/ariaLabel) > Note className override (default 대체) 1`] = `"<svg class="custom" aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.25 1.75 H7.5 L9.75 4 V10.25 H2.25 Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M7.5 1.75 V4 H9.75" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M4 6.25 H7.75 M4 8.25 H6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>"`;
+
+exports[`icons golden — 옵션 분기(selected/dir/size/className/ariaLabel) > Radio selected=true → outline + 채움 점 1`] = `"<svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"></circle><circle cx="8" cy="8" r="3" fill="currentColor" stroke="none"></circle></svg>"`;
+
+exports[`icons golden — 옵션 분기(selected/dir/size/className/ariaLabel) > Search ariaLabel 지정 1`] = `"<svg role="img" aria-label="search" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="4.5"></circle><line x1="10.5" y1="10.5" x2="14" y2="14"></line></svg>"`;
