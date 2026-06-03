@@ -11,7 +11,8 @@
  *
  * SSoT 재사용(재구현 금지):
  *  - 칩/스파인 → Chip/ChipFlow/TurnSpine(turn-spine-equivalence 게이트로 oracle 동치 보증).
- *  - spike summary → render/badges.js#turnSpikeSummaryHtml(HTML 문자열 SSoT) — RawHtml 주입.
+ *  - spike summary → render/anomaly-badges.tsx#TurnSpikeSummary(React 컴포넌트, B-2) — 판정 SSoT 는
+ *    lib/anomaly-field, sparkline 마크업은 컴포넌트 내부 1:1 재현.
  *  - 리마인더 칩 → SystemReminderChip.
  *
  * 활성 턴 결정/집계는 상위(이식 후 useSessionDetailData 훅/스토어)가 책임진다 — 본 컴포넌트는
@@ -21,7 +22,7 @@
  */
 import { useEffect, useMemo, useRef, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
-import { turnSpikeSummaryHtml } from '../../../assets/js/render/badges.js';
+import { TurnSpikeSummary } from '../../components/render/anomaly-badges';
 import { FlowHead } from './FlowHead';
 import { TurnSpine } from './TurnSpine';
 import { PrologueCard } from './PrologueCard';
@@ -57,13 +58,6 @@ interface FlowPaneProps {
   chipRefs: ChipJumpRefs;
 }
 
-/** spike summary HTML(badges.js SSoT) 를 안전 주입 — 빈 문자열이면 미렌더. */
-function SpikeSummary({ agentSpike, samples }: { agentSpike: unknown; samples: number[] }): ReactElement | null {
-  const html = turnSpikeSummaryHtml(agentSpike, samples) || '';
-  if (!html) return null;
-  return <span dangerouslySetInnerHTML={{ __html: html }} />;
-}
-
 /**
  * flow-pane 조립체. SessionLog 의 flowPane prop 으로 주입된다.
  */
@@ -94,7 +88,7 @@ export function FlowPane({
   const extra = (
     <>
       {activeTurn ? <SystemReminderChip turnIndex={activeTurn.turn_index} reminders={activeReminders} /> : null}
-      {activeTurn ? <SpikeSummary agentSpike={agentSpike} samples={spikeSamples} /> : null}
+      {activeTurn ? <TurnSpikeSummary agentSpike={agentSpike} samples={spikeSamples} /> : null}
     </>
   );
 

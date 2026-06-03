@@ -19,7 +19,7 @@
 import type { ReactElement } from 'react';
 import { fmtToken, fmtRelative } from '../../../assets/js/formatters.js';
 import { extractFirstPrompt } from './extract';
-import { bloatedSysBadgeDotHtml } from '../../../assets/js/render/badges.js';
+import { BloatedSysBadge } from './anomaly-badges';
 import { getBloatedSysFor } from '../../stores/anomaly-store';
 import { StatusActive, StatusStale, StatusEnded } from '../design-system/icons';
 
@@ -72,7 +72,8 @@ export function SessionRow({ s, isSelected, t: tProp }: { s: SessionLike; isSele
   const shortId = s.id.slice(0, 8);
   const preview = extractFirstPrompt(s.first_prompt_payload);
   const rel = fmtRelative(s.started_at);
-  const bloatedDotHtml = bloatedSysBadgeDotHtml(s.bloated_sys || getBloatedSysFor(s.id));
+  // bloated dot 소스 — 단건 fetch(s.bloated_sys) 우선, 없으면 anomaly-store 비반응형 읽기(원본 동치).
+  const bloatedSrc = s.bloated_sys || getBloatedSysFor(s.id);
 
   return (
     <tr className={`clickable${isSelected ? ' row-selected' : ''}`} data-session-id={s.id}>
@@ -91,7 +92,7 @@ export function SessionRow({ s, isSelected, t: tProp }: { s: SessionLike; isSele
           >
             {statusGlyph}
           </span>
-          {bloatedDotHtml ? <span dangerouslySetInnerHTML={{ __html: bloatedDotHtml }} /> : null}
+          <BloatedSysBadge bloatedSys={bloatedSrc} variant="dot" t={t} />
         </div>
         {preview ? (
           <div className="sess-row-preview" title={preview}>

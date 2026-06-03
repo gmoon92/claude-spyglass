@@ -29,7 +29,8 @@
 import { useMemo, useRef, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fmtToken, fmtDate } from '../../../assets/js/formatters.js';
-import { bloatedSysBadgeFullHtml, contextSaturationBadgeFullHtml } from '../../../assets/js/render/badges.js';
+import { BloatedSysBadge, ContextSaturationBadge } from '../../components/render/anomaly-badges';
+import { bloatedSysInfo, contextSaturationInfo } from '../../lib/anomaly-field';
 import { SessionLog } from './SessionLog';
 import { FlowPane } from './FlowPane';
 
@@ -53,12 +54,6 @@ interface SessionDetailHeaderProps {
   turnCount?: number | null;
 }
 
-/** badges.js HTML SSoT 안전 주입 — 빈 문자열이면 미렌더. */
-function BadgeHtml({ html }: { html: string }): ReactElement | null {
-  if (!html) return null;
-  return <span dangerouslySetInnerHTML={{ __html: html }} />;
-}
-
 /**
  * 세션 상세 헤더 — 원본 loadSession 의 헤더 텍스트(:59-64) + applyBloatedSysHeader(:166)/
  * applyContextSaturationHeader(:141) 의 DOM 변이를 선언적 렌더로 대체.
@@ -76,13 +71,14 @@ export function SessionDetailHeader({
   turnCount = null,
 }: SessionDetailHeaderProps): ReactElement {
   const { t } = useTranslation();
-  const bloatedHtml = bloatedSysBadgeFullHtml(bloatedSys) || '';
-  const ctxSatHtml = contextSaturationBadgeFullHtml(contextSaturation) || '';
+  // 노출 여부 SSoT — anomaly-field 판정(badgesHidden 계산용). 렌더는 React 컴포넌트가 동일 판정 재사용.
+  const hasBloated = !!bloatedSysInfo(bloatedSys);
+  const hasCtxSat = !!contextSaturationInfo(contextSaturation);
   const showTurnHint = Number.isFinite(turnCount) && (turnCount as number) >= 20;
   const turnHint = showTurnHint
     ? t('ui.detail-view.turn-count-hint', { count: turnCount as number })
     : '';
-  const badgesHidden = !bloatedHtml && !ctxSatHtml && !showTurnHint;
+  const badgesHidden = !hasBloated && !hasCtxSat && !showTurnHint;
 
   return (
     <div className="detail-header">
@@ -102,8 +98,8 @@ export function SessionDetailHeader({
         id="detailBadges"
         className={badgesHidden ? 'detail-agg-badges detail-agg-badges--hidden' : 'detail-agg-badges'}
       >
-        <BadgeHtml html={bloatedHtml} />
-        <BadgeHtml html={ctxSatHtml} />
+        <BloatedSysBadge bloatedSys={bloatedSys} variant="full" />
+        <ContextSaturationBadge ctxSat={contextSaturation} />
         {showTurnHint ? (
           <span
             className="badge-turn-count--hint ds-badge"
