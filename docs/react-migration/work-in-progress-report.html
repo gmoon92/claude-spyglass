@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Spyglass React 마이그레이션 작업 진행 보고서 (현행화)</title>
+  <style>
+    :root {
+      --bg: #0d1117; --surface: #161b22; --surface-2: #1c2128; --border: #30363d;
+      --text: #c9d1d9; --text-dim: #8b949e; --text-bright: #f0f6fc;
+      --accent: #58a6ff; --accent-2: #3fb950; --warn: #d29922; --danger: #f85149; --code-bg: #1f2937;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    header { border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; margin-bottom: 2rem; }
+    h1 { font-size: 2rem; color: var(--text-bright); margin: 0 0 0.5rem; }
+    .meta { color: var(--text-dim); font-size: 0.9rem; }
+    h2 { color: var(--text-bright); font-size: 1.5rem; margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+    h3 { color: var(--accent); font-size: 1.15rem; margin-top: 1.8rem; margin-bottom: 0.75rem; }
+    h4 { color: var(--text-bright); font-size: 1rem; margin-top: 1.2rem; margin-bottom: 0.4rem; }
+    .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em; }
+    .badge-success { background: rgba(63,185,80,0.15); color: var(--accent-2); border: 1px solid rgba(63,185,80,0.3); }
+    .badge-warn { background: rgba(210,153,34,0.15); color: var(--warn); border: 1px solid rgba(210,153,34,0.3); }
+    .badge-danger { background: rgba(248,81,73,0.15); color: var(--danger); border: 1px solid rgba(248,81,73,0.3); }
+    .badge-info { background: rgba(88,166,255,0.15); color: var(--accent); border: 1px solid rgba(88,166,255,0.3); }
+    .badge-ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+    .summary-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }
+    .summary-card .label { font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+    .summary-card .value { font-size: 1.8rem; font-weight: 700; color: var(--text-bright); }
+    .summary-card .sub { font-size: 0.85rem; color: var(--text-dim); margin-top: 0.3rem; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 0.65rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { background: var(--surface-2); color: var(--text-bright); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    tr:hover td { background: var(--surface-2); }
+    code { background: var(--code-bg); padding: 0.15rem 0.35rem; border-radius: 4px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 0.85em; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+    pre code { background: none; padding: 0; }
+    .task-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin: 0.75rem 0; }
+    .task-card .task-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
+    .task-card .task-title { font-weight: 600; color: var(--text-bright); }
+    .task-card .task-meta { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.3rem; }
+    .task-card .task-desc { font-size: 0.9rem; color: var(--text-dim); margin-top: 0.5rem; }
+    .alert { background: var(--surface); border-left: 3px solid var(--warn); padding: 1rem 1.25rem; margin: 1rem 0; border-radius: 0 6px 6px 0; }
+    .alert strong { color: var(--warn); }
+    .alert.danger { border-left-color: var(--danger); } .alert.danger strong { color: var(--danger); }
+    .alert.success { border-left-color: var(--accent-2); } .alert.success strong { color: var(--accent-2); }
+    .alert.info { border-left-color: var(--accent); } .alert.info strong { color: var(--accent); }
+    .checklist { list-style: none; padding: 0; margin: 0; }
+    .checklist li { padding: 0.4rem 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.5rem; }
+    .checklist li:last-child { border-bottom: none; }
+    .check { color: var(--accent-2); font-weight: bold; }
+    .pending { color: var(--warn); font-weight: bold; }
+    footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 0.85rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🔭 React 마이그레이션 작업 진행 보고서 <span class="badge badge-info">현행화</span></h1>
+      <div class="meta">
+        기준 커밋: 97afdd1 (1·2·3차 완료 후) | 갱신일: 2026-06-03 | 상태: 1·2·3차 완료 · 4차 인계<br>
+        종합 현황: <code>docs/react-migration/migration-status-report.html</code> (v3)
+      </div>
+    </header>
+
+    <section>
+      <h2>📊 현재 진행 상황</h2>
+      <div class="summary-grid">
+        <div class="summary-card">
+          <div class="label">완료 단계</div>
+          <div class="value" style="color: var(--accent-2);">1·2·3차</div>
+          <div class="sub">데드 정리 + turn-rows 순수화 + 유틸 src 이동</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">assets/js 운영 파일</div>
+          <div class="value">87 → 30</div>
+          <div class="sub">데드 52개 삭제 + 순수 유틸 5개 src 이동</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">릴리스</div>
+          <div class="value" style="color: var(--accent-2);">v4.2.5</div>
+          <div class="sub">1·2차 + 리포트 푸쉬, 3차 push 완료</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">검증</div>
+          <div class="value" style="color: var(--accent-2);">PASS</div>
+          <div class="sub">typecheck 0 · test 1,078 pass · build 284 modules</div>
+        </div>
+      </div>
+      <div class="alert success">
+        <strong>다음 작업 = 4차 (B-2 배지 React화):</strong> 본 문서의 핵심은 §"4차 인계"입니다. badges.ts의 anomaly 배지 그룹이 <strong>판정 헬퍼를 공유해 "전부 한 단위"로만 안전하게 전환</strong>되는 제약을 정리했습니다. 신선한 세션에서 그 설계대로 착수하세요.
+      </div>
+    </section>
+
+    <section>
+      <h2>✅ 완료 작업 (1·2·3차)</h2>
+      <table>
+        <thead><tr><th>단계</th><th>내용</th><th>커밋</th></tr></thead>
+        <tbody>
+          <tr><td>1차</td><td>앱 미도달 데드 vanilla 48개(7,161줄) + orphan/oracle-사망 테스트 삭제</td><td><code>2b0bccc</code> refactor · <code>5f350cb</code> test</td></tr>
+          <tr><td>2차</td><td>turn-rows 순수화 → render/rows·cells·skeleton·expand 삭제. 동등성 테스트 2개를 React 골든마스터 스냅샷으로 전환</td><td>2차 묶음(위 커밋)</td></tr>
+          <tr><td>리포트</td><td>migration-status-report.html v3 현행화</td><td><code>701b9c1</code> docs</td></tr>
+          <tr><td>릴리스</td><td>버전 4.2.5 + 태그 v4.2.5</td><td><code>416a99e</code></td></tr>
+          <tr><td>3차</td><td>순수 유틸 5개 src 이동: anomaly·col-resize·resize-utils → src/lib, render/extract → src/components/render/extract, render/model → model-classify</td><td><code>97afdd1</code> refactor</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>🎯 4차 인계 — B-2 배지 React화 (dangerouslySetInnerHTML 9곳 제거)</h2>
+
+      <h3>현재 상태: 부분 이식됨</h3>
+      <p><code>src/components/render/badges.tsx</code>에 일부 배지는 이미 React 컴포넌트로 존재합니다:</p>
+      <ul>
+        <li>✅ React화 완료: <code>TypeBadge</code> · <code>ToolIcon</code> · <code>AnomalyBadges</code>(flags) · <code>SlowBadge</code></li>
+        <li>❌ 미전환(vanilla <code>render/badges.ts</code>, <code>dangerouslySetInnerHTML</code>로 주입): <code>toolStatusBadge</code> · <code>agentSpikeBadgeHtml</code> · <code>bloatedSysBadge{Mini,Full,Dot}Html</code> · <code>contextSaturationBadgeFullHtml</code> · <code>turnSpikeSummaryHtml</code></li>
+      </ul>
+
+      <h3 style="color: var(--danger);">⚠ 핵심 제약 — "전부 한 단위" (부분 전환 금지)</h3>
+      <div class="alert danger">
+        <strong>anomaly 배지 4종</strong>(<code>bloatedSys</code>·<code>contextSaturation</code>·<code>agentSpike</code>·<code>turnSpike</code>)은 모두 <code>render/badges.ts</code>의 private 헬퍼 <code>anomalyStage(x)</code>/<code>anomalyNum(x, ...keys)</code>를 공유합니다. <strong>일부만 React화하면</strong> 이 헬퍼를 두고 (a) <code>assets→src</code> <strong>역방향 import(아키텍처 위반)</strong> 또는 (b) <strong>SSoT 이중화</strong>(헬퍼 복제 → 서버 컨트랙트 변경 시 불일치 버그)가 발생합니다. 따라서 anomaly 배지 4종 + 공유 헬퍼는 <strong>한 번에</strong> 옮겨야 합니다. <code>toolStatusBadge</code>(payload 파싱, <code>getToolResponse</code>/<code>nonEmptyStr</code>/<code>numVar</code> 공유)도 같은 이유로 <code>toolResponseHint</code>와 묶입니다.
+      </div>
+
+      <h3>SSoT 보존형 설계 (정공법)</h3>
+      <p>코드 주석이 명시한 <em>"서버 컨트랙트(stage/status, pct/multiplier, ADR-003)·토큰 신뢰도 로직이 자주 변경되므로 vanilla를 단일 oracle로, React는 마크업만"</em> 정책을 지키려면:</p>
+      <pre><code>// 1) 순수 판정 SSoT (DOM·React 무관) — src/lib/anomaly-field.ts (신규)
+export function anomalyStage(x: unknown): string | null { ... }   // stage ?? status
+export function anomalyNum(x: unknown, ...keys: string[]): number { ... }
+export function bloatedSysStage(bs): { stage, pct, tone } | null { ... }   // warn/critical 판정 + pct 환산 + tone
+export function contextSaturationStage(c): { stage, pct, tone } | null { ... }
+export function agentSpikeInfo(a): { n } | null { ... }            // multiplier≥3 판정
+
+// 2) React 컴포넌트 — src/components/render/anomaly-badges.tsx (신규)
+//    판정은 anomaly-field 호출, 라벨은 useTranslation(), 마크업은 JSX.
+//    기존 span class/data-tone/data-*-stage/title/aria-label 1:1 재현(골든마스터로 검증).
+export function BloatedSysBadge({ bloatedSys, variant }: ...) { const t = useTranslation(); ... }
+export function ContextSaturationBadge({ ctxSat }) { ... }
+export function AgentSpikeBadge({ agentSpike }) { ... }
+export function TurnSpikeSummary({ agentSpike, samples }) { ... }  // _spikeSparklineSvg → SparklineLine(src) 재사용 검토</code></pre>
+
+      <h3>소비처 교체 맵 (dangerouslySetInnerHTML 9곳)</h3>
+      <table>
+        <thead><tr><th>#</th><th>소비처</th><th>현재 (vanilla HTML)</th><th>교체 (React)</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td><code>cells.tsx:42</code></td><td><code>toolStatusBadge(r)</code> + <code>agentSpikeBadgeHtml</code></td><td><code>&lt;ToolStatusBadge r/&gt;</code> + <code>&lt;AgentSpikeBadge/&gt;</code></td></tr>
+          <tr><td>2</td><td><code>RequestRow.tsx:181</code></td><td><code>bloatedSysBadgeMiniHtml</code></td><td><code>&lt;BloatedSysBadge variant="mini"/&gt;</code></td></tr>
+          <tr><td>3</td><td><code>RequestRow.tsx:218</code></td><td><code>contextPreview</code> (extract)</td><td><code>&lt;ContextPreview r/&gt;</code> (extract 그룹)</td></tr>
+          <tr><td>4</td><td><code>SessionRow.tsx:90</code></td><td><code>bloatedSysBadgeDotHtml</code></td><td><code>&lt;BloatedSysBadge variant="dot"/&gt;</code></td></tr>
+          <tr><td>5</td><td><code>DetailView.tsx:59</code></td><td><code>bloatedSysBadgeFullHtml</code> + <code>contextSaturationBadgeFullHtml</code></td><td><code>&lt;BloatedSysBadge variant="full"/&gt;</code> + <code>&lt;ContextSaturationBadge/&gt;</code></td></tr>
+          <tr><td>6</td><td><code>FlowPane.tsx:62</code></td><td><code>turnSpikeSummaryHtml</code></td><td><code>&lt;TurnSpikeSummary/&gt;</code></td></tr>
+          <tr><td>7</td><td><code>PrologueCard.tsx:34</code></td><td><code>contextPreview</code> (extract)</td><td><code>&lt;ContextPreview/&gt;</code></td></tr>
+          <tr><td>8</td><td><code>PromptExpandRow.tsx:50</code></td><td><code>boxHtml</code> (extract expand HTML 모드)</td><td>JSX (AskUserQuestion 카드 React화)</td></tr>
+          <tr><td>9</td><td><code>LLMInput.tsx:429</code></td><td><code>t('ui.llm-input.banner-text')</code> i18n HTML</td><td><strong>유지 검토</strong> — 신뢰된 i18n 리소스 HTML. 배지와 무관, 별개 판단</td></tr>
+        </tbody>
+      </table>
+      <p class="task-meta"><strong>extract 그룹(3·7·8)</strong>: <code>contextPreview</code>·<code>buildAskUserQuestionHtml</code>는 3차에서 <code>src/components/render/extract.ts</code>로 이미 이동됨. HTML producer 부분을 <code>&lt;ContextPreview/&gt;</code>·AskUserQuestion 카드 JSX로 교체하고, 순수 추출 함수(<code>extractPromptText</code> 등)는 그대로 유지.</p>
+
+      <h3>착수 순서 (권장)</h3>
+      <ol>
+        <li><strong>anomaly 배지 일괄</strong>: <code>anomaly-field.ts</code>(판정 SSoT) + <code>anomaly-badges.tsx</code>(BloatedSys/ContextSaturation/AgentSpike/TurnSpike) 작성 → 소비처 1·2·4·5·6 교체 → <code>render/badges.ts</code>에서 anomaly 함수 + <code>anomalyStage/Num</code>/<code>_bloatedBadge</code>/<code>_spikeSparklineSvg</code> 제거.</li>
+        <li><strong>toolStatus 그룹</strong>: <code>toolStatusBadge</code> + <code>toolResponseHint</code> + 헬퍼(<code>getToolResponse</code>/<code>nonEmptyStr</code>/<code>numVar</code>) React화 → 소비처 1 교체.</li>
+        <li><strong>extract HTML 그룹</strong>: <code>ContextPreview</code> + AskUserQuestion 카드 JSX → 소비처 3·7·8 교체.</li>
+        <li>잔여 vanilla(<code>typeBadge</code>/<code>toolIconHtml</code>/<code>subTypeBadgeHtml</code>)는 이미 <code>badges.tsx</code>에 React 대응(<code>TypeBadge</code>/<code>ToolIcon</code>)이 있으니 소비처만 전환 후 vanilla 제거.</li>
+        <li>모두 끝나면 <code>render/badges.ts</code> 데드화 → 삭제 + <code>formatters</code>·<code>request-types</code>·<code>view-types</code>·<code>i18n-utils</code> src 이동(역방향 해소됨) + vanilla 아이콘 20개 데드화 삭제.</li>
+      </ol>
+
+      <h3>검증 (필수)</h3>
+      <div class="alert">
+        각 배지 React화 시 <strong>기존 vanilla HTML과 출력 동치</strong>를 골든마스터 스냅샷으로 고정하세요. 기존 <code>cache-panel.test</code>·<code>icons-equivalence</code> 패턴 참고. <code>data-tone</code>·<code>data-bloated-sys-stage</code>·<code>title</code>/<code>aria-label</code>·CSS 클래스가 정확히 동일해야 tooltip·CSS가 깨지지 않습니다.
+      </div>
+    </section>
+
+    <section>
+      <h2>📋 잔여 imperative 정리 (참고 문서 통합)</h2>
+      <p class="task-meta">아래는 별도 세션에서 식별된 항목으로, 4차(배지)와 독립적입니다. 우선순위 순.</p>
+
+      <div class="task-card">
+        <div class="task-header"><span class="task-title">A-2. CustomEvent 제거</span><span class="badge badge-warn">난이도 하 · 격리</span></div>
+        <div class="task-desc"><code>ContextChart.tsx</code> <code>ctx-point-hover</code> → 콜백 prop. <code>Sidebar.tsx</code> <code>session-anomalies-loaded</code> → Zustand 구독. 2곳, 격리도 높아 단독 진행 적합.</div>
+      </div>
+      <div class="task-card">
+        <div class="task-header"><span class="task-title">A-1. chip-jump.ts React화</span><span class="badge badge-warn">난이도 하</span></div>
+        <div class="task-desc"><code>document.getElementById('turnLogBody')</code> → <code>useRef</code> + <code>scrollIntoView</code>. (참고: <code>use-panel-resize.ts</code>·<code>system-reminder-popover.ts</code>의 querySelector도 동류.)</div>
+      </div>
+      <div class="task-card">
+        <div class="task-header"><span class="task-title">D-1. window.I18n fallback 제거</span><span class="badge badge-ghost">난이도 하 · 광범위</span></div>
+        <div class="task-desc">8개 컴포넌트의 <code>defaultT = (k, vars) =&gt; window.I18n?.t?.(k, vars) ?? k</code> → <code>useTranslation()</code>. i18next 리소스 완비 확인 선행. (classic i18n 3종 island 제거는 별개 — FOUC/server drift 테스트 의존, 후순위.)</div>
+      </div>
+      <div class="task-card">
+        <div class="task-header"><span class="task-title">B-1. use-tooltip.ts React Portal화</span><span class="badge badge-info">난이도 중</span></div>
+        <div class="task-desc"><code>document.createElement</code> + <code>appendChild</code> + <code>innerHTML</code> → React Portal + JSX. 위치 계산(absolute) 유지.</div>
+      </div>
+      <div class="task-card">
+        <div class="task-header"><span class="task-title">C-1. MetaDocsFlow.tsx SVG React화</span><span class="badge badge-ghost">난이도 상 · 의도적 병존(보류 권장)</span></div>
+        <div class="task-desc"><code>innerHTML</code>/<code>appendChild</code> 22개 + <code>addEventListener</code>. <strong>migration-status-report v3은 이를 "useRef escape-hatch 정당 예외"로 분류</strong> — D3류 SVG 직접 조작이 선언적 JSX보다 적합. 전환 강행 시 줌/팬/하이라이트 회귀 위험 큼. <strong>유지 권장</strong>, 전환은 최후순위.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>✅ 작업 완료 체크리스트 (각 단계 후)</h2>
+      <ul class="checklist">
+        <li><span class="pending">○</span> <code>bun run --cwd packages/web typecheck</code> → 0 error</li>
+        <li><span class="pending">○</span> <code>bun run --cwd packages/web test</code> → 1,078 pass 이상 유지 (2 non-fatal react-dom errors는 기존)</li>
+        <li><span class="pending">○</span> <code>bun run --cwd packages/web build</code> → 정상 종료</li>
+        <li><span class="pending">○</span> 배지/extract React화 분마다 골든마스터 스냅샷으로 출력 동치 확인</li>
+        <li><span class="pending">○</span> <code>grep -rn "dangerouslySetInnerHTML" src --include="*.tsx" | grep -v __tests__</code> → 배지·extract 제거 확인(LLMInput i18n은 별개 판단)</li>
+        <li><span class="pending">○</span> 기능/관심사 단위 분리 커밋(commit 스킬) → push → 필요 시 버전 bump + 태그</li>
+        <li><span class="pending">○</span> 완료분 반영해 본 문서 갱신</li>
+      </ul>
+    </section>
+
+    <footer>
+      본 문서는 커밋 97afdd1(1·2·3차 완료) 기준 인계 문서입니다. 4차 착수 시 §"4차 인계"의 "전부 한 단위" 제약과 SSoT 보존 설계를 반드시 지키세요.
+    </footer>
+  </div>
+</body>
+</html>
