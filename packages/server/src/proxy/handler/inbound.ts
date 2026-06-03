@@ -14,7 +14,7 @@
 import type { Database } from 'bun:sqlite';
 import type { RequestMeta } from '../types';
 import { selectUpstreamUrl, buildForwardHeaders, UPSTREAM_URL } from '../upstream';
-import { logInbound } from '../log-result';
+import { logInbound, proxyInfoLog } from '../log-result';
 import { parseRequestBody } from '../request-parser';
 import { extractClientHeaders } from '../audit-headers';
 import { getLastTurnId } from '../../hook';
@@ -97,7 +97,7 @@ export async function forwardToUpstream(
   const upstreamBase = selectUpstreamUrl(reqMeta.model);
   const targetUrl = `${upstreamBase}${path}`;
   if (upstreamBase !== UPSTREAM_URL) {
-    console.log(`[PROXY] Custom upstream: ${upstreamBase} (model=${reqMeta.model})`);
+    proxyInfoLog(`[PROXY] Custom upstream: ${upstreamBase} (model=${reqMeta.model})`);
   }
 
   let response: Response;

@@ -19,8 +19,8 @@
  *   [PROXY]   tps      : 35.8 tok/s
  *   [PROXY]   preview  : ...
  *
- * 외부 노출: logInbound(p), logResult(p)
- * 호출자: handler/inbound.ts (요청 진입), handler/{stream,non-stream}.ts (응답 종료 직후)
+ * 외부 노출: proxyInfoLog(...lines), logInbound(p), logResult(p)
+ * 호출자: handler/inbound.ts (요청 진입·custom upstream), handler/{stream,non-stream}.ts (응답 종료 직후)
  * 의존성: types, diag-log#isDiagEnabled
  */
 
@@ -28,19 +28,22 @@ import { isDiagEnabled } from '../diag-log';
 import type { AnthropicUsage } from './types';
 
 /**
- * 정보성 [PROXY] stdout 라인 억제 여부 — DIAG 활성이 곧 억제.
- * 호출 측에서 boolean 재계산하지 않도록 판단을 이 모듈 안에 둔다.
+ * 정보성 [PROXY] stdout 공통 헬퍼 — DIAG 게이트 판단 SSoT.
+ *
+ * diagLog/diagJson 과 같은 패턴: 플래그 판단을 호출 측이 아닌 함수 내부에 둔다.
+ * SPYGLASS_DIAG_ENABLED 활성 시 no-op — 모든 정보성 [PROXY] 라인은 console.log
+ * 직접 호출 대신 반드시 이 헬퍼를 거칠 것.
  */
-function suppressed(): boolean {
-  return isDiagEnabled();
+export function proxyInfoLog(...lines: string[]): void {
+  if (isDiagEnabled()) return;
+  for (const line of lines) console.log(line);
 }
 
 /**
  * 요청 진입 한 건에 대한 사람-읽기용 stdout 한 줄 출력.
  */
 export function logInbound(p: { method: string; pathname: string; model: string | null }): void {
-  if (suppressed()) return;
-  console.log(`[PROXY] → ${p.method} ${p.pathname}${p.model ? ` [${p.model}]` : ''}`);
+  proxyInfoLog(`[PROXY] → ${p.method} ${p.pathname}${p.model ? ` [${p.model}]` : ''}`);
 }
 
 /**
@@ -60,21 +63,21 @@ export function logResult(p: {
   errorType: string | null;
   requestPreview: string | null;
 }): void {
-  if (suppressed()) return;
   const ok = p.statusCode >= 200 && p.statusCode < 300;
   const icon = ok ? '✓' : '✗';
   const streamLabel = p.isStream ? ' (stream)' : '';
-  console.log(`[PROXY] ${icon} ${p.method} ${p.path} → ${p.statusCode} ${p.ms}ms${streamLabel}`);
-  if (p.model)         console.log(`[PROXY]   model    : ${p.model}`);
-  if (p.stopReason)    console.log(`[PROXY]   stop     : ${p.stopReason}`);
-  if (p.errorType)     console.log(`[PROXY]   error    : ${p.errorType}`);
-  console.log(
+  const lines = [`[PROXY] ${icon} ${p.method} ${p.path} → ${p.statusCode} ${p.ms}ms${streamLabel}`];
+  if (p.model)         lines.push(`[PROXY]   model    : ${p.model}`);
+  if (p.stopReason)    lines.push(`[PROXY]   stop     : ${p.stopReason}`);
+  if (p.errorType)     lines.push(`[PROXY]   error    : ${p.errorType}`);
+  lines.push(
     `[PROXY]   tokens   : in=${p.usage.input_tokens ?? 0}`
     + ` out=${p.usage.output_tokens ?? 0}`
     + ` cache_create=${p.usage.cache_creation_input_tokens ?? 0}`
     + ` cache_read=${p.usage.cache_read_input_tokens ?? 0}`,
   );
-  if (p.ttft !== null)  console.log(`[PROXY]   ttft     : ${p.ttft}ms`);
-  if (p.tps !== null)   console.log(`[PROXY]   tps      : ${p.tps.toFixed(1)} tok/s`);
-  if (p.requestPreview) console.log(`[PROXY]   preview  : ${p.requestPreview.slice(0, 80)}…`);
+  if (p.ttft !== null)  lines.push(`[PROXY]   ttft     : ${p.ttft}ms`);
+  if (p.tps !== null)   lines.push(`[PROXY]   tps      : ${p.tps.toFixed(1)} tok/s`);
+  if (p.requestPreview) lines.push(`[PROXY]   preview  : ${p.requestPreview.slice(0, 80)}…`);
+  proxyInfoLog(...lines);
 }
