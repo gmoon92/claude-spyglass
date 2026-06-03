@@ -28,6 +28,17 @@ export function encodeRequestPayload(payload: string | null | undefined): { valu
   return { value, algo: algo ?? null };
 }
 
+/**
+ * R3(ⓝ1): requests.preview 쓰기 인코딩. payload와 동일 정책이나 별도 preview_algo로 추적한다 —
+ * payload와 preview는 독립 인코딩되므로(updateRequest는 payload만 갱신, payload 없는 행에도
+ * preview 존재) 한 컬럼 공유 시 silent corruption. preview가 없으면 value/algo 모두 null.
+ */
+export function encodeRequestPreview(preview: string | null | undefined): { value: string | null; algo: string | null } {
+  if (preview == null) return { value: null, algo: null };
+  const { value, algo } = encodeText(preview, shouldEncrypt() ? getActiveKey() : null);
+  return { value, algo: algo ?? null };
+}
+
 // =============================================================================
 // 생성 (Create)
 // =============================================================================
@@ -76,8 +87,8 @@ const SQL_CREATE_REQUEST = `
     cache_creation_tokens, cache_read_tokens, preview, tool_use_id, event_type,
     tokens_confidence, tokens_source, parent_tool_use_id, api_request_id,
     permission_mode, agent_id, agent_type, tool_interrupted, tool_user_modified,
-    slash_command, payload_algo
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    slash_command, payload_algo, preview_algo
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 /**
@@ -88,6 +99,7 @@ export function createRequest(
   params: CreateRequestParams
 ): string {
   const enc = encodeRequestPayload(params.payload);
+  const encPreview = encodeRequestPreview(params.preview);
   db.query(SQL_CREATE_REQUEST).run(
     params.id,
     params.session_id,
@@ -105,7 +117,7 @@ export function createRequest(
     params.source ?? null,
     params.cache_creation_tokens ?? 0,
     params.cache_read_tokens ?? 0,
-    params.preview ?? null,
+    encPreview.value,
     params.tool_use_id ?? null,
     params.event_type ?? null,
     params.tokens_confidence ?? 'high',
@@ -118,7 +130,8 @@ export function createRequest(
     params.tool_interrupted ?? null,
     params.tool_user_modified ?? null,
     params.slash_command ?? null,
-    enc.algo
+    enc.algo,
+    encPreview.algo
   );
   return params.id;
 }
@@ -134,6 +147,7 @@ export function createRequests(
   const insert = db.transaction((items: CreateRequestParams[]) => {
     for (const item of items) {
       const enc = encodeRequestPayload(item.payload);
+      const encPreview = encodeRequestPreview(item.preview);
       stmt.run(
         item.id,
         item.session_id,
@@ -151,7 +165,7 @@ export function createRequests(
         item.source ?? null,
         item.cache_creation_tokens ?? 0,
         item.cache_read_tokens ?? 0,
-        item.preview ?? null,
+        encPreview.value,
         item.tool_use_id ?? null,
         item.event_type ?? null,
         item.tokens_confidence ?? 'high',
@@ -164,7 +178,8 @@ export function createRequests(
         item.tool_interrupted ?? null,
         item.tool_user_modified ?? null,
         item.slash_command ?? null,
-        enc.algo
+        enc.algo,
+        encPreview.algo
       );
     }
   });

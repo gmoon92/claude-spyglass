@@ -25,7 +25,7 @@
 packages/storage/migrations/NNN-description.sql
 ```
 
-- `NNN`: 3자리 zero-padded 버전 번호 (`001`, `002`, …, `053`, `055`, `056`, ...)
+- `NNN`: 3자리 zero-padded 버전 번호 (`001`, `002`, …, `053`, `055`, `056`, `057`, ...)
 - `description`: kebab-case 짧은 설명 (`add-tool-detail`, `add-claude-events`)
 - 파일명에서 앞 3자리가 `PRAGMA user_version` 값에 1:1 매핑된다.
 - 디렉토리 번호에 gap이 있어도 (예: 040 다음 047) 동작에 영향 없음 — migrator는 정렬된
@@ -199,7 +199,7 @@ try {
 
 - `999-final.sql`까지 정상 동작
 - 앞 숫자 prefix가 4자리 이상(`1000-xxx.sql` 등)이면 `parseMigrationVersion()`이 명확한 에러로 throw
-- 999 도달 시점에 4자리 padding 확장을 별도 ADR로 결정 (yagni — 현재 056번)
+- 999 도달 시점에 4자리 padding 확장을 별도 ADR로 결정 (yagni — 현재 057번)
 
 ```typescript
 // ❌ 금지 — silent overflow 차단됨
@@ -217,20 +217,20 @@ try {
 ```bash
 # 1. 현재 최신 버전 확인
 ls packages/storage/migrations/ | tail -3
-# → 053-kuzu-outbox-trigger-hardening.sql
 # → 055-kuzu-outbox-dlq.sql
 # → 056-payload-encryption.sql
+# → 057-preview-encryption.sql
 # (디렉토리에 gap 존재: 041~046·054 결번 — 동작 무관, 다음 번호는 항상 max+1)
 
-# 2. 새 파일 생성 — 다음 번호 사용 (현재 max 056 → 057)
-touch packages/storage/migrations/057-your-feature.sql
+# 2. 새 파일 생성 — 다음 번호 사용 (현재 max 057 → 058)
+touch packages/storage/migrations/058-your-feature.sql
 ```
 
 ### 3.2 SQL 작성 템플릿
 
 ```sql
 -- =============================================================================
--- 057 — <기능명> (관련 feature/ADR 참조)
+-- 058 — <기능명> (관련 feature/ADR 참조)
 -- =============================================================================
 -- 배경:
 --   <왜 이 마이그레이션이 필요한가>
@@ -447,10 +447,11 @@ END;
 | `trg_proxy_stats_after_insert` | `032-add-stats-proxy-hourly.sql` | `proxy_requests` → `stats_proxy_hourly` 집계 |
 | `trg_requests_to_kuzu_outbox` / `trg_sessions_to_kuzu_outbox` / `trg_requests_pre_to_tool_outbox` | `053-kuzu-outbox-trigger-hardening.sql` | `requests`·`sessions` → `kuzu_outbox` (INSERT OR IGNORE + `NEW.id IS NOT NULL` 가드) |
 
-### 055/056 운영 참고
+### 055/056/057 운영 참고
 
 - **055 (`kuzu_outbox-dlq`)**: 기존 outbox 행은 `attempts=0`, `dead=0`, `last_error=NULL`로 초기화되어 종전과 동일하게 처리됩니다. `idx_kuzu_outbox_live` 부분 인덱스는 `dead=0` 행만 스캔 대상으로 하여 DLQ 격리분이 폴링에 영향을 주지 않습니다.
 - **056 (`payload-encryption`)**: `ALTER TABLE ADD COLUMN`만 수행하므로 기존 데이터 무손실. `requests.payload_algo`의 죽은 DEFAULT `'zstd'`를 `NULL`로 정리하는 `UPDATE`가 포함되나, 이는 평문 마커를 올바르게 맞추는 메타데이터 수정이며 `payload` 본문은 불변. 암호화는 `SPYGLASS_ENCRYPTION` 옵트인 시에만 활성화되므로 OFF 상태면 동작 변화 없음.
+- **057 (`preview-encryption`, ⓝ1)**: 056의 본문 암호화를 preview 파생 컬럼까지 확장(ADR-R3 D10이 범위 밖으로 남겨둔 잔여). `requests.preview_algo`·`proxy_requests.preview_algo` 두 `ADD COLUMN`(NULL 기본)만 수행 — 기존 행 무손실, OFF면 무변경. algo 추적은 **payload_algo와 분리한 별도 preview_algo** 채택: requests는 payload와 preview가 독립 인코딩되고(updateRequest는 payload만 갱신), proxy는 3 preview가 동일 키로 원자 동시 기록(개별 UPDATE 없음)되어 단일 preview_algo를 공유한다. 읽기 복호는 `decodeText`(SSoT). 알려진 한계: 암호화 ON 시 `cli/checks/integrity.ts`·`cli/fix.ts`의 `preview = preview` 동등 비교 기반 중복-응답 진단은 GCM random-nonce로 인해 동일 평문도 다른 암호문이 되어 under-report될 수 있음(데이터 무손상, 진단 휴리스틱만 약화 — system_prompts dedup의 D8 한계와 동일 성격).
 
 ### Q. WAL 모드 PRAGMA를 파일에 넣어도 되나요?
 

@@ -1,0 +1,45 @@
+-- Migration 057: preview 미러 컬럼 at-rest 암호화 algo 마커 (R3 확장, ⓝ1)
+--
+-- Purpose:
+--   R3 AES-256-GCM at-rest 암호화를 preview 파생 컬럼까지 확장한다(ADR-R3 D10이 범위 밖으로
+--   남겨둔 ⓝ1 해소). 056이 본문(payload/content) 컬럼을 다뤘다면, 057은 그 본문의 짧은
+--   평문 미러인 preview 컬럼이 DB 단독 유출 시에도 평문 노출되지 않도록 마커 컬럼을 추가한다.
+--
+-- 대상:
+--   - requests.preview                         (TEXT, 007/010) — prompt 입력·response 본문 미리보기
+--   - proxy_requests.request_preview           (TEXT) — 마지막 user 메시지 미리보기
+--   - proxy_requests.response_preview          (TEXT) — assistant 응답 미리보기
+--   - proxy_requests.system_preview            (TEXT) — system 본문 미리보기
+--
+-- algo 추적 설계 (별도 컬럼, 행 단위 payload_algo 공유 안 함):
+--   - requests:        preview_algo 신규. payload와 preview는 독립 인코딩(updateRequest는
+--                      payload만 갱신, payload 없는 행에도 preview 존재)이라 payload_algo 공유 시
+--                      silent corruption 위험.
+--   - proxy_requests:  preview_algo 신규(3개 preview 공유). 3개는 INSERT 시 동일 키/정책으로
+--                      원자 동시 기록되고 개별 UPDATE 경로 없음. 기존 payload_algo는 BLOB
+--                      (zstd+aes256gcm)용이라 TEXT(aes256gcm, base64-in-place)와 의미가 달라 분리.
+--
+-- 저장 형태(TEXT, base64-in-place):
+--   - 평문: preview string 그대로, *_algo = NULL  (기존 행·OFF 동작과 100% 동일)
+--   - 암호문: base64([ver|nonce|tag|ct]) string, *_algo = 'aes256gcm'
+--   → string→BLOB 타입 변경 없음(R7 비해당). decodeText가 NULL/그외 값은 평문 passthrough.
+--
+-- 안전성:
+--   - ADD COLUMN (NULL 기본) — 기존 데이터 무손실. 기존 행은 *_algo=NULL=평문으로 종전과 동일하게 읽힌다.
+--   - 암호화는 옵트인(SPYGLASS_ENCRYPTION)이라 OFF면 무변경.
+--   - 신규 컬럼명 preview_algo는 requests/proxy_requests 양쪽에 기존재하지 않음 — migrator의
+--     duplicate-column silent-skip 회피.
+--   - migrator.ts가 본 파일을 db.transaction으로 감싸 원자 적용.
+--   - 파괴적 변경(컬럼 삭제/타입 변경) 없음.
+--
+-- 함께 변경되는 곳 (코드):
+--   - 쓰기: queries/request/write.ts(createRequest/createRequests), queries/proxy.ts(createProxyRequest)
+--   - 읽기: queries/request/{read,turn}.ts, queries/proxy.ts
+--           (getProxyRequestById·getLatestProxyResponseBefore·getProxyResponseByApiRequestId)
+--   - codec/키 SSoT는 056과 동일(payload-codec.ts encodeText/decodeText, runtime/encryption.ts) — 변경 없음.
+--
+-- @see docs/architecture/stabilization/adr-r3-at-rest-encryption.md (D2, D3, D10)
+-- @see packages/storage/migrations/056-payload-encryption.sql
+
+ALTER TABLE requests ADD COLUMN preview_algo TEXT;
+ALTER TABLE proxy_requests ADD COLUMN preview_algo TEXT;

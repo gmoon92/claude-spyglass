@@ -5,6 +5,8 @@
  */
 
 import type { Database } from 'bun:sqlite';
+import { encodeText, decodeText } from '../payload-codec';
+import { getActiveKey, shouldEncrypt } from '../runtime/encryption';
 
 // =============================================================================
 // 타입 정의
@@ -60,6 +62,9 @@ export interface ProxyRequest {
   // system_reminder(v21)와 직교 — body.system 본문 vs user 메시지 안 reminder.
   system_hash: string | null;
   system_byte_size: number | null;
+  // R3(ⓝ1, Migration 057): request/response/system preview at-rest 암호화 마커(3컬럼 공유).
+  // NULL=평문, 'aes256gcm'=암호문(base64-in-TEXT). 읽기 시 decodeText로 분기 복호.
+  preview_algo?: string | null;
 }
 
 export interface CreateProxyRequestParams {
@@ -129,7 +134,7 @@ const SQL_CREATE = `
     thinking_type, temperature, system_preview, system_reminder,
     tool_names, metadata_user_id, client_meta_json,
     payload, payload_raw_size, payload_algo,
-    system_hash, system_byte_size
+    system_hash, system_byte_size, preview_algo
   ) VALUES (
     ?, ?, ?, ?, ?, ?,
     ?, ?, ?, ?, ?,
@@ -143,7 +148,7 @@ const SQL_CREATE = `
     ?, ?, ?, ?,
     ?, ?, ?,
     ?, ?, ?,
-    ?, ?
+    ?, ?, ?
   )
 `;
 
@@ -214,6 +219,20 @@ const SQL_GET_STATS = `
 // =============================================================================
 
 export function createProxyRequest(db: Database, p: CreateProxyRequestParams): void {
+  // R3(ⓝ1): request/response/system preview는 동일 키/정책으로 원자 동시 기록되고 개별 UPDATE
+  //          경로가 없으므로 단일 preview_algo 마커를 공유한다(payload_algo와 분리 — payload는 BLOB
+  //          zstd 계열, preview는 TEXT aes256gcm 계열로 의미가 달라 섞으면 codec 분기 분산).
+  //          인코딩 분기는 payload-codec(encodeText)에 SSoT로 위임.
+  const key = shouldEncrypt() ? getActiveKey() : null;
+  // null preview는 그대로 null 유지(encodeText에 넘기면 "null" 문자열을 암호화하게 됨). 값이 있을 때만 인코딩.
+  const encPrev = (v: string | null | undefined): string | null =>
+    v == null ? null : encodeText(v, key).value;
+  const reqPrevValue = encPrev(p.request_preview);
+  const respPrevValue = encPrev(p.response_preview);
+  const sysPrevValue = encPrev(p.system_preview);
+  // 셋 다 동일 key로 인코딩되므로 algo는 일치(평문이면 NULL, 암호화면 'aes256gcm'). key 유무로 결정.
+  const previewAlgo = key ? 'aes256gcm' : null;
+
   db.run(SQL_CREATE, [
     p.id, p.timestamp, p.method, p.path,
     p.status_code ?? null, p.response_time_ms ?? null,
@@ -223,8 +242,8 @@ export function createProxyRequest(db: Database, p: CreateProxyRequestParams): v
     p.tokens_per_second ?? null,
     p.is_stream ? 1 : 0,
     p.messages_count ?? 0, p.max_tokens ?? null, p.tools_count ?? 0,
-    p.request_preview ?? null,
-    p.stop_reason ?? null, p.response_preview ?? null,
+    reqPrevValue,
+    p.stop_reason ?? null, respPrevValue,
     p.error_type ?? null, p.error_message ?? null,
     p.first_token_ms ?? null, p.api_request_id ?? null,
     p.session_id ?? null, p.turn_id ?? null,
@@ -232,7 +251,7 @@ export function createProxyRequest(db: Database, p: CreateProxyRequestParams): v
     p.anthropic_org_id ?? null, p.anthropic_request_id ?? null,
     p.thinking_type ?? null,
     p.temperature ?? null,
-    p.system_preview ?? null,
+    sysPrevValue,
     p.system_reminder ?? null,
     p.tool_names ?? null,
     p.metadata_user_id ?? null,
@@ -242,6 +261,7 @@ export function createProxyRequest(db: Database, p: CreateProxyRequestParams): v
     p.payload_algo ?? null,
     p.system_hash ?? null,
     p.system_byte_size ?? null,
+    previewAlgo,
   ]);
 }
 
@@ -255,7 +275,31 @@ export function createProxyRequest(db: Database, p: CreateProxyRequestParams): v
  * @returns ProxyRequest 또는 미존재 시 null
  */
 export function getProxyRequestById(db: Database, id: string): ProxyRequest | null {
-  return (db.query('SELECT * FROM proxy_requests WHERE id = ?').get(id) as ProxyRequest | null) ?? null;
+  const row = (db.query('SELECT * FROM proxy_requests WHERE id = ?').get(id) as ProxyRequest | null) ?? null;
+  // R3(ⓝ1): preview_algo 분기로 3 preview 컬럼 서버측 복호(평문/암호문 혼재 대응).
+  // 현 /messages 라우트는 previews를 직렬화하지 않지만, ProxyRequest 표면을 평문으로 통일해
+  // 향후 소비처의 silent corruption을 차단한다(decodeText SSoT).
+  return decodeProxyPreviews(row);
+}
+
+/**
+ * R3(ⓝ1): proxy_requests 행의 request/response/system preview를 preview_algo 분기로 복호한다.
+ * 평문/암호문 혼재를 decodeText가 처리(평문 passthrough, 'aes256gcm'만 복호). 모든 preview는
+ * 동일 preview_algo 마커를 공유한다(createProxyRequest가 동일 key로 원자 기록).
+ */
+function decodeProxyPreviews<T extends {
+  request_preview?: string | null;
+  response_preview?: string | null;
+  system_preview?: string | null;
+  preview_algo?: string | null;
+}>(row: T | null): T | null {
+  if (!row) return row;
+  const key = getActiveKey();
+  const algo = row.preview_algo;
+  if (row.request_preview != null) row.request_preview = decodeText(row.request_preview, algo, key);
+  if (row.response_preview != null) row.response_preview = decodeText(row.response_preview, algo, key);
+  if (row.system_preview != null) row.system_preview = decodeText(row.system_preview, algo, key);
+  return row;
 }
 
 /**
@@ -395,8 +439,11 @@ export function getProxyStats(db: Database, sinceMs: number): ProxyStats {
   };
 }
 
+// R3(ⓝ1): preview_algo를 함께 가져와 response_preview를 서버측 복호한다(평문/암호문 혼재).
+// 주의: length(response_preview) > 0 필터는 저장값(평문 또는 base64 암호문) 기준으로 동작 —
+// 암호문도 길이>0이므로 비어있지 않은 응답을 정상 선별한다.
 const SQL_LATEST_RESPONSE_PREVIEW_BEFORE = `
-  SELECT response_preview, model, tokens_input, tokens_output,
+  SELECT response_preview, preview_algo, model, tokens_input, tokens_output,
          cache_creation_tokens, cache_read_tokens, stop_reason
   FROM proxy_requests
   WHERE session_id = ?
@@ -416,6 +463,20 @@ export interface LatestProxyResponse {
   cache_creation_tokens: number;
   cache_read_tokens: number;
   stop_reason: string | null;
+  /** R3(ⓝ1): response_preview 복호 분기용 마커(내부 — 복호 후 호출자에 노출 불필요). */
+  preview_algo?: string | null;
+}
+
+/**
+ * R3(ⓝ1): LatestProxyResponse의 response_preview를 preview_algo 분기로 평문 복원한다.
+ * events.ts가 이 값을 response 본문(message)으로 재사용하므로 반드시 평문이어야 한다.
+ */
+function decodeLatestResponse(row: LatestProxyResponse | null): LatestProxyResponse | null {
+  if (!row) return row;
+  if (row.response_preview != null) {
+    row.response_preview = decodeText(row.response_preview, row.preview_algo, getActiveKey()) ?? row.response_preview;
+  }
+  return row;
 }
 
 /**
@@ -437,9 +498,11 @@ export function getLatestProxyResponseBefore(
   beforeMs: number,
   windowMs = 120_000,
 ): LatestProxyResponse | null {
-  return db
-    .query<LatestProxyResponse, [string, number, number]>(SQL_LATEST_RESPONSE_PREVIEW_BEFORE)
-    .get(sessionId, beforeMs, beforeMs - windowMs) ?? null;
+  return decodeLatestResponse(
+    db
+      .query<LatestProxyResponse, [string, number, number]>(SQL_LATEST_RESPONSE_PREVIEW_BEFORE)
+      .get(sessionId, beforeMs, beforeMs - windowMs) ?? null,
+  );
 }
 
 // =============================================================================
@@ -565,13 +628,16 @@ export function getProxyResponseByApiRequestId(
   db: Database,
   apiRequestId: string,
 ): LatestProxyResponse | null {
-  return db
-    .query<LatestProxyResponse, [string]>(
-      `SELECT response_preview, model, tokens_input, tokens_output,
-              cache_creation_tokens, cache_read_tokens, stop_reason
-       FROM proxy_requests WHERE api_request_id = ? LIMIT 1`,
-    )
-    .get(apiRequestId) ?? null;
+  // R3(ⓝ1): preview_algo 동반 조회 후 response_preview 서버측 복호(평문/암호문 혼재).
+  return decodeLatestResponse(
+    db
+      .query<LatestProxyResponse, [string]>(
+        `SELECT response_preview, preview_algo, model, tokens_input, tokens_output,
+                cache_creation_tokens, cache_read_tokens, stop_reason
+         FROM proxy_requests WHERE api_request_id = ? LIMIT 1`,
+      )
+      .get(apiRequestId) ?? null,
+  );
 }
 
 /**
