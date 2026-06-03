@@ -7,16 +7,14 @@
  *     (obs-cat-bar/obs-meta-row + ds-bar-fill[data-tone]) 재사용. 신규 클래스(meta-docs-summary-bars)는
  *     CSS 부재로 평문 세로 나열 회귀를 유발했어서 폐기됨.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { MetaDocsSummaryCards, MetaDocsBehaviorBars } from '../MetaDocsSummaryCards';
 import type { MetaDocRow, DisplayFilter } from '../meta-docs-sort';
 
-beforeAll(() => {
-  (globalThis as { window?: { I18n?: unknown } }).window ??= {};
-  (globalThis as { window: { I18n?: unknown } }).window.I18n = { t: (k: string) => k };
-});
+// i18n t 는 DI(필수 prop) — 키 passthrough stub. D-1: 전역 window.I18n 비의존.
+const t = (k: string) => k;
 
 const ROWS: MetaDocRow[] = [
   { id: 1, type: 'skill', name: 'commit', invocations: 5 }, // used
@@ -31,7 +29,7 @@ const noop = (_: DisplayFilter): void => {
 
 describe('MetaDocsSummaryCards — 좌측 요약 카드 (원본 renderLeftSummaryCards)', () => {
   it('used/unused/orphan 카운트 렌더(computeRowCounts SSoT)', () => {
-    const html = renderToStaticMarkup(createElement(MetaDocsSummaryCards, { rows: ROWS, onSelectDisplay: noop }));
+    const html = renderToStaticMarkup(createElement(MetaDocsSummaryCards, { rows: ROWS, onSelectDisplay: noop, t }));
     // used = invocations>0 → 3, unused = id!=null && inv==0 → 1, orphan = id==null → 1
     expect(html).toContain('meta-docs-summary-card--used');
     expect(html).toContain('meta-docs-summary-card--unused');
@@ -39,7 +37,7 @@ describe('MetaDocsSummaryCards — 좌측 요약 카드 (원본 renderLeftSummar
     expect(html).toContain('>3<'); // used value
   });
   it('카드 display 필터 계약 보존(data-meta-filter/data-value)', () => {
-    const html = renderToStaticMarkup(createElement(MetaDocsSummaryCards, { rows: ROWS, onSelectDisplay: noop }));
+    const html = renderToStaticMarkup(createElement(MetaDocsSummaryCards, { rows: ROWS, onSelectDisplay: noop, t }));
     expect(html).toContain('data-meta-filter="display"');
     expect(html).toContain('data-value="unused"');
     expect(html).toContain('data-value="orphan"');
@@ -47,7 +45,7 @@ describe('MetaDocsSummaryCards — 좌측 요약 카드 (원본 renderLeftSummar
   it('요약 카드 컨테이너는 카드만 직계로 — mini-bar 는 분리됨(레거시 #metaDocsToolStats 별도 트랙)', () => {
     // 레거시 #metaDocsSummaryCards{flex-direction:row}+ .card{flex:1 1 0} 가 3카드를 가로 균등 분배하려면
     // 카드가 직계 자식이어야 하고, mini-bar 는 별 트랙(#metaDocsToolStats)에 있어야 함. 카드 컨테이너에 bar 부재 가드.
-    const html = renderToStaticMarkup(createElement(MetaDocsSummaryCards, { rows: ROWS, onSelectDisplay: noop }));
+    const html = renderToStaticMarkup(createElement(MetaDocsSummaryCards, { rows: ROWS, onSelectDisplay: noop, t }));
     expect(html).toContain('id="metaDocsSummaryCards"');
     expect(html).not.toContain('obs-meta-row');
     // 중간 wrapper 제거 회귀 가드(flex 분배 깨짐 방지).

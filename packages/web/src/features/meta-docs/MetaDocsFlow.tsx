@@ -45,13 +45,6 @@ import {
 } from './flow-layout';
 
 export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
-interface I18nWindow {
-  I18n?: { t?: TFunc };
-}
-const defaultT: TFunc = (k, vars) =>
-  (globalThis as unknown as I18nWindow).I18n?.t?.(k, vars) ??
-  (typeof window !== 'undefined' ? (window as unknown as I18nWindow).I18n?.t?.(k, vars) : undefined) ??
-  k;
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const HTMLNS = 'http://www.w3.org/1999/xhtml';
@@ -112,7 +105,8 @@ export interface MetaDocsFlowProps {
   /** 날짜 범위(app-store.activeRange→rangeToParams). flow fetch 의 fromTs/toTs 로 전파.
    *   호출처(MetaDocsLayout)가 주입 — 미주입 시 전체 기간(레거시 window.__getDateRange 폐기 대체). */
   dateRange?: { from?: number; to?: number };
-  t?: TFunc;
+  /** i18n t(필수 — DI). 호출처가 react-i18next t 주입, 테스트가 stub 주입. */
+  t: TFunc;
 }
 
 /**
@@ -463,7 +457,7 @@ function findEdgeAncestor(target: EventTarget | null): HTMLElement | null {
  * MetaDocsFlow — useRef SVG escape-hatch. activeRow 변경 → effect fetch+render+bind.
  * 명령형 전부 effect 내부(SSR 비발화). 컨테이너 div(metaDocsFlowRegion)만 JSX 선언.
  */
-export function MetaDocsFlow({ activeRow, project = null, onRecenter, depth = 3, dateRange, t = defaultT }: MetaDocsFlowProps) {
+export function MetaDocsFlow({ activeRow, project = null, onRecenter, depth = 3, dateRange, t }: MetaDocsFlowProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<FlowState>(emptyState());
   // onRecenter 최신값 — effect 재구독 없이 콜백만 갱신(stale closure 방지).

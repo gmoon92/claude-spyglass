@@ -8,7 +8,7 @@
  *  - 본 컴포넌트는 동일 바 구조를 JSX 로 렌더(컨트롤드). 산술/경계/톤은 cache-stats.ts(순수).
  *    skeleton dismiss(초기 깜빡임 제거)는 React 마운트가 곧 실제 값으로 렌더하므로 불요.
  *
- * 신규 계약: data prop 주입(무전역). i18n 정밀 툴팁은 t prop(기본 window.I18n.t).
+ * 신규 계약: data prop 주입(무전역). i18n 정밀 툴팁은 t prop(필수 — DI, 호출처가 react-i18next t 주입).
  * 셀렉터 계약 유지: id(cachePanel/cachePanelOverall/cacheHitFill/cacheHitPct/cacheRatioCreate/
  *   cacheRatioRead/cacheRatioLabel), cache-panel/cache-panel-overall/cache-section/cache-panel-label/
  *   cache-bar-wrap/cache-bar-fill/cache-bar-pct/cache-ratio-wrap/cache-ratio-creation/read/cache-ratio-label.
@@ -28,19 +28,17 @@ import {
 } from './cache-stats';
 
 export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
-declare const window: { I18n?: { t?: TFunc } };
-const defaultT: TFunc = (k, vars) => window.I18n?.t?.(k, vars) ?? k;
 
 export interface CachePanelProps {
   data: CacheStats | null;
-  t?: TFunc;
+  t: TFunc;
 }
 
 /**
  * Cache 패널 — hit-rate 바 + creation/read 비율 바.
  * data=null 이면 미렌더(원본 renderCachePanel `if (!data) return`).
  */
-export function CachePanel({ data, t = defaultT }: CachePanelProps): ReactElement | null {
+export function CachePanel({ data, t }: CachePanelProps): ReactElement | null {
   if (!data) return null;
   const hr = computeHitRateView(data.hitRate);
   const ratio = computeRatioView(data.cacheCreationTokens, data.cacheReadTokens);

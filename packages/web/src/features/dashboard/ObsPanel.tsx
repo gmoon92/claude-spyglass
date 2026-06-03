@@ -10,7 +10,8 @@
  *  - payload 만 prop 으로 주입(원본 호출처 main.js 가 dispatch). 무전역·무스토어 leaf.
  *  - delta 트렌드 아이콘은 P2-01 Chevron 컴포넌트 재사용(원본 svgChevron).
  *  - sparkline 은 P3-09 Sparkline.tsx 재사용(원본 sparklineBars/Line).
- *  - i18n: t prop 주입(기본 window.I18n.t ?? identity) → 골든마스터 결정론(테스트가 stub 주입).
+ *  - i18n: t prop 주입(필수 — DI). 호출처(BrowseSidebar)가 useTranslation t 주입, 테스트가 stub 주입.
+ *    키 미스 전역 폴백은 lib/i18n.ts parseMissingKeyHandler 가 담당(window.I18n 직접참조 제거 — D-1).
  *  - 토큰/숫자/상대시각 포맷은 원본 formatters.js(병존) 재사용 — 표기 동치.
  *  - 셀렉터 계약 유지: 카드 id(cardBurnRate/cardCacheHealth/cardLivePulse/cardToolCategories),
  *    anomalyBadge, obs-card-* / obs-cat-* / anomaly-badge-* 클래스(향후 CSS/E2E 호환).
@@ -39,13 +40,8 @@ import {
   type DeltaView,
 } from './obs-card-data';
 
-/** i18n 라벨러 — 원본 window.I18n.t 와 동일 시그니처. 기본은 전역 fallback. */
+/** i18n 라벨러 — react-i18next t / 테스트 stub 공통 시그니처(필수 prop, DI). */
 export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
-
-declare const window: { I18n?: { t?: TFunc } };
-
-/** 기본 t: window.I18n.t 있으면 사용, 없으면 key 그대로(원본 ?? identity 폴백). */
-const defaultT: TFunc = (k, vars) => window.I18n?.t?.(k, vars) ?? k;
 
 const SPARK_W = 76;
 const SPARK_H = 24;
@@ -73,10 +69,10 @@ function EmptyCard({ message }: { message: string }): ReactElement {
 // ── W1. Burn Rate ─────────────────────────────────────────────────────────────
 export function BurnRateCard({
   payload,
-  t = defaultT,
+  t,
 }: {
   payload: BurnRatePayload | null;
-  t?: TFunc;
+  t: TFunc;
 }): ReactElement {
   if (isBurnRateEmpty(payload)) {
     return (
@@ -107,10 +103,10 @@ export function BurnRateCard({
 // ── W2. Cache Health ──────────────────────────────────────────────────────────
 export function CacheHealthCard({
   payload,
-  t = defaultT,
+  t,
 }: {
   payload: CacheHealthPayload | null;
-  t?: TFunc;
+  t: TFunc;
 }): ReactElement {
   if (isCacheHealthEmpty(payload)) {
     return (
@@ -141,10 +137,10 @@ export function CacheHealthCard({
 // ── W3. Live Pulse ────────────────────────────────────────────────────────────
 export function LivePulseCard({
   payload,
-  t = defaultT,
+  t,
 }: {
   payload: LivePulsePayload | null;
-  t?: TFunc;
+  t: TFunc;
 }): ReactElement {
   if (isLivePulseEmpty(payload)) {
     return (
@@ -175,11 +171,11 @@ export function LivePulseCard({
 export function ToolCategoriesCard({
   payload,
   mode = 'default',
-  t = defaultT,
+  t,
 }: {
   payload: ToolCategoriesPayload;
   mode?: ToolCategoriesMode;
-  t?: TFunc;
+  t: TFunc;
 }): ReactElement | null {
   const view = computeToolCategories(payload, mode);
   // 'suppressed' — meta-docs 모드에서 배열 payload 도착 → 렌더 변경 없음(원본 early return).

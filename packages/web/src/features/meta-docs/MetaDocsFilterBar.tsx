@@ -17,8 +17,6 @@ import type { ReactElement } from 'react';
 import type { DisplayFilter } from './meta-docs-sort';
 
 export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
-declare const window: { I18n?: { t?: TFunc } };
-const defaultT: TFunc = (k, vars) => window.I18n?.t?.(k, vars) ?? k;
 
 export type TypeFilter = 'all' | 'agent' | 'skill' | 'command';
 export type MetaFilterGroup = 'type' | 'display';
@@ -34,7 +32,8 @@ export interface MetaDocsFilterBarProps {
   onFilterChange?: (group: MetaFilterGroup, value: string) => void;
   /** includeDeleted 토글 통지. */
   onIncludeDeletedChange?: (checked: boolean) => void;
-  t?: TFunc;
+  /** i18n t(필수 — DI). 호출처가 react-i18next t 주입, 테스트가 stub 주입. */
+  t: TFunc;
 }
 
 /** 원본 svgTrash({size:12}) 1:1 — stroke-only 휴지통. */
@@ -88,7 +87,7 @@ export function MetaDocsFilterBar({
   includeDeleted,
   onFilterChange,
   onIncludeDeletedChange,
-  t = defaultT,
+  t,
 }: MetaDocsFilterBarProps): ReactElement {
   const types: FilterBtnDef[] = [
     { v: 'all', label: t('ui.meta-docs-view.filter-all') },

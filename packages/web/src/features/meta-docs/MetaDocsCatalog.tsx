@@ -34,8 +34,6 @@ import {
 } from './meta-docs-sort';
 
 export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
-declare const window: { I18n?: { t?: TFunc } };
-const defaultT: TFunc = (k, vars) => window.I18n?.t?.(k, vars) ?? k;
 
 /** fmtTime 동치 — 원본 formatters.fmtTime(로컬 'YYYY-MM-DD HH:MM'). 누락 → null(호출처 '—'). */
 function fmtTime(ms: number | null | undefined): string | null {
@@ -68,7 +66,8 @@ export interface MetaDocsCatalogProps {
   tableRef?: RefObject<HTMLTableElement>;
   /** fetch 대기 중 여부 — 미로드 시 스켈레톤(빈 상태 오해 방지). */
   loading?: boolean;
-  t?: TFunc;
+  /** i18n t(필수 — DI). 호출처가 react-i18next t 주입, 테스트가 stub 주입. */
+  t: TFunc;
 }
 
 const HEADERS: Array<{ key: MetaDocSortKey; label: string; cls: string }> = [
@@ -124,7 +123,7 @@ export function MetaDocsCatalog({
   activeRowName = null,
   tableRef,
   loading = false,
-  t = defaultT,
+  t,
 }: MetaDocsCatalogProps): ReactElement {
   // 표시필터 → 정렬(순수 lib). 원본 loadMetaDocsLibrary 순서(view.js:521-522) 동치.
   const filtered = applyDisplayFilter(rows, display);

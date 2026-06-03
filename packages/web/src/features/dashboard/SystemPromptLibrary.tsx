@@ -25,8 +25,6 @@ import {
 } from './syslib-sort';
 
 export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
-declare const window: { I18n?: { t?: TFunc } };
-const defaultT: TFunc = (k, vars) => window.I18n?.t?.(k, vars) ?? k;
 
 export interface SystemPromptLibraryProps {
   rows: SysLibRow[] | null;
@@ -34,7 +32,8 @@ export interface SystemPromptLibraryProps {
   onSort?: (key: SysLibSortKey) => void;
   /** 행 클릭(본문 lazy-fetch 모달 — 호출처 위임). */
   onOpenRow?: (hash: string) => void;
-  t?: TFunc;
+  /** i18n t(필수 — DI). 호출처가 react-i18next t 주입, 테스트가 stub 주입. */
+  t: TFunc;
 }
 
 const HEADERS: Array<{ key: SysLibSortKey; label: string; cls: string }> = [
@@ -62,7 +61,7 @@ export function SystemPromptLibrary({
   sort = DEFAULT_SORT,
   onSort,
   onOpenRow,
-  t = defaultT,
+  t,
 }: SystemPromptLibraryProps): ReactElement {
   if (!rows || rows.length === 0) {
     return (

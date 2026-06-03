@@ -197,9 +197,9 @@ export function BrowseSidebar({
       <div className="panel-section tool-stats-section" id="panelTools" ref={vToolsRef}>
         <div className="panel-body">
           <div className="obs-panel" id="obsPanel">
-            <BurnRateCard payload={obs.burnRate} />
-            <CacheHealthCard payload={obs.cacheHealth} />
-            <LivePulseCard payload={obs.livePulse} />
+            <BurnRateCard payload={obs.burnRate} t={tr} />
+            <CacheHealthCard payload={obs.cacheHealth} t={tr} />
+            <LivePulseCard payload={obs.livePulse} t={tr} />
           </div>
         </div>
       </div>

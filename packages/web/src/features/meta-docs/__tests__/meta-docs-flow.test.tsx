@@ -8,23 +8,21 @@
  *
  * 회귀 게이트: flow-region id(셀렉터 계약), activeRow 단방향(catalog→flow), centerKind 매핑.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { MetaDocsFlow, activeRowToFlowArgs } from '../MetaDocsFlow';
 
-beforeAll(() => {
-  (globalThis as { window?: { I18n?: unknown } }).window ??= {};
-  (globalThis as { window: { I18n?: unknown } }).window.I18n = { t: (k: string) => k };
-});
+// i18n t 는 DI(필수 prop) — 키 passthrough stub. D-1: 전역 window.I18n 비의존.
+const t = (k: string) => k;
 
 describe('MetaDocsFlow — SVG 영역 셸 마크업 (flow.js:103 CONTAINER_ID)', () => {
   it('flow region 컨테이너 렌더 (metaDocsFlowRegion 셀렉터 계약)', () => {
-    const html = renderToStaticMarkup(createElement(MetaDocsFlow, { activeRow: null }));
+    const html = renderToStaticMarkup(createElement(MetaDocsFlow, { activeRow: null, t }));
     expect(html).toContain('id="metaDocsFlowRegion"');
   });
   it('activeRow 미지정 → SVG 미생성(effect 명령형, SSR 비발화) — 컨테이너만', () => {
-    const html = renderToStaticMarkup(createElement(MetaDocsFlow, { activeRow: null }));
+    const html = renderToStaticMarkup(createElement(MetaDocsFlow, { activeRow: null, t }));
     // 명령형 SVG 는 effect 가 그리므로 SSR 에선 빈 region.
     expect(html).not.toContain('flow-svg');
   });

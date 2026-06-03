@@ -5,29 +5,26 @@
  * 셀렉터 계약(syslib-detail-modal/syslib-detail-inner/syslib-detail-close/data-syslib-close/
  *   syslib-detail-head/syslib-detail-hash/syslib-detail-content) + 상태 분기(loading/error/not-found/content) 검증.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { SystemPromptDetailModal } from '../SystemPromptDetailModal';
 
-beforeAll(() => {
-  (globalThis as any).window = (globalThis as any).window ?? {};
-  (globalThis as any).window.I18n = { t: (k: string) => k };
-});
-
+// i18n t 는 DI(필수 prop) — 키 passthrough stub(원본 window.I18n stub 동치). D-1: 전역 window.I18n 비의존.
+const t = (k: string) => k;
 const html = (el: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(el);
 const noop = () => {};
 
 describe('SystemPromptDetailModal — 표시/숨김', () => {
   it('hash 없으면 null (모달 미표시)', () => {
     const out = html(
-      <SystemPromptDetailModal hash={null} loading={false} detail={null} onClose={noop} />,
+      <SystemPromptDetailModal hash={null} loading={false} detail={null} onClose={noop} t={t} />,
     );
     expect(out).toBe('');
   });
 
   it('hash 있으면 syslib-detail-modal 컨테이너 + role=dialog', () => {
     const out = html(
-      <SystemPromptDetailModal hash="abc123" loading detail={null} onClose={noop} />,
+      <SystemPromptDetailModal hash="abc123" loading detail={null} onClose={noop} t={t} />,
     );
     expect(out).toContain('id="sysLibDetailModal"');
     expect(out).toContain('class="syslib-detail-modal"');
@@ -48,8 +45,7 @@ describe('SystemPromptDetailModal — 상태 분기', () => {
           segment_count: 3,
           ref_count: 5,
         }}
-        onClose={noop}
-      />,
+        onClose={noop} t={t} />,
     );
     expect(out).toContain('syslib-detail-inner');
     expect(out).toContain('class="syslib-detail-hash"');
@@ -66,7 +62,7 @@ describe('SystemPromptDetailModal — 상태 분기', () => {
 
   it('detail 없음(fetch 완료) → not-found', () => {
     const out = html(
-      <SystemPromptDetailModal hash="abc" loading={false} detail={null} onClose={noop} />,
+      <SystemPromptDetailModal hash="abc" loading={false} detail={null} onClose={noop} t={t} />,
     );
     expect(out).toContain('ui.syslib.not-found');
     expect(out).toContain('data-syslib-close');
@@ -74,7 +70,7 @@ describe('SystemPromptDetailModal — 상태 분기', () => {
 
   it('error → modal-load-failed', () => {
     const out = html(
-      <SystemPromptDetailModal hash="abc" loading={false} detail={null} error="HTTP 500" onClose={noop} />,
+      <SystemPromptDetailModal hash="abc" loading={false} detail={null} error="HTTP 500" onClose={noop} t={t} />,
     );
     expect(out).toContain('ui.syslib.modal-load-failed');
   });

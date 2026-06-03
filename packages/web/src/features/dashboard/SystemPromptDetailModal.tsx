@@ -24,8 +24,6 @@ import { CloseButton } from '../../components/design-system/primitives/CloseButt
 import { formatBytes } from './syslib-sort';
 
 export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
-declare const window: { I18n?: { t?: TFunc } };
-const defaultT: TFunc = (k, vars) => window.I18n?.t?.(k, vars) ?? k;
 
 /** 모달이 표시할 본문 상태(컨테이너의 fetch 결과). */
 export interface SystemPromptDetail {
@@ -47,7 +45,8 @@ export interface SystemPromptDetailModalProps {
   error?: string | null;
   /** 닫기(× / backdrop / ESC 공통). */
   onClose: () => void;
-  t?: TFunc;
+  /** i18n t(필수 — DI). 호출처가 react-i18next t 주입, 테스트가 stub 주입. */
+  t: TFunc;
 }
 
 /**
@@ -60,7 +59,7 @@ export function SystemPromptDetailModal({
   detail,
   error = null,
   onClose,
-  t = defaultT,
+  t,
 }: SystemPromptDetailModalProps): ReactElement | null {
   // ESC 닫기(레거시 document.addEventListener('keydown', onKey)). hash 활성일 때만 등록.
   useEffect(() => {

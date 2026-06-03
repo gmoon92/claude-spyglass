@@ -22,6 +22,7 @@
  * @module features/llm-input/LLMInput
  */
 import { useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { fmtTime, fmtToken, shortModelName } from '../../../assets/js/formatters.js';
 import { Search } from '../../components/design-system/icons/Search';
 import { Chevron } from '../../components/design-system/icons/Chevron';
@@ -41,9 +42,8 @@ import {
   SEARCH_MIN_LEN,
 } from './llm-input-state';
 
-declare const window: { I18n?: { t: (key: string, vars?: Record<string, unknown>) => string } };
-const t = (key: string, vars?: Record<string, unknown>): string =>
-  (window.I18n?.t ?? ((k: string) => k))(key, vars);
+/** i18n 번역 함수 시그니처 — react-i18next t(useTranslation) 와 동형. */
+type TFunc = (key: string, vars?: Record<string, unknown>) => string;
 
 /** system_prompts meta(원본 systemMeta 형태). */
 export interface SystemMeta {
@@ -228,6 +228,7 @@ function SystemSection({
   onToggle: (open: boolean) => void;
   onRefsClick?: (hash: string) => void;
 }): ReactElement {
+  const { t } = useTranslation() as { t: TFunc };
   if (!content) {
     return (
       <section className="llm-input-system llm-input-system--loading">
@@ -334,6 +335,7 @@ function ProxySelector({
   activeId: string;
   onSelect?: (id: string) => void;
 }): ReactElement {
+  const { t } = useTranslation() as { t: TFunc };
   const total = proxyList.length;
   return (
     <div className="llm-input-proxy-selector">
@@ -372,6 +374,7 @@ function ProxySelector({
  * 명령형 DOM 변이를 useState 기반 선언적 렌더로 정제. 원본 renderHtml 구성 순서 1:1 유지.
  */
 export function LLMInput(props: LLMInputProps): ReactElement {
+  const { t } = useTranslation() as { t: TFunc };
   const {
     requestId,
     systemHash = null,

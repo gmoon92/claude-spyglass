@@ -29,15 +29,14 @@ import type { ReactElement } from 'react';
 import { computeRowCounts, type MetaDocRow, type DisplayFilter } from './meta-docs-sort';
 
 export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
-declare const window: { I18n?: { t?: TFunc } };
-const defaultT: TFunc = (k, vars) => window.I18n?.t?.(k, vars) ?? k;
 
 export interface MetaDocsSummaryCardsProps {
   /** 전체 카탈로그 행(type 필터 전 — 원본 probe rows 동치). 카운트/mini-bar 파생 입력. */
   rows: ReadonlyArray<MetaDocRow>;
   /** 카드 클릭 → display 필터 전환 통지(호출처가 셸 상태 반영). */
   onSelectDisplay: (display: DisplayFilter) => void;
-  t?: TFunc;
+  /** i18n t(필수 — DI). 호출처가 react-i18next t 주입, 테스트가 stub 주입. */
+  t: TFunc;
 }
 
 const TYPE_ORDER: ReadonlyArray<string> = ['agent', 'skill', 'command'];
@@ -61,7 +60,7 @@ function groupInvocationsByType(rows: ReadonlyArray<MetaDocRow>): Array<{ type: 
  *   - behavior mini-bar 는 레거시에서 별도 #metaDocsToolStats 트랙(grid row4)에 위치하므로, 본 컴포넌트가 아닌
  *     MetaDocsBehaviorBars 로 분리됐다(그 둘을 한 flex-row 컨테이너에 같이 두면 카드 옆에 바가 붙어 눌린다).
  */
-export function MetaDocsSummaryCards({ rows, onSelectDisplay, t = defaultT }: MetaDocsSummaryCardsProps): ReactElement {
+export function MetaDocsSummaryCards({ rows, onSelectDisplay, t }: MetaDocsSummaryCardsProps): ReactElement {
   const counts = computeRowCounts(rows);
 
   return (

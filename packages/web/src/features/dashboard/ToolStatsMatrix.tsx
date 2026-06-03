@@ -28,15 +28,14 @@ import {
 } from './tool-stats-sort';
 
 export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
-declare const window: { I18n?: { t?: TFunc } };
-const defaultT: TFunc = (k, vars) => window.I18n?.t?.(k, vars) ?? k;
 
 export interface ToolStatsMatrixProps {
   stats: ToolStatRow[] | null;
   sort?: { key: ToolStatsSortKey; dir: SortDir };
   /** 헤더 클릭 → 정렬 전이(호출처가 nextSort 적용). */
   onSort?: (key: ToolStatsSortKey) => void;
-  t?: TFunc;
+  /** i18n t(필수 — DI). 호출처가 react-i18next t 주입, 테스트가 stub 주입. */
+  t: TFunc;
   /** 도구 아이콘 슬롯(원본 toolIconHtml). 미주입 시 폴백 없음(텍스트만). */
   renderIcon?: (toolName: string) => ReactNode;
   /** fetch 대기 중 여부 — true 면 빈 상태("데이터 없음") 대신 스켈레톤(로딩 오해 방지). */
@@ -58,7 +57,7 @@ export function ToolStatsMatrix({
   stats,
   sort = DEFAULT_SORT,
   onSort,
-  t = defaultT,
+  t,
   renderIcon,
   loading = false,
 }: ToolStatsMatrixProps): ReactElement {

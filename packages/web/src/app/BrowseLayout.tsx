@@ -545,7 +545,7 @@ export function BrowseLayout(): ReactElement {
             />
             {/* cache-panel-overall(원본 index.html :520~543) — charts-inner 3번째 행(.cache-panel grid 1/-1 전체폭).
                 fetchCacheStats 결과 결선. CachePanel 이 .cache-panel 래퍼까지 출력하므로 추가 래핑하지 않는다. */}
-            <CachePanel data={cacheStats} />
+            <CachePanel data={cacheStats} t={tx} />
           </div>
         </div>
 

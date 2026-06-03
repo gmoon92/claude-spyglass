@@ -25,7 +25,8 @@ export interface MetaDocsToolStatsProps {
   sort?: { key: ToolStatsSortKey; dir: SortDir };
   /** 헤더 클릭 → 정렬 전이 통지(호출처가 nextSort 적용). */
   onSort?: (key: ToolStatsSortKey) => void;
-  t?: TFunc;
+  /** i18n t(필수 — DI). 호출처가 react-i18next t 주입, 테스트가 stub 주입. */
+  t: TFunc;
   /** fetch 대기 중 여부 — 미로드 시 스켈레톤(빈 상태 오해 방지). */
   loading?: boolean;
 }
