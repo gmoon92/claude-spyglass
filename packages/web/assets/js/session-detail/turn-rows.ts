@@ -26,15 +26,7 @@
  * @see ADR-turn-view-revamp-004: turn-rows.js → makeRequestRow 위임
  */
 
-import { escHtml } from '../formatters.js';
-import { makeRequestRow } from '../render/rows.js';
-import type { RequestView } from '../view-types.js';
 import { subTypeOf, isAnchorTool } from '../request-types.js';
-
-// makeRequestRow 는 RequestView 를 받지만, 본 모듈은 서버 JSON 파생 loose 행(Req)을 다룬다.
-// 원본(Record<string,any>)이 암묵 허용하던 구조적 호환을 명시 캐스트로 대체(any 제거, 런타임 무변경).
-// makeRequestRow 내부는 필드 부재를 방어적으로 처리(P2-04 RowLike 동형).
-const asView = (r: Req): RequestView => r as unknown as RequestView;
 
 // any 제거(P5-03): 디스플레이 레이어가 실제 접근하는 필드만 명시하고 나머지는 index signature(unknown).
 // src/features/session-detail/TurnRows.tsx 의 RowLike/TurnLike 패턴과 동형(legacy → src 단방향 import 라 재선언).
@@ -354,101 +346,6 @@ export function chipKeyForRequest(r: Req, respSeq?: number) {
 }
 
 // =============================================================================
-// 활성 턴 로그 행 빌더 — makeRequestRow 위임 + data-chip-key 주입
+// 활성 턴 로그 행 빌더(makeTurnLogRows) 및 makeRequestRow 위임은 P5 데드 vanilla 삭제에서
+// 제거됨 — React TurnRows.tsx 가 행 렌더를 전담한다. 본 모듈은 순수 chip 압축/키 로직만 제공.
 // =============================================================================
-
-/**
- * makeRequestRow 산출 HTML에 `data-chip-key="..."` 속성을 주입한다.
- *
- * 정책:
- *  - 키가 빈 문자열이면 속성 자체를 부여하지 않는다 (불필요한 노이즈 회피).
- *  - 행 시작 태그(`<tr ...>`)의 첫 공백 직후에 삽입 — 다른 속성 순서 보존.
- *  - 같은 키가 여러 행에 박혀도 querySelector는 첫 매칭만 반환하므로 안전.
- *
- * @param {string} rowHtml makeRequestRow 결과 (`<tr ...>...</tr>`)
- * @param {string} key 행의 chip-key
- * @returns {string} chip-key가 주입된 행 HTML
- */
-function injectChipKey(rowHtml: string, key: string) {
-  if (!key) return rowHtml;
-  return rowHtml.replace(/^<tr /, `<tr data-chip-key="${escHtml(key)}" `);
-}
-
-/**
- * 활성 턴의 prompt + tool_calls + responses를 9컬럼 `<tr>` 행 HTML로 직렬화한다.
- *
- * 데이터 흐름:
- *  1) prompt 행 → makeRequestRow({...turn.prompt, type:'prompt'}) — chip-key 없음.
- *  2) 본문 행들 → `turn.items[]` 또는 폴백(tool_calls+responses) 시간순 머지.
- *     각 행에 chipKey 주입 (response 행은 ◆ 등장 순번을 1-based로 누적).
- *
- * 옵션:
- *  - `anomalyFlags`  : Map<requestId, Set<string>> — Spike/loop/slow 뱃지 부여용
- *  - `showSession`   : 기본 false (활성 턴 1개에 묶인 행만 노출)
- *
- * @param {object} turn TurnItem (server normalized)
- * @param {{anomalyFlags?: Map<string, Set<string>>, showSession?: boolean}} [opts]
- * @returns {string} `<tr>` 행들의 HTML concat
- *
- * @see ADR-turn-view-revamp-004: 하단 표는 기존 요청 탭 모듈(`makeRequestRow`) 100% 재사용.
- */
-export function makeTurnLogRows(turn: Turn | null | undefined, opts: { anomalyFlags?: Map<string, Set<string>>; showSession?: boolean } = {}) {
-  if (!turn) return '';
-  const anomalyMap = opts.anomalyFlags || null;
-  const showSession = !!opts.showSession; // 기본 false — 활성 턴 좁힘 정책(Option α).
-  const rowOpts = (r: Req) => ({
-    showSession,
-    anomalyFlags: (r.id != null ? anomalyMap?.get(r.id) : null) || null,
-  });
-
-  const parts: string[] = [];
-
-  // 1) prompt 행 — chip-key 없음 (prompt에는 spine 칩이 존재하지 않음).
-  if (turn.prompt) {
-    const promptReq = { ...turn.prompt, type: 'prompt' };
-    parts.push(makeRequestRow(asView(promptReq), rowOpts(promptReq)));
-  }
-
-  // 2) 본문 행 — 서버 인터리빙 items[] 우선, 미제공 시 시간순 머지로 폴백.
-  let respSeq = 0;
-  const walkItems = turn.items?.length
-    ? turn.items
-    : legacyInterleave(turn.tool_calls || [], turn.responses || []);
-
-  for (const it of walkItems) {
-    if (it.kind === 'response') {
-      respSeq += 1;
-      const req = { ...it.request, type: 'response' };
-      const key = chipKeyForRequest(req, respSeq);
-      parts.push(injectChipKey(makeRequestRow(asView(req), rowOpts(req)), key));
-    } else if (it.kind === 'tool') {
-      const req = { ...it.request, type: 'tool_call' };
-      const key = chipKeyForRequest(req, respSeq);
-      parts.push(injectChipKey(makeRequestRow(asView(req), rowOpts(req)), key));
-    }
-  }
-
-  return parts.join('');
-}
-
-/**
- * 서버 인터리빙(`turn.items`)을 제공하지 않는 구버전 응답을 위한 폴백.
- *
- * tool_calls와 responses를 timestamp 기준으로 머지해 `{kind, request}` 시퀀스로 반환한다.
- * 새 데이터 경로는 서버 SSoT의 items[]를 우선 사용 — 본 함수는 미세한 누락만 보정.
- */
-function legacyInterleave(toolCalls: Req[], responses: Req[]) {
-  // timestamp 는 string|number — 원본 동작(`|| 0` 후 산술, ISO는 NaN→no-op) 보존 위해 number 캐스트.
-  const tools = toolCalls.slice().sort((a: Req, b: Req) => ((a.timestamp || 0) as number) - ((b.timestamp || 0) as number));
-  const resps = responses.slice().sort((a: Req, b: Req) => ((a.timestamp || 0) as number) - ((b.timestamp || 0) as number));
-  const out: FlowItem[] = [];
-  let i = 0;
-  for (const r of resps) {
-    while (i < tools.length && (tools[i].timestamp || 0) <= (r.timestamp || 0)) {
-      out.push({ kind: 'tool', request: tools[i++] });
-    }
-    out.push({ kind: 'response', request: r });
-  }
-  while (i < tools.length) out.push({ kind: 'tool', request: tools[i++] });
-  return out;
-}
