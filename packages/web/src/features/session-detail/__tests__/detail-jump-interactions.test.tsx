@@ -67,7 +67,12 @@ describe('기능 1 — 턴 마커 클릭 → onMarkerClick', () => {
 
 describe('기능 2 — 칩 점프 → 행 flash + 펼침', () => {
   // #turnLogBody 안에 chip-key 행 + 그 행의 [data-expand-id]. 칩은 별도 컨테이너.
-  function mountDom(): { chip: HTMLElement; row: HTMLTableRowElement; expandClicks: { n: number } } {
+  function mountDom(): {
+    chip: HTMLElement;
+    row: HTMLTableRowElement;
+    expandClicks: { n: number };
+    refs: { logBodyRef: { current: HTMLElement | null }; detailRootRef: { current: HTMLElement | null } };
+  } {
     const detailView = document.createElement('div');
     detailView.id = 'detailView';
     // log-pane tbody
@@ -95,30 +100,35 @@ describe('기능 2 — 칩 점프 → 행 flash + 펼침', () => {
     detailView.appendChild(table);
     detailView.appendChild(chip);
     document.body.appendChild(detailView);
-    return { chip, row, expandClicks };
+    // chip-jump 는 전역 조회 대신 DetailView 가 부착한 ref 스코프(logBodyRef/detailRootRef)에서 탐색한다.
+    const refs = {
+      logBodyRef: { current: tbody as HTMLElement | null },
+      detailRootRef: { current: detailView as HTMLElement | null },
+    };
+    return { chip, row, expandClicks, refs };
   }
 
   it('handleChipActivation: 매칭 행 flash + [data-expand-id] 합성 click(펼침 위임)', () => {
-    const { chip, row, expandClicks } = mountDom();
-    handleChipActivation(chip);
+    const { chip, row, expandClicks, refs } = mountDom();
+    handleChipActivation(chip, refs);
     expect(row.classList.contains('row-highlight-flash')).toBe(true);
     expect(expandClicks.n).toBe(1); // 행 펼침 토글이 1회 트리거됨.
   });
 
   it('이미 펼쳐진 행(prompt-expand-row 형제 존재)은 재펼침 안 함(토글 닫힘 회피)', () => {
-    const { chip, row, expandClicks } = mountDom();
+    const { chip, row, expandClicks, refs } = mountDom();
     const expandRow = document.createElement('tr');
     expandRow.className = 'prompt-expand-row';
     row.after(expandRow);
-    handleChipActivation(chip);
+    handleChipActivation(chip, refs);
     expect(row.classList.contains('row-highlight-flash')).toBe(true); // flash 는 여전히.
     expect(expandClicks.n).toBe(0); // 펼침은 토글하지 않음.
   });
 
   it('installChipDelegation: 칩 click 위임이 handleChipActivation 을 트리거', () => {
-    const { chip, expandClicks } = mountDom();
-    const root2 = document.getElementById('detailView') as HTMLElement;
-    const cleanup = installChipDelegation(root2);
+    const { chip, expandClicks, refs } = mountDom();
+    const root2 = refs.detailRootRef.current as HTMLElement;
+    const cleanup = installChipDelegation(root2, refs);
     chip.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(expandClicks.n).toBe(1);
     cleanup();
@@ -131,6 +141,10 @@ describe('기능 2 — 칩 점프 → 행 flash + 펼침', () => {
     chip.setAttribute('data-chip-key', 'tool:Nonexistent');
     detailView.appendChild(chip);
     document.body.appendChild(detailView);
-    expect(() => handleChipActivation(chip)).not.toThrow();
+    const refs = {
+      logBodyRef: { current: null },
+      detailRootRef: { current: detailView as HTMLElement | null },
+    };
+    expect(() => handleChipActivation(chip, refs)).not.toThrow();
   });
 });

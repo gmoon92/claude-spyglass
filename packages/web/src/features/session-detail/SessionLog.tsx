@@ -21,7 +21,7 @@
  *
  * @module features/session-detail/SessionLog
  */
-import { useEffect, useRef, type ReactNode, type ReactElement } from 'react';
+import { useEffect, useRef, type ReactNode, type ReactElement, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { initColResize } from '../../lib/col-resize';
 import { TurnRows } from './TurnRows';
@@ -62,6 +62,8 @@ interface SessionLogProps {
   showSession?: boolean;
   /** FlowPane(turn-spine/flow-head) 슬롯 — P3-06 이 채운다. 미지정이면 미렌더. */
   flowPane?: ReactNode;
+  /** 칩 점프 탐색용 tbody(#turnLogBody) ref — DetailView 가 chip-jump 와 공유(전역 조회 제거). */
+  logBodyRef?: RefObject<HTMLElement | null>;
 }
 
 /**
@@ -73,6 +75,7 @@ export function SessionLog({
   anomalyFlags = null,
   showSession = false,
   flowPane,
+  logBodyRef,
 }: SessionLogProps): ReactElement {
   const { t } = useTranslation();
   const tableRef = useRef<HTMLTableElement | null>(null);
@@ -111,7 +114,7 @@ export function SessionLog({
                 <th style={{ textAlign: 'right' }}>Duration</th>
               </tr>
             </thead>
-            <tbody id="turnLogBody">
+            <tbody id="turnLogBody" ref={logBodyRef as RefObject<HTMLTableSectionElement> | undefined}>
               <TurnRows turn={activeTurn} anomalyFlags={anomalyFlags} showSession={showSession} />
             </tbody>
           </table>

@@ -12,6 +12,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { FlowPane } from '../FlowPane';
 import { SessionLog } from '../SessionLog';
 
+// 칩 점프 ref — 렌더 스모크엔 타깃이 없으므로 null ref 스코프(chip-jump 안전 no-op).
+const noopChipRefs = { logBodyRef: { current: null }, detailRootRef: { current: null } };
+
 beforeAll(() => {
   (globalThis as any).window = (globalThis as any).window ?? {};
   (globalThis as any).window.I18n = { t: (k: string) => k };
@@ -42,7 +45,7 @@ const turns: any = [
 
 describe('FlowPane 골격', () => {
   it('flow-pane section + #turnSpine + flow-head 포함', () => {
-    const html = r(<FlowPane turns={turns} activeTurnId="t1" sessionTotalTokens={40} />);
+    const html = r(<FlowPane turns={turns} activeTurnId="t1" sessionTotalTokens={40} chipRefs={noopChipRefs} />);
     expect(html).toContain('class="flow-pane"');
     expect(html).toContain('data-region="flow"');
     expect(html).toContain('id="turnSpine"');
@@ -54,7 +57,7 @@ describe('FlowPane 골격', () => {
   });
 
   it('활성 turn-line(is-active) + chip-flow 임베드', () => {
-    const html = r(<FlowPane turns={turns} activeTurnId="t1" sessionTotalTokens={40} />);
+    const html = r(<FlowPane turns={turns} activeTurnId="t1" sessionTotalTokens={40} chipRefs={noopChipRefs} />);
     expect(html).toContain('turn-line is-active');
     expect(html).toContain('class="chip-flow"');
     expect(html).toContain('data-chip-key="tool:Read"');
@@ -62,7 +65,7 @@ describe('FlowPane 골격', () => {
 
   it('프롤로그가 있으면 flow-pane 앞에 prologue 카드', () => {
     const prologue: any = [{ id: 'p1', type: 'tool_call', tool_name: 'Read', timestamp: '2026-04-28T09:00:00Z' }];
-    const html = r(<FlowPane turns={turns} activeTurnId="t1" sessionTotalTokens={40} prologue={prologue} />);
+    const html = r(<FlowPane turns={turns} activeTurnId="t1" sessionTotalTokens={40} chipRefs={noopChipRefs} prologue={prologue} />);
     const prologueIdx = html.indexOf('turn-prologue-card');
     const flowIdx = html.indexOf('class="flow-pane"');
     expect(prologueIdx).toBeGreaterThanOrEqual(0);
@@ -71,7 +74,7 @@ describe('FlowPane 골격', () => {
 
   it('활성 reminder 가 있으면 fhExtra 안에 sysrem 칩', () => {
     const html = r(
-      <FlowPane turns={turns} activeTurnId="t1" sessionTotalTokens={40} activeReminders={['rem one']} />,
+      <FlowPane turns={turns} activeTurnId="t1" sessionTotalTokens={40} chipRefs={noopChipRefs} activeReminders={['rem one']} />,
     );
     expect(html).toContain('id="turn-sysrem-chip-2"'); // 활성 turn_index 2
   });
@@ -79,7 +82,7 @@ describe('FlowPane 골격', () => {
 
 describe('SessionLog.flowPane 슬롯 결합', () => {
   it('flow-pane 이 log-pane 보다 앞에 렌더된다', () => {
-    const flowPane = <FlowPane turns={turns} activeTurnId="t1" sessionTotalTokens={40} />;
+    const flowPane = <FlowPane turns={turns} activeTurnId="t1" sessionTotalTokens={40} chipRefs={noopChipRefs} />;
     const html = r(<SessionLog activeTurn={turns[0]} flowPane={flowPane} />);
     const flowIdx = html.indexOf('class="flow-pane"');
     const logIdx = html.indexOf('class="log-pane"');

@@ -26,7 +26,7 @@
  *
  * @module features/session-detail/DetailView
  */
-import type { ReactElement } from 'react';
+import { useMemo, useRef, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fmtToken, fmtDate } from '../../../assets/js/formatters.js';
 import { bloatedSysBadgeFullHtml, contextSaturationBadgeFullHtml } from '../../../assets/js/render/badges.js';
@@ -165,6 +165,12 @@ export function DetailView({
   const resolvedActiveTurn =
     activeTurn ?? turns.find((t) => t.turn_id === activeTurnId) ?? null;
 
+  // 칩 점프 탐색 ref — 전역 getElementById/querySelector 대체(React 통일성). ref 는 안정값이라
+  //   chipRefs 만 useMemo 로 고정하면 FlowPane 의 installChipDelegation useEffect 가 mount 1회만 돈다.
+  const logBodyRef = useRef<HTMLElement | null>(null);
+  const detailRootRef = useRef<HTMLDivElement | null>(null);
+  const chipRefs = useMemo(() => ({ logBodyRef, detailRootRef }), []);
+
   const flowPane = (
     <FlowPane
       turns={turns as never}
@@ -175,6 +181,7 @@ export function DetailView({
       agentSpike={agentSpike}
       spikeSamples={spikeSamples}
       onMarkerClick={onMarkerClick}
+      chipRefs={chipRefs}
     />
   );
 
@@ -186,8 +193,13 @@ export function DetailView({
   //   flex:1 분배가 어긋나 행이 많은 턴으로 전환 시 log-table-wrap 이 스크롤 대신 찌그러진다 —
   //   레거시처럼 flow-pane + log-pane 만 직계 자식으로 둔다.
   return (
-    <div id="turnUnifiedBody">
-      <SessionLog activeTurn={resolvedActiveTurn as never} anomalyFlags={anomalyFlags} flowPane={flowPane} />
+    <div id="turnUnifiedBody" ref={detailRootRef}>
+      <SessionLog
+        activeTurn={resolvedActiveTurn as never}
+        anomalyFlags={anomalyFlags}
+        flowPane={flowPane}
+        logBodyRef={logBodyRef}
+      />
     </div>
   );
 }

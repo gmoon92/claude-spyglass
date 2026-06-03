@@ -26,7 +26,7 @@ import { FlowHead } from './FlowHead';
 import { TurnSpine } from './TurnSpine';
 import { PrologueCard } from './PrologueCard';
 import { SystemReminderChip } from './SystemReminderChip';
-import { installChipDelegation } from './chip-jump';
+import { installChipDelegation, type ChipJumpRefs } from './chip-jump';
 
 interface TurnLike {
   turn_id: string;
@@ -53,6 +53,8 @@ interface FlowPaneProps {
   spikeSamples?: number[];
   /** 비활성 마커 클릭 → 활성 턴 전환 위임(원본 main.js:803-804 toggleTurn). */
   onMarkerClick?: (turnId: string) => void;
+  /** 칩 점프 탐색 ref 스코프(DetailView 제공) — 전역 DOM 조회 대체. */
+  chipRefs: ChipJumpRefs;
 }
 
 /** spike summary HTML(badges.js SSoT) 를 안전 주입 — 빈 문자열이면 미렌더. */
@@ -74,6 +76,7 @@ export function FlowPane({
   agentSpike = null,
   spikeSamples = [],
   onMarkerClick,
+  chipRefs,
 }: FlowPaneProps): ReactElement {
   const { t } = useTranslation();
   // 활성 턴 선형 탐색 — 활성 턴/턴목록 불변 시 재탐색 생략(턴 20+ 세션에서 매 렌더 O(n) 회피).
@@ -86,7 +89,7 @@ export function FlowPane({
   // 칩 클릭 위임 — 원본 main.js#initChipActivationDelegation 대응. flow-pane section 한 곳에 1회 부착해
   //   turn-spine / flow-head 안 모든 [data-chip-key] 칩 클릭을 단일 핸들러로 처리(행 점프 + flash + 펼침).
   const flowRef = useRef<HTMLElement | null>(null);
-  useEffect(() => installChipDelegation(flowRef.current), []);
+  useEffect(() => installChipDelegation(flowRef.current, chipRefs), [chipRefs]);
 
   const extra = (
     <>
