@@ -2,11 +2,10 @@
 // 순수 포매터 유틸 — DOM 의존 없음, 활성 i18n 언어 기반 locale 적용
 // (ko-KR 하드코딩 시 영/일/중 사용자에게도 한국어 숫자·날짜 형식이 노출되어 브랜드 일관성 손상)
 //
-// getLocale은 i18n-utils.js의 SSoT를 재사용한다 (chart.js / 정렬 모듈과 통일).
-// (이전 위치 assets/js/formatters.ts → src/lib 이동. i18n-utils 는 classic window.I18n
-//  결합 모듈이라 assets 잔존, 정방향(src→assets) import 로 유지.)
+// getLocale은 i18n-utils의 SSoT를 재사용한다 (chart.js / 정렬 모듈과 통일).
 
-import { getLocale } from '../../assets/js/i18n-utils.js';
+import { getLocale } from './i18n-utils';
+import { i18next } from './i18n';
 
 export function fmt(n: number | null | undefined) { return (n ?? 0).toLocaleString(getLocale()); }
 
@@ -39,7 +38,7 @@ function toDateArg(ts: string | number): string | number {
 
 export function fmtRelative(ts: string | number | null | undefined) {
   if (!ts) return '';
-  const t = window.I18n?.t ?? ((k: string) => k);
+  const t = (k: string, vars?: Record<string, unknown>) => i18next.t(k, vars);
   const d = new Date(toDateArg(ts));
   const diffMs  = Date.now() - d.getTime();
   const diffMin = Math.floor(diffMs / 60000);

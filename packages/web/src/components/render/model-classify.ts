@@ -5,6 +5,7 @@
 // Wave 2: 이중 클래스 패턴 — 기존 CSS 클래스 유지 + ds-chip + data-tone 추가.
 
 import { escHtml } from '../../lib/formatters';
+import { i18next } from '../../lib/i18n';
 
 /**
  * 모델 분류 — ADR-data-trust-visual-001
@@ -64,8 +65,8 @@ export function trustOf(r: { model?: string | null; tokens_source?: string | nul
  *     "<synthetic>" / "synthetic"   → "SDK 합성"
  */
 export function modelChipLabel(model: string | null | undefined, cls: string): string {
-  if (cls === 'unknown')   return window.I18n.t('badges.renderers.model.unknown');
-  if (cls === 'synthetic') return window.I18n.t('badges.renderers.model.synthetic');
+  if (cls === 'unknown')   return i18next.t('badges.renderers.model.unknown');
+  if (cls === 'synthetic') return i18next.t('badges.renderers.model.synthetic');
   if (cls === 'external') {
     const m = String(model);
     const head = m.split('-').slice(0, 2).join(' ');
@@ -120,7 +121,7 @@ export function modelChipLabel(model: string | null | undefined, cls: string): s
 export function modelChipHtml(r: { model?: string | null } | null | undefined, opts: { mini?: boolean } = {}) {
   const cls     = modelClassOf(r?.model);
   const label   = modelChipLabel(r?.model, cls);
-  const title   = r?.model || window.I18n.t('badges.renderers.model.no-info');
+  const title   = r?.model || i18next.t('badges.renderers.model.no-info');
   const sizeCls = opts.mini ? ' model-chip-mini' : '';
   return `<span class="model-chip model-chip-${cls}${sizeCls} ds-chip" data-tone="${cls}" title="${escHtml(title)}">${escHtml(label)}</span>`;
 }

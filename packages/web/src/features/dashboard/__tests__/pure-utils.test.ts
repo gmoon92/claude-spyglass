@@ -15,12 +15,9 @@ import {
   resetScrollLock,
   isScrollLockBannerVisible,
 } from '../infra-state';
-// 원본(병존) — 동치 기준. request-types 는 LIVE(런타임 소비처 잔존)라 oracle 유지.
-// (context-window·tool-colors 원본은 P5 데드 vanilla 삭제로 제거 → 대표값 리터럴로 계약 고정.)
-import {
-  subTypeOf as origSubTypeOf,
-  isAnchorTool as origIsAnchor,
-} from '../../../../assets/js/request-types.js';
+// (assets/js/request-types.js oracle 은 SSoT 위치 통일로 제거됨 — assets 사본을 features/dashboard
+//  단일본으로 통합. context-window·tool-colors 선례와 동일하게 동치 비교 대신 입력→출력 리터럴 계약으로
+//  고정한다. 검증 강화이지 약화가 아님: 분류 6분기를 모두 명시 기대값으로 못박는다.)
 
 describe('context-window — 표기 계약', () => {
   it('DEFAULT_CONTEXT_WINDOW = 200_000', () => {
@@ -34,22 +31,23 @@ describe('context-window — 표기 계약', () => {
   });
 });
 
-describe('request-types — 원본 동치', () => {
-  const cases = [
-    { tool_name: 'Agent' },
-    { tool_name: 'Skill' },
-    { tool_name: 'mcp__server__tool' },
-    { tool_name: 'TaskCreate' },
-    { tool_name: 'Bash' },
-    { tool_name: null },
-    { type: 'response' },
-    { tool_name: 'TaskUpdate' },
+describe('request-types — 분류 계약(입력→출력 리터럴 고정)', () => {
+  // [입력, subTypeOf 기대, isAnchorTool 기대] — 기존 oracle 동치가 검증하던 6분기를 명시 기대값으로 못박는다.
+  const cases: Array<[{ tool_name?: string | null; type?: string | null }, string, boolean]> = [
+    [{ tool_name: 'Agent' }, 'agent', true],
+    [{ tool_name: 'Skill' }, 'skill', true],
+    [{ tool_name: 'mcp__server__tool' }, 'mcp', true],
+    [{ tool_name: 'TaskCreate' }, 'task', true],
+    [{ tool_name: 'Bash' }, '', false],
+    [{ tool_name: null }, '', false],
+    [{ type: 'response' }, '', true],       // response → anchor(sub-type 없음)
+    [{ tool_name: 'TaskUpdate' }, 'task', true], // Task 접두사 → task + anchor
   ];
-  it('subTypeOf 동치', () => {
-    for (const c of cases) expect(subTypeOf(c)).toBe(origSubTypeOf(c));
+  it('subTypeOf 분류', () => {
+    for (const [input, sub] of cases) expect(subTypeOf(input)).toBe(sub);
   });
-  it('isAnchorTool 동치(response/TaskUpdate/sub-type)', () => {
-    for (const c of cases) expect(isAnchorTool(c)).toBe(origIsAnchor(c));
+  it('isAnchorTool 분류(response/TaskUpdate/sub-type)', () => {
+    for (const [input, , anchor] of cases) expect(isAnchorTool(input)).toBe(anchor);
     expect(isAnchorTool(null)).toBe(false);
   });
   it('SUB_TYPES 집합 보존', () => {

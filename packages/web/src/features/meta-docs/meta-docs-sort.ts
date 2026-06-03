@@ -11,7 +11,7 @@
  *
  * @module features/meta-docs/meta-docs-sort
  */
-import { getCollator } from '../../../assets/js/i18n-utils.js';
+import { getCollator } from '../../lib/i18n-utils';
 
 /**
  * 카탈로그 행(/api/meta-docs). id==null → orphan(호출만 존재), invocations==0 && id!=null → unused.

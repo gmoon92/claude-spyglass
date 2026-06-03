@@ -12,7 +12,7 @@
  *
  * @module features/session-detail/filter-result
  */
-import { subTypeOf, SUB_TYPES } from '../../../assets/js/request-types.js';
+import { subTypeOf, SUB_TYPES } from '../dashboard/request-types';
 import { getAnomalyFlagsForRow } from '../../lib/anomaly';
 
 interface RequestLike {
@@ -100,7 +100,7 @@ export function computeDetailFilterResult(input: DetailFilterInput): DetailFilte
   const flatFiltered =
     filter === 'all'
       ? requests
-      : SUB_TYPES.includes(filter)
+      : (SUB_TYPES as readonly string[]).includes(filter)
         ? requests.filter((r) => subTypeOf(r) === filter)
         : requests.filter((r) => r.type === filter);
 
@@ -119,7 +119,7 @@ export function computeDetailFilterResult(input: DetailFilterInput): DetailFilte
         ? turns.filter((t) => (t.tool_calls?.length ?? 0) > 0)
         : filter === 'prompt'
           ? turns.filter((t) => !!t.prompt)
-          : SUB_TYPES.includes(filter)
+          : (SUB_TYPES as readonly string[]).includes(filter)
             ? turns.filter((t) => (t.tool_calls?.length ?? 0) > 0)
             : [];
 

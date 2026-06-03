@@ -8,7 +8,7 @@
  *
  * @module features/dashboard/syslib-sort
  */
-import { getCollator } from '../../../assets/js/i18n-utils.js';
+import { getCollator } from '../../lib/i18n-utils';
 
 /** 라이브러리 행(/api/system-prompts 메타). */
 export interface SysLibRow {

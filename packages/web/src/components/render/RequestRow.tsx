@@ -21,7 +21,7 @@ import {
   formatDuration,
   fmtTimestamp,
 } from '../../lib/formatters';
-import { subTypeOf } from '../../../assets/js/request-types.js';
+import { subTypeOf } from '../../features/dashboard/request-types';
 import { trustOf, rowTrustClass } from './model-classify';
 import {
   contextPreviewData,

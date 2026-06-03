@@ -1,5 +1,5 @@
 /**
- * globals.d.ts — web 빌드리스 ESM 번들의 ambient(전역) 타입 선언 SSoT.
+ * src/globals.d.ts — web 빌드리스 ESM 번들의 ambient(전역) 타입 선언 SSoT.
  *
  * 런타임 코드는 변경하지 않는다. 이 파일은 tsc(@ts-check) 전용 타입 표면이며
  * 브라우저 전역(`window.I18n` 등)에 대한 컴파일 타임 계약만 기술한다.

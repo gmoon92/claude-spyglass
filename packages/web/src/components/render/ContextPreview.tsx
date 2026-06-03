@@ -14,7 +14,7 @@
 import type { ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { contextPreviewData, type ContextPreviewData } from './extract';
-import type { RowTextReader } from '../../../assets/js/view-types.js';
+import type { RowTextReader } from '../../lib/view-types';
 
 interface ContextPreviewProps {
   /** 행 데이터(미지정 시 data 직접 주입). */

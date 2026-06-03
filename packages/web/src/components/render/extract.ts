@@ -6,7 +6,7 @@
 // 외부 노출: _promptCache (turn-views.js), contextPreview/extractPromptText/extractAssistantText/extractFirstPrompt/parseToolDetail (turn-rows·flat-view).
 
 import { toolResponseHintKey, type ToolHint } from '../../lib/tool-response-field';
-import type { RowTextReader } from '../../../assets/js/view-types.js';
+import type { RowTextReader } from '../../lib/view-types';
 
 const PROMPT_CACHE_MAX = 500;
 export const _promptCache = new Map<string, ExpandContent>(); // export: togglePromptExpand 공유

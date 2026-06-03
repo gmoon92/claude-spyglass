@@ -29,7 +29,7 @@
  * @see ADR-turn-view-revamp-004: turn-rows.js → makeRequestRow 위임
  */
 
-import { subTypeOf, isAnchorTool } from '../../../assets/js/request-types.js';
+import { subTypeOf, isAnchorTool } from '../dashboard/request-types';
 
 // any 제거(P5-03): 디스플레이 레이어가 실제 접근하는 필드만 명시하고 나머지는 index signature(unknown).
 // src/features/session-detail/TurnRows.tsx 의 RowLike/TurnLike 패턴과 동형(legacy → src 단방향 import 라 재선언).

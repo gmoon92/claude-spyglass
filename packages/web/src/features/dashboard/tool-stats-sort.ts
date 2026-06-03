@@ -9,7 +9,7 @@
  *
  * @module features/dashboard/tool-stats-sort
  */
-import { getCollator } from '../../../assets/js/i18n-utils.js';
+import { getCollator } from '../../lib/i18n-utils';
 
 /** 도구 통계 행(getProjectToolStats 결과). */
 export interface ToolStatRow {

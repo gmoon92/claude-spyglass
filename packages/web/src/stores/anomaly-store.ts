@@ -17,7 +17,7 @@
 //   app-store/sse-store/version-store 와 동형(persist 비대상).
 
 import { create } from 'zustand';
-import type { BloatedSysView } from '../../assets/js/view-types.js';
+import type { BloatedSysView } from '../lib/view-types';
 
 export interface AnomalyStoreState {
   /** 세션 id → bloated_sys 뷰(없으면 키 부재 또는 null). */

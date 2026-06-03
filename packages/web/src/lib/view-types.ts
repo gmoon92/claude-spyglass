@@ -1,4 +1,4 @@
-// view-types.ts — 웹 렌더 계층의 "wire row 뷰" 타입 (P5-03).
+// lib/view-types.ts — 웹 렌더 계층의 "wire row 뷰" 타입 (P5-03).
 //
 // 목적: assets/js 렌더 함수들이 소비하는 행 객체는 @spyglass/types 의 SSoT
 //   (NormalizedRequest / Session / *Field) 를 **그대로** 받되, 서버가 wire 단계에서
