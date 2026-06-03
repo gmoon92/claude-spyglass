@@ -18,19 +18,29 @@ import { decodeText } from '../../payload-codec';
 import { getActiveKey } from '../../runtime/encryption';
 
 /**
- * R3: requests.payload를 payload_algo 분기로 서버측 복호(평문/암호문 혼재 대응).
- * payload는 클라이언트(web/tui)가 JSON.parse하므로, 모든 read 출구에서 평문 string으로 복원해야 한다.
+ * R3: requests.payload를 payload_algo 분기로, preview를 preview_algo 분기로 서버측 복호(평문/암호문 혼재).
+ * payload는 클라이언트(web/tui)가 JSON.parse하고 preview는 UI 미리보기로 직렬화되므로, 모든 read
+ * 출구에서 평문 string으로 복원해야 한다. payload와 preview는 독립 algo 마커를 가진다(ⓝ1, Migration 057).
  */
-function decodeRequestRow<T extends { payload?: string | null; payload_algo?: string | null }>(row: T | null): T | null {
-  if (row && row.payload != null) {
-    row.payload = decodeText(row.payload, row.payload_algo, getActiveKey()) ?? row.payload;
+type DecodableRequestRow = {
+  payload?: string | null;
+  payload_algo?: string | null;
+  preview?: string | null;
+  preview_algo?: string | null;
+};
+function decodeRequestRow<T extends DecodableRequestRow>(row: T | null): T | null {
+  if (row) {
+    const key = getActiveKey();
+    if (row.payload != null) row.payload = decodeText(row.payload, row.payload_algo, key) ?? row.payload;
+    if (row.preview != null) row.preview = decodeText(row.preview, row.preview_algo, key) ?? row.preview;
   }
   return row;
 }
-function decodeRequestRows<T extends { payload?: string | null; payload_algo?: string | null }>(rows: T[]): T[] {
+function decodeRequestRows<T extends DecodableRequestRow>(rows: T[]): T[] {
   const key = getActiveKey();
   for (const row of rows) {
     if (row.payload != null) row.payload = decodeText(row.payload, row.payload_algo, key) ?? row.payload;
+    if (row.preview != null) row.preview = decodeText(row.preview, row.preview_algo, key) ?? row.preview;
   }
   return rows;
 }

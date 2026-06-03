@@ -195,6 +195,7 @@ export function getTurnsBySession(
     timestamp: number;
     type: 'prompt' | 'tool_call' | 'response';
     preview: string | null;
+    preview_algo: string | null;
     tokens_input: number;
     tokens_output: number;
     tokens_total: number;
@@ -212,7 +213,7 @@ export function getTurnsBySession(
   };
 
   const allRows = db.query(`
-    SELECT turn_id, id, timestamp, type, preview, payload, payload_algo,
+    SELECT turn_id, id, timestamp, type, preview, preview_algo, payload, payload_algo,
            tokens_input, tokens_output, tokens_total, duration_ms,
            model, cache_read_tokens, cache_creation_tokens, tokens_confidence,
            tool_name, tool_detail, event_type, parent_tool_use_id
@@ -224,12 +225,14 @@ export function getTurnsBySession(
     ORDER BY turn_id, timestamp ASC
   `).all(sessionId) as UnifiedRow[];
 
-  // R3: payload를 payload_algo 분기로 서버측 복호(평문/암호문 혼재). 이후 turn 구조의
-  // prompt.payload/t.payload/r.payload가 모두 평문 string으로 클라이언트에 전달된다.
+  // R3: payload를 payload_algo 분기로, preview를 preview_algo 분기로 서버측 복호(평문/암호문 혼재).
+  // 이후 turn 구조의 prompt.payload/preview·t.payload·r.payload/preview가 모두 평문으로 클라이언트에 전달된다.
+  // payload와 preview는 독립 algo 마커를 가진다(ⓝ1, Migration 057).
   {
     const key = getActiveKey();
     for (const row of allRows) {
       if (row.payload != null) row.payload = decodeText(row.payload, row.payload_algo, key) ?? row.payload;
+      if (row.preview != null) row.preview = decodeText(row.preview, row.preview_algo, key) ?? row.preview;
     }
   }
 
