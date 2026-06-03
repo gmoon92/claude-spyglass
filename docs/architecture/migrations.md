@@ -78,6 +78,19 @@ flowchart TD
 
 두 SSoT는 동일 트랜잭션 안에서 갱신되어 비정상 종료 시에도 자동 정합한다.
 
+### 결번 이력 (041~046 · 054)
+
+디렉토리의 번호 gap 은 오타가 아니라 **폐기된 마이그레이션의 흔적**이다. 동작에는 무관하며,
+다음 번호는 항상 `max+1` 이다.
+
+| 결번 | 폐기 경위 |
+|------|----------|
+| **041~046** | Storage Redesign v3 foundation (`040-events-v3` ~ `045-agent-chain-view`, 커밋 `c14d1c4`) 이 main 에 구현됐으나, 운영 DB 가 `phase/1-storage` 브랜치의 **다른 v3 스키마** (user_version=46) 를 이미 점유 — 같은 번호로 충돌하고 schema 양립 불가 (events_v3 vs events / projection_state 컬럼 mismatch / outbox_pending vs outbox_events). 2026-05-24 `81ec93b` 로 main 의 7 commit 일괄 revert. 040 번호는 이후 `040-flow-active-rows-view.sql` 이 재사용했고 041~046 은 운영 DB 의 user_version 이 이미 46 을 지나 재사용 불가 → 영구 결번. v3 재도입 시 마이그레이션은 **057+ 로 재배정**해야 한다 (CLAUDE.md §Storage Redesign v3 참조). |
+| **054** | kuzu-outbox 트리거 하드닝(053)과 DLQ(055) 사이에서 폐기된 중간 설계 흔적. 053→055 가 연속 적용되며 동작 영향 없음. |
+
+> 교훈: 브랜치 간 마이그레이션 번호는 **운영 DB 의 user_version 이 선점**한다.
+> 장기 브랜치에서 스키마 작업 시 main 과 번호 충돌 여부를 머지 전에 반드시 확인할 것.
+
 ---
 
 ## 2. 절대 규칙
