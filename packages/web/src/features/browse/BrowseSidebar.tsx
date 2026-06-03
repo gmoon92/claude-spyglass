@@ -37,9 +37,8 @@ import {
   BurnRateCard,
   CacheHealthCard,
   LivePulseCard,
-  UpdateBadge,
+  SidebarVersionFooter,
 } from '../dashboard';
-import { useVersionStore } from '../../stores/version-store';
 import { useObsCards } from './use-obs-cards';
 import { usePanelResize } from './use-panel-resize';
 import { useTranslation } from 'react-i18next';
@@ -99,10 +98,8 @@ export function BrowseSidebar({
   const obs = useObsCards(obsIntervalMs != null ? { intervalMs: obsIntervalMs } : {});
   const { panelRef, widthHandleRef, vTopHandleRef, vBottomHandleRef, vProjectsRef, vSessionsRef, vToolsRef } =
     usePanelResize();
-  // 버전 배지 — version-store 구독(단일 폴러는 AppShell 소유, 버그 #6). 자체 폴링/모달 미보유:
-  //   사이드바는 배지(트리거)만 렌더하고, 클릭 시 store.openModal 로 AppShell 모달을 연다.
-  const view = useVersionStore((s) => s.view);
-  const openModal = useVersionStore((s) => s.openModal);
+  // 버전 배지 라벨러 — 미지정 시 key passthrough. version-store 구독·모달 결선은
+  //   SidebarVersionFooter(단일 출처)가 캡슐화한다(버그 #6 + update-badge-position 회귀).
   const t = versionT ?? DEFAULT_T;
 
   // 세션 패널 hint — renderBrowserSessions(:155/169) 1:1: 미선택 → select-project, 선택 → session-count.
@@ -218,16 +215,9 @@ export function BrowseSidebar({
       </div>
 
       {/* ── 6) footer — update-badge(available 클릭 시 store.openModal → AppShell 모달). 레거시 .left-panel-footer.
+          browse·metadocs 공통 출처(SidebarVersionFooter)로 위치/스타일 정합(update-badge-position 회귀 해소).
           모달(UpdateModal)은 AppShell 이 단일 소유(버그 #6) — 사이드바는 트리거 배지만 렌더한다. ── */}
-      <div className="left-panel-footer">
-        <UpdateBadge
-          state={view.badge}
-          currentVersion={view.currentVersion}
-          latestTag={view.latestTag}
-          onOpen={openModal}
-          t={t}
-        />
-      </div>
+      <SidebarVersionFooter t={t} />
     </aside>
   );
 }

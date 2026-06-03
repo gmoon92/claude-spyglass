@@ -80,6 +80,7 @@ export { normalizeTag, isSameVersion, resolveBadgeState, tSafe } from './version
 export type { BadgeState } from './version-check-logic';
 // version-check 모달/배지/폴링 (P4-09 chrome 이식)
 export { UpdateBadge, type UpdateBadgeProps } from './UpdateBadge';
+export { SidebarVersionFooter, type SidebarVersionFooterProps } from './SidebarVersionFooter';
 export { UpdateModal, type UpdateModalProps } from './UpdateModal';
 export {
   createVersionCheckController,
