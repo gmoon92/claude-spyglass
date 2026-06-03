@@ -159,6 +159,8 @@ export interface Request {
   created_at?: number;
   /** R3: payload at-rest 인코딩 마커. NULL=평문, 'aes256gcm'=암호문(base64-in-TEXT). */
   payload_algo?: string | null;
+  /** R3(ⓝ1, Migration 057): preview at-rest 인코딩 마커. NULL=평문, 'aes256gcm'=암호문(base64-in-TEXT). payload_algo와 독립. */
+  preview_algo?: string | null;
 }
 
 // =============================================================================
