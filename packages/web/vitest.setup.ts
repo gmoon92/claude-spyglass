@@ -72,3 +72,42 @@ for (const name of ['localStorage', 'sessionStorage'] as const) {
     value: new MemoryStorage(),
   });
 }
+
+// ── jsdom AbortSignal.any 공백 보정 ──
+//
+// 이유: jsdom 은 전역 AbortSignal 을 자체 구현으로 교체하는데 정적 메서드 `any()` 가 없다
+//   (Node 24 네이티브에는 존재, 실제 브라우저도 Chrome 116+ 지원). use-obs-cards.ts:83 이
+//   `AbortSignal.any([ctrl.signal, AbortSignal.timeout(...)])` 를 호출하므로 ObsPanel 을
+//   마운트하는 테스트에서 unhandled rejection 이 발생, 테스트는 통과해도 vitest 가 exit 1
+//   을 반환한다. → TZ/webstorage 와 동일한 "머신·CI 무관 결정론" 테스트 인프라 보정.
+//   프로덕션 코드는 무영향(브라우저 네이티브 사용).
+if (typeof AbortSignal.any !== 'function') {
+  Object.defineProperty(AbortSignal, 'any', {
+    configurable: true,
+    writable: true,
+    value: (signals: AbortSignal[]): AbortSignal => {
+      const ctrl = new AbortController();
+      for (const s of signals) {
+        if (s.aborted) {
+          ctrl.abort(s.reason);
+          break;
+        }
+        s.addEventListener('abort', () => ctrl.abort(s.reason), { once: true });
+      }
+      return ctrl.signal;
+    },
+  });
+}
+
+// jsdom 의 AbortSignal.timeout 부재도 동일 계열로 보정(위 polyfill 경로가 사용).
+if (typeof AbortSignal.timeout !== 'function') {
+  Object.defineProperty(AbortSignal, 'timeout', {
+    configurable: true,
+    writable: true,
+    value: (ms: number): AbortSignal => {
+      const ctrl = new AbortController();
+      setTimeout(() => ctrl.abort(new DOMException('TimeoutError', 'TimeoutError')), ms);
+      return ctrl.signal;
+    },
+  });
+}
