@@ -1,717 +1,469 @@
-# Web Dashboard 사용자 가이드
+# Web Dashboard Architecture (React 18)
 
-## 한눈에 보기
+## Overview
 
-`claude-spyglass`의 웹 대시보드는 **로컬 SQLite에 적재된 Claude Code 세션을 실시간으로 시각화**하는 SPA입니다. 프로젝트·세션 탐색, 요청 추이, 캐시 적중률, 도구 호출 통계, Behavior Definitions 카탈로그를 한 화면에서 제공합니다. 외부 전송 없이 모든 데이터는 로컬에만 존재합니다.
+The `claude-spyglass` web dashboard is a **React 18 SPA** that visualizes Claude Code sessions stored in a local SQLite database. It provides real-time request feeds, session browsing, meta-document catalogs, and system settings — all running locally without external data transmission.
 
-| 항목 | 값 |
-|------|----|
+| Item | Value |
+|------|-------|
 | URL | `http://localhost:9999/` |
-| 기본 포트 | `9999` (환경변수 `SPGLASS_PORT`로 변경) |
-| 데이터 소스 | `~/.spyglass/spyglass.db` (SQLite) |
-| 실시간 갱신 | SSE `/events` (`new_request`, `new_proxy_request`, `session_update`) |
-| 헬스 체크 | `/health` |
-| 빌드 | 없음 — Vanilla JS(ESM) + Vanilla CSS |
+| Default port | `9999` (env `SPGLASS_PORT`) |
+| Data source | `~/.spyglass/spyglass.db` (SQLite) |
+| Real-time updates | SSE `/events` (`new_request`, `new_proxy_request`, `session_update`) |
+| Health check | `/health` |
+| Build tool | Vite 5 (React 18, TypeScript) |
 
-본 문서는 **사용자 가이드**입니다. 내부 구현(JS 모듈, 핵심 함수)은 5~6장에 코드 경로와 함께 정리되어 있습니다.
+### Related Documents
 
-### 연관 문서
-
-| 문서 | 내용 |
-|------|------|
-| [HTTP API & SSE 레퍼런스](./api-http.md) | 대시보드가 호출하는 `/api/*` 엔드포인트·SSE 채널 명세 (서버 측 SoT) |
-| [데이터 흐름](./data-flow.md) | 훅 이벤트 1건이 DB → SSE → 화면까지 도달하는 전체 경로 |
-| [메트릭/분석](./metrics-analytics.md) | burn-rate·cache·도구 통계 등 위젯 산식 SoT |
-| [TUI 가이드](./tui.md) | 동일 데이터를 노출하는 터미널 UI |
+| Document | Content |
+|----------|---------|
+| [HTTP API & SSE Reference](./api-http.md) | `/api/*` endpoints and SSE channel specs (server-side SoT) |
+| [Data Flow](./data-flow.md) | Full path of a hook event from DB → SSE → screen |
+| [Metrics/Analytics](./metrics-analytics.md) | burn-rate, cache, tool statistics widget formulas |
+| [TUI Guide](./tui.md) | Terminal UI exposing the same data |
 
 ---
 
-## 1. 개요
+## 1. Technology Stack
 
-웹 대시보드는 `~/.spyglass/spyglass.db`에 적재된 데이터를 로컬 브라우저에서 시각화합니다. 새 요청은 SSE로 즉시 push되고, 기존 패널은 폴링 없이 in-place 갱신됩니다.
+| Layer | Technology | File |
+|-------|-----------|------|
+| Framework | React 18 + StrictMode | `packages/web/src/main.tsx` |
+| Router | React Router v6 | `packages/web/src/app/App.tsx` |
+| State | Zustand (3 stores) | `packages/web/src/stores/*.ts` |
+| i18n | react-i18next + legacy bridge | `packages/web/src/lib/i18n.ts` |
+| Build | Vite 5 + `@vitejs/plugin-react` | `packages/web/vite.config.ts` |
+| Testing | Vitest + jsdom | `packages/web/package.json` |
+| Bundling | ESM, vendor chunk split | `vite.config.ts` |
 
-### 서버 구성
-
-| 항목 | 경로 |
-|------|------|
-| HTML 진입점 | `packages/web/index.html` (Bun이 `Bun.file()`로 서빙) |
-| 정적 분기 | `packages/server/src/runtime/dispatch.ts` |
-| REST 진입점 | `packages/server/src/api.ts` |
-| 라우트 | `packages/server/src/routes/*` |
-| 정적 자산 | `/assets/*`, `/locales/{ko,en,ja,zh}/*.json` |
-| 기본 포트 정의 | `packages/server/src/runtime/config.ts` — `DEFAULT_PORT` |
-
-`index.html`은 `<script type="module" src="/assets/js/main.js">` 한 줄로 진입점을 로드합니다.
+Legacy vanilla JS assets (`assets/js/*.js`) remain in place for backward compatibility during the transition, but the active entry point is now the React tree.
 
 ---
 
-## 2. 화면 레이아웃
-
-대시보드는 **3-컬럼 + 헤더/푸터** 구조입니다. 좌측 **앱 모드 rail**, 그 옆 **좌측 패널**(프로젝트/세션/옵저빌리티), 가운데~우측 **메인 영역**으로 구성됩니다. `<body data-app-mode>` 속성으로 세 가지 모드(browse / metadocs / settings)가 전환됩니다(rail 버튼: 🚥 browse · 📚 metadocs · ⚙ settings).
-
-### 2.1 browse 모드 (기본, rail 🚥)
+## 2. Component Tree
 
 ```
-+----+-----------------+------------------------------------------------+
-| #errorBanner (SSE 끊김 시에만 표시)                                    |
-+----+-----------------+------------------------------------------------+
-|    | left-panel      | right-panel (main)                             |
-|    | +-------------+ | +--- chartSection (#chartSection) -----------+ |
-|    | | projects    | | | [요청 추이 (실시간)] [언어][전체|오늘|주]  | |
-| r  | | (#browser   | | +--- charts-inner ---------------------------+ |
-| a  | |  ProjectsB.)| | |  timeline-meta (품질 / 누적)               | |
-| i  | +-- handle ---+ | |  +-- timelineChart canvas ---------------+ | |
-| l  | | sessions    | | |  +---------------------------------------+ | |
-|    | | (#browser   | | |  donut(typeChart) + cache-panel(Hit/Ratio) | |
-| 🚥 | |  SessionsB.)| | +--------------------------------------------+ |
-|    | +-- handle ---+ | +--- content-switcher -----------------------+ |
-| 📚 | | obs panel   | | |  #defaultView: 최근 요청 피드 (#feedBody)  | |
-|    | | 3 cards     | | |    +- 검색 / 필터 -----------------------+ | |
-|    | | (#obsPanel) | | |    +- <table> Time Action Target Model -+ | |
-|    | +-------------+ | |  #detailView : 세션 상세                   | |
-|    | [Update Badge]  | |                (log/llm/syslib 탭)         | |
-|    |                 | +--------------------------------------------+ |
-+----+-----------------+------------------------------------------------+
-| footer · Claude Spyglass — real-time Claude Code monitor       [?]   |
-+----------------------------------------------------------------------+
+main.tsx
+  └── <StrictMode>
+        └── <App>                     (BrowserRouter)
+              ├── <AppModeSync>       (URL ↔ store bidirectional sync)
+              └── <AppShell>          (chrome: rail/footer/banner/modal/warning)
+                    ├── <ErrorBanner> (SSE connection state)
+                    ├── <AppRail>     (mode switcher: browse / metadocs / settings)
+                    ├── <Footer>      (brand + keyboard help)
+                    ├── children = <AppRoutes>
+                    │     └── <Suspense fallback={null}>
+                    │           └── <Routes>
+                    │                 ├── "/"           → <BrowseLayout>
+                    │                 ├── "/meta-docs"  → <MetaDocsLayout>  (lazy)
+                    │                 ├── "/settings"   → <SettingsLayout>  (lazy)
+                    │                 └── "*"           → <BrowseLayout>
+                    ├── <UpdateBadge> / <UpdateModal>   (version polling)
+                    └── <DashboardWarning>              (shallow clone alert)
 ```
 
-### 2.2 metadocs 모드 (rail 📚)
+### 2.1 App Shell (`AppShell.tsx`)
 
-```
-+----+-----------------+------------------------------------------------+
-|    | left-panel      | right-panel (main)                             |
-|    | +-------------+ | +--- #metaDocsRoot (메인 영역 전체) ---------+ |
-|    | | projects    | | | [Behavior Definitions] [도구 통계]         | |
-| r  | | thead 변경: | | +--------------------------------------------+ |
-| a  | | [프로젝트|항목| | |  #metaDocsBody      (Behavior Definitions) | |
-| i  | |  동기화]    | | |                                             | |
-| l  | | + __global__| | |  #metaToolStatsBody (도구 통계)             | |
-|    | |   가상 행   | | |                                             | |
-| 🚥 | +-- handle ---+ | | (좌측 세션 패널은 동일 — 클릭 시 browse 복귀)| |
-|    | | sessions    | | |                                             | |
-| 📚 | | (그대로)    | | | Esc = 진입 직전 browse 상태로 복귀         | |
-|    | +-------------+ | +--------------------------------------------+ |
-+----+-----------------+------------------------------------------------+
-```
+The shell wraps all route content with persistent chrome:
 
-### 2.3 모드 전환 규칙
+- **AppRail** — 56px left rail with mode icons. Active mode derived from `useLocation`, click sets `appMode` in store → `AppModeSync` navigates.
+- **ErrorBanner** — Shows when SSE `onError` fires; retry triggers page reload.
+- **Footer** — Brand text + "?" keyboard-help button.
+- **UpdateBadge/UpdateModal** — Version polling results from `useVersionCheck`. Modal open state shared via `version-store` so sidebar badge can trigger shell modal.
+- **DashboardWarning** — Shallow-clone warning banner with dismiss + copy.
+- **Left panel toggle** — `Cmd/Ctrl + B` toggles `.left-panel-hidden` on `.main-layout`.
 
-| 항목 | 값 |
-|------|----|
-| 전환 방법 | 좌측 rail 버튼 클릭(`app-rail.js` 클릭 위임), 또는 `Esc`(metadocs → browse) |
-| 마커 | `<body data-app-mode="browse \| metadocs \| settings">` |
-| 영속화 | `sessionStorage('spyglass.appMode')` (`state.js`) |
-| Esc 복귀 대상 | 진입 직전 view/탭/sessionId 그대로 복원 |
+### 2.2 Browse Layout (`BrowseLayout.tsx`)
 
-세 번째 모드 **settings**(⚙)는 `settings-view.js`의 `enterSettingsMode()` / `exitSettingsMode()`가 진입·복귀를 담당하며, 시스템 진단 · Proxy · Hook · SQLite · Graph DB · 서버/로그 서브 탭을 메인 영역 전체에 노출합니다.
+Default mode. Three-column grid: rail + left sidebar + right main.
+
+**Left sidebar** (`BrowseSidebar` from `features/browse`):
+- Project list + session list + observability cards (BurnRate, CacheHealth, LivePulse)
+- Resizable panels (vertical handles)
+- Version footer with update badge
+
+**Right main**:
+- **Chart section** (`#chartSection`) — TimelineChart + DonutChart + CachePanel
+  - Timeline: 30-minute sliding window, live-updated from SSE feed timestamps
+  - Donut: mode `type | model | cache`, controlled by `app-store.donutMode`
+  - CachePanel: hit-rate + creation/read ratio bars
+- **Content switcher** — `defaultView` (request feed) ↔ `detailView` (session detail)
+
+**Data population** (mount + `activeRange` change):
+- `fetchDashboard` → projects + type donut
+- `fetchModelUsage` → model donut
+- `fetchAllSessions` → sidebar session list
+- `fetchRequests` → feed seed (merged with live SSE feed)
+- `fetchCacheStats` → cache panel
+
+### 2.3 Meta-Docs Layout (`MetaDocsLayout.tsx`)
+
+Behavior Definitions catalog + ego-graph flow.
+
+- **Left sidebar** — Project list (metadocs thead: Project | Items | Sync) + summary cards (used/unused/orphan + behavior mini-bar) + version footer
+- **Main area** — Sub-tabs: `docs` (catalog + flow) / `tools` (tool stats matrix)
+  - **Flow** (`MetaDocsFlow`) — SVG ego-graph from `/api/graph/unified-flow`. Active row auto-selected from first row with invocations.
+  - **Catalog** (`MetaDocsCatalog`) — Sortable/filterable table. Columns resizable.
+  - **Tool stats** (`MetaDocsToolStats`) — Project-scoped tool performance matrix.
+
+### 2.4 Settings Layout (`SettingsLayout.tsx`)
+
+Six sub-tabs in a 2-column grid (nav left, content right):
+
+| Tab | Component | Responsibility |
+|-----|-----------|---------------|
+| diag | `DiagPanel` | System diagnostics |
+| proxy | `ProxyPanel` | Proxy configuration |
+| hooks | `HooksPanel` | Hook script management |
+| sqlite | `SqlitePanel` | SQLite info & maintenance |
+| graph | `GraphPanel` | Graph DB (Ladybug) status & install |
+| server | `ServerPanel` | Server logs & config |
+
+Each panel self-fetches via `useAsyncResource`. Refresh button remounts active panel.
 
 ---
 
-## 3. 패널·뷰 카탈로그
+## 3. State Management (Zustand)
 
-| # | 뷰 | DOM 앵커 | 한 줄 요약 |
-|---|------|----------|-----------|
-| 3.1 | 헤더 컨트롤 | `#chartSection .view-section-header` | 언어/날짜/차트 토글 |
-| 3.2 | 좌측 패널 | `.left-panel` | 프로젝트·세션·옵저빌리티 |
-| 3.3 | 메인 차트 | `#chartSection` | timeline·donut·cache-panel |
-| 3.4 | 로그 피드 | `#defaultView #feedBody` | 실시간 요청 표 |
-| 3.5 | 세션 상세 | `#detailView` | log / llm / syslib 탭 |
-| 3.6 | Behavior Definitions | `#metaDocsRoot` | metadocs 모드 카탈로그 |
-| 3.7 | 오버레이 | 단축키·업데이트·툴팁 | 보조 UI |
+Three stores, all in-memory except where noted.
 
-### 3.1 헤더 영역 (차트 섹션 헤더로 통합)
+### 3.1 `app-store.ts` — Routing / View / Filter SoT
 
-헤더 컨트롤(언어·날짜·차트 토글)은 `#chartSection`의 `.view-section-header`에 위치합니다. SSE 끊김 등 에러는 상단 부유 `#errorBanner`로 표시됩니다.
+| State | Initial | Persist |
+|-------|---------|---------|
+| `appMode` | `'browse'` | no |
+| `metaSubTab` | `'docs'` | no |
+| `rightView` | `'default'` | no |
+| `detailTab` | `'log'` | no |
+| `selectedProject` | `null` | no |
+| `selectedSession` | `null` | no |
+| `activeRange` | `null` | **yes** (`cs.dateRange`, preset only) |
+| `feedFilter` | `'all'` | no |
+| `detailFilter` | `'all'` | no |
+| `searchQuery` | `''` | no |
+| `donutMode` | `'model'` | no |
 
-| 컨트롤 | ID | 동작 |
-|--------|----|------|
-| 언어 스위처 | `#lang-switcher` | `ko / en / ja / zh` native name 표시 |
-| 날짜 필터 | `#dateFilter` | 6개 프리셋 드롭다운(`date-range-dropdown.js`의 `PRESETS = ['1h','today','yesterday','7d','30d','all']`). 선택 시 `setActiveRange()`가 `cs:active-range-changed` 이벤트를 발행하고, `main.js` 리스너가 `applyRangeLabels` + `fetchDashboard/Requests/CacheStats/AllSessions`를 일괄 트리거 |
-| 차트 접기 토글 | `#btnToggleChart` | chevron 회전. collapse 상태 `localStorage('spyglass:chart-collapsed')` 영속화 |
+Actions include validation guards (e.g., `setAppMode` ignores invalid modes).
 
-### 3.2 좌측 패널 (`.left-panel`)
+### 3.2 `sse-store.ts` — Live Data SoT
 
-위에서 아래로 3개 섹션과 2개 수직 핸들로 구성됩니다.
+| State | Initial | Description |
+|-------|---------|-------------|
+| `feed` | `[]` | Live request feed (head = newest). Cap 200. |
+| `proxyFeed` | `[]` | Proxy request feed. Cap 50. |
+| `sessions` | `[]` | Session cache for sidebar. |
+| `needsSessionsRefetch` | `false` | Signal when event references unknown session. |
 
-```
-.left-panel
-├── 프로젝트 (#browserProjectsSection)
-│     thead-browse   : [프로젝트 | 세션 | 토큰]
-│     thead-metadocs : [프로젝트 | 항목 | 동기화]   (metadocs 모드)
-├── <handle> #panelVerticalHandle
-├── 세션 (#browserSessionsSection)
-│     라이브 상태 ● live / ◐ stale / ○ ended
-│     행 = 세션 ID(앞 8자) · 토큰 · 발화 preview
-├── <handle> #panelVerticalHandleBottom
-└── Observability (#obsPanel)  — 3 카드
-      #cardBurnRate        Burn Rate (누적 토큰)
-      #cardCacheHealth     Cache Health
-      #cardLivePulse       활성 세션 수 + 마지막 활동 시각
-```
+Actions:
+- `applyNewRequest(req)` — Upserts feed (prepend or in-place by id). Patches session `total_tokens` or sets `needsSessionsRefetch`.
+- `applyNewProxyRequest(proxy)` — Prepends to proxy feed.
+- `applySessionUpdate(upd)` — Patches `ended_at` or signals refetch.
+- `setSessions(sessions)` — Replaces cache and clears refetch signal.
 
-> 도구 카테고리 카드(`#cardToolCategories`)는 `#obsPanel` 밖, **metadocs 모드 전용 좌측 요약 영역**으로 분리되어 있습니다. `body[data-app-mode="metadocs"]`일 때만 노출됩니다.
+### 3.3 `version-store.ts` — Version Polling SoT
 
-| 항목 | 동작 |
-|------|------|
-| 패널 토글 | `Cmd/Ctrl + B` 또는 `#btnPanelCollapse`. 핸들 더블클릭 = 콘텐츠 폭 자동 |
-| Anomaly | 발생 시 좌상단에 floating `#anomalyBadge` 노출 |
-| 세션 데이터 SSoT | `getAllSessions()`. SSE `session_update`로 status를 in-place 갱신 |
-
-### 3.3 메인 차트 영역 (`#chartSection`)
-
-`.charts-inner`는 세 시각화를 가로로 정렬합니다: **timelineChart / typeChart(도넛) / cache-panel**.
-
-#### timelineChart (`<canvas id="timelineChart">`)
-
-30분 sliding window를 30개 분 bucket 막대로 표시합니다. SSE `new_request` 도착 시 `recordRequest()`로 현재 분 카운트가 +1 되고, 매 60초 `advanceBuckets()`가 윈도우를 한 칸 밀며 `drawTimeline()`을 재렌더합니다.
-
-헤더 `timeline-meta`는 두 그룹입니다: **품질**(평균/P95/오류율), **누적**(세션/요청/토큰). dateFilter 변경 시 `applyRangeLabels(range)`가 라벨을 동기화하고, detail 진입 시 같은 canvas 자리가 `contextGrowthChart`로 교체됩니다(`chart-mode=detail`).
-
-#### typeChart (도넛)
-
-3 모드 `type | model | cache`를 `getDonutMode()`로 선택합니다. 기본은 `model`(`/api/metrics/model-usage`)이며, detail 진입 시 자동으로 `cache`로 전환되어 캐시/그 외 2-슬라이스를 표시합니다. 색상은 디자인 토큰을 사용하고, 슬라이스에는 안정 id(`cache`, `others`, …)가 부여되어 locale 전환과 무관하게 매칭됩니다.
-
-#### cache-panel (`#cachePanel`)
-
-두 개의 바로 캐시 상태를 표시합니다. 호버 시 정밀 수치는 `cache-panel-tooltip.js`가 노출합니다.
-
-| 바 | 산식 | 색상 규칙 |
-|----|------|-----------|
-| Hit Rate | `cache_read / (input + cache_read + cache_creation)` | 70% 이상 green / 30~70% warn / 30% 미만 error / 99~100%는 `>99%` 표기 |
-| Creation/Read 비율 | Creation:Read | Creation=info, Read=success, 라벨 `stable` 또는 `building` |
-
-### 3.4 로그 피드 (default view, `#feedBody`)
-
-`최근 요청` 패널은 SSE로 실시간 prepend됩니다. 상단 컨트롤은 검색 박스 `#feedSearchContainer` + 타입 필터 `#typeFilterBtns`입니다.
-
-**컬럼 구성**: Time / Action(type 배지) / Target(도구 아이콘 + 이름, 또는 user/system 배지) / Model / Message(preview, 클릭 펼침) / in / out / Cache(`cache_read_tokens`) / Duration(`slow` 미니 배지) / Session(앞 12자).
-
-**갱신 정책**: SSE 도착 시 `prependRequest(r)`가 최상단에 prepend하거나, 동일 `id` 행이 있으면 셀 단위 in-place 갱신을 수행하여 스크롤 위치를 보존합니다. 최대 200행(`FEED_ROW_CAP`)이며 초과분은 자동 제거됩니다.
-
-### 3.5 세션 상세 (`#detailView`)
-
-세션 행을 클릭하면 우측이 detail 모드로 전환됩니다. 차트 헤더는 `chart-detail-meta`(세션 ID · 프로젝트 · 토큰 · 종료 시각)로 교체됩니다(`chart-mode=detail`). 탭 바(`#viewTabGroup`)는 `turn-views.js`의 `initDetailTabBar()`가 **3개 view-tab(log / llm / syslib)** 을 동적 생성합니다.
-
-| 탭 | value | DOM 컨테이너 | 설명 |
-|----|-------|--------------|------|
-| 로그 (log, 기본) | `log` | `#detailTurnView` (`#turnUnifiedBody`) | 통합 로그 뷰 — 상단 turn-spine(모든 턴을 한 줄 inline-flow + flow-head) + 하단 log-pane(활성 턴 요청 행 표). 턴 칩 클릭 시 활성 턴 전환 |
-| API 페이로드 (llm) | `llm` | `#detailLlmInputView` (`llm-input-view.js`) | system blocks + user messages 합본 렌더링 |
-| System 라이브러리 (syslib) | `syslib` | `#sysLibBody` (`system-prompt-library.js`) | distinct `system_hash` 카탈로그 카드 |
-
-탭 전환은 `setDetailView(tab)`가 처리하고 활성 탭은 `state.js`의 `getDetailTab()` / `setDetailTab()`(기본 `'log'`)에 보관됩니다. 로그 탭 하단 표의 9컬럼 행은 `turn-rows.js#makeTurnLogRows`가 `render/rows.js#makeRequestRow`를 위임 호출하여 피드와 동일한 빌더를 재사용합니다. 칩↔행은 `data-chip-key`로 1:1 매핑됩니다. `[data-payload-ts]` 액션은 `openLlmInputForTurn()`으로 llm 탭의 해당 페이로드로 점프합니다.
-
-### 3.6 Behavior Definitions 카탈로그 (`#metaDocsRoot`)
-
-좌측 rail에서 📚 클릭 시 메인 영역 전체가 `#metaDocsRoot`로 교체됩니다. 서브 탭은 `meta-docs-view.js`의 `setMetaSubTab()`이 관리하며 `docs`(`[Behavior Definitions]`, `#metaDocsBody`)와 `tools`(`[도구 통계]`, `#metaToolStatsBody`) 두 가지, `sessionStorage('spyglass.metaSubTab')`에 영속화됩니다.
-
-좌측 프로젝트 thead가 `[프로젝트 | 항목 | 동기화]`로 바뀌고, `data-project="__global__"` 가상 행이 "전체 범위" 토글로 동작합니다. `Esc`를 누르면 진입 직전 browse 상태(view/탭/sessionId)로 복귀합니다.
-
-Behavior Definition(Agent/Skill/Command) 카드는 **통합 Flow 그래프**로 펼칠 수 있습니다. `meta-docs-flow.js`의 `loadFlow({centerKind, centerName, project})`가 `/api/graph/unified-flow`(Ladybug 그래프 기반)를 호출해 좌 ancestor + center + 우 descendant + turn-after 컬럼을 SVG로 렌더하며, 카드 더블클릭으로 center를 재중심합니다.
-
-### 3.7 오버레이 / 모달
-
-| 항목 | 트리거 | 비고 |
-|------|--------|------|
-| 키보드 단축키 도움말 | 푸터 `[?]` 또는 `?` 키 | `renderKbdHelpModal()`이 i18n 로딩 후 inject. 언어 전환 시 `I18n.onChange`로 재렌더 |
-| 업데이트 모달 `#updateModal` | `version-check.js` 신버전 감지 | — |
-| 툴팁 | hover | `cache-tooltip` / `stat-tooltip` / `cache-panel-tooltip` / `obs-tooltip` |
+| State | Description |
+|-------|-------------|
+| `view` | Badge view-model (status + versions) |
+| `cache` | Latest `/api/version` payload |
+| `isShallow` | Shallow repository flag |
+| `modalOpen` | Update modal open state (shared between sidebar badge and shell modal) |
 
 ---
 
-## 4. 컴포넌트 카탈로그
+## 4. Routing
 
-`packages/web/assets/js/components/`에 위치한 재사용 컴포넌트입니다.
+React Router v6 with **mode-as-path** SoT:
 
-### 4.1 filter-bar (`components/filter-bar.js`)
+| Mode | Path | Layout |
+|------|------|--------|
+| browse | `/` | `BrowseLayout` (sync) |
+| metadocs | `/meta-docs` | `MetaDocsLayout` (lazy) |
+| settings | `/settings` | `SettingsLayout` (lazy) |
 
-```js
-import { createFilterBar } from './components/filter-bar.js';
-const bar = createFilterBar('typeFilterBtns', {
-  dataAttr: 'filter',   // 결과 버튼에 data-filter="..." 부여
-  onChange(filter) { /* 'all'|'prompt'|'system'|'tool_call'|'agent'|'skill'|'mcp' */ },
-});
-bar.setActive('tool_call');
-```
+`AppModeSync` handles bidirectional sync:
+- **URL → store**: On location change, `pathToAppMode` corrects `store.appMode`.
+- **store → URL**: On `appMode` change (e.g., rail click), `appModeToPath` navigates. Skips on initial mount to preserve deep-links.
 
-3 그룹으로 구성됩니다: `all` / `request(prompt, system)` / `tool(tool_call, agent, skill, mcp)`. 디자인 시스템 `renderFilterBtn` 출력을 두 클래스(`ds-filter-btn` + `type-filter-btn`)로 확장합니다.
-
-### 4.2 search-box (`components/search-box.js`)
-
-```js
-import { createSearchBox } from './components/search-box.js';
-createSearchBox('feedSearchContainer', {
-  placeholder: I18n.t('ui.search-box.placeholder'),
-  onSearch(q) { /* lower-cased trimmed */ },
-});
-```
-
-검색 아이콘 + 입력창 + clear 버튼으로 구성됩니다. 입력 시마다 콜백이 호출되며, debounce는 호출 측 책임입니다.
-
-### 4.3 design-system 프리미티브
-
-| 항목 | 위치 |
-|------|------|
-| 프리미티브 (`filter-button.js`, `close-button.js` 등) | `assets/js/design-system/primitives/` |
-| CSS 토큰 / 통합 | `assets/css/design-system/_index.css`, `design-tokens.css` |
+`body[data-app-mode]` is synchronized via `useEffect` so legacy CSS mode-gates continue to work.
 
 ---
 
-## 5. JS 모듈 구조
+## 5. Real-Time Updates (SSE)
 
-진입점은 `index.html`의 `<script type="module" src="/assets/js/main.js">` 한 줄입니다.
+### 5.1 Hook: `use-sse.ts`
 
-### 5.1 의존 그래프 (주요 모듈)
+Imperative `createSSEController` + React `useSSE` hook:
+- Creates `EventSource('/events')` on mount.
+- Parses messages with Zod schema (`parseSSEMessage`).
+- 5-second backoff retry on error.
+- Cleanup on unmount: closes `EventSource` + clears retry timer.
 
-```mermaid
-graph TD
-  main["main.js"]
+### 5.2 Wiring: `sse-wiring.ts`
 
-  subgraph 렌더링
-    chart["chart.js / context-chart.js\ncanvas(timeline/도넛/컨텍스트)"]
-    context_window["context-window.js\n컨텍스트 윈도우 표시(표시 전용)"]
-    renderers["renderers.js (re-export)"]
-    render["render/{badges,model,cells,\nextract,expand,rows,skeleton}.js"]
-    request_types["request-types.js\n타입 상수·판별 SSoT"]
-    renderers --> render
-    chart --> context_window
-    render --> request_types
-  end
+Maps SSE callbacks to `sse-store` actions:
+- `onNewRequest` → `sseStore.applyNewRequest`
+- `onNewProxyRequest` → `sseStore.applyNewProxyRequest`
+- `onSessionUpdate` → `sseStore.applySessionUpdate`
 
-  subgraph 데이터_통신
-    api["api.js\nfetchDashboard / fetchRequests / ..."]
-    metrics_api["metrics-api.js\n/api/metrics/* 래퍼"]
-    formatters["formatters.js"]
-    cache_obs["cache-panel.js / obs-panel.js"]
-    anomaly["anomaly.js / left-panel.js / events.js"]
-    sse["sse.js\n/events(new_request/proxy/session_update)"]
-    api --> formatters
-    api --> cache_obs
-    api --> anomaly
-    api --> metrics_api
-  end
+Lifecycle callbacks (`onOpen`/`onError`) are composed in `AppShell` to drive `ErrorBanner` visibility.
 
-  subgraph 뷰
-    default_view["views/default-view.js"]
-    default_sub["default/{bootstrap,chart-policy,\nfeed-live,feed-interactions,...}.js"]
-    detail_view["views/detail-view.js\nloadSession / abortCurrentSession"]
-    misc_view["session-detail.js / meta-docs-view.js\ntool-stats.js / system-prompt-library.js"]
-    default_view --> default_sub
-  end
+### 5.3 Data Flow
 
-  subgraph 상태_컴포넌트
-    state["state.js\nappMode/metaSubTab/rightView/selected* SSoT"]
-    components["components/{filter-bar,search-box}.js"]
-    tool_colors["tool-colors.js\nTOOL_COLORS 토큰"]
-  end
-
-  subgraph 전역_스크립트["전역 스크립트 (index.html &lt;script&gt; 직접 로드, ESM import 아님)"]
-    i18n["i18n.js + i18n-dom.js\n전역 window.I18n"]
-    lang_switcher["lang-switcher.js\nIIFE — window.I18n 런타임 참조"]
-    lang_switcher -. "runtime: window.I18n" .-> i18n
-  end
-
-  subgraph 인터랙션
-    app_rail["app-rail.js\n좌측 모드 rail 클릭 위임"]
-    resize["panel-resize.js / left-panel-vertical-resize.js / col-resize.js"]
-    tooltip["stat-tooltip.js / cache-tooltip.js\ncache-panel-tooltip.js / obs-tooltip.js"]
-  end
-
-  subgraph 부가
-    misc["version-check.js / sparkline.js\ndom-preserve.js / infra.js"]
-  end
-
-  main --> chart
-  main --> renderers
-  main --> api
-  main --> sse
-  main --> default_view
-  main --> detail_view
-  main --> misc_view
-  main --> state
-  main --> components
-  main --> tool_colors
-  main --> app_rail
-  main --> resize
-  main --> tooltip
-  main --> misc
+```
+Server SSE (/events)
+  → useSSE (parse + validate)
+    → sse-store (state transition)
+      → React components re-render (feed/sessions subscriptions)
 ```
 
-### 5.2 `api.js` — 서버 통신
-
-엔드포인트 호출과 응답 분배가 모두 이 파일을 통해 일어납니다. 응답은 모두 `{ success, data }` 형태이며 8초 `AbortSignal.timeout`이 걸립니다. 실패 시 `showError(I18n.t(...))`가 상단 배너를 띄웁니다.
-
-| 함수 | 호출 엔드포인트 | 역할 |
-|------|-----------------|------|
-| `fetchDashboard()` | `/api/dashboard` | 헤더 stat · 도넛 · 프로젝트 목록 |
-| `fetchRequests(append?)` | `/api/requests`, `/api/requests/by-type/:t` | 피드 행 |
-| `fetchAllSessions()` | `/api/sessions` | 좌측 세션 목록 |
-| `fetchCacheStats()` | `/api/stats/cache` | cache-panel |
-| `fetchSessionsByProject(p)` | `/api/projects/:p/sessions` | 프로젝트 선택 |
-| `fetchObservability()` | `/api/metrics/{burn-rate,cache-trend,tool-categories}` + `/api/sessions/active` | obs-panel 3 카드(burn/cache/pulse) + metadocs 전용 tool-categories 카드 |
-| `fetchProxyRequests/Stats` | `/api/proxy-requests*` | 프록시 (UI 미노출) |
-| `buildQuery(base, extra)` | — | `from/to` 자동 합성 |
-| `setActiveRange(r)` | — | 활성 range SSoT. `VALID_PRESETS`(api.js) = `'1h' / 'today' / 'yesterday' / '7d' / '30d' / 'all'` 프리셋 + 커스텀 범위(`{type:'custom', from, to}`) |
-
-### 5.3 `main.js` — 메인 루프
-
-`init()` 부트스트랩 순서:
-
-1. `window.I18n.init()` 대기
-2. `initMetaSubTabs()` / `initDateFilter()` — applyAppMode 이전에 슬롯·원본 element 준비(메타 모드 silent fail 방지)
-3. `applyAppMode(getAppMode())` — sessionStorage에서 모드 복원
-4. `initTypeColors()` / `initBuckets()` / `drawTimeline()` / `setChartMode('default')`
-5. 초기 데이터 — `fetchRequests`, `fetchCacheStats`, `Promise.all([fetchDashboard, fetchAllSessions]).then(autoActivateProject)`
-6. `startSSE()` — `/events` 구독
-7. 패널 resize / 툴팁 / `initDetailTabBar()` + `setDetailView('log')` / 단축키 초기화
-8. `setInterval(() => { advanceBuckets(); drawTimeline(); }, 60_000)` + `setInterval(fetchAllSessions, 30_000)`
-
-SSE 채널 및 클라이언트 구독 흐름:
-
-```mermaid
-flowchart TD
-  EventSource["EventSource('/events')"]
-
-  new_request["이벤트: new_request\n(훅 데이터 — requests 테이블)"]
-  new_proxy_request["이벤트: new_proxy_request\n(프록시 데이터 — proxy_requests 테이블)"]
-  session_update["이벤트: session_update\n(세션 started/ended/token_update)"]
-
-  onNewRequest["onNewRequest(e)"]
-  onNewProxyRequest["onNewProxyRequest(e)"]
-  onSessionUpdate["onSessionUpdate(e)"]
-
-  recordRequest["recordRequest()\n→ drawTimeline()"]
-  prependRequest["prependRequest(req)"]
-  detailSel{"선택 세션 ==\nreq.session_id ?"}
-  patchTurn["patchActiveTurnFromSSE(req)"]
-  refreshDetail["refreshDetailSession(id)\n(패치 실패 시 폴백)"]
-  scheduleRefresh["scheduleDashboardRefresh()\ndebounce 1s · maxWait 3s"]
-
-  EventSource --> new_request
-  EventSource --> new_proxy_request
-  EventSource --> session_update
-
-  new_request --> onNewRequest
-  new_proxy_request --> onNewProxyRequest
-  session_update --> onSessionUpdate
-
-  onNewRequest --> recordRequest
-  onNewRequest --> prependRequest
-  onNewRequest --> detailSel
-  detailSel -->|yes| patchTurn
-  patchTurn -->|false| refreshDetail
-  onNewRequest --> scheduleRefresh
-
-  onSessionUpdate --> sidebarUpdate["세션 캐시 갱신\n+ 사이드바 재렌더"]
-  onNewProxyRequest --> proxyFeed["spyglass:proxy-request\n커스텀 이벤트 디스패치\n(UI 미노출 경로) + scheduleRefresh"]
-```
-
-> `sse.js`는 `onNewProxyRequest`·`onSessionUpdate`가 함수로 전달된 경우에만 해당 채널의 `addEventListener`를 등록합니다.
-> 서버(`packages/server/src/sse.ts`)는 연결 직후 `ping`을 1회 전송하고 이후 8초 간격으로 반복합니다.
-
-### 5.4 `renderers.js` — DOM 렌더
-
-`renderers.js`는 한 줄 re-export 진입점이며, 실 구현은 `render/` 디렉터리에 분리되어 있습니다.
-
-| 모듈 | 책임 |
-|------|------|
-| `render/badges.js` | `typeBadge`, `toolIconHtml`, `toolStatusBadge`, `toolResponseHint`, `anomalyBadgesHtml`, `subTypeBadgeHtml` 등 배지 |
-| `render/icons.js` | 디자인 시스템 아이콘 호환 shim. `design-system/icons/*` 개별 SVG를 하나의 import 경로로 re-export |
-| `render/model.js` | `modelChipHtml`, `makeModelCell`, `trustOf`, `rowTrustClass` — 모델 라벨 / 짧은 이름 / 컬러·신뢰 매핑 |
-| `render/cells.js` | `makeActionCell`, `makeTargetCell`, `makeCacheCell`, `makeSkeletonRows` |
-| `render/extract.js` | payload에서 preview / role / tool_response 추출 |
-| `render/expand.js` | `togglePromptExpand`, `resolveExpandTarget` |
-| `render/rows.js` | `makeRequestRow`(9컬럼 행 SSoT), `makeSessionRow`, `renderRequests`, `appendRequests` |
-| `render/skeleton.js` | skeleton row 정책 |
-
-### 5.4-b `views/default/` — DefaultView 서브모듈
-
-`views/default-view.js`가 조립하는 내부 모듈로, 각 파일의 변경 이유(축)가 분리되어 있습니다.
-
-| 모듈 | 담당 축 | 책임 |
-|------|---------|------|
-| `bootstrap.js` | G축 — 조립 | `initDefaultView` 컴포지션 루트. 모듈 부팅 순서와 클로저(검색 박스) 보관 |
-| `chart-policy.js` | A축 — 차트 정책 | 타임라인·도넛 모드 전환 정책, `timeline-meta` 라벨 갱신, `ResizeObserver` 정책 |
-| `constants.js` | 공용 상수 | `localStorage` 키 (`spyglass:lastProject` 등) 등 여러 모듈이 공유하는 상수 |
-| `feed-interactions.js` | C축 — 인터랙션 | 검색 박스·클릭 위임·필터 바 — 사용자 입력 → 피드 표시 상태 매핑 |
-| `feed-live.js` | B축 — 라이브 | SSE `new_request`를 피드 테이블에 prepend / in-place 갱신. `prependRequest` SSoT |
-| `keyboard.js` | D축 — 키보드 | `Esc` 우선순위 정책, `/`·`?`·`1~7` 등 단축키 정의 및 KBD 도움말 모달 |
-| `layout-persist.js` | E축 — 레이아웃 영속 | 차트 섹션·좌측 패널 접힘 상태 `localStorage` 저장·복원 |
-
-### 5.4-c `session-detail/` — 세션 상세 서브모듈
-
-`session-detail.js`(루트)는 facade로, 실 구현은 아래 7개 파일로 분리되어 있습니다.
-
-| 모듈 | 책임 |
-|------|------|
-| `session-detail/index.js` | facade — 데이터 로드(`loadSessionDetail`, `refreshDetailSession`), 검색 박스 초기화(`initDetailSearch`), 외부 호출자 인터페이스 re-export |
-| `session-detail/state.js` | 모듈 수준 상태 단일 캡슐화 (필터 / prologue / 턴 목록 / 검색어 / 펼침 ID / anomaly map) |
-| `session-detail/flat-view.js` | 필터·검색 처리(`applyDetailFilter`) — 활성 턴 로그 표에 검색·타입 필터를 적용하고 차트·뷰 디커플링 |
-| `session-detail/turn-views.js` | 통합 "로그" 탭 렌더 SSoT — turn-spine(`renderSpine`/`turnLineHtml`/`updateFlowHead`) + log-pane(`renderLogPane`) + 활성 턴 상태(`setActiveTurnId`/`getActiveTurnId`) + 탭 바(`initDetailTabBar`/`setDetailView`) |
-| `session-detail/turn-rows.js` | 활성 턴 내부 행 빌더 — `makeTurnLogRows`(prompt / tool_call / response 인터리빙, `makeRequestRow` 위임) + 칩 키(`chipKey`/`chipFromRequest`) + `data-chip-key` 주입 |
-| `session-detail/system-reminder.js` | `<system-reminder>` 블록 추출 + dedup / diff SSoT |
-| `session-detail/system-reminder-popover.js` | system-reminder 칩 ↔ 팝오버 인터랙션 (토글·위치·포커스 복귀) |
-
-### 5.4-d 루트 레벨 주요 JS 모듈 (`packages/web/assets/js/`)
-
-| 모듈 | 책임 |
-|------|------|
-| `main.js` | 부트스트랩 진입점. i18n → 모드 복원 → 데이터 초기 로드 → SSE 구독 → 인터랙션 초기화 |
-| `sse.js` | `connectSSE()` — `EventSource('/events')` 연결 관리 및 3채널 구독 (`new_request` / `new_proxy_request` / `session_update`) |
-| `api.js` | 서버 REST 통신 전담. 응답 `{ success, data }` 래핑, 8초 `AbortSignal.timeout`, 에러 배너 |
-| `state.js` | `appMode` / `metaSubTab` / `rightView` / `selected*` 등 전역 UI 상태 SSoT |
-| `chart.js` | timeline 막대 차트 + donut 도넛 차트 canvas 렌더 |
-| `context-chart.js` | 세션 상세 진입 시 컨텍스트 성장 차트로 교체되는 canvas 렌더 |
-| `formatters.js` | 순수 포맷 함수 (`fmt`, `fmtToken`, `formatDuration`, `fmtRelative`, `escHtml`, ...) |
-| `renderers.js` | `render/*` re-export 진입점 |
-| `events.js` | 훅 이벤트 관련 처리 |
-| `anomaly.js` | 이상 이벤트 표시 매핑 헬퍼 (`getAnomalyFlagsForRow` 등) |
-| `left-panel.js` | 좌측 패널 프로젝트·세션 섹션 렌더 |
-| `infra.js` | 스크롤 잠금 배너 등 범용 인프라 헬퍼 |
-| `dom-preserve.js` | 인터랙션 상태(스크롤 위치·펼침) 캡처/복원 유틸 |
-| `i18n.js` + `i18n-dom.js` | `window.I18n` 전역 — 언어 로딩·전환·DOM 자동 적용 |
-| `sparkline.js` | 미니 스파크라인 캔버스 헬퍼 |
-| `version-check.js` | 서버 버전 폴링 → 신버전 감지 시 `#updateModal` 노출 |
-
-### 5.5 `formatters.js`
-
-순수 함수 모음입니다.
-
-| 함수 | 예시 출력 |
-|------|-----------|
-| `fmt(n)` | `12,345` |
-| `fmtToken(n)` | `12.3K` |
-| `formatDuration(ms)` | `1.2s` |
-| `fmtRelative(ts)` | `3분 전` |
-| `fmtTime / fmtTimestamp / fmtDate` | 시각 포맷 |
-| `escHtml` | HTML 이스케이프 |
-| `shortModelName` | 모델 짧은 이름 |
+No DOM manipulation — all updates are declarative via Zustand subscriptions.
 
 ---
 
-## 6. 핵심 함수 안내 (CLAUDE.md SSoT)
+## 6. i18n System
 
-다음 4개 함수는 **렌더링 SSoT**입니다. 직접 HTML 문자열을 짜지 말고 반드시 호출해야 합니다(CLAUDE.md "함수/컴포넌트 캡슐화 원칙" 참조).
+### 6.1 Architecture
 
-### 요약 표
+**Dual system during transition:**
+- **New**: react-i18next (`useTranslation`) — components re-render on language change without reload.
+- **Legacy**: `window.I18n` (IIFE scripts) — vanilla JS modules still reference it.
 
-| 함수 | 위치 | 시그니처 | 주요 사용처 |
-|------|------|----------|-------------|
-| `toolIconHtml` | `packages/web/assets/js/render/badges.js:58` | `(toolName, eventType = null) → string` | `makeTargetCell`, 턴 로그, 도구 통계 카드 |
-| `makeTargetCell` | `packages/web/assets/js/render/cells.js:73` | `(r) → <td>` | `makeRequestRow` |
-| `makeRequestRow` | `packages/web/assets/js/render/rows.js:51` | `(r, opts) → <tr>` | 피드(`default-view`), 로그 탭(`turn-rows.js#makeTurnLogRows`) |
-| `prependRequest` | `packages/web/assets/js/views/default/feed-live.js:31` | `(r) → void` | SSE `onNewRequest` 콜백 (`main.js`) |
+Both systems are kept in sync: `main.tsx` initializes `i18next.changeLanguage(window.I18n.getLang())` and registers an `onChange` listener.
 
-### 6.1 `toolIconHtml(toolName, eventType)`
+### 6.2 Configuration (`lib/i18n.ts`)
 
-도구 아이콘 SVG를 반환합니다. `eventType === 'pre_tool'`이면 pulse 애니메이션 클래스 `tool-icon-running`이 자동 부착됩니다.
+- **Backend**: Custom merged backend fetches all 5 legacy namespaces (`common`, `request`, `badges`, `session`, `ui`) in parallel and merges them into a single `translation` resource.
+- **Key format**: `ui.cache-panel.hit-rate.desc` works unchanged (dot-path with `nsSeparator: false`).
+- **Interpolation**: `{var}` single-brace (matches legacy JSON format).
+- **Fallback**: `parseMissingKeyHandler` delegates to `window.I18n.t` if key missing.
+- **Language resolution**: URL `?lang=` → `localStorage['spyglass:lang']` → `navigator.language` → `'ko'`.
 
-호출 시 **반드시 `r.event_type`을 두 번째 인자로 전달**해야 합니다. 누락하면 실행 중 상태가 표시되지 않습니다. `Agent` / `Skill` / `Task` 계열 이름은 `tool-icon-agent`로, 그 외는 `tool-icon-tool`로 자동 분기됩니다.
+### 6.3 Usage in Components
 
-```js
-import { toolIconHtml } from './render/badges.js';
-const icon = toolIconHtml(r.tool_name, r.event_type);
-//  → <span class="tool-icon tool-icon-tool tool-icon-running ds-icon">...</span>
+Components use `useTranslation()` and pass a `TFunc` labeler to memoized children:
+
+```tsx
+const { t, i18n } = useTranslation();
+const tx = useCallback((key: string, vars?: Record<string, unknown>) => t(key, vars) as string, [t]);
+const labeler = useMemo(() => makeI18nLabeler(tx), [i18n.language, tx]);
 ```
 
-### 6.2 `makeTargetCell(r)`
-
-`Target` 컬럼 전체(`<td class="cell-target">`)를 반환합니다. 도구 아이콘 + 이름(+ `Skill(detail)` sub-name) + 오류 상태 배지가 한 번에 합성됩니다.
-
-### 6.3 `makeRequestRow(r, opts)`
-
-피드/평면 표의 한 `<tr>`을 만드는 SSoT 진입점입니다. 모든 `<td>`에 `data-cell` 속성이 부여되어 in-place 셀 교체가 가능합니다.
-
-| 옵션 | 설명 |
-|------|------|
-| `opts.showSession` | Session 컬럼 포함 여부 |
-| `opts.anomalyFlags` | `Set<'spike' / 'loop' / 'slow'>` — 슬로우/스파이크/루프 배지 합성 |
-
-### 6.4 `prependRequest(r)`
-
-SSE `new_request` 도착 시 피드 최상단에 새 행을 추가합니다. 동일 `r.id` 행이 있으면 outerHTML을 새로 만들지 않고 셀(`data-cell="time|action|target|..."`) 단위로 교체하여 expand row 형제를 보존합니다.
-
-새 행이 200개를 초과하면 가장 오래된 행을 자동 제거합니다. `r.event_phase === 'updated'`인 경우 `row-flash-update` 클래스를 600ms 동안 부여하여 시각적 hint를 줍니다.
+`i18n.language` is included in `useMemo` deps so memoized components receive new labeler refs on language switch.
 
 ---
 
-## 7. 인터랙션
+## 7. Build System (Vite)
 
-### 7.1 클릭 / 호버
+### 7.1 Config (`vite.config.ts`)
 
-| 대상 | 동작 |
-|------|------|
-| 프로젝트 행 | `selectProject(name)` (detail 열려 있으면 닫고 default 복귀) |
-| 세션 행 | `loadSession(id)` → detail 전환 |
-| 요청 행 더블클릭 | LLM Input 탭으로 점프 |
-| 턴 카드 | 펼침. `[data-payload-ts]` 액션은 API 페이로드 뷰로 점프 |
-| Agent / Skill 칩 | `data-meta-doc-type` 딥링크 (browse → metadocs 자동 진입, `Esc`로 복귀) |
-| stat / cache / obs 카드 hover | `*-tooltip.js`가 정밀 수치 노출 |
+- **Entry**: `index.html` (with `#react-root` mount point)
+- **Plugins**:
+  - `@vitejs/plugin-react` — Fast Refresh, JSX transform
+  - `externalizeDaemonAssets` — Injects 24 legacy CSS files + 3 classic i18n scripts into `index.html` (dev + build)
+- **Output**: `dist/` with `assets/` subdir (matches daemon static serving contract)
+- **Vendor chunk**: `node_modules` → separate `vendor.js` (cache-friendly)
+- **Source maps**: Disabled in production unless `SPYGLASS_SOURCEMAP=1`
+- **Dev proxy**: `/api`, `/events`, `/collect`, `/v1`, `/health`, `/locales` → `http://127.0.0.1:9999`
 
-### 7.2 검색 / 필터
+### 7.2 Asset Strategy
 
-- `/` 또는 `Cmd/Ctrl + F` — 검색 포커스, `Esc` — 닫기. 매칭은 `data-search-haystack`(lower-case 직렬화) 기반.
-- 필터링은 CSS `display:none`이라 DOM이 보존됩니다.
-- 숫자 `1~7` — All / prompt / system / tool_call / Agent / Skill / MCP (`keyboard.js`의 `triggerFilterByIndex`)
-
-### 7.3 행 확장
-
-- Message preview 클릭 → 확장 row 펼침(`togglePromptExpand`).
-- 턴 카드는 카드 자체 펼침 + 내부 그룹(`[data-toggle-group]`) 2단 구조입니다.
-- `Enter` / `Space` 키보드 활성화 가능.
-
-### 7.4 패널 / 차트 토글
-
-| 단축키 / 컨트롤 | 동작 |
-|-----------------|------|
-| `Cmd/Ctrl + B` | 좌측 패널 토글 |
-| `#btnToggleChart` | 차트 섹션 collapse (localStorage 보존) |
-| 핸들 더블클릭 | 콘텐츠 폭 자동 |
-
-### 7.5 스크롤 잠금
-
-피드 위쪽이 아닐 때 새 행이 들어와도 보던 행이 밀리지 않도록 `prependRequest`가 `scrollTop`을 보정합니다. `#scrollLockBanner`가 누적 행 수를 표시하고, 배너 클릭은 `jumpToLatest()`로 동작합니다.
+Legacy CSS and i18n JS are **not bundled** by Vite. They are served raw by the daemon and injected into `index.html` via the custom plugin. This ensures:
+- Dev server (port 5173) and production build share identical CSS/i18n loading
+- Vanilla JS modules can still reference `window.I18n` before React mounts
+- `locales/` copied to `dist/locales` on build
 
 ---
 
-## 8. 다국어 (i18n)
+## 8. Feature Areas
 
-### 8.1 구조
+### 8.1 Browse (`features/browse`)
 
-```
-packages/web/locales/
-  {ko,en,ja,zh}/{common,request,badges,session,ui}.json
-```
+| Export | File | Responsibility |
+|--------|------|---------------|
+| `BrowseSidebar` | `BrowseSidebar.tsx` | Left panel: projects + sessions + obs cards + footer |
+| `useObsCards` | `use-obs-cards.ts` | Observability card data fetching |
+| `usePanelResize` | `use-panel-resize.ts` | Vertical panel resize handlers |
 
-지원 언어 `ko / en / ja / zh`, namespace 5종. 서버는 `/locales/{lang}/{ns}.json`을
-`Cache-Control: public, max-age=300`으로 서빙합니다.
+### 8.2 Dashboard (`features/dashboard`)
 
-### 8.2 언어 결정 우선순위 (`i18n.js`)
+| Export | File | Responsibility |
+|--------|------|---------------|
+| `BurnRateCard`, `CacheHealthCard`, `LivePulseCard`, `ToolCategoriesCard`, `AnomalyBadge` | `ObsPanel.tsx` | Observability cards |
+| `CachePanel` | `CachePanel.tsx` | Cache hit-rate + ratio bars |
+| `SparklineBars`, `SparklineLine` | `Sparkline.tsx` | Mini sparklines |
+| `ContextChart` | `ContextChart.tsx` | Session detail context growth canvas |
+| `ToolStatsMatrix` | `ToolStatsMatrix.tsx` | Tool usage matrix |
+| `SystemPromptLibrary` | `SystemPromptLibrary.tsx` | System prompt catalog |
+| `UpdateBadge`, `UpdateModal`, `useVersionCheck` | various | Version check UI + polling hook |
+| `fetchModelUsage`, `fetchToolCategories` | `metrics-fetchers.ts` | Metrics API wrappers |
 
-1. URL `?lang=` → 2. `localStorage('spyglass:lang')` → 3. `navigator.language` primary
-subtag → 4. 기본값 `ko`.
+### 8.3 Session Detail (`features/session-detail`)
 
-### 8.3 사용
+| Export | File | Responsibility |
+|--------|------|---------------|
+| `SessionLog` | `SessionLog.tsx` | Unified log view (turn spine + log pane) |
+| `TurnRows` | `TurnRows.tsx` | Turn row rendering |
+| `DetailView` | `DetailView.tsx` | Detail view assembly (FlowPane + SessionLog) |
+| `SessionDetailContainer` | `SessionDetailContainer.tsx` | Data orchestration container |
+| `useSessionDetail` | `use-session-detail.ts` | Turns fetch + state |
+| `fetchSessionTurns` | `turns-fetcher.ts` | Turn data fetching |
+| `Chip`, `ChipFlow`, `TurnSpine`, `FlowHead`, `FlowPane` | various | Turn sub-components |
+| `useLlmInput`, `useSystemPromptLibrary` | `use-detail-aux.ts` | LLM Input / System Library tabs |
 
-```js
-// JS — t() 키 첫 segment가 namespace
-window.I18n.t('badges.renderers.tool-hint.lines', { n: 42 });
-window.I18n.t('ui.html.error-banner.msg');
+### 8.4 Meta-Docs (`features/meta-docs`)
 
-// HTML — 정적 data-i18n / data-i18n-attr-*
-<span data-i18n="ui.html.error-banner.msg">서버에 연결할 수 없습니다.</span>
-<button data-i18n-attr-title="ui.html.error-banner.retry">…</button>
-```
+| Export | File | Responsibility |
+|--------|------|---------------|
+| `MetaDocsCatalog` | `MetaDocsCatalog.tsx` | Sortable/filterable catalog table |
+| `MetaDocsSearch` | `MetaDocsSearch.tsx` | Search input |
+| `MetaDocsFilterBar` | `MetaDocsFilterBar.tsx` | Type / display / include-deleted filters |
+| `MetaDocsFlow` | `MetaDocsFlow.tsx` | SVG ego-graph flow |
+| `MetaDocsToolStats` | `MetaDocsToolStats.tsx` | Tool stats matrix |
+| `MetaDocsSummaryCards`, `MetaDocsBehaviorBars` | `MetaDocsSummaryCards.tsx` | Left summary cards |
+| `fetchProjectToolStats` | `tool-stats-fetcher.ts` | Tool stats API |
+| Flow pure libs | `flow-*.ts` | Camera, graph, edge, layout algorithms |
 
-`window.I18n.onChange(cb)`로 언어 전환 시 재렌더 콜백 등록. 캐시는 lang+ns 단위.
+### 8.5 Settings (`features/settings`)
 
-### 8.4 새 언어 추가
-
-1. `packages/web/locales/<lang>/` 5 JSON을 동일 키로 작성
-2. `i18n.js`의 `SUPPORTED_LANGS` 배열 + `index.html` `<select id="lang-switcher">`에 추가
-3. 새로고침 후 스위처에서 선택 가능
-
----
-
-## 9. 테마 (디자인 토큰)
-
-테마는 CSS 변수 단일 SSoT입니다. 위치: `packages/web/assets/css/design-tokens.css`.
-
-### 9.1 Layer 5단계 (배경/표면)
-
-| 토큰 | 값 | 용도 |
-|------|----|----|
-| `--bg` | `#0a0a0b` | 최하단 배경 |
-| `--surface` | `#111113` | 기본 표면 |
-| `--surface-alt` | `#17171a` | 보조 표면 |
-| `--raised` | `#1e1e22` | 카드 |
-| `--floating` | `#26262b` | 떠 있는 요소 (툴팁 등) |
-| `--border` | `#26262b` | 일반 경계 |
-| `--border-strong` | `#3a3a40` | 강조 경계 |
-
-### 9.2 Text 4-Level
-
-| 토큰 | 값 | 대비 | 용도 |
-|------|----|----|----|
-| `--text-1` | `#F0F6FC` | 16.1:1 (AAA) | 헤더 / 강조 |
-| `--text-2` | `#C9D1D9` | 12.4:1 (AAA) | 본문 |
-| `--text-3` | `#8B949E` | 5.5:1 (AA) | 보조 텍스트 |
-| `--text-4` | `#6E7681` | 3.8:1 (AA Large only) | 비활성 / 장식 |
-
-호환 alias: `--text` / `--text-muted` / `--text-dim`.
-
-### 9.3 Semantic 6-color
-
-| 토큰 | 값 | 의미 |
-|------|----|----|
-| `--error` | `#F47174` | 오류 |
-| `--warn` | `#F0B72F` | 경고 |
-| `--success` | `#3FB950` | 성공 |
-| `--info` | `#58A6FF` | 정보 |
-| `--neutral` | `#8B949E` | 중립 |
-| `--accent` | `#FF7A45` | 강조 |
-
-### 9.4 Typography
-
-| 토큰 | 값 | 용도 |
-|------|----|----|
-| `--font-ui` | `'Inter Variable', 'Inter', system-ui, ...` | UI 텍스트 |
-| `--font-data` | `'SF Mono', 'SFMono-Regular', ui-monospace, ...` | 데이터 셀 |
-| `--text-hero` | `26px` | Hero 수치 |
-| `--text-h1` | `20px` | H1 |
-| `--text-h2` | `16px` | H2 |
-| `--text-h3` | `15px` | H3 |
-| `--text-body` | `12px` | 본문 |
-| `--text-data` | `12px` | 데이터 |
-| `--text-meta` | `11px` | 메타 정보 |
-
-본문/데이터는 12px이 가독성 하한입니다. Hero 수치는 26px UI 폰트, 데이터 셀은 12px 모노 폰트를 사용합니다.
-
-### 9.5 테마 교체
-
-현재는 **다크 단일 테마**입니다. 토큰을 바꾸려면 `:root` 블록 값만 교체하면 됩니다. 모든 카드/배지/표 CSS가 토큰을 참조하므로 전 페이지가 동시에 갱신됩니다.
-
-### 9.6 CSS 로드 순서 (`index.html`)
-
-토큰 → 공용 → 레이아웃 → 페이지별 → 디자인 시스템 통합 순서입니다.
-
-```
-design-tokens.css
-  → card → state → keyboard-help
-  → layout → header → left-panel
-  → default-view → detail-view → table → badges → skeleton
-  → cache-panel → turn-view → llm-input → syslib → meta-docs
-  → context-chart → tool-stats → flow-diagram → obs-panel
-  → app-rail → settings-view
-  → design-system/_index.css
-```
+| Export | File | Responsibility |
+|--------|------|---------------|
+| `DiagPanel`, `HooksPanel`, `ServerPanel`, `GraphPanel`, `SqlitePanel`, `ProxyPanel` | various | Six setting panels |
+| `*PanelView` | various | Presentational views for each panel |
+| `useAsyncResource` | `use-settings-diag.ts` | Generic async fetch hook |
+| `fetchDiag`, `fetchLogs`, `hookApply`, etc. | `hooks-api.ts` | Settings API wrappers |
+| `fetchGraphDbStatus`, `ladybugInstallStream`, etc. | `graph-api.ts` | Graph DB API |
 
 ---
 
-## 10. 트러블슈팅
+## 9. Design System
 
-| # | 증상 | 점검 | 해결 |
-|---|------|------|------|
-| 1 | 데이터가 안 들어온다 / 화면이 비어 있다 | `http://localhost:9999/health`가 `200 OK`인가? `SPGLASS_PORT`로 포트가 바뀌었나? `~/.spyglass/spyglass.db`가 비어 있나? | 정확한 포트로 접속. DB가 비었으면 Claude Code 세션 1회 실행. `/api/dashboard`는 5초 debounce + 30초 TTL 캐시(`routes/dashboard.ts`)로 최대 5초까지 지연될 수 있음 |
-| 2 | `#errorBanner`("서버에 연결할 수 없습니다.")가 떠 있다 | SSE가 끊긴 상태 | `sse.js`가 5초 간격으로 자동 재시도. 배너의 `다시 시도` 버튼도 사용 가능 |
-| 3 | 새 요청이 피드에 안 보인다 | DevTools → Network → `EventStream`에 `/events` 연결이 있는가? 필터(All 외)나 검색 박스 query가 남아 있는가? | `/` 또는 `Esc`로 필터·검색 클리어. `pre_tool` 레코드는 SSE 브로드캐스트되지 않으며, `post_tool`(`event_type='tool'`)에서 같은 `tool_use_id` 행이 update될 때만 prepend/in-place 갱신됨(CLAUDE.md) |
-| 4 | 스타일이 깨져 보인다 | DevTools Network에서 CSS 404 여부 확인 | `Cmd+Shift+R` 강제 새로고침 |
-| 5 | 도넛이 갱신되지 않는다 | 현재 모드 확인 — detail 진입 시 자동 `cache`, close 시 `model` | `model` 모드는 `fetchModelUsage()` 응답에 의존하므로 데이터가 없으면 정상 동작 |
-| 6 | timeline 막대가 0에서 멈춤 | 탭이 백그라운드 상태인가? | `setInterval(advanceBuckets, 60_000)`이 throttle됨. 탭으로 돌아오면 따라잡음 |
-| 7 | 좌측 패널을 너무 좁혀서 못 편다 | 현재 폭이 `localStorage('spyglass:panel-width')`에 저장됨 | `Cmd/Ctrl + B`로 접었다 펴기 또는 핸들 더블클릭(콘텐츠 폭 자동). 완전 초기화는 `localStorage.removeItem('spyglass:panel-width')` 후 새로고침 (다른 키도 `spyglass:` / `spyglass.` prefix) |
-| 8 | 언어 전환이 반영되지 않는다 / `Esc`로 metadocs에서 못 빠져나옴 | 동적 모달은 `I18n.onChange` 등록 필요. 브라우저 자동 번역이 켜져 있는가? 입력창에 포커스가 있는가? | 동적 모달은 `window.I18n.onChange(() => render...)`로 재렌더 등록. 브라우저 자동 번역은 끄기(텍스트 노드 교체로 i18n과 충돌). 입력 포커스가 있으면 `Esc`는 입력 취소로 동작하므로 본문 클릭 후 다시 `Esc` |
+Located in `packages/web/src/components/design-system/`.
+
+### 9.1 Primitives
+
+| Component | File |
+|-----------|------|
+| `FilterButton` | `primitives/FilterButton.tsx` |
+| `CloseButton` | `primitives/CloseButton.tsx` |
+| `Tab` | `primitives/Tab.tsx` |
+
+### 9.2 Icons
+
+All icons are stroke-only SVG components with `currentColor`:
+
+| Icon | File | Usage |
+|------|------|-------|
+| `AgentDot`, `SkillDot`, `ToolDot`, `McpDot` | `icons/*Dot.tsx` | Type markers |
+| `StatusActive`, `StatusStale`, `StatusEnded` | `icons/Status*.tsx` | Session status |
+| `Chevron`, `Search`, `Copy`, `Refresh`, etc. | various | UI actions |
+
+### 9.3 Badges & Chips
+
+| Component | File |
+|-----------|------|
+| `Badge` | `badges/Badge.tsx` |
+| `Chip` | `chips/Chip.tsx` |
+| `Dot` | `markers/Dot.tsx` |
+| `SortHead` | `markers/SortHead.tsx` |
+
+### 9.4 Stats
+
+| Component | File |
+|-----------|------|
+| `Bar` | `stats/Bar.tsx` |
+
+### 9.5 CSS Tokens
+
+Design tokens remain in the legacy `packages/web/assets/css/design-tokens.css` (dark theme). All React components reference the same CSS custom properties (`--bg`, `--surface`, `--text-1`, `--error`, etc.).
 
 ---
 
-## 11. 참고 경로
+## 10. Core Rendering Utilities
 
-| 항목 | 경로 |
-|------|------|
-| HTML 진입점 | `packages/web/index.html` |
-| 서버 정적 서빙 / 라우트 | `packages/server/src/runtime/dispatch.ts`, `packages/server/src/routes/dashboard.ts` |
-| 디자인 토큰 / i18n | `packages/web/assets/css/design-tokens.css`, `packages/web/assets/js/i18n.js`, `packages/web/locales/{ko,en,ja,zh}/*.json` |
-| SSE / API / 메인 | `packages/web/assets/js/sse.js`, `api.js`, `main.js` |
-| 차트 / 캐시 / Obs | `chart.js`, `context-chart.js`, `cache-panel.js`, `obs-panel.js` |
-| 피드 upsert | `packages/web/assets/js/views/default/feed-live.js` |
-| 렌더 SSoT | `render/rows.js`, `render/cells.js`, `render/badges.js`, `formatters.js` |
-| 컴포넌트 / 상태 | `components/{filter-bar,search-box}.js`, `state.js` |
+The following functions from the legacy vanilla JS codebase are still the **rendering SoT** and are imported/reused by React components. Do not inline equivalent HTML.
+
+| Function | Legacy Location | React Usage | Signature |
+|----------|----------------|-------------|-----------|
+| `toolIconHtml` | `assets/js/render/badges.js:58` | `ToolIcon` component, `TargetCell` | `(toolName, eventType?) → string` |
+| `makeTargetCell` | `assets/js/render/cells.js:73` | `TargetCell` component | `(r) → <td>` |
+| `makeRequestRow` | `assets/js/render/rows.js:51` | `RequestRow` component | `(r, opts) → <tr>` |
+| `prependRequest` | `assets/js/views/default/feed-live.js:31` | `sse-store.applyNewRequest` | `(r) → void` |
+
+**`toolIconHtml(toolName, eventType)`**: Returns SVG icon HTML. If `eventType === 'pre_tool'`, attaches `tool-icon-running` pulse animation. Always pass `r.event_type` as the second argument.
+
+**`makeTargetCell(r)`**: Returns full `Target` column (`<td class="cell-target">`) — icon + name + sub-name + error status badge.
+
+**`makeRequestRow(r, opts)`**: Returns a `<tr>` with 9 columns. All `<td>` cells have `data-cell` attributes for in-place updates. Options: `showSession`, `anomalyFlags`.
+
+**`prependRequest(r)`** (legacy) / **`sse-store.applyNewRequest`** (React): Prepends a new row to the feed or updates an existing row by `id` in-place (preserving scroll position and expand state). Caps at 200 rows (`FEED_CAP`).
+
+---
+
+## 11. Data Fetching
+
+### 11.1 Fetchers (`api/fetchers.ts`)
+
+Pure fetch functions — no store references, no DOM side effects:
+
+| Function | Endpoint | Returns |
+|----------|----------|---------|
+| `fetchDashboard(range, signal)` | `/api/dashboard` | `{ projects, types, summary }` |
+| `fetchRequests(opts, signal)` | `/api/requests` | `RequestRowData[]` |
+| `fetchAllSessions(range, limit, signal)` | `/api/sessions` | `Session[]` |
+| `fetchCacheStats(range, signal)` | `/api/stats/cache` | `CacheStats` |
+| `fetchMetaDocs(opts, signal)` | `/api/meta-docs` | `MetaDocRow[]` |
+
+All fetchers use Zod schema validation (`schema/api-schema.ts`) and return safe fallbacks (`[]` or `null`) on failure.
+
+### 11.2 Range Parameters
+
+`app/compute-range.ts` converts `ActiveRange` (store) to fetcher params:
+- `rangeToParams(activeRange)` → `{ from?, to? } | {}` — for REST endpoints
+- `rangeToMetricParams(activeRange)` → `{ from?, to? } | { range: 'all' }` — for metrics endpoints
+
+---
+
+## 12. Interaction Reference
+
+| Action | Mechanism |
+|--------|-----------|
+| Mode switch | Click rail icon → `setAppMode` → `AppModeSync` navigates |
+| Project select | Click project row → `setSelectedProject` → sessions filtered |
+| Session select | Click session row → `setSelectedSession` + `setRightView('detail')` |
+| Feed filter | `FilterBar` → `setFeedFilter` → memoized filter on `feedRows` |
+| Feed search | `SearchBox` → `setSearchQuery` → `buildSearchHaystack` filtering |
+| Date range | `DateRangeDropdown` → `setActiveRange` → effect refetches data |
+| Chart collapse | Toggle button → local state → CSS class |
+| Left panel toggle | `Cmd/Ctrl + B` → `leftPanelHidden` state → CSS class |
+| Detail tab | `SessionDetailContainer` internal tab state (log / llm / syslib) |
+| Meta sub-tab | `setMetaSubTab` (`docs` / `tools`) |
+| Settings tab | Local `useState` in `SettingsLayout` |
+| Row expand | Click message preview → `PromptExpandRow` toggle |
+| Chip jump | Click turn chip → `handleChipActivation` scrolls + flashes target row |
+
+---
+
+## 13. File Reference
+
+| Category | Path |
+|----------|------|
+| Entry point | `packages/web/src/main.tsx` |
+| App shell | `packages/web/src/app/App.tsx`, `AppShell.tsx`, `AppRoutes.tsx` |
+| Layouts | `packages/web/src/app/BrowseLayout.tsx`, `MetaDocsLayout.tsx`, `SettingsLayout.tsx` |
+| Stores | `packages/web/src/stores/app-store.ts`, `sse-store.ts`, `version-store.ts` |
+| SSE hook | `packages/web/src/hooks/use-sse.ts` |
+| SSE wiring | `packages/web/src/features/sse/sse-wiring.ts` |
+| i18n | `packages/web/src/lib/i18n.ts` |
+| Fetchers | `packages/web/src/api/fetchers.ts` |
+| Range utils | `packages/web/src/app/compute-range.ts` |
+| Browse data | `packages/web/src/app/browse-data.ts` |
+| App mode routes | `packages/web/src/app/app-mode-route.ts` |
+| Render components | `packages/web/src/components/render/*.tsx` |
+| Design system | `packages/web/src/components/design-system/**/*.tsx` |
+| Settings components | `packages/web/src/components/settings/*.tsx` |
+| Vite config | `packages/web/vite.config.ts` |
+| Package manifest | `packages/web/package.json` |
+| Legacy render SoT | `packages/web/assets/js/render/{badges,cells,rows,model}.js` |
+| Legacy formatters | `packages/web/assets/js/formatters.js` |
+| Legacy request types | `packages/web/assets/js/request-types.js` |

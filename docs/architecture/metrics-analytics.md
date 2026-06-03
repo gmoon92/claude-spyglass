@@ -55,8 +55,9 @@ flowchart TD
 | 정규화 저장 | `requests` / `claude_events` / `proxy_requests` / `sessions` | `packages/storage/src/schema*.ts` |
 | 사전 집계 | `stats_hourly`, `stats_proxy_hourly` (1시간 버킷) | `packages/storage/src/queries/stats/build-aggregate.ts` |
 | 도메인 쿼리 | `aggregate-*`, `metrics/*`, `session/*` | `packages/storage/src/queries/` |
-| HTTP 라우트 | `/api/stats/*`, `/api/metrics/*`, `/api/dashboard` | `packages/server/src/routes/{stats,dashboard}.ts`, `metrics/router.ts` |
-| 시각화 | Canvas 차트, 캐시 패널, 도넛, 히트맵 | `packages/web/assets/js/{chart,cache-panel}.js` |
+| HTTP 라우트 | `/api/stats/*`, `/api/dashboard` | `packages/server/src/routes/{stats,dashboard}.ts` |
+| 메트릭 라우트 | `/api/metrics/*` | `@spyglass/metrics/src/router.ts` |
+| 시각화 | Canvas 차트, 캐시 패널, 도넛, 히트맵 | `packages/web/src/features/dashboard/` |
 
 ### 1.3 추적 도메인 4종
 

@@ -245,6 +245,8 @@ Ladybug 그래프 DB 단일 SoT. 모든 라우트는 GET이며 비-GET은 `405`.
 | GET | `/api/graph/turns/:id/neighbors` | BFS depth hop |
 | GET | `/api/graph/turns/:id/path` | placeholder |
 | GET | `/api/graph/unified-flow` | 메타 문서 통합 flow (ancestor+center+descendant+after) |
+| GET | `/api/graph/dlq` | Dead Letter Queue 목록 (sync 실패 행) |
+| POST | `/api/graph/dlq/resurrect` | DLQ 행 재처리 |
 
 ### 2.13 Settings (`/api/settings/*`)
 

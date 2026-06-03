@@ -3,8 +3,8 @@
 Claude Spyglass 프로젝트에 기여해 주셔서 감사합니다. 이 문서는 코드·문서·디자인·DB 스키마 등 어떤 형태로든 기여하려는 분들을 위한 안내서입니다.
 
 Claude Spyglass 는 **Claude Code 의 훅 이벤트를 수집해 토큰 사용량과 요청 흐름을 시각화**하는 모니터링 도구입니다.
-**bun workspaces 모노레포** 위에 **TypeScript + React Ink (TUI) + Vanilla JS (Web)** 스택을 사용하며, 저장소는 **SQLite WAL** 메인 DB 와 선택적 **Ladybug 그래프 DB** 로 구성됩니다.
-워크스페이스 패키지는 `server` / `storage` / `storage-graph` / `tui` / `types` / `desktop` 6개이며, `packages/web/` 은 별도 `package.json` 없는 정적 자산 디렉터리입니다.
+**bun workspaces 모노레포** 위에 **TypeScript + React Ink (TUI) + React 18 (Web)** 스택을 사용하며, 저장소는 **SQLite WAL** 메인 DB 와 선택적 **Ladybug 그래프 DB** 로 구성됩니다.
+워크스페이스 패키지는 `types` / `storage` / `storage-graph` / `metrics` / `meta-docs` / `server` / `tui` / `web` / `desktop` 9개입니다.
 `.claude/` 메타 문서로 일부 워크플로우(커밋·데이터 작업)를 표준화합니다.
 
 > 상위 개요는 [`index.md`](./index.md), 전체 아키텍처는 [`architecture.md`](./architecture.md) 를 참조하세요.
@@ -143,18 +143,19 @@ SQLite 만 초기화하려면 `spyglass.db*` 를, 그래프만 초기화하려�
 
 ### 3.1 워크스페이스 구조
 
-루트 `package.json` 의 `workspaces: ["packages/*"]` 설정 아래, `package.json` 을 가진 디렉터리만 워크스페이스로 등록됩니다. 현재 6개 패키지입니다.
+루트 `package.json` 의 `workspaces: ["packages/*"]` 설정 아래, `package.json` 을 가진 디렉터리만 워크스페이스로 등록됩니다. 현재 9개 패키지입니다.
 
 | 패키지 | 이름 | 책임 |
 |--------|------|------|
-| `packages/server` | `@spyglass/server` | HTTP API · SSE · CLI · 훅 수집/디스패치/처리 · proxy · routes · settings · meta-docs · metrics |
+| `packages/server` | `@spyglass/server` | HTTP API · SSE · CLI · 훅 수집/디스패치/처리 · proxy · routes · settings |
 | `packages/storage` | `@spyglass/storage` | SQLite 연결·마이그레이션·쿼리·통계·retention·pricing |
 | `packages/storage-graph` | `@spyglass/storage-graph` | Ladybug 그래프 client · queries(unified-flow/retention) · schema(ddl) · sync |
+| `packages/metrics` | `@spyglass/metrics` | 관찰성 메트릭 라우터 + 계산기 (anomaly/burn-rate/cache-trend/proxy-trend) |
+| `packages/meta-docs` | `@spyglass/meta-docs` | Behavior Definitions 스캐너 · 리졸버 · 동기화 |
 | `packages/tui` | `@spyglass/tui` | React Ink 기반 터미널 대시보드 |
+| `packages/web` | `@spyglass/web` | React 18 + Vite 웹 대시보드 (Zustand · React Router · react-i18next) |
 | `packages/types` | `@spyglass/types` | 공용 도메인 타입 (request/session/turn) |
 | `packages/desktop` | `@spyglass/desktop` | Electron 셸 (main/preload) |
-
-`packages/web/` 은 `package.json` 이 없는 정적 자산 디렉터리(Vanilla JS 웹 대시보드)로, 워크스페이스 패키지가 아닙니다. 서버가 정적 파일로 직접 서빙합니다.
 
 각 워크스페이스 패키지는 `"@spyglass/<name>": "workspace:*"` 프로토콜로 서로를 참조합니다.
 
@@ -211,6 +212,7 @@ graph LR
 | `backfill:system-prompts` | 과거 세션 system_prompt 백필 |
 | `backfill:subagent-parents` | 서브에이전트 parent tool_use_id 백필 |
 | `rebuild-stats`, `rebuild-stats-proxy` | 집계 테이블 재계산 |
+| `web:dev` / `web:build` | Vite 웹 개발 서버 / production 빌드 |
 | `desktop:dev` / `desktop:build:mac` / `desktop:pack:mac` | Electron 데스크톱 셸 개발·빌드·패키징 |
 
 ---
@@ -435,7 +437,7 @@ DB 스키마·쿼리·집계·훅 데이터 흐름 변경은 모두 **`data-anal
 - 토큰 위치
   - Web: `packages/web/assets/css/` (`--color-*`, `--space-*`)
   - TUI: `packages/tui/src/design-tokens.ts`
-- 웹 화면 카탈로그(`packages/web/screen-inventory.md`)는 화면 추가·변경 시 현행화합니다.
+
 
 ### 8.3 TUI 작업 시 주의
 
@@ -636,7 +638,7 @@ PR 을 열기 전에 항목을 확인하세요. **아래 코드 블록을 그대
 
 - [ ] 기존 렌더링 함수 재사용, 직접 HTML 작성 없음
 - [ ] 하드코딩 색상 없이 디자인 토큰만 사용
-- [ ] (Web) `packages/web/screen-inventory.md` 현행화
+
 
 **문서**
 
@@ -677,7 +679,7 @@ PR 을 열기 전에 항목을 확인하세요. **아래 코드 블록을 그대
 **UI / UX (해당 시)**
 - [ ] 기존 렌더링 함수 재사용, 직접 HTML 작성 없음
 - [ ] 하드코딩 색상 없이 디자인 토큰만 사용
-- [ ] (Web) `packages/web/screen-inventory.md` 현행화
+
 
 **문서**
 - [ ] `docs/architecture/architecture.md` 영향 영역이 정확함

@@ -3,7 +3,7 @@
 ## Claude Code 실행을 들여다보는 로컬 망원경
 
 ![Build](https://img.shields.io/badge/build-passing-brightgreen)
-![Version](https://img.shields.io/badge/version-3.0.7-blue)
+![Version](https://img.shields.io/badge/version-4.2.1-blue)
 ![Runtime](https://img.shields.io/badge/bun-%E2%89%A51.2.0-f472b6)
 ![Storage](https://img.shields.io/badge/storage-SQLite-003b57)
 ![Privacy](https://img.shields.io/badge/data-local--only-success)
@@ -153,18 +153,20 @@ claude-spyglass/
 │   │   │   ├── runtime/         # daemon · dispatch · config
 │   │   │   ├── routes/, api.ts, sse.ts, events.ts
 │   │   │   ├── proxy/, hook/    # /v1/* 프록시 · hook 수집·정제
-│   │   │   ├── meta-docs/       # 룰·스킬·에이전트 카탈로그 스캔
-│   │   │   └── metrics/, metrics.ts, domain/, settings/
+│   │   │   ├── domain/, settings/
+│   │   │   └── metrics.ts       # @spyglass/metrics 위임 shim
 │   │   └── scripts/         # backfill-system-prompts.ts · backfill-subagent-parents.ts
 │   ├── storage/             # SQLite 스토리지 — connection · migrator · queries
-│   │   ├── migrations/          # 001-init.sql … 053-kuzu-outbox-trigger-hardening.sql
+│   │   ├── migrations/          # 001-init.sql … 056-payload-encryption.sql (041~046·054 결번)
 │   │   └── src/
 │   │       ├── queries/         # request/ · session/ · metrics/ · stats/ · flow/
 │   │       ├── runtime/         # retention · maintenance
 │   │       └── scripts/         # rebuild-stats.ts · rebuild-stats-proxy.ts · bench-*.ts
 │   ├── storage-graph/       # Ladybug 그래프 — client · queries(unified-flow/retention) · sync
+│   ├── metrics/             # 관찰성 메트릭 — router + calculators (anomaly/burn-rate/cache-trend/proxy-trend)
+│   ├── meta-docs/           # Behavior Definitions 스캐너 + 리졸버 + 동기화
 │   ├── tui/                 # Ink 기반 TUI (React) — screens/, components/, stores/
-│   ├── web/                 # 정적 웹 대시보드 — index.html + assets/{css,js} + locales/
+│   ├── web/                 # React 18 + Vite 웹 대시보드 — src/{app,features,components}/
 │   ├── desktop/             # Electron 래퍼 — main/preload
 │   └── types/               # 워크스페이스 공유 타입 (request/session/turn)
 ├── hooks/spyglass-collect.sh  # Claude Code 훅 진입점 (POST /collect, raw → /events)
@@ -231,6 +233,13 @@ bun run rebuild-stats              # requests 기반 stats_hourly 재집계
 bun run rebuild-stats-proxy        # proxy_requests 기반 stats_proxy_hourly 재집계
 bun run backfill:system-prompts    # 과거 proxy_requests에 시스템 프롬프트 해시 백필
 bun run backfill:subagent-parents  # 서브에이전트 parent_tool_use_id 백필
+```
+
+### 웹 (Vite)
+
+```bash
+bun run web:dev     # Vite dev server (5173, /api → 9999 프록시)
+bun run web:build   # production dist/ 빌드
 ```
 
 ### Git 훅
@@ -310,7 +319,7 @@ flowchart LR
     [system-prompts](./schema/system-prompts.md) ·
     [meta-documents](./schema/meta-documents.md) ·
     [model-limits](./schema/model-limits.md)
-- [마이그레이션](./migrations.md) — `001` … `053` 스키마 마이그레이션 카탈로그와 적용 규칙
+- [마이그레이션](./migrations.md) — `001` … `056` 스키마 마이그레이션 카탈로그와 적용 규칙
 
 ### 인터페이스·통합
 

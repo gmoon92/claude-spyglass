@@ -26,7 +26,7 @@ claude-spyglass의 영속 저장소(SQLite) 아키텍처, 마이그레이션, �
 - 코드 SSoT: [`packages/storage`](../../packages/storage)
 - 스키마 정의: [`packages/storage/src/schema.ts`](../../packages/storage/src/schema.ts)
 - 마이그레이션 디렉토리: [`packages/storage/migrations/`](../../packages/storage/migrations)
-- 현재 적용 마이그레이션 파일은 `053`까지 존재합니다. 파일명 NNN이 `PRAGMA user_version`과 1:1 매핑됩니다 (`migrator.ts`가 `PRAGMA user_version = N`을 트랜잭션 안에서 갱신). `schema.ts`의 `SCHEMA_VERSION = 23` 상수는 마이그레이션 적용을 제어하지 않는 정적 문서화 값이며 실제 버전과 무관합니다.
+- 현재 적용 마이그레이션 파일은 `001`~`056`까지 존재합니다(`041`~`046`·`054`는 결번 — 비연속이지만 migrator는 무해). 파일명 NNN이 `PRAGMA user_version`과 1:1 매핑됩니다 (`migrator.ts`가 `PRAGMA user_version = N`을 트랜잭션 안에서 갱신). `schema.ts`의 `SCHEMA_VERSION = 23` 상수는 **문서화/스키마 마커**로, 마이그레이션 적용을 제어하지 않으며 실제 `PRAGMA user_version`과 무관합니다.
 
 ### 연관 문서
 
@@ -49,6 +49,7 @@ claude-spyglass의 영속 저장소(SQLite) 아키텍처, 마이그레이션, �
 | 파일 권한 | DB 파일 `0600`, 디렉토리 `0700` | `applyFilePermissions()` |
 | WAL autocheckpoint | 200 페이지 (~800KB) | `PRAGMA wal_autocheckpoint = 200` |
 | 활성 테이블 수 | 15개 — `sessions`, `requests`, `claude_events`, `proxy_requests`, `proxy_tool_uses`, `system_prompts`, `meta_documents`, `meta_doc_resolutions`, `model_limits`, `metadata`, `stats_hourly`, `stats_proxy_hourly`, `anomaly_thresholds`, `kuzu_outbox`, `_migrations` | + 뷰 `correlated_requests`, `v_meta_doc_usage`, `v_flow_active_rows` |
+| 최신 마이그레이션 | `056-payload-encryption.sql` | `PRAGMA user_version = 56` |
 
 ### 왜 SQLite인가
 
@@ -157,7 +158,7 @@ PRAGMA wal_autocheckpoint = 200;        -- ~800KB마다 자동 checkpoint
 
 ### 3.4 마이그레이션 이력 요약
 
-마이그레이션 파일은 `001`~`053`까지 존재합니다 (`041`~`046` 번호는 사용되지 않음 — 비연속이지만 migrator는 `version > currentVersion` 파일만 적용하므로 결번은 무해). 다음 4단계로 묶어 정리합니다.
+마이그레이션 파일은 `001`~`056`까지 존재합니다 (`041`~`046`·`054` 번호는 사용되지 않음 — 비연속이지만 migrator는 `version > currentVersion` 파일만 적용하므로 결번은 무해). 다음 4단계로 묶어 정리합니다.
 
 <details>
 <summary><b>초기 (v001 ~ v010) — 기본 스키마 + 토큰·이벤트 도입</b></summary>
@@ -219,7 +220,7 @@ PRAGMA wal_autocheckpoint = 200;        -- ~800KB마다 자동 checkpoint
 </details>
 
 <details open>
-<summary><b>최근 (v036 ~ v053) — flow 호출그래프·read 성능·그래프 sync outbox</b></summary>
+<summary><b>최근 (v036 ~ v056) — flow 호출그래프·read 성능·그래프 sync outbox·at-rest 암호화</b></summary>
 
 | 버전 | 핵심 변경 |
 |------|-----------|
@@ -235,10 +236,14 @@ PRAGMA wal_autocheckpoint = 200;        -- ~800KB마다 자동 checkpoint
 | 051 | `trg_requests_pre_to_tool_outbox` AFTER UPDATE 트리거 — `event_type` `pre_tool` → `tool` 전환 시 op='update' 발행 |
 | 052 | 서브에이전트 자식 `parent_tool_use_id` 자동 백필 (TEMP TABLE 경유) + 복원 행을 `kuzu_outbox` op='update'로 재발행 |
 | 053 | `kuzu_outbox` 트리거 3종 하드닝 — `INSERT OR IGNORE` + `WHEN NEW.id IS NOT NULL` 가드로 outbox 쓰기가 메인 write를 롤백하지 못하게 격리 |
+| 055 | `kuzu_outbox` DLQ 컬럼 — `dead`/`attempts`/`last_error` + `idx_kuzu_outbox_live` 부분 인덱스. sync worker가 반복 실패 row를 격리해 Head-of-Line 블로킹 방지 |
+| 056 | at-rest 컬럼 암호화 algo 마커 — `claude_events.payload_algo`, `system_prompts.content_algo` 추가. `requests.payload_algo`의 죽은 DEFAULT 'zstd'를 NULL로 정리(평문 마커) |
 
 </details>
 
 > `038`/`052`는 둘 다 서브에이전트 `parent_tool_use_id` 백필이지만 매칭 휴리스틱과 적용 범위가 다릅니다 (`038`=같은 turn, `052`=같은 session + 그래프 재동기).
+>
+> `041`~`046`·`054`는 결번(미사용)입니다. migrator의 `version > currentVersion` 방식상 동작에 영향이 없습니다.
 
 ---
 
@@ -322,6 +327,9 @@ erDiagram
         TEXT event_id
         TEXT op
         INTEGER ts
+        INTEGER attempts
+        TEXT last_error
+        INTEGER dead
     }
 
     sessions ||--o{ requests : "FK CASCADE (DB 강제)"
@@ -426,7 +434,7 @@ erDiagram
 
 훅에서 들어온 raw 페이로드 보관 — `sessions`/`requests`로 정규화되지 않는 이벤트(SessionStart, Stop, Notification 등)와 분석·디버깅용 전체 페이로드.
 
-주요 컬럼: `id` PK AUTOINCREMENT, `event_id` UNIQUE (idempotency), `event_type`, `session_id`, `timestamp`, `payload` (JSON TEXT), `schema_version`, `transcript_path`, `cwd`, `agent_id`, `agent_type`, 그리고 정규화 컬럼 `permission_mode`, `source`, `end_reason`, `model`, `stop_hook_active`, `task_id`, `task_subject`, `notification_type`.
+주요 컬럼: `id` PK AUTOINCREMENT, `event_id` UNIQUE (idempotency), `event_type`, `session_id`, `timestamp`, `payload` (JSON TEXT), `schema_version`, `transcript_path`, `cwd`, `agent_id`, `agent_type`, 그리고 정규화 컬럼 `permission_mode`, `source`, `end_reason`, `model`, `stop_hook_active`, `task_id`, `task_subject`, `notification_type`, `payload_algo`.
 
 인덱스: `idx_events_session_time` `(session_id, timestamp)`, `idx_events_type_time` `(event_type, timestamp)`.
 
@@ -448,7 +456,11 @@ HTTP 프록시 레이어가 캡처한 Anthropic API 호출 메트릭. hook 데�
 
 **주요 인덱스**: `idx_proxy_requests_timestamp` (DESC), `idx_proxy_requests_model` (NOT NULL), `idx_proxy_requests_session_id` (NOT NULL), `idx_proxy_requests_system_hash`, `idx_proxy_requests_anthropic_req_id` (NOT NULL).
 
-**`proxy_tool_uses`**: `tool_use_id` PK + `api_request_id` (NOT NULL, indexed) + `tool_name`, `block_index`, `created_at`. proxy SSE 응답의 `content_block_start.tool_use`를 PostToolUse 훅과 1:1 매핑. `INSERT OR IGNORE`로 멱등.
+**`proxy_tool_uses`**:
+- `tool_use_id` TEXT PK — Anthropic 발급 tool_use ID
+- `api_request_id` TEXT NOT NULL — 발행 응답 ID (역참조 인덱스)
+- `tool_name` TEXT, `block_index` INTEGER, `created_at` INTEGER
+- proxy SSE 응답의 `content_block_start.tool_use`를 PostToolUse 훅과 1:1 매핑. `INSERT OR IGNORE`로 멱등.
 
 proxy commit 트랜잭션 마지막에 `backfillRequestApiRequestIdByToolUse()`가 호출되어, hook PostToolUse와의 race로 발생한 `requests.api_request_id` NULL을 즉시 보정합니다.
 
@@ -458,10 +470,11 @@ proxy commit 트랜잭션 마지막에 `backfillRequestApiRequestIdByToolUse()`�
 
 매 LLM 요청에 함께 전송되는 `body.system`을 hash 기반 dedup 저장.
 
-- `hash` PK (SHA-256 hex 64자, content-addressable), `content` (정규화 본문, billing-header `idx[0]` 제외), `byte_size`, `segment_count`, `first_seen_at`, `last_seen_at`, `ref_count`
-- UPSERT 정책: 동일 hash 재등장 시 `last_seen_at` 갱신 + `ref_count + 1`, `content`/`first_seen_at` 불변
+- `hash` PK (SHA-256 hex 64자, content-addressable), `content` (정규화 본문, billing-header `idx[0]` 제외), `byte_size`, `segment_count`, `first_seen_at`, `last_seen_at`, `ref_count`, `content_algo`
+- UPSERT 정책: 동일 hash 재등장 시 `last_seen_at` 갱신 + `ref_count + 1`, `content`/`first_seen_at`/`content_algo` 불변
 - 정규화 로직: [`packages/server/src/proxy/system-hash.ts: normalizeSystem()`](../../packages/server/src/proxy/system-hash.ts)
 - 인덱스: `idx_system_prompts_last_seen` (DESC), `idx_system_prompts_ref_count` (DESC)
+- R3: `content_algo`는 at-rest 암호화 마커. `NULL`=평문, `'aes256gcm'`=암호문(base64-in-TEXT). `hash`는 평문 기준 SHA-256으로 유지(dedup PK).
 
 **`system_reminder` ⊥ `system_hash` (ADR-007)**: 전자는 user 메시지 내 `<system-reminder>` 블록, 후자는 `body.system` 본문 참조. 두 채널은 데이터를 공유하지 않으며 절대 섞지 말 것.
 
@@ -575,6 +588,9 @@ SQLite(SSoT) → Ladybug 그래프 DB projection 의 증분 동기화 채널.
 - `event_id` TEXT NOT NULL — 소스 테이블 PK (`requests.id`·`sessions.id` 모두 TEXT PK이므로 TEXT 저장)
 - `op` TEXT CHECK `('insert','update','delete')` — 현재 insert/update 사용
 - `ts` INTEGER DEFAULT (epoch ms)
+- `attempts` INTEGER NOT NULL DEFAULT 0 — merge 실패 누적 횟수 (055)
+- `last_error` TEXT — 마지막 실패 메시지(진단용, 055)
+- `dead` INTEGER NOT NULL DEFAULT 0 — 1=DLQ 격리(영구 skip), 0=정상/재시도 대기 (055)
 
 **트리거** (모두 `INSERT OR IGNORE` + `WHEN NEW.id IS NOT NULL` 가드로 outbox 쓰기가 메인 write 를 롤백하지 못하게 격리):
 
@@ -582,7 +598,7 @@ SQLite(SSoT) → Ladybug 그래프 DB projection 의 증분 동기화 채널.
 - `trg_sessions_to_kuzu_outbox` — `sessions` AFTER INSERT → op='insert'
 - `trg_requests_pre_to_tool_outbox` — `requests` AFTER UPDATE OF `event_type` WHEN `pre_tool→tool` → op='update'
 
-**소비자**: `packages/storage-graph`의 sync worker 가 200ms tick 으로 `id > cursor ORDER BY id LIMIT 500` 폴링 → enrich → Ladybug 에 idempotent MERGE → cursor advance. 인덱스: `idx_kuzu_outbox_id` (cursor 폴링), `idx_kuzu_outbox_source_event` `(source, event_id)` (백필 NOT EXISTS).
+**소비자**: `packages/storage-graph`의 sync worker 가 200ms tick 으로 `id > cursor AND dead = 0 ORDER BY id LIMIT 500` 폴링 → enrich → Ladybug 에 idempotent MERGE → cursor advance. 인덱스: `idx_kuzu_outbox_id` (cursor 폴링), `idx_kuzu_outbox_source_event` `(source, event_id)` (백필 NOT EXISTS), `idx_kuzu_outbox_live` `(id) WHERE dead = 0` (055 DLQ 부분 인덱스).
 
 **retention**: `deleteOldData()`는 `kuzu_outbox`를 정리하지 않습니다 (그래프 retention 은 storage-graph 의 `deleteOldGraphData()`가 별도 담당).
 
@@ -696,23 +712,51 @@ ORDER BY duration_ms ASC
 
 ---
 
-## 8. 데이터 보존 정책
+## 8. At-Rest 암호화 (R3)
+
+민감 본문 컬럼(`payload`, `content`)의 디스크 저장 직전 인증 암호화 — **옵트인**(`SPYGLASS_ENCRYPTION` env).
+
+### 8.1 설계
+
+- **알고리즘**: AES-256-GCM. 프레이밍: `[version(1) | nonce(12) | tag(16) | ciphertext]`.
+- **키 관리**: env `SPYGLASS_ENCRYPTION_KEY`(base64 32B) > 키파일 `~/.spyglass/encryption.key`(0600) > 최초 자동 생성. KDF 없음(고엔트로피 랜덤 32B).
+- **옵트인**: `SPYGLASS_ENCRYPTION ∈ {1,true,yes,on}` 시 쓰기 암호화 활성. OFF면 평문(algo NULL) 그대로.
+- **읽기 호환**: 키 자료가 있으면 옵트인 플래그와 무관하게 복호 시도 — 암호화 끈 뒤에도 기존 암호문 행 읽기가 깨지지 않음.
+
+### 8.2 적용 대상
+
+| 테이블·컬럼 | 타입 | algo 컬럼 | 평문 마커 | 암호문 마커 | 비고 |
+|-----------|------|-----------|-----------|------------|------|
+| `requests.payload` | TEXT | `payload_algo` | `NULL` | `'aes256gcm'` | v21에 BLOB 추가 시도가 중복명으로 silent-skip되어 실제로는 TEXT. 056에서 죽은 DEFAULT `'zstd'`를 NULL 정리 |
+| `claude_events.payload` | TEXT | `payload_algo` | `NULL` | `'aes256gcm'` | 056에서 `payload_algo` 추가 |
+| `system_prompts.content` | TEXT | `content_algo` | `NULL` | `'aes256gcm'` | 056에서 `content_algo` 추가. `hash`는 평문 기준 SHA-256 유지(dedup PK) |
+| `proxy_requests.payload` | BLOB | `payload_algo` | `'zstd'` | `'zstd+aes256gcm'` | v21부터 zstd 압축. 암호화 시 `encrypt(zstd(raw))` |
+
+### 8.3 코드 SSoT
+
+- 암호화/복호화: [`packages/storage/src/crypto.ts`](../../packages/storage/src/crypto.ts) — `encryptBytes`/`decryptBytes`, `resolveEncryptionKey`
+- 인코딩 분기(codec): [`packages/storage/src/payload-codec.ts`](../../packages/storage/src/payload-codec.ts) — `encodeText`/`decodeText`(TEXT 컬럼), `encodeBlob`/`decodeBlob`(BLOB 컬럼)
+- 런타임 키: [`packages/storage/src/runtime/encryption.ts`](../../packages/storage/src/runtime/encryption.ts) — `getActiveKey()`, `shouldEncrypt()`
+
+---
+
+## 9. 데이터 보존 정책
 
 raw 수집 테이블은 cutoff 기준으로 정리하고, 카탈로그·dedup 테이블은 참조 무결성을 지키며 보존합니다.
 
-### 8.1 세션 retention
+### 9.1 세션 retention
 
 - 기본 보존 기간은 서버 설정으로 관리. `deleteOldData(db, beforeTimestamp)`가 주기적으로 호출됨.
 - `metadata` 테이블의 `last_cleanup_at` 키로 마지막 cleanup 시각 추적.
 - 활성 세션은 자식 행이 cutoff 이후에 있으면 sessions row 자체는 보존 (과거 requests만 정리).
 
-### 8.2 dedup 카탈로그 보존
+### 9.2 dedup 카탈로그 보존
 
 - `system_prompts`: `proxy_requests`가 참조하지 않는 row만 cutoff 시 삭제. 정책상 `system_prompts` 행은 절대 임의 삭제하지 않음.
 - `meta_documents`: soft-delete (`deleted_at`). 디스크에서 파일이 사라진 정의는 row 유지하되 `deleted_at` 기록. 파일 복원 시 자동으로 활성화됨 (`deleted_at = NULL`).
 - `model_limits`: 영구. 신규 모델은 마이그레이션이나 직접 INSERT로 추가.
 
-### 8.3 라이브 세션 판정
+### 9.3 라이브 세션 판정
 
 [`queries/session/_shared.ts`](../../packages/storage/src/queries/session/_shared.ts):
 
@@ -727,11 +771,11 @@ export const LIVE_STALE_THRESHOLD_MS = 30 * 60 * 1000; // 30분
 
 ---
 
-## 9. 유지보수
+## 10. 유지보수
 
-운영 중 자주 쓰이는 재집계·VACUUM·무결성 검증 명령을 모았습니다. 사전 집계와 raw 테이블 사이에 드리프트가 의심되면 § 9.3의 drift 쿼리부터 확인하세요.
+운영 중 자주 쓰이는 재집계·VACUUM·무결성 검증 명령을 모았습니다. 사전 집계와 raw 테이블 사이에 드리프트가 의심되면 § 10.3의 drift 쿼리부터 확인하세요.
 
-### 9.1 사전 집계 재구성
+### 10.1 사전 집계 재구성
 
 ```bash
 # stats_hourly 전체 재집계 (산식 변경 후, 대량 정정 후)
@@ -749,7 +793,7 @@ bun run rebuild-stats-proxy --since=1735603200
 
 내부적으로 [`queries/stats/build-aggregate.ts`](../../packages/storage/src/queries/stats/build-aggregate.ts)의 `STATS_HOURLY_AGGREGATE_SELECT`를 사용. 백필 SQL과 트리거가 동일 산식을 공유하도록 SSoT 통합.
 
-### 9.2 VACUUM / 최적화 / 백업
+### 10.2 VACUUM / 최적화 / 백업
 
 ```bash
 sqlite3 ~/.spyglass/spyglass.db "PRAGMA wal_checkpoint(TRUNCATE);"   # WAL → main 머지
@@ -762,7 +806,7 @@ sqlite3 ~/.spyglass/spyglass.db ".backup /backup/spyglass-$(date +%Y%m%d).db"
 
 WAL 모드에서 단순 `cp`는 위험합니다 — `-wal`/`-shm` 파일을 함께 복사하거나 위처럼 `.backup` API를 사용해야 합니다.
 
-### 9.3 검증·디버깅 쿼리
+### 10.3 검증·디버깅 쿼리
 
 ```sql
 PRAGMA user_version;            -- 마이그레이션 버전
@@ -783,7 +827,7 @@ drift ≠ 0이면 `rebuild-stats` 실행.
 
 ---
 
-## 10. 가격 관리 (`pricing.ts`)
+## 11. 가격 관리 (`pricing.ts`)
 
 토큰 단가는 DB 컬럼이 아니라 외부 설정 파일과 런타임 캐시로 관리합니다. 비용은 저장하지 않고 위젯에서 계산합니다.
 
@@ -800,7 +844,7 @@ DB의 `proxy_requests.cost_usd`는 신뢰도 문제로 NULL 유지. 비용이 �
 
 ---
 
-## 11. 외부 API와의 매핑
+## 12. 외부 API와의 매핑
 
 훅(hook) 이벤트와 프록시 캡처가 어떤 엔드포인트를 거쳐 어느 테이블에 기록되는지 1:1로 보여줍니다.
 
@@ -849,4 +893,5 @@ DB의 `proxy_requests.cost_usd`는 신뢰도 문제로 NULL 유지. 비용이 �
 - 신규 마이그레이션 추가 시 본 문서의 § 3.4 표에 한 줄 추가
 - 테이블 컬럼 추가/변경 시 해당 `docs/schema/<table>.md` 갱신
 - 산식 변경(특히 `stats_hourly` / `stats_proxy_hourly`) 시 `aggregate-*.ts`와 `build-aggregate.ts`, 마이그레이션, 본 문서 § 5.9 / § 5.10 / § 7을 동시 갱신
+- at-rest 암호화 관련 컬럼/알고리즘 변경 시 `crypto.ts`, `payload-codec.ts`, `runtime/encryption.ts`, 본 문서 § 8을 동시 갱신
 - 모든 메타 문서 작성은 [`CLAUDE.md`](../../CLAUDE.md)의 doc-spec 스킬 규칙을 따름

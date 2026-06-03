@@ -13,7 +13,7 @@ flowchart LR
   B --> C["③ 저장\n/collect /events\nINSERT/UPDATE SQLite"]
   C --> D["④ 집계\nrequests AFTER INSERT/UPDATE 트리거(028)\n→ stats_hourly upsert"]
   D --> E["⑤ 전달\nSSE / REST API\nnew_request\nnew_proxy_request\nsession_update"]
-  E --> F["웹 대시보드\nEventSource\nprependReq…"]
+  E --> F["웹 대시보드\nReact 18 + Zustand sse-store\nEventSource → feed/chart 갱신"]
   E --> G["TUI (Ink CLI)\neventsource\nfeedStore"]
 ```
 

@@ -1,6 +1,6 @@
 # claude-spyglass 아키텍처
 
-**Version**: 3.0.7 | **Last Updated**: 2026-05-29
+**Version**: 4.2.1 | **Last Updated**: 2026-06-03
 
 > Claude Code 실행 모니터링 도구의 시스템 설계 문서.
 > 본 문서는 코드 동작과 직접 매핑된다. 파일 경로(`packages/.../foo.ts:42`)는 모두 실제 위치이며, 기능을 추가·수정할 때 참고해야 할 진입점을 알려준다.
@@ -22,11 +22,11 @@
 |---|------|------------|
 | 1 | 개요 | 목적, 한 줄 요약, 핵심 가치, 기능 분포 |
 | 2 | 시스템 다이어그램 | 데이터 흐름, HTTP 디스패처, 부팅 라이프사이클 |
-| 3 | 모노레포 구조 | 7개 패키지 의존 그래프와 책임 |
+| 3 | 모노레포 구조 | 9개 패키지 의존 그래프와 책임 |
 | 4 | `packages/server` | HTTP·SSE·Hook·Proxy·Metrics·Meta-docs·Graph·Settings |
 | 5 | `packages/storage` | SQLite 스키마와 마이그레이션 |
 | 6 | `packages/tui` | Ink 기반 터미널 UI |
-| 7 | `packages/web` | Vanilla JS 웹 대시보드 |
+| 7 | `packages/web` | React 18 + Vite 웹 대시보드 |
 | 8 | `packages/types` | 공통 타입 contract |
 | 9 | 통신 인터페이스 | HTTP API·SSE 페이로드 contract |
 | 10 | 설계 원칙 | SRP, Strategy, SSoT, 캡슐화 |
@@ -246,7 +246,7 @@ flowchart TD
 
 > **TL;DR** — types(타입만) → storage(DB) → storage-graph(그래프)/server(HTTP)/web → tui 순으로 의존이 한 방향으로만 흐른다. types는 누구에게도 의존하지 않고, tui가 가장 위에 있다.
 
-bun workspaces 기반 모노레포. 루트 `package.json`의 `"workspaces": ["packages/*"]` 한 줄로 일곱 워크스페이스가 자동 연결된다.
+bun workspaces 기반 모노레포. 루트 `package.json`의 `"workspaces": ["packages/*"]` 한 줄로 아홉 워크스페이스가 자동 연결된다.
 
 ```
 claude-spyglass/
@@ -262,9 +262,11 @@ claude-spyglass/
 │   ├── types/                          — 공통 타입 정의 (런타임 0줄)
 │   ├── storage/                        — SQLite 스키마 + 쿼리 + 마이그레이션
 │   ├── storage-graph/                  — Ladybug 그래프 DB client + outbox sync worker + flow 쿼리
-│   ├── server/                         — Bun HTTP 서버 (API + SSE + Hook + Proxy + Metrics + Graph + Settings)
+│   ├── metrics/                        — 관찰성 메트릭 라우터 + 계산기 (anomaly/burn-rate/cache-trend/proxy-trend)
+│   ├── meta-docs/                      — Behavior Definitions 스캐너 + 리졸버 + 동기화
+│   ├── server/                         — Bun HTTP 서버 (API + SSE + Hook + Proxy + Graph + Settings)
 │   ├── tui/                            — Ink/React 기반 터미널 UI
-│   ├── web/                            — Vanilla JS 웹 대시보드
+│   ├── web/                            — React 18 + Vite 웹 대시보드
 │   └── desktop/                        — Electron 데스크톱 래퍼 (main/preload)
 └── docs/                               — 운영/스키마/아키텍처 문서
 ```
@@ -276,20 +278,28 @@ flowchart TD
     TYPES["@spyglass/types\n모든 패키지가 import. 변경 이유 단일성(SRP)."]
     STORAGE["@spyglass/storage\n(SQLite SSoT)"]
     GRAPH["@spyglass/storage-graph\n(Ladybug 그래프)"]
+    METRICS["@spyglass/metrics\n(관찰성 메트릭)"]
+    METADOCS["@spyglass/meta-docs\n(Behavior Definitions)"]
     SERVER["@spyglass/server\n(HTTP/SSE/Graph/Settings)"]
-    WEB["packages/web\n(JSDoc only)"]
+    WEB["packages/web\n(React 18 SPA)"]
     TUI["@spyglass/tui\n(Ink + React)"]
     DESKTOP["packages/desktop\n(Electron 래퍼)"]
 
     TYPES -->|"import (type-only)"| STORAGE
     TYPES -->|"import (type-only)"| GRAPH
+    TYPES -->|"import (type-only)"| METRICS
+    TYPES -->|"import (type-only)"| METADOCS
     TYPES -->|"import (type-only)"| SERVER
     TYPES -->|"import (type-only)"| WEB
     TYPES -->|"import (type-only)"| TUI
     STORAGE -->|"import workspace"| GRAPH
+    STORAGE -->|"import workspace"| METRICS
+    STORAGE -->|"import workspace"| METADOCS
     STORAGE -->|"import workspace"| SERVER
-    GRAPH -->|"import workspace"| SERVER
     STORAGE -->|"import workspace"| TUI
+    GRAPH -->|"import workspace"| SERVER
+    METRICS -->|"import workspace"| SERVER
+    METADOCS -->|"import workspace"| SERVER
     SERVER -->|"import workspace"| TUI
     SERVER -.->|"런타임 spawn"| DESKTOP
 ```
@@ -303,9 +313,11 @@ flowchart TD
 | `@spyglass/types` | 서버/TUI/웹이 공유하는 TS 타입 contract. **런타임 0줄.** | TS 선언만 | `src/{request,session,turn,i18n}.ts` |
 | `@spyglass/storage` | SQLite 연결, 스키마, 마이그레이션, 모든 SQL 쿼리, retention SSoT. | Bun/Node | `src/{connection,schema,migrator,queries/*,runtime/retention}` |
 | `@spyglass/storage-graph` | Ladybug 그래프 client, outbox sync worker, unified-flow 쿼리, 회로 차단기, 그래프 retention. | Bun + Ladybug | `src/{client,queries/*,sync/*,runtime/*,schema/*}` |
-| `@spyglass/server` | HTTP 서버 + SSE + Hook 수집 + Proxy + Metrics + Meta-docs + Graph + Settings. | Bun | `src/{api,sse,hook,proxy,metrics,meta-docs,routes,runtime,settings}` |
+| `@spyglass/metrics` | 관찰성 메트릭 라우터 + 계산기. 11개 `/api/metrics/*` 엔드포인트 + anomaly/burn-rate/cache-trend/proxy-trend. | Bun | `src/{router.ts,calculators/*,tool-category.ts}` |
+| `@spyglass/meta-docs` | Behavior Definitions 스캐너, 리졸버, 동기화. `.claude/{agents,skills,commands}` 및 `CLAUDE.md` 스캔. | Bun/Node | `src/{scanner.ts,resolver.ts,synchronizer.ts,known-cwds.ts}` |
+| `@spyglass/server` | HTTP 서버 + SSE + Hook 수집 + Proxy + Graph + Settings. (Metrics·Meta-docs는 별도 패키지로 추출됨) | Bun | `src/{api,sse,hook,proxy,routes,runtime,settings}` |
 | `@spyglass/tui` | Ink 기반 터미널 UI. SSE 클라이언트, KPI strip, 사이드바, screens. | React 18 + Ink 5 | `src/{app.tsx,components,screens,hooks,stores}` |
-| `packages/web` | Vanilla JS 대시보드. `index.html` + ES modules + CSS 모듈. **`package.json` 없음 — npm workspace 패키지가 아니라 서버가 정적 서빙하는 자산 디렉토리.** | 브라우저 | `index.html`, `assets/{js,css}` |
+| `packages/web` | React 18 + Vite 웹 대시보드. Zustand 상태관리, React Router v6, react-i18next. | 브라우저 | `src/{main.tsx,app/,features/,components/,schema/}` |
 | `packages/desktop` | 서버를 띄우고 대시보드를 감싸는 Electron 래퍼. | Electron | `main/`, `preload/` |
 
 ---
@@ -322,7 +334,7 @@ packages/server/src/
 ├── api.ts                         — 97줄. routes/* fan-out 디스패처.
 ├── sse.ts                         — 328줄. SSE 연결 관리 + broadcastNewRequest 등.
 ├── events.ts                      — POST /events 핸들러 (SessionStart/Stop 등).
-├── metrics.ts                     — 메트릭 라우터 re-export (얇은 호환 shim).
+├── metrics.ts                     — 메트릭 라우터 re-export (`@spyglass/metrics` 위임 shim).
 ├── model-limits.ts                — model_limits 테이블 캐시.
 ├── anomaly-thresholds.ts          — anomaly_thresholds 테이블 조회·캐시 (project/model별 warn/critical 임계값 SSoT).
 ├── tool-category.ts               — Tool 이름 → category 분류 (search/exec/...)
@@ -362,15 +374,6 @@ packages/server/src/
 │   ├── graph-db-installer.ts      — Ladybug 의존성 감지(detectLadybugInstall) + 설치(installLadybug)
 │   ├── version-probe.ts           — bun/node/sqlite 등 바이너리 버전 진단
 │   └── file-edit-toolkit.ts       — 백업 + diff + atomic 파일 편집 헬퍼
-│
-├── metrics/                       — /api/metrics/* 시계열·이상치 계산 라우터
-│   ├── router.ts                  — 라우터 (11개 라우트)
-│   ├── _shared.ts                 — 시간 윈도우 파서, meta 빌더
-│   └── calculators/               — 시계열·이상치 계산기
-│       ├── burn-rate.ts
-│       ├── cache-trend.ts
-│       ├── proxy-trend.ts
-│       └── anomaly.ts
 │
 ├── hook/                          — /collect 수집 파이프라인 (Strategy 패턴)
 │   ├── index.ts                   — barrel (외부 노출 API만)
@@ -417,13 +420,6 @@ packages/server/src/
 │   ├── log-result.ts              — stdout 디버그 출력
 │   ├── backfill.ts                — hook 측 model NULL 채움 (api_request_id 매칭)
 │   └── types.ts                   — RequestMeta, StreamState, AnthropicUsage
-│
-├── meta-docs/                     — Behavior Definitions 카탈로그
-│   ├── index.ts                   — barrel
-│   ├── scanner.ts                 — 파일 시스템 스캔 (CLAUDE.md/SKILL.md/agents.md)
-│   ├── resolver.ts                — cwd → project chain 해석 (`.claude/` 계층)
-│   ├── synchronizer.ts            — DB upsert + missing 처리
-│   └── known-cwds.ts              — 알려진 cwd 발견 (sessions 테이블 스캔)
 │
 ├── domain/                        — 도메인 변환 계층
 │   └── request-normalizer.ts      — Request raw → NormalizedRequest (model 폴백·sub_type·trust)
@@ -558,7 +554,9 @@ flowchart TD
 
 ### 4.5 Metrics 라우터 (`/api/metrics/*`)
 
-`packages/server/src/metrics/router.ts`의 11개 라우트(`metricsRouter`):
+> **위치**: `@spyglass/metrics` 패키지. `packages/server/src/metrics.ts`는 위임 shim.
+
+`@spyglass/metrics/src/router.ts`의 11개 라우트(`metricsRouter`):
 
 | 라우트 | 데이터 소스 | 가공 |
 |--------|-------------|------|
@@ -577,6 +575,8 @@ flowchart TD
 공통 쿼리: `?range=24h|7d|30d|all` 또는 `?from=<ms>&to=<ms>`. 가공 알고리즘은 `metrics/calculators/`로 분리되어 단위 테스트가 가능하다.
 
 ### 4.6 Meta-docs (Behavior Definitions)
+
+> **위치**: `@spyglass/meta-docs` 패키지. server의 `routes/meta-docs.ts`는 이 패키지를 호출하는 라우터 핸들러.
 
 Claude Code의 `.claude/agents/`, `.claude/skills/`, `~/.claude/commands/`, `CLAUDE.md` 등 **모델 동작을 정의하는 markdown 파일**을 자동 스캔하여 `meta_documents` 테이블에 카탈로그화한다.
 
@@ -618,6 +618,8 @@ SessionStart 훅이 새 cwd를 감지하면 lazy 재동기화한다.
 | `GET /api/graph/turns/:id/neighbors` | BFS depth hop 이웃 노드 |
 | `GET /api/graph/turns/:id/path` | 경로 placeholder |
 | `GET /api/graph/unified-flow` | 메타 문서 통합 flow (ancestor + center + descendant + turn-after) |
+| `GET /api/graph/dlq` | Dead Letter Queue 목록 (sync 실패 행) |
+| `POST /api/graph/dlq/resurrect` | DLQ 행 재처리 |
 
 `unified-flow`는 `getUnifiedFlow`(`packages/storage-graph/src/queries/unified-flow.ts`)가 4개 Cypher(seed + descendant + ancestor + turn-after) + Kahn 위상정렬 + 시간 layer tone을 산출하고, `enrichUnifiedFlow`(`routes/graph.ts`)가 raw ToolCall을 (kind,name) 카드 단위로 합성한다. 웹 측 단일 렌더 진입점은 `meta-docs-flow.js`의 `loadFlow()`.
 
@@ -664,7 +666,7 @@ SessionStart 훅이 새 cwd를 감지하면 lazy 재동기화한다.
 
 ```
 packages/storage/
-├── migrations/                    — SQL 마이그레이션 (001 ~ 053, 041~046 번호 결번)
+├── migrations/                    — SQL 마이그레이션 (001 ~ 056, 041~046·054 번호 결번)
 │   ├── 001-init.sql                          — sessions, requests 테이블 초기 생성
 │   ├── 002-add-tool-detail.sql               — requests.tool_detail
 │   ├── 003-add-turn-id.sql                   — requests.turn_id (인터리빙 식별)
@@ -711,7 +713,9 @@ packages/storage/
 │   ├── 050-kuzu-outbox-backfill.sql          — 기존 세션/요청 outbox 백필
 │   ├── 051-kuzu-outbox-update-trigger.sql    — pre_tool → tool 전환 AFTER UPDATE 트리거
 │   ├── 052-backfill-subagent-parent-tool-use-id.sql  — parent 백필 + 그래프 재동기
-│   └── 053-kuzu-outbox-trigger-hardening.sql — outbox 트리거 write 경로 격리
+│   ├── 053-kuzu-outbox-trigger-hardening.sql — outbox 트리거 write 경로 격리
+│   ├── 055-kuzu-outbox-dlq.sql               — outbox Dead Letter Queue (dead, attempts, last_error)
+│   └── 056-payload-encryption.sql            — at-rest AES-256-GCM payload/content algo 마커
 │
 └── src/
     ├── index.ts                   — 외부 노출 barrel — 쿼리 함수·타입 re-export.
@@ -1693,16 +1697,18 @@ export { handleHookHttpRequest, ... } from './http-entry';
   "rebuild-stats-proxy":      "bun run packages/storage/src/scripts/rebuild-stats-proxy.ts",
   "backfill:system-prompts":  "bun run packages/server/scripts/backfill-system-prompts.ts",
   "backfill:subagent-parents": "bun run packages/server/scripts/backfill-subagent-parents.ts",
+  "web:dev":     "bun run --cwd packages/web dev",
+  "web:build":   "bun run --cwd packages/web build",
   "desktop:dev":       "bun run --cwd packages/desktop start",
   "desktop:build:mac": "bun run --cwd packages/desktop build:mac",
   "desktop:pack:mac":  "bun run --cwd packages/desktop pack:mac"
 }
 ```
 
-### 12.2 빌드 불필요
+### 12.2 빌드
 
 - TypeScript는 Bun이 직접 실행(`bun run *.ts`).
-- 웹은 ES modules로 정적 서빙(빌드 X).
+- **웹은 Vite 빌드가 필요** (`bun run web:build` → `packages/web/dist/`). 서버는 `dist/`를 정적 서빙.
 - 패키지 의존성은 `workspace:*`로 심볼릭 링크.
 
 ### 12.3 테스트 전략
@@ -1711,8 +1717,11 @@ export { handleHookHttpRequest, ... } from './http-entry';
 |--------|-------------|------|
 | server | `src/__tests__/`, `src/hook/__tests__/`, `src/proxy/__tests__/`, `src/domain/__tests__/` | `bun test` |
 | storage | `src/__tests__/` | `bun test` |
+| storage-graph | `src/__tests__/` | `bun test` |
+| metrics | `src/__tests__/`, `src/calculators/__tests__/` | `bun test` |
+| meta-docs | `src/__tests__/` | `bun test` |
 | tui | `src/__tests__/` | `bun test` + `ink-testing-library` |
-| web | `assets/js/__tests__/` | `bun test` (DOM utility 단위) |
+| web | `src/__tests__/` | `vitest` (Vite 기반) |
 
 ### 12.4 진단
 
@@ -1831,9 +1840,9 @@ export { handleHookHttpRequest, ... } from './http-entry';
 
 ### 14.3 새 메트릭 추가
 1. raw 데이터: `packages/storage/src/queries/metrics/<name>.ts`에 SELECT 함수 작성.
-2. 가공: `packages/server/src/metrics/calculators/<name>.ts`에 pure function 작성.
-3. 노출: `packages/server/src/metrics/router.ts`에 `if (path === '/api/metrics/<name>')` 추가.
-4. 클라이언트: `packages/web/assets/js/metrics-api.js` 추가 + 뷰 컴포넌트.
+2. 가공: `packages/metrics/src/calculators/<name>.ts`에 pure function 작성.
+3. 노출: `packages/metrics/src/router.ts`에 `if (path === '/api/metrics/<name>')` 추가.
+4. 클라이언트: `packages/web/src/features/dashboard/` 또는 해당 feature에 API 호출 + 뷰 컴포넌트 추가.
 
 ### 14.4 새 컬럼 추가
 1. `packages/storage/migrations/<NNN>-<reason>.sql` 작성 (`ALTER TABLE` + 인덱스).
@@ -1841,13 +1850,13 @@ export { handleHookHttpRequest, ... } from './http-entry';
 3. `packages/storage/src/queries/<table>/write.ts`의 INSERT/UPDATE에 컬럼 추가.
 4. `packages/storage/src/queries/<table>/read.ts`의 SELECT/매핑에 컬럼 추가.
 5. (외부 노출이 필요한 경우) `packages/types/src/<entity>.ts`의 인터페이스에 필드 추가.
-6. (UI 표시) `packages/web/assets/js/renderers.js` 또는 `packages/tui/src/components/*` 갱신.
+6. (UI 표시) `packages/web/src/components/design-system/` 또는 `packages/tui/src/components/*` 갱신.
 
 ### 14.5 새 SSE 이벤트 타입 추가
 1. `packages/server/src/sse.ts:SSEEventType`에 union 추가.
 2. `broadcast<EventName>(payload)` 함수 작성 (`broadcastUpdate` 호출).
 3. 클라이언트 listener 추가:
-   - 웹: `packages/web/assets/js/sse.js`
+   - 웹: `packages/web/src/features/sse/index.ts` 및 `app/stores/sse-store.ts`
    - TUI: `packages/tui/src/hooks/useSSE.ts`
 
 ### 14.6 새 TUI 화면 추가
@@ -1877,8 +1886,8 @@ export { handleHookHttpRequest, ... } from './http-entry';
 | Hook 수집 | `packages/server/src/hook/dispatcher.ts:42` |
 | Proxy | `packages/server/src/proxy/handler/index.ts:36` |
 | SSE | `packages/server/src/sse.ts:166` |
-| 메트릭 | `packages/server/src/metrics/router.ts` |
-| Meta-docs | `packages/server/src/meta-docs/synchronizer.ts` |
+| 메트릭 | `packages/metrics/src/router.ts` |
+| Meta-docs | `packages/meta-docs/src/synchronizer.ts` |
 | Graph 라우터 | `packages/server/src/routes/graph.ts:63` (graphRouter) |
 | Settings 라우터 | `packages/server/src/routes/settings.ts:117` (settingsRouter) |
 | 통합 flow 쿼리 | `packages/storage-graph/src/queries/unified-flow.ts` |
@@ -1895,13 +1904,13 @@ export { handleHookHttpRequest, ... } from './http-entry';
 | TUI SSE | `packages/tui/src/hooks/useSSE.ts:32` |
 | TUI 외부 store | `packages/tui/src/stores/feed-store.ts:17` |
 | 웹 HTML | `packages/web/index.html:1` |
-| 웹 진입점 | `packages/web/assets/js/main.js:1` |
-| 웹 핵심 렌더러 | `packages/web/assets/js/renderers.js` |
+| 웹 진입점 | `packages/web/src/main.tsx:1` |
+| 웹 핵심 렌더러 | `packages/web/src/app/renderers.ts` (또는 legacy `assets/js/renderers.js`) |
 | Hook 수집 스크립트 | `hooks/spyglass-collect.sh:1` |
 
 ---
 
 ---
 
-**문서 기준**: `claude-spyglass` 저장소 코드 트리 2026-05 시점 (migrations 001~053, 041~046 결번).
+**문서 기준**: `claude-spyglass` 저장소 코드 트리 2026-06 시점 (migrations 001~056, 041~046·054 결번).
 **갱신 책임**: 변경 PR 작성자. 새 마이그레이션·라우트·SSE 이벤트 추가 시 §9·§11·§14 표를 함께 갱신할 것.
