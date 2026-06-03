@@ -1,5 +1,8 @@
 /**
- * session-detail/turn-rows.js — 활성 턴의 요청 로그 행 빌더 (얇은 위임 모듈).
+ * features/session-detail/turn-rows.ts — 활성 턴 칩/흐름 순수 로직 (React 소비).
+ *
+ * (이전 위치 assets/js/session-detail/turn-rows.ts → src 이동. assets 잔존 소비처 0.
+ *  request-types(assets) 는 정방향(src→assets) import 로 유지.)
  *
  * 책임:
  *  - 활성 턴을 받아 prompt + 도구·응답 인터리빙을 `makeRequestRow`(render/rows.js)에
@@ -26,7 +29,7 @@
  * @see ADR-turn-view-revamp-004: turn-rows.js → makeRequestRow 위임
  */
 
-import { subTypeOf, isAnchorTool } from '../request-types.js';
+import { subTypeOf, isAnchorTool } from '../../../assets/js/request-types.js';
 
 // any 제거(P5-03): 디스플레이 레이어가 실제 접근하는 필드만 명시하고 나머지는 index signature(unknown).
 // src/features/session-detail/TurnRows.tsx 의 RowLike/TurnLike 패턴과 동형(legacy → src 단방향 import 라 재선언).

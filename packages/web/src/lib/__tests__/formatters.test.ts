@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { fmt, formatDuration, fmtToken, fmtRelative, fmtTime, fmtDate, fmtTimestamp, escHtml, shortModelName } from '../formatters.js';
+import { fmt, formatDuration, fmtToken, fmtRelative, fmtTime, fmtDate, fmtTimestamp, escHtml, shortModelName } from '../formatters';
 
 // window.I18n mock — fmtRelative 가 window.I18n.t 를 사용하므로 테스트 환경에서 ko fallback을 주입한다.
 beforeAll(() => {

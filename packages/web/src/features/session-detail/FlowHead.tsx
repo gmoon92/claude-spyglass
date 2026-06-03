@@ -15,7 +15,7 @@
  *
  * @module features/session-detail/FlowHead
  */
-import { fmtToken } from '../../../assets/js/formatters.js';
+import { fmtToken } from '../../lib/formatters';
 import { useTranslation } from 'react-i18next';
 import type { ReactElement, ReactNode } from 'react';
 

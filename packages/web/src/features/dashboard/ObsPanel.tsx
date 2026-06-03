@@ -19,7 +19,7 @@
  * @module features/dashboard/ObsPanel
  */
 import type { ReactElement } from 'react';
-import { fmt, fmtToken, fmtRelative } from '../../../assets/js/formatters.js';
+import { fmt, fmtToken, fmtRelative } from '../../lib/formatters';
 import { Chevron } from '../../components/design-system/icons/Chevron';
 import { SparklineBars, SparklineLine } from './Sparkline';
 import {

@@ -20,7 +20,7 @@ import {
   fmtToken,
   formatDuration,
   fmtTimestamp,
-} from '../../../assets/js/formatters.js';
+} from '../../lib/formatters';
 import { subTypeOf } from '../../../assets/js/request-types.js';
 import { trustOf, rowTrustClass } from './model-classify';
 import {

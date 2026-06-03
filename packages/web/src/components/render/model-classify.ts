@@ -4,7 +4,7 @@
 // 변경 이유: 모델 family/버전 매핑 정책, trust 시각 표지 정책 변경 시 묶여서 손이 가는 묶음.
 // Wave 2: 이중 클래스 패턴 — 기존 CSS 클래스 유지 + ds-chip + data-tone 추가.
 
-import { escHtml } from '../../../assets/js/formatters.js';
+import { escHtml } from '../../lib/formatters';
 
 /**
  * 모델 분류 — ADR-data-trust-visual-001

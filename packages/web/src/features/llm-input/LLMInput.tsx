@@ -23,7 +23,7 @@
  */
 import { useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fmtTime, fmtToken, shortModelName } from '../../../assets/js/formatters.js';
+import { fmtTime, fmtToken, shortModelName } from '../../lib/formatters';
 import { Search } from '../../components/design-system/icons/Search';
 import { Chevron } from '../../components/design-system/icons/Chevron';
 import { Info } from '../../components/design-system/icons/Info';

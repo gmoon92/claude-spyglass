@@ -13,7 +13,7 @@
  * @module render/cells
  */
 import type { ReactElement, ReactNode } from 'react';
-import { fmtToken, shortModelName } from '../../../assets/js/formatters.js';
+import { fmtToken, shortModelName } from '../../lib/formatters';
 import { ToolIcon } from './badges';
 import { ToolStatusBadge } from './tool-status-badge';
 import { AgentSpikeBadge } from './anomaly-badges';

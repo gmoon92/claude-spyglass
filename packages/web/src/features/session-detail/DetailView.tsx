@@ -28,7 +28,7 @@
  */
 import { useMemo, useRef, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fmtToken, fmtDate } from '../../../assets/js/formatters.js';
+import { fmtToken, fmtDate } from '../../lib/formatters';
 import { BloatedSysBadge, ContextSaturationBadge } from '../../components/render/anomaly-badges';
 import { bloatedSysInfo, contextSaturationInfo } from '../../lib/anomaly-field';
 import { SessionLog } from './SessionLog';

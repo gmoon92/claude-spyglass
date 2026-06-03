@@ -17,7 +17,7 @@
  * @module render/SessionRow
  */
 import type { ReactElement } from 'react';
-import { fmtToken, fmtRelative } from '../../../assets/js/formatters.js';
+import { fmtToken, fmtRelative } from '../../lib/formatters';
 import { extractFirstPrompt } from './extract';
 import { BloatedSysBadge } from './anomaly-badges';
 import { getBloatedSysFor } from '../../stores/anomaly-store';

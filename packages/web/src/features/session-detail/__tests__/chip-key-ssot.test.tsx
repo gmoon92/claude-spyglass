@@ -15,7 +15,7 @@ import {
   chipKey,
   chipFromRequest,
   chipKeyForRequest,
-} from '../../../../assets/js/session-detail/turn-rows.js';
+} from '../turn-rows';
 
 beforeAll(() => {
   (globalThis as any).window = (globalThis as any).window ?? {};

@@ -17,7 +17,7 @@
 import { Fragment, type ReactElement } from 'react';
 import { RequestRow } from '../../components/render';
 // chipKey SSoT — 원본 turn-rows.js export 를 그대로 재사용(재구현 금지).
-import { chipKeyForRequest } from '../../../assets/js/session-detail/turn-rows.js';
+import { chipKeyForRequest } from './turn-rows';
 
 interface RowLike {
   id?: string | null;

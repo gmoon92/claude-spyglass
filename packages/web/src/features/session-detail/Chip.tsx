@@ -23,7 +23,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Diamond } from '../../components/design-system/icons';
 import { ToolIcon } from '../../components/render';
-import { chipFromRequest, chipKey } from '../../../assets/js/session-detail/turn-rows.js';
+import { chipFromRequest, chipKey } from './turn-rows';
 import { subTypeOf } from '../../../assets/js/request-types.js';
 
 /** i18n 번역 함수 시그니처(react-i18next t / 레거시 window.I18n.t 공통). */

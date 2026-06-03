@@ -19,7 +19,7 @@
 // 레이어: components leaf(순수). i18n 라벨은 호출처가 tt 로 주입(무전역).
 
 import type { ReactElement } from 'react';
-import { fmt, fmtToken, formatDuration } from '../../assets/js/formatters.js';
+import { fmt, fmtToken, formatDuration } from '../lib/formatters';
 import type { DashboardSummary } from '../schema/api-schema';
 
 /** timeline-meta i18n 라벨러 — window.I18n 키를 계약으로(무전역). 호출처가 tt 로 어댑트. */

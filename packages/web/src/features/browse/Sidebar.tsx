@@ -28,7 +28,7 @@
  */
 import { cloneElement, memo, useEffect } from 'react';
 import type { ReactElement } from 'react';
-import { fmt, fmtToken } from '../../../assets/js/formatters.js';
+import { fmt, fmtToken } from '../../lib/formatters';
 import { SessionRow } from '../../components/render/SessionRow';
 import { Skeleton } from '../../components/Skeleton';
 import { useAnomalyStore } from '../../stores/anomaly-store';

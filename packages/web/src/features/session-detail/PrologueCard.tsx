@@ -15,7 +15,7 @@
  */
 import type { ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fmtTime } from '../../../assets/js/formatters.js';
+import { fmtTime } from '../../lib/formatters';
 import { ContextPreview } from '../../components/render/ContextPreview';
 import { targetInner } from '../../components/render';
 

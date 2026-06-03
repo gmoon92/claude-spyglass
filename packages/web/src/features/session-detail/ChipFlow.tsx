@@ -12,7 +12,7 @@
  */
 import { Fragment, type ReactElement } from 'react';
 import { Chip, ChipArrow, type FlowItem } from './Chip';
-import { compressFlowWithResponses } from '../../../assets/js/session-detail/turn-rows.js';
+import { compressFlowWithResponses } from './turn-rows';
 
 /**
  * 활성 턴의 도구·응답 흐름을 inline chip 시퀀스로 직렬화한다.

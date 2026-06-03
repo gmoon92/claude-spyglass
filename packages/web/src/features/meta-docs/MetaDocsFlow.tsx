@@ -20,7 +20,7 @@
  * @module features/meta-docs/MetaDocsFlow
  */
 import { useEffect, useRef } from 'react';
-import { escHtml } from '../../../assets/js/formatters.js';
+import { escHtml } from '../../lib/formatters';
 import {
   computeFitView,
   animateToView,

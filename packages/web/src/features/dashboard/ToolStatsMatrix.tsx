@@ -14,7 +14,7 @@
  * @module features/dashboard/ToolStatsMatrix
  */
 import type { ReactElement, ReactNode } from 'react';
-import { fmtToken } from '../../../assets/js/formatters.js';
+import { fmtToken } from '../../lib/formatters';
 import { SkeletonRows } from '../../components/Skeleton';
 import { computeMatrixView } from './tool-stats-view';
 import {
