@@ -458,8 +458,9 @@ export function MetaDocsLayout(): ReactElement {
         {/* footer — update-badge(metadocs grid row6, meta-docs.css 가 예약한 마지막 트랙).
             browse 와 동일한 SidebarVersionFooter 단일 출처로 렌더해, 과거 footer 미렌더로 인해
             AppShell .app-shell-update-badge(fixed 좌하단) 폴백이 대신 뜨며 위치/스타일이 어긋나던
-            update-badge-position 회귀를 해소한다. version-store 구독·모달 결선은 컴포넌트가 캡슐화. */}
-        <SidebarVersionFooter t={tx} />
+            update-badge-position 회귀를 해소한다. version-store 구독·모달 결선·i18n 해석은 컴포넌트가
+            캡슐화하므로 라벨러 주입 불요(update-badge-i18n 회귀 — 호출처 주입 누락 원천 차단). */}
+        <SidebarVersionFooter />
       </aside>
 
       {/* ── metaDocsRoot(원본 :779) — Behavior Definitions 카탈로그 컨테이너(grid-column 3/4). ── */}

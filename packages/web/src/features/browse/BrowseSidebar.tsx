@@ -52,9 +52,6 @@ export interface BrowseSidebarChromeLabels {
   sessionPanelLabel?: string;
 }
 
-/** UpdateBadge/Modal i18n 라벨러 — 미지정 시 컴포넌트 내장 영문 폴백 사용. */
-export type BrowseSidebarVersionT = (key: string, vars?: Record<string, unknown>) => string;
-
 export interface BrowseSidebarProps {
   projects: readonly ProjectLike[];
   sessions: readonly SessionLike[];
@@ -69,11 +66,7 @@ export interface BrowseSidebarProps {
   obsIntervalMs?: number;
   /** 패널 크롬 라벨(thead/세션 헤더) — 미지정 시 레거시 영문 폴백. */
   chromeLabels?: BrowseSidebarChromeLabels;
-  /** UpdateBadge i18n 라벨러 — 미지정 시 컴포넌트 영문 폴백(key passthrough 호환). */
-  versionT?: BrowseSidebarVersionT;
 }
-
-const DEFAULT_T: BrowseSidebarVersionT = (key) => key;
 
 /**
  * 브라우즈 좌측 패널 전체 — 프로젝트 섹션 / 수직핸들 / 세션 섹션(panel-header) / 수직핸들2 /
@@ -90,17 +83,14 @@ export function BrowseSidebar({
   sessionsLoading,
   obsIntervalMs,
   chromeLabels,
-  versionT,
 }: BrowseSidebarProps): ReactElement {
   // i18n — react-i18next 단일 경로. 언어 변경 시 useTranslation 구독으로 재렌더 → tr() 재평가.
-  //   (지역 t 는 버전배지 라벨러 versionT 가 이미 점유 → react-i18next t 는 tr 로 받는다.)
   const { t: tr } = useTranslation();
   const obs = useObsCards(obsIntervalMs != null ? { intervalMs: obsIntervalMs } : {});
   const { panelRef, widthHandleRef, vTopHandleRef, vBottomHandleRef, vProjectsRef, vSessionsRef, vToolsRef } =
     usePanelResize();
-  // 버전 배지 라벨러 — 미지정 시 key passthrough. version-store 구독·모달 결선은
-  //   SidebarVersionFooter(단일 출처)가 캡슐화한다(버그 #6 + update-badge-position 회귀).
-  const t = versionT ?? DEFAULT_T;
+  // 버전 배지 footer — version-store 구독·모달 결선·i18n 해석을 SidebarVersionFooter(단일 출처)가
+  //   캡슐화한다(버그 #6 + update-badge-position/i18n 회귀). 호출처는 라벨러를 주입하지 않는다.
 
   // 세션 패널 hint — renderBrowserSessions(:155/169) 1:1: 미선택 → select-project, 선택 → session-count.
   const sessionHint = selectedProject
@@ -215,9 +205,9 @@ export function BrowseSidebar({
       </div>
 
       {/* ── 6) footer — update-badge(available 클릭 시 store.openModal → AppShell 모달). 레거시 .left-panel-footer.
-          browse·metadocs 공통 출처(SidebarVersionFooter)로 위치/스타일 정합(update-badge-position 회귀 해소).
+          browse·metadocs 공통 출처(SidebarVersionFooter)로 위치/스타일/로케일 정합(update-badge-position/i18n 회귀 해소).
           모달(UpdateModal)은 AppShell 이 단일 소유(버그 #6) — 사이드바는 트리거 배지만 렌더한다. ── */}
-      <SidebarVersionFooter t={t} />
+      <SidebarVersionFooter />
     </aside>
   );
 }
