@@ -6,16 +6,17 @@
  * 전략(D형 골든마스터 — makeTargetCell 은 renderers.test.ts.snap 으로 고정):
  *  - 셀 구조(td class·data-cell·placeholder)와 Target 내부 분기(prompt/response/system/tool_call)를
  *    JSX 로 1:1 이식. 도구 아이콘은 동치 검증된 TSX ToolIcon 재사용.
- *  - 오류 배지(toolStatusBadge)·agent-spike 배지는 원본 SSoT 문자열 producer 를 그대로 호출하고
- *    dangerouslySetInnerHTML 로 삽입(재구현 금지). 둘 다 fixture 에서는 '' 라 출력 영향 0.
+ *  - 오류 배지(ToolStatusBadge)·agent-spike 배지(AgentSpikeBadge)는 React 컴포넌트로 직접 렌더
+ *    (B-2: dangerouslySetInnerHTML 제거). 판정 SSoT 는 lib/anomaly-field·tool-status-field(순수).
  *  - shortModelName/escHtml 도 원본 formatters SSoT 재사용.
  *
  * @module render/cells
  */
 import type { ReactElement, ReactNode } from 'react';
 import { fmtToken, shortModelName } from '../../../assets/js/formatters.js';
-import { toolStatusBadge, agentSpikeBadgeHtml } from '../../../assets/js/render/badges.js';
 import { ToolIcon } from './badges';
+import { ToolStatusBadge } from './tool-status-badge';
+import { AgentSpikeBadge } from './anomaly-badges';
 import { ToolDot } from '../design-system/icons';
 
 interface RowLike {
@@ -32,15 +33,6 @@ interface RowLike {
 
 /** 액션 셀 내부(배지) — 원본 cells.js#makeActionCell → TypeBadge. */
 export { TypeBadge as ActionBadge } from './badges';
-
-/**
- * 원본 SSoT 문자열 producer 를 그대로 삽입하는 헬퍼.
- * 빈 문자열이면 아무것도 렌더하지 않아 인접 공백/노드를 만들지 않는다(동치).
- */
-function RawHtml({ html }: { html: string }): ReactElement | null {
-  if (!html) return null;
-  return <span dangerouslySetInnerHTML={{ __html: html }} />;
-}
 
 /**
  * Target 셀 내부 — 원본 cells.js#targetInnerHtml.
@@ -114,14 +106,12 @@ export function targetInner(r: RowLike): { node: ReactNode; empty: boolean } {
       </span>
     );
   }
-  const statusBadgeHtml = inProgress ? '' : toolStatusBadge(r);
-  const agentSpikeHtml = agentSpikeBadgeHtml(r.agent_spike);
   return {
     node: (
       <span className="target-cell-inner">
         {nameNode}
-        <RawHtml html={statusBadgeHtml} />
-        <RawHtml html={agentSpikeHtml} />
+        {inProgress ? null : <ToolStatusBadge r={r} />}
+        <AgentSpikeBadge agentSpike={r.agent_spike} />
       </span>
     ),
     empty: false,

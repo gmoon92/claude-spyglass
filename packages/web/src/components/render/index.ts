@@ -16,6 +16,15 @@
  * @module render
  */
 export { TypeBadge, ToolIcon, AnomalyBadges, SlowBadge } from './badges';
+export {
+  BloatedSysBadge,
+  ContextSaturationBadge,
+  AgentSpikeBadge,
+  TurnSpikeSummary,
+} from './anomaly-badges';
+export { ToolStatusBadge } from './tool-status-badge';
+export { ContextPreview } from './ContextPreview';
+export { AskUserQuestionCard } from './AskUserQuestionCard';
 export { ModelChip, ModelCell } from './model';
 export { ActionBadge, TargetCell, CacheCell, targetInner } from './cells';
 export { RequestRow } from './RequestRow';

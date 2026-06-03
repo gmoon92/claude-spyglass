@@ -7,17 +7,16 @@
  *
  * SSoT 재사용(재구현 금지):
  *  - target 셀: render/cells.ts#targetInner (TSX, P2-04 동치 검증) 재사용.
- *  - preview:  render/extract.js#contextPreview (HTML 문자열 SSoT) — RawHtml 로 주입(재구현 금지).
+ *  - preview:  render/ContextPreview(React, B-2) — contextPreviewData SSoT(+_promptCache 부수효과).
  *  - 시각: 원본은 targetInnerHtml(r).html / contextPreview(r,60) 문자열을 그대로 박았다.
- *          targetInner(TSX) 는 동일 마크업을 이미 동치 검증했고, contextPreview 는 _promptCache
- *          부수효과(extract.js:262)가 SSoT 라 문자열 그대로 재사용한다.
+ *          targetInner(TSX)·ContextPreview 가 동일 마크업을 렌더(.prologue-row-preview > .prompt-preview).
  *
  * @module features/session-detail/PrologueCard
  */
 import type { ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fmtTime } from '../../../assets/js/formatters.js';
-import { contextPreview } from '../../components/render/extract';
+import { ContextPreview } from '../../components/render/ContextPreview';
 import { targetInner } from '../../components/render';
 
 interface PrologueRow {
@@ -28,10 +27,17 @@ interface PrologueRow {
   [k: string]: unknown;
 }
 
-/** contextPreview(HTML 문자열 SSoT) 를 안전하게 주입 — 빈 문자열이면 미렌더. */
-function PreviewHtml({ r }: { r: PrologueRow }): ReactElement {
-  const html = contextPreview(r, 60) || '';
-  return <span className="prologue-row-preview" dangerouslySetInnerHTML={{ __html: html }} />;
+/**
+ * prologue 행 미리보기 — 원본은 `<span class="prologue-row-preview">{contextPreview HTML}</span>`.
+ * ContextPreview 가 빈 텍스트면 null 을 반환하지만, 원본은 항상 .prologue-row-preview 래퍼를 출력했으므로
+ * 래퍼는 유지하고 내부만 ContextPreview(없으면 빈 래퍼)로 둔다(원본 동치).
+ */
+function PreviewCell({ r }: { r: PrologueRow }): ReactElement {
+  return (
+    <span className="prologue-row-preview">
+      <ContextPreview r={r} maxLen={60} />
+    </span>
+  );
 }
 
 /**
@@ -78,7 +84,7 @@ export function PrologueCard({ prologue }: { prologue: PrologueRow[] | null | un
           return (
             <div key={r.id ?? i} className="prologue-row" data-type={r.type}>
               <span className="prologue-row-target">{node}</span>
-              <PreviewHtml r={r} />
+              <PreviewCell r={r} />
               {sourceTag}
               <span className="prologue-row-time">{fmtTime(r.timestamp)}</span>
             </div>

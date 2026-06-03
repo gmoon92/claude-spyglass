@@ -5,17 +5,34 @@
 //
 // 외부 노출: _promptCache (turn-views.js), contextPreview/extractPromptText/extractAssistantText/extractFirstPrompt/parseToolDetail (turn-rows·flat-view).
 
-import { escHtml } from '../../../assets/js/formatters.js';
-import { toolResponseHint } from '../../../assets/js/render/badges.js';
-import { svgRadio } from '../../../assets/js/design-system/icons/radio.js';
-import { svgCheck } from '../../../assets/js/design-system/icons/check.js';
+import { toolResponseHintKey, type ToolHint } from '../../lib/tool-response-field';
 import type { RowTextReader } from '../../../assets/js/view-types.js';
 
 const PROMPT_CACHE_MAX = 500;
 export const _promptCache = new Map<string, ExpandContent>(); // export: togglePromptExpand 공유
 
-/** 펼침 캐시/getDetailText 반환 — 텍스트 또는 HTML 모드. */
-type ExpandContent = string | { kind: 'html'; html: string };
+/** AskUserQuestion 옵션 — 라벨/설명/선택 여부/multi 마커. */
+export interface AskOption {
+  label: string;
+  desc: string;
+  selected: boolean;
+  multi: boolean;
+}
+
+/** AskUserQuestion 질문 블록 — 헤더/질문/multi/옵션. */
+export interface AskQuestion {
+  header: string;
+  question: string;
+  multi: boolean;
+  options: AskOption[];
+}
+
+/**
+ * 펼침 캐시/getDetailText 반환 — 텍스트 모드 또는 AskUserQuestion 구조화 모드.
+ * (B-2) 과거 { kind:'html', html } 문자열 모드는 구조화 { kind:'askq', questions } 로 대체 —
+ *   PromptExpandRow 가 dangerouslySetInnerHTML 대신 AskUserQuestionCard(JSX) 로 렌더.
+ */
+type ExpandContent = string | { kind: 'askq'; questions: AskQuestion[] };
 
 /** JSON.parse 결과를 읽기 전용 record 로 안전 취급(필드는 unknown). any 누출 방지. */
 type JsonRecord = Record<string, unknown>;
@@ -110,8 +127,8 @@ function getDetailText(r: RowTextReader | null | undefined): ExpandContent | nul
     if (ti) {
       const tn = r.tool_name;
       if (tn === 'AskUserQuestion') {
-        const html = buildAskUserQuestionHtml(ti);
-        if (html) return { kind: 'html', html };
+        const questions = parseAskUserQuestion(ti);
+        if (questions) return { kind: 'askq', questions };
         // payload 파싱 실패 시 tool_detail 텍스트로 폴백.
         return r.tool_detail || null;
       }
@@ -196,7 +213,7 @@ function getDetailText(r: RowTextReader | null | undefined): ExpandContent | nul
 }
 
 /**
- * AskUserQuestion payload(tool_input)를 받아 펼침 영역에 표시할 풍부 HTML을 만든다.
+ * AskUserQuestion payload(tool_input)를 받아 구조화 질문 모델로 파싱한다(B-2: HTML 미생성).
  *
  * 입력 스키마:
  *   {
@@ -207,68 +224,45 @@ function getDetailText(r: RowTextReader | null | undefined): ExpandContent | nul
  *     answers?: { [questionText]: string }   // 사용자가 실제 선택한 label (PostToolUse에만 존재)
  *   }
  *
- * 책임 단일화: 호출자는 "AskUserQuestion이면 이 함수를 부른다"만 담당.
- * 옵션 selected 판단·multiSelect 마커·description hover 등 모든 표현은 이 함수 내부에 캡슐화.
+ * 책임 단일화: 옵션 selected 판단·multiSelect 마커·description 노출 정책은 이 파서가 SSoT.
+ * 마크업은 AskUserQuestionCard(JSX)가 이 모델을 받아 렌더한다.
  *
- * @param {object} toolInput   payload.tool_input 객체.
- * @returns {string|null}      HTML 문자열 또는 questions가 비어있으면 null.
+ * @param toolInput payload.tool_input 객체.
+ * @returns 질문 배열 또는 questions 가 비어있으면 null.
  */
-function buildAskUserQuestionHtml(toolInput: JsonRecord | null) {
+export function parseAskUserQuestion(toolInput: JsonRecord | null): AskQuestion[] | null {
   const questions = Array.isArray(toolInput?.questions) ? toolInput.questions : null;
   if (!questions || questions.length === 0) return null;
   const answersRaw = toolInput?.answers;
   const answers: Record<string, unknown> =
     answersRaw && typeof answersRaw === 'object' ? (answersRaw as Record<string, unknown>) : {};
 
-  const blocks = questions.map((q: unknown) => {
-    const qo     = (q && typeof q === 'object' ? q : {}) as JsonRecord;
-    const qText  = typeof qo.question === 'string' ? qo.question : '';
-    const header = typeof qo.header   === 'string' ? qo.header   : '';
-    const multi  = !!qo.multiSelect;
-    const opts   = Array.isArray(qo.options) ? qo.options : [];
+  return questions.map((q: unknown): AskQuestion => {
+    const qo = (q && typeof q === 'object' ? q : {}) as JsonRecord;
+    const qText = typeof qo.question === 'string' ? qo.question : '';
+    const header = typeof qo.header === 'string' ? qo.header : '';
+    const multi = !!qo.multiSelect;
+    const opts = Array.isArray(qo.options) ? qo.options : [];
 
     // answers는 question 텍스트를 키로, 선택된 label을 값으로 매핑.
     // multiSelect가 true면 콤마/세미콜론 구분 문자열로 저장될 수 있어 두 형태 모두 허용.
     const rawAnswer = answers[qText];
     const selectedSet = new Set<string>();
     if (typeof rawAnswer === 'string' && rawAnswer.length > 0) {
-      // 단일 답이라도 split 결과의 첫 원소만 들어가므로 세트 처리에 안전.
-      rawAnswer.split(/\s*[,;]\s*/).forEach(v => { if (v) selectedSet.add(v); });
+      rawAnswer.split(/\s*[,;]\s*/).forEach((v) => { if (v) selectedSet.add(v); });
     } else if (Array.isArray(rawAnswer)) {
-      rawAnswer.forEach(v => { if (typeof v === 'string') selectedSet.add(v); });
+      rawAnswer.forEach((v) => { if (typeof v === 'string') selectedSet.add(v); });
     }
 
-    const optsHtml = opts.map((opt: unknown) => {
-      const oo       = (opt && typeof opt === 'object' ? opt : {}) as JsonRecord;
-      const label    = typeof oo.label       === 'string' ? oo.label       : '';
-      const desc     = typeof oo.description === 'string' ? oo.description : '';
-      const selected = selectedSet.has(label);
-      // marker: multiSelect=false → svgRadio, multiSelect=true → svgCheck
-      const markerSvg = multi
-        ? svgCheck({ selected, size: 12 })
-        : svgRadio({ selected, size: 12 });
-      const cls = ['askq-option'];
-      if (selected) cls.push('askq-option-selected');
-      if (multi)    cls.push('askq-option-multi');
-      const titleAttr = desc ? ` title="${escHtml(desc)}"` : '';
-      const descHtml  = desc ? `<span class="askq-option-desc">${escHtml(desc)}</span>` : '';
-      return `<li class="${cls.join(' ')}"${titleAttr}>` +
-        `<span class="askq-option-marker">${markerSvg}</span>` +
-        `<span class="askq-option-label">${escHtml(label)}</span>` +
-        descHtml +
-      `</li>`;
-    }).join('');
+    const options: AskOption[] = opts.map((opt: unknown): AskOption => {
+      const oo = (opt && typeof opt === 'object' ? opt : {}) as JsonRecord;
+      const label = typeof oo.label === 'string' ? oo.label : '';
+      const desc = typeof oo.description === 'string' ? oo.description : '';
+      return { label, desc, selected: selectedSet.has(label), multi };
+    });
 
-    const headerHtml = header ? `<span class="askq-header ds-badge" data-tone="brand">${escHtml(header)}</span>` : '';
-    const multiHint  = multi  ? ' <span class="askq-multi-hint">(multi-select)</span>' : '';
-
-    return `<div class="askq-q">
-      <div class="askq-q-head">${headerHtml}<span class="askq-question">${escHtml(qText)}</span>${multiHint}</div>
-      ${optsHtml ? `<ul class="askq-options">${optsHtml}</ul>` : ''}
-    </div>`;
-  }).join('');
-
-  return `<div class="askq-block">${blocks}</div>`;
+    return { header, question: qText, multi, options };
+  });
 }
 
 export function parseToolDetail(raw: unknown): string | null {
@@ -315,9 +309,35 @@ export function extractAssistantText(r: RowTextReader) {
   return '';
 }
 
-export function contextPreview(r: RowTextReader, maxLen = 60) {
+/**
+ * context preview 구조화 데이터 — 원본 contextPreview 의 텍스트/툴팁/힌트 계산 1:1.
+ * 반환 데이터를 ContextPreview(React) 가 JSX 로 렌더한다(B-2: HTML 문자열·dangerouslySetInnerHTML 제거).
+ *
+ * 부수효과(SSoT 보존): 원본과 동일하게 _promptCache 를 채운다(PromptExpandRow 가 읽음).
+ * i18n: 힌트는 키+vars(ToolHint), 툴팁 char-count 도 키+vars(라벨 해석은 컴포넌트의 t).
+ *
+ * @returns null  표시할 텍스트 없으면(원본 빈 문자열) — 호출 측이 cell-msg-empty 렌더.
+ */
+export interface ContextPreviewData {
+  /** data-expand-id (r.id). */
+  expandId: string;
+  /** 표시 텍스트(maxLen slice, 개행 평탄화). */
+  display: string;
+  /** maxLen 초과로 '…' 말줄임 여부. */
+  ellipsis: boolean;
+  /** title 본문(≤200 은 rawText 그대로). truncated 면 컴포넌트가 char-count 라벨을 붙인다. */
+  tooltipBase: string;
+  /** title 가 200자 초과로 잘렸는지 — true 면 char-count 서픽스 필요. */
+  tooltipTruncated: boolean;
+  /** char-count 서픽스용 원문 전체 길이(toLocaleString 은 컴포넌트가 적용). */
+  rawLength: number;
+  /** tool_call 결과 힌트 i18n 지시(없으면 null). 원본은 tool_call 타입에만 부여. */
+  hint: ToolHint | null;
+}
+
+export function contextPreviewData(r: RowTextReader, maxLen = 60): ContextPreviewData | null {
   const rawText = getContextText(r);
-  if (!rawText) return '';
+  if (!rawText) return null;
   if (_promptCache.size >= PROMPT_CACHE_MAX) {
     const oldest = _promptCache.keys().next().value;
     if (oldest !== undefined) _promptCache.delete(oldest);
@@ -329,13 +349,19 @@ export function contextPreview(r: RowTextReader, maxLen = 60) {
     : rawText;
   const flat    = displayText.replace(/\n/g, ' ');
   const display = flat.slice(0, maxLen);
-  const tooltip = rawText.length > 200
-    ? rawText.slice(0, 200) + `… (${window.I18n.t('badges.renderers.extract.chars', { n: rawText.length.toLocaleString() })})`
-    : rawText;
+  const tooltipTruncated = rawText.length > 200;
+  const tooltipBase = tooltipTruncated ? rawText.slice(0, 200) : rawText;
   // tool_call 타입에만 힌트 서픽스 추가 (maxLen 초과해도 힌트는 잘리지 않음)
-  const hint = r.type === 'tool_call' ? toolResponseHint(r) : '';
-  const hintHtml = hint ? ` <span class="tool-response-hint">${escHtml(hint)}</span>` : '';
-  return `<span class="prompt-preview" data-expand-id="${escHtml(r.id)}" title="${escHtml(tooltip)}">${escHtml(display)}${flat.length > maxLen ? '…' : ''}${hintHtml}</span>`;
+  const hint = r.type === 'tool_call' ? toolResponseHintKey(r) : null;
+  return {
+    expandId: r.id ?? '',
+    display,
+    ellipsis: flat.length > maxLen,
+    tooltipBase,
+    tooltipTruncated,
+    rawLength: rawText.length,
+    hint,
+  };
 }
 
 export function extractFirstPrompt(payload: unknown) {

@@ -24,14 +24,16 @@ import {
 import { subTypeOf } from '../../../assets/js/request-types.js';
 import { trustOf, rowTrustClass } from './model-classify';
 import {
-  contextPreview,
+  contextPreviewData,
   extractPromptText,
   extractAssistantText,
 } from './extract';
-import { bloatedSysBadgeMiniHtml } from '../../../assets/js/render/badges.js';
+import { ContextPreview } from './ContextPreview';
 import { ActionBadge, CacheCell, targetInner } from './cells';
 import { ModelCell } from './model';
 import { AnomalyBadges, SlowBadge } from './badges';
+import { BloatedSysBadge } from './anomaly-badges';
+import { bloatedSysInfo } from '../../lib/anomaly-field';
 import { PromptExpandRow } from './PromptExpandRow';
 
 /** feed 뷰 expand td colspan — 원본 expand.ts#RECENT_REQ_COLS(10: + Session). */
@@ -131,8 +133,8 @@ export const RequestRow = memo(function RequestRow({ r, opts = {} }: { r: RowLik
 
   // msg 셀 클릭 위임 — 원본 resolveExpandTarget(expand.ts) 와 동치:
   //   클릭 타깃이 [data-expand-id] 를 (자신 또는 조상으로) 가지면 토글.
-  //   msg 셀 innerHTML 안의 `.prompt-preview[data-expand-id]` 에 React onClick 을 직접 달 수
-  //   없으므로(dangerouslySetInnerHTML), 원본과 같이 closest 위임으로 해결한다.
+  //   ContextPreview(React JSX) 가 .prompt-preview[data-expand-id] 를 렌더하므로 onClick 을 직접
+  //   달 수도 있으나, 위임 한 곳으로 통일(원본 closest 위임)해 회귀를 줄인다.
   const onMsgCellClick = (e: MouseEvent<HTMLTableCellElement>): void => {
     if (!rid) return;
     const el = (e.target as HTMLElement).closest('[data-expand-id]');
@@ -149,21 +151,19 @@ export const RequestRow = memo(function RequestRow({ r, opts = {} }: { r: RowLik
       }
     : undefined;
 
-  // contextPreview 는 이미 완성된 `<span class="prompt-preview">…</span>` HTML 을 반환한다.
-  //   원본 makeRequestRow 는 이 HTML 을 td innerHTML 로 직접 삽입한다(래퍼 span 없음).
-  //   래퍼 span 으로 감싸면 `<span><span class="prompt-preview">…` 이중 span 회귀가 생긴다
-  //   — P3-05 TurnRows 동치 테스트(tool_detail preview 케이스)가 적발. 빈 경우만 cell-msg-empty.
-  const msgPreviewHtml = contextPreview(r);
+  // 미리보기 데이터 한 번 계산(SSoT + _promptCache write 1회). null 이면 빈 셀(cell-msg-empty).
+  //   원본 makeRequestRow 는 prompt-preview span 을 td 에 래퍼 없이 직접 삽입했다 — ContextPreview 도
+  //   래퍼 없이 .prompt-preview 를 직접 렌더(이중 span 회귀 방지).
+  const previewData = contextPreviewData(r);
 
   const spikeLoopFlags = flags ? new Set([...flags].filter((f) => f !== 'slow')) : null;
   const hasSlow = !!(flags && flags.has('slow'));
 
-  const bloatedMiniHtml = bloatedSysBadgeMiniHtml(r.bloated_sys);
-
+  // bloated mini 노출 여부 SSoT — anomaly-field 판정(warn/critical 이면 info 객체).
+  const bloatedInfo = bloatedSysInfo(r.bloated_sys);
   let bloatedRowCls = '';
-  const bsStage = r.bloated_sys?.stage ?? r.bloated_sys?.status;
-  if (bsStage === 'warn') bloatedRowCls = ' row-bloated-warn';
-  else if (bsStage === 'critical') bloatedRowCls = ' row-bloated-critical';
+  if (bloatedInfo?.stage === 'warn') bloatedRowCls = ' row-bloated-warn';
+  else if (bloatedInfo?.stage === 'critical') bloatedRowCls = ' row-bloated-critical';
 
   const trustCls = rowTrustClass(r);
   // r 객체 참조가 바뀌어도 실제 검색 관련 필드가 변하지 않으면 재연산 생략.
@@ -178,10 +178,10 @@ export const RequestRow = memo(function RequestRow({ r, opts = {} }: { r: RowLik
   const targetExtra: ReactNode = (
     <>
       <AnomalyBadges flags={spikeLoopFlags} />
-      {bloatedMiniHtml ? <span dangerouslySetInnerHTML={{ __html: bloatedMiniHtml }} /> : null}
+      <BloatedSysBadge bloatedSys={r.bloated_sys} variant="mini" />
     </>
   );
-  const hasExtra = (spikeLoopFlags && spikeLoopFlags.size > 0) || !!bloatedMiniHtml;
+  const hasExtra = (spikeLoopFlags && spikeLoopFlags.size > 0) || !!bloatedInfo;
 
   // data-chip-key 는 원본 injectChipKey 와 동일하게 `<tr ` 첫 속성 위치(className 앞)에 둔다.
   // 빈 문자열/미지정이면 undefined → React 가 속성을 출력하지 않음(원본 "키 없으면 속성 생략"과 동치).
@@ -210,13 +210,10 @@ export const RequestRow = memo(function RequestRow({ r, opts = {} }: { r: RowLik
         <TargetCellWithBadges r={r} extra={null} />
       )}
       <ModelCell r={r} />
-      {msgPreviewHtml ? (
-        <td
-          className="cell-msg"
-          data-cell="msg"
-          onClick={onMsgCellClick}
-          dangerouslySetInnerHTML={{ __html: msgPreviewHtml }}
-        />
+      {previewData ? (
+        <td className="cell-msg" data-cell="msg" onClick={onMsgCellClick}>
+          <ContextPreview data={previewData} />
+        </td>
       ) : (
         <td className="cell-msg" data-cell="msg">
           <span className="cell-msg-empty" aria-label={t('session.rows.empty-message')} />
