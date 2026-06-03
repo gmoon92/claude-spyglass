@@ -70,7 +70,9 @@ DB 파일(`~/.spyglass/spyglass.db`) 유출 시 전체 대화 본문·시스템 
 - 암호화/마스킹 **미채택**(기본 OFF·휘발성 디버그 산출물). 하드닝만: diag 파일 생성 모드 **0o600 명시** + diag ON 시 "평문 기록" 경고 1줄.
 
 ### D10. 범위 한계 (문서화, 확대 금지)
-- `requests.preview`/`response_preview`/`system_reminder` 등 평문 파생 미리보기 컬럼은 R3 범위 밖 — 평문 잔존(별도 R-item). WAL은 암호화 컬럼의 평문을 누출하지 않음(암호문 페이지 이미지). 활성화 이전 행은 평문 유지(D5 옵트인 백필).
+- ~~`requests.preview`/`response_preview`/`system_reminder` 등 평문 파생 미리보기 컬럼은 R3 범위 밖~~ → **ⓝ1로 후속 해소(Migration 057, 2026-06-04)**: `requests.preview` + `proxy_requests.request_preview`/`response_preview`/`system_preview`가 동일 codec(`encodeText`/`decodeText`)로 at-rest 암호화 범위에 포함됨. `system_reminder`는 여전히 평문 잔존(별도 R-item). WAL은 암호화 컬럼의 평문을 누출하지 않음(암호문 페이지 이미지). 활성화 이전 행은 평문 유지(D5 옵트인 백필).
+- **algo 추적**: preview는 `payload_algo`와 분리한 **별도 `preview_algo`** 컬럼으로 추적. requests는 payload/preview 독립 인코딩(updateRequest payload-only 갱신)이라 공유 불가, proxy 3 preview는 단일 키 원자 기록이라 한 `preview_algo` 공유. 자세한 근거는 Migration 057 헤더 주석 참조.
+- **알려진 한계**: 암호화 ON 시 `cli/checks/integrity.ts`·`cli/fix.ts`의 preview 동등 비교(`a.preview = b.preview`) 기반 중복-응답 진단은 GCM random-nonce로 동일 평문도 다른 암호문이 되어 under-report 가능(데이터 무손상, 진단 휴리스틱만 약화 — D8 dedup 한계와 동일 성격).
 
 ## 전문가 회의 권장사항 (채택/완화/기각)
 
