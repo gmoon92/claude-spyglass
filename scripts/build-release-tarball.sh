@@ -162,7 +162,37 @@ echo "[build] staging LadybugDB native (@ladybugdb/core + core-${OS}-${ARCH})...
 NATIVE_DST="$STAGE_DIR/share/spyglass/native/node_modules/@ladybugdb"
 mkdir -p "$NATIVE_DST"
 cp -RL node_modules/.bun/@ladybugdb+core@*/node_modules/@ladybugdb/core "$NATIVE_DST/"
-cp -RL node_modules/.bun/@ladybugdb+core-${OS}-${ARCH}@*/node_modules/@ladybugdb/core-${OS}-${ARCH} "$NATIVE_DST/"
+
+# arch 별 native — 러너 아치와 타깃 아치가 다르면(bun install 은 러너 아치용 optional
+# dependency 만 설치) 로컬 스토어에 없다. 그 경우 npm pack 으로 타깃 아치 패키지를
+# 레지스트리에서 직접 받아 동봉한다 (v4.0.9~v4.2.7 darwin-x64 릴리스 실패 원인 해소).
+NATIVE_ARCH_PKG="@ladybugdb/core-${OS}-${ARCH}"
+NATIVE_ARCH_SRC=(node_modules/.bun/@ladybugdb+core-${OS}-${ARCH}@*/node_modules/@ladybugdb/core-${OS}-${ARCH})
+if [[ -d "${NATIVE_ARCH_SRC[0]}" ]]; then
+  cp -RL "${NATIVE_ARCH_SRC[0]}" "$NATIVE_DST/"
+else
+  # 버전은 방금 staging 한 wrapper(core) 사본에서 직접 읽는다 — bun 의 exports 맵이
+  # package.json subpath require 를 차단해 모듈 해석 경유는 빈 값이 될 수 있음.
+  CORE_VERSION="$(bun -e "console.log(JSON.parse(require('fs').readFileSync('$NATIVE_DST/core/package.json','utf8')).version)")"
+  [[ -n "$CORE_VERSION" ]] || { echo "[build] FATAL: @ladybugdb/core 버전 해석 실패" >&2; exit 1; }
+  echo "[build]   cross-arch: ${NATIVE_ARCH_PKG} 로컬 미설치 → npm pack ${NATIVE_ARCH_PKG}@${CORE_VERSION}"
+  NATIVE_TMP="$(mktemp -d)"
+  (cd "$NATIVE_TMP" && npm pack "${NATIVE_ARCH_PKG}@${CORE_VERSION}" --silent >/dev/null)
+  tar -xzf "$NATIVE_TMP"/*.tgz -C "$NATIVE_TMP"
+  mkdir -p "$NATIVE_DST/core-${OS}-${ARCH}"
+  cp -RL "$NATIVE_TMP/package/." "$NATIVE_DST/core-${OS}-${ARCH}/"
+  rm -rf "$NATIVE_TMP"
+fi
+
+# install.js 동작을 빌드 시점에 재현 — wrapper(core) 의 lbugjs.node 는 *빌드 머신 아치*
+# 산물(postinstall 이 러너 아치 sub-package 에서 복사해 둔 것)이고, lbug_native.js 는
+# wrapper 자신의 lbugjs.node 만 로드한다. tarball 은 사용자 머신에서 postinstall 이
+# 실행되지 않으므로, 타깃 아치 sub-package 바이너리로 반드시 덮어쓴다
+# (미덮어쓰기 시 cross-arch 빌드에서 x64 사용자가 arm64 dylib 로드 → 즉시 크래시).
+if [[ -f "$NATIVE_DST/core-${OS}-${ARCH}/lbugjs.node" ]]; then
+  cp -f "$NATIVE_DST/core-${OS}-${ARCH}/lbugjs.node" "$NATIVE_DST/core/lbugjs.node"
+  echo "[build]   wrapper lbugjs.node ← core-${OS}-${ARCH} (타깃 아치 바이너리로 정렬)"
+fi
 echo "[build]   native staged: $(ls "$NATIVE_DST" | tr '\n' ' ')"
 
 # LICENSE 가 있으면 동봉
