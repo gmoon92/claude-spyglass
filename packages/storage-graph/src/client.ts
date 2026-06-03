@@ -36,6 +36,12 @@ import { existsSync, statSync, chmodSync } from 'node:fs';
 import { getGraphDir, getGraphDbPath } from './runtime/paths';
 import { getCircuitBreaker } from './runtime/circuit-breaker';
 import { applySchema, SchemaMismatchError } from './schema/apply';
+import type {
+  LadybugNativeModule,
+  LadybugDatabaseHandle,
+  LadybugConnectionHandle,
+  LadybugRawResult,
+} from './ladybug-native-types';
 
 /**
  * 그래프 DB 파일/보조파일을 소유자 전용 권한으로 강제 (consistency-hardening P2.2).
@@ -90,12 +96,16 @@ export class LadybugUnavailableError extends Error {
 // =============================================================================
 
 export class LadybugClient {
-  /** lazy import로 받은 native module — `any` 인 이유는 fork마다 타입 표면이 달라서. */
-  private native: any = null;
+  /**
+   * lazy import 로 받은 native module. fork(LadybugDB / Bighorn 등) 마다 export 표면이
+   * 달라 정밀한 d.ts 에 결합하지 않고, client 가 실제 접근하는 멤버만 추린 구조적 계약
+   * {@link LadybugNativeModule} (ladybug-native-types.ts) 으로 흡수한다.
+   */
+  private native: LadybugNativeModule | null = null;
   /** native 가 만든 Database 핸들. */
-  private dbHandle: any = null;
+  private dbHandle: LadybugDatabaseHandle | null = null;
   /** 한 번 연결한 뒤 close 까지 유지되는 connection 객체. */
-  private connHandle: any = null;
+  private connHandle: LadybugConnectionHandle | null = null;
   private state: 'idle' | 'ready' | 'failed' | 'closed' = 'idle';
   private lastError: unknown = null;
 
@@ -117,8 +127,8 @@ export class LadybugClient {
       // Lazy native import — 본 줄에서만 @ladybugdb/core 가 평가된다.
       // 패키지가 install 되지 않은 경우 ERR_MODULE_NOT_FOUND 가 발생하고 catch 분기로 진입.
       // 메타 패키지 이름이 확정되기 전까지는 fork에 맞춰 조정 (TODO: install 후 lockfile 확인).
-      const mod = await import(/* @vite-ignore */ '@ladybugdb/core' as string);
-      this.native = (mod as any).default ?? mod;
+      const mod: LadybugNativeModule = await import(/* @vite-ignore */ '@ladybugdb/core' as string);
+      this.native = mod.default ?? mod;
 
       // Database open — Ladybug API는 보통 `new Database(path)` + `new Connection(db)`.
       // 일부 빌드에서 클래스가 namespace 안에 export 될 수 있어 `Ladybug.*` fallback 도 시도.
@@ -207,7 +217,7 @@ export class LadybugClient {
       // 두 번째 인자를 객체로 넘기면 "progressCallback must be a function" 으로 throw 됨.
       // 따라서 params 가 비어 있으면 query, 있으면 prepare+execute 분기.
       const hasParams = params !== null && typeof params === 'object' && Object.keys(params).length > 0;
-      let raw: unknown;
+      let raw: LadybugRawResult;
       if (hasParams) {
         const stmt = await this.connHandle.prepare(cypher);
         raw = await this.connHandle.execute(stmt, params);
@@ -237,8 +247,12 @@ export class LadybugClient {
     // 폴백 시도 자체가 실패한다. MERGE / CREATE 가 idempotent 라 batch 단위 atomicity 없이도
     // 데이터 정합성은 유지 — sync worker 의 batch 중 일부가 실패하면 다음 tick 에서 재시도해
     // 누락분만 다시 적용된다. 따라서 work() 직접 실행이 가장 안전한 fallback.
-    if (typeof this.connHandle.transaction === 'function') {
-      return this.connHandle.transaction(work);
+    // state==='ready' 면 connHandle 은 위 가드에 의해 항상 non-null 이지만 TS 가 그
+    // 불변식을 추론하지 못하므로 non-null 단언으로 알린다 — 런타임 동작은 기존 분기와 동일
+    // (state!=='ready' 는 이미 throw 됐고, ready 상태에서 connHandle 은 connect() 가 보장).
+    const conn = this.connHandle!;
+    if (typeof conn.transaction === 'function') {
+      return conn.transaction(work);
     }
     return work();
   }
@@ -271,14 +285,18 @@ export class LadybugClient {
    * native query 결과를 Record<string, unknown>[] 로 정규화. fork 마다 형태가 다르므로
    * 알려진 3가지 패턴(배열 직반환 / { rows } / { records }) 을 모두 수용.
    */
-  private async normalizeResult(raw: any): Promise<Record<string, unknown>[]> {
+  private async normalizeResult(raw: LadybugRawResult): Promise<Record<string, unknown>[]> {
     if (Array.isArray(raw)) return raw as Record<string, unknown>[];
-    if (raw && Array.isArray(raw.rows)) return raw.rows;
-    if (raw && Array.isArray(raw.records)) return raw.records;
-    if (raw && typeof raw.getAll === 'function') {
-      // Ladybug QueryResult.getAll() 은 Promise<Record<string, LbugValue>[]> — async 로 받아야 함.
-      const all = await raw.getAll();
-      if (Array.isArray(all)) return all;
+    // raw 는 fork 별 유니온/unknown 이라 프로퍼티 접근 전에 object 가드로 좁힌다.
+    if (typeof raw === 'object' && raw !== null) {
+      const obj = raw as { rows?: unknown; records?: unknown; getAll?: unknown };
+      if (Array.isArray(obj.rows)) return obj.rows as Record<string, unknown>[];
+      if (Array.isArray(obj.records)) return obj.records as Record<string, unknown>[];
+      if (typeof obj.getAll === 'function') {
+        // Ladybug QueryResult.getAll() 은 Promise<Record<string, LbugValue>[]> — async 로 받아야 함.
+        const all = await (obj.getAll as () => Promise<unknown> | unknown)();
+        if (Array.isArray(all)) return all as Record<string, unknown>[];
+      }
     }
     return [];
   }
