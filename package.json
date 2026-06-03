@@ -1,6 +1,6 @@
 {
   "name": "spyglass",
-  "version": "4.2.5",
+  "version": "4.2.6",
   "description": "Claude Code execution monitoring tool - token usage visualization",
   "workspaces": [
     "packages/*"
