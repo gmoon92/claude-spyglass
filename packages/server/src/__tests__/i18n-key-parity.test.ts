@@ -21,6 +21,9 @@ import { join, resolve } from 'path';
 
 const PROJECT_ROOT = resolve(__dirname, '../../../..');
 const WEB_JS_DIR = join(PROJECT_ROOT, 'packages/web/assets/js');
+// React 마이그레이션으로 web 의 t() 호출 SSoT 가 src/ 로 이동 — assets/js 만 스캔하면
+// 키가 2개만 잡혀 게이트가 무력화된다. 두 위치를 모두 스캔해야 본래 보호 범위가 유지된다.
+const WEB_SRC_DIR = join(PROJECT_ROOT, 'packages/web/src');
 const WEB_LOCALES = join(PROJECT_ROOT, 'packages/web/locales');
 const SERVER_SRC_DIR = join(PROJECT_ROOT, 'packages/server/src');
 const SERVER_LOCALES = join(PROJECT_ROOT, 'packages/server/locales');
@@ -121,7 +124,11 @@ describe('i18n 키 정합성 (정적 검증)', () => {
   it('모든 web t() 호출의 literal 키가 4언어 JSON에 존재해야 한다', () => {
     // 1) 모든 web SSoT 파일에서 literal 키 수집.
     //    P5-01: assets/js SSoT 가 .ts 로 전환됨 — .ts/.tsx 도 스캔 대상에 포함(잔여 classic i18n .js + 전환된 .ts).
-    const files = collectFiles(WEB_JS_DIR, ['.js', '.ts', '.tsx']);
+    //    React 마이그레이션 후 t() 호출 대부분이 src/ 에 있으므로 src/ 도 스캔.
+    const files = [
+      ...collectFiles(WEB_JS_DIR, ['.js', '.ts', '.tsx']),
+      ...collectFiles(WEB_SRC_DIR, ['.ts', '.tsx']),
+    ];
     const allKeys = new Set<string>();
     for (const file of files) {
       const content = readFileSync(file, 'utf-8');
@@ -176,7 +183,11 @@ describe('i18n 키 정합성 (정적 검증)', () => {
     // 미래에 같은 path가 다른 ns에 추가되면 어느 ns가 hit될지 예측 불가.
     // 모든 호출에 명시적 ns prefix를 강제해 단일 SSoT 보장.
     // P5-01: assets/js SSoT 가 .ts 로 전환됨 — .ts/.tsx 도 스캔 대상에 포함.
-    const files = collectFiles(WEB_JS_DIR, ['.js', '.ts', '.tsx']);
+    // React 마이그레이션 후 t() 호출 대부분이 src/ 에 있으므로 src/ 도 스캔.
+    const files = [
+      ...collectFiles(WEB_JS_DIR, ['.js', '.ts', '.tsx']),
+      ...collectFiles(WEB_SRC_DIR, ['.ts', '.tsx']),
+    ];
     const offenders: { file: string; key: string }[] = [];
     for (const file of files) {
       const content = readFileSync(file, 'utf-8');
