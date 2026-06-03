@@ -26,6 +26,7 @@ import { enrichRowWithAnomalies } from './domain/anomaly-enricher';
 import { invalidateDashboardCache } from './api';
 import { diagJson } from './diag-log';
 import { syncCwd as syncMetaDocsCwd } from '@spyglass/meta-docs';
+import { corsHeaders } from '@spyglass/types';
 
 export interface RawHookPayload {
   hook_event_name: string;
@@ -41,18 +42,18 @@ export interface RawHookPayload {
 
 export async function eventsCollectHandler(req: Request, db: Database): Promise<Response> {
   if (req.method !== 'POST') {
-    return json({ error: 'Method not allowed' }, 405);
+    return json(req, { error: 'Method not allowed' }, 405);
   }
 
   let payload: RawHookPayload;
   try {
     payload = await req.json();
   } catch {
-    return json({ error: 'Invalid JSON' }, 400);
+    return json(req, { error: 'Invalid JSON' }, 400);
   }
 
   if (!payload.hook_event_name || !payload.session_id) {
-    return json({ error: 'Missing required fields: hook_event_name, session_id' }, 400);
+    return json(req, { error: 'Missing required fields: hook_event_name, session_id' }, 400);
   }
 
   // /collect와 동일하게 hook-payload.jsonl로 raw 보존 (SessionStart/End/Stop/Notification 등)
@@ -126,10 +127,10 @@ export async function eventsCollectHandler(req: Request, db: Database): Promise<
       saveAssistantResponse(db, payload, event.timestamp);
     }
 
-    return json({ success: true, event_id: event.event_id });
+    return json(req, { success: true, event_id: event.event_id });
   } catch (error) {
     console.error('[Events] Failed to save event:', error);
-    return json({ error: 'Failed to save event' }, 500);
+    return json(req, { error: 'Failed to save event' }, 500);
   }
 }
 
@@ -302,9 +303,10 @@ function saveAssistantResponse(
   }
 }
 
-function json(body: unknown, status = 200): Response {
+// CORS 헤더는 origin 허용 판단까지 SSoT(corsHeaders)가 책임진다 — req 의 Origin 을 넘긴다.
+function json(req: Request, body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    headers: { 'Content-Type': 'application/json', ...corsHeaders(req) },
   });
 }

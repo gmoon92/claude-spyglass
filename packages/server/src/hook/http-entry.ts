@@ -26,6 +26,7 @@
  */
 
 import { SpyglassDatabase, getDatabase } from '@spyglass/storage';
+import { corsHeaders } from '@spyglass/types';
 import { diagJson, isDiagEnabled } from '../diag-log';
 import type { ClaudeHookPayload, NormalizedHookPayload, HookProcessResult } from './types';
 import type { HookContext } from './event-handler';
@@ -97,7 +98,7 @@ export async function handleHookHttpRequest(
 
   const result = dispatchHookEvent(raw, ctx);
 
-  return jsonResponse(result);
+  return jsonResponse(req, result);
 }
 
 /**
@@ -120,7 +121,7 @@ export async function collectHandler(req: Request, db: SpyglassDatabase): Promis
   try {
     const payload = (await req.json()) as NormalizedHookPayload;
     const result = processHookEvent(db.instance, payload);
-    return jsonResponse(result);
+    return jsonResponse(req, result);
   } catch (error) {
     console.error('[Hook] Error processing legacy request:', error);
     return new Response(
@@ -130,10 +131,11 @@ export async function collectHandler(req: Request, db: SpyglassDatabase): Promis
   }
 }
 
-function jsonResponse(result: HookProcessResult): Response {
+// CORS 헤더는 origin 허용 판단까지 SSoT(corsHeaders)가 책임진다 — req 의 Origin 을 넘긴다.
+function jsonResponse(req: Request, result: HookProcessResult): Response {
   return new Response(JSON.stringify(result), {
     status: result.success ? 200 : 400,
-    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    headers: { 'Content-Type': 'application/json', ...corsHeaders(req) },
   });
 }
 

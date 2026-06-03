@@ -76,12 +76,23 @@ export function parseTimeWindow(url: URL): TimeWindow {
 // 응답 빌더
 // =============================================================================
 
-export function jsonResponse<T>(body: MetricsResponse<T>, status = 200): Response {
+/**
+ * 통일된 메트릭 JSON 응답.
+ *
+ * CORS 헤더는 @spyglass/types 의 SSoT(corsHeaders)가 origin 허용 판단까지 책임진다.
+ * 호출 측(metricsRouter)이 라우터 진입 시 1회 계산한 cors 헤더 맵을 넘긴다 —
+ * 허용/비허용 판단을 이 함수나 호출 측에서 재계산하지 않는다.
+ */
+export function jsonResponse<T>(
+  body: MetricsResponse<T>,
+  cors: Record<string, string>,
+  status = 200,
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
+      ...cors,
     },
   });
 }

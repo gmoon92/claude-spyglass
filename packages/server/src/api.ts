@@ -22,6 +22,7 @@
 
 import type { Database } from 'bun:sqlite';
 import { metricsRouter } from '@spyglass/metrics';
+import { applyCorsHeaders } from '@spyglass/types';
 import { jsonResponse } from './routes/_shared';
 import { sessionsRouter } from './routes/sessions';
 import { requestsRouter } from './routes/requests';
@@ -64,8 +65,19 @@ const SYNC_ROUTERS = [
 
 /**
  * API 요청 라우터 — domain별 routes/* 를 차례로 시도.
+ *
+ * CORS: /api/* 응답의 origin 허용 판단·헤더 부여는 이 fan-out 진입점 단 한 곳에서
+ *   SSoT(@spyglass/types applyCorsHeaders)를 경유해 일괄 적용한다. routes/* 의 97개
+ *   jsonResponse 호출 측은 req 를 알 필요가 없다 ("동일 판단 로직은 한 곳에만").
  */
 export async function apiRouter(req: Request, db: Database): Promise<Response> {
+  const res = await dispatchApi(req, db);
+  applyCorsHeaders(res.headers, req);
+  return res;
+}
+
+/** 실제 도메인 라우터 fan-out (CORS 미부여 — apiRouter 가 단일 지점에서 부여). */
+async function dispatchApi(req: Request, db: Database): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
   const method = req.method;

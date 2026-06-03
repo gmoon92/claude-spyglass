@@ -11,7 +11,8 @@
     "src"
   ],
   "dependencies": {
-    "@spyglass/storage": "workspace:*"
+    "@spyglass/storage": "workspace:*",
+    "@spyglass/types": "workspace:*"
   },
   "scripts": {
     "test": "bun test src"

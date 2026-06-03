@@ -27,7 +27,8 @@ const TEST_DB_PATH = `/tmp/spyglass-http-entry-${Date.now()}-${process.pid}-${cr
 function postJson(body: unknown): Request {
   return new Request('http://localhost/collect', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    // CORS SSoT 전환(보안): 허용 origin(localhost) 을 명시해 echo 동작을 검증.
+    headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
     body: JSON.stringify(body),
   });
 }
@@ -101,8 +102,9 @@ describe('T3 — /collect 진입점 검증 + 응답 shape', () => {
     expect(body.session_id).toBe(sessionId);
     expect(typeof body.request_id).toBe('string');
     expect(body.request_id.startsWith('pre-')).toBe(true); // PreToolUseHandler prefix
-    // Access-Control-Allow-Origin 헤더 동봉 (jsonResponse contract)
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    // CORS SSoT 전환: 와일드카드('*') 대신 허용 origin echo + Vary: Origin (jsonResponse contract)
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:3000');
+    expect(res.headers.get('Vary')).toBe('Origin');
   });
 
   it("session_id='' 빈 문자열 → 400 + saved:false (processHookEvent 필수 필드 거부)", async () => {
