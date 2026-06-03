@@ -10,13 +10,17 @@
  *  - preview 추출(extractFirstPrompt)·토큰 포맷(fmtToken)·상대시간(fmtRelative)·escHtml 은
  *    원본 SSoT 재사용. bloated dot 은 SSoT producer(bloatedSysBadgeDotHtml + getBloatedSysFor) 호출.
  *
+ * A-2(CustomEvent 제거): getBloatedSysFor SSoT 는 stores/anomaly-store 로 이전됐다. SessionRow 는 plain
+ *  함수/JSX 양쪽으로 호출되므로 hook 대신 store 의 비반응형 getState 읽기(getBloatedSysFor)를 쓴다.
+ *  bloated dot 의 라이브 재렌더는 호출처(SessionList)가 anomaly-store 를 구독해 subtree 를 재렌더하게 한다.
+ *
  * @module render/SessionRow
  */
 import type { ReactElement } from 'react';
 import { fmtToken, fmtRelative } from '../../../assets/js/formatters.js';
 import { extractFirstPrompt } from './extract';
 import { bloatedSysBadgeDotHtml } from '../../../assets/js/render/badges.js';
-import { getBloatedSysFor } from '../../../assets/js/state/anomaly-cache.js';
+import { getBloatedSysFor } from '../../stores/anomaly-store';
 import { StatusActive, StatusStale, StatusEnded } from '../design-system/icons';
 
 /** i18n 번역 함수 시그니처 — SessionRow 는 SessionList 가 함수로 호출(JSX 아님)하므로 useTranslation 훅

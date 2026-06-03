@@ -176,10 +176,10 @@ export function SessionDetailContainer({
   }, []);
 
   // 단건 anomaly fetch — 헤더 뱃지. detail-view.ts#useSessionLoad(AbortController) 재사용.
-  //   콜백은 setBloatedSysFor 캐시 + session-anomalies-loaded 디스패치를 내부에서 수행하므로
-  //   본 컨테이너는 store 수정 없이 캐시/이벤트 경로로 헤더 뱃지를 흐른다.
+  //   콜백 호출 전 useSessionLoad 가 anomaly-store(A-2)를 갱신하므로(setBloatedSysFor), 본 컨테이너는
+  //   store 수정 없이 store 경로로 사이드바 dot/헤더 뱃지를 흐른다.
   const onAnomalies = useCallback((_a: SessionAnomalies) => {
-    // detail-view.ts#useSessionLoad 가 setBloatedSysFor + CustomEvent 디스패치를 이미 수행.
+    // detail-view.ts#useSessionLoad 가 anomaly-store.setBloatedSysFor 를 이미 수행(전역 CustomEvent 폐기).
     // 헤더 뱃지 추가 결선은 store(detailAnomalies) 소유로, 본 데이터 배선 범위 밖(no-op).
     void _a;
   }, []);

@@ -4,6 +4,10 @@
  * 원본: assets/js/left-panel.js (renderBrowserProjects/renderBrowserSessions/GLOBAL_PROJECT_KEY/
  *   top-level `session-anomalies-loaded` 리스너 + _allProjects/_allSessions 모듈 상태).
  *
+ * A-2(CustomEvent 제거): 원본 'session-anomalies-loaded' document CustomEvent 구독은 stores/anomaly-store
+ *   (Zustand) 구독으로 전환됐다. createAnomalySubscription 은 store.subscribe 로 bloated_sys 변경을 받아
+ *   onUpdate 로 통지한다(전역 document 이벤트버스 폐기 — React 채널 일원화).
+ *
  * 이식 전략(P2-08 FilterBar/SearchBox controlled 선례 계승):
  *  - 모듈 상태 _allProjects/_allSessions → props(controlled). 호출처(features/app)가 데이터 소스/
  *    app-store 에서 주입. 선택 상태(selectedProject/selectedSession)도 prop + onSelect* 콜백 통지.
@@ -27,6 +31,7 @@ import type { ReactElement } from 'react';
 import { fmt, fmtToken } from '../../../assets/js/formatters.js';
 import { SessionRow } from '../../components/render/SessionRow';
 import { Skeleton } from '../../components/Skeleton';
+import { useAnomalyStore } from '../../stores/anomaly-store';
 
 /** 가상 'user (global)' 행 식별자 — 원본 left-panel.js:17 GLOBAL_PROJECT_KEY 1:1. metadocs 전용. */
 export const GLOBAL_PROJECT_KEY = '__global__';
@@ -94,28 +99,31 @@ export function sortSessions<T extends SessionLike>(list: readonly T[]): T[] {
 }
 
 /**
- * 'session-anomalies-loaded' 구독 — 원본 left-panel.js:36-50 핸들러 동치 + 해제 경로 추가(신규 계약).
- *  - document 부재(bun test) 시 noop cleanup 반환(원본 가드 동일 — api.js TDZ 연쇄 차단 계승).
- *  - 핸들러: detail.sessionId 부재면 무시, bloatedSys falsy 는 null 정규화 후 onUpdate 통지.
+ * anomaly(bloated_sys) 변경 구독 — 원본 left-panel.js:36-50 'session-anomalies-loaded' 핸들러를
+ *   stores/anomaly-store(Zustand) 구독으로 전환(A-2: 전역 document CustomEvent 폐기).
+ *  - store.subscribe 로 bloatedBySession 변경을 받아, 직전 스냅샷과 diff 한 세션만 onUpdate 통지한다.
  *    (원본은 _allSessions 직접 변이 + 조건부 renderBrowserSessions — React 에선 onUpdate 콜백으로
- *     상위 상태 갱신을 위임. critical-only 노출 정책/stale dot 캐시 의미는 호출처가 보존.)
+ *     상위 상태 갱신을 위임. bloatedSys falsy 는 store 가 이미 null 로 정규화해 둔다.)
+ *  - SSR/단위테스트(store 미구독 불필요)에서도 안전: zustand subscribe 는 환경 비의존.
  *
  * @param onUpdate (sessionId, bloatedSys|null) 통지
- * @param doc 주입 가능한 document(테스트). 기본 globalThis.document.
+ * @param store 주입 가능한 anomaly-store(테스트). 기본 전역 useAnomalyStore.
  * @returns 구독 해제 cleanup(useEffect 반환값으로 사용).
  */
 export function createAnomalySubscription(
   onUpdate: (sessionId: string, bloatedSys: unknown) => void,
-  doc: Document | undefined = typeof document !== 'undefined' ? document : undefined,
+  store: typeof useAnomalyStore = useAnomalyStore,
 ): () => void {
-  if (!doc) return () => {};
-  const handler = (e: Event) => {
-    const { sessionId, bloatedSys } = ((e as CustomEvent).detail as { sessionId?: string; bloatedSys?: unknown }) || {};
-    if (!sessionId) return;
-    onUpdate(sessionId, bloatedSys || null);
-  };
-  doc.addEventListener('session-anomalies-loaded', handler);
-  return () => doc.removeEventListener('session-anomalies-loaded', handler);
+  let prev = store.getState().bloatedBySession;
+  return store.subscribe((state) => {
+    const next = state.bloatedBySession;
+    if (next === prev) return;
+    // 변경/추가된 세션만 통지(다른 세션 갱신이 무관 행을 흔들지 않도록 diff).
+    for (const sessionId of Object.keys(next)) {
+      if (next[sessionId] !== prev[sessionId]) onUpdate(sessionId, next[sessionId] ?? null);
+    }
+    prev = next;
+  });
 }
 
 /** 가상 'user (global)' 행 — 원본 renderMetaGlobalRow(:141-152). metadocs 모드 최상단. */

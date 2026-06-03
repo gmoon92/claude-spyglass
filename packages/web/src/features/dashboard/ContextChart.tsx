@@ -6,7 +6,7 @@
  *  - 본 컴포넌트는 Chart.tsx(P3-01) 동형 패턴: useRef<canvas> + useLayoutEffect 그리기 +
  *    null/ctx-null 가드(SSR·canvas 미구현 안전). 순수 데이터는 context-chart-data.ts.
  *  - P3-01 Chart.tsx 미재용(데이터 모델/상호작용 상이 — context-chart-data.ts 설계노트 참조).
- *  - hover hit-test / ctx-point-hover CustomEvent / DETAIL_FILTER_CHANGED 구독은 레거시 vanilla
+ *  - hover hit-test / point-hover(tooltip-store) / DETAIL_FILTER_CHANGED 구독은 레거시 vanilla
  *    병존 유지(이식 범위 외). 본 컴포넌트는 turns prop 주입 → 정적 차트 그리기 계약만 이식.
  *
  * 셀렉터 계약 유지: #contextGrowthChart.
@@ -26,6 +26,7 @@ import {
   type ContextWindowInfo,
 } from './context-chart-data';
 import { useChartReveal } from '../../hooks/use-chart-reveal';
+import { useTooltipStore } from '../../stores/tooltip-store';
 
 const PAD = { top: 4, right: 6, bottom: 4, left: 6 };
 
@@ -187,13 +188,6 @@ export interface ContextChartProps {
   sessionKey?: string | null;
 }
 
-/** ctx-point-hover CustomEvent 발행(SSR/test 가드). detail=null 은 호버 해제. */
-function dispatchPointHover(detail: unknown): void {
-  const doc = (globalThis as { document?: Document }).document;
-  if (!doc) return;
-  doc.dispatchEvent(new CustomEvent('ctx-point-hover', { detail }));
-}
-
 /**
  * 누적 토큰 차트 컴포넌트. 그리기는 ref 기반 redraw() 단일 경로로 통합 — 매 프레임 re-render 없이
  * progress(reveal)·hover 상태를 ref 로 들고 canvas 만 갱신한다.
@@ -203,11 +197,14 @@ function dispatchPointHover(detail: unknown): void {
  *    reveal 중에는 hover 를 해제(progress<1)해 stale 강조를 막는다. prefers-reduced-motion 이면 즉시 완성.
  *
  * 호버 상호작용(레거시 context-chart.js 복원):
- *  - mousemove → 그려진 점과 동일 좌표계로 hit-test(15px) → 가장 가까운 점 강조 + ctx-point-hover 발행.
- *  - 수치 툴팁 표시는 use-tooltip 훅이 ctx-point-hover 를 구독해 처리(차트=발행, 툴팁=표시 단일책임 분리).
+ *  - mousemove → 그려진 점과 동일 좌표계로 hit-test(15px) → 가장 가까운 점 강조 + tooltip-store 갱신.
+ *  - 수치 툴팁 표시는 TooltipLayer 가 tooltip-store 를 구독해 처리(차트=발행, 툴팁=표시 단일책임 분리).
  */
 export function ContextChart({ turns, loading = false, sessionKey = null }: ContextChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // 포인트 호버 발행 — tooltip-store(A-2: ctx-point-hover CustomEvent 폐기). action 은 ref 안정.
+  const setPointHover = useTooltipStore((s) => s.setPointHover);
+  const clearPointHover = useTooltipStore((s) => s.clearPointHover);
   // 마지막 그리기 결과(점 좌표 + window) — mousemove hit-test 가 draw 와 동일 좌표계를 보도록 ref 보관.
   //   draw 가 반환하는 pts 는 progress 와 무관한 full 좌표라 reveal 중에도 hit-test 좌표는 정확.
   const renderRef = useRef<ContextChartRender | null>(null);
@@ -253,7 +250,7 @@ export function ContextChart({ turns, loading = false, sessionKey = null }: Cont
     if (idx === hoveredRef.current) {
       // 같은 점 위 이동: 강조는 그대로, 툴팁 위치만 갱신(불필요한 redraw 회피).
       if (idx >= 0) {
-        dispatchPointHover(buildCtxPointHoverDetail(render.pts[idx], render.window, e.clientX, e.clientY));
+        setPointHover({ kind: 'ctx', detail: buildCtxPointHoverDetail(render.pts[idx], render.window, e.clientX, e.clientY) });
       }
       return;
     }
@@ -262,22 +259,22 @@ export function ContextChart({ turns, loading = false, sessionKey = null }: Cont
     canvas.style.cursor = idx >= 0 ? 'crosshair' : '';
     redraw();
     if (idx >= 0) {
-      dispatchPointHover(buildCtxPointHoverDetail(render.pts[idx], render.window, e.clientX, e.clientY));
+      setPointHover({ kind: 'ctx', detail: buildCtxPointHoverDetail(render.pts[idx], render.window, e.clientX, e.clientY) });
     } else {
-      dispatchPointHover(null);
+      clearPointHover();
     }
     // deps 에 redraw 필수 — redraw 는 useCallback([turns]) 라 turns 변경 시 새로 생성된다.
     //   deps 가 []이면 첫 렌더(turns=[])의 stale redraw 를 캡처해 호버 시 renderRef 를 빈 데이터로
     //   덮어써 이후 hit-test 가 죽는다(턴뷰 점 호버 무반응 회귀의 원인).
-  }, [redraw]);
+  }, [redraw, setPointHover, clearPointHover]);
 
   const handleMouseLeave = useCallback(() => {
     if (hoveredRef.current === -1) return;
     hoveredRef.current = -1;
     redraw();
     if (canvasRef.current) canvasRef.current.style.cursor = '';
-    dispatchPointHover(null);
-  }, [redraw]);
+    clearPointHover();
+  }, [redraw, clearPointHover]);
 
   return (
     <canvas

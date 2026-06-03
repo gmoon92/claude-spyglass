@@ -7,9 +7,9 @@
  * 전략(P2-08 filter-bar.test 선례 + 무 DOM 하네스):
  *  - 마크업/셀렉터 계약: renderToStaticMarkup 으로 검증.
  *  - 선택/콜백 배선: 트리에서 노드 onClick 직접 invoke → onSelect 콜백/store end-to-end.
- *  - 리스너 생명주기: createAnomalySubscription 을 직접 mount(구독 등록)/cleanup(해제) 호출해
- *    누수 가드 검증. 이는 원본 left-panel.js 가 미보장한 신규 계약이다(Gap: 원본 top-level
- *    addEventListener 는 영구 등록·해제 없음 — 컴포넌트 언마운트 시 해제로 SPA 누수 차단).
+ *  - 구독 생명주기: createAnomalySubscription 을 직접 호출해 anomaly-store 구독 등록/해제(누수 가드)와
+ *    bloated_sys 변경 통지를 검증. A-2 에서 원본 document 'session-anomalies-loaded' CustomEvent 구독을
+ *    stores/anomaly-store(Zustand) 구독으로 전환했다(전역 이벤트버스 폐기 — React 채널 일원화).
  */
 import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -23,6 +23,7 @@ import {
   createAnomalySubscription,
 } from '../Sidebar';
 import { useAppStore } from '../../../stores/app-store';
+import { useAnomalyStore } from '../../../stores/anomaly-store';
 
 // SessionRow(P2-04)/fmtRelative 가 window.I18n 을 참조 → 테스트 스텁 주입(renderers-equivalence 선례).
 beforeAll(() => {
@@ -131,73 +132,51 @@ describe('sortSessions — 활성 우선 → 최근 활동 desc 정렬', () => {
   });
 });
 
-// ── createAnomalySubscription — 마운트/언마운트 cleanup (신규 계약, Gap) ───────
-describe('createAnomalySubscription — 구독 등록/해제 누수 가드 (신규 계약)', () => {
-  it('document 부재 환경에서 throw 없이 noop cleanup 을 반환(api.js TDZ 연쇄 차단 계승)', () => {
-    // P5-07: jsdom 환경은 globalThis.document 를 주입하므로, "document 부재" 계약을 재현하려면
-    //   이 케이스 동안만 전역 document 를 제거했다가 복원한다(bun test 의 무-DOM 의미 보존).
-    const savedDoc = globalThis.document;
-    // 비-DOM 환경 재현을 위해 전역 document 임시 제거(캐스트로 타입 우회).
-    delete (globalThis as { document?: Document }).document;
-    try {
-      expect(typeof globalThis.document).toBe('undefined');
-      const cleanup = createAnomalySubscription(() => {});
-      expect(typeof cleanup).toBe('function');
-      expect(() => cleanup()).not.toThrow();
-    } finally {
-      (globalThis as { document?: Document }).document = savedDoc;
-    }
+// ── createAnomalySubscription — anomaly-store 구독/해제 (A-2: CustomEvent → Zustand) ──
+describe('createAnomalySubscription — store 구독 등록/해제 + 변경 통지', () => {
+  beforeEach(() => {
+    // 각 케이스 격리 — anomaly-store 초기화.
+    useAnomalyStore.setState({ bloatedBySession: {} });
   });
 
-  it('mount 시 session-anomalies-loaded 리스너를 등록, cleanup 시 해제한다', () => {
-    const added: string[] = [];
-    const removed: string[] = [];
-    const docStub = {
-      addEventListener: (type: string) => added.push(type),
-      removeEventListener: (type: string) => removed.push(type),
-    } as unknown as Document;
-    const cleanup = createAnomalySubscription(() => {}, docStub);
-    expect(added).toContain('session-anomalies-loaded'); // 마운트 = 구독
-    expect(removed).not.toContain('session-anomalies-loaded');
-    cleanup();
-    expect(removed).toContain('session-anomalies-loaded'); // 언마운트 = 해제(누수 차단)
-  });
-
-  it('이벤트 detail 의 sessionId/bloatedSys 를 onUpdate 로 통지(원본 핸들러 동치)', () => {
-    let handler: ((e: { detail?: unknown }) => void) | null = null;
-    const docStub = {
-      addEventListener: (_t: string, h: (e: { detail?: unknown }) => void) => { handler = h; },
-      removeEventListener: () => {},
-    } as unknown as Document;
+  it('cleanup 함수를 반환하고, 호출 시 구독 해제 후 추가 통지가 없다(누수 차단)', () => {
     const seen: Array<[string, unknown]> = [];
-    createAnomalySubscription((id, bloated) => seen.push([id, bloated]), docStub);
-    handler!({ detail: { sessionId: 's1', bloatedSys: { status: 'critical' } } });
-    expect(seen).toEqual([['s1', { status: 'critical' }]]);
+    const cleanup = createAnomalySubscription((id, b) => seen.push([id, b]), useAnomalyStore);
+    expect(typeof cleanup).toBe('function');
+    cleanup(); // 해제
+    useAnomalyStore.getState().setBloatedSysFor('s1', { stage: 'critical' });
+    expect(seen).toEqual([]); // 해제 후엔 통지 없음
   });
 
-  it('sessionId 부재 detail 은 무시(원본 early-return 동치)', () => {
-    let handler: ((e: { detail?: unknown }) => void) | null = null;
-    const docStub = {
-      addEventListener: (_t: string, h: (e: { detail?: unknown }) => void) => { handler = h; },
-      removeEventListener: () => {},
-    } as unknown as Document;
-    const seen: unknown[] = [];
-    createAnomalySubscription((id) => seen.push(id), docStub);
-    handler!({ detail: {} });
-    handler!({});
-    expect(seen).toEqual([]);
-  });
-
-  it('bloatedSys falsy 는 null 로 정규화(원본 `bloatedSys || null` 동치)', () => {
-    let handler: ((e: { detail?: unknown }) => void) | null = null;
-    const docStub = {
-      addEventListener: (_t: string, h: (e: { detail?: unknown }) => void) => { handler = h; },
-      removeEventListener: () => {},
-    } as unknown as Document;
+  it('store.setBloatedSysFor 변경 시 (sessionId, bloatedSys) 를 onUpdate 로 통지', () => {
     const seen: Array<[string, unknown]> = [];
-    createAnomalySubscription((id, bloated) => seen.push([id, bloated]), docStub);
-    handler!({ detail: { sessionId: 's2', bloatedSys: undefined } });
+    createAnomalySubscription((id, bloated) => seen.push([id, bloated]), useAnomalyStore);
+    useAnomalyStore.getState().setBloatedSysFor('s1', { stage: 'critical' });
+    expect(seen).toEqual([['s1', { stage: 'critical' }]]);
+  });
+
+  it('변경된 세션만 diff 통지(무관 세션은 흔들지 않음)', () => {
+    useAnomalyStore.setState({ bloatedBySession: { a: { stage: 'warn' } as never } });
+    const seen: string[] = [];
+    createAnomalySubscription((id) => seen.push(id), useAnomalyStore);
+    useAnomalyStore.getState().setBloatedSysFor('b', { stage: 'critical' });
+    expect(seen).toEqual(['b']); // a 는 미변경 → 미통지
+  });
+
+  it('bloatedSys falsy 는 store 가 null 로 정규화해 통지(원본 `bloatedSys || null` 동치)', () => {
+    // 실제 변경을 만들기 위해 critical → falsy(null 정규화) 전이를 본다(이전 세션 잔재 제거 경로).
+    useAnomalyStore.setState({ bloatedBySession: { s2: { stage: 'critical' } as never } });
+    const seen: Array<[string, unknown]> = [];
+    createAnomalySubscription((id, bloated) => seen.push([id, bloated]), useAnomalyStore);
+    useAnomalyStore.getState().setBloatedSysFor('s2', undefined);
     expect(seen).toEqual([['s2', null]]);
+  });
+
+  it('동일 값 재설정(null→null 등)은 변경이 없어 통지하지 않는다(idempotent)', () => {
+    const seen: unknown[] = [];
+    createAnomalySubscription((id) => seen.push(id), useAnomalyStore);
+    useAnomalyStore.getState().setBloatedSysFor('s3', undefined); // 키 부재(null) → null: no-op
+    expect(seen).toEqual([]);
   });
 });
 

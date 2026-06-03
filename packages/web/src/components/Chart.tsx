@@ -25,6 +25,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { useChartReveal } from '../hooks/use-chart-reveal';
+import { useTooltipStore } from '../stores/tooltip-store';
 import {
   computeDonutSlices,
   computeTimelinePoints,
@@ -97,19 +98,12 @@ const DONUT_SIZE = 90;
 const DONUT_R = 36;
 const DONUT_INNER = 22;
 
-/** 타임라인 포인트 호버 이벤트 detail — use-tooltip 이 구독해 "시각 · N건" 툴팁으로 표시. */
+/** 타임라인 포인트 호버 detail — TooltipLayer 가 tooltip-store 구독으로 "시각 · N건" 툴팁 표시. */
 export interface TimelineHoverDetail {
   label: string;
   count: number;
   clientX: number;
   clientY: number;
-}
-
-/** timeline-point-hover CustomEvent 발행(SSR/test 가드). detail=null 은 호버 해제. */
-function dispatchTimelineHover(detail: TimelineHoverDetail | null): void {
-  const doc = (globalThis as { document?: Document }).document;
-  if (!doc) return;
-  doc.dispatchEvent(new CustomEvent('timeline-point-hover', { detail }));
 }
 
 /**
@@ -364,6 +358,9 @@ function ChartImpl({
   const donutRef = useRef<HTMLCanvasElement>(null);
   // 타임라인 호버 hit-test 좌표(draw 가 반환) — mousemove 가 동일 좌표계로 nearest 버킷을 찾는다.
   const timelineHitsRef = useRef<TimelineHitPoint[]>([]);
+  // 타임라인 포인트 호버 발행 — tooltip-store(A-2: timeline-point-hover CustomEvent 폐기). action 은 ref 안정.
+  const setPointHover = useTooltipStore((s) => s.setPointHover);
+  const clearPointHover = useTooltipStore((s) => s.clearPointHover);
 
   // 범례 + 하단 total 뷰모델(레거시 renderTypeLegend) — 활성 도넛셋(dataByKind[donutMode]) 기준.
   //   labeler 미주입 시 미렌더(폴백). i18n 해석은 labeler.cacheLabel/countUnit/noData 에 위임(leaf 무전역).
@@ -423,8 +420,8 @@ function ChartImpl({
     };
   }, [timelineBuckets, locale]);
 
-  // 타임라인 호버 — 마우스 x 위치의 버킷(=그 시점 요청 수)을 잡아 "시각 · N건" 툴팁 이벤트 발행.
-  //   표시는 use-tooltip 이 timeline-point-hover 구독으로 처리(차트=발행 / 툴팁=표시 단일책임 분리).
+  // 타임라인 호버 — 마우스 x 위치의 버킷(=그 시점 요청 수)을 잡아 "시각 · N건" 툴팁 상태 발행.
+  //   표시는 TooltipLayer 가 tooltip-store 구독으로 처리(차트=발행 / 툴팁=표시 단일책임 분리).
   const handleTimelineMove = useCallback(
     (e: ReactMouseEvent<HTMLCanvasElement>) => {
       const canvas = timelineRef.current;
@@ -447,12 +444,12 @@ function ChartImpl({
       const curMin = nowMinute(Date.now());
       const ts = new Date((curMin - (n - 1 - idx)) * 60000);
       const label = ts.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-      dispatchTimelineHover({ label, count, clientX: e.clientX, clientY: e.clientY });
+      setPointHover({ kind: 'timeline', detail: { label, count, clientX: e.clientX, clientY: e.clientY } });
     },
-    [timelineBuckets, locale],
+    [timelineBuckets, locale, setPointHover],
   );
 
-  const handleTimelineLeave = useCallback(() => dispatchTimelineHover(null), []);
+  const handleTimelineLeave = useCallback(() => clearPointHover(), [clearPointHover]);
 
   // 레거시 default-view.css 의 .charts-inner(grid 2fr 1fr) 2-셀 구조를 그대로 출력한다(WP14).
   //   - 좌(2fr): .chart-wrap > #timelineChart — timeline canvas. data-ctx-tooltip 은 호출처가
