@@ -47,7 +47,7 @@ export async function handleProxy(req: Request, url: URL, db: Database): Promise
 
   const statusCode = response.status;
   const isStream = (response.headers.get('content-type') ?? '').includes('text/event-stream');
-  const responseHeaders = buildResponseHeaders(response);
+  const responseHeaders = buildResponseHeaders(req, response);
   const headerReqId = response.headers.get('request-id')
     ?? response.headers.get('x-request-id') ?? null;
 

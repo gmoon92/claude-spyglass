@@ -43,6 +43,7 @@ import {
   getModelMaxTokens,
   getAllModelLimits,
 } from '@spyglass/storage';
+import { corsHeaders } from '@spyglass/types';
 import { categorizeToolName, ALL_TOOL_CATEGORIES, type ToolCategory } from './tool-category';
 import { buildMeta, jsonResponse, parseTimeWindow } from './_shared';
 import { computeBurnRate } from './calculators/burn-rate';
@@ -61,6 +62,9 @@ export async function metricsRouter(req: Request, db: Database): Promise<Respons
 
   if (method !== 'GET' || !path.startsWith('/api/metrics/')) return null;
 
+  // CORS 헤더는 origin 허용 판단까지 SSoT(corsHeaders)가 책임진다. 라우터 진입 시
+  // 1회 계산해 모든 jsonResponse 에 전달 — 판단을 호출 측에서 재계산하지 않는다.
+  const cors = corsHeaders(req);
   const window = parseTimeWindow(url);
   const meta = buildMeta(window);
 
@@ -79,7 +83,7 @@ export async function metricsRouter(req: Request, db: Database): Promise<Respons
       avg_tokens: Math.round(r.avg_tokens),
       percentage: total > 0 ? Math.round((r.request_count / total) * 1000) / 10 : 0,
     }));
-    return jsonResponse({ success: true, data, meta });
+    return jsonResponse({ success: true, data, meta }, cors);
   }
 
   // -------------------------------------------------------------------------
@@ -98,7 +102,7 @@ export async function metricsRouter(req: Request, db: Database): Promise<Respons
         hit_rate: Math.round(hit_rate * 10_000) / 10_000,
       };
     });
-    return jsonResponse({ success: true, data, meta });
+    return jsonResponse({ success: true, data, meta }, cors);
   }
 
   // -------------------------------------------------------------------------
@@ -128,7 +132,7 @@ export async function metricsRouter(req: Request, db: Database): Promise<Respons
         model_limits: getAllModelLimits(db),
       },
       meta,
-    });
+    }, cors);
   }
 
   // -------------------------------------------------------------------------
@@ -154,7 +158,7 @@ export async function metricsRouter(req: Request, db: Database): Promise<Respons
         weekday_labels: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
       },
       meta,
-    });
+    }, cors);
   }
 
   // -------------------------------------------------------------------------
@@ -195,7 +199,7 @@ export async function metricsRouter(req: Request, db: Database): Promise<Respons
         total_sessions: totalSessions.total_sessions,
       },
       meta,
-    });
+    }, cors);
   }
 
   // -------------------------------------------------------------------------
@@ -232,7 +236,7 @@ export async function metricsRouter(req: Request, db: Database): Promise<Respons
         },
       },
       meta,
-    });
+    }, cors);
   }
 
   // -------------------------------------------------------------------------
@@ -255,7 +259,7 @@ export async function metricsRouter(req: Request, db: Database): Promise<Respons
         ? Math.round((buckets.get(category)! / total) * 1000) / 10
         : 0,
     }));
-    return jsonResponse({ success: true, data, meta });
+    return jsonResponse({ success: true, data, meta }, cors);
   }
 
   // -------------------------------------------------------------------------
@@ -265,7 +269,7 @@ export async function metricsRouter(req: Request, db: Database): Promise<Respons
     const bucket = url.searchParams.get('bucket') || 'hour'; // 'hour' | 'day'
     const rows = getAnomalyTimeSeriesInputs(db, window.from, window.to);
     const data = computeAnomalyTimeSeries(rows, bucket as 'hour' | 'day');
-    return jsonResponse({ success: true, data, meta });
+    return jsonResponse({ success: true, data, meta }, cors);
   }
 
   // -------------------------------------------------------------------------
@@ -273,7 +277,7 @@ export async function metricsRouter(req: Request, db: Database): Promise<Respons
   // -------------------------------------------------------------------------
   if (path === '/api/metrics/burn-rate') {
     const data = computeBurnRate(db, window);
-    return jsonResponse({ success: true, data, meta });
+    return jsonResponse({ success: true, data, meta }, cors);
   }
 
   // -------------------------------------------------------------------------
@@ -281,7 +285,7 @@ export async function metricsRouter(req: Request, db: Database): Promise<Respons
   // -------------------------------------------------------------------------
   if (path === '/api/metrics/cache-trend') {
     const data = computeCacheTrend(db, window);
-    return jsonResponse({ success: true, data, meta });
+    return jsonResponse({ success: true, data, meta }, cors);
   }
 
   // -------------------------------------------------------------------------
@@ -289,7 +293,7 @@ export async function metricsRouter(req: Request, db: Database): Promise<Respons
   // -------------------------------------------------------------------------
   if (path === '/api/metrics/proxy-trend') {
     const data = computeProxyTrend(db, window);
-    return jsonResponse({ success: true, data, meta });
+    return jsonResponse({ success: true, data, meta }, cors);
   }
 
   return null;

@@ -37,7 +37,12 @@ afterEach(() => {
 });
 
 function get(path: string): Request {
-  return new Request(`http://localhost${path}`, { method: 'GET' });
+  // CORS SSoT 전환(보안): localhost origin 을 명시해야 Allow-Origin 이 echo 된다.
+  // 와일드카드('*') 제거 후 동작이라, 허용 origin 헤더를 부여해 새 contract 를 검증.
+  return new Request(`http://localhost${path}`, {
+    method: 'GET',
+    headers: { Origin: 'http://localhost:3000' },
+  });
 }
 
 async function call(path: string): Promise<Response | null> {
@@ -76,7 +81,9 @@ describe('metricsRouter — 응답 봉투', () => {
     const res = await call('/api/metrics/model-usage');
     expect(res).not.toBeNull();
     expect(res!.headers.get('Content-Type')).toBe('application/json');
-    expect(res!.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    // CORS SSoT 전환: 와일드카드('*') 대신 허용 origin echo + Vary: Origin.
+    expect(res!.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:3000');
+    expect(res!.headers.get('Vary')).toBe('Origin');
     const body = await res!.json();
     expect(body.success).toBe(true);
     expect(body).toHaveProperty('data');

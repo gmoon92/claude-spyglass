@@ -88,11 +88,28 @@ describe('Server', () => {
     it('should handle OPTIONS request', async () => {
       startServer({ port: TEST_PORT });
 
+      // CORS SSoT 전환(보안): 와일드카드('*') 제거. 허용 origin(localhost) 을 명시하면
+      // preflight 가 그 origin 을 echo + Methods/Headers/Vary 를 내려준다.
       const res = await fetch(`http://127.0.0.1:${TEST_PORT}/health`, {
         method: 'OPTIONS',
+        headers: { Origin: 'http://localhost:3000' },
       });
       expect(res.status).toBe(204);
-      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:3000');
+      expect(res.headers.get('Access-Control-Allow-Methods')).toBe('GET, POST, OPTIONS');
+      expect(res.headers.get('Vary')).toBe('Origin');
+    });
+
+    it('should not emit CORS headers for disallowed origin (preflight)', async () => {
+      startServer({ port: TEST_PORT });
+
+      // 비허용 origin → CORS 헤더 미부여(요청 차단은 하지 않음, 204 유지).
+      const res = await fetch(`http://127.0.0.1:${TEST_PORT}/health`, {
+        method: 'OPTIONS',
+        headers: { Origin: 'https://evil.example.com' },
+      });
+      expect(res.status).toBe(204);
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
     });
   });
 });

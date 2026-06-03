@@ -167,7 +167,8 @@ describe('Collect API', () => {
 
       const req = new Request('http://localhost:9999/collect', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // CORS SSoT 전환(보안): 와일드카드('*') 제거 후 동작 검증을 위해 허용 origin 명시.
+        headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000' },
         body: JSON.stringify(payload),
       });
 
@@ -179,8 +180,9 @@ describe('Collect API', () => {
       expect(body.success).toBe(true);
       expect(body.saved).toBe(true);
 
-      // CORS 헤더 확인
-      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+      // CORS 헤더 확인 — 와일드카드 대신 허용 origin echo + Vary: Origin.
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:3000');
+      expect(res.headers.get('Vary')).toBe('Origin');
     });
 
     it('should handle invalid JSON', async () => {

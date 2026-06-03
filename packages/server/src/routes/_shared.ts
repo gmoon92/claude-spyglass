@@ -41,15 +41,18 @@ export interface ApiResponse<T = unknown> {
 // =============================================================================
 
 /**
- * 통일된 JSON 응답 (CORS 헤더 포함).
- * 모든 routes/* 라우터가 이 함수를 사용 — API 응답 contract SSoT.
+ * 통일된 JSON 응답. 모든 routes/* 라우터가 이 함수를 사용 — API 응답 contract SSoT.
+ *
+ * CORS 헤더는 여기서 부여하지 않는다 — origin 허용 판단·헤더 부여는 /api/* 진입점
+ * (api.ts apiRouter)에서 SSoT(@spyglass/types corsHeaders)를 1회 경유해 모든 응답에
+ * 일괄 적용한다 ("동일 판단 로직은 한 곳에만"). 97개 호출 측이 req 를 다시 넘길 필요가
+ * 없도록 하기 위함이며, 와일드카드('*')는 이 전환으로 완전히 제거됐다.
  */
 export function jsonResponse(body: ApiResponse, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
     },
   });
 }

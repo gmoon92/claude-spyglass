@@ -11,6 +11,7 @@
  */
 
 import type { NormalizedRequest } from './domain/request-normalizer';
+import { corsHeaders } from '@spyglass/types';
 
 // =============================================================================
 // 타입 정의
@@ -251,7 +252,7 @@ export function broadcastSessionUpdate(sessionData: {
 /**
  * SSE 엔드포인트 핸들러
  */
-export function sseRouter(_req: Request): Response {
+export function sseRouter(req: Request): Response {
   let activeController: ReadableStreamDefaultController<Uint8Array> | null = null;
   let pingInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -296,7 +297,8 @@ export function sseRouter(_req: Request): Response {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
+      // CORS 헤더는 origin 허용 판단까지 SSoT(corsHeaders)가 책임.
+      ...corsHeaders(req),
     },
   });
 }

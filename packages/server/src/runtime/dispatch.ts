@@ -13,6 +13,7 @@ import { apiRouter, invalidateDashboardCache } from '../api';
 import { sseRouter } from '../sse';
 import { handleProxy } from '../proxy';
 import type { SpyglassDatabase } from '@spyglass/storage';
+import { corsHeaders, preflightResponse } from '@spyglass/types';
 
 /**
  * web 정적 파일 루트 — packaged(Electron desktop) 환경에서는 `SPYGLASS_WEB_ROOT`
@@ -39,16 +40,9 @@ export async function handleRequest(req: Request, db: SpyglassDatabase): Promise
   const url = new URL(req.url);
   const path = url.pathname;
 
-  // CORS 프리플라이트
+  // CORS 프리플라이트 — origin 허용 판단·헤더 부여는 SSoT(preflightResponse)가 책임.
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      },
-    });
+    return preflightResponse(req);
   }
 
   try {
@@ -89,7 +83,7 @@ export async function handleRequest(req: Request, db: SpyglassDatabase): Promise
         {
           headers: {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
+            ...corsHeaders(req),
           },
         }
       );
@@ -198,7 +192,7 @@ export async function handleRequest(req: Request, db: SpyglassDatabase): Promise
         status: 404,
         headers: {
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
+          ...corsHeaders(req),
         },
       }
     );
@@ -210,7 +204,7 @@ export async function handleRequest(req: Request, db: SpyglassDatabase): Promise
         status: 500,
         headers: {
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
+          ...corsHeaders(req),
         },
       }
     );

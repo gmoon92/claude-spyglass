@@ -6,5 +6,11 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test src"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
   }
 }
