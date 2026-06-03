@@ -15,28 +15,17 @@ import {
   resetScrollLock,
   isScrollLockBannerVisible,
 } from '../infra-state';
-// 원본(병존) — 동치 기준
-import {
-  formatContextWindowLabel as origCtxLabel,
-  DEFAULT_CONTEXT_WINDOW as ORIG_DEFAULT,
-} from '../../../../assets/js/context-window.js';
+// 원본(병존) — 동치 기준. request-types 는 LIVE(런타임 소비처 잔존)라 oracle 유지.
+// (context-window·tool-colors 원본은 P5 데드 vanilla 삭제로 제거 → 대표값 리터럴로 계약 고정.)
 import {
   subTypeOf as origSubTypeOf,
   isAnchorTool as origIsAnchor,
 } from '../../../../assets/js/request-types.js';
-import { getToolColor as origGetToolColor } from '../../../../assets/js/tool-colors.js';
 
-describe('context-window — 원본 동치', () => {
+describe('context-window — 표기 계약', () => {
   it('DEFAULT_CONTEXT_WINDOW = 200_000', () => {
     expect(DEFAULT_CONTEXT_WINDOW).toBe(200_000);
-    expect(DEFAULT_CONTEXT_WINDOW).toBe(ORIG_DEFAULT);
   });
-  it.each([200_000, 1_000_000, 1_500_000, 262_144, 999, 0, 200_001])(
-    'formatContextWindowLabel(%i) 동치',
-    (n) => {
-      expect(formatContextWindowLabel(n)).toBe(origCtxLabel(n));
-    },
-  );
   it('대표 표기: 200K / 1M / 1.5M / 262.1K', () => {
     expect(formatContextWindowLabel(200_000)).toBe('200K');
     expect(formatContextWindowLabel(1_000_000)).toBe('1M');
@@ -68,13 +57,7 @@ describe('request-types — 원본 동치', () => {
   });
 });
 
-describe('tool-colors — 원본 동치 + CSS override 순수화', () => {
-  it.each(['Agent', 'Bash', 'mcp__x__Read', 'Unknown', null, ''])(
-    'getToolColor(%s) 기본 테이블 동치',
-    (name) => {
-      expect(getToolColor(name)).toBe(origGetToolColor(name));
-    },
-  );
+describe('tool-colors — 기본 테이블 + CSS override 순수화', () => {
   it('mcp__ 접두사 → 마지막 세그먼트 룩업', () => {
     expect(getToolColor('mcp__srv__Bash')).toBe(TOOL_COLORS.Bash);
   });

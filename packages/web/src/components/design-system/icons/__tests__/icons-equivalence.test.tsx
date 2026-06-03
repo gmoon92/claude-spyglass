@@ -28,7 +28,6 @@ import {
   Info,
   McpDot,
   Note,
-  Quote,
   Radio,
   Refresh,
   Search,
@@ -51,7 +50,6 @@ import { svgError } from '../../../../../assets/js/design-system/icons/error.js'
 import { svgInfo } from '../../../../../assets/js/design-system/icons/info.js';
 import { svgMcpDot } from '../../../../../assets/js/design-system/icons/mcp-dot.js';
 import { svgNote } from '../../../../../assets/js/design-system/icons/note.js';
-import { svgQuote } from '../../../../../assets/js/design-system/icons/quote.js';
 import { svgRadio } from '../../../../../assets/js/design-system/icons/radio.js';
 import { svgRefresh } from '../../../../../assets/js/design-system/icons/refresh.js';
 import { svgSearch } from '../../../../../assets/js/design-system/icons/search.js';
@@ -116,9 +114,6 @@ describe('icons equivalence — 20개 아이콘 default 출력 동치', () => {
   });
   it('Note (viewBox 12, xmlns, default className)', () => {
     expect(tsx(<Note />)).toBe(js(svgNote()));
-  });
-  it('Quote (fill-only, viewBox 12, xmlns, size 12)', () => {
-    expect(tsx(<Quote />)).toBe(js(svgQuote()));
   });
   it('Radio (outline circle, no cap/join, size 12)', () => {
     expect(tsx(<Radio />)).toBe(js(svgRadio()));

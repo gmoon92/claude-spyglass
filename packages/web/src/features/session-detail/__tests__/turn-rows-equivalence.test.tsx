@@ -1,23 +1,19 @@
 /**
- * turn-rows-equivalence.test.tsx — TurnRows TSX ↔ 원본 makeTurnLogRows 출력 동치 (P3-05)
+ * turn-rows-equivalence.test.tsx — TurnRows TSX 골든마스터 스냅샷 (P3-05 → P5 정공법)
  *
- * 골든마스터 보호:
- *  - oracle = assets/js/session-detail/turn-rows.js#makeTurnLogRows (병존, 무수정).
- *  - 신규 TSX TurnRows 의 renderToStaticMarkup 결과가 oracle HTML 과 정규화 후 동치임을 증명.
+ * 연혁:
+ *  - (P3-05) oracle = assets/js/session-detail/turn-rows.js#makeTurnLogRows 와 출력 동치 검증.
+ *  - (P5 데드 vanilla 삭제) makeTurnLogRows(및 render/rows 위임)는 React TurnRows 로 완전 대체되어
+ *    런타임 소비처가 없으므로 제거됨. 본 테스트는 검증된 React 출력을 골든마스터 스냅샷으로
+ *    동결하여 이후 회귀를 잡는다. vanilla oracle 의존 0.
  *
- * 정규화(renderers-equivalence.test.tsx 와 동일 철학 + 속성순서 무시):
- *  - self-close 통일 / 공백·줄바꿈 축약 / HTML 엔티티 디코드 / 속성명 소문자화.
- *  - 추가: **태그 내 속성을 이름순 정렬** — 원본 injectChipKey 는 data-chip-key 를 `<tr `
- *    첫 속성으로 삽입(turn-rows.js:323)하지만, RequestRow 는 chipKey 를 className 앞에 두므로
- *    위치가 다를 수 있다. HTML 속성 순서는 spec 상 무의미하므로 정렬로 흡수(동치의 충분조건).
- *  - 거짓통과 가드로 "구조/속성/값 차이는 여전히 잡힘"을 별도 증명.
+ * 정규화: self-close 통일 / 공백·줄바꿈 축약 / HTML 엔티티 디코드 / 속성명 소문자화 / 속성 이름순 정렬.
+ *  - 속성 순서는 spec 상 무의미하므로 정렬로 안정화(스냅샷 노이즈 제거).
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { TurnRows } from '../TurnRows';
-// oracle — 원본 JS(병존, 무수정).
-import { makeTurnLogRows } from '../../../../assets/js/session-detail/turn-rows.js';
 
 const NOW_FIXED_MS = new Date('2026-05-04T10:00:00Z').getTime();
 const originalDateNow = Date.now;
@@ -25,7 +21,7 @@ const originalDateNow = Date.now;
 beforeAll(() => {
   (globalThis as any).window = (globalThis as any).window ?? {};
   (globalThis as any).window.I18n = {
-    t: (key: string, vars?: Record<string, unknown>) => {
+    t: (key: string) => {
       const map: Record<string, string> = {
         'session.rows.empty-message': '메시지 없음',
         'badges.renderers.tool-status.error': '오류',
@@ -58,7 +54,6 @@ function decodeEntities(s: string): string {
 
 /** 단일 시작 태그의 속성을 이름순 정렬(값 보존). */
 function sortAttrsInTag(tag: string): string {
-  // tag 예: '<tr data-chip-key="x" class="y" data-type="z">'
   const m = tag.match(/^<([a-zA-Z][\w-]*)\s+([\s\S]*?)(\/?)>$/);
   if (!m) return tag;
   const [, name, attrBody, selfClose] = m;
@@ -80,12 +75,10 @@ function normalizeHtml(s: string): string {
       .replace(/(\s)([a-zA-Z][a-zA-Z0-9-]*)(=)/g, (_m, sp, nm, eq) => `${sp}${nm.toLowerCase()}${eq}`)
       .trim(),
   );
-  // 시작 태그마다 속성 정렬(닫는 태그/텍스트는 보존).
   return decoded.replace(/<[a-zA-Z][\w-]*\s[^<>]*?>/g, (tag) => sortAttrsInTag(tag));
 }
 
 const tsx = (el: Parameters<typeof renderToStaticMarkup>[0]) => normalizeHtml(renderToStaticMarkup(el));
-const js = (s: string) => normalizeHtml(s);
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 
@@ -136,12 +129,12 @@ function response(id: string, extra: Record<string, unknown> = {}) {
   };
 }
 
-// ── 동치 ──────────────────────────────────────────────────────────────────────
+// ── 골든마스터 스냅샷 ───────────────────────────────────────────────────────────
 
-describe('TurnRows ≡ makeTurnLogRows (golden master)', () => {
+describe('TurnRows 골든마스터 스냅샷', () => {
   it('prompt 단독 (본문 없음)', () => {
     const turn: any = { prompt: prompt('p1'), items: [] };
-    expect(tsx(<TurnRows turn={turn} />)).toBe(js(makeTurnLogRows(turn)));
+    expect(tsx(<TurnRows turn={turn} />)).toMatchSnapshot();
   });
 
   it('items[] 인터리빙 (tool → response → tool)', () => {
@@ -153,7 +146,7 @@ describe('TurnRows ≡ makeTurnLogRows (golden master)', () => {
         { kind: 'tool', request: tool('a2', 'Bash') },
       ],
     };
-    expect(tsx(<TurnRows turn={turn} />)).toBe(js(makeTurnLogRows(turn)));
+    expect(tsx(<TurnRows turn={turn} />)).toMatchSnapshot();
   });
 
   it('items 미제공 → 폴백 시간순 머지(tool_calls + responses)', () => {
@@ -162,7 +155,7 @@ describe('TurnRows ≡ makeTurnLogRows (golden master)', () => {
       tool_calls: [tool('a1', 'Read', { timestamp: '2026-04-28T10:01:00Z' }), tool('a2', 'Edit', { timestamp: '2026-04-28T10:03:00Z' })],
       responses: [response('r1', { timestamp: '2026-04-28T10:02:00Z' })],
     };
-    expect(tsx(<TurnRows turn={turn} />)).toBe(js(makeTurnLogRows(turn)));
+    expect(tsx(<TurnRows turn={turn} />)).toMatchSnapshot();
   });
 
   it('showSession: true', () => {
@@ -170,7 +163,7 @@ describe('TurnRows ≡ makeTurnLogRows (golden master)', () => {
       prompt: prompt('p1'),
       items: [{ kind: 'tool', request: tool('a1', 'Read') }],
     };
-    expect(tsx(<TurnRows turn={turn} showSession />)).toBe(js(makeTurnLogRows(turn, { showSession: true })));
+    expect(tsx(<TurnRows turn={turn} showSession />)).toMatchSnapshot();
   });
 
   it('anomalyFlags (spike + loop on tool, slow on response)', () => {
@@ -185,9 +178,7 @@ describe('TurnRows ≡ makeTurnLogRows (golden master)', () => {
       ['a1', new Set(['spike', 'loop'])],
       ['r1', new Set(['slow'])],
     ]);
-    expect(tsx(<TurnRows turn={turn} anomalyFlags={flags} />)).toBe(
-      js(makeTurnLogRows(turn, { anomalyFlags: flags })),
-    );
+    expect(tsx(<TurnRows turn={turn} anomalyFlags={flags} />)).toMatchSnapshot();
   });
 
   it('chip-key 6분기 (agent/skill/mcp/task/tool/response) 모두 행에 주입', () => {
@@ -202,40 +193,30 @@ describe('TurnRows ≡ makeTurnLogRows (golden master)', () => {
         { kind: 'response', request: response('r1') },
       ],
     };
-    expect(tsx(<TurnRows turn={turn} />)).toBe(js(makeTurnLogRows(turn)));
+    expect(tsx(<TurnRows turn={turn} />)).toMatchSnapshot();
   });
 
-  it('turn 없음 → null (oracle 은 빈 문자열)', () => {
-    expect(tsx(<TurnRows turn={null} />)).toBe(js(makeTurnLogRows(null as any)));
+  it('turn 없음 → null', () => {
+    expect(tsx(<TurnRows turn={null} />)).toMatchSnapshot();
   });
 });
 
-// ── 거짓통과 가드 ──────────────────────────────────────────────────────────────
+// ── 정규화 거짓통과 가드 (oracle 무관, 정규화 자체 계약) ─────────────────────────
 
 describe('정규화 거짓통과 가드 — 의도적 변형은 잡혀야 한다', () => {
-  const turn: any = {
-    prompt: prompt('p1'),
-    items: [{ kind: 'tool', request: tool('a1', 'Read') }],
-  };
-  const base = () => makeTurnLogRows(turn);
-
-  it('data-chip-key 값 변형 시 불일치', () => {
-    const b = base();
-    const mutated = b.replace('data-chip-key="tool:Read"', 'data-chip-key="tool:ReadX"');
-    expect(js(mutated)).not.toBe(js(b));
-  });
-
-  it('행 개수 차이(prompt 행 제거) 시 불일치', () => {
-    const b = base();
-    const mutated = b.replace(/<tr[^>]*data-type="prompt"[\s\S]*?<\/tr>/, '');
-    expect(js(mutated)).not.toBe(js(b));
-  });
-
   it('속성 정렬은 순서차만 흡수(동일 속성 집합은 일치)', () => {
-    expect(js('<tr data-chip-key="k" class="c" data-type="t"></tr>')).toBe(
-      js('<tr class="c" data-type="t" data-chip-key="k"></tr>'),
+    expect(normalizeHtml('<tr data-chip-key="k" class="c" data-type="t"></tr>')).toBe(
+      normalizeHtml('<tr class="c" data-type="t" data-chip-key="k"></tr>'),
     );
     // 속성 값이 다르면 정렬해도 불일치
-    expect(js('<tr class="c" data-type="t"></tr>')).not.toBe(js('<tr class="c" data-type="x"></tr>'));
+    expect(normalizeHtml('<tr class="c" data-type="t"></tr>')).not.toBe(
+      normalizeHtml('<tr class="c" data-type="x"></tr>'),
+    );
+  });
+
+  it('data-chip-key 값 변형 시 불일치', () => {
+    const a = normalizeHtml('<tr data-chip-key="tool:Read" class="c"></tr>');
+    const b = normalizeHtml('<tr data-chip-key="tool:ReadX" class="c"></tr>');
+    expect(a).not.toBe(b);
   });
 });

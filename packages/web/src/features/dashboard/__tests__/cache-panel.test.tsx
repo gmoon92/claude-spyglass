@@ -12,11 +12,12 @@ import {
   computeRatioView,
 } from '../cache-stats';
 import { CachePanel } from '../CachePanel';
-import { computeSessionCacheStats as origComputeSessionCacheStats } from '../../../../assets/js/cache-panel.js';
 
 const t = (key: string, vars?: Record<string, unknown>) => `t:${key}:${JSON.stringify(vars ?? {})}`;
 
-describe('computeSessionCacheStats ↔ 원본 동치', () => {
+// 구 cache-panel.js 원본 동치 oracle 비교 블록은 P5 데드 vanilla 삭제로 제거됨.
+// 합산/제외 규칙은 cache-stats.ts(src) 골든마스터 리터럴로 고정한다.
+describe('computeSessionCacheStats — 합산/제외 골든마스터', () => {
   const reqs = [
     { type: 'prompt', cache_read_tokens: 100, cache_creation_tokens: 50, tokens_input: 30 },
     { type: 'tool_call', cache_read_tokens: 200, cache_creation_tokens: 0, tokens_input: 10 },
@@ -24,12 +25,6 @@ describe('computeSessionCacheStats ↔ 원본 동치', () => {
     { type: 'tool_call', event_type: 'pre_tool', cache_read_tokens: 999 }, // 제외
     { type: 'other', cache_read_tokens: 999 }, // 제외
   ];
-
-  it('합산/분모/hitRate 가 원본과 동일', () => {
-    const ours = computeSessionCacheStats(reqs);
-    const orig = origComputeSessionCacheStats(reqs);
-    expect(ours).toEqual(orig);
-  });
 
   it('pre_tool/비-LLM 행 제외 — cacheRead 999 미반영', () => {
     const s = computeSessionCacheStats(reqs);
