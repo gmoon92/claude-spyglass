@@ -14,6 +14,7 @@
 import type { Database } from 'bun:sqlite';
 import type { RequestMeta } from '../types';
 import { selectUpstreamUrl, buildForwardHeaders, UPSTREAM_URL } from '../upstream';
+import { logInbound } from '../log-result';
 import { parseRequestBody } from '../request-parser';
 import { extractClientHeaders } from '../audit-headers';
 import { getLastTurnId } from '../../hook';
@@ -68,9 +69,8 @@ export async function buildInboundContext(
   const turnId = sessionId ? getLastTurnId(db, sessionId) : null;
   const { clientUserAgent, clientApp, anthropicBeta, clientMeta } = extractClientHeaders(req);
 
-  console.log(
-    `[PROXY] → ${method} ${url.pathname}${reqMeta.model ? ` [${reqMeta.model}]` : ''}`,
-  );
+  // 정보성 stdout 라인 — DIAG 게이트 판단은 log-result에 캡슐화 (호출 측 재계산 금지).
+  logInbound({ method, pathname: url.pathname, model: reqMeta.model });
 
   return {
     bodyBuffer,
