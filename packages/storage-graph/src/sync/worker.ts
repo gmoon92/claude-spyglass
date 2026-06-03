@@ -59,6 +59,8 @@ let timer: ReturnType<typeof setInterval> | null = null;
 let tickInFlight = false;
 let totalProcessed = 0;
 let lastError: unknown = null;
+/** 마지막으로 cursor 가 실제 전진(processed>0)한 시각(epoch ms). 성공 tick 이 없으면 null. */
+let lastSuccessAt: number | null = null;
 
 // =============================================================================
 // 외부 인터페이스
@@ -72,6 +74,30 @@ export interface SyncWorkerStatus {
   circuitState: ReturnType<ReturnType<typeof getCircuitBreaker>['getState']>;
   /** DLQ(dead=1) 로 격리된 outbox row 수 — 누적 영구 실패 관측 지표 (P1). */
   deadLetterCount: number;
+  /**
+   * 마지막으로 cursor 가 실제 전진(processed>0)한 시각(epoch ms). 성공 tick 이 없으면 null.
+   * 운영자가 "지금 멈춘 건지, 원래 큐가 빈 건지"를 cursor 2회 비교 없이 1회 조회로 판단
+   * (roadmap §02-5). 빈 큐 tick·전량 실패 tick 은 갱신하지 않는다 — idle ≠ success.
+   */
+  lastSuccessAt: number | null;
+}
+
+/**
+ * tick 결과를 모듈 상태(totalProcessed/lastError/lastSuccessAt)에 반영하는 seam.
+ * runOutboxTick 과 동일한 "주입으로 단위 테스트 가능" 철학 — now 주입으로 시계 결정론.
+ * processed>0 이면 부분 성공(poison 혼재)이라도 시스템은 동작 중이므로 lastSuccessAt 갱신.
+ */
+export function applyTickResult(result: OutboxTickResult, now: number = Date.now()): void {
+  totalProcessed += result.processed;
+  lastError = result.error;
+  if (result.processed > 0) lastSuccessAt = now;
+}
+
+/** 테스트 전용 — 모듈 상태 초기화 (flag.ts resetGraphModeCache 선례). */
+export function resetSyncWorkerStateForTests(): void {
+  totalProcessed = 0;
+  lastError = null;
+  lastSuccessAt = null;
 }
 
 /**
@@ -120,6 +146,7 @@ export function getSyncWorkerStatus(): SyncWorkerStatus {
         : String(lastError),
     circuitState: getCircuitBreaker().getState(),
     deadLetterCount: readDeadLetterCount(),
+    lastSuccessAt,
   };
 }
 
@@ -253,8 +280,7 @@ async function tick(): Promise<void> {
     if (!client) return; // TS narrowing 보조 — 위 catch 가 return 했으므로 사실상 unreachable.
 
     const result = await runOutboxTick(db, client, cursor, breaker);
-    totalProcessed += result.processed;
-    lastError = result.error;
+    applyTickResult(result);
   } finally {
     tickInFlight = false;
   }
