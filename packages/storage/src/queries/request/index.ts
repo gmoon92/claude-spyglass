@@ -33,6 +33,12 @@ export {
   getChildRequestsByParents,
 } from './read';
 
+// 대화 프로젝션 — GET /api/conversations (주간 보고·패턴 분석)
+export {
+  type ConversationRow,
+  getConversationRows,
+} from './conversation';
+
 export {
   // 타입
   type CreateRequestParams,

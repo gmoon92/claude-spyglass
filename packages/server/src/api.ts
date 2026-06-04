@@ -26,6 +26,7 @@ import { applyCorsHeaders } from '@spyglass/types';
 import { jsonResponse } from './routes/_shared';
 import { sessionsRouter } from './routes/sessions';
 import { requestsRouter } from './routes/requests';
+import { conversationsRouter } from './routes/conversations';
 import { statsRouter } from './routes/stats';
 import { dashboardRouter, invalidateDashboardCache } from './routes/dashboard';
 import { eventsRouter } from './routes/events';
@@ -55,6 +56,7 @@ export { invalidateDashboardCache };
 const SYNC_ROUTERS = [
   sessionsRouter,
   requestsRouter,
+  conversationsRouter,
   statsRouter,
   dashboardRouter,
   eventsRouter,

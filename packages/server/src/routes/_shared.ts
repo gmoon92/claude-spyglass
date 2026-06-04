@@ -33,6 +33,8 @@ export interface ApiResponse<T = unknown> {
     prologue_count?: number;
     /** prompt 행이 없는 진행 중 세션을 단일 implicit turn으로 합성해 반환한 경우 표지 */
     implicit_turn?: boolean;
+    /** /api/conversations: MAX_ROWS 상한에 걸려 결과가 잘렸는지 표지 */
+    truncated?: boolean;
   };
 }
 

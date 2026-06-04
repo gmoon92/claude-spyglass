@@ -137,6 +137,8 @@ export {
   getRequestsByType,
   getRequestsWithFilter,
   getTopTokenRequests,
+  // 대화 프로젝션 — GET /api/conversations (주간 보고·패턴 분석)
+  getConversationRows,
   // 수정
   updateRequest,
   // 삭제
@@ -175,6 +177,7 @@ export {
   type CacheStats,
   type TurnItem,
   type TurnToolCall,
+  type ConversationRow,
 } from './queries/request';
 
 // =============================================================================
