@@ -36,7 +36,11 @@ function decodeRequestRow<T extends DecodableRequestRow>(row: T | null): T | nul
   }
   return row;
 }
-function decodeRequestRows<T extends DecodableRequestRow>(rows: T[]): T[] {
+/**
+ * 모듈 내부 공유 헬퍼 — conversation.ts 등 request 하위 read 모듈이 동일 복호 정책을
+ * 재구현하지 않도록 export ("동일 판단 로직은 한 곳에만"). barrel(index.ts)로는 노출하지 않음.
+ */
+export function decodeRequestRows<T extends DecodableRequestRow>(rows: T[]): T[] {
   const key = getActiveKey();
   for (const row of rows) {
     if (row.payload != null) row.payload = decodeText(row.payload, row.payload_algo, key) ?? row.payload;
