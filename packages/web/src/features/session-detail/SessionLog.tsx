@@ -17,13 +17,14 @@
  *  - <col> 너비는 모듈 상수(LOG_TABLE_COLS) 로 **초기값만** JSX 에 둔다. col-resize 가
  *    드래그로 변경한 너비를 매 렌더에서 인라인 style 로 덮어쓰지 않도록, 너비 소유권은
  *    DOM(col-resize ref) 이 갖고 JSX 는 재조정 시 col 을 건드리지 않는다(원본 멱등 주입과 동일 시맨틱).
- *  - col-resize 부착은 useRef(table)+useEffect(mount 1회) — 원본 "골격 1회 부착"(turn-views.js:1023).
+ *  - col-resize 부착은 production 주력 훅 useColResize(tableRef, { storageKey })
+ *    — 마운트 1회 핸들 부착 + 드래그/Auto-fit + storageKey 별 너비 영속(feed/metadocs/syslib 선례).
  *
  * @module features/session-detail/SessionLog
  */
-import { useEffect, useRef, type ReactNode, type ReactElement, type RefObject } from 'react';
+import { useRef, type ReactNode, type ReactElement, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
-import { initColResize } from '../../lib/col-resize';
+import { useColResize } from '../../components/use-col-resize';
 import { TurnRows } from './TurnRows';
 
 interface RowLike {
@@ -80,10 +81,8 @@ export function SessionLog({
   const { t } = useTranslation();
   const tableRef = useRef<HTMLTableElement | null>(null);
 
-  // col-resize 핸들 부착 — mount 1회(원본 turn-views.js:1023 "골격 1회 부착").
-  useEffect(() => {
-    if (tableRef.current) initColResize(tableRef.current);
-  }, []);
+  // col-resize 핸들 부착 + 너비 영속 — production 주력 훅(마운트 1회 부착, storageKey 별 분리).
+  useColResize(tableRef as RefObject<HTMLTableElement>, { storageKey: 'session-log' });
 
   return (
     <>

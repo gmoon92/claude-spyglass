@@ -7,13 +7,19 @@
  *    불변이어야 한다(드래그한 컬럼 너비가 리셋되는 회귀 방지).
  *  - 9컬럼 폭: 100/88/120/130/(가변)/48/48/52/68px.
  *
- * 주의: col-resize 의 useEffect 부착은 실제 DOM mount 에서만 동작하므로(러너는 renderToStaticMarkup,
- *   effect 미실행) 본 테스트는 *정적 골격 계약* 만 검증한다. 드래그→너비유지 런타임 확인은
- *   수동 verify(§4.2 가드 #3, P3-01 resize 패턴) 로 보강한다.
+ * 정적 골격 계약(renderToStaticMarkup): col-resize 의 useEffect 미실행 환경에서 colgroup/thead
+ *   불변·9컬럼·colspan 을 검증한다.
+ * 라이브 결선 계약(createRoot+act): production 주력 훅 useColResize(storageKey='session-log')가
+ *   마운트 시 각 thead th 에 .col-resize-handle 을 부착함을 jsdom 에서 입증한다(syslib-colresize 선례).
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import './_dom-stub'; // bun test 양립: createRoot 마운트용 전역 DOM 보장(vitest 에선 no-op).
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { SessionLog, LOG_TABLE_COLS } from '../SessionLog';
+
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 // expandCols 파생 공식 SSoT 검증용 — TurnRows 내부 로직과 동기화 유지.
 const SESSION_DETAIL_EXPAND_COLS = (showSession: boolean) => showSession ? 10 : 9;
 
@@ -106,5 +112,30 @@ describe('expand 행 colspan 계약 — 테이블 컬럼 수와 일치해야 레
   it('showSession=true → expandCols=10 = LOG_TABLE_COLS 길이 + Session 컬럼 1', () => {
     // showSession=true 면 Session 컬럼이 추가되어 10컬럼이므로 expandCols=10 이어야 한다.
     expect(SESSION_DETAIL_EXPAND_COLS(true)).toBe(LOG_TABLE_COLS.length + 1);
+  });
+});
+
+describe('SessionLog — col-resize 핸들 부착(useColResize 라이브 결선)', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    localStorage.clear();
+    container = document.createElement('div');
+    document.body.appendChild(container);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  it('#turnLogTable thead 각 th 에 .col-resize-handle 이 붙는다(개수 = 9컬럼)', () => {
+    root = createRoot(container);
+    act(() => root.render(<SessionLog activeTurn={turnA} />));
+    const table = container.querySelector('#turnLogTable')!;
+    const ths = table.querySelectorAll('thead th');
+    const handles = table.querySelectorAll('.col-resize-handle');
+    expect(ths.length).toBe(LOG_TABLE_COLS.length); // 9컬럼
+    expect(handles.length).toBe(ths.length); // th 마다 핸들 1개
   });
 });

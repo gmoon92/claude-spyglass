@@ -6,7 +6,8 @@
  *    드래그·하이라이트는 effect 내부에 *명령형 코드를 거의 그대로 이식*(arch §4.1-4.2).
  *    노드를 JSX foreignObject N개로 선언 매핑하지 않음 — resizeNodeToContent 의 동기 offsetWidth
  *    측정(flow.js:596)이 선언 렌더와 충돌(측정 시점 보장 불가).
- *  - 순수 추출 lib 호출: flow-camera(fit/이징/트윈), flow-graph(BFS), flow-edge(베지어), flow-layout(좌표).
+ *  - 순수 추출 lib 호출: flow-camera(fit/이징/트윈 — 순수부+effect부 공존), flow-graph(BFS, 순수),
+ *    flow-edge(베지어 computeEdgeD, 순수), flow-layout(좌표 computePositions/contentBBox, 순수).
  *  - activeRow 단방향 props 계약(arch §2.2): catalog 행 클릭/첫 행 → activeRow set → effect re-fetch.
  *    flow 가 catalog 를 역참조하지 않음(features 횡결합 금지). dblclick/sub-row 재중심은
  *    onRecenter(row) 통지 — 호출처(셸)가 activeRow 갱신(loadFlow re-fetch 와 동치).
@@ -14,13 +15,27 @@
  *  - ★등록 순서 보존: bindSubRowClick → bindDrag → bindPan → bindZoom → bindHighlight →
  *    bindNodeDoubleClick → bindToolbar (flow.js:271-277). sub-row click 이 카드로 흡수되지 않게 정책.
  *
- * 명령형 영역(줌/팬/드래그/하이라이트/resize 측정)은 bun:test(DOM 미구현) 단위 불가 →
- *   수동 verify(arch §4.2: 리사이즈/줌/팬/드래그 후 깜빡임 0 + 하이라이트 정상 + sub-row 재중심 정상).
+ * ── 명령형/선언형 경계 (vanilla-js-audit) ───────────────────────────────────────
+ *  본질적 명령형(React 선언 대체 불가 — 유지):
+ *    · 노드 카드 컨테이너(foreignObject/.node) — resizeNodeToContent 의 동기 offsetWidth 측정과
+ *      결합. 선언 렌더 시 측정 시점 보장 불가 + jsdom layout 미계산이라 테스트 불가. ★escape-hatch.
+ *    · viewBox 줌/팬/드래그 — pan/zoom 이 rAF·in-place 로 setAttribute('viewBox'/'d') 갱신.
+ *      useState 전환은 측정 후 React 재렌더 + 60fps 상태 갱신 재설계라 회귀 위험 大 → 보류.
+ *    · 엣지 path 의 *DOM 생성* — 좌표는 순수 computeEdgeD 산출이나, measured 노드 geometry 에
+ *      의존 + 드래그 시 in-place d 갱신이라 JSX <path> 선언 매핑은 viewBox 재설계와 동반 필요 → 보류.
+ *    · 하이라이트 — 순수 BFS(flow-graph) 결과를 classList 토글로 적용(effect).
+ *  선언형 전환 완료(이번 작업):
+ *    · 노드 카드 *내용물*(아이콘 컨테이너/통계/sub-row/칩/pill) innerHTML 보간 → mkHtml DOM 생성.
+ *    · empty/skeleton/error 종단 상태 innerHTML → DOM 노드. center 라벨 textContent 주입.
+ *    · → escHtml 수동 이스케이프 전량 제거(XSS 표면 축소).
+ *
+ * 명령형 영역(줌/팬/드래그/하이라이트/resize 측정)은 SVG layout 미계산이라 정밀 좌표 단위 불가 →
+ *   특성화 테스트(meta-docs-flow-render.test.tsx)가 측정 비의존 산출물(아이콘/텍스트/엣지 path 형식/
+ *   viewBox/칩/pill/종단상태)을 고정 + 수동 verify(arch §4.2: 리사이즈/줌/팬/드래그 후 깜빡임 0).
  *
  * @module features/meta-docs/MetaDocsFlow
  */
 import { useEffect, useRef } from 'react';
-import { escHtml } from '../../lib/formatters';
 import {
   computeFitView,
   animateToView,
@@ -145,7 +160,20 @@ async function fetchUnifiedFlow(args: FlowArgs, getDateRange: () => { from?: num
 
 // =============================================================================
 // 명령형 SVG 빌드 — effect 내부에서 호출. Chart.tsx drawDonutToCanvas 동형(명령형 격리).
+//
+// vanilla-js-audit: 노드 카드 *컨테이너*(foreignObject/.node)는 resizeNodeToContent 의 동기
+//   offsetWidth 측정과 결합돼 본질적 명령형으로 유지(아래 resizeNodeToContent 주석 참조). 다만 카드
+//   *내용물* 조립은 innerHTML 문자열 보간을 폐기하고 mkHtml DOM 생성으로 전환했다 — escHtml 수동
+//   이스케이프(=XSS 표면)를 제거(textContent 가 자동 이스케이프). 시각 산출물 1:1 동치.
 // =============================================================================
+
+/** HTMLNS 엘리먼트 생성 + className/textContent 설정 헬퍼. innerHTML 문자열 보간 대체(XSS 표면 제거). */
+function mkHtml(tag: 'div' | 'span' | 'b', className?: string, text?: string): HTMLElement {
+  const el = document.createElementNS(HTMLNS, tag) as unknown as HTMLElement;
+  if (className) el.className = className;
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
 
 interface NodeRef {
   node: PositionedNode;
@@ -181,11 +209,12 @@ function emptyState(): FlowState {
   };
 }
 
-function shellHtml(meta: { centerName?: string } | undefined, t: TFunc, view: ViewState): string {
-  const centerLabel = meta?.centerName ? escHtml(meta.centerName) : '—';
+function shellHtml(_meta: { centerName?: string } | undefined, t: TFunc, view: ViewState): string {
+  // 정적 SVG 스캐폴드(.flow-svg/#flowEdgesLayer 등 하위 쿼리 대상)는 innerHTML 유지가 안전.
+  //   data-bearing 인 center 라벨(<b>)만 주입 후 textContent 로 채워 escHtml 수동 이스케이프(XSS 표면)를 제거.
   return `
     <div class="flow-toolbar flow-toolbar-sequential">
-      <span class="flow-scope">${t('ui.meta-docs-view.flow.scope-center')}: <b>${centerLabel}</b></span>
+      <span class="flow-scope">${t('ui.meta-docs-view.flow.scope-center')}: <b data-flow-scope-name></b></span>
       <div class="flow-spacer"></div>
       <span class="flow-zoom-group">
         <button class="flow-zoom-btn" data-flow-zoom="out" title="${t('ui.meta-docs-view.flow.zoom-out-title')}" aria-label="${t('ui.meta-docs-view.flow.zoom-out-title')}">−</button>
@@ -209,18 +238,32 @@ function shellHtml(meta: { centerName?: string } | undefined, t: TFunc, view: Vi
   `;
 }
 
-function emptyHtml(centerName: string | null, t: TFunc): string {
+/** container 내용을 단일 노드로 교체(innerHTML='' 대체). */
+function replaceContent(container: HTMLElement, node: HTMLElement): void {
+  container.replaceChildren(node);
+}
+
+// 빈/스켈레톤/에러 — 종단 상태(하위 쿼리 대상 없음). innerHTML 문자열 보간 폐기 → DOM 생성.
+//   i18n 문자열은 평문 + {name}/{message} placeholder 라 escHtml 수동 이스케이프가 불필요(textContent 자동).
+function emptyNode(centerName: string | null, t: TFunc): HTMLElement {
   const title = !centerName
     ? t('ui.meta-docs-view.flow.empty-no-center')
-    : t('ui.meta-docs-view.flow.empty-zero-turns', { name: escHtml(centerName) });
-  return `<div class="flow-empty flow-empty-sequential"><span class="flow-empty-title">${title}</span><span>${t('ui.meta-docs-view.flow.empty-hint')}</span></div>`;
+    : t('ui.meta-docs-view.flow.empty-zero-turns', { name: centerName });
+  const wrap = mkHtml('div', 'flow-empty flow-empty-sequential');
+  wrap.appendChild(mkHtml('span', 'flow-empty-title', title) as unknown as Node);
+  wrap.appendChild(mkHtml('span', undefined, t('ui.meta-docs-view.flow.empty-hint')) as unknown as Node);
+  return wrap;
 }
-function skeletonHtml(): string {
-  return `<div class="flow-empty"><span>…</span></div>`;
+function skeletonNode(): HTMLElement {
+  const wrap = mkHtml('div', 'flow-empty');
+  wrap.appendChild(mkHtml('span', undefined, '…') as unknown as Node);
+  return wrap;
 }
-function errorHtml(err: unknown, t: TFunc): string {
+function errorNode(err: unknown, t: TFunc): HTMLElement {
   const msg = (err as { message?: string })?.message ? String((err as { message: string }).message) : String(err);
-  return `<div class="flow-empty"><span class="flow-empty-title">${t('ui.meta-docs-view.flow.fetch-failed', { message: escHtml(msg) })}</span></div>`;
+  const wrap = mkHtml('div', 'flow-empty');
+  wrap.appendChild(mkHtml('span', 'flow-empty-title', t('ui.meta-docs-view.flow.fetch-failed', { message: msg })) as unknown as Node);
+  return wrap;
 }
 
 /** 노드 카드 foreignObject 생성 (flow.js:431). */
@@ -232,8 +275,7 @@ function makeNodeFO(node: PositionedNode): SVGForeignObjectElement {
   fo.setAttribute('height', String(node.h));
   fo.dataset.nodeId = node.id;
 
-  const card = document.createElementNS(HTMLNS, 'div') as unknown as HTMLDivElement;
-  card.className = 'node node-seq';
+  const card = mkHtml('div', 'node node-seq');
   card.dataset.nodeId = node.id;
   card.dataset.kind = node.kind;
   if (typeof node.layerTone === 'number') card.style.setProperty('--card-tone-layer', String(node.layerTone));
@@ -243,80 +285,69 @@ function makeNodeFO(node: PositionedNode): SVGForeignObjectElement {
   else if (node.timeline === 'after') card.classList.add('is-after');
   if (node.type !== 'center') card.dataset.clickable = '1';
 
-  const icon = document.createElementNS(HTMLNS, 'div') as unknown as HTMLDivElement;
-  icon.className = 'icon';
+  const icon = mkHtml('div', 'icon');
+  // 아이콘은 정적·신뢰 SVG 마크업(ICONS SSoT, 사용자 데이터 0) → XSS 표면 아님. 카드 컨테이너가
+  //   본질적 명령형(측정)이라 React 컴포넌트로 못 옮기며, 복잡 SVG 를 createElementNS 로 1:1 재구성하면
+  //   동치 깨짐 위험 → innerHTML 유지(데이터 보간 innerHTML 만 위에서 폐기). vanilla-js-audit 경계.
   icon.innerHTML = ICONS[KIND_TO_ICON[node.kind] || 'cmd'] || '';
-  card.appendChild(icon);
+  card.appendChild(icon as unknown as Node);
 
-  const body = document.createElementNS(HTMLNS, 'div') as unknown as HTMLDivElement;
-  body.className = 'body';
-  const titleRow = document.createElementNS(HTMLNS, 'div') as unknown as HTMLDivElement;
-  titleRow.className = 'title-row';
-  const title = document.createElementNS(HTMLNS, 'div') as unknown as HTMLDivElement;
-  title.className = 'title';
-  title.textContent = node.title;
-  titleRow.appendChild(title);
+  const body = mkHtml('div', 'body');
+  const titleRow = mkHtml('div', 'title-row');
+  titleRow.appendChild(mkHtml('div', 'title', node.title) as unknown as Node);
 
   if (node.type !== 'center') {
     const tone = KIND_TO_TONE[node.kind];
     const label = KIND_TO_LABEL[node.kind];
     if (tone && label) {
-      const chip = document.createElementNS(HTMLNS, 'span') as unknown as HTMLSpanElement;
-      chip.className = 'ds-chip';
+      const chip = mkHtml('span', 'ds-chip', label);
       chip.dataset.tone = tone;
-      chip.textContent = label;
-      titleRow.appendChild(chip);
+      titleRow.appendChild(chip as unknown as Node);
     }
   }
-  body.appendChild(titleRow);
+  body.appendChild(titleRow as unknown as Node);
 
   const count = typeof node.count === 'number' ? node.count : null;
   const pct = typeof node.pct === 'number' ? node.pct : null;
-  let subText = '';
+  // "<b>{count}</b> turns{ · {calls} calls | · {pct}%}" — innerHTML 보간 폐기, DOM 노드로 1:1 조립.
+  let subTail: string | null = null;
   if (node.type === 'center' && count !== null) {
     const invocations = typeof node.invocations === 'number' ? node.invocations : null;
-    const callsText = invocations !== null && invocations !== count ? ` · ${invocations} calls` : '';
-    subText = `<b>${count}</b> turns${callsText}`;
+    subTail = invocations !== null && invocations !== count ? ` · ${invocations} calls` : '';
   } else if (count !== null) {
-    const pctText = pct !== null ? ` · ${Math.round(pct * 1000) / 10}%` : '';
-    subText = `<b>${count}</b> turns${pctText}`;
+    subTail = pct !== null ? ` · ${Math.round(pct * 1000) / 10}%` : '';
   }
-  if (subText) {
-    const sub = document.createElementNS(HTMLNS, 'div') as unknown as HTMLDivElement;
-    sub.className = 'sub';
-    sub.innerHTML = subText;
-    body.appendChild(sub);
+  if (subTail !== null && count !== null) {
+    const sub = mkHtml('div', 'sub');
+    sub.appendChild(mkHtml('b', undefined, String(count)) as unknown as Node);
+    sub.appendChild(document.createTextNode(` turns${subTail}`));
+    body.appendChild(sub as unknown as Node);
   }
 
   if (Array.isArray(node.subRows) && node.subRows.length > 0) {
-    const list = document.createElementNS(HTMLNS, 'div') as unknown as HTMLDivElement;
-    list.className = 'sub-list';
+    const list = mkHtml('div', 'sub-list');
     for (const r of node.subRows) {
-      const row = document.createElementNS(HTMLNS, 'div') as unknown as HTMLDivElement;
-      row.className = 'sub-row';
+      const row = mkHtml('div', 'sub-row');
       row.dataset.toolName = r.fullName;
-      row.innerHTML = `<span class="sub-row-name">${escHtml(r.toolName)}</span><span class="sub-row-stats"><b>${r.count}</b> · ${r.pct}%</span>`;
-      list.appendChild(row);
+      // <span class="sub-row-name">{toolName}</span><span class="sub-row-stats"><b>{count}</b> · {pct}%</span>
+      row.appendChild(mkHtml('span', 'sub-row-name', r.toolName) as unknown as Node);
+      const stats = mkHtml('span', 'sub-row-stats');
+      stats.appendChild(mkHtml('b', undefined, String(r.count)) as unknown as Node);
+      stats.appendChild(document.createTextNode(` · ${r.pct}%`));
+      row.appendChild(stats as unknown as Node);
+      list.appendChild(row as unknown as Node);
     }
-    body.appendChild(list);
+    body.appendChild(list as unknown as Node);
   }
-  card.appendChild(body);
+  card.appendChild(body as unknown as Node);
 
   if (Array.isArray(node.pills) && node.pills.length > 0) {
-    const pills = document.createElementNS(HTMLNS, 'span') as unknown as HTMLSpanElement;
-    pills.className = 'meta-pills';
+    const pills = mkHtml('span', 'meta-pills');
     for (const p of node.pills) {
-      const el = document.createElementNS(HTMLNS, 'span') as unknown as HTMLSpanElement;
-      if (p === 'hot') {
-        el.className = 'pill-hot';
-        el.textContent = 'HOT';
-      } else {
-        el.className = 'pill-live';
-        el.textContent = String(p);
-      }
-      pills.appendChild(el);
+      const el = p === 'hot' ? mkHtml('span', 'pill-hot', 'HOT') : mkHtml('span', 'pill-live', String(p));
+      pills.appendChild(el as unknown as Node);
     }
-    card.appendChild(pills);
+    card.appendChild(pills as unknown as Node);
   }
 
   fo.appendChild(card as unknown as Node);
@@ -478,11 +509,11 @@ export function MetaDocsFlow({ activeRow, project = null, onRecenter, depth = 3,
 
     const args = activeRowToFlowArgs(activeRow, project, depth);
     if (!args) {
-      container.innerHTML = emptyHtml(activeRow?.name ?? null, t);
+      replaceContent(container, emptyNode(activeRow?.name ?? null, t));
       return undefined;
     }
 
-    container.innerHTML = skeletonHtml();
+    replaceContent(container, skeletonNode());
     // 날짜 범위 — prop 주입(app-store.activeRange→rangeToParams). 폐기된 window.__getDateRange 전역을
     //   대체: 그 전역은 setter 가 어디에도 없어 항상 undefined→{}→flow 가 날짜 필터를 무시하던 버그.
     const getDateRange = () => dateRange ?? {};
@@ -491,13 +522,13 @@ export function MetaDocsFlow({ activeRow, project = null, onRecenter, depth = 3,
       .then((payload) => {
         if (cancelled) return;
         if (!payload || !Array.isArray(payload.nodes) || payload.nodes.length === 0) {
-          container.innerHTML = emptyHtml(args.centerName, t);
+          replaceContent(container, emptyNode(args.centerName, t));
           return;
         }
         renderFlow(container, payload, args, t, stateRef.current, addWin, (row) => recenterRef.current?.(row));
       })
       .catch((err) => {
-        if (!cancelled) container.innerHTML = errorHtml(err, t);
+        if (!cancelled) replaceContent(container, errorNode(err, t));
       });
 
     return () => {
@@ -539,6 +570,9 @@ function renderFlow(
   };
 
   container.innerHTML = shellHtml(payload.meta, t, st.seqView);
+  // center 라벨은 data-bearing → textContent 로 안전 주입(escHtml 제거).
+  const scopeNameEl = container.querySelector('[data-flow-scope-name]');
+  if (scopeNameEl) scopeNameEl.textContent = payload.meta?.centerName ? payload.meta.centerName : '—';
   const svgEl = container.querySelector('.flow-svg') as SVGSVGElement | null;
   if (!svgEl) return;
   const edgesLayer = svgEl.querySelector('#flowEdgesLayer') as SVGGElement;
@@ -609,7 +643,7 @@ function renderFlow(
 
 // --- bind* (effect 명령형, flow.js 1:1) ---------------------------------------
 
-function bindSubRowClick(svgEl: SVGSVGElement, st: FlowState, args: FlowArgs, recenter: (row: FlowActiveRow) => void): void {
+function bindSubRowClick(svgEl: SVGSVGElement, _st: FlowState, _args: FlowArgs, recenter: (row: FlowActiveRow) => void): void {
   let downX = 0;
   let downY = 0;
   let moved = false;
@@ -632,7 +666,7 @@ function bindSubRowClick(svgEl: SVGSVGElement, st: FlowState, args: FlowArgs, re
   });
 }
 
-function bindNodeDoubleClick(svgEl: SVGSVGElement, st: FlowState, args: FlowArgs, recenter: (row: FlowActiveRow) => void): void {
+function bindNodeDoubleClick(svgEl: SVGSVGElement, st: FlowState, _args: FlowArgs, recenter: (row: FlowActiveRow) => void): void {
   svgEl.addEventListener('dblclick', (e) => {
     const target = e.target as Element;
     if (target.closest && target.closest('.sub-row')) return;

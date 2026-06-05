@@ -26,8 +26,9 @@ export { SessionBadges } from './SessionBadges';
 export { FlowPane } from './FlowPane';
 export { buildTurnHaystack, HAYSTACK_MAX, type HaystackTurn } from './turn-haystack';
 
-// P3-07 — system-reminder*/detail-view → TSX.
-//   system-reminder.js → lib/system-reminder.ts(순수, 재노출). popover → useSystemReminderPopover 훅.
+// P3-07 / P5 — system-reminder*/detail-view → TSX.
+//   system-reminder.js → lib/system-reminder.ts(순수, 재노출).
+//   popover 상태기계/전역 훅은 SystemReminderChip(useState+createPortal)로 흡수 — 좌표 수학만 남김.
 //   views/detail-view.js → DetailView 조립(FlowPane+SessionLog) + useSessionLoad. 순환은
 //   SessionBadges.onBloatedSysHeader 콜백 위임으로 단절(§5).
 export {
@@ -36,11 +37,7 @@ export {
   type ReminderTurn,
 } from '../../lib/system-reminder';
 export {
-  useSystemReminderPopover,
   computePopoverPosition,
-  createPopoverController,
-  type PopoverDom,
-  type PopoverElement,
   type ChipRect,
   type PopoverPosition,
 } from './system-reminder-popover';

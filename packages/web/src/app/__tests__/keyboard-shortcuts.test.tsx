@@ -9,6 +9,12 @@
  *    (KEYBOARD_FILTER_KEYS SSoT 파생) 단정.
  *  - 단축키 훅: createRoot + act 라이브 마운트(update-badge-i18n 선례) 후 document 에 실 keydown
  *    디스패치 — controlled action(setFeedFilter/setSearchQuery/setRightView) 결과를 app-store 로 단정.
+ *
+ * DOM 우회 제거(감사 보고서 권장안) 전환:
+ *  - 검색 포커스(`/`·⌘F): 레거시 getElementById('feedSearchContainer').querySelector(...).focus() 우회
+ *    제거 → app-store.requestSearchFocus() 호출(searchFocusSignal 증가)로 검증. DOM activeElement 검증 폐기.
+ *  - ESC 확장 닫기: 레거시 querySelector('[data-expand-for]').click() 우회 제거 →
+ *    expand-store.collapseTopExpanded() 가 등록된 collapse 콜백을 호출하는지로 검증. DOM .click() 검증 폐기.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
@@ -17,6 +23,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { KeyboardHelpModal } from '../KeyboardHelpModal';
 import { useKeyboardShortcuts, KEYBOARD_FILTER_KEYS } from '../use-keyboard-shortcuts';
 import { useAppStore } from '../../stores/app-store';
+import { useExpandStore } from '../../stores/expand-store';
 import { ensureDom } from '../../test-support/ensure-dom';
 
 ensureDom();
@@ -93,14 +100,15 @@ describe('useKeyboardShortcuts — 레거시 wireKeyboard 동작 동치', () => 
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
-    // app-store 기본값 복원 — 케이스 간 누출 차단.
-    useAppStore.setState({ rightView: 'default', feedFilter: 'all', detailFilter: 'all', searchQuery: '' });
+    // app-store 기본값 복원 — 케이스 간 누출 차단(searchFocusSignal 포함).
+    useAppStore.setState({ rightView: 'default', feedFilter: 'all', detailFilter: 'all', searchQuery: '', searchFocusSignal: 0 });
+    // expand-store 레지스트리 초기화 — 케이스 간 등록 콜백 누출 차단.
+    useExpandStore.setState({ collapsers: new Map() });
   });
 
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
-    document.querySelector('#feedSearchContainer')?.remove();
   });
 
   it('`?` 키 → 도움말 토글(footer 버튼과 동일 경로)', () => {
@@ -138,16 +146,28 @@ describe('useKeyboardShortcuts — 레거시 wireKeyboard 동작 동치', () => 
     input.remove();
   });
 
-  it('`/` 키 → 피드 검색 input 포커스(#feedSearchContainer .feed-search-input)', () => {
+  it('`/` 키 → 검색 포커스 요청(requestSearchFocus → searchFocusSignal 증가)', () => {
     mount();
-    const wrap = document.createElement('div');
-    wrap.id = 'feedSearchContainer';
-    const input = document.createElement('input');
-    input.className = 'feed-search-input';
-    wrap.appendChild(input);
-    document.body.appendChild(wrap);
+    const before = useAppStore.getState().searchFocusSignal;
     pressKey({ key: '/' });
-    expect(document.activeElement).toBe(input);
+    // DOM getElementById 우회 폐기 — store 신호 증가로 SearchBox(구독자)가 focus 하도록 위임.
+    expect(useAppStore.getState().searchFocusSignal).toBe(before + 1);
+  });
+
+  it('⌘F 키 → 검색 포커스 요청(타이핑 타깃과 무관, 동일 신호 경로)', () => {
+    mount();
+    const before = useAppStore.getState().searchFocusSignal;
+    pressKey({ key: 'f', metaKey: true });
+    expect(useAppStore.getState().searchFocusSignal).toBe(before + 1);
+  });
+
+  it('detail 뷰에서 `/`·⌘F 는 포커스 신호를 보내지 않는다(검색박스 미결선 슬롯 → no-op)', () => {
+    mount();
+    useAppStore.setState({ rightView: 'detail' });
+    const before = useAppStore.getState().searchFocusSignal;
+    pressKey({ key: '/' });
+    pressKey({ key: 'f', metaKey: true });
+    expect(useAppStore.getState().searchFocusSignal).toBe(before);
   });
 
   it('ESC 우선순위 1 — 도움말 모달 열림 시 닫기만 수행(detail 유지)', () => {
@@ -158,16 +178,30 @@ describe('useKeyboardShortcuts — 레거시 wireKeyboard 동작 동치', () => 
     expect(useAppStore.getState().rightView).toBe('detail');
   });
 
+  it('ESC 우선순위 2 — 펼친 행 있으면 collapse 콜백 호출만 수행(detail 유지)', () => {
+    mount(); // helpOpen=false
+    useAppStore.setState({ rightView: 'detail' });
+    let collapsed = 0;
+    // 펼친 RequestRow 가 등록하는 것과 동일하게 collapse 콜백 등록(DOM .click() 우회 폐기).
+    useExpandStore.getState().register('req-1', () => { collapsed++; });
+    pressKey({ key: 'Escape' });
+    expect(collapsed).toBe(1);
+    // 확장 닫기에서 멈춤 — detail 유지, searchQuery 미변경(우선순위 2 가 3·4 를 가린다).
+    expect(useAppStore.getState().rightView).toBe('detail');
+  });
+
+  it('ESC 우선순위 2 — 다중 펼침 시 가장 최근 등록(LIFO) 행만 닫는다', () => {
+    mount();
+    const hits: string[] = [];
+    useExpandStore.getState().register('req-1', () => hits.push('req-1'));
+    useExpandStore.getState().register('req-2', () => hits.push('req-2'));
+    pressKey({ key: 'Escape' });
+    expect(hits).toEqual(['req-2']);
+  });
+
   it('ESC 우선순위 3 — 검색어 있으면 클리어만 수행(detail 유지)', () => {
     mount();
     useAppStore.setState({ searchQuery: 'abc' });
-    const wrap = document.createElement('div');
-    wrap.id = 'feedSearchContainer';
-    const input = document.createElement('input');
-    input.className = 'feed-search-input';
-    input.value = 'abc';
-    wrap.appendChild(input);
-    document.body.appendChild(wrap);
     pressKey({ key: 'Escape' });
     expect(useAppStore.getState().searchQuery).toBe('');
     expect(useAppStore.getState().rightView).toBe('default');

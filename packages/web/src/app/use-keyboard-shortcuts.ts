@@ -7,17 +7,20 @@
 //   - 필터 트리거: 레거시는 필터바 버튼 DOM .click() — React 에선 FilterBar 가 controlled 라
 //     app-store action(setFeedFilter/setDetailFilter)을 직접 호출한다(같은 onChange 경로).
 //   - 검색 클리어: SearchBox 도 controlled — setSearchQuery('') (input 이벤트 디스패치 불요).
-//   - 검색 포커스: focus 는 DOM 명령이므로 SearchBox 가 렌더한 .feed-search-input 을 컨테이너
-//     id 로 조회(레거시 getter 주입과 동치). detail 검색박스는 미결선 슬롯 — 레거시와 동일하게
-//     해당 표면 부재 시 no-op.
-//   - 확장 패널(ESC): 레거시 expandRow.remove() 는 React 트리를 깨므로, 펼침 행
-//     [data-expand-for] 직전 행의 토글([data-expand-id]) click 으로 기존 토글 경로를 재사용한다
-//     (RequestRow#onMsgCellClick → setExpanded(false)).
+//   - 검색 포커스: 레거시는 getElementById('feedSearchContainer').querySelector('.feed-search-input')
+//     로 DOM 을 직접 잡아 focus() 했다(id 셀렉터 의존). 이를 store action 으로 전환 —
+//     requestSearchFocus() 가 searchFocusSignal 을 증가시키면 input 을 소유한 SearchBox(feed)가
+//     자기 ref 로 focus/select 한다. detail 뷰는 검색박스가 미결선 슬롯이라 신호를 안 보낸다(레거시 no-op 동치).
+//   - 확장 패널(ESC): 레거시 expandRow.remove()/querySelector('[data-expand-for]').click() 는 DOM 우회였다.
+//     expand-store.collapseTopExpanded() 로 전환 — 펼친 RequestRow 가 등록한 collapse 콜백을 호출해
+//     자기 useState 를 닫는다(펼침 SSoT 는 그대로 RequestRow useState, DOM 클릭 시뮬레이션 제거).
+//     닫을 행이 있었는지 boolean 으로 받아 ESC 우선순위 분기를 판단한다.
 //
 // 스토어 읽기는 핸들러 안 getState() — stale closure 없이 리스너 1회 등록 유지.
 
 import { useEffect } from 'react';
 import { useAppStore } from '../stores/app-store';
+import { useExpandStore } from '../stores/expand-store';
 import { FILTER_GROUPS } from '../components/FilterBar';
 
 /**
@@ -35,14 +38,13 @@ function isTypingTarget(el: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
 }
 
-/** 활성 검색 input — detail 뷰면 detail 슬롯, 아니면 피드 검색(레거시 activeSearchInput 동치). */
-function activeSearchInput(rightView: string): HTMLInputElement | null {
-  const containerId = rightView === 'detail' ? 'detailSearchContainer' : 'feedSearchContainer';
-  return (
-    document
-      .getElementById(containerId)
-      ?.querySelector<HTMLInputElement>('.feed-search-input') ?? null
-  );
+/**
+ * 검색 포커스가 가능한 뷰인지 — 레거시 activeSearchInput 의 "표면 존재" 판정 1:1.
+ *   레거시는 detail 뷰면 detailSearchContainer(미결선 슬롯)를 조회해 null → no-op, 그 외 feed 검색 input 을
+ *   반환했다. detail 검색박스는 결선되지 않았으므로 feed(=non-detail)에서만 포커스 대상이 존재한다.
+ */
+function hasFocusableSearch(rightView: string): boolean {
+  return rightView !== 'detail';
 }
 
 export interface KeyboardShortcutOpts {
@@ -64,11 +66,10 @@ export function useKeyboardShortcuts({ helpOpen, onToggleHelp, onCloseHelp }: Ke
     if (!doc) return;
 
     function focusActiveSearch(): void {
-      const el = activeSearchInput(useAppStore.getState().rightView);
-      if (el) {
-        el.focus();
-        el.select?.();
-      }
+      const s = useAppStore.getState();
+      // 포커스 대상 검색박스가 존재하는 뷰에서만 신호를 보낸다(detail 미결선 슬롯 → no-op, 레거시 동치).
+      if (!hasFocusableSearch(s.rightView)) return;
+      s.requestSearchFocus();
     }
 
     // 1-7 → 활성 뷰의 필터 갱신(레거시 triggerFilterByIndex — 버튼 click 대신 controlled action).
@@ -86,17 +87,15 @@ export function useKeyboardShortcuts({ helpOpen, onToggleHelp, onCloseHelp }: Ke
         onCloseHelp();
         return;
       }
-      const expandRow = doc!.querySelector('[data-expand-for]');
-      if (expandRow) {
-        // 기존 토글 경로 재사용 — 펼침 행 직전(소유) 행의 [data-expand-id] click → setExpanded(false).
-        expandRow.previousElementSibling
-          ?.querySelector<HTMLElement>('[data-expand-id]')
-          ?.click();
-        return;
-      }
+      // 펼침 행이 있으면 하나 닫고 멈춤(레거시 querySelector('[data-expand-for]').click() 우회 대체).
+      //   collapseTopExpanded 가 등록된 collapse 콜백(RequestRow setExpanded(false))을 호출하고
+      //   닫을 행이 있었는지 boolean 으로 반환한다(레거시 expandRow 존재 분기 1:1).
+      if (useExpandStore.getState().collapseTopExpanded()) return;
       const s = useAppStore.getState();
-      const searchInput = activeSearchInput(s.rightView);
-      if (searchInput && searchInput.value) {
+      // 검색어가 있으면 클리어만 수행 — 레거시는 "검색 input 존재(=feed 뷰) && input.value" 였다.
+      //   store 전환: 포커스 가능한 검색박스가 있는 뷰(hasFocusableSearch)에서만 searchQuery 클리어 분기.
+      //   detail 뷰는 input 미존재라 이 분기를 건너뛰고 곧장 detail 닫기로 간다(레거시 1:1).
+      if (hasFocusableSearch(s.rightView) && s.searchQuery) {
         s.setSearchQuery('');
         return;
       }

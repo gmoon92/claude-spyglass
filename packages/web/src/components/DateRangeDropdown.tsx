@@ -14,6 +14,11 @@
  *  - 키보드/포커스/외부클릭/floating 위치 계산 등 명령형 상호작용은 후속 페이즈(hooks)로 분리.
  *    본 컴포넌트는 "DOM 계약 + 스토어 연동" 범위(P2-08)에 한정 — open/close 상태는 hidden 토글 prop.
  *  - 전역 window.I18n 의존 제거 → labeler 명시 prop 주입(무전역).
+ *  - custom from/to 는 controlled state(useState) — 과거 apply 핸들러가 closest('.ds-dropdown-footer')
+ *    + querySelector('[data-role=custom-from/to]') 로 DOM 을 역참조해 input 값을 읽던 명령형을 폐기하고,
+ *    React state(customFrom/customTo)를 직접 읽는다(DOM 역참조 제거 — 선언형 controlled 입력).
+ *  - floating 위치는 menuStyle prop(useFloatingMenuPosition 반환 CSSProperties)을 .ds-dropdown-menu 의
+ *    JSX style 로 바인딩 — 훅이 menu.style 을 직접 변형하던 결선 폐기(소비처가 style 주입).
  *
  * 셀렉터 계약 유지(arch §2.2): ds-dropdown(data-component) / ds-dropdown-trigger(role=combobox)
  *   / ds-dropdown-listbox(role=listbox) / ds-dropdown-item(role=option, data-value, aria-selected)
@@ -23,7 +28,7 @@
  *
  * @module components/DateRangeDropdown
  */
-import type { RefObject } from 'react';
+import { useState, type CSSProperties, type RefObject } from 'react';
 import type { ActiveRange, PresetValue } from '../stores/app-store';
 
 /** 프리셋 순서 SSoT — 원본 date-range-dropdown.js:24 PRESETS 1:1 (custom 은 footer 로 분리). */
@@ -59,8 +64,10 @@ export interface DateRangeDropdownProps {
   onApplyCustom?: (from: number, to: number) => void;
   /** 트리거 ref — 호출처가 useFloatingMenuPosition 으로 메뉴 위치를 계산하기 위해 주입(선택). */
   triggerRef?: RefObject<HTMLButtonElement>;
-  /** 메뉴(fixed) ref — 위치 계산 대상. 미주입 시 메뉴는 dropdown.css 기본 top/left(0,0). */
+  /** 메뉴(fixed) ref — 위치 계산 대상(크기 실측). 미주입 시 메뉴는 dropdown.css 기본 top/left(0,0). */
   menuRef?: RefObject<HTMLDivElement>;
+  /** 메뉴(fixed) 인라인 style — 호출처가 useFloatingMenuPosition 반환값을 주입. 미주입 시 css 기본값. */
+  menuStyle?: CSSProperties;
 }
 
 /**
@@ -101,10 +108,14 @@ export function DateRangeDropdown({
   onApplyCustom,
   triggerRef,
   menuRef,
+  menuStyle,
 }: DateRangeDropdownProps) {
   const listboxId = `${menuId}-listbox`;
   const selected = selectedPreset(activeRange);
   const isCustom = !!activeRange && activeRange.type === 'custom';
+  // custom from/to 입력값 controlled state — DOM 역참조(closest/querySelector) 제거. ISO(YYYY-MM-DD) 문자열.
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
 
   return (
     <div className="ds-dropdown" data-component="date-range-dropdown">
@@ -122,7 +133,7 @@ export function DateRangeDropdown({
       >
         <span className="ds-dropdown-trigger-label">{triggerLabel(activeRange, labeler)}</span>
       </button>
-      <div ref={menuRef} id={menuId} className="ds-dropdown-menu" hidden={!open}>
+      <div ref={menuRef} id={menuId} className="ds-dropdown-menu" hidden={!open} style={menuStyle}>
         <ul id={listboxId} role="listbox" className="ds-dropdown-listbox" aria-labelledby={triggerId}>
           {DATE_RANGE_PRESETS.map((value, i) => (
             <li
@@ -142,26 +153,33 @@ export function DateRangeDropdown({
         <div className="ds-dropdown-footer" role="group" aria-label={labeler.customLabel()}>
           <label className="ds-dropdown-footer-field">
             <span className="ds-dropdown-footer-label-text">{labeler.customFrom()}</span>
-            <input type="date" data-role="custom-from" />
+            <input
+              type="date"
+              data-role="custom-from"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.currentTarget.value)}
+            />
           </label>
           <label className="ds-dropdown-footer-field">
             <span className="ds-dropdown-footer-label-text">{labeler.customTo()}</span>
-            <input type="date" data-role="custom-to" />
+            <input
+              type="date"
+              data-role="custom-to"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.currentTarget.value)}
+            />
           </label>
           <div className="ds-dropdown-footer-warn" data-role="custom-warn" hidden />
           <button
             type="button"
             className="ds-dropdown-footer-apply"
             data-role="custom-apply"
-            onClick={(e) => {
-              // 인접 input 값을 읽어 로컬 자정(from)/종일(to) ms 로 변환 후 통지(레거시 applyCustomRange 1:1).
+            onClick={() => {
+              // controlled state(customFrom/customTo)를 읽어 로컬 자정(from)/종일(to) ms 로 변환 후 통지
+              //   (레거시 applyCustomRange 1:1, DOM 역참조 없이 React state 직접 사용).
               //   from <= to 순서 가드(레거시 동치) — 역순/무효는 무시(no-op). 90일 경고는 후속 hooks.
-              const footer = (e.currentTarget.closest('.ds-dropdown-footer') as HTMLElement) ?? null;
-              const fromEl = footer?.querySelector<HTMLInputElement>('[data-role="custom-from"]');
-              const toEl = footer?.querySelector<HTMLInputElement>('[data-role="custom-to"]');
-              if (!fromEl || !toEl) return;
-              const from = isoDateToLocalMs(fromEl.value, false);
-              const to = isoDateToLocalMs(toEl.value, true);
+              const from = isoDateToLocalMs(customFrom, false);
+              const to = isoDateToLocalMs(customTo, true);
               if (Number.isFinite(from) && Number.isFinite(to) && from <= to) onApplyCustom?.(from, to);
             }}
           >

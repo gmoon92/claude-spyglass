@@ -62,7 +62,7 @@ import { CachePanel } from '../features/dashboard/CachePanel';
 import type { CacheStats } from '../features/dashboard/cache-stats';
 import type { DashboardSummary } from '../schema/api-schema';
 import { TimelineMeta } from '../components/TimelineMeta';
-import { LangSwitcherSlot } from '../components/LangSwitcherSlot';
+import { LangSwitcher } from '../components/LangSwitcher';
 
 /**
  * Chart 색 토큰 폴백 — design-tokens.css 주입 전(SSR/초기) 안전 기본.
@@ -109,6 +109,8 @@ export function BrowseLayout(): ReactElement {
   const searchQuery = useAppStore((s) => s.searchQuery);
   const setFeedFilter = useAppStore((s) => s.setFeedFilter);
   const setSearchQuery = useAppStore((s) => s.setSearchQuery);
+  // 검색 포커스 신호(keyboard-shortcuts `/`·⌘F) — feed SearchBox 가 이 값 증가 시 자기 input 을 focus.
+  const searchFocusSignal = useAppStore((s) => s.searchFocusSignal);
   // 차트 헤더 date-filter — activeRange SSoT(app-store, persist cs.dateRange).
   const activeRange = useAppStore((s) => s.activeRange);
   const setActiveRange = useAppStore((s) => s.setActiveRange);
@@ -253,7 +255,7 @@ export function BrowseLayout(): ReactElement {
   // 메뉴(fixed) 위치 계산 — 트리거 기준 우측 정렬. 조상 overflow:hidden 클리핑 회피용 fixed.
   const dateTriggerRef = useRef<HTMLButtonElement>(null);
   const dateMenuRef = useRef<HTMLDivElement>(null);
-  useFloatingMenuPosition(dateOpen, dateTriggerRef, dateMenuRef);
+  const dateMenuStyle = useFloatingMenuPosition(dateOpen, dateTriggerRef, dateMenuRef);
 
   // date-filter 바깥 클릭 시 닫기(원본 dropdown outside-close).
   useEffect(() => {
@@ -497,6 +499,7 @@ export function BrowseLayout(): ReactElement {
                   open={dateOpen}
                   triggerRef={dateTriggerRef}
                   menuRef={dateMenuRef}
+                  menuStyle={dateMenuStyle}
                   onSelectPreset={(v: PresetValue) => {
                     setActiveRange({ type: 'preset', value: v });
                     setDateOpen(false);
@@ -507,9 +510,9 @@ export function BrowseLayout(): ReactElement {
                   }}
                 />
               </div>
-              {/* lang-switcher(레거시 복원) — index.html 정적 classic island(#lang-switcher, lang-switcher.js 바인딩)을
-                  여기 슬롯으로 DOM 이동해 차트 헤더에 노출한다(중복 id 회피 + 바인딩 보존). LangSwitcherSlot 참조. */}
-              <LangSwitcherSlot />
+              {/* lang-switcher — react-i18next + window.I18n 동기 단일 진입점(LangSwitcher). 과거 classic
+                  island + lang-switcher.js + DOM 이동(LangSwitcherSlot) 결선을 대체한다. */}
+              <LangSwitcher />
               <button
                 className="btn-toggle"
                 id="btnToggleChart"
@@ -563,6 +566,7 @@ export function BrowseLayout(): ReactElement {
                       placeholder="model / tool / message"
                       clearLabel={tx('ui.search-box.clear-label')}
                       onSearch={setSearchQuery}
+                      focusSignal={searchFocusSignal}
                     />
                   </div>
                   <div id="typeFilterBtns" className="type-filter-btns">

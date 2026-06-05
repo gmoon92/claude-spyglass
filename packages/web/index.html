@@ -94,24 +94,13 @@
   <!-- React 마운트 루트 — App(AppShell+AppRoutes) 트리가 페이지 전체 chrome+레이아웃을 소유. -->
   <div id="react-root"></div>
 
-  <!-- classic i18n island — lang-switcher.
-       lang-switcher.js(보존된 classic i18n 3종 중 하나)가 #lang-switcher 를 getElementById 로 바인딩해
-       I18n.setLang→reload 를 구동한다. React(#react-root)가 소유하지 않는 영역에 두어야 React 렌더가
-       이 노드를 clobber 하지 않고 classic 언어 전환이 동작한다.
-       <option> 4종은 i18n-html-css-drift 회귀 가드의 SoT(packages/server …drift.test.ts)이기도 하다.
-       시각 배치(React Chart 헤더 편입)는 chrome 이식 후속(.manual-verify-p4-07 §3/§5 부채) — 본 P4-10 범위 밖. -->
-  <div class="lang-switcher-wrap" data-classic-i18n-island="lang-switcher">
-    <select id="lang-switcher" aria-label="Select language" role="combobox"
-            data-i18n-attr-aria-label="ui.html.chart-section.lang-switcher-aria">
-      <option value="ko">한국어</option>
-      <option value="en">English</option>
-      <option value="ja">日本語</option>
-      <option value="zh">中文</option>
-    </select>
-  </div>
+  <!-- lang-switcher 는 React 컴포넌트(src/components/LangSwitcher.tsx)로 전환됨 — 과거 정적 classic
+       island + lang-switcher.js + i18n-dom.js 결선은 제거되었다. <option>/SUPPORTED_LANGS drift 회귀
+       가드의 SoT 는 컴포넌트 + drift 테스트로 이전. -->
 
-  <!-- classic i18n 3종(i18n.js → i18n-dom.js → lang-switcher.js)은 externalizeDaemonAssets() plugin 이
-       module 진입 앞(body-prepend)에 주입한다 — window.I18n 이 React 첫 렌더 전에 선존재해야 tt()/labeler 가 key 폴백 없이 동작. -->
+  <!-- classic i18n 잔존 1종(i18n.js → window.I18n)은 externalizeDaemonAssets() plugin 이 module 진입
+       앞(body-prepend)에 주입한다 — window.I18n 이 React 첫 렌더 전에 선존재해야 tt()/labeler·date-locale
+       폴백이 key 폴백 없이 동작. (i18n-dom.js/lang-switcher.js 는 React 전환으로 제거됨.) -->
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

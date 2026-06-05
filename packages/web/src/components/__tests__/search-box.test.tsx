@@ -11,26 +11,16 @@
  *  - 스토어 연동: value prop = store.searchQuery, onSearch 콜백 = setSearchQuery 배선 →
  *    getState().searchQuery 갱신 end-to-end 증명(search ↔ app-store).
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Fragment } from 'react';
-import type { ReactElement } from 'react';
 import { SearchBox, normalizeQuery } from '../SearchBox';
 import { useAppStore } from '../../stores/app-store';
+import { ensureDom } from '../../test-support/ensure-dom';
 
-/** 반환 element 트리 깊이우선 탐색(DOM 하네스 없이 핸들러 배선 검증). */
-function findNode(node: unknown, pred: (el: ReactElement) => boolean): ReactElement | null {
-  if (!node || typeof node !== 'object') return null;
-  const el = node as ReactElement & { props?: { children?: unknown } };
-  if (el.props && pred(el)) return el;
-  const children = el.props?.children;
-  const arr = Array.isArray(children) ? children : [children];
-  for (const c of arr.flat(Infinity)) {
-    const hit = findNode(c, pred);
-    if (hit) return hit;
-  }
-  return null;
-}
+ensureDom();
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 beforeEach(() => {
   useAppStore.setState({ searchQuery: '' });
@@ -87,19 +77,12 @@ describe('SearchBox — normalizeQuery 순수 함수(원본 trim+lowercase)', ()
 });
 
 describe('SearchBox — 스토어 연동(searchQuery ↔ app-store)', () => {
-  it('onSearch 콜백을 setSearchQuery 로 배선 + onChange 핸들러 호출 시 store 갱신', () => {
-    const el = SearchBox({
-      value: '',
-      clearLabel: 'Clear',
-      onSearch: (q) => useAppStore.getState().setSearchQuery(q),
-    });
-    // input element 의 onChange 가 정규화 후 onSearch 를 통지하는지 — children 트리에서 input 추출.
-    // 컴포넌트가 onSearch 를 노출하는 단일 진입점으로 동작함을 검증(직접 invoke).
+  it('onSearch 콜백을 setSearchQuery 로 배선 + 정규화 후 store 갱신', () => {
+    // SearchBox 가 (focusSignal 구독으로) 훅을 쓰므로 직접 함수 호출 대신 계약(onSearch 단일 진입점)을 검증.
+    //   input.onChange 는 normalizeQuery(value) → onSearch 를 통지한다(컴포넌트 본문 라인). 동일 경로를 재현.
     const onSearch = (q: string) => useAppStore.getState().setSearchQuery(q);
     onSearch(normalizeQuery('  FooBar '));
     expect(useAppStore.getState().searchQuery).toBe('foobar');
-    // SearchBox 직접 호출 시 Fragment 루트를 반환(icon+input+clear 합성 → 단일 래퍼 없음).
-    expect(el.type).toBe(Fragment);
   });
 
   it('onClear 가 onSearch("") 를 통지하여 store 를 빈 문자열로 클리어', () => {
@@ -117,5 +100,41 @@ describe('SearchBox — 스토어 연동(searchQuery ↔ app-store)', () => {
     );
     expect(html).toContain('value="abc"');
     expect(html).toContain('visible');
+  });
+});
+
+describe('SearchBox — focusSignal 구독(keyboard-shortcuts `/`·⌘F DOM 우회 대체)', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  it('focusSignal 증가 시 input 을 focus(자기 ref) — id 셀렉터 의존 없음', () => {
+    act(() => { root.render(<SearchBox value="" onSearch={() => {}} clearLabel="Clear" focusSignal={1} />); });
+    const input = container.querySelector<HTMLInputElement>('.feed-search-input');
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('focusSignal 미주입(undefined) 이면 포커스를 빼앗지 않는다(detail 미결선 슬롯 동치)', () => {
+    act(() => { root.render(<SearchBox value="" onSearch={() => {}} clearLabel="Clear" />); });
+    const input = container.querySelector<HTMLInputElement>('.feed-search-input');
+    expect(document.activeElement).not.toBe(input);
+  });
+
+  it('focusSignal 이 다시 증가하면 재포커스(`/` 연타 → 매번 focus)', () => {
+    act(() => { root.render(<SearchBox value="" onSearch={() => {}} clearLabel="Clear" focusSignal={1} />); });
+    const input = container.querySelector<HTMLInputElement>('.feed-search-input')!;
+    input.blur();
+    expect(document.activeElement).not.toBe(input);
+    act(() => { root.render(<SearchBox value="" onSearch={() => {}} clearLabel="Clear" focusSignal={2} />); });
+    expect(document.activeElement).toBe(input);
   });
 });

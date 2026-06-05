@@ -82,6 +82,13 @@ export interface AppStoreState {
   //   Chart 컴포넌트는 leaf(스토어 무참조) — 호출처가 이 값을 donutMode prop 으로 주입(컨트롤드).
   //   초기값 'model'(chart.js:39, default 모드가 첫 화면).
   donutMode: DonutMode;
+  // ── 검색 포커스 신호 슬라이스 (keyboard-shortcuts DOM 우회 제거) ──
+  //   `/`·⌘F 단축키가 검색 input 을 포커스하려는 "의도"를 표현하는 단조 증가 신호.
+  //   레거시는 use-keyboard-shortcuts 가 getElementById('feedSearchContainer').querySelector('.feed-search-input')
+  //   로 DOM 을 직접 잡아 focus() 했다 — id 셀렉터 의존. 이를 store action(requestSearchFocus)으로 전환:
+  //   focus 는 명령형이므로 input 을 소유한 SearchBox 가 이 신호 증가를 구독해 자기 ref 로 focus/select 한다.
+  //   값 자체는 의미 없고 "변했다"는 것만 신호(SSE needsSessionsRefetch 와 동일한 신호 패턴). 휘발.
+  searchFocusSignal: number;
 
   // ── 액션 (state.js accessor 1:1) ──
   setAppMode: (m: AppMode) => void;
@@ -103,6 +110,9 @@ export interface AppStoreState {
   setDonutMode: (m: DonutMode) => void;
   /** 차트 섹션 모드(default/detail) → 도넛 모드 매핑 후 적용(chart-policy.js setChartMode SSoT). */
   setChartMode: (mode: ChartMode) => void;
+  // ── 검색 포커스 액션 ──
+  /** 검색 input 포커스 요청 — searchFocusSignal 을 증가시켜 SearchBox(구독자)가 자기 ref 로 focus 하게 한다. */
+  requestSearchFocus: () => void;
 }
 
 /**
@@ -128,6 +138,8 @@ export const initialState = {
   searchQuery: '',
   // 도넛 모드 초기값 'model' (chart.js:39 — default 모드가 첫 화면).
   donutMode: 'model' as DonutMode,
+  // 검색 포커스 신호 초기값 0 — 아직 포커스 요청 없음. 단조 증가만 의미.
+  searchFocusSignal: 0,
 };
 
 /**
@@ -234,6 +246,9 @@ export const useAppStore = create<AppStoreState>()(persist((set) => ({
   },
   // chart-policy.js setChartMode SSoT: default→model, detail→cache 매핑 후 적용.
   setChartMode: (mode) => set({ donutMode: chartModeToDonutMode(mode) }),
+
+  // ── 검색 포커스 (keyboard-shortcuts DOM 우회 제거) — 신호 단조 증가. 구독자(SearchBox)가 focus 수행. ──
+  requestSearchFocus: () => set((s) => ({ searchFocusSignal: s.searchFocusSignal + 1 })),
 }), {
   name: STORAGE_KEY,
   version: SCHEMA_VERSION,

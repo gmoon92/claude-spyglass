@@ -14,6 +14,14 @@
  *    에 합성 click 을 보내 RequestRow.onMsgCellClick 이 자기 useState 를 토글하게 한다
  *    (펼침 SSoT 단일화 — 펼침 로직 재구현 금지). ref 스코프 탐색은 React 표준 escape-hatch.
  *
+ * 합성 click 유지 사유(P5 검토 결과):
+ *  - expand-store(stores/expand-store.ts)는 "펼쳐진 행의 collapse 콜백" 만 보관한다(ESC 닫기용).
+ *    chip-jump 는 *접힌* 행을 *펼쳐야* 하는데, store 엔 expand-by-rid 진입점이 없다. 추가하려면
+ *    RequestRow 가 접힌 동안에도 expand 콜백을 등록해야 해(effect/계약 확장) RequestRow 공개 시그니처
+ *    변경 회귀 위험이 크다 → 안전 경계 내에서 합성 click escape-hatch 를 유지한다.
+ *  - 후속 권장: expand-store 에 registerExpander(rid, expand)/expandByRid(rid) 를 추가하고
+ *    RequestRow 가 항상 expander 를 등록하도록 정공법 전환(별 워크스트림에서 RequestRow 와 함께).
+ *
  * @module features/session-detail/chip-jump
  */
 import type { RefObject } from 'react';

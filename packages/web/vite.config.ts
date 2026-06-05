@@ -5,10 +5,10 @@ import type { Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
 // P4-10: 운영 진입 전환 — build input = index.html(#react-root) + 데몬 정적 자산 외부화 plugin.
-// - 기존 Vanilla 자산(assets/css/*.css·assets/js/i18n*.js·lang-switcher.js)은 데몬(/assets/*)이
+// - 기존 Vanilla 자산(assets/css/*.css·assets/js/i18n.js)은 데몬(/assets/*)이
 //   직접 서빙한다. Vite 번들 그래프에 끌어오지 않고 <head>/<body> 에 raw 태그로 외부 주입한다
 //   (externalizeDaemonAssets). 이렇게 해야 index.html 소스는 FOUC/lang 인라인 + #react-root + module 진입만
-//   유지하면서, dev(Vite 5173)·build(dist) 양쪽에서 동일한 CSS24/classic-i18n3 가 로드된다.
+//   유지하면서, dev(Vite 5173)·build(dist) 양쪽에서 동일한 CSS24/classic-i18n1 가 로드된다.
 // - locales 는 build 후 dist/locales 로 복사(F2, P1-02 §3) — WEB_ROOT→dist 시 /locales/* 정합.
 // - 데몬(9999) 정적 서빙 계약(WEB_ROOT→dist, mimeMap .map, SPA fallback)은 dispatch.ts 에서 처리.
 const DAEMON_TARGET = 'http://127.0.0.1:9999';
@@ -46,16 +46,17 @@ const DAEMON_CSS = [
   '/assets/css/design-system/_index.css',
 ] as const;
 
-// classic i18n 3종 — 로드 순서 고정(i18n.js → i18n-dom.js → lang-switcher.js).
+// classic i18n 잔존 1종 — i18n.js(window.I18n 전역 SSoT)만 유지한다.
+//   i18n-dom.js(data-i18n DOM 패스)·lang-switcher.js(select 바인딩)는 React 전환으로 제거됨
+//   (#lang-switcher → src/components/LangSwitcher.tsx). window.I18n 은 i18n-utils date-locale 폴백 +
+//   i18n.ts parseMissingKeyHandler + vitest stub 위임이 런타임에 의존하므로 유지한다.
 // module(main.tsx) 진입 전에 실행돼 window.I18n 이 React 첫 렌더 전 선존재(P1-03 §3.2).
 const DAEMON_I18N = [
   '/assets/js/i18n.js',
-  '/assets/js/i18n-dom.js',
-  '/assets/js/lang-switcher.js',
 ] as const;
 
 /**
- * 데몬 정적 자산 외부화 — index.html 에 CSS24(head) + classic-i18n3(body-prepend) 를 주입한다.
+ * 데몬 정적 자산 외부화 — index.html 에 CSS24(head) + classic-i18n1(body-prepend) 를 주입한다.
  *   - transformIndexHtml 은 dev/build 양쪽에서 발화 → 두 환경의 진입 HTML 이 동일.
  *   - body-prepend: i18n 스크립트를 <body> 선두(= #react-root·module 진입 앞)에 배치 → window.I18n 선존재.
  *   - closeBundle: build 후 locales → dist/locales 복사(F2) — dispatch /locales/* 분기 무수정 유지.
@@ -79,7 +80,7 @@ function externalizeDaemonAssets(): Plugin {
     },
     closeBundle() {
       // WEB_ROOT→dist 전환(dispatch.ts) 후 데몬이 dist/ 만 서빙하므로, 데몬-서빙 classic 자산을 dist 로 복사한다.
-      //   - assets/{css,js} → dist/assets/{css,js}: index.html 이 외부 참조하는 CSS24 + classic i18n3(+의존 모듈).
+      //   - assets/{css,js} → dist/assets/{css,js}: index.html 이 외부 참조하는 CSS24 + classic i18n1(+의존 모듈).
       //     Vite 산출(dist/assets/index-<hash>.js·favicon)과 파일명이 겹치지 않아 recursive 병합이 안전.
       //   - locales → dist/locales (F2, P1-02 §3): /locales/* 분기 정합. dev 는 proxy 위임이라 불요.
       const copies: Array<[string, string]> = [

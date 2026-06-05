@@ -13,7 +13,7 @@
  *
  * @module render/RequestRow
  */
-import { Fragment, memo, useMemo, useState, type MouseEvent, type ReactElement, type ReactNode } from 'react';
+import { Fragment, memo, useEffect, useMemo, useState, type MouseEvent, type ReactElement, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   escHtml,
@@ -35,6 +35,7 @@ import { AnomalyBadges, SlowBadge } from './badges';
 import { BloatedSysBadge } from './anomaly-badges';
 import { bloatedSysInfo } from '../../lib/anomaly-field';
 import { PromptExpandRow } from './PromptExpandRow';
+import { useExpandStore } from '../../stores/expand-store';
 
 /** feed 뷰 expand td colspan — 원본 expand.ts#RECENT_REQ_COLS(10: + Session). */
 const FEED_EXPAND_COLS = 10;
@@ -141,6 +142,15 @@ export const RequestRow = memo(function RequestRow({ r, opts = {} }: { r: RowLik
     if (!el) return;
     setExpanded((v) => !v);
   };
+
+  // ESC 우회 제거 — 펼쳐진 동안 expand-store 에 자신의 collapse 콜백을 등록한다.
+  //   use-keyboard-shortcuts 의 ESC 가 DOM .click() 대신 collapseTopExpanded() 로 이 콜백을 호출해
+  //   행 로컬 useState 를 닫는다(펼침 SSoT 는 그대로 이 useState). 공개 props 시그니처 불변.
+  useEffect(() => {
+    if (!expanded || !rid) return;
+    useExpandStore.getState().register(rid, () => setExpanded(false));
+    return () => useExpandStore.getState().unregister(rid);
+  }, [expanded, rid]);
 
   // 기능 1 — Session 셀 클릭 → onGotoSession. 미주입이면 핸들러 자체를 달지 않아 무동작(안전).
   const gotoSession = opts.onGotoSession;

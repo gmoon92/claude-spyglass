@@ -2,8 +2,14 @@
  * features/meta-docs/flow-camera.ts — viewBox 카메라 fit/이징/트윈 (P4-03)
  *
  * 원본: assets/js/meta-docs-flow-camera.js 전량(camera.js)을 TS 로 1:1 이식. 외부 의존 0(camera.js:9).
- *   computeFitView/easeInOutCubic 는 순수 계산(단위테스트), animateToView/focusOnNode 는 rAF 트윈
- *   (MetaDocsFlow effect 가 호출). viewState 는 *in-place* 갱신(arch §4.2).
+ *
+ * 본 모듈은 "순수 lib" 가 아니라 **순수부 + effect 전용부** 가 공존한다(vanilla-js-audit 정정):
+ *   - 순수부(단위테스트 가능, DOM 무관): easeInOutCubic, viewBoxStr, computeFitView 의 산식부.
+ *     (computeFitView 는 getBoundingClientRect 측정 입력을 받지만 산출은 순수 — 측정 자체는 호출 시점.)
+ *   - effect 전용부(React 선언으로 대체 불가, 본질적 명령형): applyViewBox(setAttribute),
+ *     getBoundingClientRect(computeFitView 내부 측정), requestAnimationFrame 트윈(animateToView/
+ *     focusOnNode). 이들은 viewState 를 *in-place* 갱신하며 MetaDocsFlow effect 가 호출(arch §4.2).
+ *     → "잔재" 가 아니라 viewBox 카메라 제어의 본질적 명령형 경계다.
  *
  * @module features/meta-docs/flow-camera
  */

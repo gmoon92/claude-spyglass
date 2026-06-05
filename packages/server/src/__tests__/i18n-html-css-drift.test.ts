@@ -1,8 +1,11 @@
 // HTML/CSS lang 인프라 drift 회귀 방지.
 //
-// 시나리오 1 (HTML drift):
-//   누군가 SUPPORTED_LANGS에 'fr' 추가 후 HTML lang-switcher 옵션 갱신 안 함
-//   → fr 사용자가 lang-switcher에서 자신의 언어를 선택할 수 없음
+// 시나리오 1 (lang-switcher 라벨 drift):
+//   누군가 SUPPORTED_LANGS에 'fr' 추가 후 LangSwitcher 컴포넌트의 LANG_LABELS 갱신 안 함
+//   → fr 사용자가 lang-switcher에서 코드('fr') 만 보고 네이티브 라벨을 못 봄
+//   (#lang-switcher 는 index.html 정적 <option> → React 컴포넌트(LangSwitcher.tsx)로 전환됨.
+//    옵션은 SUPPORTED_LANGS.map() 으로 생성되므로 옵션 집합 자체는 구조적으로 drift 불가하고,
+//    유일한 drift 위험은 LANG_LABELS 누락이다.)
 //
 // 시나리오 2 (CSS drift):
 //   누군가 :lang(ko) selector 추가 후 :lang(ja)/:lang(zh) 누락
@@ -17,28 +20,31 @@ const SUPPORTED_LANGS = ['ko', 'en', 'ja', 'zh']; // packages/types/src/i18n.ts�
 const REQUIRED_LANG_BRANCHES = ['ko', 'ja', 'zh']; // CSS :lang() — en은 기본 fallback
 
 describe('HTML/CSS lang 인프라 drift 회귀 방지', () => {
-  it('HTML lang-switcher 옵션이 SUPPORTED_LANGS와 정확히 일치해야 한다', () => {
-    const html = readFileSync(join(PROJECT_ROOT, 'packages/web/index.html'), 'utf-8');
-    const options = new Set<string>();
-    for (const m of html.matchAll(/<option\s+value=["'](\w+)["']/g)) {
-      options.add(m[1]);
+  it('LangSwitcher LANG_LABELS 가 SUPPORTED_LANGS 를 모두 커버해야 한다', () => {
+    const tsx = readFileSync(join(PROJECT_ROOT, 'packages/web/src/components/LangSwitcher.tsx'), 'utf-8');
+    // LANG_LABELS 객체 리터럴의 키를 추출(예: `ko: '한국어',`).
+    const block = tsx.match(/LANG_LABELS\s*:\s*Record<[^>]*>\s*=\s*\{([\s\S]*?)\}/);
+    expect(block).not.toBeNull();
+    const labels = new Set<string>();
+    for (const m of block![1].matchAll(/(\w+)\s*:/g)) {
+      labels.add(m[1]);
     }
 
     const supported = new Set(SUPPORTED_LANGS);
-    const missingInHtml = SUPPORTED_LANGS.filter((l) => !options.has(l));
-    const extraInHtml = [...options].filter((l) => !supported.has(l) && l !== '').filter((v) => !['true', 'false'].includes(v));
+    const missingLabels = SUPPORTED_LANGS.filter((l) => !labels.has(l));
+    const extraLabels = [...labels].filter((l) => !supported.has(l));
 
-    if (missingInHtml.length > 0 || extraInHtml.length > 0) {
+    if (missingLabels.length > 0 || extraLabels.length > 0) {
       // eslint-disable-next-line no-console
       console.error(
-        `\n[html-lang-drift] HTML과 SUPPORTED_LANGS drift:\n` +
-          `  HTML에 누락: [${missingInHtml.join(',') || '없음'}]\n` +
-          `  SUPPORTED_LANGS에 없는 HTML 옵션: [${extraInHtml.join(',') || '없음'}]\n` +
-          `→ packages/web/index.html의 <select id="lang-switcher"> 옵션을 동기화하세요.\n`,
+        `\n[lang-label-drift] LangSwitcher LANG_LABELS 와 SUPPORTED_LANGS drift:\n` +
+          `  LANG_LABELS에 누락: [${missingLabels.join(',') || '없음'}]\n` +
+          `  SUPPORTED_LANGS에 없는 라벨: [${extraLabels.join(',') || '없음'}]\n` +
+          `→ packages/web/src/components/LangSwitcher.tsx 의 LANG_LABELS 를 동기화하세요.\n`,
       );
     }
-    expect(missingInHtml).toEqual([]);
-    expect(extraInHtml).toEqual([]);
+    expect(missingLabels).toEqual([]);
+    expect(extraLabels).toEqual([]);
   });
 
   it('CSS :lang() selector 블록은 ko/ja/zh 3언어 모두 정의돼야 한다 (en은 기본 fallback)', () => {

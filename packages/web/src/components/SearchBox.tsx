@@ -18,6 +18,8 @@
  * @module components/SearchBox
  */
 
+import { useEffect, useRef } from 'react';
+
 /** 원본 search-box.js 의 입력 정규화 — trim + lowercase (검색 매칭 SSoT). */
 export function normalizeQuery(raw: string): string {
   return raw.trim().toLowerCase();
@@ -32,10 +34,28 @@ export interface SearchBoxProps {
   onSearch: (query: string) => void;
   /** 클리어 버튼 aria-label(원본 window.I18n.t('ui.search-box.clear-label') 대체). */
   clearLabel: string;
+  /**
+   * 포커스 신호(선택) — 단조 증가 값. 값이 바뀌면 input 을 focus + select 한다.
+   * keyboard-shortcuts `/`·⌘F 가 app-store.searchFocusSignal 을 증가시키면 호출처가 이 prop 으로 흘린다.
+   * 레거시 getElementById('feedSearchContainer').querySelector('.feed-search-input').focus() 우회 대체.
+   * 미주입(undefined)이면 포커스 구독 없음 — detail 슬롯 등 미결선 인스턴스는 그대로 no-op(레거시 동치).
+   */
+  focusSignal?: number;
 }
 
-export function SearchBox({ value, placeholder = '', onSearch, clearLabel }: SearchBoxProps) {
+export function SearchBox({ value, placeholder = '', onSearch, clearLabel, focusSignal }: SearchBoxProps) {
   const hasValue = value.length > 0;
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // 포커스 신호 구독 — 신호 증가 시 input 을 focus + select(레거시 activeSearchInput().focus()/select() 동치).
+  //   초기 마운트(focusSignal===undefined 또는 0)에는 포커스를 빼앗지 않도록 신호가 truthy 일 때만 동작.
+  useEffect(() => {
+    if (!focusSignal) return;
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    el.select?.();
+  }, [focusSignal]);
   // 원본 svgSearch({ size:14, className:'feed-search-icon-svg' }) 마크업 1:1 (circle r=4.5 + 손잡이 line).
   return (
     <>
@@ -57,6 +77,7 @@ export function SearchBox({ value, placeholder = '', onSearch, clearLabel }: Sea
         </svg>
       </span>
       <input
+        ref={inputRef}
         className="feed-search-input"
         type="text"
         placeholder={placeholder}

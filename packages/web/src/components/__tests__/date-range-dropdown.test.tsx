@@ -11,25 +11,16 @@
  *
  * date-range 회귀 0: 원본 .js 무수정·병존. api.js setActiveRange/getActiveRange 계약 불변.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { ReactElement } from 'react';
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { ensureDom } from '../../test-support/ensure-dom';
 import { DateRangeDropdown, DATE_RANGE_PRESETS } from '../DateRangeDropdown';
 import { useAppStore } from '../../stores/app-store';
 
-/** 반환 element 트리 깊이우선 탐색(DOM 하네스 없이 핸들러 배선 검증 — primitives invoke 패턴 확장). */
-function findNode(node: unknown, pred: (el: ReactElement) => boolean): ReactElement | null {
-  if (!node || typeof node !== 'object') return null;
-  const el = node as ReactElement & { props?: { children?: unknown } };
-  if (el.props && pred(el)) return el;
-  const children = el.props?.children;
-  const arr = Array.isArray(children) ? children : [children];
-  for (const c of arr.flat(Infinity)) {
-    const hit = findNode(c, pred);
-    if (hit) return hit;
-  }
-  return null;
-}
+ensureDom();
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // i18n 라벨러 — 컴포넌트는 무전역(라벨러 함수를 prop 으로 주입). 테스트는 식별 가능한 라벨 반환.
 const labeler = {
@@ -107,34 +98,42 @@ describe('DateRangeDropdown — DOM 계약(셀렉터/aria 보존)', () => {
 });
 
 describe('DateRangeDropdown — 스토어 연동(activeRange ↔ app-store)', () => {
-  it('7d 옵션 클릭(onClick) → onSelectPreset→setActiveRange 로 store.activeRange 갱신', () => {
-    const tree = DateRangeDropdown({
-      activeRange: { type: 'preset', value: 'all' },
-      labeler,
-      onSelectPreset: (v) => useAppStore.getState().setActiveRange({ type: 'preset', value: v }),
-    });
-    // 트리에서 data-value="7d" 인 role=option li 를 찾아 onClick 직접 invoke.
-    const opt7d = findNode(tree, (el) => (el.props as Record<string, unknown>)['data-value'] === '7d');
+  // 컴포넌트가 useState(controlled custom)를 쓰므로 plain 함수 호출이 아닌 라이브 렌더로 검증한다.
+  let liveContainer: HTMLElement;
+  let liveRoot: Root;
+  beforeEach(() => {
+    liveContainer = document.createElement('div');
+    document.body.appendChild(liveContainer);
+    liveRoot = createRoot(liveContainer);
+  });
+  afterEach(() => {
+    act(() => liveRoot.unmount());
+    document.body.innerHTML = '';
+  });
+
+  it('7d 옵션 클릭 → onSelectPreset→setActiveRange 로 store.activeRange 갱신', () => {
+    act(() =>
+      liveRoot.render(
+        <DateRangeDropdown
+          activeRange={{ type: 'preset', value: 'all' }}
+          labeler={labeler}
+          open
+          onSelectPreset={(v) => useAppStore.getState().setActiveRange({ type: 'preset', value: v })}
+        />,
+      ),
+    );
+    const opt7d = liveContainer.querySelector<HTMLElement>('[data-value="7d"]')!;
     expect(opt7d).not.toBeNull();
-    expect(typeof opt7d!.props.onClick).toBe('function');
-    (opt7d!.props.onClick as () => void)();
+    act(() => opt7d.click());
     expect(useAppStore.getState().activeRange).toEqual({ type: 'preset', value: '7d' });
   });
 
-  it('onApplyCustom 콜백 계약: 호출 시 custom range 가 store 에 반영(apply 버튼 단일 진입점)', () => {
-    // custom apply 버튼의 DOM-읽기 로직(인접 input 값 파싱)은 DOM 하네스가 필요하므로
-    // 본 테스트는 onApplyCustom 콜백 계약(from,to → setActiveRange custom)만 end-to-end 검증한다.
-    // (버튼→input 파싱 결선은 후속 hooks/통합 테스트 범위 — P2-08 은 스토어 연동 계약까지.)
-    const onApplyCustom = (from: number, to: number) =>
-      useAppStore.getState().setActiveRange({ type: 'custom', from, to });
-    const tree = DateRangeDropdown({ activeRange: { type: 'preset', value: 'all' }, labeler, onApplyCustom });
-    // apply 버튼이 트리에 존재(셀렉터 계약)하고 onClick 이 배선됨을 확인.
-    const applyBtn = findNode(tree, (el) => (el.props as Record<string, unknown>)['data-role'] === 'custom-apply');
+  it('apply 버튼이 listbox footer 에 존재(셀렉터 계약)', () => {
+    act(() =>
+      liveRoot.render(<DateRangeDropdown activeRange={{ type: 'preset', value: 'all' }} labeler={labeler} open />),
+    );
+    const applyBtn = liveContainer.querySelector<HTMLButtonElement>('[data-role="custom-apply"]');
     expect(applyBtn).not.toBeNull();
-    expect(typeof applyBtn!.props.onClick).toBe('function');
-    // 콜백 계약 직접 검증(스토어 반영).
-    onApplyCustom(1000, 2000);
-    expect(useAppStore.getState().activeRange).toEqual({ type: 'custom', from: 1000, to: 2000 });
   });
 
   it('store.activeRange 를 prop 으로 받아 렌더하면 라벨이 store 상태를 반영(셀렉터 연동)', () => {
@@ -143,5 +142,106 @@ describe('DateRangeDropdown — 스토어 연동(activeRange ↔ app-store)', ()
     const html = renderToStaticMarkup(<DateRangeDropdown activeRange={ar} labeler={labeler} />);
     expect(html).toContain('label:yesterday');
     expect(html).toMatch(/data-value="yesterday"[^>]*aria-selected="true"|aria-selected="true"[^>]*data-value="yesterday"/);
+  });
+});
+
+describe('DateRangeDropdown — controlled custom 입력(DOM 역참조 제거)', () => {
+  let container: HTMLElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    document.body.innerHTML = '';
+  });
+
+  it('custom from/to input 에 값을 입력하고 apply 클릭 → onApplyCustom(from<=to ms) 통지', () => {
+    let applied: { from: number; to: number } | null = null;
+    act(() =>
+      root.render(
+        <DateRangeDropdown
+          activeRange={{ type: 'preset', value: 'all' }}
+          labeler={labeler}
+          open
+          onApplyCustom={(from, to) => {
+            applied = { from, to };
+          }}
+        />,
+      ),
+    );
+    const fromEl = container.querySelector<HTMLInputElement>('[data-role="custom-from"]')!;
+    const toEl = container.querySelector<HTMLInputElement>('[data-role="custom-to"]')!;
+    const applyBtn = container.querySelector<HTMLButtonElement>('[data-role="custom-apply"]')!;
+    expect(fromEl).not.toBeNull();
+    // controlled input — React onChange 로 state 갱신(네이티브 setter 후 input 이벤트 dispatch).
+    const setVal = (el: HTMLInputElement, v: string): void => {
+      const proto = Object.getPrototypeOf(el) as object;
+      const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+      setter?.call(el, v);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    act(() => {
+      setVal(fromEl, '2026-01-01');
+      setVal(toEl, '2026-01-31');
+    });
+    // controlled 반영 확인(DOM value 가 state 를 따라감).
+    expect(fromEl.value).toBe('2026-01-01');
+    expect(toEl.value).toBe('2026-01-31');
+    act(() => applyBtn.click());
+    expect(applied).not.toBeNull();
+    // 로컬 자정(from) / 종일(to) ms — isoDateToLocalMs 계약(from < to).
+    expect(applied!.from).toBe(new Date(2026, 0, 1, 0, 0, 0, 0).getTime());
+    expect(applied!.to).toBe(new Date(2026, 0, 31, 23, 59, 59, 999).getTime());
+  });
+
+  it('역순(from>to) 입력 시 apply 는 no-op(레거시 순서 가드 동치)', () => {
+    let called = false;
+    act(() =>
+      root.render(
+        <DateRangeDropdown
+          activeRange={{ type: 'preset', value: 'all' }}
+          labeler={labeler}
+          open
+          onApplyCustom={() => {
+            called = true;
+          }}
+        />,
+      ),
+    );
+    const fromEl = container.querySelector<HTMLInputElement>('[data-role="custom-from"]')!;
+    const toEl = container.querySelector<HTMLInputElement>('[data-role="custom-to"]')!;
+    const applyBtn = container.querySelector<HTMLButtonElement>('[data-role="custom-apply"]')!;
+    const setVal = (el: HTMLInputElement, v: string): void => {
+      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el) as object, 'value')?.set;
+      setter?.call(el, v);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    act(() => {
+      setVal(fromEl, '2026-02-10');
+      setVal(toEl, '2026-02-01');
+    });
+    act(() => applyBtn.click());
+    expect(called).toBe(false);
+  });
+
+  it('menuStyle prop 을 .ds-dropdown-menu 의 인라인 style 로 바인딩(선언형 위치 주입)', () => {
+    act(() =>
+      root.render(
+        <DateRangeDropdown
+          activeRange={{ type: 'preset', value: 'all' }}
+          labeler={labeler}
+          open
+          menuStyle={{ left: '120px', top: '40px' }}
+        />,
+      ),
+    );
+    const menu = container.querySelector<HTMLElement>('.ds-dropdown-menu')!;
+    expect(menu).not.toBeNull();
+    expect(menu.style.left).toBe('120px');
+    expect(menu.style.top).toBe('40px');
   });
 });

@@ -80,11 +80,13 @@ describe.if(hasDist)('dispatch 정적 서빙 — dist 진입/SPA fallback/mime (
     }
   });
 
-  it('진입 HTML 은 classic i18n 3종 + CSS24 외부화 태그를 포함', async () => {
+  it('진입 HTML 은 classic i18n 1종(i18n.js) + CSS24 외부화 태그를 포함', async () => {
+    // i18n-dom.js/lang-switcher.js 는 #lang-switcher React 전환(LangSwitcher.tsx)으로 제거됨.
+    //   window.I18n 전역(date-locale 폴백·parseMissingKeyHandler) 의존으로 i18n.js 만 유지.
     const html = await (await get('/')).text();
-    for (const s of ['/assets/js/i18n.js', '/assets/js/i18n-dom.js', '/assets/js/lang-switcher.js']) {
-      expect(html).toContain(s);
-    }
+    expect(html).toContain('/assets/js/i18n.js');
+    expect(html).not.toContain('/assets/js/i18n-dom.js');
+    expect(html).not.toContain('/assets/js/lang-switcher.js');
     expect(html).toContain('/assets/css/design-tokens.css');
     expect(html).toContain('/assets/css/design-system/_index.css');
   });

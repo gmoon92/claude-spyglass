@@ -11,6 +11,8 @@
  */
 import './_dom-stub';
 import { describe, it, expect, beforeAll } from 'vitest';
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve as resolvePath } from 'node:path';
@@ -115,22 +117,40 @@ describe('SystemReminderChip — buildSystemReminderChip(turn-views.js:794)', ()
     expect(r(<SystemReminderChip turnIndex={1} reminders={null} />)).toBe('');
   });
 
-  it('N>0 → 칩 id/popover id/count + pre 본문', () => {
-    const html = r(<SystemReminderChip turnIndex={7} reminders={['alpha', 'beta']} />);
-    expect(html).toContain('id="turn-sysrem-chip-7"');
-    expect(html).toContain('id="turn-sysrem-popover-7"');
-    expect(html).toContain('data-sysrem-toggle="turn-sysrem-popover-7"');
-    expect(html).toContain('aria-controls="turn-sysrem-popover-7"');
-    expect(html).toContain('<span class="turn-system-reminder-count">2</span>');
-    expect((html.match(/class="turn-system-reminder-item"/g) || []).length).toBe(2);
-    expect(html).toContain('alpha');
-    expect(html).toContain('beta');
+  // P5: 팝오버는 createPortal(client-only)로 body 에 렌더되므로 SSR(renderToStaticMarkup)엔 안 나온다.
+  //   칩 + 팝오버 본문 동치는 jsdom client mount 로 검증한다(마크업 1:1 동일, 렌더 경로만 client).
+  it('N>0 → 칩 id/popover id/count + pre 본문(client portal)', () => {
+    (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    act(() => root.render(<SystemReminderChip turnIndex={7} reminders={['alpha', 'beta']} />));
+    const chip = document.getElementById('turn-sysrem-chip-7')!;
+    const pop = document.getElementById('turn-sysrem-popover-7')!;
+    expect(chip).toBeTruthy();
+    expect(pop).toBeTruthy();
+    expect(chip.getAttribute('data-sysrem-toggle')).toBe('turn-sysrem-popover-7');
+    expect(chip.getAttribute('aria-controls')).toBe('turn-sysrem-popover-7');
+    expect(chip.querySelector('.turn-system-reminder-count')!.textContent).toBe('2');
+    expect(pop.querySelectorAll('.turn-system-reminder-item').length).toBe(2);
+    expect(pop.textContent).toContain('alpha');
+    expect(pop.textContent).toContain('beta');
+    act(() => root.unmount());
+    document.body.innerHTML = '';
   });
 
   it('reminder 본문은 escape 된다(XSS 가드)', () => {
-    const html = r(<SystemReminderChip turnIndex={1} reminders={['<script>x</script>']} />);
-    expect(html).not.toContain('<script>x</script>');
-    expect(html).toContain('&lt;script&gt;');
+    (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    act(() => root.render(<SystemReminderChip turnIndex={1} reminders={['<script>x</script>']} />));
+    const pop = document.getElementById('turn-sysrem-popover-1')!;
+    // React 텍스트 노드라 <script> 는 실제 자식 엘리먼트가 아니라 텍스트로만 존재(주입 차단).
+    expect(pop.querySelector('script')).toBeNull();
+    expect(pop.querySelector('.turn-system-reminder-item')!.textContent).toBe('<script>x</script>');
+    act(() => root.unmount());
+    document.body.innerHTML = '';
   });
 });
 

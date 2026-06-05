@@ -77,7 +77,7 @@ import { rangeToParams } from './compute-range';
 import { fetchMetaDocs, fetchDashboard } from '../api/fetchers';
 import { DateRangeDropdown, type DateRangeLabeler } from '../components/DateRangeDropdown';
 import { useFloatingMenuPosition } from '../components/use-floating-menu-position';
-import { LangSwitcherSlot } from '../components/LangSwitcherSlot';
+import { LangSwitcher } from '../components/LangSwitcher';
 
 /** GLOBAL_PROJECT_KEY(left-panel.js:17 / fetchers GLOBAL_PROJECT_KEY) — userSettings 글로벌 집계 키. */
 const GLOBAL_PROJECT_KEY = '__global__';
@@ -216,7 +216,7 @@ export function MetaDocsLayout(): ReactElement {
   // 메뉴(fixed) 위치 계산 — 트리거 기준 우측 정렬. #metaDocsRoot overflow:hidden 클리핑 회피용 fixed.
   const dateTriggerRef = useRef<HTMLButtonElement>(null);
   const dateMenuRef = useRef<HTMLDivElement>(null);
-  useFloatingMenuPosition(dateOpen, dateTriggerRef, dateMenuRef);
+  const dateMenuStyle = useFloatingMenuPosition(dateOpen, dateTriggerRef, dateMenuRef);
   useEffect(() => {
     if (!dateOpen) return undefined;
     const onDocDown = (e: MouseEvent): void => {
@@ -526,6 +526,7 @@ export function MetaDocsLayout(): ReactElement {
                 open={dateOpen}
                 triggerRef={dateTriggerRef}
                 menuRef={dateMenuRef}
+                menuStyle={dateMenuStyle}
                 onSelectPreset={(v: PresetValue) => {
                   setActiveRange({ type: 'preset', value: v });
                   setDateOpen(false);
@@ -536,9 +537,9 @@ export function MetaDocsLayout(): ReactElement {
                 }}
               />
             </div>
-            {/* lang-switcher — 전역 classic island 를 메타 탭 액션 슬롯으로 DOM 이동(BrowseLayout 과 동일 컴포넌트). */}
+            {/* lang-switcher — BrowseLayout 과 동일 컴포넌트(LangSwitcher). 메타 탭 액션 슬롯에 직접 렌더. */}
             <div id="metaTabsLangSwitcher" className="meta-tabs-lang-switcher">
-              <LangSwitcherSlot />
+              <LangSwitcher />
             </div>
           </div>
         </div>
