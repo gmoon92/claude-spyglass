@@ -2,21 +2,14 @@
  * config-file.ts — `~/.spyglass/server-config.json` SSoT
  *
  * 책임 (Single Responsibility):
- *   spyglass 서버의 *영속 설정* 을 JSON 파일에 저장/조회한다. 사용자가 웹 대시보드 설정
- *   페이지에서 graph mode 같은 값을 변경하면 본 파일이 변경되어 *다음 서버 시작에도 유지*
- *   된다. 셸 환경변수(`SPYGLASS_GRAPH_MODE` 등) 영속화의 대안 — IDE 터미널/Electron/
- *   launchctl/systemd 컨텍스트에서 셸 export 가 무력화되는 케이스를 해소.
+ *   spyglass 서버의 *영속 설정* 을 JSON 파일에 저장/조회한다. 향후 port / plugin enabled /
+ *   theme 등 영속 설정을 본 파일에 통합하기 위한 atomic write 인프라를 제공한다.
+ *   (graph mode 는 v4.3.x 에서 제거됨 — 그래프는 항상 켜진 상태로 고정.)
  *
  * 의존성:
  *   - node:fs/promises (readFile, writeFile, rename, mkdir)
  *   - paths.ts::getUserSpyglassDir 같은 헬퍼는 의도적으로 미사용 — 본 모듈은 storage-graph
  *     의 다른 모듈에 의존하지 않는 *독립적 SSoT* (테스트 격리 + 순환 의존 방지).
- *
- * 호출 흐름:
- *   flag.ts::getGraphMode()              // env > file > default 평가 시 file 읽기
- *     → loadServerConfig()
- *   routes/settings.ts::handleGraphMode  // persistent:true 시 파일 저장
- *     → saveServerConfig({graphMode})
  *
  * 디자인 결정 — Gemini 리뷰 §3.3:
  *   - 임시 파일은 *같은 파일 시스템* 의 `~/.spyglass/tmp/` 에 생성 후 rename.
@@ -31,8 +24,6 @@
 
 import { readFile, writeFile, rename, mkdir, unlink, access } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-
-import type { GraphMode } from './flag';
 
 // =============================================================================
 // 경로 / 상수
@@ -94,21 +85,18 @@ export function getServerConfigTmpDir(): string {
  * 영속 설정 스키마 v1.
  *
  *   - version : 마이그레이션 분기용. 항상 SERVER_CONFIG_VERSION 으로 저장.
- *   - graphMode: 'off' | 'shadow' | 'primary'. 누락 시 getGraphMode 가 default 폴백.
  *   - updatedAt: 마지막 쓰기 시각 (unix ms). 디버깅용.
  *
- *   *graphMode 가 undefined* 인 케이스가 가능 — 파일은 있지만 graphMode 필드만 없을 때.
- *   getGraphMode() 가 file source 에서 undefined 면 default 로 진행.
+ *   현재 영속 필드는 없으며(graph mode 제거됨), 향후 port/theme 등을 추가할 때
+ *   *기존 필드 보존 + 누락 필드 default 주입* 방식으로 확장한다.
  */
 export interface ServerConfig {
   version: number;
-  graphMode?: GraphMode;
   updatedAt: number;
 }
 
 const DEFAULT_CONFIG: ServerConfig = {
   version: SERVER_CONFIG_VERSION,
-  graphMode: undefined,
   updatedAt: 0,
 };
 
@@ -124,17 +112,14 @@ const DEFAULT_CONFIG: ServerConfig = {
  *     - 권한 거부
  *     - JSON 파싱 실패 (사용자가 손댄 케이스 / 디스크 손상)
  *     - root 가 plain object 아님 (array / primitive)
- *     - graphMode 가 알 수 없는 문자열
  *
- *   파일이 있고 graphMode 가 정상이면 그 값을 신뢰. version 이 미래값(>1) 이어도
- *   현재 알고 있는 필드만 읽어 진행 — 다운그레이드 호환.
+ *   version 이 미래값(>1) 이어도 현재 알고 있는 필드만 읽어 진행 — 다운그레이드 호환.
  */
 /**
  * 레거시 루트 경로(`~/.spyglass/server-config.json`)를 config/ 로 1회 이전한다.
  *
- *   업데이트한 기존 사용자가 graphMode 설정을 잃지 않도록, 신규 경로가 없고 레거시가 있을
- *   때만 rename(같은 파티션, atomic) 한다. 신규가 이미 있으면 no-op. 실패는 치명 아님 —
- *   load 가 DEFAULT 로 폴백하고 다음 기회에 재시도. (모든 사용자가 업데이트해도 동작 보장)
+ *   신규 경로가 없고 레거시가 있을 때만 rename(같은 파티션, atomic) 한다. 신규가 이미
+ *   있으면 no-op. 실패는 치명 아님 — load 가 DEFAULT 로 폴백하고 다음 기회에 재시도.
  */
 async function migrateLegacyConfigIfNeeded(): Promise<void> {
   const target = getServerConfigPath();
@@ -181,14 +166,9 @@ export async function loadServerConfig(): Promise<ServerConfig> {
 
   const obj = parsed as Record<string, unknown>;
   const version = typeof obj.version === 'number' && obj.version >= 1 ? obj.version : SERVER_CONFIG_VERSION;
-  const graphMode = isValidGraphMode(obj.graphMode) ? obj.graphMode : undefined;
   const updatedAt = typeof obj.updatedAt === 'number' && Number.isFinite(obj.updatedAt) ? obj.updatedAt : 0;
 
-  return { version, graphMode, updatedAt };
-}
-
-function isValidGraphMode(v: unknown): v is GraphMode {
-  return v === 'off' || v === 'shadow' || v === 'primary';
+  return { version, updatedAt };
 }
 
 // =============================================================================

@@ -31,22 +31,12 @@
  */
 
 // =============================================================================
-// Runtime — feature flag, circuit breaker, paths
+// Runtime — circuit breaker, paths
 // =============================================================================
 
-export {
-  getGraphMode,
-  setGraphMode,            // 런타임 setter — 영속화는 호출 측 (saveServerConfig 별도) 책임
-  getGraphModeSource,      // 'env' | 'file' | 'default' — UI 가 사용자에게 출처 노출
-  refreshGraphModeFromFile,// 부팅 lifecycle 가 await — file source 평가
-  isGraphEnabled,
-  resetGraphModeCache,     // 테스트 전용
-  type GraphMode,          // type-only export — ESM runtime 가 value 로 오해하지 않도록 명시.
-  type GraphModeSource,    // type-only export
-} from './runtime/flag';
-
-// PR 1 영속화 — server-config.json SSoT.
+// 영속 설정 — server-config.json SSoT.
 //   다른 영속 설정 (port, plugin enabled 등) 도 향후 본 파일에 통합 예정.
+//   (graph mode 는 v4.3.x 에서 제거됨 — 그래프는 항상 켜진 상태로 고정.)
 export {
   loadServerConfig,
   saveServerConfig,

@@ -32,7 +32,6 @@
  * @see packages/storage/src/queries/session/retention.ts::deleteOldData — RDB 대응
  */
 
-import { getGraphMode } from '../runtime/flag';
 import { getCircuitBreaker } from '../runtime/circuit-breaker';
 import { getLadybugClient, LadybugUnavailableError, type LadybugClient } from '../client';
 
@@ -91,14 +90,11 @@ export async function deleteOldGraphDataOnClient(
  * cutoff(ms) 이전의 타임스탬프 노드를 그래프에서 삭제. RDB retention 과 동일 cutoff 로
  * 호출되어야 양쪽 데이터가 일치한다.
  *
- *   - mode='off' / circuit OPEN / Ladybug unavailable → 즉시 no-op (정상 동작).
+ *   - circuit OPEN / Ladybug unavailable → 즉시 no-op (정상 동작).
  *   - 각 단계 실패는 흡수하고 다음 단계 진행 — main flow 봉쇄 금지.
  */
 export async function deleteOldGraphData(cutoff: number): Promise<void> {
-  // 1) mode 게이트 — graph 가 꺼져 있으면 정리할 그래프 자체가 없음.
-  if (getGraphMode() === 'off') return;
-
-  // 2) circuit 게이트 — OPEN 이면 Ladybug 호출 자체 회피 (회로가 회복 결정).
+  // 1) circuit 게이트 — OPEN 이면 Ladybug 호출 자체 회피 (회로가 회복 결정).
   const breaker = getCircuitBreaker();
   if (!breaker.allowsTraffic()) return;
 

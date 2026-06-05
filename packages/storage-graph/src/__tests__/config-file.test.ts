@@ -4,9 +4,10 @@
  * 검증 대상:
  *   1) loadServerConfig 의 *안전한 폴백* — 파일 없음 / 깨진 JSON / 비정상 root
  *   2) saveServerConfig 의 *atomic write* — tmp 디렉토리 격리 + 잔여 파일 0
- *   3) 부분 업데이트 — 기존 필드 보존 + version/updatedAt 자동 갱신
- *   4) flag.ts 우선순위 — env > file > default 시나리오
- *   5) getGraphModeSource — 각 경로 분기에서 정확한 source 반환
+ *   3) version/updatedAt 자동 갱신 + 레거시 경로 마이그레이션
+ *
+ *   (graph mode 는 v4.3.x 에서 제거됨 — 그래프는 항상 켜진 상태로 고정. 본 파일은
+ *    이제 atomic write 인프라 + 안전 폴백만 검증한다.)
  *
  * 환경 격리:
  *   `process.env.SPYGLASS_HOME` 을 임시 디렉토리로 redirect 하여 사용자 실제
@@ -25,32 +26,19 @@ import {
   getServerConfigTmpDir,
   SERVER_CONFIG_VERSION,
 } from '../runtime/config-file';
-import {
-  getGraphMode,
-  getGraphModeSource,
-  refreshGraphModeFromFile,
-  resetGraphModeCache,
-} from '../runtime/flag';
 
 let tmpHome: string;
 let originalHome: string | undefined;
-let originalEnv: string | undefined;
 
 beforeEach(() => {
   tmpHome = mkdtempSync(join(tmpdir(), 'spyglass-config-test-'));
   originalHome = process.env.SPYGLASS_HOME;
-  originalEnv = process.env.SPYGLASS_GRAPH_MODE;
   process.env.SPYGLASS_HOME = tmpHome;
-  delete process.env.SPYGLASS_GRAPH_MODE;
-  resetGraphModeCache();
 });
 
 afterEach(async () => {
   if (originalHome !== undefined) process.env.SPYGLASS_HOME = originalHome;
   else delete process.env.SPYGLASS_HOME;
-  if (originalEnv !== undefined) process.env.SPYGLASS_GRAPH_MODE = originalEnv;
-  else delete process.env.SPYGLASS_GRAPH_MODE;
-  resetGraphModeCache();
   await rm(tmpHome, { recursive: true, force: true });
 });
 
@@ -59,10 +47,10 @@ afterEach(async () => {
 // =============================================================================
 
 describe('loadServerConfig — 안전 폴백', () => {
-  it('파일 없으면 default 객체 반환 (version=1, graphMode=undefined)', async () => {
+  it('파일 없으면 default 객체 반환 (version=SERVER_CONFIG_VERSION)', async () => {
     const cfg = await loadServerConfig();
     expect(cfg.version).toBe(SERVER_CONFIG_VERSION);
-    expect(cfg.graphMode).toBeUndefined();
+    expect(cfg.updatedAt).toBe(0);
   });
 
   it('깨진 JSON 위에서도 throw 없이 default 폴백', async () => {
@@ -70,7 +58,7 @@ describe('loadServerConfig — 안전 폴백', () => {
     mkdirSync(join(tmpHome, '.spyglass', 'config'), { recursive: true });
     writeFileSync(cfgPath, '{ broken json');
     const cfg = await loadServerConfig();
-    expect(cfg.graphMode).toBeUndefined();
+    expect(cfg.version).toBe(SERVER_CONFIG_VERSION);
   });
 
   it('Array root 같은 비정상 JSON 도 default 폴백', async () => {
@@ -78,25 +66,25 @@ describe('loadServerConfig — 안전 폴백', () => {
     mkdirSync(join(tmpHome, '.spyglass', 'config'), { recursive: true });
     writeFileSync(cfgPath, JSON.stringify([1, 2, 3]));
     const cfg = await loadServerConfig();
-    expect(cfg.graphMode).toBeUndefined();
+    expect(cfg.version).toBe(SERVER_CONFIG_VERSION);
   });
 
-  it('graphMode 가 알 수 없는 문자열이면 undefined 로 폴백 (다른 필드는 보존)', async () => {
+  it('정상 파일은 version + updatedAt 그대로 반환', async () => {
     const cfgPath = getServerConfigPath();
     mkdirSync(join(tmpHome, '.spyglass', 'config'), { recursive: true });
-    writeFileSync(cfgPath, JSON.stringify({ version: 1, graphMode: 'invalid', updatedAt: 123 }));
+    writeFileSync(cfgPath, JSON.stringify({ version: 1, updatedAt: 1234567890 }));
     const cfg = await loadServerConfig();
-    expect(cfg.graphMode).toBeUndefined();
-    expect(cfg.updatedAt).toBe(123);
-  });
-
-  it('정상 파일은 graphMode + updatedAt 그대로 반환', async () => {
-    const cfgPath = getServerConfigPath();
-    mkdirSync(join(tmpHome, '.spyglass', 'config'), { recursive: true });
-    writeFileSync(cfgPath, JSON.stringify({ version: 1, graphMode: 'primary', updatedAt: 1234567890 }));
-    const cfg = await loadServerConfig();
-    expect(cfg.graphMode).toBe('primary');
+    expect(cfg.version).toBe(1);
     expect(cfg.updatedAt).toBe(1234567890);
+  });
+
+  it('알 수 없는 추가 필드는 무시하고 알려진 필드만 읽는다', async () => {
+    const cfgPath = getServerConfigPath();
+    mkdirSync(join(tmpHome, '.spyglass', 'config'), { recursive: true });
+    writeFileSync(cfgPath, JSON.stringify({ version: 1, legacyField: 'ignored', updatedAt: 123 }));
+    const cfg = await loadServerConfig();
+    expect(cfg.updatedAt).toBe(123);
+    expect(Object.keys(cfg).sort()).toEqual(['updatedAt', 'version']);
   });
 });
 
@@ -109,24 +97,23 @@ describe('레거시 마이그레이션 (root → config/)', () => {
     // 업데이트 전 사용자: 설정이 루트 직속에 존재.
     mkdirSync(join(tmpHome, '.spyglass'), { recursive: true });
     const legacyPath = join(tmpHome, '.spyglass', 'server-config.json');
-    writeFileSync(legacyPath, JSON.stringify({ version: 1, graphMode: 'primary', updatedAt: 999 }));
+    writeFileSync(legacyPath, JSON.stringify({ version: 1, updatedAt: 999 }));
 
     const cfg = await loadServerConfig();
 
-    expect(cfg.graphMode).toBe('primary'); // 값 보존
-    expect(cfg.updatedAt).toBe(999);
+    expect(cfg.updatedAt).toBe(999); // 값 보존
     expect(existsSync(getServerConfigPath())).toBe(true); // config/ 로 이전됨
     expect(existsSync(legacyPath)).toBe(false);           // 레거시 제거됨
   });
 
   it('신규 config/ 경로가 이미 있으면 레거시를 무시한다 (no-op)', async () => {
     mkdirSync(join(tmpHome, '.spyglass', 'config'), { recursive: true });
-    writeFileSync(getServerConfigPath(), JSON.stringify({ version: 1, graphMode: 'shadow', updatedAt: 1 }));
+    writeFileSync(getServerConfigPath(), JSON.stringify({ version: 1, updatedAt: 1 }));
     const legacyPath = join(tmpHome, '.spyglass', 'server-config.json');
-    writeFileSync(legacyPath, JSON.stringify({ version: 1, graphMode: 'primary', updatedAt: 2 }));
+    writeFileSync(legacyPath, JSON.stringify({ version: 1, updatedAt: 2 }));
 
     const cfg = await loadServerConfig();
-    expect(cfg.graphMode).toBe('shadow'); // 신규 우선 — 레거시 미반영
+    expect(cfg.updatedAt).toBe(1); // 신규 우선 — 레거시 미반영
   });
 });
 
@@ -136,8 +123,7 @@ describe('레거시 마이그레이션 (root → config/)', () => {
 
 describe('saveServerConfig — atomic write', () => {
   it('첫 저장 — 파일 생성 + tmp 디렉토리 격리 사용', async () => {
-    const next = await saveServerConfig({ graphMode: 'primary' });
-    expect(next.graphMode).toBe('primary');
+    const next = await saveServerConfig({});
     expect(next.version).toBe(SERVER_CONFIG_VERSION);
     expect(next.updatedAt).toBeGreaterThan(0);
     // 파일 실제 존재.
@@ -149,18 +135,18 @@ describe('saveServerConfig — atomic write', () => {
     expect(leftovers).toEqual([]);
   });
 
-  it('부분 업데이트 — 기존 필드 보존', async () => {
-    await saveServerConfig({ graphMode: 'shadow' });
+  it('재저장 — version/updatedAt 자동 갱신', async () => {
+    await saveServerConfig({});
     const ts1 = Date.now();
     await new Promise((r) => setTimeout(r, 10)); // updatedAt 변화 보장
-    const next = await saveServerConfig({ graphMode: 'primary' });
-    expect(next.graphMode).toBe('primary');
+    const next = await saveServerConfig({});
+    expect(next.version).toBe(SERVER_CONFIG_VERSION);
     expect(next.updatedAt).toBeGreaterThanOrEqual(ts1);
   });
 
   it('연속 저장 — tmp 파일이 누적되지 않는다', async () => {
-    for (const m of ['off', 'shadow', 'primary', 'shadow', 'off'] as const) {
-      await saveServerConfig({ graphMode: m });
+    for (let i = 0; i < 5; i++) {
+      await saveServerConfig({});
     }
     const tmpDir = getServerConfigTmpDir();
     const leftovers = await readdir(tmpDir);
@@ -168,100 +154,15 @@ describe('saveServerConfig — atomic write', () => {
   });
 
   it('저장된 파일은 indent 2 + 끝 개행 + 파싱 가능', async () => {
-    await saveServerConfig({ graphMode: 'primary' });
+    await saveServerConfig({});
     const text = readFileSync(getServerConfigPath(), 'utf-8');
     expect(text.endsWith('\n')).toBe(true);
     const parsed = JSON.parse(text);
-    expect(parsed.graphMode).toBe('primary');
     expect(parsed.version).toBe(SERVER_CONFIG_VERSION);
   });
 
   it('tmp 파일이 settings 디렉토리가 아닌 ~/.spyglass/tmp/ 에 만들어진다 (격리)', async () => {
-    // 동시성 X — 직렬 save 가 끝나면 tmp 가 비어있어야 한다는 케이스는 위에서 검증.
-    // 본 케이스는 *tmp 디렉토리 경로 자체* 가 ~/.spyglass/tmp/ 인지 직접 검증.
     const expectedTmp = join(tmpHome, '.spyglass', 'tmp');
     expect(getServerConfigTmpDir()).toBe(expectedTmp);
-  });
-});
-
-// =============================================================================
-// flag.ts 우선순위 — env > file > default
-// =============================================================================
-
-describe('flag.ts 우선순위 (env > file > default)', () => {
-  it('env / file 모두 없으면 default = primary / source = default', async () => {
-    await refreshGraphModeFromFile();
-    expect(getGraphMode()).toBe('primary');
-    expect(getGraphModeSource()).toBe('default');
-  });
-
-  it('file 만 있고 env 없으면 file 값 적용 / source = file', async () => {
-    await saveServerConfig({ graphMode: 'primary' });
-    resetGraphModeCache();
-    await refreshGraphModeFromFile();
-    expect(getGraphMode()).toBe('primary');
-    expect(getGraphModeSource()).toBe('file');
-  });
-
-  it('env 가 있으면 file 무시 / source = env', async () => {
-    await saveServerConfig({ graphMode: 'primary' }); // file = primary
-    process.env.SPYGLASS_GRAPH_MODE = 'off';          // env = off
-    resetGraphModeCache();
-    await refreshGraphModeFromFile();
-    expect(getGraphMode()).toBe('off');
-    expect(getGraphModeSource()).toBe('env');
-  });
-
-  it('env 가 알 수 없는 값이면 무시되고 file 평가로 진행', async () => {
-    await saveServerConfig({ graphMode: 'shadow' });
-    process.env.SPYGLASS_GRAPH_MODE = 'garbage';
-    resetGraphModeCache();
-    await refreshGraphModeFromFile();
-    expect(getGraphMode()).toBe('shadow'); // file 의 값 그대로 반영 — DEFAULT 와 무관
-    expect(getGraphModeSource()).toBe('file');
-  });
-
-  it('file 의 graphMode 가 undefined 이고 env 도 없으면 default', async () => {
-    // graphMode 필드 자체가 누락된 file.
-    mkdirSync(join(tmpHome, '.spyglass', 'config'), { recursive: true });
-    writeFileSync(
-      getServerConfigPath(),
-      JSON.stringify({ version: 1, updatedAt: Date.now() }),
-    );
-    resetGraphModeCache();
-    await refreshGraphModeFromFile();
-    expect(getGraphMode()).toBe('primary');
-    expect(getGraphModeSource()).toBe('default');
-  });
-
-  it('초기 getGraphMode() 동기 호출은 env 만 평가 + file 미반영', () => {
-    // refreshGraphModeFromFile 호출 *전* 의 동기 분기 검증.
-    // env 없음 → default.
-    expect(getGraphMode()).toBe('primary');
-    expect(getGraphModeSource()).toBe('default');
-  });
-
-  it('setGraphMode 호출 시 source 가 file 로 표시 (env override 가 아닌 경우)', async () => {
-    resetGraphModeCache();
-    await refreshGraphModeFromFile(); // default 상태로 시작.
-    expect(getGraphModeSource()).toBe('default');
-
-    // setGraphMode 직접 호출 — GUI 가 사용했다고 가정.
-    const { setGraphMode } = await import('../runtime/flag');
-    setGraphMode('primary');
-    expect(getGraphMode()).toBe('primary');
-    expect(getGraphModeSource()).toBe('file');
-  });
-
-  it('env override 상태에서 setGraphMode 가 호출되어도 source 는 env 유지', async () => {
-    process.env.SPYGLASS_GRAPH_MODE = 'shadow';
-    resetGraphModeCache();
-    await refreshGraphModeFromFile();
-    expect(getGraphModeSource()).toBe('env');
-
-    const { setGraphMode } = await import('../runtime/flag');
-    setGraphMode('primary');
-    // env override 의미 보존 — source 는 env. mode 자체는 setGraphMode 가 캐시 갱신.
-    expect(getGraphModeSource()).toBe('env');
   });
 });

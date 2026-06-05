@@ -32,7 +32,6 @@
 
 import type { Database } from 'bun:sqlite';
 import { getDatabase } from '@spyglass/storage';
-import { getGraphMode } from '../runtime/flag';
 import { getCircuitBreaker } from '../runtime/circuit-breaker';
 import { getLadybugClient, closeLadybugClient, LadybugUnavailableError } from '../client';
 import { getSyncCursor } from './cursor';
@@ -93,7 +92,7 @@ export function applyTickResult(result: OutboxTickResult, now: number = Date.now
   if (result.processed > 0) lastSuccessAt = now;
 }
 
-/** 테스트 전용 — 모듈 상태 초기화 (flag.ts resetGraphModeCache 선례). */
+/** 테스트 전용 — 모듈 상태 초기화. */
 export function resetSyncWorkerStateForTests(): void {
   totalProcessed = 0;
   lastError = null;
@@ -101,17 +100,12 @@ export function resetSyncWorkerStateForTests(): void {
 }
 
 /**
- * 부팅 시점에 한 번 호출. mode='off' 이면 native 모듈 import 자체가 발생하지 않으므로
- * 패키지가 install 안 된 상태에서도 안전.
+ * 부팅 시점에 한 번 호출. 그래프는 항상 켜진 상태로 고정 — Ladybug 미설치/회로 OPEN
+ * 같은 안전망은 tick/circuit-breaker 가 독립적으로 처리한다.
  */
 export function startGraphSyncWorker(): void {
   if (timer !== null) return; // 멱등.
-  const mode = getGraphMode();
-  if (mode === 'off') {
-    console.log(`[graph-sync] worker dormant (SPYGLASS_GRAPH_MODE=off)`);
-    return;
-  }
-  console.log(`[graph-sync] worker starting (mode=${mode}, tick=${TICK_INTERVAL_MS}ms)`);
+  console.log(`[graph-sync] worker starting (tick=${TICK_INTERVAL_MS}ms)`);
   // load cursor 즉시 — tick 첫 호출 전에 file IO 끝내 두면 첫 응답이 빠르다.
   getSyncCursor().load();
   timer = setInterval(() => {
