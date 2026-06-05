@@ -35,15 +35,21 @@ export function buildMetricQuery(params: MetricParams = {}): string {
 
 /**
  * fetch + envelope unwrap. 실패(HTTP/!success/abort) 시 fallback 반환(throw 없음 — 원본 silent catch).
+ *
+ * signal: 호출처(effect)의 AbortController 를 받으면 8초 타임아웃과 **결합**한다(AbortSignal.any).
+ *   호출처 신호 누락 시에도 타임아웃은 항상 적용 — 요청이 매달려도 무한 대기하지 않는다(fetchers.ts B1 동치).
+ *   호출처가 신호를 주면 effect cleanup/재실행 시 in-flight 요청이 취소되어 stale 응답 덮어쓰기를 막는다.
  */
 export async function getMetric<T>(
   path: string,
   params: MetricParams = {},
   fallback: T,
+  signal?: AbortSignal,
 ): Promise<T> {
   try {
+    const timeout = AbortSignal.timeout(DEFAULT_TIMEOUT_MS);
     const res = await fetch(`${BASE}${path}${buildMetricQuery(params)}`, {
-      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = (await res.json()) as { success?: boolean; data?: T; error?: string };
@@ -54,12 +60,12 @@ export async function getMetric<T>(
   }
 }
 
-/** 모델 사용량 비율(Donut) — 실패 시 []. */
-export function fetchModelUsage(params: MetricParams = {}): Promise<unknown[]> {
-  return getMetric<unknown[]>('/api/metrics/model-usage', params, []);
+/** 모델 사용량 비율(Donut) — 실패 시 []. signal 로 stale 응답 덮어쓰기 방지(model 도넛 race). */
+export function fetchModelUsage(params: MetricParams = {}, signal?: AbortSignal): Promise<unknown[]> {
+  return getMetric<unknown[]>('/api/metrics/model-usage', params, [], signal);
 }
 
 /** Tool 카테고리 분포 — 실패 시 []. */
-export function fetchToolCategories(params: MetricParams = {}): Promise<unknown[]> {
-  return getMetric<unknown[]>('/api/metrics/tool-categories', params, []);
+export function fetchToolCategories(params: MetricParams = {}, signal?: AbortSignal): Promise<unknown[]> {
+  return getMetric<unknown[]>('/api/metrics/tool-categories', params, [], signal);
 }

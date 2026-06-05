@@ -87,7 +87,7 @@ async function fetchParsed<T, F>(
   signal?: AbortSignal,
 ): Promise<T | F> {
   try {
-    const res = await fetch(url, { signal: signal ?? AbortSignal.timeout(DEFAULT_TIMEOUT_MS) });
+    const res = await fetch(url, { signal: withTimeout(signal) });
     if (!res.ok) return fallback;
     const json: unknown = await res.json();
     const parsed = parseApiEnvelope<{ data: T }>(schema as z.ZodType<{ data: T }>, json);
@@ -95,6 +95,17 @@ async function fetchParsed<T, F>(
   } catch {
     return fallback;
   }
+}
+
+/**
+ * 호출처 signal 과 8초 타임아웃을 **결합**한 AbortSignal 을 만든다.
+ *   과거 `signal ?? AbortSignal.timeout(...)` 는 호출처가 signal 을 주면(BrowseLayout 의 모든 fetch
+ *   가 그렇다) 타임아웃이 사라져, 서버가 매달리면 그 요청이 무한 대기하고 묶인 Promise.all 이 영영
+ *   끝나지 않았다(좌측 스켈레톤 영구 유지 = "멈춤"). signal 유무와 무관하게 타임아웃을 항상 적용한다.
+ */
+function withTimeout(signal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(DEFAULT_TIMEOUT_MS);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }
 
 // =============================================================================
@@ -242,7 +253,7 @@ export interface ObservabilityData {
 /** 개별 엔드포인트 안전 fetch — 실패 시 null(원본 safeJson api.js:378 1:1). */
 async function safeJsonData(url: string, signal?: AbortSignal): Promise<unknown> {
   try {
-    const res = await fetch(url, { signal: signal ?? AbortSignal.timeout(DEFAULT_TIMEOUT_MS) });
+    const res = await fetch(url, { signal: withTimeout(signal) });
     if (!res.ok) return null;
     const j = (await res.json()) as { data?: unknown };
     return j?.data ?? null;

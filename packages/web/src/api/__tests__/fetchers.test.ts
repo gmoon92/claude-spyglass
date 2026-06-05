@@ -125,11 +125,17 @@ describe('fetchDashboard (api.js:240 데이터 역전)', () => {
     expect(data).toBeNull();
   });
 
-  it('signal 전달 — 언마운트 cleanup 계약', async () => {
+  it('signal 전달 — 언마운트 cleanup 계약(8초 타임아웃과 결합 전파)', async () => {
     responder = () => validDashboardEnvelope();
     const ctrl = new AbortController();
     await fetchDashboard(undefined, ctrl.signal);
-    expect(calls[0].init?.signal).toBe(ctrl.signal);
+    // 호출처 signal 은 8초 타임아웃과 결합(AbortSignal.any)돼 전달된다 — 동일 객체는 아니지만
+    //   원본 abort 가 결합 signal 로 전파되어야 cleanup 계약(요청 취소)이 성립한다(무한 대기 방지).
+    const passed = calls[0].init?.signal as AbortSignal;
+    expect(passed).toBeInstanceOf(AbortSignal);
+    expect(passed.aborted).toBe(false);
+    ctrl.abort();
+    expect(passed.aborted).toBe(true);
   });
 });
 
@@ -393,10 +399,15 @@ describe('fetchMetaDocs (meta-docs-view.js:460 데이터 역전)', () => {
     expect(rows).toEqual([]);
   });
 
-  it('signal 전달 — 언마운트 cleanup 계약', async () => {
+  it('signal 전달 — 언마운트 cleanup 계약(8초 타임아웃과 결합 전파)', async () => {
     responder = () => ({ data: [] });
     const ctrl = new AbortController();
     await fetchMetaDocs({ signal: ctrl.signal });
-    expect(calls[0].init?.signal).toBe(ctrl.signal);
+    // 결합 signal(AbortSignal.any) — 원본 abort 가 전파되어야 cleanup 계약이 성립한다.
+    const passed = calls[0].init?.signal as AbortSignal;
+    expect(passed).toBeInstanceOf(AbortSignal);
+    expect(passed.aborted).toBe(false);
+    ctrl.abort();
+    expect(passed.aborted).toBe(true);
   });
 });
