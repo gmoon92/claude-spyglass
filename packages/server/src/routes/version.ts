@@ -227,7 +227,7 @@ function handlePostUpdate(): Response {
   // 본 부팅에서는 적용된 게 없음. 진짜 신규 적용 결과는 클라이언트가 재기동 직후 /api/version 폴링으로 회수.
   const migrationsApplied = getLastMigrationRun();
 
-  // 5. 응답 전송 후 비동기 자기 자신 재시작 — bun run dev (restart) 를
+  // 5. 응답 전송 후 비동기 자기 자신 재시작 — `bun run dev` 를
   //    detached child로 띄우면 commandRestart가 부모를 SIGTERM으로 종료시키고
   //    새 서버가 같은 PORT를 잡는다. 클라이언트는 polling으로 부활 감지.
   scheduleSelfRestart(cwd);
@@ -249,15 +249,21 @@ function handlePostUpdate(): Response {
  * git pull 성공 후 자기 자신을 백그라운드로 restart 한다.
  *  - 1.2s 지연: HTTP 응답이 클라이언트에 도달할 시간을 보장.
  *  - Bun.spawn detached + stdio ignore: 부모가 죽어도 자식이 살아남도록.
- *  - 자식은 `bun run packages/server/src/index.ts restart` 를 실행 →
- *    daemon.commandRestart 가 기존 PID(=현재 우리)를 SIGTERM 으로 종료 후
- *    같은 포트로 새 서버를 띄운다.
+ *  - 자식은 `bun run dev` 를 실행 → ensure-deps(선언 deps 누락 시 bun install) · daily-cleanup 후
+ *    index.ts restart → daemon.commandRestart 가 기존 PID(=현재 우리)를 SIGTERM 으로 종료 후
+ *    같은 포트로 새 서버를 띄운다. Ladybug·web 빌드 보강은 startServer() 내재화(boot-prereqs)가 담당.
+ *
+ *  entry 직접 호출 아님 — `bun run dev` 경유의 핵심 이유는 **install** 이다: ensure-deps(bun install)는
+ *  import-time 제약상 startServer() 안에서 보장할 수 없어(lifecycle 이 @spyglass/* 를 import) 셸 prelude 를
+ *  반드시 거쳐야 한다. version.ts step 2 의 무조건 bun install 과 합쳐 install 이중 안전망. graceful
+ *  shutdown 으로 재기동되므로 수 초의 추가 비용은 허용 — 여러 버전 건너뛴 업그레이드/신규 설치자의
+ *  "부팅조차 실패" 를 막는 게 우선이다.
  */
 function scheduleSelfRestart(cwd: string): void {
   setTimeout(() => {
     try {
       Bun.spawn(
-        ['bun', 'run', 'packages/server/src/index.ts', 'restart'],
+        ['bun', 'run', 'dev'],
         {
           cwd,
           stdout: 'ignore',

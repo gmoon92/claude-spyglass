@@ -33,6 +33,7 @@ import {
   refreshGraphModeFromFile,
 } from '@spyglass/storage-graph';
 import { clearDiagLogs, getDiagLogDir, logDiagStatus } from '../diag-log';
+import { ensureBootPrerequisites } from './boot-prereqs';
 import { PORT, HOST, DB_PATH, SHUTDOWN_TIMEOUT_MS, isNonLoopbackHost } from './config';
 import { startMaintenanceSchedule, stopMaintenanceSchedule } from './maintenance';
 import { handleRequest } from './dispatch';
@@ -75,6 +76,11 @@ export function startServer(options: {
     console.log(`[Server] Already running on ${HOST}:${PORT}`);
     return server;
   }
+
+  // 부팅 전제조건(Ladybug·web 빌드) 보강 — 진입점 무관 누락 방지 SSoT.
+  //   셸 스크립트(dev/start)를 거치지 않은 진입점(직접 restart/serve, self-restart, Electron, brew)도
+  //   여기서 한 번 보강된다. install 은 import-time 제약으로 여기서 다루지 않는다(boot-prereqs.ts 참조).
+  ensureBootPrerequisites();
 
   // 진단 로그 디렉토리 정리 — DIAG ON/OFF 무관, 새 서버 라이프사이클은 깨끗한 상태에서 시작
   const cleared = clearDiagLogs();
