@@ -42,7 +42,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { backupFile, writeAtomic, restoreFromBackup as toolkitRestoreFromBackup } from './file-edit-toolkit';
+import { backupFile, writeAtomic, restoreFromBackup as toolkitRestoreFromBackup, deleteBackup } from './file-edit-toolkit';
 
 // =============================================================================
 // 경로 / 상수
@@ -60,14 +60,15 @@ export function getSettingsPath(): string {
 }
 
 /** 본 레포지토리 안의 hook profile JSON 경로. */
-export function getProfilePath(profile: HookProfileKind): string {
+export function getProfilePath(_profile: HookProfileKind): string {
   // `process.cwd()` 는 spyglass 서버가 기동된 디렉토리 — install-guide 가 정의하는 `SPYGLASS_DIR`.
   // 본 PR 범위에선 서버를 항상 클론 디렉토리에서 기동한다고 가정 (install-guide 3.1).
-  const baseName = profile === 'full' ? 'settings.hooks.full.json' : 'settings.hooks.minimal.json';
-  return join(process.cwd(), 'docs', 'examples', baseName);
+  // full 단일 프로필 — minimal 은 제거됨(선택 아님).
+  return join(process.cwd(), 'docs', 'examples', 'settings.hooks.full.json');
 }
 
-export type HookProfileKind = 'full' | 'minimal';
+/** hook 프로필 종류 — full 단일(선택 아님). 향후 확장 여지를 위해 타입은 유지. */
+export type HookProfileKind = 'full';
 
 // =============================================================================
 // 타입
@@ -101,14 +102,18 @@ export interface DiffSummary {
 }
 
 export interface ApplyResult {
-  /** 백업본 절대 경로. */
-  backupPath: string;
+  /** 백업본 절대 경로. 검증 성공 후 삭제하면 null. */
+  backupPath: string | null;
   /** 사용된 프로필. */
   profile: HookProfileKind;
   /** 변경 요약 — UI 가 사용자에게 표시. */
   diff: DiffSummary;
   /** 적용 후 settings.json 의 크기 (bytes). */
   finalSize: number;
+  /** 적용 후 JSON 유효성 검증 통과 여부. */
+  verify: 'ok' | 'failed';
+  /** 검증 성공으로 이번 백업을 삭제했으면 true (백업 누적 방지). */
+  backupRemoved: boolean;
 }
 
 // =============================================================================
@@ -362,10 +367,26 @@ export async function applyHookProfile(
   const { merged, diff } = mergeSettings(current, profileJson);
 
   // 백업 실패 = critical. 백업 없이는 변경하지 않는다.
-  const backupPath = (await backupSettings()) ?? '(none — 첫 설치)';
+  const backupPath = await backupSettings();
   const { finalSize } = await applySettings(merged);
 
-  return { backupPath, profile, diff, finalSize };
+  // JSON 유효성 검증 — 기록한 파일을 다시 읽어 파싱(우리가 직렬화했으므로 정상이 기대값).
+  let verify: 'ok' | 'failed' = 'ok';
+  try {
+    JSON.parse(await readFile(getSettingsPath(), 'utf-8'));
+  } catch {
+    verify = 'failed';
+  }
+
+  // 검증 통과 + 백업 존재 → 백업 삭제(누적 방지). 검증 실패 시 백업 유지(복원 가능).
+  let finalBackupPath: string | null = backupPath;
+  let backupRemoved = false;
+  if (verify === 'ok' && backupPath) {
+    backupRemoved = await deleteBackup(backupPath);
+    if (backupRemoved) finalBackupPath = null;
+  }
+
+  return { backupPath: finalBackupPath, profile, diff, finalSize, verify, backupRemoved };
 }
 
 // =============================================================================

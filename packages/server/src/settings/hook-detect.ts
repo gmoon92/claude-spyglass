@@ -19,8 +19,7 @@
  *     설정 페이지가 첫 진단을 못 그리는 사고를 막기 위함.
  *   - hook 등록 여부 판정 기준: 해당 event 배열 안에 `command` 가 `spyglass-collect.sh` 를
  *     포함하는 hook 한 개 이상 존재. 사용자가 임의로 손댄 형식도 관대하게 수용.
- *   - `expectedEvents` 는 *권장 프로필 기준* — minimal 프로필 사용자라면 일부가 unregistered
- *     로 보이는 게 자연스러움 (UI 는 프로필 선택 후 다시 검사 가능).
+ *   - `expectedEvents` 는 full 프로필 기준 — 일부가 unregistered 면 [자동 설치] 로 full 재적용 권장.
  */
 
 import { readFile, stat } from 'node:fs/promises';
@@ -65,12 +64,11 @@ export interface HookDetectResult {
 // =============================================================================
 
 /**
- * spyglass 가 권장하는 hook events.
+ * spyglass 가 권장하는 hook events — 진단 표시용 *핵심 셋*.
  *
- *   minimal 프로필(`docs/examples/settings.hooks.minimal.json`) 의 6개 + 자주 쓰이는 4개.
- *   사용자가 minimal 만 깔았어도 핵심 6개는 *모두* expected:true 로 등록 상태가 정확히 표시됨.
- *   full 프로필의 30개 전부는 UI 가 너무 빽빽해지므로 *핵심 셋* 만 유지 — 사용자가 자세히
- *   보고 싶으면 settings.json 을 직접 열어 확인 가능.
+ *   full 프로필(`docs/examples/settings.hooks.full.json`)의 전체 이벤트 중 가장 핵심적인 항목만
+ *   진단 row 로 노출한다 (전체 30개는 UI 가 너무 빽빽해짐 — 상세는 아코디언/ settings.json 직접 확인).
+ *   full 단일 정책이라 정상 설치 시 이 핵심 셋은 모두 expected:true 로 등록 상태가 정확히 표시됨.
  */
 const EXPECTED_EVENTS: ReadonlyArray<string> = [
   'UserPromptSubmit',

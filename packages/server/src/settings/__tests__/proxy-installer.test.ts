@@ -5,10 +5,9 @@
  *   1) detectShellProfile: SHELL env / 명시 인자 / 파일 존재 우선순위
  *   2) replaceOrAppendMarkerBlock: append / replace / 손상 마커 throw / 역순 throw
  *   3) removeMarkerBlock: idempotent + 한쪽만 손상 throw
- *   4) cleanGraphModeExports: export 줄 주석화 + 카운트
- *   5) buildProxySnippet / buildMarkerBlock: 셸별 문법
- *   6) installProxyHook: 전체 흐름 (백업 + atomic write)
- *   7) restoreProxyHook: backup 복원 모드 + 마커 제거 모드
+ *   4) buildProxySnippet / buildMarkerBlock: 셸별 문법
+ *   5) installProxyHook: 전체 흐름 (백업 + atomic write)
+ *   6) restoreProxyHook: backup 복원 모드 + 마커 제거 모드
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
@@ -20,11 +19,11 @@ import {
   detectShellProfile,
   replaceOrAppendMarkerBlock,
   removeMarkerBlock,
-  cleanGraphModeExports,
   buildProxySnippet,
   buildMarkerBlock,
   installProxyHook,
   restoreProxyHook,
+  hasStrayProxyOutsideMarkers,
   MARKER_OPEN,
   MARKER_CLOSE,
 } from '../proxy-installer';
@@ -160,35 +159,6 @@ describe('removeMarkerBlock', () => {
 });
 
 // =============================================================================
-// cleanGraphModeExports
-// =============================================================================
-
-describe('cleanGraphModeExports', () => {
-  it('export SPYGLASS_GRAPH_MODE 줄을 주석 처리', () => {
-    const src = `export PATH=/x\nexport SPYGLASS_GRAPH_MODE=primary\nalias foo=bar\n`;
-    const r = cleanGraphModeExports(src);
-    expect(r.cleanedCount).toBe(1);
-    expect(r.content).toContain('# export SPYGLASS_GRAPH_MODE=primary');
-    expect(r.content).toContain('commented by spyglass');
-    // 다른 라인 보존.
-    expect(r.content).toContain('export PATH=/x');
-    expect(r.content).toContain('alias foo=bar');
-  });
-
-  it('동일 줄이 여러 개여도 모두 처리', () => {
-    const src = `export SPYGLASS_GRAPH_MODE=off\necho ok\nexport SPYGLASS_GRAPH_MODE=primary\n`;
-    const r = cleanGraphModeExports(src);
-    expect(r.cleanedCount).toBe(2);
-  });
-
-  it('이미 주석 처리된 줄은 건드리지 않음', () => {
-    const src = `# export SPYGLASS_GRAPH_MODE=shadow\n`;
-    const r = cleanGraphModeExports(src);
-    expect(r.cleanedCount).toBe(0);
-  });
-});
-
-// =============================================================================
 // buildProxySnippet / buildMarkerBlock
 // =============================================================================
 
@@ -233,16 +203,21 @@ describe('installProxyHook', () => {
     expect(txt).toContain(MARKER_CLOSE);
   });
 
-  it('기존 사용자 코드 보존 + 백업 생성 + 마커 append', async () => {
+  it('기존 사용자 코드 보존 + 마커 append + 검증 후 백업 삭제', async () => {
     process.env.SHELL = '/bin/zsh';
     const rc = join(tmpHome, '.zshrc');
     writeFileSync(rc, 'export FOO=bar\nalias ll="ls -la"\n');
     const r = await installProxyHook({ shell: 'auto', port: 9999 });
-    expect(r.backupPath).not.toBe(null);
+    // 구문 검증(zsh -n) 통과 → 이번 백업 삭제(누적 방지) → backupPath null.
+    expect(r.verify).not.toBe('failed');
+    expect(r.backupRemoved).toBe(true);
+    expect(r.backupPath).toBe(null);
     const txt = readFileSync(rc, 'utf-8');
     expect(txt).toContain('export FOO=bar');
     expect(txt).toContain('alias ll="ls -la"');
     expect(txt).toContain(MARKER_OPEN);
+    // .bak-* 누적 없음.
+    expect(require('node:fs').readdirSync(tmpHome).some((f: string) => f.includes('.bak-'))).toBe(false);
   });
 
   it('두 번째 호출은 *교체* (idempotent)', async () => {
@@ -261,16 +236,6 @@ describe('installProxyHook', () => {
     expect(opens.length).toBe(1);
   });
 
-  it('SPYGLASS_GRAPH_MODE export 가 잔존하면 자동 주석화 + cleanedGraphModeExports 카운트', async () => {
-    process.env.SHELL = '/bin/zsh';
-    const rc = join(tmpHome, '.zshrc');
-    writeFileSync(rc, 'export SPYGLASS_GRAPH_MODE=primary\n');
-    const r = await installProxyHook({ shell: 'auto', port: 9999 });
-    expect(r.cleanedGraphModeExports).toBe(1);
-    const txt = readFileSync(rc, 'utf-8');
-    expect(txt).toContain('# export SPYGLASS_GRAPH_MODE=primary');
-  });
-
   it('한쪽 마커만 손상된 셸 프로필 → throw', async () => {
     process.env.SHELL = '/bin/zsh';
     const rc = join(tmpHome, '.zshrc');
@@ -284,22 +249,21 @@ describe('installProxyHook', () => {
 // =============================================================================
 
 describe('restoreProxyHook', () => {
-  it('backupPath 주어지면 백업 → 원본 복원 + pre-restore 백업', async () => {
+  it('주어진 backupPath 로 원본 복원 + pre-restore 백업', async () => {
+    // install 은 검증 성공 시 백업을 삭제하므로, 검증 실패로 백업이 유지된 상황을 가정해
+    // 백업 파일을 직접 만들어 복원 경로만 검증한다(restoreProxyHook 자체 동작).
     process.env.SHELL = '/bin/zsh';
     const rc = join(tmpHome, '.zshrc');
     writeFileSync(rc, 'export FOO=bar\n');
-    const install = await installProxyHook({ shell: 'auto', port: 9999 });
-    expect(install.backupPath).not.toBe(null);
-    // 사용자 변경 추가.
-    writeFileSync(rc, readFileSync(rc, 'utf-8') + '\nextra=line\n');
-    // 복원.
-    const r = await restoreProxyHook({ backupPath: install.backupPath!, shell: 'auto' });
+    const backup = `${rc}.bak-20260101-000000`;
+    writeFileSync(backup, 'export FOO=bar\n');
+    // 사용자가 파일을 변경.
+    writeFileSync(rc, 'export FOO=bar\nextra=line\n');
+    const r = await restoreProxyHook({ backupPath: backup, shell: 'auto' });
     expect(r.mode).toBe('restore-backup');
-    expect(r.restoredFrom).toBe(install.backupPath);
+    expect(r.restoredFrom).toBe(backup);
     expect(r.preRestoreBackup).not.toBe(null);
-    // 원본 내용 복원 — 마커 사라짐 + extra=line 사라짐 + 원래 FOO=bar 만.
-    const restored = readFileSync(rc, 'utf-8');
-    expect(restored).toBe('export FOO=bar\n');
+    expect(readFileSync(rc, 'utf-8')).toBe('export FOO=bar\n');
   });
 
   it('backupPath 없으면 마커 블록만 제거 (다른 코드 보존)', async () => {
@@ -329,5 +293,71 @@ describe('restoreProxyHook', () => {
     const r = await restoreProxyHook({ shell: 'auto' });
     expect(r.removedBlock).toBe(false);
     expect(readFileSync(rc, 'utf-8')).toBe('plain content\n');
+  });
+});
+
+// =============================================================================
+// 멱등성 — 재설치 시 마커/함수 중복 0 (사용자 우려: "괜히 덭붙이면 안돼")
+// =============================================================================
+
+describe('멱등성 — replaceOrAppendMarkerBlock 재실행', () => {
+  it('정상 경로: 3회 설치해도 마커 쌍 1개·claude() 1개 (덧붙임 없음)', () => {
+    const block = buildMarkerBlock('zsh', 9999);
+    let shell = 'export PATH=/x\nalias foo=bar\n';
+    const r1 = replaceOrAppendMarkerBlock(shell, block); shell = r1.content;
+    const r2 = replaceOrAppendMarkerBlock(shell, block); shell = r2.content;
+    const r3 = replaceOrAppendMarkerBlock(shell, block); shell = r3.content;
+    expect(r1.action).toBe('appended');
+    expect(r2.action).toBe('replaced');
+    expect(r3.action).toBe('replaced');
+    expect((shell.match(/# >>> spyglass proxy >>>/g) || []).length).toBe(1);
+    expect((shell.match(/# <<< spyglass proxy <<</g) || []).length).toBe(1);
+    expect((shell.match(/claude\(\)\s*\{/g) || []).length).toBe(1);
+    // 사용자 라인 보존.
+    expect(shell).toContain('export PATH=/x');
+    expect(shell).toContain('alias foo=bar');
+  });
+
+  it('2회차 content == 1회차 content (안정)', () => {
+    const block = buildMarkerBlock('zsh', 9999);
+    const first = replaceOrAppendMarkerBlock('base\n', block).content;
+    const second = replaceOrAppendMarkerBlock(first, block).content;
+    expect(second).toBe(first);
+  });
+});
+
+describe('hasStrayProxyOutsideMarkers — 마커 밖 중복 claude() 정의만 감지', () => {
+  it('마커 안에만 claude() 정의 → false (중복 아님)', () => {
+    const block = buildMarkerBlock('zsh', 9999);
+    const content = `export PATH=/x\n${block}\n`;
+    expect(hasStrayProxyOutsideMarkers(content)).toBe(false);
+  });
+
+  it('마커 없이 claude() 정의(수동 붙여넣기/옛 설치) → true (중복 위험)', () => {
+    const stray = 'claude() {\n  ANTHROPIC_BASE_URL=http://localhost:9999 command claude "$@"\n}\n';
+    expect(hasStrayProxyOutsideMarkers(stray)).toBe(true);
+  });
+
+  it('마커 안 + 마커 밖 둘 다 claude() 정의 → true (replace 후에도 stray 잔존)', () => {
+    const block = buildMarkerBlock('zsh', 9999);
+    const stray = 'claude() {\n  ANTHROPIC_BASE_URL=http://127.0.0.1:9999 command claude "$@"\n}\n';
+    expect(hasStrayProxyOutsideMarkers(`${stray}${block}\n`)).toBe(true);
+  });
+
+  it('fish function claude 정의 → true', () => {
+    expect(hasStrayProxyOutsideMarkers('function claude\n  command claude $argv\nend\n')).toBe(true);
+  });
+
+  // ── 오탐 방지: 사용자가 만든 *다른 이름* 의 래퍼는 claude() 정의가 아니므로 무시 ──
+  it('kimi()/cc() 가 본문에서 ANTHROPIC_BASE_URL=localhost 를 참조해도 → false (정당한 사용자 설정)', () => {
+    const userWrappers =
+      'kimi() {\n  ANTHROPIC_BASE_URL=http://localhost:9999 command claude "$@"\n}\n' +
+      'cc() {\n  ANTHROPIC_BASE_URL=http://localhost:9999 claude --dangerously-skip-permissions "$@"\n}\n';
+    const block = buildMarkerBlock('zsh', 9999);
+    expect(hasStrayProxyOutsideMarkers(`${userWrappers}${block}\n`)).toBe(false);
+  });
+
+  it('claude *호출*(command claude) 만 있고 정의 없음 → false', () => {
+    expect(hasStrayProxyOutsideMarkers('alias c="command claude"\necho hi\n')).toBe(false);
   });
 });

@@ -30,7 +30,6 @@ import { SpyglassDatabase, getDatabase, closeDatabase } from '@spyglass/storage'
 import {
   startGraphSyncWorker,
   stopGraphSyncWorker,
-  refreshGraphModeFromFile,
 } from '@spyglass/storage-graph';
 import { clearDiagLogs, getDiagLogDir, logDiagStatus } from '../diag-log';
 import { ensureBootPrerequisites } from './boot-prereqs';
@@ -92,17 +91,9 @@ export function startServer(options: {
   db = getDatabase({ dbPath });
   console.log(`[Server] Database connected: ${dbPath}`);
 
-  // Graph projection sync worker — SPYGLASS_GRAPH_MODE 가 'off' 이면 즉시 no-op.
+  // Graph projection sync worker — 그래프는 항상 켜진 상태로 고정 (v4.3.x).
   //   - native binding 의 lazy import 까지 모두 본 호출 안에서 일어남.
   //   - 실패해도 main loop 영향 없음 — try/catch 흡수 + 회로 OPEN.
-  //
-  //   PR 1: file source 영속 값 평가 — startServer 가 sync 라 await 불가하므로
-  //   fire-and-forget 으로 발사. graph sync worker 가 매 폴링마다 getGraphMode() 를
-  //   다시 읽어 분기하므로 ms 단위 지연은 무시 가능 (worker 가 polling 첫 사이클 직전에
-  //   mode 가 갱신되도록 가장 먼저 호출).
-  void refreshGraphModeFromFile().catch((e) => {
-    console.warn('[Server] refreshGraphModeFromFile failed (using env/default):', e);
-  });
   try {
     startGraphSyncWorker();
   } catch (e) {

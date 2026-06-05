@@ -356,3 +356,51 @@ describe('loadCurrentSettings — 안전한 폴백', () => {
     expect(result).toEqual({});
   });
 });
+
+// =============================================================================
+// 멱등성 — mergeSettings 재적용 시 중복/배열 증식 0 (사용자 우려: "괜히 덭붙이면 안돼")
+// =============================================================================
+
+describe('mergeSettings — 멱등성 (재적용 안정)', () => {
+  const profile = {
+    env: { SPYGLASS_DIR: '/proj' },
+    hooks: {
+      PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: 'spyglass-collect' }] }],
+      Stop: [{ matcher: '*', hooks: [{ type: 'command', command: 'spyglass-stop' }] }],
+    },
+  };
+
+  it('동일 프로필 3회 적용 → 2회차==1회차==3회차 (안정)', () => {
+    const user = { someUserKey: true, hooks: {} };
+    const first = mergeSettings(user, profile).merged;
+    const second = mergeSettings(first, profile).merged;
+    const third = mergeSettings(second, profile).merged;
+    expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+    expect(JSON.stringify(third)).toBe(JSON.stringify(second));
+  });
+
+  it('이벤트별 hook 배열이 증식하지 않음 (append 아님, 키 단위 치환)', () => {
+    const user = {
+      hooks: { PreToolUse: [{ matcher: 'OtherTool', hooks: [{ type: 'command', command: 'other' }] }] },
+    };
+    const first = mergeSettings(user, profile).merged as any;
+    const second = mergeSettings(first, profile).merged as any;
+    const third = mergeSettings(second, profile).merged as any;
+    // 완전 치환 정책 — 재적용해도 배열 길이 1 유지 (중복 삽입 0).
+    expect(first.hooks.PreToolUse.length).toBe(1);
+    expect(second.hooks.PreToolUse.length).toBe(1);
+    expect(third.hooks.PreToolUse.length).toBe(1);
+    expect(first.hooks.Stop.length).toBe(1);
+    expect(third.hooks.Stop.length).toBe(1);
+  });
+
+  it('사용자 top-level 키는 재적용 후에도 보존', () => {
+    const user = { model: 'opus', statusLine: 'x', hooks: {} };
+    const third = mergeSettings(
+      mergeSettings(mergeSettings(user, profile).merged, profile).merged,
+      profile,
+    ).merged as any;
+    expect(third.model).toBe('opus');
+    expect(third.statusLine).toBe('x');
+  });
+});

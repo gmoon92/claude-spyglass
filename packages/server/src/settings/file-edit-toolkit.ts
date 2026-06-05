@@ -224,3 +224,20 @@ export async function restoreFromBackup(
   const { bytes } = await writeAtomic(targetPath, text);
   return { restoredFrom: backupPath, preRestoreBackup, bytes };
 }
+
+/**
+ * 백업 파일 삭제 — *검증 성공 후 확정* 시 호출해 백업 누적을 방지.
+ *   - backupPath 가 null/빈값이면 no-op (백업 없던 케이스).
+ *   - 삭제 실패(이미 없음/권한)는 흡수 — 백업 정리는 best-effort 이지 치명 동작 아님.
+ *   - 안전: spyglass 가 backupFile 로 만든 `.bak-…` 만 호출 측이 넘긴다(임의 경로 삭제 아님).
+ *   반환: 실제 삭제했으면 true.
+ */
+export async function deleteBackup(backupPath: string | null | undefined): Promise<boolean> {
+  if (!backupPath) return false;
+  try {
+    await unlink(backupPath);
+    return true;
+  } catch {
+    return false; // 이미 없거나 권한 — 무시.
+  }
+}

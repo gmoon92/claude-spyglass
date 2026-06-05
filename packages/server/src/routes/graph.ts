@@ -32,7 +32,6 @@
 import type { Database } from 'bun:sqlite';
 import { jsonResponse } from './_shared';
 import {
-  getGraphMode,
   getCircuitBreaker,
   getSyncWorkerStatus,
   getLadybugClient,
@@ -128,9 +127,8 @@ export async function graphRouter(req: Request, db: Database): Promise<Response 
 // =============================================================================
 
 async function handleSessionInitial(sessionId: string, _recentTurns: number, _db: Database): Promise<Response> {
-  const mode = getGraphMode();
-  if (mode === 'off' || !getCircuitBreaker().allowsTraffic()) {
-    return jsonResponse({ success: true, data: emptyGraphResponse('graph mode disabled or circuit open') });
+  if (!getCircuitBreaker().allowsTraffic()) {
+    return jsonResponse({ success: true, data: emptyGraphResponse('circuit open') });
   }
   try {
     const client = await getLadybugClient();
@@ -144,9 +142,8 @@ async function handleSessionInitial(sessionId: string, _recentTurns: number, _db
 }
 
 async function handleTurnNeighbors(turnId: string, depth: number, dir: 'in' | 'out' | 'both', _db: Database): Promise<Response> {
-  const mode = getGraphMode();
-  if (mode === 'off' || !getCircuitBreaker().allowsTraffic()) {
-    return jsonResponse({ success: true, data: emptyGraphResponse('graph mode disabled or circuit open') });
+  if (!getCircuitBreaker().allowsTraffic()) {
+    return jsonResponse({ success: true, data: emptyGraphResponse('circuit open') });
   }
   try {
     const client = await getLadybugClient();
@@ -204,14 +201,6 @@ async function handleUnifiedFlow(url: URL): Promise<Response> {
   //   - depthRaw 누락 → 30 (사실상 무제한, Ladybug 가변 path 상한)
   //   - depthRaw 존재 → [1, 30] clamp.
   const depth = depthRaw ? Math.max(1, Math.min(30, parseInt(depthRaw, 10) || 30)) : 30;
-
-  const mode = getGraphMode();
-  if (mode === 'off') {
-    return jsonResponse({
-      success: true,
-      data: emptyUnifiedFlow(centerKind, centerName, 'graph mode is off'),
-    });
-  }
 
   const breaker = getCircuitBreaker();
   if (!breaker.allowsTraffic()) {
@@ -774,13 +763,11 @@ async function handleDlqResurrect(req: Request, db: Database): Promise<Response>
 // =============================================================================
 
 function handleStatus(): Response {
-  const mode = getGraphMode();
   const circuit = getCircuitBreaker();
   const worker = getSyncWorkerStatus();
   return jsonResponse({
     success: true,
     data: {
-      mode,
       circuit: {
         state: circuit.getState(),
         consecutiveFailures: circuit.getConsecutiveFailures(),

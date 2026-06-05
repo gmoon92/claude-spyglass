@@ -20,7 +20,6 @@
  *   GET  /api/settings/diag                  — 전체 진단 (binary versions + hooks + graph + ports)
  *   GET  /api/settings/hooks/preview?profile — 미리보기 (diff + merged 결과, 파일 미수정)
  *   POST /api/settings/hooks/apply           — 백업 + 병합 + atomic write
- *   POST /api/settings/graph/mode            — 런타임 모드 전환 (영속화 X)
  *   GET  /api/settings/proxy/snippet?shell   — claude() 조건부 프록시 함수 스니펫
  *   GET  /api/settings/logs                  — ~/.spyglass/logs/ 디렉토리 스캔
  *
@@ -42,7 +41,7 @@ import type { Database } from 'bun:sqlite';
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { getLatestMigrationFile } from '@spyglass/storage';
+import { getLatestMigrationFile, getRetentionDays } from '@spyglass/storage';
 import { jsonResponse } from './_shared';
 import { probeAllVersions, probeSqlite3, type VersionProbeResult } from '../settings/version-probe';
 import { detectHookStatus } from '../settings/hook-detect';
@@ -66,15 +65,10 @@ import {
   type ShellSelector,
 } from '../settings/proxy-installer';
 import {
-  getGraphMode,
-  setGraphMode,
-  getGraphModeSource,
   getCircuitBreaker,
   getSyncWorkerStatus,
   getGraphDir,
-  saveServerConfig,
   getServerConfigPath,
-  type GraphMode,
 } from '@spyglass/storage-graph';
 import { PORT, DB_PATH } from '../runtime/config';
 
@@ -102,9 +96,8 @@ let _diagCache: { data: unknown; ts: number } | null = null;
 /**
  * /api/settings/diag 응답 캐시 무효화 — 즉시.
  *
- * 호출자: 7개 mutation 핸들러 (hooks apply/restore, graph reset-cache/mode,
- *   graph-db install, proxy install/restore). 다음 GET /api/settings/diag 요청이
- *   fresh 데이터를 받도록 보장.
+ * 호출자: mutation 핸들러 (hooks apply/restore, graph-db install, proxy install/
+ *   restore). 다음 GET /api/settings/diag 요청이 fresh 데이터를 받도록 보장.
  */
 function invalidateDiagCacheNow(): void {
   _diagCache = null;
@@ -136,9 +129,6 @@ export async function settingsRouter(
     }
     if (path === '/api/settings/hooks/restore' && method === 'POST') {
       return await handleHooksRestore(req);
-    }
-    if (path === '/api/settings/graph/mode' && method === 'POST') {
-      return await handleGraphMode(req);
     }
     if (path === '/api/settings/graph-db/status' && method === 'GET') {
       return await handleGraphDbStatus();
@@ -217,11 +207,9 @@ async function handleDiag(db: Database): Promise<Response> {
   ]);
 
   // graph 상태 — storage-graph 의 기존 헬퍼 재사용 (/api/graph/status 와 동일 데이터).
-  //   PR 1: `source` 필드 추가 — UI 가 사용자에게 현재 mode 의 출처(env/file/default) 노출.
-  //         `configFile` 필드 — 설정이 저장될 영속화 파일 경로.
+  //   그래프는 항상 켜진 상태로 고정(v4.3.x) — mode/source 개념 제거. 안전망(circuit/sync)
+  //   상태만 노출하며, `configFile` 은 향후 영속 설정이 저장될 파일 경로.
   let graph: {
-    mode: GraphMode;
-    source: 'env' | 'file' | 'default';
     configFile: string;
     circuit: { state: string; consecutiveFailures: number; fallbackRate: number };
     sync: ReturnType<typeof getSyncWorkerStatus>;
@@ -232,8 +220,6 @@ async function handleDiag(db: Database): Promise<Response> {
     const breaker = getCircuitBreaker();
     const cacheDir = getGraphDir();
     graph = {
-      mode: getGraphMode(),
-      source: getGraphModeSource(),
       configFile: getServerConfigPath(),
       circuit: {
         state: breaker.getState(),
@@ -245,10 +231,8 @@ async function handleDiag(db: Database): Promise<Response> {
       cacheSizeBytes: await dirSizeBytes(cacheDir).catch(() => null),
     };
   } catch (err) {
-    // graph 미초기화 환경 (mode=off) 에서도 진단 자체는 응답.
+    // graph 미초기화 환경에서도 진단 자체는 응답.
     graph = {
-      mode: 'off',
-      source: 'default',
       configFile: getServerConfigPath(),
       circuit: { state: 'unknown', consecutiveFailures: 0, fallbackRate: 0 },
       sync: { running: false, cursor: null, lastErrorMessage: String(err) } as unknown as ReturnType<
@@ -276,7 +260,10 @@ async function handleDiag(db: Database): Promise<Response> {
   //   - migration.version / filename : `_migrations` 최신 row
   const sqlite = await collectSqliteInfo(db);
 
-  const data = { versions, hooks, graph, server, ladybug, proxy, sqlite };
+  // 보관 기간 — Storage 패널 요약 카드가 "보관 기간 N일" 로 노출 (RDB·그래프 공통 cutoff SSoT).
+  const retention = { days: getRetentionDays() };
+
+  const data = { versions, hooks, graph, server, ladybug, proxy, sqlite, retention };
   _diagCache = { data, ts: now };
   return jsonResponse({ success: true, data });
 }
@@ -335,7 +322,7 @@ async function handleHooksPreview(url: URL): Promise<Response> {
   const profile = parseProfile(url.searchParams.get('profile'));
   if (!profile) {
     return jsonResponse(
-      { success: false, error: 'profile query must be "full" or "minimal"' },
+      { success: false, error: 'profile query must be "full"' },
       400,
     );
   }
@@ -366,7 +353,7 @@ async function handleHooksApply(req: Request): Promise<Response> {
   const profile = parseProfile(body.profile ?? null);
   if (!profile) {
     return jsonResponse(
-      { success: false, error: 'profile field must be "full" or "minimal"' },
+      { success: false, error: 'profile field must be "full"' },
       400,
     );
   }
@@ -425,103 +412,6 @@ async function handleHooksRestore(req: Request): Promise<Response> {
     const msg = err instanceof Error ? err.message : String(err);
     return jsonResponse({ success: false, error: msg }, 400);
   }
-}
-
-// =============================================================================
-// /api/settings/graph/mode — 런타임 모드 전환
-// =============================================================================
-
-/**
- * POST /api/settings/graph/mode
- *
- *   body: { mode: 'off'|'shadow'|'primary', persistent?: boolean }
- *     - mode       : 새로 적용할 graph 모드.
- *     - persistent : 기본값 true. true 면 `server-config.json` 에 저장 → 다음 서버 시작에도 유지.
- *                    false 면 *현재 세션 캐시만* 변경 (이전 동작과 동일).
- *
- *   응답 (Gemini API 사양):
- *     { previous, current, persistent, configFile, source, hint }
- *
- *   env override 가 있을 때: 사용자가 GUI 에서 토글해도 *현재 적용은 env 가 계속 우선*.
- *   이 경우에도 파일에는 저장 (다음 시작에서 env 가 사라지면 GUI 의도가 반영되도록).
- *   응답의 `hint` 가 env override 상황을 명시 — UI 가 사용자에게 경고.
- */
-async function handleGraphMode(req: Request): Promise<Response> {
-  let body: { mode?: string; persistent?: boolean } = {};
-  try {
-    body = (await req.json()) as { mode?: string; persistent?: boolean };
-  } catch {
-    return jsonResponse({ success: false, error: 'invalid JSON body' }, 400);
-  }
-  const raw = (body.mode ?? '').toLowerCase();
-  if (raw !== 'off' && raw !== 'shadow' && raw !== 'primary') {
-    return jsonResponse(
-      { success: false, error: 'mode must be one of "off" / "shadow" / "primary"' },
-      400,
-    );
-  }
-  const next = raw as GraphMode;
-  // 기본값 true — 대시보드 GUI 토글의 의도는 영구 변경. 명시적 false 만 세션-only.
-  const persistent = body.persistent !== false;
-  const previous = getGraphMode();
-  const previousSource = getGraphModeSource();
-
-  // 1) 런타임 캐시 갱신 (즉시 적용 — env override 가 있어도 setGraphMode 가 캐시 자체는 갱신).
-  setGraphMode(next);
-  // diag 캐시 무효화 — graph.mode / graph.source 변경. 영속화 실패 경로도 런타임은 바뀌었으므로
-  // 영속화 try/catch 이전에 호출해 모든 경로에서 일관 무효화.
-  invalidateDiagCacheNow();
-
-  // 2) 영속화 (옵션).
-  let persistedTo: string | null = null;
-  if (persistent) {
-    try {
-      const cfg = await saveServerConfig({ graphMode: next });
-      persistedTo = getServerConfigPath();
-      // env override 가 있던 케이스에선 source 가 여전히 'env'. 그 외엔 file 갱신.
-      void cfg; // type assertion 회피용 — 결과 자체는 사용 안 함.
-    } catch (err) {
-      console.warn('[settings-route] saveServerConfig failed:', err);
-      // 영속화 실패해도 런타임 변경은 유효 — 사용자에게 명시.
-      return jsonResponse({
-        success: true,
-        data: {
-          previous,
-          current: next,
-          persistent: false,
-          persistedTo: null,
-          configFile: getServerConfigPath(),
-          source: getGraphModeSource(),
-          hint: 'runtime applied but failed to persist — please retry or check disk permissions',
-        },
-      });
-    }
-  }
-
-  // 3) hint 생성 — env override 상황을 명시.
-  let hint: string;
-  if (previousSource === 'env') {
-    hint = persistent
-      ? 'env SPYGLASS_GRAPH_MODE overrides this setting — saved to file but not active until env is unset'
-      : 'env SPYGLASS_GRAPH_MODE overrides this setting — runtime cache updated but env still wins on restart';
-  } else if (persistent) {
-    hint = `persisted — will apply on next start (config: ${getServerConfigPath()})`;
-  } else {
-    hint = 'runtime-only — pass persistent:true to save permanently';
-  }
-
-  return jsonResponse({
-    success: true,
-    data: {
-      previous,
-      current: next,
-      persistent,
-      persistedTo,
-      configFile: getServerConfigPath(),
-      source: getGraphModeSource(),
-      hint,
-    },
-  });
 }
 
 // =============================================================================
@@ -691,11 +581,10 @@ end`;
  *   body: { shell?: 'auto'|'zsh'|'bash'|'fish' }
  *     - 'auto' (기본): proxy-installer 의 detectShellProfile 로 자동 탐지.
  *
- *   응답: { installedTo, shell, backupPath, action, cleanedGraphModeExports, nextAction }
+ *   응답: { installedTo, shell, backupPath, action, nextAction }
  *     - installedTo: 실제 수정된 파일 경로 (UI 가 사용자에게 명시 노출).
  *     - backupPath : 백업 파일 절대 경로 — UI 의 [Undo] 버튼이 그대로 전달.
  *     - action     : 'replaced' (기존 마커 교체) | 'appended' (새로 추가).
- *     - cleanedGraphModeExports: SPYGLASS_GRAPH_MODE export 잔존을 주석 처리한 줄 수.
  *     - nextAction : 사용자에게 보여줄 다음 행동 안내 (예: "source ~/.zshrc 또는 새 터미널").
  *
  *   마커가 한쪽만 손상된 비정상 셸 프로필이면 *400* + 에러 메시지 — 사용자에게 수동 정정 안내.
@@ -806,7 +695,8 @@ async function handleLogs(): Promise<Response> {
 // =============================================================================
 
 function parseProfile(raw: string | null): HookProfileKind | null {
-  if (raw === 'full' || raw === 'minimal') return raw;
+  // full 단일 프로필 — minimal 은 제거됨(선택 아님).
+  if (raw === 'full') return raw;
   return null;
 }
 

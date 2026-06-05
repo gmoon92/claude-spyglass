@@ -29,7 +29,6 @@
  *     → 2) readFile(profile) — 없으면 빈 문자열
  *     → 3) replaceOrAppendMarkerBlock(content, snippet)
  *     → 4) backupFile(profile) → writeAtomic(profile, next)
- *     → 5) cleanGraphModeExports(profile) — 부수 클리닝 (옵션)
  *
  *   routes/settings.ts::handleProxyRestore → restoreProxyHook(backupPath?, shell?)
  *     → 옵션 A: backupPath 가 있으면 file-edit-toolkit::restoreFromBackup
@@ -49,6 +48,7 @@ import {
   backupFile,
   writeAtomic,
   restoreFromBackup as toolkitRestoreFromBackup,
+  deleteBackup,
 } from './file-edit-toolkit';
 
 // =============================================================================
@@ -61,9 +61,6 @@ export type ShellSelector = ShellKind | 'auto';
 /** 마커 페어 — *반드시* 고정 문자열. 변경 시 기존 사용자의 마커 블록을 *찾지 못해* append. */
 export const MARKER_OPEN = '# >>> spyglass proxy >>>';
 export const MARKER_CLOSE = '# <<< spyglass proxy <<<';
-
-/** 한 줄짜리 SPYGLASS_GRAPH_MODE export 매칭 — 셸 클리닝용. */
-const SPYGLASS_GRAPH_MODE_EXPORT_RE = /^\s*export\s+SPYGLASS_GRAPH_MODE=\S+\s*$/gm;
 
 // =============================================================================
 // 셸 프로필 탐지
@@ -241,32 +238,6 @@ export function removeMarkerBlock(current: string): { content: string; removed: 
 }
 
 // =============================================================================
-// SPYGLASS_GRAPH_MODE export 클리닝 — 부수 셸 최적화
-// =============================================================================
-
-/**
- * 셸 프로필 안의 `export SPYGLASS_GRAPH_MODE=...` 줄을 *주석 처리* (삭제 X).
- *
- *   PR 1 의 server-config.json 영속화가 도입되면서, 사용자의 셸 프로필에 남아 있는 export 가
- *   *env override* 로 GUI 변경을 막는 케이스를 자동 해결. 단 *삭제는 위험* — 사용자가 의도적
- *   으로 둔 케이스도 있으므로 `#` 주석 처리 + 안내 코멘트만 추가 (사용자가 영구 제거하려면
- *   본인이 직접 해당 줄 삭제).
- *
- *   반환: { content, cleanedCount } — 주석 처리된 줄 수.
- */
-export function cleanGraphModeExports(current: string): { content: string; cleanedCount: number } {
-  let cleanedCount = 0;
-  const note = ` # commented by spyglass — was overriding GUI graphMode`;
-  const next = current.replace(SPYGLASS_GRAPH_MODE_EXPORT_RE, (line) => {
-    // 이미 주석 처리됐으면 스킵 (정규식 자체가 `export` 시작이라 매칭 안 됨 — 방어).
-    if (line.trim().startsWith('#')) return line;
-    cleanedCount++;
-    return `# ${line.trim()}${note}`;
-  });
-  return { content: next, cleanedCount };
-}
-
-// =============================================================================
 // 고수준 — install / restore / uninstall 진입점
 // =============================================================================
 
@@ -334,10 +305,58 @@ export async function checkProxyInstalled(
 export interface InstallResult {
   installedTo: string;
   shell: ShellKind;
+  /** 검증 성공 후 백업을 삭제하므로 보통 null. 검증 실패로 백업을 *유지* 한 경우에만 경로 존재. */
   backupPath: string | null;
   action: 'replaced' | 'appended';
-  cleanedGraphModeExports: number;
   nextAction: string;
+  /** 마커 *밖* 에 중복 claude() 정의가 잔존하면 true — 사용자 직접 정리 안내(자동 삭제 X). */
+  legacyUnmarked: boolean;
+  /** 설치 후 구문 검증(`<shell> -n`) 통과 여부. 검증 도구가 없으면 'skipped'. */
+  verify: 'ok' | 'failed' | 'skipped';
+  /** 검증 성공으로 *이번 설치 백업을 삭제* 했으면 true (백업 누적 방지). */
+  backupRemoved: boolean;
+}
+
+/**
+ * 셸 프로필 구문 검증 — `<shell> -n <file>` (no-execute, 부작용 없이 파싱만).
+ *   - zsh/bash: `-n`. fish: `--no-execute`.
+ *   - 셸 바이너리가 없으면 'skipped' (검증 불가 — 설치는 유효한 것으로 진행).
+ *   - 종료코드 0 → 'ok', 그 외 → 'failed'.
+ */
+export async function validateShellSyntax(shell: ShellKind, profilePath: string): Promise<'ok' | 'failed' | 'skipped'> {
+  const argv = shell === 'fish' ? ['fish', '--no-execute', profilePath] : [shell, '-n', profilePath];
+  try {
+    const proc = Bun.spawn(argv, { stdout: 'ignore', stderr: 'ignore' });
+    const code = await proc.exited;
+    return code === 0 ? 'ok' : 'failed';
+  } catch {
+    return 'skipped'; // 셸 미설치/spawn 실패 — 검증 생략.
+  }
+}
+
+/**
+ * 마커 밖 *중복 `claude()` 래퍼 정의* 매칭 — 진짜 중복 위험만 좁게 감지.
+ *   - 매칭: `claude() {` (sh/zsh/bash) / `function claude` (fish) — 함수 *정의*.
+ *   - 비매칭: `command claude "$@"` 같은 *호출*, 또는 사용자의 다른 함수(kimi()/cc() 등)가
+ *     본문에서 `ANTHROPIC_BASE_URL=…localhost` 를 참조하는 *정당한* 설정.
+ *   spyglass 마커 블록의 claude() 정의는 검사 전에 제거되므로, 남은 claude() 정의가 있으면
+ *   곧 셸 로드 시 *둘 중 뒤에 선언된 것이 이김* → 중복/혼동. 그때만 경고한다.
+ */
+const STRAY_CLAUDE_FN_RE = /(?:^|\n)[ \t]*(?:function[ \t]+claude\b|claude[ \t]*\([ \t]*\)[ \t]*\{)/;
+
+/**
+ * 마커 블록을 제거한 *나머지* 에 또 다른 `claude()` 함수 정의가 있는지 검사.
+ *   true 면 마커 밖에 *중복 claude() 래퍼* 가 있어 충돌 위험 — install 결과에 경고로 surface.
+ *   ANTHROPIC_BASE_URL 단순 참조(다른 함수 본문)는 오탐하지 않는다. 순수함수(I/O 없음).
+ */
+export function hasStrayProxyOutsideMarkers(content: string): boolean {
+  let outside = content;
+  const openIdx = content.indexOf(MARKER_OPEN);
+  const closeIdx = content.indexOf(MARKER_CLOSE);
+  if (openIdx !== -1 && closeIdx !== -1 && closeIdx >= openIdx) {
+    outside = content.slice(0, openIdx) + content.slice(closeIdx + MARKER_CLOSE.length);
+  }
+  return STRAY_CLAUDE_FN_RE.test(outside);
 }
 
 /**
@@ -345,8 +364,8 @@ export interface InstallResult {
  *
  *   1) detectShellProfile(shell) — 자동/명시 분기.
  *   2) 현재 파일 읽기 (없으면 빈 문자열).
- *   3) cleanGraphModeExports — 부수 클리닝.
- *   4) replaceOrAppendMarkerBlock(content, marker block).
+ *   3) replaceOrAppendMarkerBlock(content, marker block) — 마커 사이 in-place 치환(중복 없음).
+ *   4) 마커 *밖* stray 프록시 시그니처 검사(legacyUnmarked) — 중복 위험 경고.
  *   5) backupFile (원본 있으면) + writeAtomic.
  *   6) 응답 — nextAction 문구로 *셸 재시작 또는 source* 안내.
  */
@@ -357,27 +376,41 @@ export async function installProxyHook(args: {
   const { shell: detectedShell, profilePath, existed } = await detectShellProfile(args.shell ?? 'auto');
   const current = existed ? await readFile(profilePath, 'utf-8') : '';
 
-  // 부수 클리닝 — graph mode export 잔존 시 주석화.
-  const cleaned = cleanGraphModeExports(current);
-
   // 마커 블록 idempotent 교체/추가.
   const block = buildMarkerBlock(detectedShell, args.port);
-  const replaced = replaceOrAppendMarkerBlock(cleaned.content, block);
+  const replaced = replaceOrAppendMarkerBlock(current, block);
+
+  // 마커 밖 stray 프록시 함수 검사 — 최종 content 기준(마커 블록 제외하고 시그니처 잔존 시 중복).
+  const legacyUnmarked = hasStrayProxyOutsideMarkers(replaced.content);
 
   // 백업 + atomic write.
   const backupPath = await backupFile(profilePath);
   await writeAtomic(profilePath, replaced.content);
 
+  // 구문 검증(`<shell> -n`) — 통과 시 백업 삭제(누적 방지), 실패 시 백업에서 복원 + 백업 유지.
+  const verify = await validateShellSyntax(detectedShell, profilePath);
+  let finalBackupPath: string | null = backupPath;
+  let backupRemoved = false;
+  if (verify === 'failed' && backupPath) {
+    // 우리가 쓴 블록이 구문 오류를 유발 — 안전하게 원복하고 백업은 남겨 사용자 진단 가능.
+    try {
+      await toolkitRestoreFromBackup(backupPath, profilePath);
+    } catch { /* 복원 실패는 흡수 — 백업 경로는 응답에 남아 수동 복원 가능 */ }
+  } else if (backupPath) {
+    // 검증 ok/skipped(셸 미설치) — 확정. 이번 설치 백업 삭제로 .bak-* 누적 방지.
+    backupRemoved = await deleteBackup(backupPath);
+    if (backupRemoved) finalBackupPath = null;
+  }
+
   return {
     installedTo: profilePath,
     shell: detectedShell,
-    backupPath,
+    backupPath: finalBackupPath,
     action: replaced.action,
-    cleanedGraphModeExports: cleaned.cleanedCount,
-    nextAction:
-      detectedShell === 'fish'
-        ? `Open a new terminal or run: source ${profilePath}`
-        : `Open a new terminal or run: source ${profilePath}`,
+    legacyUnmarked,
+    verify,
+    backupRemoved,
+    nextAction: `Open a new terminal or run: source ${profilePath}`,
   };
 }
 
