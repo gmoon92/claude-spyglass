@@ -201,12 +201,15 @@ if [ -f "${HOME}/.claude/settings.json" ]; then
 fi
 ```
 
-### 4.3 훅 프로파일 선택
+### 4.3 훅 프로파일 (full 단일 — 선택 아님)
+
+spyglass 는 **full 프로파일을 기본이자 유일한 권장 구성**으로 제공합니다. 일부 이벤트만 등록하면
+시각화·통계·관계 흐름 그래프가 불완전해지므로, 전체 HOOK_EVENTS 를 등록하는 full 을 사용하세요.
+(대시보드 설정 → **연동** 탭의 **[자동 설치]** 버튼이 이 full 프로파일을 원클릭으로 적용합니다.)
 
 | 프로파일 | 훅 수 | 수집 범위 | 예제 |
 |---------|------|----------|------|
-| **최소** | 6개 | UserPromptSubmit, PreToolUse, PostToolUse, SessionStart, SessionEnd, Stop | [`docs/examples/settings.hooks.minimal.json`](./examples/settings.hooks.minimal.json) |
-| **권장** ★ | 30개 | Subagent / Task / Permission / Compact / Worktree / FileChanged / CwdChanged 등 전체 HOOK_EVENTS | [`docs/examples/settings.hooks.full.json`](./examples/settings.hooks.full.json) |
+| **full** (기본) | 전체 | Subagent / Task / Permission / Compact / Worktree / FileChanged / CwdChanged 등 전체 HOOK_EVENTS | [`docs/examples/settings.hooks.full.json`](./examples/settings.hooks.full.json) |
 
 ### 4.4 자동 병합 (jq 사용 — 권장)
 
@@ -214,7 +217,7 @@ fi
 
 ```bash
 SPYGLASS_DIR="$(cd "${HOME}/.spyglass-src" && pwd)"
-PROFILE="${HOME}/.spyglass-src/docs/examples/settings.hooks.full.json"   # 또는 settings.hooks.minimal.json
+PROFILE="${HOME}/.spyglass-src/docs/examples/settings.hooks.full.json"   # full 단일 (선택 아님)
 SETTINGS="${HOME}/.claude/settings.json"
 
 # 기존 settings.json이 없으면 빈 객체로 시작
@@ -233,7 +236,7 @@ jq --arg dir "$SPYGLASS_DIR" --slurpfile profile "$PROFILE" '
 # 병합 결과 검증
 jq '.env.SPYGLASS_DIR, (.hooks | keys | length)' "$SETTINGS"
 # "/Users/alice/.spyglass-src"
-# 27   (또는 6)
+# 30   (full 전체 이벤트)
 ```
 
 ### 4.5 수동 병합 (jq 미사용 시)
@@ -249,7 +252,7 @@ jq '.env.SPYGLASS_DIR, (.hooks | keys | length)' "$SETTINGS"
     // 기존 env가 있으면 다른 키와 함께 보존
   },
   "hooks": {
-    // 예제 파일(docs/examples/settings.hooks.full.json 또는 minimal.json)의
+    // 예제 파일(docs/examples/settings.hooks.full.json)의
     // hooks 객체 내용을 그대로 추가
   }
 }
@@ -764,7 +767,6 @@ v2.10 이상에서 v2.9 이하로 다운그레이드 시:
 ## 참고
 
 - [README.md](../README.md) — 프로젝트 개요와 기능 설명
-- [examples/settings.hooks.minimal.json](./examples/settings.hooks.minimal.json) — 최소 훅 프로파일
-- [examples/settings.hooks.full.json](./examples/settings.hooks.full.json) — 권장(전체) 훅 프로파일
+- [examples/settings.hooks.full.json](./examples/settings.hooks.full.json) — 기본(전체) 훅 프로파일 — 선택 아님
 - [개발 작업 문서 — Sequential Flowchart 풀스택 구현](./development/sequential-flow-implementation.md)
 - [Graph DB 마스터 플랜 — 06 Sequential Flowchart](../.claude/.tmp/plans/spyglass/graph-db-research/06-sequential-flowchart.md)

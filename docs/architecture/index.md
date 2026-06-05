@@ -96,10 +96,9 @@ curl -sf http://127.0.0.1:9999/health && echo OK
 
 ### 4. Claude Code 훅 등록
 
-`~/.claude/settings.json`에 `env.SPYGLASS_DIR`과 훅 프로파일을 병합합니다. 예제 프로파일은 두 가지가 제공됩니다.
+`~/.claude/settings.json`에 `env.SPYGLASS_DIR`과 훅 프로파일을 병합합니다. 프로파일은 full 단일입니다(선택 아님).
 
-- [`examples/settings.hooks.minimal.json`](../examples/settings.hooks.minimal.json) — 6개 훅 (최소 구성)
-- [`examples/settings.hooks.full.json`](../examples/settings.hooks.full.json) — 30개 훅 (권장)
+- [`examples/settings.hooks.full.json`](../examples/settings.hooks.full.json) — 전체 훅 (기본)
 
 전체 `jq` 병합 절차는 [설치 가이드](../install-guide.md#4-claude-code-훅-설정)를 참고하세요. 등록 후에는 Claude Code를 **완전히 종료한 뒤 재시작**해야 훅이 로드됩니다.
 
@@ -350,8 +349,7 @@ flowchart LR
 
 ### 예제·샘플
 
-- [최소 훅 프로파일](../examples/settings.hooks.minimal.json) — 6개 훅 (UserPromptSubmit, PreToolUse, PostToolUse, SessionStart, SessionEnd, Stop)
-- [권장 훅 프로파일](../examples/settings.hooks.full.json) — 30개 훅 (전체 HOOK_EVENTS)
+- [훅 프로파일 (full, 기본)](../examples/settings.hooks.full.json) — 전체 HOOK_EVENTS (선택 아님)
 
 ---
 

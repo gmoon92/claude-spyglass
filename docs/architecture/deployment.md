@@ -928,8 +928,7 @@ docker inspect spyglass --format='{{json .State.Health}}' | jq
 - [`migrations.md`](./migrations.md) — DB 마이그레이션 카탈로그
 - [`hooks-integration.md`](./hooks-integration.md) — 훅 수집 스크립트 동작
 - [`troubleshooting.md`](./troubleshooting.md) — 트러블슈팅 모음
-- [`examples/settings.hooks.minimal.json`](../examples/settings.hooks.minimal.json) — 최소 훅 프로파일
-- [`examples/settings.hooks.full.json`](../examples/settings.hooks.full.json) — 권장(전체) 훅 프로파일
+- [`examples/settings.hooks.full.json`](../examples/settings.hooks.full.json) — 기본(전체) 훅 프로파일 — 선택 아님
 - 프로젝트 루트 [`README.md`](../../README.md) — 기능과 철학 개요
 - 프로젝트 루트 [`Dockerfile`](../../Dockerfile), [`docker-compose.yml`](../../docker-compose.yml)
 - [`scripts/build-image.sh`](../../scripts/build-image.sh) — tarball 패키징 스크립트

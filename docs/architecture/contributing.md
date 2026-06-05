@@ -410,7 +410,7 @@ DB 스키마·쿼리·집계·훅 데이터 흐름 변경은 모두 **`data-anal
 
 ### 7.3 훅 수집 스크립트 변경
 
-훅 수집 스크립트 `hooks/spyglass-collect.sh` 와 사용자 `~/.claude/settings.json` 의 훅 등록(예제: `docs/examples/settings.hooks.full.json` · `settings.hooks.minimal.json`)은 한 세트로 묶여 있습니다.
+훅 수집 스크립트 `hooks/spyglass-collect.sh` 와 사용자 `~/.claude/settings.json` 의 훅 등록(예제: `docs/examples/settings.hooks.full.json` — full 단일)은 한 세트로 묶여 있습니다.
 이벤트 종류·페이로드를 변경할 때는 아래 다섯 곳을 모두 갱신해야 합니다. 훅 통합 흐름 전체는 [`hooks-integration.md`](./hooks-integration.md) 를 참조하세요.
 
 1. `hooks/spyglass-collect.sh` — 수집 로직 (`/collect`, `/events` 로 POST)
@@ -454,7 +454,7 @@ Ink 컴포넌트는 `packages/tui/src/components/`(`charts`/`display`/`feedback`
 ```
 docs/                              ← 사용자·외부 대상 문서
 ├── install-guide.md
-├── examples/                      ← 훅 settings.json 예제 (full / minimal)
+├── examples/                      ← 훅 settings.json 예제 (full 단일)
 ├── prototypes/ · release-notes/ · research/
 └── architecture/                  ← index.md, architecture.md, contributing.md,
                                       database.md, migrations.md, hooks-integration.md,

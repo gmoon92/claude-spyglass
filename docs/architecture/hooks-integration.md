@@ -418,8 +418,9 @@ flowchart TD
 
 ## 5. `.claude/settings.json` 등록 방법
 
-**요약**: 두 가지 프로파일이 있습니다 — **minimal**(6개 이벤트, 코어 기능 충분) /
-**full**(30개 이벤트, 모든 메트릭 활성화). 모든 항목은 동일한 명령(`bash $SPYGLASS_DIR/hooks/spyglass-collect.sh`)을 가리킵니다.
+**요약**: 프로파일은 **full**(전체 이벤트, 모든 메트릭 활성화) **단일**입니다 — 선택 아님. 일부만 등록하면
+시각화·통계·관계 흐름 그래프가 불완전해지므로 항상 full 을 사용합니다. 모든 항목은 동일한 명령
+(`bash $SPYGLASS_DIR/hooks/spyglass-collect.sh`)을 가리킵니다. (과거 minimal 프로파일은 제거됨.)
 
 > 훅은 반드시 **글로벌 `~/.claude/settings.json`** 에 등록하세요.
 > 프로젝트 단위 설정에 두면 다른 프로젝트의 작업이 누락됩니다.
@@ -459,29 +460,11 @@ flowchart TD
 - `matcher`는 **`PreToolUse` / `PostToolUse` / `PostToolUseFailure` 전용**이며 **도구 이름 매칭**용입니다 (`"*"` = 전체).
 - `async: true` + `timeout: 1`을 권장합니다 — 훅 실패가 도구 실행을 막지 않도록 하기 위함입니다.
 
-### 5.2 minimal 프로파일 — 6개 이벤트 (`docs/examples/settings.hooks.minimal.json`)
+### 5.2 full 프로파일 — 전체 이벤트 (기본, `docs/examples/settings.hooks.full.json`)
 
-**대상**: 세션 timeline + 도구 호출 + 프롬프트 + 응답까지 코어 기능만 필요할 때.
-세션 메트릭, compact 추적, 권한 모드 분석 등 부가 메트릭은 비활성화됩니다.
-
-```jsonc
-{
-  "env": { "SPYGLASS_DIR": "/Users/<your-name>/.spyglass-src" },
-  "hooks": {
-    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "async": true, "timeout": 1 }] }],
-    "PreToolUse":       [{ "matcher": "*", "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "async": true, "timeout": 1 }] }],
-    "PostToolUse":      [{ "matcher": "*", "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "async": true, "timeout": 1 }] }],
-    "SessionStart":     [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "async": true, "timeout": 1 }] }],
-    "SessionEnd":       [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "async": true, "timeout": 1 }] }],
-    "Stop":             [{ "hooks": [{ "type": "command", "command": "bash $SPYGLASS_DIR/hooks/spyglass-collect.sh", "async": true, "timeout": 1 }] }]
-  }
-}
-```
-
-### 5.3 full 프로파일 — 30개 이벤트 (권장, `docs/examples/settings.hooks.full.json`)
-
-**대상**: 모든 메트릭(compact·permission·subagent·worktree 등)을 활용하고 싶을 때.
-모든 항목은 동일한 패턴을 따르므로 한 줄로 요약하면 다음과 같습니다.
+**선택 아님** — 모든 메트릭(compact·permission·subagent·worktree 등)을 활용하려면 전체 이벤트를
+등록해야 합니다. 일부만 등록하면 시각화·통계·관계 흐름 그래프가 불완전해집니다.
+(과거 minimal 6-이벤트 프로파일은 제거됨.) 모든 항목은 동일한 패턴을 따릅니다.
 
 ```jsonc
 "<EventName>": [{ "matcher": "*",  // Pre/PostToolUse(Failure)만 해당
@@ -505,12 +488,12 @@ flowchart TD
 전체 파일은 `docs/examples/settings.hooks.full.json`을 참고하세요.
 `jq` 자동 병합 절차는 [`install-guide.md` §4.4](../install-guide.md#44-자동-병합-jq-사용--권장)를 사용하세요.
 
-### 5.4 등록 검증
+### 5.3 등록 검증
 
 ```bash
 # 1) 등록된 훅 키 수
 jq '.hooks | keys | length' ~/.claude/settings.json
-# 30   (또는 6)
+# 30   (full 전체 이벤트)
 
 # 2) SPYGLASS_DIR 절대경로 확인
 jq -r '.env.SPYGLASS_DIR' ~/.claude/settings.json
@@ -879,5 +862,5 @@ cd "$(jq -r '.env.SPYGLASS_DIR' ~/.claude/settings.json)" && bun run doctor
 | 슬래시 커맨드 | `packages/server/src/hook/slash-command.ts` |
 | transcript 파싱 | `packages/server/src/hook/transcript.ts`, `transcript-context.ts` |
 | storage 스키마 | `packages/storage/src/schema.ts`, `packages/storage/migrations/` |
-| 예제 설정 | `docs/examples/settings.hooks.minimal.json`, `docs/examples/settings.hooks.full.json` |
+| 예제 설정 | `docs/examples/settings.hooks.full.json` (full 단일) |
 | 설치 가이드 | `docs/install-guide.md` |
