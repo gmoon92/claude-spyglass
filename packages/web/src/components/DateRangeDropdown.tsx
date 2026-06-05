@@ -34,7 +34,7 @@ import type { ActiveRange, PresetValue } from '../stores/app-store';
 /** 프리셋 순서 SSoT — 원본 date-range-dropdown.js:24 PRESETS 1:1 (custom 은 footer 로 분리). */
 export const DATE_RANGE_PRESETS: PresetValue[] = ['1h', 'today', 'yesterday', '7d', '30d', 'all'];
 
-/** i18n 라벨러 — 컴포넌트 무전역. 호출처(features/app)가 window.I18n 을 감싸 주입. */
+/** i18n 라벨러 — 컴포넌트 무전역. 호출처(features/app)가 react-i18next t 를 감싸 주입. */
 export interface DateRangeLabeler {
   presetLabel: (value: string) => string;
   presetTitle: (value: string) => string;

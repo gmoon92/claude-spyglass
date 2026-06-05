@@ -11,8 +11,9 @@
  *
  * 전략(filter-bar/Chart 계승): renderToStaticMarkup 마크업 계약 검증.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { i18next } from '../../../lib/i18n';
 import {
   BurnRateCard,
   CacheHealthCard,
@@ -23,18 +24,12 @@ import {
 } from '../ObsPanel';
 
 /**
- * window.I18n 스텁 — 카드 자체 i18n 은 t prop 으로 결정론화하지만, formatters.js 의
- * fmtRelative/fmt 가 내부에서 window.I18n.t / getLocale 을 참조하므로(원본 그대로 재사용)
- * 테스트 환경에 전역 stub 을 주입한다(formatters.test.ts 컨벤션 동일).
+ * 카드 자체 i18n 은 t prop 으로 결정론화한다. formatters.js 의 fmtRelative/fmt 가 내부에서 getLocale
+ * (i18next.language)을 참조하므로 'en' 로케일을 고정한다.
  * 주의: Chart.tsx hasRealDom 가드가 bare window 스텁에서 useLayoutEffect 를 회피하므로 안전.
  */
-beforeAll(() => {
-  (globalThis as { window?: { I18n?: unknown } }).window ??= {};
-  (globalThis as { window: { I18n?: unknown } }).window.I18n = {
-    t: (key: string) => key,
-    getLang: () => 'en',
-  };
-});
+beforeAll(async () => { await i18next.changeLanguage('en'); });
+afterAll(async () => { await i18next.changeLanguage('ko'); });
 
 /** 결정론 t stub — key 를 그대로 노출(vars 무시)해 라벨 식별. */
 const t: TFunc = (key) => `t:${key}`;

@@ -11,8 +11,8 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { computeDetailFilterResult } from '../filter-result';
 
 beforeAll(() => {
+  // 루트 bun test(jsdom 부재)용 window 보장. i18n 은 vitest.setup 의 기본 t(passthrough)가 담당.
   (globalThis as any).window = (globalThis as any).window ?? {};
-  (globalThis as any).window.I18n = { t: (k: string) => k };
 });
 
 const req = (id: string, type: string, extra: Record<string, unknown> = {}) => ({

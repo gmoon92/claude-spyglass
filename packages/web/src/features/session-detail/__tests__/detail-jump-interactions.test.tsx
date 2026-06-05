@@ -14,11 +14,9 @@ import { createRoot, type Root } from 'react-dom/client';
 import { TurnSpine } from '../TurnSpine';
 import { handleChipActivation, installChipDelegation } from '../chip-jump';
 
-declare const window: { I18n: { t: (k: string, v?: Record<string, unknown>) => string } };
-
 beforeAll(() => {
+  // i18n 은 vitest.setup 의 기본 t(passthrough)가 담당 — window.I18n 전역 스텁 제거.
   (globalThis as any).window = (globalThis as any).window ?? {};
-  (globalThis as any).window.I18n = { t: (key: string, vars?: Record<string, unknown>) => (vars ? `${key}` : key) };
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   // jsdom 은 scrollIntoView 가 없으므로 no-op 스텁(flashChipTarget 호출 안전).
   if (!(Element.prototype as any).scrollIntoView) {

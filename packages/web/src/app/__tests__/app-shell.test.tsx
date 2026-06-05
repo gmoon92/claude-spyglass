@@ -14,11 +14,10 @@ import { MemoryRouter } from 'react-router-dom';
 import type { ReactElement } from 'react';
 import { AppShell } from '../AppShell';
 
-// window.I18n 스텁(app-routes.test 선례) — tt 가 전역 참조.
+// i18n 기본 t(passthrough)는 vitest.setup 가 담당 — window 만 보장(루트 bun test 대응).
 beforeAll(() => {
-  const g = globalThis as unknown as { window?: { I18n?: unknown } };
+  const g = globalThis as unknown as { window?: object };
   g.window = g.window ?? ({} as never);
-  (g.window as { I18n: unknown }).I18n = { t: (key: string) => key, onChange: () => {}, init: () => Promise.resolve() };
 });
 afterAll(() => {
   delete (globalThis as unknown as { window?: unknown }).window;

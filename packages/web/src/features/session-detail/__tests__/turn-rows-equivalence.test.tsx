@@ -10,29 +10,34 @@
  * 정규화: self-close 통일 / 공백·줄바꿈 축약 / HTML 엔티티 디코드 / 속성명 소문자화 / 속성 이름순 정렬.
  *  - 속성 순서는 spec 상 무의미하므로 정렬로 안정화(스냅샷 노이즈 제거).
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { i18next } from '../../../lib/i18n';
 
 import { TurnRows } from '../TurnRows';
 
 const NOW_FIXED_MS = new Date('2026-05-04T10:00:00Z').getTime();
 const originalDateNow = Date.now;
 
-beforeAll(() => {
-  (globalThis as any).window = (globalThis as any).window ?? {};
-  (globalThis as any).window.I18n = {
-    t: (key: string) => {
-      const map: Record<string, string> = {
-        'session.rows.empty-message': '메시지 없음',
-        'badges.renderers.tool-status.error': '오류',
-        'badges.renderers.model.unknown': '모델불명',
-        'badges.renderers.model.synthetic': 'SDK 합성',
-        'badges.renderers.model.no-info': '모델 정보 없음',
-      };
-      return map[key] ?? key;
-    },
-  };
+// 테스트 t — i18next.t/useTranslation 출력을 ko 라벨로 고정(vitest.setup __setTestT). afterEach 자동 복원
+//   대응으로 각 테스트 전 재주입.
+beforeEach(() => {
+  globalThis.__setTestT?.((key) => {
+    const map: Record<string, string> = {
+      'session.rows.empty-message': '메시지 없음',
+      'badges.renderers.tool-status.error': '오류',
+      'badges.renderers.model.unknown': '모델불명',
+      'badges.renderers.model.synthetic': 'SDK 합성',
+      'badges.renderers.model.no-info': '모델 정보 없음',
+    };
+    return map[key] ?? key;
+  });
+});
+
+// 골든마스터는 ko 로케일 날짜 포맷(getLocale→i18next.language)으로 동결됨 — jsdom navigator 가 en 이므로 명시 고정.
+beforeAll(async () => {
   Date.now = () => NOW_FIXED_MS;
+  await i18next.changeLanguage('ko');
 });
 
 afterAll(() => {

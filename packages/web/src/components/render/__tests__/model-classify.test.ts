@@ -1,23 +1,20 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { modelClassOf, modelChipLabel, modelChipHtml } from '../model-classify';
 
 // model-classify 의 i18n 라벨(모델불명·SDK 합성·모델 정보 없음) 출력을 고정하는 특성화 테스트.
 //
-// 목적(window.I18n 브릿지 제거): modelChipLabel/modelChipHtml 의 i18n 라벨은 원래 전역 window.I18n.t
-//   를 직접 호출했고, 이를 lib/i18n.ts 의 i18next 인스턴스로 대체한다. 두 경로의 출력이 동일함을
-//   고정한다(키 문자열 불변). vitest.setup.ts 가 i18next.t 를 window.I18n.t(아래 stub)로 위임 패치하므로,
-//   본 stub 의 ko 라벨이 양쪽(window.I18n.t / i18next.t) 모두에서 동일 출력으로 관측된다.
-beforeAll(() => {
-  (globalThis as { window: { I18n?: unknown } }).window.I18n = {
-    t: (key: string) => {
-      const map: Record<string, string> = {
-        'badges.renderers.model.unknown': '모델불명',
-        'badges.renderers.model.synthetic': 'SDK 합성',
-        'badges.renderers.model.no-info': '모델 정보 없음',
-      };
-      return map[key] ?? key;
-    },
-  };
+// 목적(react-i18next 단일화): modelChipLabel/modelChipHtml 의 i18n 라벨은 lib/i18n.ts 의 i18next
+//   인스턴스(i18next.t)로 해석된다. vitest.setup.ts 가 i18next.t 를 테스트 t 로 위임하므로, 아래 ko
+//   라벨이 i18next.t 출력으로 관측된다(키 문자열 불변). afterEach 자동 복원 대응으로 beforeEach 재주입.
+beforeEach(() => {
+  globalThis.__setTestT?.((key) => {
+    const map: Record<string, string> = {
+      'badges.renderers.model.unknown': '모델불명',
+      'badges.renderers.model.synthetic': 'SDK 합성',
+      'badges.renderers.model.no-info': '모델 정보 없음',
+    };
+    return map[key] ?? key;
+  });
 });
 
 describe('modelClassOf', () => {

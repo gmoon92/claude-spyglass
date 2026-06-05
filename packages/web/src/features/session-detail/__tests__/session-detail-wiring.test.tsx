@@ -18,8 +18,8 @@ import { SessionDetailContainer } from '../SessionDetailContainer';
 import { useAppStore } from '../../../stores/app-store';
 
 beforeAll(() => {
+  // 루트 bun test(jsdom 부재)용 window 보장. i18n 은 vitest.setup 의 기본 t(passthrough)가 담당.
   (globalThis as any).window = (globalThis as any).window ?? {};
-  (globalThis as any).window.I18n = { t: (key: string) => key };
 });
 
 // bun test 양립: vi.stubGlobal 부재 → globalThis.fetch 직접 할당 + 원복(WP33 패턴).

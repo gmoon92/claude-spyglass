@@ -13,13 +13,10 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { BrowseSidebar } from '../BrowseSidebar';
 
-// SessionRow/fmtRelative 가 window.I18n 참조 → 테스트 스텁(sidebar.test 선례).
+// SessionRow/fmtRelative 가 i18next.t 참조 → 기본 t(passthrough)는 vitest.setup 가 담당.
 beforeAll(() => {
-  (globalThis as unknown as { window: { I18n: { t: (k: string) => string } } }).window =
+  (globalThis as unknown as { window?: object }).window =
     ((globalThis as unknown as { window?: object }).window as never) ?? ({} as never);
-  (globalThis as unknown as { window: { I18n: { t: (k: string) => string } } }).window.I18n = {
-    t: (key: string) => key,
-  };
 });
 afterAll(() => {
   delete (globalThis as unknown as { window?: unknown }).window;
@@ -116,24 +113,22 @@ describe('BrowseSidebar — 프로젝트 테이블 thead-browse(colgroup + 3컬�
     expect(html).toContain('ui.html.session-panel.label');
   });
 
-  it('window.I18n.t 가 번역값을 주면 thead/panel-label 이 그 값으로 렌더된다', () => {
-    // 로케일 해석 입증: 임시로 I18n.t 를 한국어 값 반환으로 교체.
+  it('i18next.t 가 번역값을 주면 thead/panel-label 이 그 값으로 렌더된다', () => {
+    // 로케일 해석 입증: 임시로 테스트 t 를 한국어 값 반환으로 교체(vitest.setup __setTestT).
     const dict: Record<string, string> = {
       'ui.html.left-panel.th-project': '프로젝트',
       'ui.html.left-panel.th-session': '세션',
       'ui.html.left-panel.th-token': '토큰',
       'ui.html.session-panel.label': '세션',
     };
-    const win = (globalThis as unknown as { window: { I18n: { t: (k: string) => string } } }).window;
-    const orig = win.I18n.t;
-    win.I18n.t = (key: string) => dict[key] ?? key;
+    globalThis.__setTestT?.((key) => dict[key] ?? key);
     try {
       const html = render();
       expect(html).toContain('>프로젝트</th>');
       expect(html).toContain('>토큰</th>');
       expect(html).toContain('class="panel-label">세션</span>');
     } finally {
-      win.I18n.t = orig;
+      globalThis.__resetTestT?.();
     }
   });
 

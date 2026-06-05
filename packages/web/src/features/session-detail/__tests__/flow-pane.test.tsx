@@ -16,8 +16,8 @@ import { SessionLog } from '../SessionLog';
 const noopChipRefs = { logBodyRef: { current: null }, detailRootRef: { current: null } };
 
 beforeAll(() => {
+  // 루트 bun test(jsdom 부재)용 window 보장. i18n 은 vitest.setup 의 기본 t(passthrough)가 담당.
   (globalThis as any).window = (globalThis as any).window ?? {};
-  (globalThis as any).window.I18n = { t: (k: string) => k };
 });
 
 const r = (el: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(el);

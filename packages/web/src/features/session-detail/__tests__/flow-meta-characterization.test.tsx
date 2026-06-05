@@ -10,7 +10,7 @@
  *  - 칩 6분기 자체의 렌더 동치는 turn-spine-equivalence.test.tsx 가 exported oracle 로 보증.
  */
 import './_dom-stub';
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { readFileSync } from 'node:fs';
@@ -27,12 +27,9 @@ import { PrologueCard } from '../PrologueCard';
 import { SystemReminderChip } from '../SystemReminderChip';
 import { SessionBadges } from '../SessionBadges';
 
-beforeAll(() => {
-  (globalThis as any).window = (globalThis as any).window ?? {};
-  (globalThis as any).window.I18n = {
-    t: (key: string, vars?: Record<string, unknown>) =>
-      vars ? `${key}(${JSON.stringify(vars)})` : key,
-  };
+// 테스트 t — useTranslation 출력 고정(vitest.setup __setTestT). afterEach 자동 복원 대응으로 각 테스트 전 재주입.
+beforeEach(() => {
+  globalThis.__setTestT?.((key, vars) => (vars ? `${key}(${JSON.stringify(vars)})` : key));
 });
 
 const r = (el: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(el);
@@ -169,7 +166,7 @@ describe('SessionBadges — updateSessionBadges(turn-views.js:839) + 순환 차�
   });
 
   it('최고비용 turn(2) + 최다호출 tool(Read×2) 뱃지', () => {
-    // window.I18n vars 는 JSON 직렬화 후 React 텍스트 노드라 " → &quot; 로 escape 된다.
+    // 테스트 t 의 vars JSON 직렬화 후 React 텍스트 노드라 " → &quot; 로 escape 된다.
     const html = r(<SessionBadges badgeTurns={turns} sessionTotalTokens={400} />);
     expect(html).toContain('max-cost-badge');
     expect(html).toContain('&quot;n&quot;:2'); // turn_index 2 가 최고 비용

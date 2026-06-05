@@ -17,10 +17,11 @@
  *   스코프 전환을 입증한다. react-dom client createRoot + act 로 jsdom 에 마운트해 useEffect 실행.
  *   클릭은 실제 DOM 행(data-project)에 dispatch — 라이브 DOM 배선 검증.
  */
-import { describe, it, expect, beforeEach, beforeAll, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
+import { i18next } from '../../lib/i18n';
 import { MetaDocsLayout } from '../MetaDocsLayout';
 import { useAppStore } from '../../stores/app-store';
 import { ensureDom } from '../../test-support/ensure-dom';
@@ -43,14 +44,9 @@ function jsonResponse(body: unknown): Response {
 let container: HTMLDivElement;
 let root: Root;
 
-beforeAll(() => {
-  (globalThis as { window?: { I18n?: unknown } }).window ??= {};
-  (globalThis as { window: { I18n?: unknown } }).window.I18n = {
-    t: (k: string) => k,
-    getLang: () => 'en',
-    getCollator: () => new Intl.Collator('en'),
-  };
-});
+// getCollator(getLocale)가 i18next.language 를 읽는다 — 정렬 결정론을 위해 'en' 로케일 고정.
+beforeAll(async () => { await i18next.changeLanguage('en'); });
+afterAll(async () => { await i18next.changeLanguage('ko'); });
 
 beforeEach(() => {
   metaDocsUrls.length = 0;

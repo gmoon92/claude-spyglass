@@ -11,8 +11,9 @@
  * 정규화: self-close 통일 / 태그 사이 공백·줄바꿈 축약 / 엔티티 디코드 / 속성명 소문자화.
  *  스냅샷은 정규화된 형태로 저장되어 표현차(self-close·공백·엔티티) 노이즈가 제거된다.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { i18next } from '../../../lib/i18n';
 
 // 신규 TSX(barrel 경유 — barrel 완전성 동시 검증).
 import { RequestRow, SessionRow, TargetCell } from '../index';
@@ -20,29 +21,33 @@ import { RequestRow, SessionRow, TargetCell } from '../index';
 const NOW_FIXED_MS = new Date('2026-05-04T10:00:00Z').getTime();
 const originalDateNow = Date.now;
 
-beforeAll(() => {
-  (globalThis as any).window = (globalThis as any).window ?? {};
-  (globalThis as any).window.I18n = {
-    t: (key: string, vars?: Record<string, unknown>) => {
-      const map: Record<string, string> = {
-        'common.formatters.just-now': '방금',
-        'common.formatters.minutes-ago': `${vars?.n}분 전`,
-        'common.formatters.hours-ago': `${vars?.n}시간 전`,
-        'common.formatters.days-ago': `${vars?.n}일 전`,
-        'session.rows.empty-message': '메시지 없음',
-        'session.rows.no-data': '데이터가 없습니다',
-        'session.rows.status.ended': '종료된 세션',
-        'session.rows.status.live': '라이브 세션',
-        'session.rows.status.stale': 'stale — SessionEnd 누락 의심',
-        'badges.renderers.tool-status.error': '오류',
-        'badges.renderers.model.unknown': '모델불명',
-        'badges.renderers.model.synthetic': 'SDK 합성',
-        'badges.renderers.model.no-info': '모델 정보 없음',
-      };
-      return map[key] ?? key;
-    },
-  };
+// 테스트 t — i18next.t/useTranslation 출력을 ko 라벨로 고정(vitest.setup __setTestT). afterEach 가 기본
+//   passthrough 로 복원하므로 각 테스트 전 beforeEach 로 재주입한다.
+beforeEach(() => {
+  globalThis.__setTestT?.((key, vars) => {
+    const map: Record<string, string> = {
+      'common.formatters.just-now': '방금',
+      'common.formatters.minutes-ago': `${vars?.n}분 전`,
+      'common.formatters.hours-ago': `${vars?.n}시간 전`,
+      'common.formatters.days-ago': `${vars?.n}일 전`,
+      'session.rows.empty-message': '메시지 없음',
+      'session.rows.no-data': '데이터가 없습니다',
+      'session.rows.status.ended': '종료된 세션',
+      'session.rows.status.live': '라이브 세션',
+      'session.rows.status.stale': 'stale — SessionEnd 누락 의심',
+      'badges.renderers.tool-status.error': '오류',
+      'badges.renderers.model.unknown': '모델불명',
+      'badges.renderers.model.synthetic': 'SDK 합성',
+      'badges.renderers.model.no-info': '모델 정보 없음',
+    };
+    return map[key] ?? key;
+  });
+});
+
+// 골든마스터는 ko 로케일 날짜 포맷(getLocale→i18next.language)으로 동결됨 — jsdom navigator 가 en 이므로 명시 고정.
+beforeAll(async () => {
   Date.now = () => NOW_FIXED_MS;
+  await i18next.changeLanguage('ko');
 });
 
 afterAll(() => {

@@ -7,8 +7,9 @@
  *  - 마크업 계약: .lang-switcher-wrap > select#lang-switcher[role=combobox][aria-label], <option> 4종이
  *    SUPPORTED_LANGS 와 정확히 일치(과거 i18n-html-css-drift 가드의 HTML SoT 를 컴포넌트로 이전).
  *  - value: select 의 현재 값이 i18n.language 를 추종.
- *  - change 동기: select change 시 react-i18next changeLanguage(lang) + window.I18n.setLang(lang) 둘 다 호출
- *    (date-locale 폴백 동기 — i18n-utils getLocale 이 window.I18n.getLang 을 읽으므로 필수).
+ *  - change: select change 시 react-i18next changeLanguage(lang) 단일 호출(SSoT). 레거시 window.I18n.setLang
+ *    동시호출은 react-i18next 단일화로 제거됐다 — getLocale 이 i18next.language 를 읽고, localStorage 영속은
+ *    i18n.ts 의 languageChanged 리스너가 담당한다.
  */
 import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest';
 import { act } from 'react';
@@ -46,23 +47,12 @@ describe('LangSwitcher — DOM 계약(마크업/셀렉터 보존)', () => {
   });
 });
 
-describe('LangSwitcher — value 추종 + change 동기', () => {
+describe('LangSwitcher — value 추종 + change', () => {
   let container: HTMLDivElement;
   let root: Root;
-  let setLang: ReturnType<typeof vi.fn>;
   let changeSpy: MockInstance;
 
   beforeEach(async () => {
-    // 레거시 전역 stub — getLang/getSupportedLangs 는 vitest.setup 의 i18next.t 위임과 무관하게 본 테스트 전용.
-    setLang = vi.fn(() => Promise.resolve());
-    (globalThis as { window: Window & { I18n?: unknown } }).window.I18n = {
-      t: (k: string) => k,
-      getLang: () => 'ko',
-      getSupportedLangs: () => [...SUPPORTED_LANGS],
-      setLang,
-      onChange: () => () => {},
-      init: () => Promise.resolve(),
-    } as unknown as Window['I18n'];
     // react-i18next 인스턴스를 알려진 언어로 고정.
     await act(async () => {
       await i18next.changeLanguage('ko');
@@ -85,7 +75,7 @@ describe('LangSwitcher — value 추종 + change 동기', () => {
     expect(select.value).toBe('ko');
   });
 
-  it('change 시 i18next.changeLanguage(lang) + window.I18n.setLang(lang) 둘 다 호출', () => {
+  it('change 시 i18next.changeLanguage(lang) 단일 호출(SSoT)', () => {
     act(() => root.render(<LangSwitcher />));
     const select = container.querySelector<HTMLSelectElement>('#lang-switcher')!;
     act(() => {
@@ -93,10 +83,9 @@ describe('LangSwitcher — value 추종 + change 동기', () => {
       select.dispatchEvent(new Event('change', { bubbles: true }));
     });
     expect(changeSpy).toHaveBeenCalledWith('en');
-    expect(setLang).toHaveBeenCalledWith('en');
   });
 
-  it('미지원 값은 무시(changeLanguage/setLang 미호출)', () => {
+  it('미지원 값은 무시(changeLanguage 미호출)', () => {
     act(() => root.render(<LangSwitcher />));
     const select = container.querySelector<HTMLSelectElement>('#lang-switcher')!;
     // 미지원 옵션을 강제로 주입(브라우저상 발생 가능성은 낮지만 가드 검증).
@@ -104,12 +93,10 @@ describe('LangSwitcher — value 추종 + change 동기', () => {
     opt.value = 'fr';
     select.appendChild(opt);
     changeSpy.mockClear();
-    setLang.mockClear();
     act(() => {
       select.value = 'fr';
       select.dispatchEvent(new Event('change', { bubbles: true }));
     });
     expect(changeSpy).not.toHaveBeenCalled();
-    expect(setLang).not.toHaveBeenCalled();
   });
 });

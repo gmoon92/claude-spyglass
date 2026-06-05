@@ -49,8 +49,8 @@ const EDGES = [
 const PAYLOAD = { nodes: NODES, edges: EDGES, columns: COLUMNS, meta: { centerName: 'designer' } };
 
 beforeAll(() => {
-  (globalThis as unknown as { window: { I18n?: unknown } }).window ??= {} as never;
-  (globalThis as unknown as { window: { I18n?: unknown } }).window.I18n = { t: (k: string) => k };
+  // 루트 bun test(jsdom 부재)용 window 보장. i18n 은 vitest.setup 의 기본 t(passthrough)가 담당.
+  (globalThis as unknown as { window?: object }).window ??= {} as never;
 });
 
 let container: HTMLDivElement;

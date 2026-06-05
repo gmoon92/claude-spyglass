@@ -18,9 +18,8 @@ import { LLMInput } from '../LLMInput';
 import type { MessageLike } from '../llm-input-state';
 
 beforeAll(() => {
+  // i18n 기본 t(passthrough)는 vitest.setup 가 담당 — window 만 보장(루트 bun test 대응).
   (globalThis as any).window = (globalThis as any).window ?? {};
-  // I18n.t 폴백: key → key (RequestRow 테스트 패턴과 동일).
-  (globalThis as any).window.I18n = { t: (k: string) => k };
 });
 
 const html = (el: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(el);
@@ -46,18 +45,18 @@ describe('LLMInput — 골격/헤더', () => {
   it('banner 텍스트에 <strong> 이 포함되면 escape 되지 않고 실제 태그로 렌더 (결함 #1)', () => {
     // 레거시 i18n 키(ui.llm-input.banner-text)는 <strong> 강조 태그를 포함한다.
     // 기본 텍스트 보간은 이를 escape 해 `&lt;strong&gt;` 문자로 노출(버그). dangerouslySetInnerHTML 로 복원.
-    const prev = (globalThis as any).window.I18n.t;
-    (globalThis as any).window.I18n.t = (k: string) =>
+    globalThis.__setTestT?.((k) =>
       k === 'ui.llm-input.banner-text'
         ? '이 탭은 proxy가 전송한 <strong>원본 페이로드</strong>입니다.'
-        : k;
+        : k,
+    );
     try {
       const out = html(<LLMInput {...baseProps} />);
       // 실제 <strong> 엘리먼트로 렌더 — escape 된 &lt;strong&gt; 가 아님.
       expect(out).toContain('<strong>원본 페이로드</strong>');
       expect(out).not.toContain('&lt;strong&gt;');
     } finally {
-      (globalThis as any).window.I18n.t = prev;
+      globalThis.__resetTestT?.();
     }
   });
 

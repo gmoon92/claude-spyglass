@@ -12,10 +12,11 @@
     html.app-ready body { opacity: 1; transition: opacity 120ms ease-out; }
   </style>
   <script>
-    // FOUC 방지 — i18n.js 비동기 로딩 전에 URL ?lang= / localStorage / navigator
+    // FOUC 방지 — react-i18next(main.tsx module) 초기화 전에 URL ?lang= / localStorage / navigator
     // 우선순위로 lang을 결정해 <html lang>을 즉시 설정. 이게 없으면 첫 페인트가
     // 항상 ko로 렌더되어 :lang() CSS pseudo-content·스크린리더가 한국어로 한 번 잡힌 뒤
-    // i18n 로딩 후 다른 언어로 깜빡임(FOUC) 발생.
+    // i18n 초기화 후 다른 언어로 깜빡임(FOUC) 발생.
+    // (resolveInitialLang(lib/i18n.ts)와 동일 우선순위·동일 localStorage 키 'spyglass:lang' — 정합.)
     // 우선순위: URL ?lang → localStorage 'spyglass:lang' → navigator.language → 'ko'
     (function () {
       var SUPPORTED = ['ko', 'en', 'ja', 'zh'];
@@ -96,11 +97,8 @@
 
   <!-- lang-switcher 는 React 컴포넌트(src/components/LangSwitcher.tsx)로 전환됨 — 과거 정적 classic
        island + lang-switcher.js + i18n-dom.js 결선은 제거되었다. <option>/SUPPORTED_LANGS drift 회귀
-       가드의 SoT 는 컴포넌트 + drift 테스트로 이전. -->
-
-  <!-- classic i18n 잔존 1종(i18n.js → window.I18n)은 externalizeDaemonAssets() plugin 이 module 진입
-       앞(body-prepend)에 주입한다 — window.I18n 이 React 첫 렌더 전에 선존재해야 tt()/labeler·date-locale
-       폴백이 key 폴백 없이 동작. (i18n-dom.js/lang-switcher.js 는 React 전환으로 제거됨.) -->
+       가드의 SoT 는 컴포넌트 + drift 테스트로 이전. i18n 은 react-i18next(lib/i18n.ts) 단일 — 과거
+       classic i18n.js(window.I18n) 전역은 완전히 제거됐다. -->
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

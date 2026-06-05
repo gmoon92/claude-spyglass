@@ -26,7 +26,7 @@ import { ToolIcon } from '../../components/render';
 import { chipFromRequest, chipKey } from './turn-rows';
 import { subTypeOf } from '../dashboard/request-types';
 
-/** i18n 번역 함수 시그니처(react-i18next t / 레거시 window.I18n.t 공통). */
+/** i18n 번역 함수 시그니처(react-i18next t). */
 type TFn = (key: string, vars?: Record<string, unknown>) => string;
 
 /** flow item — compressFlowWithResponses(turn-rows.js) 의 반환 요소. */

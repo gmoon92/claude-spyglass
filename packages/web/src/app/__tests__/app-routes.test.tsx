@@ -17,15 +17,10 @@ import { MemoryRouter } from 'react-router-dom';
 import type { ReactElement } from 'react';
 import { AppRoutes } from '../App';
 
-// 컨테이너(SessionRow/SystemPromptLibrary 등)가 window.I18n 을 참조 → 테스트 스텁(sidebar.test 선례).
+// i18n 기본 t(passthrough)는 vitest.setup 가 담당 — window 만 보장(루트 bun test 대응).
 beforeAll(async () => {
-  const g = globalThis as unknown as { window?: { I18n?: unknown } };
+  const g = globalThis as unknown as { window?: object };
   g.window = g.window ?? ({} as never);
-  (g.window as { I18n: unknown }).I18n = {
-    t: (key: string) => key,
-    onChange: () => {},
-    init: () => Promise.resolve(),
-  };
   // lazy 라우트 모듈(MetaDocs/Settings) 프리로드 — ESM 캐시 워밍. App.tsx 의 React.lazy 가 동일 모듈을
   //   import 하므로, 캐시가 데워지면 renderAt 의 flush 루프에서 즉시 resolve 된다(무거운 모듈 그래프의
   //   dynamic import 가 동기 setTimeout flush 만으로는 제때 안 끝나는 문제 회피).

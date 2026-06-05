@@ -25,24 +25,25 @@ import {
 import { useAppStore } from '../../../stores/app-store';
 import { useAnomalyStore } from '../../../stores/anomaly-store';
 
-// SessionRow(P2-04)/fmtRelative 가 window.I18n 을 참조 → 테스트 스텁 주입(renderers-equivalence 선례).
+// SessionRow(P2-04)/fmtRelative 가 i18next.t 를 참조 → 테스트 t 주입(vitest.setup __setTestT).
 beforeAll(() => {
-  (globalThis as unknown as { window: { I18n: { t: (k: string, v?: Record<string, unknown>) => string } } }).window =
+  (globalThis as unknown as { window?: object }).window =
     (globalThis as unknown as { window?: object }).window as never ?? ({} as never);
-  (globalThis as unknown as { window: { I18n: { t: (k: string, v?: Record<string, unknown>) => string } } }).window.I18n = {
-    t: (key: string, vars?: Record<string, unknown>) => {
-      const map: Record<string, string> = {
-        'common.formatters.just-now': '방금',
-        'common.formatters.minutes-ago': `${vars?.n}분 전`,
-        'common.formatters.hours-ago': `${vars?.n}시간 전`,
-        'common.formatters.days-ago': `${vars?.n}일 전`,
-        'session.rows.status.ended': '종료된 세션',
-        'session.rows.status.live': '라이브 세션',
-        'session.rows.status.stale': 'stale',
-      };
-      return map[key] ?? key;
-    },
-  };
+});
+// afterEach 자동 복원 대응으로 각 테스트 전 커스텀 t 재주입.
+beforeEach(() => {
+  globalThis.__setTestT?.((key, vars) => {
+    const map: Record<string, string> = {
+      'common.formatters.just-now': '방금',
+      'common.formatters.minutes-ago': `${vars?.n}분 전`,
+      'common.formatters.hours-ago': `${vars?.n}시간 전`,
+      'common.formatters.days-ago': `${vars?.n}일 전`,
+      'session.rows.status.ended': '종료된 세션',
+      'session.rows.status.live': '라이브 세션',
+      'session.rows.status.stale': 'stale',
+    };
+    return map[key] ?? key;
+  });
 });
 afterAll(() => {
   delete (globalThis as unknown as { window?: unknown }).window;

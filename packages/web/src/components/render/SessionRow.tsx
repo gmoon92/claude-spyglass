@@ -17,6 +17,7 @@
  * @module render/SessionRow
  */
 import type { ReactElement } from 'react';
+import { i18next } from '../../lib/i18n';
 import { fmtToken, fmtRelative } from '../../lib/formatters';
 import { extractFirstPrompt } from './extract';
 import { BloatedSysBadge } from './anomaly-badges';
@@ -41,12 +42,13 @@ interface SessionLike {
  * 세션 행 — 원본 rows.js#makeSessionRow.
  * @param s 세션 데이터
  * @param isSelected 선택 강조 여부('row-selected')
- * @param t i18n 번역 함수(호출처 SessionList 가 useTranslation 으로 주입). 미주입 시 레거시 window.I18n.t
- *   폴백 — SessionRow 는 함수/JSX 양쪽으로 호출되고, 골든 동치 테스트는 t 미주입으로 렌더하므로 안전 폴백.
+ * @param t i18n 번역 함수(호출처 SessionList 가 useTranslation 으로 주입). 미주입 시 react-i18next
+ *   인스턴스(i18next.t) 폴백 — SessionRow 는 함수/JSX 양쪽으로 호출되고, 골든 동치 테스트는 t 미주입으로
+ *   렌더하므로 안전 폴백(키 미해석 시 i18next 가 key 자체를 반환).
  */
 export function SessionRow({ s, isSelected, t: tProp }: { s: SessionLike; isSelected: boolean; t?: TFn }): ReactElement {
-  // t 해석 — prop 우선, 없으면 레거시 전역 window.I18n.t(전환기 폴백).
-  const t: TFn = tProp ?? ((k) => (globalThis as { I18n?: { t?: (k: string) => string } }).I18n?.t?.(k) ?? k);
+  // t 해석 — prop 우선, 없으면 react-i18next 인스턴스(i18next.t) 폴백.
+  const t: TFn = tProp ?? ((k, vars) => i18next.t(k, vars));
   // live_state 단일 분기 — 클라 자체 stale 판정 금지(서버 권위). 구버전 폴백: ended_at 기준.
   const liveState = s.live_state || (s.ended_at ? 'ended' : 'live');
   let statusGlyph: ReactElement;

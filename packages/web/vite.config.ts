@@ -5,10 +5,11 @@ import type { Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
 // P4-10: 운영 진입 전환 — build input = index.html(#react-root) + 데몬 정적 자산 외부화 plugin.
-// - 기존 Vanilla 자산(assets/css/*.css·assets/js/i18n.js)은 데몬(/assets/*)이
-//   직접 서빙한다. Vite 번들 그래프에 끌어오지 않고 <head>/<body> 에 raw 태그로 외부 주입한다
-//   (externalizeDaemonAssets). 이렇게 해야 index.html 소스는 FOUC/lang 인라인 + #react-root + module 진입만
-//   유지하면서, dev(Vite 5173)·build(dist) 양쪽에서 동일한 CSS24/classic-i18n1 가 로드된다.
+// - 기존 Vanilla CSS 자산(assets/css/*.css)은 데몬(/assets/*)이 직접 서빙한다. Vite 번들 그래프에
+//   끌어오지 않고 <head> 에 raw <link> 태그로 외부 주입한다(externalizeDaemonAssets). 이렇게 해야
+//   index.html 소스는 FOUC/lang 인라인 + #react-root + module 진입만 유지하면서, dev(Vite 5173)·
+//   build(dist) 양쪽에서 동일한 CSS24 가 로드된다.
+//   (과거 classic i18n.js(window.I18n) 외부 주입은 react-i18next 단일화로 제거됐다 — i18n SSoT = lib/i18n.ts.)
 // - locales 는 build 후 dist/locales 로 복사(F2, P1-02 §3) — WEB_ROOT→dist 시 /locales/* 정합.
 // - 데몬(9999) 정적 서빙 계약(WEB_ROOT→dist, mimeMap .map, SPA fallback)은 dispatch.ts 에서 처리.
 const DAEMON_TARGET = 'http://127.0.0.1:9999';
@@ -46,20 +47,11 @@ const DAEMON_CSS = [
   '/assets/css/design-system/_index.css',
 ] as const;
 
-// classic i18n 잔존 1종 — i18n.js(window.I18n 전역 SSoT)만 유지한다.
-//   i18n-dom.js(data-i18n DOM 패스)·lang-switcher.js(select 바인딩)는 React 전환으로 제거됨
-//   (#lang-switcher → src/components/LangSwitcher.tsx). window.I18n 은 i18n-utils date-locale 폴백 +
-//   i18n.ts parseMissingKeyHandler + vitest stub 위임이 런타임에 의존하므로 유지한다.
-// module(main.tsx) 진입 전에 실행돼 window.I18n 이 React 첫 렌더 전 선존재(P1-03 §3.2).
-const DAEMON_I18N = [
-  '/assets/js/i18n.js',
-] as const;
-
 /**
- * 데몬 정적 자산 외부화 — index.html 에 CSS24(head) + classic-i18n1(body-prepend) 를 주입한다.
+ * 데몬 정적 자산 외부화 — index.html 에 CSS24(head) 를 주입한다.
  *   - transformIndexHtml 은 dev/build 양쪽에서 발화 → 두 환경의 진입 HTML 이 동일.
- *   - body-prepend: i18n 스크립트를 <body> 선두(= #react-root·module 진입 앞)에 배치 → window.I18n 선존재.
  *   - closeBundle: build 후 locales → dist/locales 복사(F2) — dispatch /locales/* 분기 무수정 유지.
+ *   - 과거 body-prepend 로 주입하던 classic i18n.js(window.I18n) 스크립트는 react-i18next 단일화로 제거됨.
  */
 function externalizeDaemonAssets(): Plugin {
   return {
@@ -71,11 +63,6 @@ function externalizeDaemonAssets(): Plugin {
           attrs: { rel: 'stylesheet', href },
           injectTo: 'head' as const,
         })),
-        ...DAEMON_I18N.map((src) => ({
-          tag: 'script',
-          attrs: { src },
-          injectTo: 'body-prepend' as const,
-        })),
       ];
     },
     closeBundle() {
@@ -84,6 +71,7 @@ function externalizeDaemonAssets(): Plugin {
       //     Vite 산출(dist/assets/index-<hash>.js·favicon)과 파일명이 겹치지 않아 recursive 병합이 안전.
       //   - locales → dist/locales (F2, P1-02 §3): /locales/* 분기 정합. dev 는 proxy 위임이라 불요.
       const copies: Array<[string, string]> = [
+        // assets 는 이제 css 만 보유한다(과거 assets/js/i18n.js 는 react-i18next 단일화로 제거).
         [resolve(__dirname, 'assets'), resolve(__dirname, 'dist/assets')],
         [resolve(__dirname, 'locales'), resolve(__dirname, 'dist/locales')],
         // dispatch favicon 분기(/favicon.svg|ico)는 WEB_ROOT 루트에서 찾는다. 진입 HTML 의 <link> 는

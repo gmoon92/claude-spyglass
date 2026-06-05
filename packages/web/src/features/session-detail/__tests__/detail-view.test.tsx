@@ -11,7 +11,7 @@
  *    onBloatedSysHeader 콜백이 SessionBadges 로 위임됨.
  */
 import './_dom-stub';
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve as resolvePath } from 'node:path';
@@ -25,12 +25,9 @@ const readSource = (rel: string): string =>
 import { parseAnomaliesResponse } from '../detail-view';
 import { DetailView, SessionDetailHeader } from '../DetailView';
 
-beforeAll(() => {
-  (globalThis as any).window = (globalThis as any).window ?? {};
-  (globalThis as any).window.I18n = {
-    t: (key: string, vars?: Record<string, unknown>) =>
-      vars ? `${key}(${JSON.stringify(vars)})` : key,
-  };
+// 테스트 t — useTranslation 출력 고정(vitest.setup __setTestT). afterEach 자동 복원 대응으로 각 테스트 전 재주입.
+beforeEach(() => {
+  globalThis.__setTestT?.((key, vars) => (vars ? `${key}(${JSON.stringify(vars)})` : key));
 });
 
 const r = (el: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(el);

@@ -2,10 +2,11 @@
  * stats-tables.test.tsx — tool-stats 매트릭스 + syslib 표 정렬/뷰 + 골든마스터 (P3-09)
  *
  * 정렬 SSoT(nextSort/applySort)·행 산술(computeMatrixView)·임계(sizeClassFor) 결정론 고정 +
- * ToolStatsMatrix/SystemPromptLibrary 마크업 계약. window.I18n 스텁(getCollator 의존).
+ * ToolStatsMatrix/SystemPromptLibrary 마크업 계약. getCollator(getLocale)가 활성 언어 의존 → 'en' 고정.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { i18next } from '../../../lib/i18n';
 import {
   applySort as tsApplySort,
   nextSort as tsNextSort,
@@ -26,10 +27,9 @@ import {
 } from '../syslib-sort';
 import { SystemPromptLibrary } from '../SystemPromptLibrary';
 
-beforeAll(() => {
-  (globalThis as { window?: { I18n?: unknown } }).window ??= {};
-  (globalThis as { window: { I18n?: unknown } }).window.I18n = { t: (k: string) => k, getLang: () => 'en' };
-});
+// getCollator(getLocale)가 i18next.language 를 읽는다 — 정렬 결정론을 위해 'en' 로케일 고정.
+beforeAll(async () => { await i18next.changeLanguage('en'); });
+afterAll(async () => { await i18next.changeLanguage('ko'); });
 
 const t = (key: string) => `t:${key}`;
 

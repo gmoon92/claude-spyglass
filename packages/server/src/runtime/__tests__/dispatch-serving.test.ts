@@ -80,11 +80,11 @@ describe.if(hasDist)('dispatch 정적 서빙 — dist 진입/SPA fallback/mime (
     }
   });
 
-  it('진입 HTML 은 classic i18n 1종(i18n.js) + CSS24 외부화 태그를 포함', async () => {
-    // i18n-dom.js/lang-switcher.js 는 #lang-switcher React 전환(LangSwitcher.tsx)으로 제거됨.
-    //   window.I18n 전역(date-locale 폴백·parseMissingKeyHandler) 의존으로 i18n.js 만 유지.
+  it('진입 HTML 은 classic i18n 스크립트(i18n.js 포함)를 미포함하고 CSS24 외부화 태그만 포함', async () => {
+    // react-i18next 단일화 — classic i18n.js(window.I18n)/i18n-dom.js/lang-switcher.js 전부 제거됨.
+    //   i18n SSoT 는 web 번들 내부 lib/i18n.ts(i18next)다. 진입 HTML 은 더 이상 classic i18n 스크립트를 주입하지 않는다.
     const html = await (await get('/')).text();
-    expect(html).toContain('/assets/js/i18n.js');
+    expect(html).not.toContain('/assets/js/i18n.js');
     expect(html).not.toContain('/assets/js/i18n-dom.js');
     expect(html).not.toContain('/assets/js/lang-switcher.js');
     expect(html).toContain('/assets/css/design-tokens.css');
@@ -101,15 +101,12 @@ describe.if(hasDist)('dispatch 정적 서빙 — dist 진입/SPA fallback/mime (
     expect(res.headers.get('content-type')).toContain('application/json');
   });
 
-  it('classic CSS/JS 와 locales 가 dist 에서 정상 서빙', async () => {
+  it('classic CSS 와 locales 가 dist 에서 정상 서빙', async () => {
     const css = await get('/assets/css/design-tokens.css');
     expect(css.status).toBe(200);
     expect(css.headers.get('content-type')).toContain('text/css');
 
-    const js = await get('/assets/js/i18n.js');
-    expect(js.status).toBe(200);
-    expect(js.headers.get('content-type')).toContain('application/javascript');
-
+    // classic i18n.js(window.I18n)는 react-i18next 단일화로 제거됨 — 더 이상 /assets/js 정적 서빙 대상 아님.
     const loc = await get('/locales/ko/ui.json');
     expect(loc.status).toBe(200);
     expect(loc.headers.get('content-type')).toContain('application/json');

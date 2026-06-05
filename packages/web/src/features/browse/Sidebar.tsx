@@ -14,8 +14,8 @@
  *  - renderBrowserProjects/renderBrowserSessions(innerHTML) → <ProjectList>/<SessionList> JSX.
  *  - escHtml 불필요: React 텍스트 노드 자동 이스케이프(원본 escHtml 호출과 동치 안전).
  *  - 세션 행은 P2-04 SessionRow.tsx 재사용. onClick 은 cloneElement 로 비침습 주입(SessionRow 무변경).
- *  - 전역 window.I18n 직접 의존 제거 → labeler prop 주입(FilterBar 선례, 컴포넌트 무전역).
- *    단, SessionRow(P2-04)/fmtRelative 의 window.I18n 의존은 원본 SSoT 라 그대로 둔다.
+ *  - 전역 i18n 직접 의존 제거 → labeler prop 주입(FilterBar 선례, 컴포넌트 무전역).
+ *    SessionRow(P2-04)/fmtRelative 는 react-i18next(i18next.t)를 SSoT 로 참조한다.
  *
  * 신규 계약(Gap — 원본 미보장):
  *  - createAnomalySubscription: 원본 top-level addEventListener(left-panel.js:36-50)는 모듈
@@ -63,7 +63,7 @@ export interface MetaCounts {
   total: number;
 }
 
-/** i18n 라벨러 — 컴포넌트 무전역(FilterBar 선례). 호출처가 window.I18n 을 감싸 주입. */
+/** i18n 라벨러 — 컴포넌트 무전역(FilterBar 선례). 호출처가 react-i18next t 를 감싸 주입. */
 export interface SidebarLabeler {
   /** 빈 데이터 행 라벨(ui.left-panel.no-data). */
   noData: () => string;

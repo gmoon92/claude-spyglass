@@ -59,7 +59,7 @@ export const FILTER_GROUPS: FilterGroup[] = [
   },
 ];
 
-/** i18n 라벨러 — 컴포넌트 무전역. 호출처(features/app)가 window.I18n 을 감싸 주입. */
+/** i18n 라벨러 — 컴포넌트 무전역. 호출처(features/app)가 react-i18next t 를 감싸 주입. */
 export interface FilterBarLabeler {
   /** 그룹 aria-label(request/tool 만 호출됨). */
   groupAria: (group: string) => string;

@@ -3,12 +3,13 @@
  *
  * §7 보강계획의 P4-02 선행 특성화 테스트 — 원본 meta-docs-view.js 의
  * applySort/COMPARATORS/applyDisplayFilter/computeRowCounts/applySearchFilter(DOM hidden)
- * 동치를 순수 함수로 고정한다. window.I18n 스텁(getCollator 의존).
+ * 동치를 순수 함수로 고정한다. getCollator(getLocale)가 활성 언어를 읽으므로 'en' 로케일을 고정한다.
  *
  * 회귀 게이트: null/orphan 끝자리 정책(view.js:1289,1309), type 동률 invocations desc 보조(view.js:1285),
  *   검색 부분일치 소문자(view.js:1014) — "검색 필터 회귀 0" done_criteria 직접 근거.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { i18next } from '../../../lib/i18n';
 import {
   applySort,
   nextSort,
@@ -23,10 +24,9 @@ import {
   type MetaDocRow,
 } from '../meta-docs-sort';
 
-beforeAll(() => {
-  (globalThis as { window?: { I18n?: unknown } }).window ??= {};
-  (globalThis as { window: { I18n?: unknown } }).window.I18n = { t: (k: string) => k, getLang: () => 'en' };
-});
+// getCollator(getLocale)가 i18next.language 를 읽는다 — 정렬 결정론을 위해 'en' 로케일 고정.
+beforeAll(async () => { await i18next.changeLanguage('en'); });
+afterAll(async () => { await i18next.changeLanguage('ko'); });
 
 // id=null → orphan, invocations=0 + id!=null → unused.
 const ROWS: MetaDocRow[] = [

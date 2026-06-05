@@ -19,21 +19,20 @@ import { ensureDom } from '../../../test-support/ensure-dom';
 //   원본 위임(closest) 경로를 그대로 재현하려면 실제 DOM 마운트가 필요하다.
 ensureDom();
 
-declare const window: { I18n: { t: (k: string, v?: Record<string, unknown>) => string }; IS_REACT_ACT_ENVIRONMENT?: boolean };
-
 beforeAll(() => {
-  (globalThis as any).window = (globalThis as any).window ?? {};
-  (globalThis as any).window.I18n = {
-    t: (key: string) => {
-      const map: Record<string, string> = {
-        'session.rows.empty-message': '메시지 없음',
-        'ui.main.expand.copy': '복사',
-        'ui.main.expand.copied': '✓복사됨',
-      };
-      return map[key] ?? key;
-    },
-  };
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+});
+
+// 테스트 t — useTranslation 출력을 ko 라벨로 고정(vitest.setup __setTestT). afterEach 자동 복원 대응으로 재주입.
+beforeEach(() => {
+  globalThis.__setTestT?.((key) => {
+    const map: Record<string, string> = {
+      'session.rows.empty-message': '메시지 없음',
+      'ui.main.expand.copy': '복사',
+      'ui.main.expand.copied': '✓복사됨',
+    };
+    return map[key] ?? key;
+  });
 });
 
 let container: HTMLTableSectionElement;

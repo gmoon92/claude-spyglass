@@ -11,12 +11,12 @@
  *
  * 전략: 클라이언트 렌더(createRoot + act)로 라이브 DOM 에 마운트한다(zustand SSR getServerSnapshot 은 초기
  *   스냅샷을 읽어 store 주입이 반영되지 않으므로 라이브 렌더가 필요 — meta-docs-layout-scope.test 선례).
- *   vitest.setup.ts 가 i18next.t/getFixedT 를 window.I18n.t 위임으로 패치하므로, window.I18n stub 이 버전
- *   키를 한국어로 돌려주면 useTranslation 경로도 한국어로 해석된다. version-store 를 latest 로 고정한 뒤
+ *   vitest.setup.ts 가 i18next.t/getFixedT 를 테스트 t(__setTestT)로 위임하므로, 버전 키를 한국어로
+ *   돌려주는 테스트 t 를 주입하면 useTranslation 경로도 한국어로 해석된다. version-store 를 latest 로 고정한 뒤
  *   두 모드를 렌더해 (1) 한국어 라벨 (2) 두 모드 byte-identical 을 단정한다. 회귀(browse 가 주입 누락으로
  *   key-passthrough 로 떨어짐)가 재발하면 browse 는 영문 fallback 이 되어 (1)/(2) 가 깨진다.
  */
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { useVersionStore } from '../../stores/version-store';
@@ -28,7 +28,7 @@ import { ensureDom } from '../../test-support/ensure-dom';
 ensureDom();
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-// 버전 키만 한국어로 돌려주는 stub — vitest.setup.ts 의 i18next 위임이 window.I18n.t 를 조회한다.
+// 버전 키만 한국어로 돌려주는 테스트 t — vitest.setup.ts 의 i18next 위임이 __setTestT 로 조회한다.
 const KO: Record<string, string> = {
   'ui.version-check.latest': '__KO_최신__',
   'ui.version-check.available': '__KO_업데이트__',
@@ -36,17 +36,6 @@ const KO: Record<string, string> = {
 };
 
 const realFetch = globalThis.fetch;
-
-beforeAll(() => {
-  (globalThis as { window?: { I18n?: unknown } }).window ??= {};
-  (globalThis as { window: { I18n?: unknown } }).window.I18n = {
-    t: (key: string) => KO[key] ?? key,
-    getLang: () => 'ko',
-    getCollator: () => new Intl.Collator('ko'),
-    onChange: () => {},
-    init: () => Promise.resolve(),
-  };
-});
 
 const labeler = {
   noData: () => 'no-data',
@@ -61,6 +50,8 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  // 버전 키를 한국어로 해석하는 테스트 t 주입(afterEach 자동 복원 대응으로 매 테스트 재주입).
+  globalThis.__setTestT?.((key) => KO[key] ?? key);
   // metadocs 마운트 fetch(meta-docs/dashboard)는 빈 봉투로 — 라벨만 검증하므로 데이터 불요.
   globalThis.fetch = (async () =>
     new Response(JSON.stringify({ data: [] }), {

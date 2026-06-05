@@ -13,7 +13,7 @@
  *
  * 정규화: self-close 통일 / 태그 사이 공백·줄바꿈 축약 / 엔티티 디코드 / 속성명 소문자화.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import {
@@ -49,19 +49,13 @@ function interpolate(tpl: string, vars?: Record<string, unknown>): string {
   return tpl.replace(/\{(\w+)\}/g, (_m, k) => (vars[k] != null ? String(vars[k]) : `{${k}}`));
 }
 
-beforeAll(() => {
-  (globalThis as any).window = (globalThis as any).window ?? {};
-  (globalThis as any).window.I18n = {
-    t: (key: string, vars?: Record<string, unknown>) => {
-      const tpl = I18N_MAP[key];
-      return tpl != null ? interpolate(tpl, vars) : key;
-    },
-  };
-});
-
-afterAll(() => {
-  // 다른 테스트가 의존하지 않도록 정리(beforeAll 에서 만든 stub).
-  delete (globalThis as any).window.I18n;
+// 테스트 t — useTranslation 출력을 I18N_MAP({var} 보간)으로 고정(vitest.setup __setTestT).
+//   afterEach 가 기본 passthrough 로 자동 복원하므로 각 테스트 전 재주입한다.
+beforeEach(() => {
+  globalThis.__setTestT?.((key, vars) => {
+    const tpl = I18N_MAP[key];
+    return tpl != null ? interpolate(tpl, vars) : key;
+  });
 });
 
 // ── 정규화(renderers-equivalence 동일 계약) ──────────────────────────────────────

@@ -16,8 +16,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { SystemReminderChip } from '../SystemReminderChip';
 
 beforeAll(() => {
+  // i18n 은 vitest.setup 의 기본 t(passthrough)가 담당 — window.I18n 전역 스텁 제거.
   (globalThis as any).window = (globalThis as any).window ?? {};
-  (globalThis as any).window.I18n = { t: (key: string, vars?: Record<string, unknown>) => (vars ? `${key}` : key) };
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 });
 

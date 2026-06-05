@@ -1,22 +1,54 @@
-// i18n(태스크 #12) — react-i18next 인스턴스를 테스트 워커에서 초기화한다(useTranslation 사용 컴포넌트
-//   테스트 지원). jsdom 에는 /locales 서버가 없어 백엔드 fetch 가 실패→빈 리소스→키 폴백을 반환하므로,
-//   기존 골든 단언(키 passthrough; window.I18n stub `t:(k)=>k` 와 동치)이 변환 후에도 그대로 통과한다.
-//   (import 부수효과로 i18next.init 발화 — Phase C 변환 컴포넌트가 useTranslation 으로 인스턴스 참조.)
+// i18n — react-i18next 인스턴스를 테스트 워커에서 초기화한다(useTranslation 사용 컴포넌트 테스트 지원).
+//   jsdom 에는 /locales 서버가 없어 백엔드 fetch 가 실패→빈 리소스→키 폴백을 반환하므로, 기존 골든
+//   단언(키 passthrough)이 그대로 통과한다. (import 부수효과로 i18next.init 발화 — useTranslation 인스턴스 참조.)
+import { afterEach } from 'vitest';
 import { i18next } from './src/lib/i18n';
 
-// 테스트 한정 — i18next 의 t/getFixedT 를 레거시 window.I18n.t(테스트 stub) 로 **완전 위임**한다(vars 포함).
-//   목적: 골든/특성/동치 테스트가 바닐라(window.I18n) ↔ TSX(useTranslation) 를 비교하므로, 두 경로의
-//   i18n 출처를 테스트에서 일치시킨다. window.I18n 부재 시 key 폴백. 프로덕션 i18n.ts 는 무영향(여기서만 패치).
-//   window.I18n 은 각 테스트 beforeAll 에서 세팅되므로, 위임 함수는 호출(렌더) 시점에 lazy 조회한다.
-{
-  const delegate = (key: unknown, opts?: unknown): string => {
-    const legacy = (globalThis as { window?: { I18n?: { t?: (k: string, v?: unknown) => string } } }).window?.I18n;
-    const k = Array.isArray(key) ? String(key[0]) : String(key);
-    return legacy?.t ? legacy.t(k, opts as never) : k;
-  };
-  (i18next as unknown as { t: unknown }).t = delegate;
-  (i18next as unknown as { getFixedT: unknown }).getFixedT = () => delegate;
+// ── 테스트 i18n 위임 (window.I18n 의존 제거) ──────────────────────────────────────
+//
+// 과거: i18next.t/getFixedT 를 레거시 전역 window.I18n.t(각 테스트가 주입한 stub)로 위임했다. window.I18n
+//   전역이 react-i18next 단일화로 제거됐으므로, 여기서 테스트용 t 출처를 자체적으로 관리한다.
+//
+// 기본 동작 = 레거시 stub `t:(k)=>k` + i18n.js#interpolate 동치:
+//   - 키 미해석 시 key 문자열 그대로 반환(passthrough).
+//   - vars 가 있으면 `{var}` 단일 중괄호 보간(locales JSON·i18next prefix/suffix 와 동일 포맷).
+//
+// 커스텀 번역/보간이 필요한 테스트(update-badge-i18n·meta-docs-components·llm-input·equivalence 등)는
+//   globalThis.__setTestT(fn) 으로 t 구현을 주입하고, afterEach 가 자동으로 __resetTestT(기본 동작)로 복원한다.
+//   런타임 중 t 를 교체하는 테스트(llm-input)는 __setTestT 를 재호출하면 된다.
+
+/** {var} 단일 중괄호 보간 — locales JSON·i18next prefix/suffix 와 동일(레거시 i18n.js#interpolate 동치). */
+function interpolate(tpl: string, vars?: Record<string, unknown>): string {
+  if (!vars) return tpl;
+  return tpl.replace(/\{(\w+)\}/g, (_m, k) => (vars[k] != null ? String(vars[k]) : `{${k}}`));
 }
+
+/** 기본 t — 키 passthrough + {var} 보간. */
+const defaultT = (key: string, vars?: Record<string, unknown>): string => interpolate(key, vars);
+
+type TestT = (key: string, vars?: Record<string, unknown>) => string;
+let currentT: TestT = defaultT;
+
+const delegate = (key: unknown, opts?: unknown): string => {
+  const k = Array.isArray(key) ? String(key[0]) : String(key);
+  const vars = opts && typeof opts === 'object' ? (opts as Record<string, unknown>) : undefined;
+  return currentT(k, vars);
+};
+(i18next as unknown as { t: unknown }).t = delegate;
+(i18next as unknown as { getFixedT: unknown }).getFixedT = () => delegate;
+
+// 테스트가 커스텀 번역/보간을 주입/복원하는 헬퍼 — globalThis 노출.
+(globalThis as { __setTestT?: (fn: TestT) => void }).__setTestT = (fn: TestT) => {
+  currentT = fn;
+};
+(globalThis as { __resetTestT?: () => void }).__resetTestT = () => {
+  currentT = defaultT;
+};
+
+// 각 테스트 후 기본 t 로 자동 복원 — 커스텀 주입이 다른 테스트로 새지 않게 한다.
+afterEach(() => {
+  currentT = defaultT;
+});
 
 // P5-07: 테스트 타임존을 UTC 로 고정한다.
 //

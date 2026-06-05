@@ -15,7 +15,7 @@
  */
 const g = globalThis as unknown as {
   document?: unknown;
-  window?: { I18n?: { t: (k: string) => string } };
+  window?: object;
 };
 
 if (!g.document) {
@@ -31,6 +31,6 @@ if (!g.document) {
 }
 
 g.window = g.window ?? {};
-g.window.I18n = g.window.I18n ?? { t: (k: string) => k };
+// i18n 은 vitest.setup 의 기본 t(passthrough)가 담당 — window.I18n 전역 스텁 제거(react-i18next 단일화).
 
 export {};

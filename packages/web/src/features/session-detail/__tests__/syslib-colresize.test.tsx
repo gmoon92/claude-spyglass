@@ -17,9 +17,9 @@ import type { SysLibRow } from '../../dashboard/syslib-sort';
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 beforeAll(() => {
-  (globalThis as unknown as { window: { I18n: { t: (k: string) => string } } }).window =
+  // 루트 bun test(jsdom 부재)용 window 보장. i18n 은 vitest.setup 의 기본 t(passthrough)가 담당.
+  (globalThis as unknown as { window?: object }).window =
     ((globalThis as unknown as { window?: object }).window as never) ?? ({} as never);
-  (globalThis as unknown as { window: { I18n: { t: (k: string) => string } } }).window.I18n = { t: (k) => k };
 });
 
 const rows: SysLibRow[] = [

@@ -16,22 +16,18 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
+import { i18next } from '../../lib/i18n';
 import { BrowseSidebar } from '../../features/browse/BrowseSidebar';
 import { MetaDocsLayout } from '../MetaDocsLayout';
 
-// SessionRow/fmtRelative / tt 가 window.I18n 를 참조 → 테스트 스텁(선례 동일).
-beforeAll(() => {
-  const g = globalThis as unknown as { window?: { I18n?: unknown } };
+// i18n 기본 t(passthrough)는 vitest.setup 가 담당. getCollator(getLocale) 결정론을 위해 'en' 로케일 고정.
+beforeAll(async () => {
+  const g = globalThis as unknown as { window?: object };
   g.window = g.window ?? ({} as never);
-  (g.window as { I18n: unknown }).I18n = {
-    t: (key: string) => key,
-    getLang: () => 'en',
-    getCollator: () => new Intl.Collator('en'),
-    onChange: () => {},
-    init: () => Promise.resolve(),
-  };
+  await i18next.changeLanguage('en');
 });
-afterAll(() => {
+afterAll(async () => {
+  await i18next.changeLanguage('ko');
   delete (globalThis as unknown as { window?: unknown }).window;
 });
 

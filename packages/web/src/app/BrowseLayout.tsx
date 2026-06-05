@@ -540,8 +540,8 @@ export function BrowseLayout(): ReactElement {
                   }}
                 />
               </div>
-              {/* lang-switcher — react-i18next + window.I18n 동기 단일 진입점(LangSwitcher). 과거 classic
-                  island + lang-switcher.js + DOM 이동(LangSwitcherSlot) 결선을 대체한다. */}
+              {/* lang-switcher — react-i18next 단일 진입점(LangSwitcher). 과거 classic island +
+                  lang-switcher.js + DOM 이동(LangSwitcherSlot) 결선을 대체한다. */}
               <LangSwitcher />
               <button
                 className="btn-toggle"

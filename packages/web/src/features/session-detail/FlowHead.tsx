@@ -19,7 +19,7 @@ import { fmtToken } from '../../lib/formatters';
 import { useTranslation } from 'react-i18next';
 import type { ReactElement, ReactNode } from 'react';
 
-/** i18n 번역 함수 시그니처(react-i18next t / 레거시 window.I18n.t 공통). */
+/** i18n 번역 함수 시그니처(react-i18next t). */
 type TFn = (key: string, vars?: Record<string, unknown>) => string;
 
 interface TurnSummary {

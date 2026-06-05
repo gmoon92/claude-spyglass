@@ -98,17 +98,21 @@ void i18next
     // 레거시 {var} 단일 중괄호 보간(locales JSON 포맷) — i18next 기본 {{var}} 와 다름.
     interpolation: { escapeValue: false, prefix: '{', suffix: '}' },
     returnNull: false,
-    // 전환기 폴백(태스크 #12): i18next 리소스에 없는 키는 레거시 전역 window.I18n.t 로 위임한다.
-    //   - 프로덕션: i18next 리소스 로드 전(또는 누락) 키-플래시 없이 이미 로드된 window.I18n 값 사용.
-    //   - 테스트: 바닐라(window.I18n stub)와 TSX(useTranslation) 의 i18n 출처를 일치시켜 골든 동치 보존
-    //     (renderers/turn-rows equivalence 가 동일 번역을 비교). window.I18n 부재 시 key 그대로.
-    parseMissingKeyHandler: (key) => {
-      const legacy = (globalThis as { I18n?: { t?: (k: string) => string } }).I18n;
-      return legacy?.t ? legacy.t(key) : key;
-    },
+    // 미해석 키는 키 문자열 그대로 반환한다(i18next 기본). 과거 레거시 전역 window.I18n.t 위임 폴백은
+    //   react-i18next 단일화(window.I18n 완전 제거)로 폐기됐다 — 리소스에 없는 키는 dot-path key 자체가 렌더된다.
     // SSR/테스트(renderToStaticMarkup)에서 렌더 중 suspend 회피 — 미로드 시 key 폴백 렌더.
     react: { useSuspense: false },
   });
+
+// 언어 영속 — 런타임 전환(changeLanguage) 시 localStorage 에 저장한다. resolveInitialLang 이 다음 부팅에서
+//   이 키('spyglass:lang')를 읽어 복원한다. 과거 레거시 window.I18n.setLang 이 하던 localStorage 저장을
+//   react-i18next 단일화에 따라 이 곳으로 이관했다. SSR/시크릿모드(storage 차단)는 가드로 안전 폴백.
+i18next.on('languageChanged', (lng) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage?.setItem(LANG_STORAGE_KEY, lng);
+  } catch { /* 시크릿 모드 등 storage 차단 — 영속 생략 */ }
+});
 
 export { i18next };
 export default i18next;

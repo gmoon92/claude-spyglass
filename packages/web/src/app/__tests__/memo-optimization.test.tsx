@@ -40,11 +40,9 @@ import { MetaDocsFilterBar } from '../../features/meta-docs/MetaDocsFilterBar';
 const REACT_MEMO_TYPE = Symbol.for('react.memo');
 
 beforeAll(() => {
-  (globalThis as unknown as { window: { I18n: { t: (k: string) => string } } }).window =
-    (globalThis as unknown as { window?: object }).window as never ?? ({} as never);
-  (globalThis as unknown as { window: { I18n: { t: (k: string) => string } } }).window.I18n = {
-    t: (key: string) => key,
-  };
+  // 루트 bun test(jsdom 부재)용 window 보장. i18n 은 vitest.setup 의 기본 t(passthrough)가 담당.
+  (globalThis as unknown as { window?: object }).window =
+    (globalThis as unknown as { window?: object }).window ?? ({} as never);
 });
 afterAll(() => {
   delete (globalThis as unknown as { window?: unknown }).window;

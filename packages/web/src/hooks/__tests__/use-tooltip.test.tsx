@@ -12,7 +12,7 @@
  * 검증 방식: jsdom 라이브 마운트(react-dom/client + act). vitest.setup.ts 가 i18next.t 를 window.I18n.t
  *   로 위임하므로, 키 → 한국어 stub 로 본문 텍스트를 단정한다(키 부재 시 passthrough).
  */
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { ensureDom } from '../../test-support/ensure-dom';
@@ -31,14 +31,10 @@ const LABELS: Record<string, string> = {
   'ui.stat-tooltip.sessions.desc': '__SESS_DESC__',
 };
 
-beforeAll(() => {
-  (globalThis as { window?: { I18n?: unknown } }).window ??= {};
-  (globalThis as { window: { I18n?: unknown } }).window.I18n = {
-    t: (key: string) => LABELS[key] ?? key,
-    getLang: () => 'ko',
-    onChange: () => {},
-    init: () => Promise.resolve(),
-  };
+beforeEach(() => {
+  // useTranslation(t) 가 LABELS 를 해석하도록 테스트 t 를 주입(vitest.setup __setTestT). 미스 키는 passthrough.
+  //   afterEach 가 기본 t 로 자동 복원하므로 각 테스트 전 재주입한다.
+  globalThis.__setTestT?.((key) => LABELS[key] ?? key);
   // jsdom 은 innerWidth/innerHeight 를 제공(기본 1024x768). offsetWidth/Height 는 0 → fallback 폭 사용.
 });
 

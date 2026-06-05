@@ -3,22 +3,21 @@
  *
  * 원본 meta-docs-view.js renderHtml/rowHtml/thHtml/metaDocTypeBadge/renderFilters/searchHtml 의
  * 셀렉터 계약을 renderToStaticMarkup 으로 고정한다. 컨트롤드(props) — store 무참조 leaf.
- * window.I18n 스텁(MetaDocTypeBadge 가 toolIconHtml 경유 ToolIcon 사용, getCollator 의존 없음).
+ * getCollator(getLocale) 결정론을 위해 'en' 로케일 고정.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { i18next } from '../../../lib/i18n';
 import { MetaDocsCatalog } from '../MetaDocsCatalog';
 import { MetaDocTypeBadge } from '../MetaDocTypeBadge';
 import { MetaDocsSearch } from '../MetaDocsSearch';
 import { MetaDocsFilterBar } from '../MetaDocsFilterBar';
 import type { MetaDocRow } from '../meta-docs-sort';
 
-beforeAll(() => {
-  (globalThis as { window?: { I18n?: unknown } }).window ??= {};
-  (globalThis as { window: { I18n?: unknown } }).window.I18n = { t: (k: string) => k, getLang: () => 'en' };
-});
+beforeAll(async () => { await i18next.changeLanguage('en'); });
+afterAll(async () => { await i18next.changeLanguage('ko'); });
 
-// vars 보간하는 스텁 — 실제 window.I18n.t 처럼 {placeholder} 를 치환(empty-project 안내가 project 주입 검증).
+// vars 보간하는 t prop — {placeholder} 를 치환(empty-project 안내가 project 주입 검증).
 const t = (key: string, vars?: Record<string, unknown>) => {
   let out = `t:${key}`;
   if (vars) for (const [k, v] of Object.entries(vars)) out += ` ${k}=${String(v)}`;
