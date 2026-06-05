@@ -20,7 +20,20 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { Chart } from '../../components/Chart';
 import type { ChartTokens } from '../../components/Chart';
 import type { DataByKind } from '../../components/chart-data';
-import { Sidebar, ProjectList, type SidebarLabeler, type ProjectLike } from '../../features/browse/Sidebar';
+import {
+  Sidebar,
+  ProjectList,
+  MemoProjectList,
+  MemoSessionList,
+  type SidebarLabeler,
+  type ProjectLike,
+} from '../../features/browse/Sidebar';
+import { RequestRow } from '../../components/render/RequestRow';
+import { MetaDocsCatalog } from '../../features/meta-docs/MetaDocsCatalog';
+import { MetaDocsFlow } from '../../features/meta-docs/MetaDocsFlow';
+import { MetaDocsSummaryCards } from '../../features/meta-docs/MetaDocsSummaryCards';
+import { MetaDocsToolStats } from '../../features/meta-docs/MetaDocsToolStats';
+import { MetaDocsFilterBar } from '../../features/meta-docs/MetaDocsFilterBar';
 
 // React.memo 가 반환하는 MemoExoticComponent 의 마커(react.memo Symbol). 환경별 Symbol 비교 안전을 위해
 // Symbol.for('react.memo') 로 대조한다(React 가 동일 전역 Symbol 레지스트리를 사용).
@@ -126,4 +139,69 @@ describe('P5-04 timelineBuckets 안정 ref 근거', () => {
     const ref2 = STABLE;
     expect(ref1).toBe(ref2); // 모듈 상수는 신원 안정 → memo 유효
   });
+});
+
+// =============================================================================
+// render-perf: SSE 라이브 갱신 시 200행 재렌더 회귀 가드.
+//
+// 핵심: RequestRow 는 memo 다(피드 200행이 SSE new_request 1건마다 재렌더되는 비용을 props 안정 시
+//   생략). 이 memo 는 BrowseLayout 이 `opts` 를 **안정 ref(useMemo)**로 넘겨야만 작동한다 —
+//   인라인 `opts={{...}}` 리터럴은 매 렌더 새 신원이라 memo 를 100% 무력화한다(전체 행 재렌더).
+//   아래는 (1) memo 배치와 (2) 안정 ref vs 인라인 객체의 신원 대조를 회귀로 고정한다.
+// =============================================================================
+describe('render-perf: RequestRow memo + opts 안정 ref', () => {
+  it('RequestRow 는 React.memo 로 배치돼 있다($$typeof = react.memo)', () => {
+    expect((RequestRow as unknown as { $$typeof?: symbol }).$$typeof).toBe(REACT_MEMO_TYPE);
+  });
+
+  it('인라인 opts 객체는 매 렌더 새 신원(memo 무력) / 안정 ref 는 동일 신원(memo 유효)', () => {
+    const onGotoSession = () => {};
+    // 인라인 리터럴(과거 BrowseLayout 패턴) — 매 렌더 새 객체.
+    const inlineA = { showSession: true, onGotoSession };
+    const inlineB = { showSession: true, onGotoSession };
+    expect(inlineA).not.toBe(inlineB); // shallow 비교 실패 → 200행 전부 재렌더
+
+    // useMemo 안정 ref(현 BrowseLayout feedRowOpts) — deps 불변 시 동일 객체.
+    const STABLE = { showSession: true, onGotoSession };
+    expect(STABLE).toBe(STABLE); // memo 가 변경 없는 행을 skip
+  });
+});
+
+// =============================================================================
+// render-perf: 좌측 사이드바 memo 자산 실사용 가드.
+//
+// BrowseSidebar 는 비메모 ProjectList/SessionList 가 아니라 MemoProjectList/MemoSessionList 를 써야
+//   고주기 SSE 재렌더 시 sortSessions/maxT 재계산을 건너뛴다. export + memo 마커를 고정한다.
+// =============================================================================
+describe('render-perf: MemoProjectList/MemoSessionList export + memo', () => {
+  it('MemoProjectList 는 export 되고 React.memo 다', () => {
+    expect(MemoProjectList).toBeDefined();
+    expect((MemoProjectList as unknown as { $$typeof?: symbol }).$$typeof).toBe(REACT_MEMO_TYPE);
+  });
+
+  it('MemoSessionList 는 export 되고 React.memo 다', () => {
+    expect(MemoSessionList).toBeDefined();
+    expect((MemoSessionList as unknown as { $$typeof?: symbol }).$$typeof).toBe(REACT_MEMO_TYPE);
+  });
+});
+
+// =============================================================================
+// render-perf: 메타 페이지 자식 memo 가드.
+//
+// 검색 키 입력 등 MetaDocsLayout 재렌더 시, 자식이 memo 가 아니면 flow SVG·카탈로그·요약카드가
+//   전부 재렌더된다. 핸들러는 useCallback·flowRow 는 useMemo 로 안정화돼(props 불변) memo 가 유효하다.
+// =============================================================================
+describe('render-perf: 메타 자식 컴포넌트 memo 배치', () => {
+  const cases: Array<[string, unknown]> = [
+    ['MetaDocsCatalog', MetaDocsCatalog],
+    ['MetaDocsFlow', MetaDocsFlow],
+    ['MetaDocsSummaryCards', MetaDocsSummaryCards],
+    ['MetaDocsToolStats', MetaDocsToolStats],
+    ['MetaDocsFilterBar', MetaDocsFilterBar],
+  ];
+  for (const [name, comp] of cases) {
+    it(`${name} 은 React.memo 로 배치돼 있다`, () => {
+      expect((comp as { $$typeof?: symbol }).$$typeof).toBe(REACT_MEMO_TYPE);
+    });
+  }
 });

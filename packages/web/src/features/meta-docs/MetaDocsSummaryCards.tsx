@@ -25,7 +25,7 @@
  *
  * @module features/meta-docs/MetaDocsSummaryCards
  */
-import type { ReactElement } from 'react';
+import { memo, type ReactElement } from 'react';
 import { computeRowCounts, type MetaDocRow, type DisplayFilter } from './meta-docs-sort';
 
 export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
@@ -60,7 +60,8 @@ function groupInvocationsByType(rows: ReadonlyArray<MetaDocRow>): Array<{ type: 
  *   - behavior mini-bar 는 레거시에서 별도 #metaDocsToolStats 트랙(grid row4)에 위치하므로, 본 컴포넌트가 아닌
  *     MetaDocsBehaviorBars 로 분리됐다(그 둘을 한 flex-row 컨테이너에 같이 두면 카드 옆에 바가 붙어 눌린다).
  */
-export function MetaDocsSummaryCards({ rows, onSelectDisplay, t }: MetaDocsSummaryCardsProps): ReactElement {
+// memo: rows 불변(검색 입력 등 부모 재렌더) 시 computeRowCounts 재계산·카드 재렌더를 건너뛴다.
+export const MetaDocsSummaryCards = memo(function MetaDocsSummaryCards({ rows, onSelectDisplay, t }: MetaDocsSummaryCardsProps): ReactElement {
   const counts = computeRowCounts(rows);
 
   return (
@@ -100,7 +101,7 @@ export function MetaDocsSummaryCards({ rows, onSelectDisplay, t }: MetaDocsSumma
       </button>
     </div>
   );
-}
+});
 
 export interface MetaDocsBehaviorBarsProps {
   /** 전체 카탈로그 행 — type별 invocations 합 mini-bar 파생 입력. */

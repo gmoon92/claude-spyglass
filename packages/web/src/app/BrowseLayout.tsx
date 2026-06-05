@@ -49,7 +49,7 @@ import { useAppStore } from '../stores/app-store';
 import type { PresetValue } from '../stores/app-store';
 import { makeI18nLabeler } from './i18n-labeler';
 import { deriveBrowseData } from './browse-data';
-import { rangeToParams, rangeToMetricParams } from './compute-range';
+import { rangeToParams, rangeToMetricParams, buildModelUsageParams } from './compute-range';
 import {
   fetchDashboard,
   fetchAllSessions,
@@ -233,6 +233,15 @@ export function BrowseLayout(): ReactElement {
     [selectedProject, setSelectedProject, setSelectedSession, setRightView],
   );
 
+  // RequestRow opts — 안정 ref(useMemo)로 묶어 RequestRow(memo)의 shallow 비교를 보존한다.
+  //   인라인 `opts={{...}}` 리터럴은 매 렌더 새 신원이라 memo 를 항상 깨뜨려, SSE new_request 1건마다
+  //   피드 200행 전부가 재렌더된다(opts ref 불변 시 in-place upsert 된 1행만 재렌더). onGotoSession 은
+  //   이미 useMemo 안정이므로 deps 는 그것 하나 — 라이브 갱신 비용의 지배 항목을 제거한다.
+  const feedRowOpts = useMemo(
+    () => ({ showSession: true, onGotoSession }),
+    [onGotoSession],
+  );
+
   // BrowseSidebar 콜백 — useCallback으로 안정화해 MemoProjectList/SessionList 의 memo를 보호.
   const handleSelectProject = useCallback((p: string) => setSelectedProject(p), [setSelectedProject]);
   const handleSelectSession = useCallback(
@@ -332,15 +341,25 @@ export function BrowseLayout(): ReactElement {
     const ctrl = new AbortController();
     const { signal } = ctrl;
     const restRange = rangeToParams(activeRange);
-    const metricRange = rangeToMetricParams(activeRange);
-    // 도넛 모델 분포 프로젝트 스코프(이슈2) — selectedProject 를 metrics 파라미터로 전파.
-    //   서버 /api/metrics/model-usage 가 project 를 sessions JOIN 으로 스코프(미지정 시 전역).
-    const modelUsageParams = selectedProject ? { ...metricRange, project: selectedProject } : metricRange;
+
+    // 세션 목록 — 도착 즉시 setSessions + 로딩 해제(A4). 과거엔 5개 Promise.all 의 .finally 에서만
+    //   sessionsLoading 을 풀어, 세션이 먼저 와도 가장 느린 요청(dashboard 등)이 끝날 때까지 좌측
+    //   세션 스켈레톤이 유지됐다. 영역별 독립 로딩으로 분리 — 세션은 자기 응답 속도로 표시된다.
+    fetchAllSessions(restRange, 500, signal)
+      .then((allSessions) => {
+        if (signal.aborted) return;
+        setSessions(allSessions as unknown as Parameters<typeof setSessions>[0]);
+        setSessionsLoading(false);
+      })
+      .catch(() => {
+        if (!signal.aborted) setSessionsLoading(false);
+      });
+
+    // 차트/통계/피드 시드 — project 무관(restRange 만). selectedProject 를 deps 에서 뺀 핵심:
+    //   이 4요청은 진입 auto-select 가 selectedProject 를 채워도 재발화하지 않는다.
     (async () => {
-      const [dashboard, modelUsage, allSessions, requests, cache] = await Promise.all([
+      const [dashboard, requests, cache] = await Promise.all([
         fetchDashboard(restRange, signal),
-        fetchModelUsage(modelUsageParams),
-        fetchAllSessions(restRange, 500, signal),
         fetchRequests({ limit: 200, range: restRange }, signal),
         fetchCacheStats(restRange, signal),
       ]);
@@ -348,22 +367,34 @@ export function BrowseLayout(): ReactElement {
       const derived = deriveBrowseData(dashboard);
       setProjects(derived.projects);
       setDonutType(derived.donutType);
-      setDonutModel((modelUsage as DonutDatum[]) ?? []);
-      setSessions(allSessions as unknown as Parameters<typeof setSessions>[0]);
       setSeedRequests(requests);
       // timeline-meta 통계 — fetchDashboard summary 재사용(별도 /api/stats 불요, api.js 와 동일 SoT).
       setSummary((dashboard?.summary as DashboardSummary | undefined) ?? null);
       // cache-panel-overall — /api/stats/cache 응답(camelCase hitRate/cacheReadTokens/cacheCreationTokens).
       setCacheStats((cache as unknown as CacheStats | null) ?? null);
-    })()
-      .catch(() => {
-        /* silent — fetcher 가 이미 안전 폴백(null/[]). UI 는 빈 상태 유지(원본 silent catch 동치). */
-      })
-      .finally(() => {
-        if (!signal.aborted) setSessionsLoading(false);
-      });
+    })().catch(() => {
+      /* silent — fetcher 가 이미 안전 폴백(null/[]). UI 는 빈 상태 유지(원본 silent catch 동치). */
+    });
     return () => ctrl.abort();
-  }, [setSessions, activeRange, selectedProject]);
+  }, [setSessions, activeRange]);
+
+  // 모델 도넛 — selectedProject 스코프 fetch 를 메인 population 에서 분리(A3 연쇄 리로드 방지).
+  //   model-usage 만 selectedProject 에 의존하므로 별도 effect 로 떼어내, 프로젝트 전환/auto-select 시
+  //   가벼운 이 요청만 재발화하고 dashboard/sessions/requests/cache(project 무관)는 건드리지 않는다.
+  //   buildModelUsageParams 로 파라미터 합성(순수·테스트 가능). signal 로 stale 응답 덮어쓰기 차단.
+  useEffect(() => {
+    const ctrl = new AbortController();
+    const { signal } = ctrl;
+    const modelUsageParams = buildModelUsageParams(rangeToMetricParams(activeRange), selectedProject);
+    (async () => {
+      const modelUsage = await fetchModelUsage(modelUsageParams, signal);
+      if (signal.aborted) return;
+      setDonutModel((modelUsage as DonutDatum[]) ?? []);
+    })().catch(() => {
+      /* silent — fetchModelUsage 안전 폴백([]). 도넛은 직전 값 유지. */
+    });
+    return () => ctrl.abort();
+  }, [activeRange, selectedProject]);
 
   // SSE 캐시미스 → 세션 목록 재시드(기능 결함 #11) — sse-store.needsSessionsRefetch 구독·처리.
   //   SSE 가 캐시에 없는 세션을 참조하면 store 가 needsSessionsRefetch=true 로 신호한다(sse-store).
@@ -396,14 +427,13 @@ export function BrowseLayout(): ReactElement {
     const ctrl = new AbortController();
     const { signal } = ctrl;
     const restRange = rangeToParams(activeRange);
-    const metricRange = rangeToMetricParams(activeRange);
-    const modelUsageParams = selectedProject ? { ...metricRange, project: selectedProject } : metricRange;
+    const modelUsageParams = buildModelUsageParams(rangeToMetricParams(activeRange), selectedProject);
     // SSE 버스트 합치기(차트는 즉시성 less 중요) — 1.5s 디바운스.
     const id = setTimeout(() => {
       (async () => {
         const [dashboard, modelUsage, cache] = await Promise.all([
           fetchDashboard(restRange, signal),
-          fetchModelUsage(modelUsageParams),
+          fetchModelUsage(modelUsageParams, signal),
           fetchCacheStats(restRange, signal),
         ]);
         if (signal.aborted) return;
@@ -613,7 +643,7 @@ export function BrowseLayout(): ReactElement {
                       <RequestRow
                         key={(r.id as string) ?? i}
                         r={r}
-                        opts={{ showSession: true, onGotoSession }}
+                        opts={feedRowOpts}
                       />
                     ))}
                   </tbody>

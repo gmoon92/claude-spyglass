@@ -27,8 +27,8 @@
 
 import { type ReactElement } from 'react';
 import {
-  ProjectList,
-  SessionList,
+  MemoProjectList,
+  MemoSessionList,
   type ProjectLike,
   type SessionLike,
   type SidebarLabeler,
@@ -140,7 +140,7 @@ export function BrowseSidebar({
               </tr>
             </thead>
             <tbody id="browserProjectsBody">
-              <ProjectList
+              <MemoProjectList
                 projects={projects}
                 selectedProject={selectedProject}
                 isMetaMode={false}
@@ -172,7 +172,7 @@ export function BrowseSidebar({
         <div className="panel-body">
           <table>
             <tbody id="browserSessionsBody">
-              <SessionList
+              <MemoSessionList
                 sessions={sessions}
                 selectedProject={selectedProject}
                 selectedSession={selectedSession}

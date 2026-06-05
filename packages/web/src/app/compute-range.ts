@@ -13,6 +13,7 @@
 
 import type { ActiveRange } from '../stores/app-store';
 import type { RangeParams } from '../api/fetchers';
+import type { MetricParams } from '../features/dashboard/metrics-fetchers';
 
 /**
  * ActiveRange + now(ms epoch) → {} | {from,to}. 레거시 api.js computeRange 1:1.
@@ -68,4 +69,21 @@ export function rangeToMetricParams(ar: ActiveRange, now: number = Date.now()): 
   const dr = rangeToParams(ar, now);
   if (dr.from != null && dr.to != null) return dr;
   return { range: 'all' };
+}
+
+/**
+ * model-usage 도넛 fetch 파라미터 — metricRange + 선택 프로젝트 스코프.
+ *
+ * 분리 근거(연쇄 리로드 방지): BrowseLayout 메인 population effect 의 5 fetch 중 selectedProject 를
+ *   실제로 쓰는 것은 model-usage 하나뿐이다. 이 순수 함수로 "어떤 입력이 어떤 fetch 파라미터를
+ *   결정하는가"를 표면화해, model-usage 만 selectedProject 에 의존하는 별도 effect 로 떼어낸다.
+ *   결과적으로 진입 auto-select 가 selectedProject 를 채워도 dashboard/sessions/requests/cache
+ *   (project 무관) 4요청은 재발화하지 않는다(마운트 시 무거운 요청 2회 실행 회귀 제거).
+ *
+ *   - project 지정(truthy) → metricRange 에 project 병합(서버가 sessions JOIN 으로 모델 분포 스코프).
+ *   - project null/빈문자 → metricRange 그대로(전역, 서버 기본).
+ *   입력 metricRange 는 변형하지 않는다(스프레드 복사).
+ */
+export function buildModelUsageParams(metricRange: RangeParams, project: string | null): MetricParams {
+  return project ? { ...metricRange, project } : metricRange;
 }

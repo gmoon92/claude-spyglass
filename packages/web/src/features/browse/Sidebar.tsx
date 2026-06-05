@@ -313,8 +313,13 @@ export function ProjectList({
  *   비교로 프로젝트 행 재계산(maxT 정규화 등)을 건너뛴다. SessionList 도 동일 이유로 메모화한다
  *   (아래 MemoSessionList — feed-only 재렌더 시 sortSessions 재계산 차단, onSelectSession 안정화 전제).
  * 출력은 ProjectList 와 동일(메모는 re-render 회피일 뿐 동작 무변경).
+ *
+ * export 근거: 합성 `Sidebar` 는 프로젝트+세션을 한 <tbody> 에 묶지만, BrowseSidebar 는 레거시 grid
+ *   구조상 프로젝트/세션을 별도 <table> 두 벌로 쪼개야 해 합성 Sidebar 를 쓸 수 없다. 따라서 memo
+ *   버전을 직접 조합하도록 export 한다(비메모 ProjectList/SessionList 를 쓰면 BrowseLayout 의
+ *   고주기 SSE 재렌더가 매번 프로젝트 행 maxT 재계산을 유발).
  */
-const MemoProjectList = memo(ProjectList);
+export const MemoProjectList = memo(ProjectList);
 
 export interface MetaProjectListProps {
   /** 프로젝트 목록(원본 _allProjects) — 호출처 주입(controlled). */
@@ -455,8 +460,12 @@ export function SessionList({
  *   sessions 불변 시 shallow 비교로 목록 재계산을 건너뛴다(feed-only 재렌더 차단).
  *   sessions 가 실제로 갱신되면 ref 가 바뀌어 정상 재렌더된다(데이터 갱신은 그대로 반영).
  * 출력은 SessionList 와 동일(메모는 re-render 회피일 뿐 동작 무변경).
+ *
+ * export 근거: MemoProjectList 와 동일 — BrowseSidebar 의 분리된 세션 <table> 가 직접 사용.
+ *   sessions ref 가 SSE token patch 로 바뀔 때만 재렌더되고, BrowseLayout 의 무관한 로컬 state
+ *   변경(chartCollapsed/dateOpen 등)으로는 sortSessions 재계산을 건너뛴다.
  */
-const MemoSessionList = memo(SessionList);
+export const MemoSessionList = memo(SessionList);
 
 export interface SidebarProps {
   projects: readonly ProjectLike[];

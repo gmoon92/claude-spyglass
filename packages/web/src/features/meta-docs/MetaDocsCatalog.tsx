@@ -16,7 +16,7 @@
  *
  * @module features/meta-docs/MetaDocsCatalog
  */
-import type { ReactElement, RefObject } from 'react';
+import { memo, useMemo, type ReactElement, type RefObject } from 'react';
 import { SortHead, type SortState } from '../../components/design-system/markers/SortHead';
 import { SkeletonRows } from '../../components/Skeleton';
 import { MetaDocTypeBadge } from './MetaDocTypeBadge';
@@ -111,7 +111,9 @@ function PathCell({ row }: { row: MetaDocRow }): ReactElement {
   );
 }
 
-export function MetaDocsCatalog({
+// memo: 검색 키 입력 등 부모(MetaDocsLayout) 재렌더 시, props(rows/sort/display/searchTerm/콜백)가
+//   불변이면 카탈로그 재렌더를 건너뛴다. onSort/onRowClick 은 호출처가 useCallback 으로 안정화한다(C3).
+export const MetaDocsCatalog = memo(function MetaDocsCatalog({
   rows,
   sort = DEFAULT_SORT,
   display = 'all',
@@ -126,8 +128,13 @@ export function MetaDocsCatalog({
   t,
 }: MetaDocsCatalogProps): ReactElement {
   // 표시필터 → 정렬(순수 lib). 원본 loadMetaDocsLibrary 순서(view.js:521-522) 동치.
-  const filtered = applyDisplayFilter(rows, display);
-  const sorted = applySort(filtered, sort.key, sort.dir);
+  //   useMemo deps 에서 searchTerm 을 **제외**한다: 검색은 행 hidden 토글(visibleBySearch)일 뿐
+  //   정렬 집합을 바꾸지 않으므로, 키 입력마다 O(n log n) applySort(+Intl.Collator 생성)를 재실행할
+  //   이유가 없다. rows/display/sort 가 불변이면 동일 sorted ref 를 재사용한다.
+  const sorted = useMemo(
+    () => applySort(applyDisplayFilter(rows, display), sort.key, sort.dir),
+    [rows, display, sort.key, sort.dir],
+  );
 
   // 로딩 중(아직 데이터 없음) → 스켈레톤. "데이터 없음" 빈 상태가 fetch 대기 중 뜨는 오해를 막는다.
   if (loading && sorted.length === 0) {
@@ -233,4 +240,4 @@ export function MetaDocsCatalog({
       </tbody>
     </table>
   );
-}
+});

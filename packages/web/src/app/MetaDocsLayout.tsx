@@ -192,7 +192,15 @@ export function MetaDocsLayout(): ReactElement {
   const [display, setDisplay] = useState<DisplayFilter>('all');
   const [includeDeleted, setIncludeDeleted] = useState(false);
   const [sort, setSort] = useState<{ key: MetaDocSortKey; dir: SortDir }>(DEFAULT_SORT);
+  // 검색 — 입력(searchInput, SearchBox 즉시 반영)과 카탈로그 적용(searchTerm, 디바운스)을 분리한다.
+  //   매 키 입력이 곧장 searchTerm 으로 가면 MetaDocsLayout 전체(+카탈로그 hidden 재계산, flow 등)가
+  //   글자마다 재렌더된다. 입력 반응성은 searchInput 으로 즉시 유지하되, 무거운 하위 갱신은 디바운스한다.
+  const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  useEffect(() => {
+    const id = setTimeout(() => setSearchTerm(searchInput), 180);
+    return () => clearTimeout(id);
+  }, [searchInput]);
   // flow 활성 행 — null 이면 첫 행 자동 중심(pickFlowRow). 행 클릭/재중심 시 명시 지정.
   const [activeRow, setActiveRow] = useState<FlowActiveRow | null>(null);
 
@@ -283,7 +291,7 @@ export function MetaDocsLayout(): ReactElement {
   );
 
   // flow 활성 행 — 명시 지정 우선, 없으면 정렬 대상 첫 초점 행 자동 선택.
-  const flowRow = activeRow ?? pickFlowRow(typeFiltered);
+  const flowRow = useMemo(() => activeRow ?? pickFlowRow(typeFiltered), [activeRow, typeFiltered]);
 
   // flow 날짜 범위 — 카탈로그와 동일 activeRange→{from,to}. MetaDocsFlow 에 주입해 unified-flow
   //   fetch 의 fromTs/toTs 로 전파(폐기된 window.__getDateRange 전역 대체). activeRange 변경 시만 재계산.
@@ -348,31 +356,37 @@ export function MetaDocsLayout(): ReactElement {
     return () => ctrl.abort();
   }, [selectedProject, metaSubTab, activeRange]);
 
+  // 핸들러 — useCallback 으로 안정화해 memo 된 자식(MetaDocsCatalog/MetaDocsToolStats/MetaDocsFilterBar)의
+  //   shallow 비교를 보존한다(검색 키 입력 등 셸 재렌더가 자식 재렌더로 번지지 않게 함, C3).
+  //   setState 함수·모듈 함수(nextSort/nextToolSort/toFlowId)는 안정 ref 라 deps 에서 제외 가능.
   // 정렬 헤더 클릭 → nextSort 전이(meta-docs-sort SSoT).
-  const onSort = (key: MetaDocSortKey): void => setSort((prev) => nextSort(prev, key));
+  const onSort = useCallback((key: MetaDocSortKey): void => setSort((prev) => nextSort(prev, key)), []);
 
   // tools 매트릭스 정렬 헤더 클릭 → nextSort 전이(tool-stats-sort SSoT).
-  const onToolSort = (key: ToolStatsSortKey): void => setToolSort((prev) => nextToolSort(prev, key));
+  const onToolSort = useCallback(
+    (key: ToolStatsSortKey): void => setToolSort((prev) => nextToolSort(prev, key)),
+    [],
+  );
 
   // 필터 버튼 클릭 → 그룹별 상태 갱신(원본 onMetaContainerClick 분기 동치).
-  const onFilterChange = (group: MetaFilterGroup, value: string): void => {
+  const onFilterChange = useCallback((group: MetaFilterGroup, value: string): void => {
     if (group === 'type') setType(value as TypeFilter);
     else setDisplay(value as DisplayFilter);
-  };
+  }, []);
 
   // 행 클릭 → flow 재중심(orphan 은 catalog 가 무시 — id null). 명시 activeRow 지정.
-  const onRowClick = (row: MetaDocRow): void => {
+  const onRowClick = useCallback((row: MetaDocRow): void => {
     if (row.id == null || !row.name || !row.type) return;
     setActiveRow({ type: row.type, name: row.name, id: toFlowId(row.id) });
-  };
+  }, []);
 
   // 동기화 버튼 클릭 → 카탈로그 재조회 트리거(원본 runRefresh 재스캔+재조회 동치).
   //   in-flight(syncing) 중 중복 클릭은 무시(레거시 buttonEl.disabled 가드 동치).
-  const onSync = (): void => {
+  const onSync = useCallback((): void => {
     if (syncing) return;
     setSyncing(true);
     setRefreshKey((k) => k + 1);
-  };
+  }, [syncing]);
 
   const showTools = metaSubTab === 'tools';
 
@@ -557,7 +571,7 @@ export function MetaDocsLayout(): ReactElement {
           <MetaDocsFlow
             activeRow={flowRow}
             project={selectedProject}
-            onRecenter={(row) => setActiveRow(row)}
+            onRecenter={(row: FlowActiveRow) => setActiveRow(row)}
             dateRange={flowRange}
             t={tx}
           />
@@ -584,10 +598,10 @@ export function MetaDocsLayout(): ReactElement {
                 t={tx}
               />
               <MetaDocsSearch
-                value={searchTerm}
+                value={searchInput}
                 placeholder={tx('ui.meta-docs-view.search-placeholder')}
                 clearLabel={tx('ui.meta-docs-view.search-placeholder')}
-                onSearch={setSearchTerm}
+                onSearch={setSearchInput}
               />
             </div>
             {/* 카탈로그 테이블(원본 head:680) — 정렬/표시필터/검색 위임(meta-docs-sort).

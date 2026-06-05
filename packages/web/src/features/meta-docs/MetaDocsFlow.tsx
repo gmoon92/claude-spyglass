@@ -35,7 +35,7 @@
  *
  * @module features/meta-docs/MetaDocsFlow
  */
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import {
   computeFitView,
   animateToView,
@@ -488,7 +488,7 @@ function findEdgeAncestor(target: EventTarget | null): HTMLElement | null {
  * MetaDocsFlow — useRef SVG escape-hatch. activeRow 변경 → effect fetch+render+bind.
  * 명령형 전부 effect 내부(SSR 비발화). 컨테이너 div(metaDocsFlowRegion)만 JSX 선언.
  */
-export function MetaDocsFlow({ activeRow, project = null, onRecenter, depth = 3, dateRange, t }: MetaDocsFlowProps) {
+function MetaDocsFlowImpl({ activeRow, project = null, onRecenter, depth = 3, dateRange, t }: MetaDocsFlowProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<FlowState>(emptyState());
   // onRecenter 최신값 — effect 재구독 없이 콜백만 갱신(stale closure 방지).
@@ -885,3 +885,10 @@ function bindToolbarButtons(container: HTMLElement, svgEl: SVGSVGElement, st: Fl
 // EDGE_END_OFFSET 재노출 회피용 — flow-edge SSoT 사용. (lint: 미사용 import 방지)
 void applyImmediate;
 void EDGE_END_OFFSET;
+
+/**
+ * memo: 부모(MetaDocsLayout) 재렌더(검색 입력·필터 토글 등) 시 flow props(activeRow=flowRow useMemo,
+ *   project/depth/dateRange/t=tx useCallback)가 불변이면 SVG 컴포넌트 재렌더를 건너뛴다. 무거운 SVG
+ *   rebuild effect 는 이미 deps 가드로 보호되지만, memo 로 함수 본체 재실행/JSX 재조정까지 차단한다.
+ */
+export const MetaDocsFlow = memo(MetaDocsFlowImpl);

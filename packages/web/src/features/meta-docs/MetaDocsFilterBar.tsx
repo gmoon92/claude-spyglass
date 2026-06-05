@@ -13,7 +13,7 @@
  *
  * @module features/meta-docs/MetaDocsFilterBar
  */
-import type { ReactElement } from 'react';
+import { memo, type ReactElement } from 'react';
 import type { DisplayFilter } from './meta-docs-sort';
 
 export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
@@ -87,7 +87,8 @@ function FilterBtn({
   );
 }
 
-export function MetaDocsFilterBar({
+// memo: type/display/콜백 불변(검색 입력 등) 시 필터 버튼 재렌더를 건너뛴다.
+export const MetaDocsFilterBar = memo(function MetaDocsFilterBar({
   type,
   display,
   includeDeleted,
@@ -149,4 +150,4 @@ export function MetaDocsFilterBar({
       </label>
     </div>
   );
-}
+});

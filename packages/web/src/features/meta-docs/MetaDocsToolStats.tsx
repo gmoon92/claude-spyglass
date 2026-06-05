@@ -9,7 +9,7 @@
  *
  * @module features/meta-docs/MetaDocsToolStats
  */
-import type { ReactElement } from 'react';
+import { memo, type ReactElement } from 'react';
 import { ToolIcon } from '../../components/render/badges';
 import {
   ToolStatsMatrix,
@@ -34,6 +34,7 @@ export interface MetaDocsToolStatsProps {
 /** 원본 toolIconHtml 위임 — ToolStatsMatrix renderIcon 슬롯에 ToolIcon(badges) 주입. */
 const renderIcon: ToolStatsMatrixProps['renderIcon'] = (toolName) => <ToolIcon toolName={toolName} />;
 
-export function MetaDocsToolStats({ stats, sort, onSort, t, loading }: MetaDocsToolStatsProps): ReactElement {
+// memo: stats/sort 불변(부모 재렌더) 시 매트릭스 재렌더를 건너뛴다.
+export const MetaDocsToolStats = memo(function MetaDocsToolStats({ stats, sort, onSort, t, loading }: MetaDocsToolStatsProps): ReactElement {
   return <ToolStatsMatrix stats={stats} sort={sort} onSort={onSort} t={t} renderIcon={renderIcon} loading={loading} />;
-}
+});
