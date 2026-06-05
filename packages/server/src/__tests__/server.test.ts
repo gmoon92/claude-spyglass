@@ -20,6 +20,10 @@ import { sseRouter } from '../sse';
 const TEST_DB_PATH = `/tmp/spyglass-server-test-${Date.now()}.db`;
 const TEST_PORT = 19999;
 
+// startServer() 가 부팅 전제조건(Ladybug·web build) 보강을 수행하므로, 테스트에서는 비활성화
+// (자식 spawnSync 부작용·지연 차단). boot-prereqs 게이트 자체는 boot-prereqs.test.ts 가 검증.
+process.env.SPYGLASS_SKIP_BOOT_PREREQS = '1';
+
 describe('Server', () => {
   let db: SpyglassDatabase;
 
