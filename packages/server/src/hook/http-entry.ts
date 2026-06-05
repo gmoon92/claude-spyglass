@@ -32,6 +32,7 @@ import type { ClaudeHookPayload, NormalizedHookPayload, HookProcessResult } from
 import type { HookContext } from './event-handler';
 import { dispatchHookEvent } from './dispatcher';
 import { processHookEvent } from './processor';
+import { logDiscardedPayload } from './discard-diag';
 
 /**
  * raw Claude Code hook payload를 받아 dispatcher로 라우팅.
@@ -66,9 +67,11 @@ export async function handleHookHttpRequest(
 
   const { hook_event_name, session_id, cwd, tool_name, tool_use_id } = raw;
 
-  // hook_event_name 없는 페이로드는 처리 불가 — 조기 거부 (경고는 항상 출력)
+  // hook_event_name 없는 페이로드는 처리 불가 — 조기 거부.
+  //   거부 직전 진단(추정 이벤트명·키·길이제한 프리뷰)을 logDiscardedPayload 가 한 곳에서 남긴다.
+  //   본문 영구화는 거부 return 이전 시점에서만 가능하므로 반드시 이 라인에서 호출.
   if (!hook_event_name) {
-    console.warn(`[RECV] payload missing hook_event_name — discarded`);
+    logDiscardedPayload(raw, 'missing hook_event_name (/collect)');
     return new Response(
       JSON.stringify({ success: false, error: 'Missing hook_event_name' }),
       { status: 400, headers: { 'Content-Type': 'application/json' } },

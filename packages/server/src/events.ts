@@ -25,6 +25,7 @@ import { normalizeRequest } from './domain/request-normalizer';
 import { enrichRowWithAnomalies } from './domain/anomaly-enricher';
 import { invalidateDashboardCache } from './api';
 import { diagJson } from './diag-log';
+import { logDiscardedPayload } from './hook/discard-diag';
 import { syncCwd as syncMetaDocsCwd } from '@spyglass/meta-docs';
 import { corsHeaders } from '@spyglass/types';
 
@@ -53,6 +54,10 @@ export async function eventsCollectHandler(req: Request, db: Database): Promise<
   }
 
   if (!payload.hook_event_name || !payload.session_id) {
+    // hook_event_name 누락분만 discard 진단 — session_id 만 빠진 정상 이벤트는 노이즈라 제외.
+    if (!payload.hook_event_name) {
+      logDiscardedPayload(payload, 'missing hook_event_name (/events)');
+    }
     return json(req, { error: 'Missing required fields: hook_event_name, session_id' }, 400);
   }
 
