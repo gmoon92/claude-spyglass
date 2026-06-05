@@ -154,6 +154,13 @@ body[data-app-mode="settings"] .main-layout {
   background: var(--surface);
   overflow-y: auto;
 }
+/* 버전 뱃지 footer — nav 하단으로 밀어 in-flow 배치(좌하단 fixed 폴백 대체). */
+.settings-nav .left-panel-footer {
+  margin-top: auto;
+  align-self: stretch;
+  border-top: 1px solid var(--border-soft);
+  padding: 10px 4px 2px;
+}
 .settings-nav-btn {
   appearance: none;
   border: none;
@@ -320,6 +327,38 @@ body[data-app-mode="settings"] .main-layout {
   font-weight: 600;
   transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease, transform var(--dur-fast) ease;
 }
+/* 미리보기 모드 등에서 비활성 — no-op 임을 시각적으로 명시. */
+.settings-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none !important;
+  transform: none !important;
+}
+
+/* =============================================================================
+ * 컴팩트 설치 행 — 인라인 상태(좌) + 원클릭 자동 설치 버튼(우). Hook·Proxy 공통.
+ * ========================================================================== */
+.settings-install-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 4px 0 2px;
+}
+.settings-inline-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.settings-inline-status-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+.settings-inline-status.is-ok { color: var(--accent); }
+.settings-inline-status.is-warn { color: var(--danger-red, #e0413e); }
 .settings-action-primary {
   background: var(--accent);
   color: #fff;
@@ -1132,4 +1171,154 @@ body[data-app-mode="settings"] .main-layout {
   text-align: center;
   color: var(--text-3);
   font-size: 12px;
+}
+
+/* =============================================================================
+ * Storage 패널 — 섹션 헤더(제목+부제 좌 / 배지 우) + 용량 비율 바 + 중첩 카드
+ * ========================================================================== */
+
+/* 섹션 헤더 — 제목/부제는 좌측, 헬스 배지는 우측 상단. 모든 카드 동일 위치라 통일감. */
+.storage-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+.storage-section-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+/* 헤더 안에서는 배지 wrapper 의 좌측 정렬 마진 제거 — 우측 정렬 유지. */
+.storage-section-head .settings-health-row {
+  flex: 0 0 auto;
+}
+
+/* 용량 비율 바 — 한 줄 누적 막대 + 범례(라벨 좌 / 용량·% 우). */
+.storage-usage {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0 2px;
+}
+.storage-usage-bar {
+  display: flex;
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--raised);
+  border: 1px solid var(--border-soft);
+}
+.storage-usage-seg {
+  height: 100%;
+  min-width: 2px;
+}
+.storage-usage-seg.is-rdb { background: var(--accent); }
+.storage-usage-seg.is-graph { background: var(--info); }
+
+.storage-usage-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.storage-usage-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.storage-usage-dot {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+}
+.storage-usage-dot.is-rdb { background: var(--accent); }
+.storage-usage-dot.is-graph { background: var(--info); }
+.storage-usage-legend-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.storage-usage-legend-value {
+  flex: 0 0 auto;
+  color: var(--text-3);
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 중첩 카드 — Ladybug 미설치 안내처럼 섹션 카드 *안에* 들어가는 보조 카드. */
+.settings-card--nested {
+  background: var(--surface);
+  margin: 4px 0 2px;
+}
+
+/* =============================================================================
+ * 설치/미설치 UI 미리보기 토글 (개발용) — 연동 패널 상단 segmented control
+ * ========================================================================== */
+
+.settings-preview-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.settings-preview-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.settings-preview-dev {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-4);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+.settings-preview-options {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--raised);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  padding: 2px;
+}
+.settings-preview-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.settings-preview-btn:hover {
+  color: var(--text-1);
+}
+.settings-preview-btn.is-active {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
 }

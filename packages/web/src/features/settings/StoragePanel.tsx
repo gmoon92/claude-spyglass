@@ -1,69 +1,55 @@
 /**
- * features/settings/GraphPanel.tsx — Graph DB sub-tab 컨테이너 (P2-07)
+ * features/settings/StoragePanel.tsx — 통합 Storage sub-tab 컨테이너
  *
- * 원본: settings-view.js renderGraphSection(:695-849) + onGraphMode(:1013) + onLadybugInstall(:904).
- *   diag + graph-db/status 병렬 페칭(useAsyncResource) → GraphPanelView 위임. 모드 변경/Ladybug
- *   설치(SSE) 핸들러 + result slot 로컬상태(§5.2) + Toast/StickyAlert 연결(§4.4).
+ * 분리됐던 SQLite·Graph DB 두 탭을 단일 "Storage" 패널로 통합한다. diag(graph/retention) +
+ *   sqlite/info + graph-db/status 를 *병렬* 페칭(useAsyncResource) → StoragePanelView 위임.
+ *   Ladybug 미설치 시 자동 설치(SSE) 핸들러 + result slot 로컬 상태만 유지(모드 전환 제거됨).
  *
- * 로컬 상태(아키텍처 §4.1): installResult/modeStream(부분 갱신 §5.2), toast/showRestart(§4.4).
- *   모드 변경 성공 → toast(env override 분기) + 재시작 StickyAlert + refetch(원본 :1043 재렌더).
- *   Ladybug 설치 성공 → refetch(원본 :1001 renderGraphSection).
- *
- * @module features/settings/GraphPanel
+ * @module features/settings/StoragePanel
  */
 import { useCallback, useState } from 'react';
 import { StickyAlert } from '../../components/settings/StickyAlert';
-import { Toast } from '../../components/settings/Toast';
-import { GraphPanelView } from './GraphPanelView';
+import { StoragePanelView } from './StoragePanelView';
 import { fetchDiag } from './hooks-api';
-import { fetchGraphDbStatus, ladybugInstallStream, setGraphMode } from './graph-api';
+import { fetchGraphDbStatus, fetchSqliteInfo, ladybugInstallStream } from './graph-api';
 import { isInstallSuccess } from './logic';
 import { useAsyncResource } from './use-settings-diag';
-import type { DiagData, GraphMode, InstallEvent, InstallResult, LadybugStatus } from './types';
+import type { DiagData, InstallEvent, InstallResult, LadybugStatus, SqliteInfo } from './types';
 
-export interface GraphPanelProps {
+export interface StoragePanelProps {
   t: (key: string, vars?: Record<string, unknown>) => string;
   onCopy?: (text: string) => void;
 }
 
-/** Ladybug 설치 SSE result slot 상태(원본 #ladybugInstallResult, §5.2). */
+/** Ladybug 설치 SSE result slot 상태(#ladybugInstallResult). */
 type InstallState =
   | { kind: 'idle' }
   | { kind: 'streaming'; cmd: string | null; lines: { text: string; stderr: boolean }[] }
   | { kind: 'done'; cmd: string | null; lines: { text: string; stderr: boolean }[]; result: InstallResult }
   | { kind: 'error'; message: string };
 
-export function GraphPanel({ t, onCopy }: GraphPanelProps) {
-  // diag + graph-db/status 병렬(원본 :702). 단일 AbortSignal 로 둘 다 취소.
+interface StorageResource {
+  diag: DiagData;
+  sqlite: SqliteInfo;
+  ladybug: LadybugStatus | null;
+}
+
+export function StoragePanel({ t, onCopy }: StoragePanelProps) {
+  // diag(graph/retention) + sqlite/info + graph-db/status 병렬. 단일 AbortSignal 로 모두 취소.
   const fetcher = useCallback(
-    (signal: AbortSignal): Promise<{ diag: DiagData; ladybug: LadybugStatus | null }> =>
+    (signal: AbortSignal): Promise<StorageResource> =>
       Promise.all([
         fetchDiag(signal),
-        // graph-db/status 실패는 카드 생략(원본 :710 ladybugJson.success ? data : null) — diag 실패만 치명.
+        fetchSqliteInfo(signal),
+        // graph-db/status 실패는 카드 생략(ladybugJson.success ? data : null) — diag/sqlite 실패만 치명.
         fetchGraphDbStatus(signal).catch(() => null),
-      ]).then(([diag, ladybug]) => ({ diag, ladybug })),
+      ]).then(([diag, sqlite, ladybug]) => ({ diag, sqlite, ladybug })),
     [],
   );
   const { status, data, error, refetch } = useAsyncResource(fetcher);
 
   const [install, setInstall] = useState<InstallState>({ kind: 'idle' });
-  const [toast, setToast] = useState<string | null>(null);
   const [showRestart, setShowRestart] = useState(false);
-
-  const onSelectMode = useCallback(
-    async (mode: GraphMode) => {
-      try {
-        const d = await setGraphMode(mode);
-        // env override 면 별도 안내 toast(원본 :1031-1035).
-        setToast(d.source === 'env' ? t('ui.settings-view.graph.toast-env-override') : t('ui.settings-view.graph.toast-saved'));
-        setShowRestart(true); // 재시작 안내(원본 :1038).
-        refetch(); // 통합 배지 갱신(원본 :1043 재렌더).
-      } catch (err) {
-        setToast(`⚠ ${err instanceof Error ? err.message : String(err)}`);
-      }
-    },
-    [t, refetch],
-  );
 
   const onInstall = useCallback(
     async (strategy: string) => {
@@ -82,7 +68,10 @@ export function GraphPanel({ t, onCopy }: GraphPanelProps) {
         const result = await ladybugInstallStream(strategy, onEvent);
         if (result) {
           setInstall({ kind: 'done', cmd, lines: [...lines], result });
-          if (isInstallSuccess(result.status)) refetch(); // 성공 시 재페치(원본 :1001).
+          if (isInstallSuccess(result.status)) {
+            if (result.restartRequired) setShowRestart(true);
+            refetch(); // 성공 시 재페치.
+          }
         } else {
           setInstall({ kind: 'idle' });
         }
@@ -100,7 +89,7 @@ export function GraphPanel({ t, onCopy }: GraphPanelProps) {
     return <div className="settings-error">⚠ {error}</div>;
   }
 
-  // Ladybug 설치 result slot 렌더(원본 onLadybugInstall :907-1000 구조).
+  // Ladybug 설치 result slot 렌더(원본 GraphPanel onLadybugInstall 구조).
   const installResult = (() => {
     if (install.kind === 'idle') return null;
     if (install.kind === 'error') return <div className="settings-error">⚠ {install.message}</div>;
@@ -118,11 +107,10 @@ export function GraphPanel({ t, onCopy }: GraphPanelProps) {
       return (
         <>
           {stream}
-          <div className="install-running">{t('ui.settings-view.graph.ladybug.installing')}</div>
+          <div className="install-running">{t('ui.settings-view.storage.graph.installing')}</div>
         </>
       );
     }
-    // done — headline + restart 배너 + hints(원본 :988-1000).
     const r = install.result;
     const ok = isInstallSuccess(r.status);
     return (
@@ -131,13 +119,13 @@ export function GraphPanel({ t, onCopy }: GraphPanelProps) {
         <div className="install-summary">
           {ok ? (
             <div className="settings-success">
-              {t('ui.settings-view.graph.ladybug.install-success')}{r.version ? ` v${r.version}` : ''}
+              {t('ui.settings-view.storage.graph.install-success')}{r.version ? ` v${r.version}` : ''}
             </div>
           ) : (
-            <div className="settings-error">{t('ui.settings-view.graph.ladybug.install-failed')}: {r.error || ''}</div>
+            <div className="settings-error">{t('ui.settings-view.storage.graph.install-failed')}: {r.error || ''}</div>
           )}
           {r.restartRequired && (
-            <div className="settings-warn-banner">⚠ {t('ui.settings-view.graph.ladybug.restart-required')}</div>
+            <div className="settings-warn-banner">⚠ {t('ui.settings-view.storage.graph.restart-required')}</div>
           )}
           {Array.isArray(r.hints) && r.hints.length > 0 && (
             <ul className="install-hint-list">
@@ -158,12 +146,13 @@ export function GraphPanel({ t, onCopy }: GraphPanelProps) {
           onDismissed={() => setShowRestart(false)}
         />
       )}
-      {toast && <Toast message={toast} onDone={() => setToast(null)} />}
-      <GraphPanelView
+      <StoragePanelView
+        sqlite={data.sqlite}
         graph={data.diag.graph}
         ladybug={data.ladybug}
+        retentionDays={data.diag.retention?.days ?? 0}
         t={t}
-        onSelectMode={onSelectMode}
+        onCopy={onCopy}
         onInstall={onInstall}
         installResult={installResult}
       />

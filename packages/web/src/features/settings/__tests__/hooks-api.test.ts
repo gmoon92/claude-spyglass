@@ -53,8 +53,8 @@ describe('fetchDiag (settings-view.js:181)', () => {
 describe('hookPreview (settings-view.js:522)', () => {
   it('GET preview?profile= + diff 반환', async () => {
     responder = () => ({ success: true, data: { diff: { applied: ['Stop'], modified: [], preserved: [], spyglassDir: '', spyglassDirAfter: '/x' } } });
-    const data = await hookPreview('minimal');
-    expect(calls[0].url).toBe('/api/settings/hooks/preview?profile=minimal');
+    const data = await hookPreview('full');
+    expect(calls[0].url).toBe('/api/settings/hooks/preview?profile=full');
     expect(data.diff.applied).toEqual(['Stop']);
   });
   it('profile URL 인코딩', async () => {
@@ -78,7 +78,7 @@ describe('hookApply (settings-view.js:536)', () => {
   });
   it('nextAction=restart-claude-code 보존(§4.4 재시작 배너)', async () => {
     responder = () => ({ success: true, data: { diff: { applied: [], modified: [], preserved: [], spyglassDir: '', spyglassDirAfter: '' }, backupPath: '/bak', nextAction: 'restart-claude-code' } });
-    const data = await hookApply('minimal');
+    const data = await hookApply('full');
     expect(data.nextAction).toBe('restart-claude-code');
   });
   it('success=false → throw', async () => {

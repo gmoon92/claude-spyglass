@@ -8,7 +8,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   fetchGraphDbStatus,
-  setGraphMode,
   fetchSqliteInfo,
   fetchProxySnippet,
   fetchProxyStatus,
@@ -58,26 +57,6 @@ describe('fetchGraphDbStatus (settings-view.js:704)', () => {
   });
 });
 
-describe('setGraphMode (settings-view.js:1015)', () => {
-  it('POST /api/settings/graph/mode + body { mode, persistent:true }', async () => {
-    responder = () => ({ success: true, data: { previous: 'off', current: 'primary', persistent: true, configFile: '/cfg', source: 'file', hint: 'ok' } });
-    const d = await setGraphMode('primary');
-    expect(calls[0].url).toBe('/api/settings/graph/mode');
-    expect(calls[0].init?.method).toBe('POST');
-    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ mode: 'primary', persistent: true });
-    expect(d.current).toBe('primary');
-  });
-  it('source=env 보존(원본 :1031 env override toast 판별)', async () => {
-    responder = () => ({ success: true, data: { previous: 'off', current: 'shadow', persistent: true, configFile: '/cfg', source: 'env', hint: 'env wins' } });
-    const d = await setGraphMode('shadow');
-    expect(d.source).toBe('env');
-  });
-  it('success=false → throw(원본 :1021)', async () => {
-    responder = () => ({ success: false, error: 'mode change failed' });
-    await expect(setGraphMode('off')).rejects.toThrow('mode change failed');
-  });
-});
-
 describe('fetchSqliteInfo (settings-view.js:1072)', () => {
   it('GET /api/settings/sqlite/info + data', async () => {
     responder = () => ({ success: true, data: { dbPath: '/db', dbSizeBytes: 1024, migration: { version: 3, filename: '003.sql' }, cliVersion: null } });
@@ -118,7 +97,7 @@ describe('fetchProxyStatus (settings-view.js:1178)', () => {
 
 describe('proxyInstall (settings-view.js:1353)', () => {
   it('POST install + body { shell }', async () => {
-    responder = () => ({ success: true, data: { installedTo: '/h/.zshrc', shell: 'zsh', backupPath: '/h/.zshrc.bak-1', action: 'appended', cleanedGraphModeExports: 0, nextAction: 'source ~/.zshrc' } });
+    responder = () => ({ success: true, data: { installedTo: '/h/.zshrc', shell: 'zsh', backupPath: '/h/.zshrc.bak-1', action: 'appended', nextAction: 'source ~/.zshrc' } });
     const d = await proxyInstall('zsh');
     expect(calls[0].url).toBe('/api/settings/proxy/install');
     expect(calls[0].init?.method).toBe('POST');

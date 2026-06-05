@@ -17,8 +17,6 @@ import {
   canUndo,
   graphHealthState,
   graphHealthIcon,
-  isValidGraphMode,
-  graphSourceKey,
   proxyHealthState,
   proxyHealthBadgeVariant,
   proxyHealthIcon,
@@ -30,8 +28,6 @@ import type { GraphData, HookData, ProxyStatus, VersionInfo } from '../types';
 
 function graph(p: Partial<GraphData>): GraphData {
   return {
-    mode: 'primary',
-    source: 'file',
     configFile: '/cfg',
     circuit: { state: 'CLOSED', consecutiveFailures: 0, fallbackRate: 0 },
     sync: { running: true, cursor: 0 },
@@ -130,12 +126,12 @@ describe('showProfilePicker (settings-view.js:425)', () => {
   it('broken → 노출(true)', () => expect(showProfilePicker('broken')).toBe(true));
 });
 
-describe('isValidHookProfile (settings-view.js:504)', () => {
-  it('full/minimal 만 허용', () => {
+describe('isValidHookProfile (full 단일 — minimal 제거)', () => {
+  it('full 만 허용', () => {
     expect(isValidHookProfile('full')).toBe(true);
-    expect(isValidHookProfile('minimal')).toBe(true);
   });
-  it('그 외 거부(타입가드)', () => {
+  it('그 외 거부(minimal 포함 — 더 이상 선택 아님)', () => {
+    expect(isValidHookProfile('minimal')).toBe(false);
     expect(isValidHookProfile('off')).toBe(false);
     expect(isValidHookProfile('')).toBe(false);
     expect(isValidHookProfile('FULL')).toBe(false);
@@ -153,39 +149,19 @@ describe('canUndo (settings-view.js:614,660)', () => {
   });
 });
 
-// ── Graph DB (P2-07) ──────────────────────────────────────────────────────────
-describe('graphHealthState (settings-view.js:748-749)', () => {
-  it('mode=off → off', () => expect(graphHealthState(graph({ mode: 'off' }))).toBe('off'));
-  it('mode!=off + circuit CLOSED + sync running → ok', () =>
-    expect(graphHealthState(graph({ mode: 'primary', circuit: { state: 'CLOSED', consecutiveFailures: 0, fallbackRate: 0 }, sync: { running: true, cursor: 1 } }))).toBe('ok'));
+// ── Graph (Storage 패널 — 항상 켜짐 고정, circuit/sync 기준) ───────────────────
+describe('graphHealthState', () => {
+  it('circuit CLOSED + sync running → ok', () =>
+    expect(graphHealthState(graph({ circuit: { state: 'CLOSED', consecutiveFailures: 0, fallbackRate: 0 }, sync: { running: true, cursor: 1 } }))).toBe('ok'));
   it('circuit OPEN → warn', () =>
-    expect(graphHealthState(graph({ mode: 'primary', circuit: { state: 'OPEN', consecutiveFailures: 3, fallbackRate: 1 } }))).toBe('warn'));
+    expect(graphHealthState(graph({ circuit: { state: 'OPEN', consecutiveFailures: 3, fallbackRate: 1 } }))).toBe('warn'));
   it('sync 정지 → warn', () =>
-    expect(graphHealthState(graph({ mode: 'shadow', sync: { running: false, cursor: null } }))).toBe('warn'));
+    expect(graphHealthState(graph({ sync: { running: false, cursor: null } }))).toBe('warn'));
 });
 
-describe('graphHealthIcon (settings-view.js:750)', () => {
+describe('graphHealthIcon', () => {
   it('ok → ✓', () => expect(graphHealthIcon('ok')).toBe('✓'));
   it('warn → ⚠', () => expect(graphHealthIcon('warn')).toBe('⚠'));
-  it('off → ⏸', () => expect(graphHealthIcon('off')).toBe('⏸'));
-});
-
-describe('isValidGraphMode (settings-view.js:723)', () => {
-  it('off/shadow/primary 허용', () => {
-    expect(isValidGraphMode('off')).toBe(true);
-    expect(isValidGraphMode('shadow')).toBe(true);
-    expect(isValidGraphMode('primary')).toBe(true);
-  });
-  it('그 외 거부', () => {
-    expect(isValidGraphMode('on')).toBe(false);
-    expect(isValidGraphMode('')).toBe(false);
-  });
-});
-
-describe('graphSourceKey (settings-view.js:764)', () => {
-  it('file → saved', () => expect(graphSourceKey('file')).toBe('saved'));
-  it('env → env', () => expect(graphSourceKey('env')).toBe('env'));
-  it('default → default', () => expect(graphSourceKey('default')).toBe('default'));
 });
 
 // ── Proxy (P2-07) ─────────────────────────────────────────────────────────────

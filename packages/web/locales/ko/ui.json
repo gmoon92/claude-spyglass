@@ -553,10 +553,21 @@
     "refresh-title": "현재 설정 탭의 진단을 강제 갱신",
     "loading": "진단 정보를 불러오는 중…",
     "tab-diag": "시스템 진단",
-    "tab-hooks": "Hook 설정",
-    "tab-graph": "Graph DB",
-    "tab-proxy": "Proxy 설정",
+    "tab-integration": "연동",
+    "tab-storage": "저장소",
     "tab-server": "서버 / 로그",
+    "integration": {
+      "install-title": "연동 자동 설치",
+      "install-sub": "Hook(이벤트 수집)과 Proxy(API 메트릭 수집)를 한 번에 설치합니다. 설치 후 구문 검증 → 백업 자동 정리.",
+      "install-all": "Hook · Proxy 한 번에 설치",
+      "preview": {
+        "label": "미리보기",
+        "dev": "개발용",
+        "real": "실제",
+        "missing": "미설치",
+        "installed": "설치됨"
+      }
+    },
     "diag": {
       "title": "시스템 진단",
       "missing": "미설치",
@@ -566,7 +577,6 @@
       "hook-broken": "JSON 손상",
       "hook-missing": "설정 파일 없음",
       "jump-hooks": "Hook 설정 →",
-      "jump-graph": "Graph DB →",
       "port": "포트",
       "logs-dir": "로그 디렉토리",
       "jump-proxy": "Proxy 가이드 →",
@@ -575,13 +585,19 @@
       "proxy-no-profile": "셸 프로파일 없음",
       "installed": "설치됨",
       "configured": "설정됨",
-      "graph-off": "비활성",
       "graph-circuit-open": "회로 차단",
       "hook-partial": "부분 등록",
-      "jump-sqlite": "SQLite →"
+      "jump-page": "페이지 이동",
+      "jump-integration": "연동 →",
+      "jump-storage": "저장소 →"
     },
     "hooks": {
-      "title": "Hook 설정",
+      "title": "이벤트 수집 (Hook)",
+      "subtitle": "Claude Code 의 라이프사이클 이벤트(프롬프트·도구 호출·세션 등)를 수집합니다.",
+      "status-ok": "수집 중 ({n}/{total} 이벤트)",
+      "status-off": "미설치 — 자동 설치가 필요합니다",
+      "reinstall": "재설치",
+      "detail-summary": "상세 정보 보기",
       "registered": "등록됨",
       "unregistered": "미등록",
       "spyglass-dir-missing": "env.SPYGLASS_DIR 미설정",
@@ -627,79 +643,69 @@
       "pre-restore-backup": "복구 직전 상태 백업",
       "restart-required-banner": "✓ 적용되었습니다. 변경 사항을 활성화하려면 실행 중인 Claude Code 터미널 세션을 종료 후 재시작하세요."
     },
-    "graph": {
-      "title": "Graph DB",
-      "mode": "현재 모드",
-      "mode-hint": "런타임 변경만 — 다음 시작은 SPYGLASS_GRAPH_MODE 환경변수 우선",
-      "mode-pick-title": "그래프 엔진 동작 방식",
-      "mode-pick-sub": "선택하면 즉시 저장됩니다. Claude Code 를 재시작해야 새 모드가 활성화됩니다.",
-      "circuit": "회로 차단기",
-      "sync-worker": "Sync Worker",
-      "cache": "캐시 크기",
-      "engineering-summary": "시스템 엔지니어링 정보 보기 ▼",
-      "engineering-title": "시스템 엔지니어링 정보",
-      "toast-saved": "✓ 설정이 저장되었습니다",
-      "toast-env-override": "⚠ 환경변수가 우선 적용되어 현재 세션엔 반영되지 않습니다",
-      "options": {
-        "off": {
-          "label": "사용 안 함 (안정성 최우선)",
-          "desc": "그래프 엔진을 끄고 기존 표준 모드로 안전하게 구동합니다.",
-          "tooltip": "Ladybug 그래프 엔진 자체를 비활성화합니다. 그래프 시각화는 사용할 수 없습니다."
+    "storage": {
+      "title": "저장소",
+      "summary-title": "전체 사용량",
+      "total-size": "총 용량",
+      "retention": "보관 기간",
+      "retention-days": "{n}일",
+      "rdb": {
+        "title": "대화·이벤트 기록",
+        "subtitle": "프롬프트·도구 호출·세션 등 모든 활동 기록을 저장합니다.",
+        "health-ok": "정상 동작 중",
+        "size-label": "크기",
+        "path-label": "경로",
+        "migration-label": "스키마 버전",
+        "engine-label": "엔진",
+        "engine-value": "SQLite (Bun 내장)",
+        "cli-label": "sqlite3 CLI (선택)"
+      },
+      "graph": {
+        "title": "관계 흐름 그래프",
+        "subtitle": "에이전트·스킬·도구 간 호출 관계를 시각화하는 그래프 데이터입니다.",
+        "size-label": "캐시 크기",
+        "connection": "연결 상태",
+        "connection-ok": "정상",
+        "connection-warn": "문제 발생",
+        "sync": "동기화 상태",
+        "sync-on": "작동 중",
+        "sync-off": "멈춤",
+        "engine-label": "엔진",
+        "health": {
+          "ok": "정상 작동 중",
+          "warn": "최적화 준비 중"
         },
-        "shadow": {
-          "label": "백그라운드 테스트 (권장)",
-          "desc": "안전하게 표준 모드로 화면을 그리면서, 뒤에서 엔진 호환성을 테스트합니다.",
-          "tooltip": "사용자 응답은 제한적이고 백그라운드에서 Ladybug 결과를 비교 로깅합니다. 회로 차단기로 보호되어 사용자 영향 0."
-        },
-        "primary": {
-          "label": "실시간 그래프 활성화 (성능 극대화)",
-          "desc": "초고속 그래프 엔진을 켜서 Claude Code 의 복잡한 추적 흐름도를 렉 없이 화려하게 시각화합니다.",
-          "tooltip": "Ladybug 그래프 엔진을 메인 응답에 사용합니다. 복잡한 BFS/순서도 쿼리가 빠르게 처리됩니다."
-        }
-      },
-      "health": {
-        "ok": "그래프 엔진 상태: 정상 작동 중",
-        "warn": "최적화 준비 중",
-        "off": "그래프 엔진 사용 안 함"
-      },
-      "config-file": "설정 파일",
-      "persisted-to": "영속화 경로",
-      "env-override-warning": "셸 환경변수 SPYGLASS_GRAPH_MODE 가 설정되어 있어 대시보드 변경사항이 현재 세션에 적용되지 않습니다. 영구 적용하려면 셸 프로필에서 export 선언을 제거하세요.",
-      "source": {
-        "env": "env",
-        "saved": "saved",
-        "default": "default"
-      },
-      "ladybug": {
-        "title": "그래프 엔진",
-        "engineering-label": "그래프 엔진 (Ladybug)",
+        "install-title": "그래프 엔진",
         "status-label": "상태",
-        "installed": "설치됨",
         "missing": "미설치",
         "missing-hint": "그래프 분석 기능을 사용하려면 추가 구성요소가 필요합니다. 아래 버튼으로 자동 설치하세요.",
         "install": "자동 설치",
         "no-package-manager": "자동 설치에 필요한 시스템 환경이 갖춰지지 않았습니다. 관리자에게 문의하세요.",
         "installing": "설치 중...",
-        "running": "설치 진행 중...",
         "install-success": "설치 완료",
         "install-failed": "설치 실패",
         "restart-required": "Claude Code를 재시작해야 변경 사항이 적용됩니다."
       }
     },
     "proxy": {
-      "title": "Proxy 자동 등록",
+      "title": "API 메트릭 수집 (Proxy)",
       "intro": "spyglass 가 LISTEN 중일 때만 ANTHROPIC_BASE_URL 을 주입하는 조건부 함수를 셸 프로필에 자동 등록합니다.",
       "shell": "셸",
       "copy": "복사",
       "copied": "✓ 클립보드에 복사됨",
       "outro": "직접 편집을 원하면 위 스니펫을 ~/.zshrc 등 셸 프로필 끝에 붙여 넣고 새 셸에서 사용하세요.",
       "install": "프록시 자동 등록",
+      "status-ok": "수집 중 ({shell})",
+      "status-off": "미설치 — 자동 설치가 필요합니다",
+      "status-broken": "마커 손상 — 수동 정정이 필요합니다",
+      "reinstall": "재설치",
+      "detail-summary": "상세 정보 / 고급 설정",
+      "legacy-unmarked-warning": "마커 밖에 기존 프록시 함수가 남아 있어 중복될 수 있습니다. 셸 프로필에서 spyglass 마커 블록 외의 claude() 함수를 직접 제거하세요.",
       "installing": "셸 프로필에 등록 중…",
       "installed": "프록시 자동 등록 완료",
       "installed-to": "수정된 파일",
       "replaced": "교체됨",
       "appended": "추가됨",
-      "cleaned-graph-exports": "주석 처리된 SPYGLASS_GRAPH_MODE export",
       "undo": "이전 셸 설정으로 복구",
       "restoring": "복구 중…",
       "restored": "✓ 이전 셸 설정으로 복구 완료",
@@ -757,20 +763,6 @@
       "port-change-hint": "환경변수로 설정 후 서버 재시작이 필요합니다.",
       "logs-title": "로그 파일",
       "no-logs": "로그 디렉토리가 비어 있거나 존재하지 않습니다."
-    },
-    "tab-sqlite": "SQLite",
-    "sqlite": {
-      "title": "SQLite",
-      "health-ok": "SQLite 정상 동작 중",
-      "health-hint": "Bun 런타임에 내장된 SQLite 라이브러리를 사용합니다. 별도 설치가 필요 없습니다.",
-      "db-file-title": "데이터베이스 파일",
-      "path-label": "경로",
-      "size-label": "크기",
-      "migration-title": "마이그레이션",
-      "migration-version-label": "최신 버전",
-      "cli-title": "sqlite3 CLI (선택 사항)",
-      "cli-hint": "명령줄에서 DB를 직접 조회할 때 사용하는 외부 도구입니다. Spyglass 동작에는 영향이 없습니다.",
-      "cli-label": "상태"
     }
   }
 }

@@ -553,10 +553,21 @@
     "refresh-title": "强制刷新当前标签的诊断",
     "loading": "正在加载诊断信息…",
     "tab-diag": "系统诊断",
-    "tab-hooks": "Hook 设置",
-    "tab-graph": "Graph DB",
-    "tab-proxy": "Proxy 设置",
+    "tab-integration": "集成",
+    "tab-storage": "存储",
     "tab-server": "服务器 / 日志",
+    "integration": {
+      "install-title": "集成自动安装",
+      "install-sub": "一次性安装 Hook(事件采集)和 Proxy(API 指标)。语法校验后自动清理备份。",
+      "install-all": "一键安装 Hook · Proxy",
+      "preview": {
+        "label": "预览",
+        "dev": "开发用",
+        "real": "实际",
+        "missing": "未安装",
+        "installed": "已安装"
+      }
+    },
     "diag": {
       "title": "系统诊断",
       "missing": "未安装",
@@ -566,7 +577,6 @@
       "hook-broken": "JSON 损坏",
       "hook-missing": "设置文件不存在",
       "jump-hooks": "Hook 设置 →",
-      "jump-graph": "Graph DB →",
       "port": "端口",
       "logs-dir": "日志目录",
       "jump-proxy": "Proxy 指南 →",
@@ -575,13 +585,19 @@
       "proxy-no-profile": "无 shell 配置文件",
       "installed": "已安装",
       "configured": "已配置",
-      "graph-off": "已禁用",
       "graph-circuit-open": "断路器开启",
       "hook-partial": "部分注册",
-      "jump-sqlite": "SQLite →"
+      "jump-page": "前往页面",
+      "jump-integration": "集成 →",
+      "jump-storage": "存储 →"
     },
     "hooks": {
-      "title": "Hook 设置",
+      "title": "事件采集 (Hook)",
+      "subtitle": "采集 Claude Code 的生命周期事件(提示词、工具调用、会话等)。",
+      "status-ok": "采集中 ({n}/{total} 事件)",
+      "status-off": "未安装 — 需要自动安装",
+      "reinstall": "重新安装",
+      "detail-summary": "查看详情",
       "registered": "已注册",
       "unregistered": "未注册",
       "spyglass-dir-missing": "env.SPYGLASS_DIR 未设置",
@@ -627,79 +643,69 @@
       "pre-restore-backup": "恢复前的备份",
       "restart-required-banner": "✓ 已应用。要激活更改，请退出正在运行的 Claude Code 终端会话并重新启动。"
     },
-    "graph": {
-      "title": "Graph DB",
-      "mode": "当前模式",
-      "mode-hint": "仅运行时 — 下次启动以 SPYGLASS_GRAPH_MODE 为准",
-      "mode-pick-title": "图形引擎运行方式",
-      "mode-pick-sub": "选择后立即保存。重启 Claude Code 后新模式才会激活。",
-      "circuit": "断路器",
-      "sync-worker": "Sync Worker",
-      "cache": "缓存大小",
-      "engineering-summary": "系统工程信息 ▼",
-      "engineering-title": "系统工程信息",
-      "toast-saved": "✓ 设置已保存",
-      "toast-env-override": "⚠ 环境变量优先 — 当前会话不会生效",
-      "options": {
-        "off": {
-          "label": "禁用 (稳定性优先)",
-          "desc": "关闭图形引擎，以传统标准模式安全运行。",
-          "tooltip": "完全禁用 Ladybug 图形引擎。流程图可视化不可用。"
+    "storage": {
+      "title": "存储",
+      "summary-title": "总体用量",
+      "total-size": "总大小",
+      "retention": "保留期限",
+      "retention-days": "{n} 天",
+      "rdb": {
+        "title": "对话·事件记录",
+        "subtitle": "存储提示词、工具调用、会话等所有活动记录。",
+        "health-ok": "正常运行中",
+        "size-label": "大小",
+        "path-label": "路径",
+        "migration-label": "架构版本",
+        "engine-label": "引擎",
+        "engine-value": "SQLite (Bun 内置)",
+        "cli-label": "sqlite3 CLI (可选)"
+      },
+      "graph": {
+        "title": "关系流程图",
+        "subtitle": "可视化智能体、技能、工具之间调用关系的图形数据。",
+        "size-label": "缓存大小",
+        "connection": "连接状态",
+        "connection-ok": "正常",
+        "connection-warn": "出现问题",
+        "sync": "同步状态",
+        "sync-on": "运行中",
+        "sync-off": "已停止",
+        "engine-label": "引擎",
+        "health": {
+          "ok": "正常运行中",
+          "warn": "优化准备中"
         },
-        "shadow": {
-          "label": "后台测试 (推荐)",
-          "desc": "以标准模式安全渲染画面，同时在后台测试引擎兼容性。",
-          "tooltip": "后台对比记录 Ladybug。受断路器保护，对用户影响为零。"
-        },
-        "primary": {
-          "label": "实时图形启用 (性能最大化)",
-          "desc": "打开高速图形引擎，流畅地可视化 Claude Code 的复杂跟踪流程。",
-          "tooltip": "使用 Ladybug 图形引擎作为主要响应源。复杂的 BFS / 顺序查询快速处理。"
-        }
-      },
-      "health": {
-        "ok": "图形引擎: 正常运行中",
-        "warn": "优化准备中",
-        "off": "图形引擎已禁用"
-      },
-      "config-file": "配置文件",
-      "persisted-to": "持久化路径",
-      "env-override-warning": "shell 环境变量 SPYGLASS_GRAPH_MODE 已设置，仪表盘更改在当前会话中不会生效。要永久应用，请从 shell 配置中移除 export 声明。",
-      "source": {
-        "env": "env",
-        "saved": "saved",
-        "default": "default"
-      },
-      "ladybug": {
-        "title": "图引擎",
-        "engineering-label": "图引擎 (Ladybug)",
+        "install-title": "图引擎",
         "status-label": "状态",
-        "installed": "已安装",
         "missing": "未安装",
         "missing-hint": "图分析功能需要额外组件。请使用下方按钮自动安装。",
         "install": "自动安装",
         "no-package-manager": "系统未具备自动安装所需的环境。请联系管理员。",
         "installing": "安装中...",
-        "running": "安装进行中...",
         "install-success": "安装完成",
         "install-failed": "安装失败",
         "restart-required": "请重启 Claude Code 以使更改生效。"
       }
     },
     "proxy": {
-      "title": "Proxy 自动注册",
+      "title": "API 指标采集 (Proxy)",
       "intro": "在 shell 配置中自动注册仅当 spyglass LISTEN 时注入 ANTHROPIC_BASE_URL 的条件函数。",
       "shell": "Shell",
       "copy": "复制",
       "copied": "✓ 已复制到剪贴板",
       "outro": "如需手动安装，将上方代码片段追加到 shell 配置 (如 ~/.zshrc) 末尾后在新 shell 中使用。",
       "install": "自动注册代理",
+      "status-ok": "采集中 ({shell})",
+      "status-off": "未安装 — 需要自动安装",
+      "status-broken": "标记损坏 — 需要手动修正",
+      "reinstall": "重新安装",
+      "detail-summary": "详情 / 高级设置",
+      "legacy-unmarked-warning": "标记之外存在旧的代理函数，可能重复。请手动从 shell 配置中删除 spyglass 标记之外的 claude() 函数。",
       "installing": "正在注册到 shell 配置…",
       "installed": "代理注册完成",
       "installed-to": "已修改的文件",
       "replaced": "替换",
       "appended": "追加",
-      "cleaned-graph-exports": "已注释的 SPYGLASS_GRAPH_MODE export",
       "undo": "恢复先前 shell 配置",
       "restoring": "正在恢复…",
       "restored": "✓ shell 配置已恢复",
@@ -757,20 +763,6 @@
       "port-change-hint": "设置环境变量后重启服务器。",
       "logs-title": "日志文件",
       "no-logs": "日志目录为空或不存在。"
-    },
-    "tab-sqlite": "SQLite",
-    "sqlite": {
-      "title": "SQLite",
-      "health-ok": "SQLite 正常运行中",
-      "health-hint": "使用 Bun 运行时内置的 SQLite 库。无需单独安装。",
-      "db-file-title": "数据库文件",
-      "path-label": "路径",
-      "size-label": "大小",
-      "migration-title": "迁移",
-      "migration-version-label": "最新版本",
-      "cli-title": "sqlite3 CLI (可选)",
-      "cli-hint": "用于从命令行直接查询 DB 的外部工具。不影响 Spyglass 运行。",
-      "cli-label": "状态"
     }
   }
 }

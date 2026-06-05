@@ -63,24 +63,17 @@ export interface GraphSyncStatus {
 }
 
 /**
- * /api/settings/diag 응답 data.graph — P2-06 은 진단 카드용 최소형만 선언했으나, GraphPanel
- * 엔지니어링 카드(원본 renderGraphSection :785-806)는 sync/cacheDir/cacheSizeBytes 까지 읽는다.
- * diag 엔드포인트가 항상 반환하는 필드이므로(settings.ts:234-246) optional 이 아닌 필수로 확장.
- * mode 는 'off'|'shadow'|'primary'(GraphMode) 이나 web-local contract 정책상 string 유지 +
- * isValidGraphMode 가드(logic.ts)로 좁힌다.
+ * /api/settings/diag 응답 data.graph — Storage 패널 "관계 흐름 그래프" 섹션이 읽는 형태.
+ * 그래프는 항상 켜진 상태로 고정(v4.3.x) — mode/source 개념 제거. 안전망(circuit/sync) 상태와
+ * 캐시 크기·경로·설정 파일 경로만 노출. diag 엔드포인트가 항상 반환하는 필드라 전부 필수.
  */
 export interface GraphData {
-  mode: string;
-  source: 'env' | 'file' | 'default';
   configFile: string;
   circuit: { state: string; consecutiveFailures: number; fallbackRate: number };
   sync: GraphSyncStatus;
   cacheDir: string;
   cacheSizeBytes: number | null;
 }
-
-/** Graph 모드 옵션 카드 값(원본 renderGraphSection modes :723). HookProfile 와 동일 정책의 local union. */
-export type GraphMode = 'off' | 'shadow' | 'primary';
 
 /**
  * Ladybug 의존성 설치 여부 — 진단 카드가 graph 상태 결정에 읽는 최소형(settings.ts:285).
@@ -104,16 +97,6 @@ export interface LadybugStatus {
   brewAvailable: boolean;
   npmAvailable: boolean;
   error?: string;
-}
-
-/** POST /api/settings/graph/mode 응답 data — handleGraphMode(:513-523). source 로 env override 판별. */
-export interface GraphModeData {
-  previous: string;
-  current: string;
-  persistent: boolean;
-  configFile: string;
-  source: 'env' | 'file' | 'default';
-  hint: string;
 }
 
 // ── Ladybug 설치 SSE (graph-db-installer.ts InstallEvent/InstallResult 1:1) ─────
@@ -202,8 +185,13 @@ export interface ProxyInstallResult {
   shell: string;
   backupPath: string | null;
   action: 'replaced' | 'appended';
-  cleanedGraphModeExports: number;
   nextAction: string;
+  /** 마커 밖에 stray 프록시 함수가 남아 중복 위험 시 true — UI 가 수동 정리 경고 노출. */
+  legacyUnmarked?: boolean;
+  /** 설치 후 셸 구문 검증(`<shell> -n`) 결과. */
+  verify?: 'ok' | 'failed' | 'skipped';
+  /** 검증 성공으로 이번 백업을 삭제했으면 true. */
+  backupRemoved?: boolean;
 }
 
 /** POST /api/settings/proxy/restore 응답 data — proxy-installer.ts restoreProxyHook(:392-399) 1:1. */
@@ -226,7 +214,12 @@ export interface ServerInfo {
   cwd: string;
 }
 
-/** /api/settings/diag 응답 data — handleDiag 의 `{ versions, hooks, graph, server, ladybug, proxy, sqlite }`. */
+/** 보관 기간 — handleDiag retention 블록(settings.ts). Storage 패널 요약 카드가 노출. */
+export interface RetentionData {
+  days: number;
+}
+
+/** /api/settings/diag 응답 data — handleDiag 의 `{ versions, hooks, graph, server, ladybug, proxy, sqlite, retention }`. */
 export interface DiagData {
   versions: VersionsData;
   hooks: HookData;
@@ -235,6 +228,7 @@ export interface DiagData {
   ladybug: LadybugData | null;
   proxy: ProxyData | null;
   sqlite: SqliteData | null;
+  retention: RetentionData;
 }
 
 // ── /api/settings/logs 응답 data (ServerPanel 로그 목록 — settings-view.js:1485) ─
@@ -266,8 +260,13 @@ export interface HookPreviewData {
 /** apply 응답 data — backupPath + nextAction(재시작 안내) 포함. */
 export interface HookApplyData {
   diff: HookDiff;
-  backupPath: string;
+  /** 검증 성공 후 백업을 삭제하면 null. */
+  backupPath: string | null;
   nextAction?: string;
+  /** 적용 후 JSON 유효성 검증 결과. */
+  verify?: 'ok' | 'failed';
+  /** 검증 성공으로 이번 백업을 삭제했으면 true. */
+  backupRemoved?: boolean;
 }
 
 /** restore 응답 data — bindUndoButton 이 읽는 형태(settings-view.js:628-634). */
@@ -276,8 +275,8 @@ export interface HookRestoreData {
   preRestoreBackup?: string;
 }
 
-/** Hook 프로필 — 옵션 카드 2개(full/minimal). settings-view.js:426. */
-export type HookProfile = 'full' | 'minimal';
+/** Hook 프로필 — full 단일(선택 아님). minimal 제거됨. */
+export type HookProfile = 'full';
 
 /** 진단 row 상태 — rowHtml status(settings-view.js:1534) 와 1:1. */
 export type RowStatus = 'ok' | 'warn' | 'fail';

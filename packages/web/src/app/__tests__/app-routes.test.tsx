@@ -101,12 +101,12 @@ describe('레이아웃 마운트 계약 — 핵심 컨테이너 region', () => {
     expect(html).toContain('class="meta-docs-catalog-area"');
   });
 
-  it('SettingsLayout 은 6 패널 네비 + 활성 패널 region 을 마운트한다', async () => {
+  it('SettingsLayout 은 4 패널 네비 + 활성 패널 region 을 마운트한다', async () => {
     const html = await renderAt('/settings');
     expect(html).toContain('data-testid="settings-nav"');
     expect(html).toContain('data-testid="settings-panel"');
-    // 6 sub-tab 키가 네비에 존재(diag/hooks/server/graph/sqlite/proxy).
-    for (const k of ['diag', 'hooks', 'server', 'graph', 'sqlite', 'proxy']) {
+    // 4 sub-tab 키가 네비에 존재(Hook·Proxy→integration, SQLite·Graph→storage 통합).
+    for (const k of ['diag', 'integration', 'storage', 'server']) {
       expect(html).toContain(`data-settings-tab="${k}"`);
     }
   });

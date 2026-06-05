@@ -2,9 +2,9 @@
  * features/settings/graph-api.ts — Graph DB / SQLite / Proxy fetch 핸들러 (P2-07)
  *
  * 원본: settings-view.js 의 graph/sqlite/proxy 섹션 *네트워크 부* 만 추출(hooks-api.ts 와 동일 정책).
- *   - graph : renderGraphSection diag+graph-db/status 병렬 fetch(:702) / onGraphMode(:1013) /
- *             onLadybugInstall SSE(:904-1003)
- *   - sqlite: renderSqliteSection sqlite/info fetch(:1072)
+ *   - graph : graph-db/status fetch + Ladybug 자동 설치 SSE(:904-1003). 모드 전환(graph/mode)은
+ *             제거됨 — 그래프는 항상 켜진 상태로 고정(v4.3.x).
+ *   - sqlite: sqlite/info fetch(:1072)
  *   - proxy : renderProxySection snippet+status 병렬(:1176) / onProxyInstall(:1353) /
  *             onProxyRestore(:1425)
  *
@@ -16,7 +16,6 @@
  */
 
 import type {
-  GraphModeData,
   InstallEvent,
   InstallResult,
   LadybugStatus,
@@ -49,16 +48,6 @@ async function unwrap<T>(res: Response, fallbackMsg: string): Promise<T> {
 export async function fetchGraphDbStatus(signal?: AbortSignal): Promise<LadybugStatus> {
   const res = await fetch('/api/settings/graph-db/status', signal ? { signal } : undefined);
   return unwrap<LadybugStatus>(res, 'graph-db status failed');
-}
-
-/** POST /api/settings/graph/mode — 모드 전환(영속, 원본 :1015). body { mode, persistent:true }. */
-export async function setGraphMode(mode: string): Promise<GraphModeData> {
-  const res = await fetch('/api/settings/graph/mode', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode, persistent: true }),
-  });
-  return unwrap<GraphModeData>(res, 'mode change failed');
 }
 
 // ── Ladybug 설치 SSE (POST 응답 스트림, §5.3) ─────────────────────────────────

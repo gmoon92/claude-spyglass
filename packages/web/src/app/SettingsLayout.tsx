@@ -1,7 +1,8 @@
 // app/SettingsLayout.tsx — settings 모드 레이아웃 셸 (P4-06)
 //
-// 원본: main.js enterSettingsMode + settings-view.js(1590) 의 6 sub-tab 라우터.
-//   진단/Hook/서버/Graph/SQLite/Proxy 6 패널을 좌측 네비 + 활성 패널 region 으로 조립한다.
+// 원본: main.js enterSettingsMode + settings-view.js(1590) 의 sub-tab 라우터.
+//   진단/Hook/서버/Storage/Proxy 5 패널을 좌측 네비 + 활성 패널 region 으로 조립한다.
+//   (SQLite·Graph DB 두 탭은 단일 "Storage" 탭으로 통합 — storage-redesign 후속.)
 //
 // 자기완결 결선: settings 6 패널은 각자 useAsyncResource(use-settings-diag) 로 자체 fetch 한다
 //   (DiagPanel/HooksPanel/... 헤더 §데이터 페칭). 따라서 본 셸은 데이터 오케스트레이션 없이
@@ -13,33 +14,32 @@
 import { useCallback, useState } from 'react';
 import type { ReactElement } from 'react';
 import {
-  DiagPanel, HooksPanel, ServerPanel, GraphPanel, SqlitePanel, ProxyPanel,
+  DiagPanel, ServerPanel, StoragePanel, IntegrationPanel,
   SettingsHeader,
 } from '../features/settings';
+import { SidebarVersionFooter } from '../features/dashboard/SidebarVersionFooter';
 import { Toast } from '../components/settings/Toast';
 import { useTranslation } from 'react-i18next';
 
-/** 6 sub-tab 식별자(settings-view.js 탭 순서 1:1). */
-type SettingsTab = 'diag' | 'hooks' | 'server' | 'graph' | 'sqlite' | 'proxy';
+/** sub-tab 식별자. (Hook·Proxy → 'integration', SQLite·Graph → 'storage' 통합.) */
+type SettingsTab = 'diag' | 'integration' | 'server' | 'storage';
 
 /**
  * 네비 항목 정의(SSoT) — 탭 키 + i18n 라벨 키.
- *   순서/라벨키 모두 원본 index.html nav(:833-844) 1:1 — diag → proxy → hooks → sqlite → graph → server.
  *   라벨키는 `tab-<key>` 형식(locales 의 ui.settings-view.tab-diag 등) — dot 형식은 미존재 키라 raw 노출됨.
+ *   비개발자 친화: Hook·Proxy(데이터 수집 연동)는 'Integration', SQLite·Graph(저장)는 'Storage' 로 통합.
  */
 const SETTINGS_TABS: ReadonlyArray<{ key: SettingsTab; labelKey: string }> = [
   { key: 'diag', labelKey: 'ui.settings-view.tab-diag' },
-  { key: 'proxy', labelKey: 'ui.settings-view.tab-proxy' },
-  { key: 'hooks', labelKey: 'ui.settings-view.tab-hooks' },
-  { key: 'sqlite', labelKey: 'ui.settings-view.tab-sqlite' },
-  { key: 'graph', labelKey: 'ui.settings-view.tab-graph' },
+  { key: 'integration', labelKey: 'ui.settings-view.tab-integration' },
+  { key: 'storage', labelKey: 'ui.settings-view.tab-storage' },
   { key: 'server', labelKey: 'ui.settings-view.tab-server' },
 ];
 
 /**
  * 활성 탭 → 해당 패널. 각 패널은 t 주입(+자체 fetch).
  *   - diag 만 onJump 로 탭 전환 통지(원본 :349 jump 버튼).
- *   - copy 가능 패널(diag/sqlite/graph/proxy/server)은 onCopy → 상위 Toast 호스트(원본 toast :1579).
+ *   - copy 가능 패널(diag/storage/integration/server)은 onCopy → 상위 Toast 호스트(원본 toast :1579).
  *   - refreshKey 는 "전체 진단 다시 실행"(원본 settingsRefreshBtn :131) — 키 변경 시 패널 remount→refetch.
  */
 function renderPanel(
@@ -49,11 +49,9 @@ function renderPanel(
   t: (key: string, vars?: Record<string, unknown>) => string,
 ): ReactElement {
   switch (tab) {
-    case 'hooks': return <HooksPanel t={t} />;
+    case 'integration': return <IntegrationPanel t={t} onCopy={onCopy} />;
     case 'server': return <ServerPanel t={t} onCopy={onCopy} />;
-    case 'graph': return <GraphPanel t={t} onCopy={onCopy} />;
-    case 'sqlite': return <SqlitePanel t={t} onCopy={onCopy} />;
-    case 'proxy': return <ProxyPanel t={t} onCopy={onCopy} />;
+    case 'storage': return <StoragePanel t={t} onCopy={onCopy} />;
     case 'diag':
     default:
       return <DiagPanel t={t} onJump={(x) => onJump(x as SettingsTab)} onCopy={onCopy} />;
@@ -116,6 +114,8 @@ export function SettingsLayout(): ReactElement {
               {t(labelKey)}
             </button>
           ))}
+          {/* 버전 뱃지 — 사이드바가 없는 settings 모드에서 nav 하단에 in-flow 로 배치(fixed 폴백 대체). */}
+          <SidebarVersionFooter />
         </nav>
         <div className="settings-content" data-testid="settings-panel" role="tabpanel">
           {/* key=tab:refreshKey — 탭 전환·새로고침 모두 패널 remount → useAsyncResource 재페치(원본 :131). */}

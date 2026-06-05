@@ -69,54 +69,32 @@ export function DiagPanelView({ data, t, onJump, onCopy }: DiagPanelViewProps) {
           : t('ui.settings-view.diag.hook-partial')
       : t('ui.settings-view.diag.hook-broken')
     : t('ui.settings-view.diag.hook-missing');
-  const hookTail = (
-    <>
-      <JumpButton tab="hooks" label={t('ui.settings-view.diag.jump-hooks')} onJump={onJump} />
-      {hooks.exists && hooks.parsed && (
-        <span className="settings-meta">{hooks.registeredCount}/{hooks.expectedCount}</span>
-      )}
-    </>
-  );
+  const hookTail = <JumpButton tab="integration" label={t('ui.settings-view.diag.jump-page')} onJump={onJump} />;
 
   // Proxy row(원본 proxyRowHtml :248-271).
   const p = data.proxy;
   const proxyLabel = t('ui.settings-view.diag.proxy-label');
-  const proxyJump = <JumpButton tab="proxy" label={t('ui.settings-view.diag.jump-proxy')} onJump={onJump} />;
+  const proxyJump = <JumpButton tab="integration" label={t('ui.settings-view.diag.jump-page')} onJump={onJump} />;
   let proxyRow: React.ReactNode;
   if (!p) {
     proxyRow = <SettingsRow label={proxyLabel} status="warn" value={t('ui.settings-view.diag.missing')} tail={proxyJump} />;
   } else if (p.corrupted) {
     proxyRow = <SettingsRow label={proxyLabel} status="fail" value={t('ui.settings-view.diag.proxy-corrupted')} tail={proxyJump} />;
   } else if (p.installed) {
-    proxyRow = (
-      <SettingsRow
-        label={proxyLabel}
-        status="ok"
-        value={t('ui.settings-view.diag.proxy-installed')}
-        tail={
-          <>
-            <span className="settings-meta">{p.shell}</span>
-            {p.profilePath && <code className="settings-meta">{p.profilePath}</code>}
-          </>
-        }
-      />
-    );
+    proxyRow = <SettingsRow label={proxyLabel} status="ok" value={t('ui.settings-view.diag.proxy-installed')} tail={proxyJump} />;
   } else if (!p.profileExisted) {
     proxyRow = <SettingsRow label={proxyLabel} status="warn" value={t('ui.settings-view.diag.proxy-no-profile')} tail={proxyJump} />;
   } else {
     proxyRow = <SettingsRow label={proxyLabel} status="warn" value={t('ui.settings-view.diag.missing')} tail={proxyJump} />;
   }
 
-  // Graph DB 통합 row(원본 :285-340).
+  // 관계 흐름 그래프 통합 row — 그래프는 항상 켜진 상태로 고정(v4.3.x). circuit/설치 기준만 판정.
   const ladybugInstalled = !!data.ladybug?.installed;
   let graphStatus: 'ok' | 'warn';
   let graphValueText: string;
   if (!ladybugInstalled) {
     graphStatus = 'warn';
     graphValueText = t('ui.settings-view.diag.missing');
-  } else if (graph.mode === 'off') {
-    graphStatus = 'warn';
-    graphValueText = t('ui.settings-view.diag.graph-off');
   } else if (graph.circuit?.state !== 'CLOSED') {
     graphStatus = 'warn';
     graphValueText = t('ui.settings-view.diag.graph-circuit-open');
@@ -124,32 +102,11 @@ export function DiagPanelView({ data, t, onJump, onCopy }: DiagPanelViewProps) {
     graphStatus = 'ok';
     graphValueText = t('ui.settings-view.diag.installed');
   }
-  const graphSource = graph.source || 'default';
-  const graphSourceClass = graphSource === 'env' ? 'is-env' : graphSource === 'file' ? 'is-saved' : 'is-default';
-  const graphSourceLabel = t(`ui.settings-view.graph.source.${graphSource === 'file' ? 'saved' : graphSource}`);
-  const graphTail = (
-    <>
-      <JumpButton tab="graph" label={t('ui.settings-view.diag.jump-graph')} onJump={onJump} />
-      {ladybugInstalled && (
-        <>
-          <span className={`settings-source-badge ${graphSourceClass}`} title={graph.configFile || ''}>
-            {graphSourceLabel}
-          </span>
-          <span className="settings-meta">{graph.mode}</span>
-        </>
-      )}
-    </>
-  );
+  const graphTail = <JumpButton tab="storage" label={t('ui.settings-view.diag.jump-page')} onJump={onJump} />;
 
-  // SQLite row(원본 :325-337).
-  const mig = data.sqlite?.migration ?? null;
-  const sqliteTail = (
-    <>
-      <JumpButton tab="sqlite" label={t('ui.settings-view.diag.jump-sqlite')} onJump={onJump} />
-      {mig?.version != null && <span className="settings-meta">v{mig.version}</span>}
-      {mig?.filename && <code className="settings-meta">{mig.filename}</code>}
-    </>
-  );
+  // 대화·이벤트 기록(SQLite) row — Storage 탭으로 점프. 마이그레이션 상세(버전/파일명)는
+  //   진단을 어수선하게 하므로 *저장소 페이지* 항목으로 이관 — 여기선 점프 링크만.
+  const sqliteTail = <JumpButton tab="storage" label={t('ui.settings-view.diag.jump-page')} onJump={onJump} />;
 
   return (
     <>

@@ -11,7 +11,6 @@
 
 import type {
   GraphData,
-  GraphMode,
   HookData,
   HookHealthState,
   HookProfile,
@@ -88,11 +87,10 @@ export function showProfilePicker(state: HookHealthState): boolean {
 }
 
 /**
- * 라디오 선택값 유효성 가드 — 'full' | 'minimal' 만 허용(원본 :504).
- * 아키텍처 §4.2: 입력 폼이 아니므로 클라 검증 최소 — 라디오 유효성만 타입가드.
+ * Hook 프로필 유효성 가드 — full 단일(선택 아님). minimal 제거됨.
  */
 export function isValidHookProfile(value: string): value is HookProfile {
-  return value === 'full' || value === 'minimal';
+  return value === 'full';
 }
 
 /**
@@ -103,41 +101,31 @@ export function canUndo(backupPath: string | null | undefined): boolean {
   return !!backupPath && !backupPath.startsWith('(');
 }
 
-// ── Graph DB (P2-07) ─────────────────────────────────────────────────────────
+// ── Graph (Storage 패널 "관계 흐름 그래프" 섹션) ───────────────────────────────
 
-/** Graph 섹션 통합 헬스 상태(원본 renderGraphSection :748-749). */
-export type GraphHealthState = 'ok' | 'warn' | 'off';
+/**
+ * Graph 통합 상태 — 그래프는 항상 켜진 상태로 고정(v4.3.x). mode 개념이 사라져
+ * 안전망(circuit/sync) 기준으로만 판정한다.
+ */
+export type GraphHealthState = 'ok' | 'warn';
 
 /**
  * Graph 통합 상태 배지.
- *   - mode=off                              → 'off'
  *   - circuit=CLOSED AND sync.running       → 'ok'
  *   - 그 외(circuit OPEN/HALF || !running)  → 'warn'
- * 원본 :748-749 1:1.
  */
 export function graphHealthState(graph: GraphData): GraphHealthState {
-  if (graph.mode === 'off') return 'off';
   return graph.circuit?.state === 'CLOSED' && graph.sync?.running ? 'ok' : 'warn';
 }
 
-/** Graph 헬스 배지 변형 클래스 — 원본 `is-${healthState}`(:819). off 는 별도 톤. */
-export function graphHealthBadgeVariant(state: GraphHealthState): 'ok' | 'warn' | 'off' {
+/** Graph 헬스 배지 변형 클래스 — `is-${state}`. */
+export function graphHealthBadgeVariant(state: GraphHealthState): 'ok' | 'warn' {
   return state;
 }
 
-/** Graph 헬스 글리프 — ok '✓' / warn '⚠' / off '⏸'(원본 :750). */
+/** Graph 헬스 글리프 — ok '✓' / warn '⚠'. */
 export function graphHealthIcon(state: GraphHealthState): string {
-  return state === 'ok' ? '✓' : state === 'warn' ? '⚠' : '⏸';
-}
-
-/** Graph 모드 라디오 유효성 가드 — off/shadow/primary(원본 modes :723). */
-export function isValidGraphMode(value: string): value is GraphMode {
-  return value === 'off' || value === 'shadow' || value === 'primary';
-}
-
-/** graph source → i18n 키 접미사(원본 :764 `source==='file'?'saved':source`). */
-export function graphSourceKey(source: string): string {
-  return source === 'file' ? 'saved' : source;
+  return state === 'ok' ? '✓' : '⚠';
 }
 
 // ── Proxy (P2-07) ────────────────────────────────────────────────────────────

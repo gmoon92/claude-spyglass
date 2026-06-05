@@ -553,10 +553,21 @@
     "refresh-title": "現在の設定タブの診断を再取得",
     "loading": "診断情報を読み込み中…",
     "tab-diag": "システム診断",
-    "tab-hooks": "Hook 設定",
-    "tab-graph": "Graph DB",
-    "tab-proxy": "Proxy 設定",
+    "tab-integration": "連携",
+    "tab-storage": "ストレージ",
     "tab-server": "サーバー / ログ",
+    "integration": {
+      "install-title": "連携の自動インストール",
+      "install-sub": "Hook(イベント収集)と Proxy(APIメトリクス)を一度にインストール。構文検証後、バックアップを自動整理。",
+      "install-all": "Hook · Proxy を一括インストール",
+      "preview": {
+        "label": "プレビュー",
+        "dev": "開発用",
+        "real": "実際",
+        "missing": "未インストール",
+        "installed": "インストール済み"
+      }
+    },
     "diag": {
       "title": "システム診断",
       "missing": "未インストール",
@@ -566,7 +577,6 @@
       "hook-broken": "JSON 破損",
       "hook-missing": "設定ファイルなし",
       "jump-hooks": "Hook 設定 →",
-      "jump-graph": "Graph DB →",
       "port": "ポート",
       "logs-dir": "ログディレクトリ",
       "jump-proxy": "Proxy ガイド →",
@@ -575,13 +585,19 @@
       "proxy-no-profile": "シェルプロファイルなし",
       "installed": "インストール済み",
       "configured": "設定済み",
-      "graph-off": "無効",
       "graph-circuit-open": "サーキット遮断",
       "hook-partial": "部分登録",
-      "jump-sqlite": "SQLite →"
+      "jump-page": "ページへ移動",
+      "jump-integration": "連携 →",
+      "jump-storage": "ストレージ →"
     },
     "hooks": {
-      "title": "Hook 設定",
+      "title": "イベント収集 (Hook)",
+      "subtitle": "Claude Code のライフサイクルイベント(プロンプト・ツール呼び出し・セッション等)を収集します。",
+      "status-ok": "収集中 ({n}/{total} イベント)",
+      "status-off": "未インストール — 自動インストールが必要です",
+      "reinstall": "再インストール",
+      "detail-summary": "詳細を表示",
       "registered": "登録済",
       "unregistered": "未登録",
       "spyglass-dir-missing": "env.SPYGLASS_DIR 未設定",
@@ -627,79 +643,69 @@
       "pre-restore-backup": "復元直前のバックアップ",
       "restart-required-banner": "✓ 適用されました。変更を有効にするには、実行中の Claude Code ターミナルセッションを終了して再起動してください。"
     },
-    "graph": {
-      "title": "Graph DB",
-      "mode": "現在のモード",
-      "mode-hint": "ランタイムのみ — 次回起動は SPYGLASS_GRAPH_MODE が優先",
-      "mode-pick-title": "グラフエンジンの動作方式",
-      "mode-pick-sub": "選択すると即座に保存されます。新しいモードを有効にするには Claude Code を再起動してください。",
-      "circuit": "サーキットブレーカー",
-      "sync-worker": "Sync Worker",
-      "cache": "キャッシュサイズ",
-      "engineering-summary": "システムエンジニアリング情報 ▼",
-      "engineering-title": "システムエンジニアリング情報",
-      "toast-saved": "✓ 設定を保存しました",
-      "toast-env-override": "⚠ 環境変数が優先され、現在のセッションには反映されません",
-      "options": {
-        "off": {
-          "label": "使用しない（安定性優先）",
-          "desc": "グラフエンジンを切って、従来の標準モードで安全に動作させます。",
-          "tooltip": "Ladybug グラフエンジン自体を無効化します。フロー可視化は使用できません。"
+    "storage": {
+      "title": "ストレージ",
+      "summary-title": "全体の使用量",
+      "total-size": "合計サイズ",
+      "retention": "保存期間",
+      "retention-days": "{n}日",
+      "rdb": {
+        "title": "会話・イベント記録",
+        "subtitle": "プロンプト・ツール呼び出し・セッションなど、すべての活動記録を保存します。",
+        "health-ok": "正常稼働中",
+        "size-label": "サイズ",
+        "path-label": "パス",
+        "migration-label": "スキーマバージョン",
+        "engine-label": "エンジン",
+        "engine-value": "SQLite (Bun 内蔵)",
+        "cli-label": "sqlite3 CLI (任意)"
+      },
+      "graph": {
+        "title": "関係フローグラフ",
+        "subtitle": "エージェント・スキル・ツール間の呼び出し関係を可視化するグラフデータです。",
+        "size-label": "キャッシュサイズ",
+        "connection": "接続状態",
+        "connection-ok": "正常",
+        "connection-warn": "問題発生",
+        "sync": "同期状態",
+        "sync-on": "稼働中",
+        "sync-off": "停止",
+        "engine-label": "エンジン",
+        "health": {
+          "ok": "正常稼働中",
+          "warn": "最適化準備中"
         },
-        "shadow": {
-          "label": "バックグラウンドテスト（推奨）",
-          "desc": "標準モードで安全に画面を描画しながら、裏でエンジンの互換性をテストします。",
-          "tooltip": "バックグラウンドで Ladybug を比較ログのみ実行。サーキットブレーカーで保護され、ユーザー影響ゼロ。"
-        },
-        "primary": {
-          "label": "リアルタイムグラフ有効化（性能最大化）",
-          "desc": "高速グラフエンジンをオンにして、Claude Code の複雑な追跡フローをラグなく華麗に可視化します。",
-          "tooltip": "Ladybug グラフエンジンをメイン応答に使用。複雑な BFS / シーケンスクエリが高速。"
-        }
-      },
-      "health": {
-        "ok": "グラフエンジン: 正常稼働中",
-        "warn": "最適化準備中",
-        "off": "グラフエンジン無効"
-      },
-      "config-file": "設定ファイル",
-      "persisted-to": "永続化先",
-      "env-override-warning": "シェル環境変数 SPYGLASS_GRAPH_MODE が設定されているため、ダッシュボードの変更は現在のセッションに反映されません。永続的に適用するにはシェルプロファイルから export 宣言を削除してください。",
-      "source": {
-        "env": "env",
-        "saved": "saved",
-        "default": "default"
-      },
-      "ladybug": {
-        "title": "グラフエンジン",
-        "engineering-label": "グラフエンジン (Ladybug)",
+        "install-title": "グラフエンジン",
         "status-label": "ステータス",
-        "installed": "インストール済み",
         "missing": "未インストール",
         "missing-hint": "グラフ分析機能を利用するには追加の構成要素が必要です。下のボタンで自動インストールしてください。",
         "install": "自動インストール",
         "no-package-manager": "自動インストールに必要なシステム環境が整っていません。管理者にお問い合わせください。",
         "installing": "インストール中...",
-        "running": "インストールを実行中...",
         "install-success": "インストール完了",
         "install-failed": "インストール失敗",
         "restart-required": "Claude Codeを再起動すると変更が反映されます。"
       }
     },
     "proxy": {
-      "title": "Proxy 自動登録",
+      "title": "API メトリクス収集 (Proxy)",
       "intro": "spyglass が LISTEN 中のみ ANTHROPIC_BASE_URL を注入する条件付き関数をシェルプロファイルに自動登録します。",
       "shell": "シェル",
       "copy": "コピー",
       "copied": "✓ クリップボードにコピーしました",
       "outro": "手動編集を希望する場合は上記スニペットを ~/.zshrc などシェルプロファイル末尾に貼り付け、新しいシェルで使用してください。",
       "install": "プロキシ自動登録",
+      "status-ok": "収集中 ({shell})",
+      "status-off": "未インストール — 自動インストールが必要です",
+      "status-broken": "マーカー破損 — 手動修正が必要です",
+      "reinstall": "再インストール",
+      "detail-summary": "詳細 / 高度な設定",
+      "legacy-unmarked-warning": "マーカー外に既存のプロキシ関数が残っており重複する可能性があります。シェルプロファイルから spyglass マーカー外の claude() 関数を手動で削除してください。",
       "installing": "シェルプロファイルに登録中…",
       "installed": "プロキシ自動登録完了",
       "installed-to": "変更されたファイル",
       "replaced": "置換",
       "appended": "追加",
-      "cleaned-graph-exports": "コメントアウトされた SPYGLASS_GRAPH_MODE export",
       "undo": "以前のシェル設定に戻す",
       "restoring": "復元中…",
       "restored": "✓ シェル設定を復元しました",
@@ -757,20 +763,6 @@
       "port-change-hint": "環境変数を設定してサーバーを再起動してください。",
       "logs-title": "ログファイル",
       "no-logs": "ログディレクトリは空または存在しません。"
-    },
-    "tab-sqlite": "SQLite",
-    "sqlite": {
-      "title": "SQLite",
-      "health-ok": "SQLite は正常に動作中",
-      "health-hint": "Bun ランタイムに内蔵された SQLite ライブラリを使用します。別途インストールは不要です。",
-      "db-file-title": "データベースファイル",
-      "path-label": "パス",
-      "size-label": "サイズ",
-      "migration-title": "マイグレーション",
-      "migration-version-label": "最新バージョン",
-      "cli-title": "sqlite3 CLI (オプション)",
-      "cli-hint": "コマンドラインから DB を直接照会するための外部ツール。Spyglass の動作には影響しません。",
-      "cli-label": "ステータス"
     }
   }
 }

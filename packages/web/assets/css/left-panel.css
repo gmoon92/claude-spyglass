@@ -267,12 +267,5 @@
 .app-shell-update-badge {
   display: none;
 }
-body[data-app-mode="settings"] .app-shell-update-badge {
-  display: flex;
-  position: fixed;
-  left: calc(var(--space-4) + var(--app-rail-width));
-  bottom: var(--space-4);
-  width: auto;
-  max-width: 220px;
-  z-index: 40;
-}
+/* settings 모드도 nav 하단에 SidebarVersionFooter(.left-panel-footer)를 in-flow 로 두므로
+   fixed 폴백을 쓰지 않는다 — browse·metadocs 와 동일하게 사이드바(nav)가 배지를 소유. */

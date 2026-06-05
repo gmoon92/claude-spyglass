@@ -9,6 +9,7 @@
  */
 export { SettingsRow, type SettingsRowProps } from './SettingsRow';
 export { HealthBadge, type HealthBadgeProps } from './HealthBadge';
+export { StorageUsageBar, type StorageUsageBarProps, type StorageUsageSegment } from './StorageUsageBar';
 export { OptionCard, type OptionCardProps } from './OptionCard';
 export { TooltipHost, type TooltipHostProps } from './TooltipHost';
 export { CodeCopyBox, type CodeCopyBoxProps } from './CodeCopyBox';
