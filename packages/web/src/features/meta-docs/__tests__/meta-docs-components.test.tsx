@@ -77,8 +77,9 @@ describe('MetaDocsCatalog — 테이블 마크업 (view.js:682-704)', () => {
     expect(html).toContain('data-name="designer"');
     expect(html).toContain('data-type="agent"');
   });
-  it('orphan 행(id null) → meta-doc-orphan + 경로 라벨', () => {
-    const html = renderToStaticMarkup(<MetaDocsCatalog rows={ROWS} t={t} />);
+  it('orphan 행(id null) → meta-doc-orphan + 경로 라벨 (orphan 필터에서만 노출)', () => {
+    // orphan 은 기본 all 목록에서 제외되므로 orphan 필터로 명시해야 노출된다.
+    const html = renderToStaticMarkup(<MetaDocsCatalog rows={ROWS} display="orphan" t={t} />);
     expect(html).toContain('meta-doc-orphan');
     expect(html).toContain('meta-doc-source-orphan');
   });
@@ -93,12 +94,12 @@ describe('MetaDocsCatalog — 테이블 마크업 (view.js:682-704)', () => {
     expect(html).toContain('aria-sort="descending"');
     expect(html).toContain('sort-desc');
   });
-  it('정렬 적용 → 행 순서 (invocations desc: designer(12),ghost(3),committer(0))', () => {
+  it('정렬 적용 → 행 순서 (invocations desc: designer(12),committer(0); orphan ghost 는 all 에서 제외)', () => {
     const html = renderToStaticMarkup(
       <MetaDocsCatalog rows={ROWS} sort={{ key: 'invocations', dir: 'desc' }} t={t} />,
     );
     const order = [...html.matchAll(/data-name="([^"]+)"/g)].map((m) => m[1]);
-    expect(order).toEqual(['designer', 'ghost', 'committer']);
+    expect(order).toEqual(['designer', 'committer']);
   });
   it('display=unused 필터 → committer 만', () => {
     const html = renderToStaticMarkup(<MetaDocsCatalog rows={ROWS} display="unused" t={t} />);
@@ -107,10 +108,10 @@ describe('MetaDocsCatalog — 테이블 마크업 (view.js:682-704)', () => {
   });
   it('searchTerm 필터 → 비매칭 행 hidden 속성 (view.js:1019 동치)', () => {
     const html = renderToStaticMarkup(<MetaDocsCatalog rows={ROWS} searchTerm="design" t={t} />);
-    // designer 만 visible — committer/ghost 는 hidden
+    // designer 만 visible — committer 는 hidden. ghost(orphan)는 all 에서 이미 제외되어 행 자체가 없음.
     expect(html).toContain('data-name="designer"');
     expect(html).toMatch(/data-name="committer"[^>]*hidden/);
-    expect(html).toMatch(/data-name="ghost"[^>]*hidden/);
+    expect(html).not.toContain('data-name="ghost"');
   });
 });
 
@@ -150,5 +151,19 @@ describe('MetaDocsFilterBar — 타입/표시/includeDeleted (view.js:836-908)',
     );
     expect(html).toContain('data-meta-include-deleted');
     expect(html).toContain('checked');
+  });
+  it('showOrphan 기본값(미지정) → orphan 버튼 노출 (기존 동작 보존)', () => {
+    const html = renderToStaticMarkup(
+      <MetaDocsFilterBar type="all" display="all" includeDeleted={false} t={t} />,
+    );
+    expect(html).toContain('data-value="orphan"');
+  });
+  it('showOrphan=false → orphan 버튼 숨김 (0건 시 노이즈 제거)', () => {
+    const html = renderToStaticMarkup(
+      <MetaDocsFilterBar type="all" display="all" includeDeleted={false} showOrphan={false} t={t} />,
+    );
+    expect(html).not.toContain('data-value="orphan"');
+    // all/unused 는 그대로 노출
+    expect(html).toContain('data-value="unused"');
   });
 });

@@ -47,6 +47,7 @@ import {
   nextSort,
   DEFAULT_SORT,
   applyDisplayFilter,
+  computeRowCounts,
   filterMetaDocsByProject,
   isGlobalMetaDoc,
   type MetaDocRow,
@@ -272,6 +273,14 @@ export function MetaDocsLayout(): ReactElement {
 
   // 좌측 카운트 — 전체 카탈로그(프로젝트/type 필터 전) 기준(원본 pushLeftCounts 는 probe rows 전체).
   const metaCounts = useMemo(() => computeMetaCounts(rows), [rows]);
+
+  // orphan(미등록 호출) 필터 노출 여부 — 전체 카탈로그 기준 orphan 0건이면 버튼 숨김(UI 노이즈 제거).
+  //   단 현재 orphan 필터가 활성이면 0건이어도 유지해 사용자가 필터를 빠져나올 수 있게 한다.
+  //   카운트 SSoT 는 computeRowCounts(요약 카드와 동일 출처).
+  const showOrphanFilter = useMemo(
+    () => computeRowCounts(rows).orphan > 0 || display === 'orphan',
+    [rows, display],
+  );
 
   // flow 활성 행 — 명시 지정 우선, 없으면 정렬 대상 첫 초점 행 자동 선택.
   const flowRow = activeRow ?? pickFlowRow(typeFiltered);
@@ -568,6 +577,7 @@ export function MetaDocsLayout(): ReactElement {
                 type={type}
                 display={display}
                 includeDeleted={includeDeleted}
+                showOrphan={showOrphanFilter}
                 onFilterChange={onFilterChange}
                 onIncludeDeletedChange={setIncludeDeleted}
                 t={tx}

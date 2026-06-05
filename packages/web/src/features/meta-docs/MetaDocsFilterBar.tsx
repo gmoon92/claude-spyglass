@@ -28,6 +28,12 @@ export interface MetaDocsFilterBarProps {
   display: DisplayFilter;
   /** soft-deleted 포함 토글(컨트롤드). */
   includeDeleted: boolean;
+  /**
+   * orphan(미등록 호출) 필터 버튼 노출 여부. 기본 true(기존 동작 보존).
+   * 호출처가 "orphan 0건이면 숨김(단 현재 orphan 필터 활성 시엔 유지)"을 계산해 전달 —
+   * 평상시 UI 노이즈를 줄이되, 미등록 호출(정합성 신호)이 생기면 자동 노출되는 센서 동작.
+   */
+  showOrphan?: boolean;
   /** 필터 버튼 클릭 통지(type/display). */
   onFilterChange?: (group: MetaFilterGroup, value: string) => void;
   /** includeDeleted 토글 통지. */
@@ -85,6 +91,7 @@ export function MetaDocsFilterBar({
   type,
   display,
   includeDeleted,
+  showOrphan = true,
   onFilterChange,
   onIncludeDeletedChange,
   t,
@@ -95,10 +102,11 @@ export function MetaDocsFilterBar({
     { v: 'skill', label: 'Skill' },
     { v: 'command', label: 'Command' },
   ];
+  // orphan(미등록 호출)은 showOrphan 일 때만 노출 — 0건이면 호출처가 숨긴다.
   const displays: FilterBtnDef[] = [
     { v: 'all', label: t('ui.meta-docs-view.filter-all') },
     { v: 'unused', label: t('ui.meta-docs-view.filter-unused') },
-    { v: 'orphan', label: t('ui.meta-docs-view.filter-orphan') },
+    ...(showOrphan ? [{ v: 'orphan', label: t('ui.meta-docs-view.filter-orphan') }] : []),
   ];
 
   return (
