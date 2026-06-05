@@ -559,14 +559,7 @@
     "integration": {
       "install-title": "Auto-install integration",
       "install-sub": "Install Hook (event collection) and Proxy (API metrics) at once. Syntax-verified, then backups auto-cleaned.",
-      "install-all": "Install Hook · Proxy",
-      "preview": {
-        "label": "Preview",
-        "dev": "dev",
-        "real": "Real",
-        "missing": "Not installed",
-        "installed": "Installed"
-      }
+      "install-all": "Install Hook · Proxy"
     },
     "diag": {
       "title": "System Diagnostics",
@@ -587,7 +580,7 @@
       "configured": "Configured",
       "graph-circuit-open": "Circuit open",
       "hook-partial": "Partial",
-      "jump-page": "Go to page",
+      "jump-page": "View",
       "jump-integration": "Integration →",
       "jump-storage": "Storage →"
     },

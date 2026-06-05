@@ -559,14 +559,7 @@
     "integration": {
       "install-title": "集成自动安装",
       "install-sub": "一次性安装 Hook(事件采集)和 Proxy(API 指标)。语法校验后自动清理备份。",
-      "install-all": "一键安装 Hook · Proxy",
-      "preview": {
-        "label": "预览",
-        "dev": "开发用",
-        "real": "实际",
-        "missing": "未安装",
-        "installed": "已安装"
-      }
+      "install-all": "一键安装 Hook · Proxy"
     },
     "diag": {
       "title": "系统诊断",
@@ -587,7 +580,7 @@
       "configured": "已配置",
       "graph-circuit-open": "断路器开启",
       "hook-partial": "部分注册",
-      "jump-page": "前往页面",
+      "jump-page": "查看",
       "jump-integration": "集成 →",
       "jump-storage": "存储 →"
     },

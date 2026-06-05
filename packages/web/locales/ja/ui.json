@@ -559,14 +559,7 @@
     "integration": {
       "install-title": "連携の自動インストール",
       "install-sub": "Hook(イベント収集)と Proxy(APIメトリクス)を一度にインストール。構文検証後、バックアップを自動整理。",
-      "install-all": "Hook · Proxy を一括インストール",
-      "preview": {
-        "label": "プレビュー",
-        "dev": "開発用",
-        "real": "実際",
-        "missing": "未インストール",
-        "installed": "インストール済み"
-      }
+      "install-all": "Hook · Proxy を一括インストール"
     },
     "diag": {
       "title": "システム診断",
@@ -587,7 +580,7 @@
       "configured": "設定済み",
       "graph-circuit-open": "サーキット遮断",
       "hook-partial": "部分登録",
-      "jump-page": "ページへ移動",
+      "jump-page": "表示",
       "jump-integration": "連携 →",
       "jump-storage": "ストレージ →"
     },

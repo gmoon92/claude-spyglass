@@ -559,14 +559,7 @@
     "integration": {
       "install-title": "연동 자동 설치",
       "install-sub": "Hook(이벤트 수집)과 Proxy(API 메트릭 수집)를 한 번에 설치합니다. 설치 후 구문 검증 → 백업 자동 정리.",
-      "install-all": "Hook · Proxy 한 번에 설치",
-      "preview": {
-        "label": "미리보기",
-        "dev": "개발용",
-        "real": "실제",
-        "missing": "미설치",
-        "installed": "설치됨"
-      }
+      "install-all": "Hook · Proxy 한 번에 설치"
     },
     "diag": {
       "title": "시스템 진단",
@@ -587,7 +580,7 @@
       "configured": "설정됨",
       "graph-circuit-open": "회로 차단",
       "hook-partial": "부분 등록",
-      "jump-page": "페이지 이동",
+      "jump-page": "보기",
       "jump-integration": "연동 →",
       "jump-storage": "저장소 →"
     },
