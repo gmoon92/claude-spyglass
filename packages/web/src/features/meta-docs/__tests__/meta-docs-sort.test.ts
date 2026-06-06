@@ -126,8 +126,11 @@ describe('nextSort — 토글 전이 (view.js:1049-1058)', () => {
 });
 
 describe('applyDisplayFilter — 행 부분집합 (view.js:1223)', () => {
-  it('all → 전체', () => {
-    expect(applyDisplayFilter(ROWS, 'all')).toHaveLength(4);
+  it('all → 카탈로그 등록 행만(orphan 제외)', () => {
+    const out = applyDisplayFilter(ROWS, 'all').map((r) => r.name);
+    // orphan-z(id==null)는 기본 목록에서 제외 — 나머지 3개만.
+    expect(out).not.toContain('orphan-z');
+    expect(out).toHaveLength(3);
   });
   it('unused → id!=null && invocations===0 (alpha 만)', () => {
     const out = applyDisplayFilter(ROWS, 'unused').map((r) => r.name);

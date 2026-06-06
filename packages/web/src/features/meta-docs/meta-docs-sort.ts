@@ -140,14 +140,15 @@ export function nextSort(
 
 /**
  * 표시 필터 — 행 부분집합 선택(단일 책임). (view.js:1223)
- *  - all    : 전체
+ *  - all    : 카탈로그 등록 행만 (id!=null). orphan(호출만 존재)은 제외 — 빌트인/외부/삭제된
+ *             정의의 호출 잔재라 기본 목록에서는 노이즈이므로 뺀다. 보려면 orphan 필터로 명시 선택.
  *  - unused : id!=null && invocations===0
- *  - orphan : id==null
+ *  - orphan : id==null (호출만 존재 — 명시 선택 시에만 노출)
  */
 export function applyDisplayFilter(rows: ReadonlyArray<MetaDocRow>, display: DisplayFilter): MetaDocRow[] {
   if (display === 'unused') return rows.filter((r) => r.id != null && (r.invocations ?? 0) === 0);
   if (display === 'orphan') return rows.filter((r) => r.id == null);
-  return rows.slice();
+  return rows.filter((r) => r.id != null);
 }
 
 /** rows → {used,unused,orphan} 카운트(summary 카드 SSoT). (view.js:437) */
