@@ -142,10 +142,10 @@ function GlobalRow({
     <tr
       className={`clickable cell-proj-global${selected ? ' row-selected' : ''}`}
       data-project={GLOBAL_PROJECT_KEY}
-      title={labeler.globalRowTitle()}
+      data-tip={labeler.globalRowTitle()}
       onClick={() => onSelect?.(GLOBAL_PROJECT_KEY)}
     >
-      <td className="cell-proj-name" title={labeler.globalRowLabel()}>
+      <td className="cell-proj-name" data-tip={labeler.globalRowLabel()}>
         {labeler.globalRowLabel()}
       </td>
       <td className="num cell-proj-meta-count" style={{ textAlign: 'right' }}>
@@ -179,10 +179,10 @@ function BrowseProjectRow({
       data-project={p.project_name}
       onClick={() => onSelect?.(p.project_name)}
     >
-      <td className="cell-proj-name" title={p.project_name || ''}>
+      <td className="cell-proj-name" data-tip={p.project_name || ''}>
         {p.project_name || '—'}
       </td>
-      <td className={`num cell-proj-sess${sessCls}`} style={{ textAlign: 'right' }} title={labeler.liveCount(active)}>
+      <td className={`num cell-proj-sess${sessCls}`} style={{ textAlign: 'right' }} data-tip={labeler.liveCount(active)}>
         {active === 0 ? '—' : <span className="proj-sess-active">{fmt(active)}</span>}
       </td>
       <td>
@@ -217,7 +217,7 @@ function MetaProjectRow({
       data-project={p.project_name}
       onClick={() => onSelect?.(p.project_name)}
     >
-      <td className="cell-proj-name" title={p.project_name || ''}>
+      <td className="cell-proj-name" data-tip={p.project_name || ''}>
         {p.project_name || '—'}
       </td>
       <td className="num cell-proj-meta-count" style={{ textAlign: 'right' }}>
@@ -409,7 +409,7 @@ export function SessionList({
   if (!selectedProject) {
     return (
       <tr>
-        <td colSpan={4} className="table-empty" title={labeler.selectProject()}>
+        <td colSpan={4} className="table-empty" data-tip={labeler.selectProject()}>
           —
         </td>
       </tr>
@@ -433,7 +433,7 @@ export function SessionList({
     }
     return (
       <tr>
-        <td colSpan={4} className="table-empty" title={labeler.sessionCount(selectedProject, 0)}>
+        <td colSpan={4} className="table-empty" data-tip={labeler.sessionCount(selectedProject, 0)}>
           {labeler.noData()}
         </td>
       </tr>

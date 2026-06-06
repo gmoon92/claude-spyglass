@@ -196,7 +196,7 @@ export function SystemReminderChip({
         aria-expanded={open}
         aria-controls={popoverId}
         data-sysrem-toggle={popoverId}
-        title={t('session.session-detail.turn-views.sysrem-chip-title', { count })}
+        data-tip={t('session.session-detail.turn-views.sysrem-chip-title', { count })}
         onClick={onChipClick}
       >
         <Note size={12} />

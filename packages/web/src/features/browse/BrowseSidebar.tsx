@@ -110,7 +110,7 @@ export function BrowseSidebar({
       {/* 수평 너비 드래그 핸들(absolute) — use-panel-resize 가 mousedown/dblclick 결선. */}
       <div
         className="panel-resize-handle"
-        title="Drag to resize · Double-click to fit content"
+        data-tip="Drag to resize · Double-click to fit content"
         ref={widthHandleRef}
       />
 
@@ -157,7 +157,7 @@ export function BrowseSidebar({
       <div
         className="panel-vertical-handle"
         id="panelVerticalHandle"
-        title="Drag to resize height"
+        data-tip="Drag to resize height"
         ref={vTopHandleRef}
       />
 
@@ -189,7 +189,7 @@ export function BrowseSidebar({
       <div
         className="panel-vertical-handle"
         id="panelVerticalHandleBottom"
-        title="Drag to resize height"
+        data-tip="Drag to resize height"
         ref={vBottomHandleRef}
       />
 

@@ -40,7 +40,7 @@ export function SettingsHeader({ onRefresh, t }: SettingsHeaderProps): ReactElem
       <button
         type="button"
         className="settings-refresh-btn"
-        title={t('ui.settings-view.refresh-title', undefined) || ''}
+        data-tip={t('ui.settings-view.refresh-title', undefined) || ''}
         onClick={onRefresh}
       >
         {t('ui.settings-view.refresh', undefined) || '전체 진단 다시 실행'}

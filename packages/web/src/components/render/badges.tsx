@@ -35,7 +35,7 @@ export function TypeBadge({ type }: { type: string | null | undefined }): ReactE
   const tone = toneMap[t] ?? 'neutral';
   // 원본은 title/aria-label 에 escHtml(type) — React 자동 이스케이프로 동치(정규화에서 엔티티 디코드).
   return (
-    <span className={`type-badge type-${cls} ds-badge`} data-tone={tone} title={t} aria-label={t}>
+    <span className={`type-badge type-${cls} ds-badge`} data-tone={tone} data-tip={t} aria-label={t}>
       {label}
     </span>
   );

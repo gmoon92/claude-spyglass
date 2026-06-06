@@ -62,7 +62,7 @@ export function PrologueCard({ prologue }: { prologue: PrologueRow[] | null | un
         </span>
         <span
           className="turn-prologue-hint"
-          title={t('session.session-detail.turn-views.prologue-hint-title')}
+          data-tip={t('session.session-detail.turn-views.prologue-hint-title')}
         >
           {t('session.session-detail.turn-views.prologue-hint')}
         </span>
@@ -74,7 +74,7 @@ export function PrologueCard({ prologue }: { prologue: PrologueRow[] | null | un
             r.source === 'transcript-assistant-text' ? (
               <span
                 className="prologue-source-tag"
-                title={t('session.session-detail.turn-views.prologue-transcript-tag')}
+                data-tip={t('session.session-detail.turn-views.prologue-transcript-tag')}
               >
                 transcript
               </span>

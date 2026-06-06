@@ -105,7 +105,7 @@ function PathCell({ row }: { row: MetaDocRow }): ReactElement {
   const path = row.file_path || row.source_root || null;
   if (!path) return <span className="meta-doc-na">—</span>;
   return (
-    <span className="meta-doc-source-root" title={String(path)}>
+    <span className="meta-doc-source-root" data-tip={String(path)}>
       {shortenPath(String(path))}
     </span>
   );
@@ -207,7 +207,7 @@ export const MetaDocsCatalog = memo(function MetaDocsCatalog({
               className={cls}
               data-type={String(r.type ?? '')}
               data-name={String(r.name ?? '')}
-              {...(r.description ? { title: String(r.description) } : {})}
+              {...(r.description ? { 'data-tip': String(r.description) } : {})}
               {...(hidden ? { hidden: true } : {})}
               {...(isActive ? { 'data-flow-active': '1' } : {})}
               onClick={onRowClick ? () => onRowClick(r) : undefined}
@@ -222,7 +222,7 @@ export const MetaDocsCatalog = memo(function MetaDocsCatalog({
                 {orphan ? (
                   <span
                     className="meta-doc-source-orphan"
-                    title={t('ui.meta-docs-view.orphan-tooltip')}
+                    data-tip={t('ui.meta-docs-view.orphan-tooltip')}
                     tabIndex={0}
                   >
                     {t('ui.meta-docs-view.orphan-path-label')}

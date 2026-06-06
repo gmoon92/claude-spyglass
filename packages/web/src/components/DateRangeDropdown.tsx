@@ -143,7 +143,7 @@ export function DateRangeDropdown({
               className="ds-dropdown-item"
               data-value={value}
               aria-selected={selected === value ? 'true' : 'false'}
-              title={labeler.presetTitle(value)}
+              data-tip={labeler.presetTitle(value)}
               onClick={() => onSelectPreset?.(value)}
             >
               {labeler.presetLabel(value)}

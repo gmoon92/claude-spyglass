@@ -8,8 +8,10 @@
  * 정공법(SSoT 이중화 금지):
  *  - 노출 여부·stage·pct·tone·n 판정은 lib/anomaly-field.ts(순수 SSoT) 가 단독 담당.
  *  - 라벨은 useTranslation 의 t 가 동일 i18n 키로 해석(원본 window.I18n.t 와 같은 키 문자열).
- *  - 마크업은 원본 span class / data-tone / data-*-stage / title / aria-label 을 1:1 재현
- *    (badges.css·tooltip·점멸 애니메이션 회귀 방지).
+ *  - 마크업은 원본 span class / data-tone / data-*-stage / aria-label 을 재현(badges.css·점멸 회귀 방지).
+ *    단 툴팁은 즉시 노출 게이트로 통합 — 동적 fullTip(pct/n 포함)은 i18n 키로 재현 불가하므로
+ *    네이티브 title 대신 data-tip(raw 텍스트, use-tooltip 의 TooltipLayer 가 즉시 표시)을 쓴다.
+ *    bloated-sys/agent-spike 는 data-mini-badge-tooltip 키가 i18n 에 없어 항상 null 이었으므로 제거.
  *
  * 골든마스터: anomaly-badges-equivalence.test.tsx 가 React 출력을 원본 vanilla HTML 과
  *  정규화 후 동치(toMatchSnapshot)로 고정 — vanilla producer 제거 전 회귀 가드.
@@ -59,7 +61,7 @@ export function BloatedSysBadge({
         className={`badge-bloated-sys badge-bloated-sys--dot${stageCls} ds-dot`}
         data-tone={tone}
         data-bloated-sys-stage={stage}
-        title={fullTip}
+        data-tip={fullTip}
         aria-label={fullTip}
       />
     );
@@ -71,8 +73,7 @@ export function BloatedSysBadge({
       className={`badge-bloated-sys ${cls}${stageCls} ds-badge`}
       data-tone={tone}
       data-bloated-sys-stage={stage}
-      data-mini-badge-tooltip="bloated-sys"
-      title={fullTip}
+      data-tip={fullTip}
       aria-label={fullTip}
     >
       {label}
@@ -99,7 +100,7 @@ export function ContextSaturationBadge({ ctxSat }: { ctxSat: unknown }): ReactEl
       className={`badge-context-saturation badge-context-saturation--full${stageCls} ds-badge`}
       data-tone={tone}
       data-context-saturation-stage={stage}
-      title={fullTip}
+      data-tip={fullTip}
       aria-label={fullTip}
     >
       {label}
@@ -125,8 +126,7 @@ export function AgentSpikeBadge({ agentSpike }: { agentSpike: unknown }): ReactE
       className="mini-badge badge-spike ds-badge"
       data-tone="warn"
       data-spike-variant="agent"
-      data-mini-badge-tooltip="agent-spike"
-      title={fullTip}
+      data-tip={fullTip}
       aria-label={fullTip}
     >
       ↑<span className="agent-spike-count">×{n}</span>
@@ -221,7 +221,7 @@ export function TurnSpikeSummary({
   if (!info) return null;
   const label = t('ui.anomaly.agent-spike.summary', { n: info.n });
   return (
-    <span className="turn-spike-summary" title={label} aria-label={label}>
+    <span className="turn-spike-summary" data-tip={label} aria-label={label}>
       <span className="turn-spike-summary-label">{label}</span>
       <span className="turn-spike-summary-spark">
         <SpikeSparkline samples={samples} />

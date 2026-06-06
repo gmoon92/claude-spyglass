@@ -16,7 +16,7 @@ import { Copy } from '../design-system/icons/Copy';
 export interface InlineCopyButtonProps {
   /** 복사할 텍스트 — data-copy-text. */
   text: string;
-  /** title/aria-label. */
+  /** 즉시 툴팁(data-tip) + aria-label. */
   title: string;
   /** 복사 통지 — 호출처가 clipboard 부수효과 수행. */
   onCopy?: (text: string) => void;
@@ -28,8 +28,8 @@ export function InlineCopyButton({ text, title, onCopy }: InlineCopyButtonProps)
       type="button"
       className="settings-inline-copy"
       data-copy-text={text}
-      title={title}
-      aria-label="copy"
+      data-tip={title}
+      aria-label={title}
       onClick={() => onCopy?.(text)}
     >
       <Copy />

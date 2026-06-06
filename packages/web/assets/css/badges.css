@@ -373,11 +373,23 @@ tr.row-bloated-critical > td:first-child,
   font-size: 10px; font-weight: 600; color: var(--text-muted);
   text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
 }
-.stat-tooltip-desc { color: var(--text-dim); }
+/* 긴 토큰(공백 없는 식별자·URL·슬래시 경로)도 280px cap 안에서 줄바꿈 — 가로 삐져나감 차단.
+ * 한국어는 어절 단위 자연 줄바꿈(keep-all). settings-tooltip-bubble 공식과 동일. */
+.stat-tooltip-desc { color: var(--text-dim); overflow-wrap: anywhere; word-break: keep-all; }
 [data-stat-tooltip],
 [data-cache-panel-tooltip],
 [data-ctx-tooltip],
-[data-mini-badge-tooltip] { cursor: help; }
+[data-mini-badge-tooltip],
+[data-tip] { cursor: help; }
+/* 인터랙티브 요소(버튼·링크·클릭 행)는 data-tip 이 붙어도 pointer 어포던스 유지 — help(?) 커서 회귀 차단.
+ * 네이티브 title 시절에도 버튼은 pointer 였으므로 동작 보존. */
+button[data-tip],
+a[data-tip],
+[role="button"][data-tip],
+[role="option"][data-tip],
+[role="radio"][data-tip],
+[role="tab"][data-tip],
+[onclick][data-tip] { cursor: pointer; }
 
 /* ── TOOL ICON COLOR ────────────────────────────────────────────────────── */
 /* tool-icon-svg-color-regression: 옛 텍스트 글리프(◉/◎) 시절의

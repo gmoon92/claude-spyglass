@@ -105,7 +105,7 @@ export function AppRail({ appMode, onSelect, t }: AppRailProps): ReactElement {
             data-app-mode={mode}
             aria-current={isActive ? 'page' : undefined}
             aria-label={t(ariaKey, undefined) || ariaFallback}
-            title={t(titleKey, undefined) || titleFallback}
+            data-tip={t(titleKey, undefined) || titleFallback}
             onClick={() => onSelect(mode)}
           >
             {icon}

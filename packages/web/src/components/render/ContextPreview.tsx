@@ -44,7 +44,7 @@ export function ContextPreview({ r, maxLen = 60, data: dataProp }: ContextPrevie
   const hintText = data.hint ? t(data.hint.key, data.hint.vars) : '';
 
   return (
-    <span className="prompt-preview" data-expand-id={data.expandId} title={tooltip}>
+    <span className="prompt-preview" data-expand-id={data.expandId} data-tip={tooltip}>
       {data.display}
       {data.ellipsis ? '…' : ''}
       {hintText ? (

@@ -40,7 +40,7 @@ export function StorageUsageBar({ segments }: StorageUsageBarProps) {
                 key={s.key}
                 className={`storage-usage-seg is-${s.key}`}
                 style={{ width: `${pct}%` }}
-                title={`${s.label}: ${s.sizeText}`}
+                data-tip={`${s.label}: ${s.sizeText}`}
               />
             );
           })}

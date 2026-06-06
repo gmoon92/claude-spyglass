@@ -48,16 +48,16 @@ describe('modelChipLabel — i18n 라벨 고정', () => {
   });
 });
 
-describe('modelChipHtml — title 라벨 고정', () => {
-  it('model null → title 에 "모델 정보 없음"', () => {
+describe('modelChipHtml — data-tip 라벨 고정', () => {
+  it('model null → data-tip 에 "모델 정보 없음"', () => {
     const html = modelChipHtml(null);
-    expect(html).toContain('title="모델 정보 없음"');
+    expect(html).toContain('data-tip="모델 정보 없음"');
     expect(html).toContain('모델불명');
     expect(html).toContain('data-tone="unknown"');
   });
-  it('정상 model → title 에 풀네임 + 라벨', () => {
+  it('정상 model → data-tip 에 풀네임 + 라벨', () => {
     const html = modelChipHtml({ model: 'claude-sonnet-4-5-20250929' });
-    expect(html).toContain('title="claude-sonnet-4-5-20250929"');
+    expect(html).toContain('data-tip="claude-sonnet-4-5-20250929"');
     expect(html).toContain('Sonnet 4.5');
     expect(html).toContain('data-tone="sonnet"');
   });

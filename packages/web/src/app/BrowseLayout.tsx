@@ -505,7 +505,7 @@ export function BrowseLayout(): ReactElement {
                 레거시 setChartMode 가 hidden 속성을 토글(default-view.css :87 .chart-detail-meta[hidden]).
                 default 모드에선 hidden 으로 숨기고 detail 모드에서 노출(chart-default-meta 와 자리 교대). */}
             <div className="chart-detail-meta" hidden={!detailActive}>
-              <span className="detail-session-id" id="detailSessionId" title={selectedSession ?? ''}>
+              <span className="detail-session-id" id="detailSessionId" data-tip={selectedSession ?? ''}>
                 {selectedSession ? `${selectedSession.slice(0, 8)}…` : ''}
               </span>
               <span className="detail-project" id="detailProject">{selectedProject ?? ''}</span>
@@ -547,7 +547,7 @@ export function BrowseLayout(): ReactElement {
                 className="btn-toggle"
                 id="btnToggleChart"
                 type="button"
-                title={tx('ui.html.chart-section.toggle-title')}
+                data-tip={tx('ui.html.chart-section.toggle-title')}
                 aria-label={tx('ui.html.chart-section.toggle-aria')}
                 onClick={() => setChartCollapsed((v) => !v)}
               >

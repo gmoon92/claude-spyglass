@@ -193,7 +193,7 @@ export function ToolCategoriesCard({
         <div className="obs-card-tools obs-card-meta-docs">
           {view.rows.map((r, i) => (
             <div className="obs-meta-row" key={i}>
-              <span className="obs-meta-name" title={r.name}>
+              <span className="obs-meta-name" data-tip={r.name}>
                 {r.name}
               </span>
               <div className="obs-cat-bar">

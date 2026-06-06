@@ -81,7 +81,7 @@ export function SessionRow({ s, isSelected, t: tProp }: { s: SessionLike; isSele
     <tr className={`clickable${isSelected ? ' row-selected' : ''}`} data-session-id={s.id}>
       <td colSpan={4} className="sess-row-cell" style={{ padding: '5px 10px' }}>
         <div className="sess-row-header">
-          <span className="sess-id" title={s.id}>
+          <span className="sess-id" data-tip={s.id}>
             {shortId}
           </span>
           <span className="sess-row-time">{rel}</span>
@@ -90,14 +90,14 @@ export function SessionRow({ s, isSelected, t: tProp }: { s: SessionLike; isSele
             className={`sess-row-status${statusCls} ds-dot`}
             data-tone={statusTone}
             data-size="md"
-            title={statusTitle}
+            data-tip={statusTitle}
           >
             {statusGlyph}
           </span>
           <BloatedSysBadge bloatedSys={bloatedSrc} variant="dot" t={t} />
         </div>
         {preview ? (
-          <div className="sess-row-preview" title={preview}>
+          <div className="sess-row-preview" data-tip={preview}>
             {preview}
           </div>
         ) : null}

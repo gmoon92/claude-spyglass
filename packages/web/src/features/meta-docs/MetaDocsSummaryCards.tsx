@@ -93,7 +93,7 @@ export const MetaDocsSummaryCards = memo(function MetaDocsSummaryCards({ rows, o
         className="meta-docs-summary-card meta-docs-summary-card--used"
         data-meta-filter="display"
         data-value="all"
-        title={t('ui.meta-docs-view.card-used-title')}
+        data-tip={t('ui.meta-docs-view.card-used-title')}
         onClick={() => onSelectDisplay('all')}
       >
         <span className="meta-docs-summary-card-value">{counts.used}</span>
@@ -104,7 +104,7 @@ export const MetaDocsSummaryCards = memo(function MetaDocsSummaryCards({ rows, o
         className="meta-docs-summary-card meta-docs-summary-card--unused"
         data-meta-filter="display"
         data-value="unused"
-        title={t('ui.meta-docs-view.card-unused-title')}
+        data-tip={t('ui.meta-docs-view.card-unused-title')}
         onClick={() => onSelectDisplay('unused')}
       >
         <span className="meta-docs-summary-card-value">{counts.unused}</span>
@@ -115,7 +115,7 @@ export const MetaDocsSummaryCards = memo(function MetaDocsSummaryCards({ rows, o
         className="meta-docs-summary-card meta-docs-summary-card--orphan"
         data-meta-filter="display"
         data-value="orphan"
-        title={t('ui.meta-docs-view.card-orphan-title')}
+        data-tip={t('ui.meta-docs-view.card-orphan-title')}
         onClick={() => onSelectDisplay('orphan')}
       >
         <span className="meta-docs-summary-card-value">{counts.orphan}</span>
@@ -159,7 +159,7 @@ export function MetaDocsBehaviorBars({ rows, topN = DEFAULT_TOP_N }: MetaDocsBeh
             const pct = Math.round((b.calls / maxCalls) * 100);
             return (
               <div className="obs-meta-row" role="listitem" key={b.key}>
-                <span className="obs-meta-name" title={b.name}>
+                <span className="obs-meta-name" data-tip={b.name}>
                   <ToolIcon toolName={metaDocIconName(b.type)} />
                   {b.name}
                 </span>

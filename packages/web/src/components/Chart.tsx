@@ -495,7 +495,7 @@ function ChartImpl({
                       data-size="md"
                       style={{ background: row.color }}
                     />
-                    <span className="legend-name" title={row.title}>{row.name}</span>
+                    <span className="legend-name" data-tip={row.title}>{row.name}</span>
                     <span className="legend-val">{row.count.toLocaleString()}</span>
                     <span className="legend-pct">{row.pct}%</span>
                   </div>

@@ -31,7 +31,7 @@ function AskOptionLi({
   if (selected) cls.push('askq-option-selected');
   if (multi) cls.push('askq-option-multi');
   return (
-    <li className={cls.join(' ')} title={desc || undefined}>
+    <li className={cls.join(' ')} data-tip={desc || undefined}>
       <span className="askq-option-marker">
         {multi ? <Check selected={selected} size={12} /> : <Radio selected={selected} size={12} />}
       </span>

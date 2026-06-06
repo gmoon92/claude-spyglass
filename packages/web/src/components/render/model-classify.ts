@@ -123,7 +123,7 @@ export function modelChipHtml(r: { model?: string | null } | null | undefined, o
   const label   = modelChipLabel(r?.model, cls);
   const title   = r?.model || i18next.t('badges.renderers.model.no-info');
   const sizeCls = opts.mini ? ' model-chip-mini' : '';
-  return `<span class="model-chip model-chip-${cls}${sizeCls} ds-chip" data-tone="${cls}" title="${escHtml(title)}">${escHtml(label)}</span>`;
+  return `<span class="model-chip model-chip-${cls}${sizeCls} ds-chip" data-tone="${cls}" data-tip="${escHtml(title)}">${escHtml(label)}</span>`;
 }
 
 export function makeModelCell(r: { model?: string | null } | null | undefined) {

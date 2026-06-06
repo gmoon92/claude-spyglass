@@ -25,6 +25,16 @@
  *   CustomEvent 가 아니라 stores/tooltip-store 를 구독한다. 차트(발행) → store.setPointHover →
  *   TooltipLayer(소비) 가 수치 툴팁을 표시한다(차트=발행 / 툴팁=표시 단일책임 분리 유지).
  *
+ * 범용 data-tip 채널(단일 게이트 통합): 과거 산재하던 네이티브 `title` 속성(브라우저 기본 툴팁 —
+ *   ≈0.5~1.5초 지연·위치/스타일/줄바꿈 제어 불가·터치 미지원)을 본 레이어로 흡수한다. data-*-tooltip
+ *   계열이 i18n 키 사전 매핑(statContent 등)인 것과 달리, data-tip 은 **이미 번역된 raw 텍스트**를
+ *   그대로 표시한다(동적 식별자·자유 문장 대응). 선택적 data-tip-title 로 2단(제목+본문). i18n 변환이
+ *   없으므로 호출처는 t(...) 결과나 동적 값을 그대로 넣는다. → 즉시 노출 + 커서 추종 + 뷰포트 보정 공유.
+ *
+ * focus 지원(접근성): 네이티브 title 은 키보드 포커스로 뜨지 않았다. 본 레이어는 focusin/focusout 도
+ *   위임해 data-tip/data-*-tooltip 요소가 포커스될 때 요소 박스(getBoundingClientRect) 기준으로 툴팁을
+ *   표시한다(키보드/스크린리더 사용자 대응 — 네이티브 대비 순개선).
+ *
  * i18n: 콘텐츠 키는 'ui.stat-tooltip.*' / 'ui.obs-tooltip.*' / 'ui.cache-panel.*'. react-i18next t 를
  *   useTranslation 으로 받아 모듈 헬퍼(statContent 등)에 인자로 주입(레거시 window.I18n/tt 직접참조 폐기).
  *
@@ -292,16 +302,18 @@ export function TooltipLayer(): ReactElement | null {
       | { kind: 'cache'; cache: CacheTip }
       | null {
       if (!(target instanceof Element)) return null;
+      // 키 기반 채널 — i18n 사전에 매핑된 content 가 있을 때만 채택하고, 없으면(미등록 키) 다음 채널로
+      //   fall-through 한다. 죽은 키가 같은 요소의 data-tip(raw) 을 가리던 문제 차단.
       const ctx = target.closest<HTMLElement>('[data-ctx-tooltip]');
-      if (ctx) return { kind: 'stat', content: ctxContent(ctx.dataset.ctxTooltip ?? '', tRef.current) };
+      if (ctx) { const c = ctxContent(ctx.dataset.ctxTooltip ?? '', tRef.current); if (c) return { kind: 'stat', content: c }; }
       const badge = target.closest<HTMLElement>('[data-mini-badge-tooltip]');
-      if (badge) return { kind: 'stat', content: miniBadgeContent(badge.dataset.miniBadgeTooltip ?? '', tRef.current) };
+      if (badge) { const c = miniBadgeContent(badge.dataset.miniBadgeTooltip ?? '', tRef.current); if (c) return { kind: 'stat', content: c }; }
       const stat = target.closest<HTMLElement>('[data-stat-tooltip]');
-      if (stat) return { kind: 'stat', content: statContent(stat.dataset.statTooltip ?? '', tRef.current) };
+      if (stat) { const c = statContent(stat.dataset.statTooltip ?? '', tRef.current); if (c) return { kind: 'stat', content: c }; }
       const obs = target.closest<HTMLElement>('[data-obs-tooltip]');
-      if (obs) return { kind: 'stat', content: obsContent(obs.dataset.obsTooltip ?? '', tRef.current) };
+      if (obs) { const c = obsContent(obs.dataset.obsTooltip ?? '', tRef.current); if (c) return { kind: 'stat', content: c }; }
       const cachePanel = target.closest<HTMLElement>('[data-cache-panel-tooltip]');
-      if (cachePanel) return { kind: 'stat', content: cachePanelContent(cachePanel.dataset.cachePanelTooltip ?? '', tRef.current) };
+      if (cachePanel) { const c = cachePanelContent(cachePanel.dataset.cachePanelTooltip ?? '', tRef.current); if (c) return { kind: 'stat', content: c }; }
       const cacheCell = target.closest<HTMLElement>('.cache-cell');
       if (cacheCell) {
         return {
@@ -312,7 +324,26 @@ export function TooltipLayer(): ReactElement | null {
           },
         };
       }
+      // 범용 raw-text 채널(최저 우선순위) — 네이티브 title 흡수. i18n 변환 없이 그대로 표시.
+      const tip = target.closest<HTMLElement>('[data-tip]');
+      if (tip) {
+        const desc = tip.dataset.tip ?? '';
+        if (!desc) return null; // 빈 data-tip 은 무시(과거 빈 title 동치)
+        const title = tip.dataset.tipTitle;
+        return { kind: 'stat', content: { title: title || undefined, desc } };
+      }
       return null;
+    }
+
+    /** 포커스/호버 트리거 요소의 박스 하단을 anchor 좌표로 — focus 표시(커서 좌표 부재) 시 사용. */
+    function anchorOf(target: EventTarget | null): { x: number; y: number } | null {
+      if (!(target instanceof Element)) return null;
+      const trigger = target.closest<HTMLElement>(
+        '[data-tip],[data-ctx-tooltip],[data-mini-badge-tooltip],[data-stat-tooltip],[data-obs-tooltip],[data-cache-panel-tooltip],.cache-cell',
+      );
+      if (!trigger) return null;
+      const r = trigger.getBoundingClientRect();
+      return { x: r.left, y: r.bottom };
     }
 
     function showFromHit(hit: NonNullable<ReturnType<typeof resolve>>, clientX: number, clientY: number): void {
@@ -354,13 +385,42 @@ export function TooltipLayer(): ReactElement | null {
       setTip((cur) => (cur ? null : cur));
     }
 
+    // 키보드 포커스 — 네이티브 title 이 못 하던 접근성. 커서 좌표가 없으므로 요소 박스 하단을 anchor 로.
+    function onFocusIn(e: FocusEvent): void {
+      if (pointHoverActiveRef.current) return;
+      const hit = resolve(e.target);
+      if (!hit || (hit.kind === 'stat' && !hit.content)) return;
+      const at = anchorOf(e.target);
+      if (!at) return;
+      cursorRef.current = { x: at.x, y: at.y, above: false };
+      setTip((cur) => {
+        if (hit.kind === 'cache') {
+          if (cur?.kind === 'cache' && cur.cache.read === hit.cache.read && cur.cache.write === hit.cache.write) return cur;
+          return { kind: 'cache', cache: hit.cache };
+        }
+        if (!hit.content) return cur;
+        if (cur?.kind === 'stat' && cur.content.title === hit.content.title && cur.content.desc === hit.content.desc) return cur;
+        return { kind: 'stat', content: hit.content };
+      });
+    }
+
+    function onFocusOut(e: FocusEvent): void {
+      if (pointHoverActiveRef.current) return;
+      if (!resolve(e.target)) return;
+      setTip((cur) => (cur ? null : cur));
+    }
+
     doc.addEventListener('mouseover', onMouseOver);
     doc.addEventListener('mousemove', onMouseMove);
     doc.addEventListener('mouseout', onMouseOut);
+    doc.addEventListener('focusin', onFocusIn);
+    doc.addEventListener('focusout', onFocusOut);
     return () => {
       doc.removeEventListener('mouseover', onMouseOver);
       doc.removeEventListener('mousemove', onMouseMove);
       doc.removeEventListener('mouseout', onMouseOut);
+      doc.removeEventListener('focusin', onFocusIn);
+      doc.removeEventListener('focusout', onFocusOut);
     };
   }, []);
 

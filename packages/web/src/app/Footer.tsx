@@ -25,7 +25,7 @@ export function Footer({ onHelp, t }: FooterProps): ReactElement {
       <button
         type="button"
         className="footer-help-btn"
-        title={t('ui.html.footer.help-title', undefined) || 'Keyboard shortcuts (?)'}
+        data-tip={t('ui.html.footer.help-title', undefined) || 'Keyboard shortcuts (?)'}
         aria-label={t('ui.html.footer.help-aria', undefined) || 'Keyboard shortcuts'}
         onClick={onHelp}
       >

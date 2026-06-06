@@ -136,7 +136,7 @@ export const MetaDocsFilterBar = memo(function MetaDocsFilterBar({
           />
         ))}
       </div>
-      <label className="meta-docs-include-deleted" title={t('ui.meta-docs-view.include-deleted-title')}>
+      <label className="meta-docs-include-deleted" data-tip={t('ui.meta-docs-view.include-deleted-title')}>
         <input
           type="checkbox"
           data-meta-include-deleted

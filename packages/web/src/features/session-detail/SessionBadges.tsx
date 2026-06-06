@@ -83,7 +83,7 @@ export function SessionBadges({
       <span
         className="detail-agg-badge ds-badge"
         data-tone="neutral"
-        title={t('session.session-detail.turn-views.max-cost-badge-title')}
+        data-tip={t('session.session-detail.turn-views.max-cost-badge-title')}
       >
         {t('session.session-detail.turn-views.max-cost-badge', {
           n: maxCostTurn.turn_index,
@@ -94,7 +94,7 @@ export function SessionBadges({
         <span
           className="detail-agg-badge ds-badge"
           data-tone="neutral"
-          title={t('session.session-detail.turn-views.top-tool-badge-title')}
+          data-tip={t('session.session-detail.turn-views.top-tool-badge-title')}
         >
           {t('session.session-detail.turn-views.top-tool-badge', {
             name: topTool[0],

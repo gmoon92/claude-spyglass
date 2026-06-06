@@ -133,12 +133,13 @@ describe('CodeCopyBox (settings-view.js:1505 settings-code-wrap)', () => {
 });
 
 describe('InlineCopyButton (settings-view.js:211 settings-inline-copy)', () => {
-  it('data-copy-text + 아이콘 + title', () => {
+  it('data-copy-text + 아이콘 + data-tip(즉시 툴팁) + aria-label', () => {
     const html = renderToStaticMarkup(<InlineCopyButton text="brew install jq" title="복사" />);
     expect(html).toContain('settings-inline-copy');
     expect(html).toContain('data-copy-text="brew install jq"');
     expect(html).toContain('settings-copy-icon');
-    expect(html).toContain('title="복사"');
+    expect(html).toContain('data-tip="복사"');
+    expect(html).toContain('aria-label="복사"');
   });
   it('onCopy 콜백 배선', () => {
     let copied = '';

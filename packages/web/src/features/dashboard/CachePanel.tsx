@@ -56,10 +56,10 @@ export function CachePanel({ data, t }: CachePanelProps): ReactElement | null {
               className={`cache-bar-fill ${hr.legacyToneCls} ds-bar-fill`}
               data-tone={hr.dsTone}
               style={{ width: `${hr.pct}%` }}
-              title={precisionTip}
+              data-tip={precisionTip}
             />
           </div>
-          <span className="cache-bar-pct" id="cacheHitPct" title={precisionTip}>
+          <span className="cache-bar-pct" id="cacheHitPct" data-tip={precisionTip}>
             {hr.labelText}
           </span>
         </div>

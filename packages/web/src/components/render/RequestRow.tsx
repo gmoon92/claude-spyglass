@@ -257,7 +257,7 @@ export const RequestRow = memo(function RequestRow({ r, opts = {} }: { r: RowLik
             className="sess-id sess-id-link"
             data-goto-session={r.session_id || ''}
             data-goto-project={r.project_name || ''}
-            title={r.session_id || ''}
+            data-tip={r.session_id || ''}
             onClick={onSessClick}
           >
             {r.session_id ? r.session_id.slice(0, 12) + '…' : '—'}

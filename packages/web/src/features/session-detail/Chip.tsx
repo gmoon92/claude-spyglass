@@ -132,7 +132,7 @@ export function Chip({ item, respSeq }: { item: FlowItem; respSeq: number }): Re
     const key = chipKey(meta);
     const label = t('session.session-detail.turn-views.response-chip-label');
     return (
-      <span className="tool-chip response-chip ds-chip" data-tone="info" title={label} {...a11yProps(key, label, t)}>
+      <span className="tool-chip response-chip ds-chip" data-tone="info" data-tip={label} {...a11yProps(key, label, t)}>
         <Diamond size={10} />
       </span>
     );
@@ -169,7 +169,7 @@ export function Chip({ item, respSeq }: { item: FlowItem; respSeq: number }): Re
       <span
         className="tool-chip tool-chip-group ds-chip"
         data-tone="tool"
-        title={titleText}
+        data-tip={titleText}
         {...a11yProps(key, groupAria, t)}
         {...targetIdProps}
       >
@@ -186,7 +186,7 @@ export function Chip({ item, respSeq }: { item: FlowItem; respSeq: number }): Re
       <span
         className={`tool-chip agent-chip${subCls} ds-chip`}
         data-tone={tone}
-        title={fullLabel}
+        data-tip={fullLabel}
         {...a11yProps(key, aria, t)}
         {...targetIdProps}
       >
@@ -204,7 +204,7 @@ export function Chip({ item, respSeq }: { item: FlowItem; respSeq: number }): Re
       <span
         className={`tool-chip agent-chip${subCls} ds-chip`}
         data-tone={tone}
-        title={name}
+        data-tip={name}
         {...a11yProps(key, fullLabel, t)}
         {...targetIdProps}
       >

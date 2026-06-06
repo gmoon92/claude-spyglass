@@ -217,8 +217,8 @@ function shellHtml(_meta: { centerName?: string } | undefined, t: TFunc, view: V
       <span class="flow-scope">${t('ui.meta-docs-view.flow.scope-center')}: <b data-flow-scope-name></b></span>
       <div class="flow-spacer"></div>
       <span class="flow-zoom-group">
-        <button class="flow-zoom-btn" data-flow-zoom="out" title="${t('ui.meta-docs-view.flow.zoom-out-title')}" aria-label="${t('ui.meta-docs-view.flow.zoom-out-title')}">−</button>
-        <button class="flow-zoom-btn" data-flow-zoom="in"  title="${t('ui.meta-docs-view.flow.zoom-in-title')}"  aria-label="${t('ui.meta-docs-view.flow.zoom-in-title')}">＋</button>
+        <button class="flow-zoom-btn" data-flow-zoom="out" data-tip="${t('ui.meta-docs-view.flow.zoom-out-title')}" aria-label="${t('ui.meta-docs-view.flow.zoom-out-title')}">−</button>
+        <button class="flow-zoom-btn" data-flow-zoom="in"  data-tip="${t('ui.meta-docs-view.flow.zoom-in-title')}"  aria-label="${t('ui.meta-docs-view.flow.zoom-in-title')}">＋</button>
       </span>
       <button class="flow-reset-btn" data-seq-reset>${t('ui.meta-docs-view.flow.reset-label')}</button>
     </div>

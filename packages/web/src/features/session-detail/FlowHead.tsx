@@ -70,7 +70,7 @@ export function FlowHead({
   return (
     <header className="flow-head">
       <div className="flow-head-row flow-head-active" id="flowHeadActive">
-        <span className="turn-line-prompt" id="fhPrompt" title={promptText}>
+        <span className="turn-line-prompt" id="fhPrompt" data-tip={promptText}>
           {promptText}
         </span>
         <span className="turn-line-meta">

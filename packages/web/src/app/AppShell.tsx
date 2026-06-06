@@ -202,7 +202,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
           className="sidebar-edge-toggle"
           id="btnPanelCollapse"
           type="button"
-          title={t('ui.html.sidebar-toggle.title')}
+          data-tip={t('ui.html.sidebar-toggle.title')}
           aria-label={t('ui.html.sidebar-toggle.aria')}
           onClick={toggleLeftPanel}
         >

@@ -104,10 +104,10 @@ export function ToolStatsMatrix({
           <div className="ts-mx-row" key={i}>
             <div className="ts-mx-cell ts-mx-tool">
               {renderIcon?.(r.toolName)}
-              <span className="ts-mx-tool-name" title={r.toolName}>
+              <span className="ts-mx-tool-name" data-tip={r.toolName}>
                 {r.toolName}
                 {r.hasLowConf ? (
-                  <sup className="confidence-low-mark" title={t(r.confTipKey)}>
+                  <sup className="confidence-low-mark" data-tip={t(r.confTipKey)}>
                     *
                   </sup>
                 ) : null}
@@ -116,7 +116,7 @@ export function ToolStatsMatrix({
             <div
               className="ts-mx-cell ts-mx-num"
               {...(r.durUnavailable
-                ? { 'data-duration-unavailable': 'true', title: 'duration unavailable for older data' }
+                ? { 'data-duration-unavailable': 'true', 'data-tip': 'duration unavailable for older data' }
                 : {})}
             >
               <span className="ts-mx-val">{fmtDur(r.durMs)}</span>

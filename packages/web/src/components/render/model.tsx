@@ -32,7 +32,7 @@ export function ModelChip({ r, mini = false }: { r: RowLike; mini?: boolean }): 
   const title = r?.model || t('badges.renderers.model.no-info');
   const sizeCls = mini ? ' model-chip-mini' : '';
   return (
-    <span className={`model-chip model-chip-${cls}${sizeCls} ds-chip`} data-tone={cls} title={title}>
+    <span className={`model-chip model-chip-${cls}${sizeCls} ds-chip`} data-tone={cls} data-tip={title}>
       {label}
     </span>
   );

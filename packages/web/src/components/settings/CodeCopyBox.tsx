@@ -15,7 +15,7 @@ import { Copy } from '../design-system/icons/Copy';
 export interface CodeCopyBoxProps {
   /** 코드 본문 — React 자동 이스케이프(원본 escHtml). */
   code: string;
-  /** 복사 버튼 title/aria-label/라벨(i18n). */
+  /** 복사 버튼 aria-label/가시 라벨(i18n). 가시 라벨이 있어 네이티브 title 미부여(중복 제거). */
   copyLabel: string;
   /** 복사 통지. */
   onCopy?: (code: string) => void;
@@ -28,7 +28,6 @@ export function CodeCopyBox({ code, copyLabel, onCopy }: CodeCopyBoxProps) {
       <button
         type="button"
         className="settings-code-copy"
-        title={copyLabel}
         aria-label={copyLabel}
         onClick={() => onCopy?.(code)}
       >

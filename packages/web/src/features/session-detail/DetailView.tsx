@@ -82,7 +82,7 @@ export function SessionDetailHeader({
 
   return (
     <div className="detail-header">
-      <span id="detailSessionId" title={sessionId}>
+      <span id="detailSessionId" data-tip={sessionId}>
         {sessionId.slice(0, 8)}…
       </span>
       <span id="detailProject">{projectName ?? ''}</span>
@@ -105,7 +105,7 @@ export function SessionDetailHeader({
             className="badge-turn-count--hint ds-badge"
             data-tone="muted"
             data-turn-count={turnCount as number}
-            title={turnHint}
+            data-tip={turnHint}
             aria-label={turnHint}
           >
             ⟲ {turnCount as number}t
