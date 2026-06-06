@@ -185,6 +185,9 @@ export function broadcastNewRequest(
  */
 export interface ProxyBroadcastPayload {
   id: string;
+  /** Claude Code 세션 id(x-claude-code-session-id). 세션 상세 LLM Input 의 실시간 갱신 필터 키 —
+   *  웹 use-detail-aux 가 proxyFeed 에서 이 값으로 현재 세션 매칭 → requestId 점프 → messages 재조회. */
+  session_id: string | null;
   timestamp: number;
   method: string;
   path: string;

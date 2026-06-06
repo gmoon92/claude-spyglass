@@ -81,6 +81,8 @@ function buildBroadcastPayload(
   const { reqMeta } = ctx;
   return {
     id: ctx.requestId,
+    // 세션 상세 실시간 갱신 필터 키 — persist 가 proxy_requests.session_id 로 쓰는 값과 동일 출처.
+    session_id: ctx.sessionId,
     timestamp: ctx.startMs,
     method: ctx.method,
     path: ctx.url.pathname,
