@@ -28,7 +28,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Database } from 'bun:sqlite';
-import { createRequest, getProxyToolUseById, encodeRequestPayload } from '@spyglass/storage';
+import { createRequest, getProxyToolUseById, encodeRequestPayload, upsertRequestPayload } from '@spyglass/storage';
 import type { Request as DbRequest } from '@spyglass/storage';
 import type { NormalizedHookPayload, SubagentChildToolCall } from './types';
 import type { AssistantTextEntry } from './transcript';
@@ -85,35 +85,40 @@ function mergePostToolIntoPreTool(
   // ADR-001 P1-E: api_request_id를 COALESCE로 채워 기존 값 보존(동시 backfill 회피).
   // R3: payload 갱신 시 payload_algo도 함께 갱신해야 한다. 미갱신 시 pre_tool INSERT가
   // 남긴 algo(암호화 ON이면 'aes256gcm')와 평문 payload가 어긋나 복호 실패(silent corruption).
+  // storage-payload-detach 단계 C(Migration 063): payload·payload_algo 는 requests 에서 DROP 되어
+  //   request_payloads off-row 테이블이 단일 소스다. UPDATE 는 메타만 갱신하고 payload 는
+  //   upsertRequestPayload 로 off-row 기록(single-write) — requests 본체엔 payload 를 쓰지 않으므로
+  //   피드 등 스칼라 read 가 BLOB 을 끌어오지 않는다(병목 미발생). 둘을 한 트랜잭션으로 원자 적용.
   const enc = encodeRequestPayload(payload.payload ?? null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = (db as any).run(
-    `UPDATE requests
-     SET duration_ms = ?,
-         tokens_input = ?,
-         tokens_output = ?,
-         tokens_total = ?,
-         cache_creation_tokens = ?,
-         cache_read_tokens = ?,
-         model = COALESCE(?, model),
-         payload = ?,
-         payload_algo = ?,
-         event_type = 'tool',
-         api_request_id = COALESCE(api_request_id, ?)
-     WHERE id = ?`,
-    payload.duration_ms || 0,
-    payload.tokens_input,
-    payload.tokens_output,
-    payload.tokens_total,
-    payload.cache_creation_tokens ?? 0,
-    payload.cache_read_tokens ?? 0,
-    payload.model ?? null,
-    enc.value,
-    enc.algo,
-    apiRequestId,
-    preToolId,
-  );
-  return result.changes > 0;
+  const tx = db.transaction(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = (db as any).run(
+      `UPDATE requests
+       SET duration_ms = ?,
+           tokens_input = ?,
+           tokens_output = ?,
+           tokens_total = ?,
+           cache_creation_tokens = ?,
+           cache_read_tokens = ?,
+           model = COALESCE(?, model),
+           event_type = 'tool',
+           api_request_id = COALESCE(api_request_id, ?)
+       WHERE id = ?`,
+      payload.duration_ms || 0,
+      payload.tokens_input,
+      payload.tokens_output,
+      payload.tokens_total,
+      payload.cache_creation_tokens ?? 0,
+      payload.cache_read_tokens ?? 0,
+      payload.model ?? null,
+      apiRequestId,
+      preToolId,
+    );
+    // payload 는 request_payloads 에만 기록(off-row single-write).
+    upsertRequestPayload(db, preToolId, enc.value, enc.algo);
+    return result.changes > 0;
+  });
+  return tx();
 }
 
 /**
@@ -493,21 +498,21 @@ export function persistAssistantTextResponses(
   // requests 테이블의 모든 컬럼을 채워야 하므로 raw SQL 사용 (createRequest는 일반 INSERT)
   // ADR-001 P1-E (polish): api_request_id를 entry.messageId로 채움 — id에 포함된 msgid와
   //   동일하지만 컬럼을 채워두면 응답 행 단독 SELECT만으로 cross-link이 즉시 가능.
+  // storage-payload-detach 단계 C(Migration 063): payload·payload_algo 는 requests 에서 DROP 됨.
+  //   INSERT 는 메타만 채우고 payload 는 INSERT 성공 후 upsertRequestPayload 로 off-row 기록.
   const stmt = db.prepare(`
     INSERT OR IGNORE INTO requests (
       id, session_id, timestamp, type, tool_name, tool_detail, turn_id, model,
-      tokens_input, tokens_output, tokens_total, duration_ms, payload, source,
+      tokens_input, tokens_output, tokens_total, duration_ms, source,
       cache_creation_tokens, cache_read_tokens, preview, tool_use_id, event_type,
       tokens_confidence, tokens_source, parent_tool_use_id, api_request_id,
-      permission_mode, agent_id, agent_type, tool_interrupted, tool_user_modified,
-      payload_algo
+      permission_mode, agent_id, agent_type, tool_interrupted, tool_user_modified
     ) VALUES (
       ?, ?, ?, 'response', NULL, NULL, ?, ?,
-      ?, ?, ?, 0, ?, 'transcript-assistant-text',
+      ?, ?, ?, 0, 'transcript-assistant-text',
       ?, ?, ?, NULL, 'assistant_response',
       'high', 'transcript', NULL, ?,
-      NULL, NULL, NULL, NULL, NULL,
-      ?
+      NULL, NULL, NULL, NULL, NULL
     )
   `);
 
@@ -537,14 +542,16 @@ export function persistAssistantTextResponses(
         entry.tokensInput,
         entry.tokensOutput,
         tokensTotal,
-        enc.value,
         entry.cacheCreationTokens,
         entry.cacheReadTokens,
         previewText,
         entry.messageId, // api_request_id — entry.messageId가 곧 Anthropic msg_xxx
-        enc.algo,
       );
-      if (result.changes > 0) inserted++;
+      if (result.changes > 0) {
+        // 새로 INSERT 된 행만 payload 를 off-row 기록(INSERT OR IGNORE 로 skip 된 기존 행은 보존).
+        upsertRequestPayload(db, id, enc.value, enc.algo);
+        inserted++;
+      }
     } catch (e) {
       console.error('[Hook] Failed to insert assistant text response:', e);
     }

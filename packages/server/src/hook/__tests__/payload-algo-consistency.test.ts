@@ -72,10 +72,16 @@ function makePayload(opts: {
   };
 }
 
+/**
+ * storage-payload-detach 단계 C(Migration 063): payload·payload_algo 는 requests 에서 DROP 되어
+ *   request_payloads off-row 테이블이 단일 소스. raw 행 직접 검증도 request_payloads 를 조회한다.
+ *   payload 가 없는 행은 request_payloads 에 행이 없으므로 { payload:null, algo:null } 로 정규화.
+ */
 function rawRow(db: SpyglassDatabase, id: string): { payload: string | null; payload_algo: string | null } {
-  return db.instance
-    .query('SELECT payload, payload_algo FROM requests WHERE id = ?')
-    .get(id) as { payload: string | null; payload_algo: string | null };
+  const row = db.instance
+    .query('SELECT payload, payload_algo FROM request_payloads WHERE request_id = ?')
+    .get(id) as { payload: string | null; payload_algo: string | null } | null;
+  return row ?? { payload: null, payload_algo: null };
 }
 
 describe('T1 — pre→post merge payload/payload_algo 일관성', () => {

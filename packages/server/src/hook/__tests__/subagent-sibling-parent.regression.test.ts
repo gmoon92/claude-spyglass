@@ -226,21 +226,27 @@ describe('G5 회귀 — 형제 서브에이전트 부모 오귀속 권위 교정
       timestamp: now + 2000, eventType: 'tool',
     }));
     // 자식 Y 를 *직접* INSERT 하며 틀린 parent='A' 를 주입(라이브 추측 경로 우회).
+    // storage-payload-detach 단계 C(Migration 063): payload 는 requests 에서 DROP → request_payloads
+    //   off-row 테이블에 별도 INSERT(컬럼 매핑 정정). 검증 대상(parent 교정)은 그대로.
     db.instance.run(
       `INSERT INTO requests
         (id, session_id, timestamp, type, tool_name, tool_detail, turn_id,
-         tokens_input, tokens_output, tokens_total, duration_ms, payload, source,
+         tokens_input, tokens_output, tokens_total, duration_ms, source,
          cache_creation_tokens, cache_read_tokens, tool_use_id, event_type,
          tokens_confidence, tokens_source, parent_tool_use_id, agent_type)
        VALUES
         (?, ?, ?, 'tool_call', 'Bash', 'ls', ?,
-         0, 0, 0, 0, ?, 'claude-code-hook',
+         0, 0, 0, 0, 'claude-code-hook',
          0, 0, ?, 'tool',
          'high', 'transcript', ?, 'Explore')`,
       [
         'child-Y-manual', sessionId, now + 3000, turnId,
-        JSON.stringify({ tool_use_id: 'Y' }), 'Y', 'A',
+        'Y', 'A',
       ],
+    );
+    db.instance.run(
+      'INSERT INTO request_payloads (request_id, payload, payload_algo) VALUES (?, ?, NULL)',
+      ['child-Y-manual', JSON.stringify({ tool_use_id: 'Y' })],
     );
     // 전제: 틀린 non-NULL 부모 A 가 주입됨.
     expect(getParent(db.instance, 'Y')).toBe('A');

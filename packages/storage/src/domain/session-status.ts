@@ -207,12 +207,16 @@ export function listVisibleSessions(
   const where = compileFilter(filter);
 
   // R3: first_prompt_payload는 클라이언트가 JSON.parse하므로 algo를 함께 가져와 서버측 복호한다.
+  // storage-payload-detach 단계 C(063): payload 는 request_payloads off-row 테이블에 있으므로
+  //   첫 prompt 의 payload 를 request_payloads JOIN 으로 회수한다(prompt 행은 payload 100% 보유 → 매칭).
   const rows = db.query(`
     SELECT s.*,
-      (SELECT r.payload FROM requests r
+      (SELECT p.payload FROM requests r
+         JOIN request_payloads p ON p.request_id = r.id
        WHERE r.session_id = s.id AND r.type = 'prompt'
        ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload,
-      (SELECT r.payload_algo FROM requests r
+      (SELECT p.payload_algo FROM requests r
+         JOIN request_payloads p ON p.request_id = r.id
        WHERE r.session_id = s.id AND r.type = 'prompt'
        ORDER BY r.timestamp ASC LIMIT 1) as first_prompt_payload_algo,
       MAX(r.timestamp) as last_activity_at,

@@ -226,20 +226,35 @@ describe('Migrator — 시나리오 3: 비정상 종료 시뮬레이션', () => 
     expect(countMigrationRows(db)).toBe(rowsAfterFirst);
   });
 
-  it('PRAGMA를 강제 후퇴시켜도 duplicate column/already exists 가드로 안전 복구', () => {
+  it('PRAGMA 후퇴 + duplicate column/already exists/no such column 가드 안전 복구', () => {
     runMigrations(db, false);
     const beforeRows = countMigrationRows(db);
+
+    // requests.payload/payload_algo 는 063 DROP COLUMN 으로 이미 제거된 상태(정상 적용 후).
+    function reqCols(): Set<string> {
+      const rows = db.query('PRAGMA table_info(requests)').all() as Array<{ name: string }>;
+      return new Set(rows.map((r) => r.name));
+    }
+    expect(reqCols().has('payload')).toBe(false);
+    expect(reqCols().has('payload_algo')).toBe(false);
 
     // 비정상 종료 — user_version만 임의로 후퇴 (DDL은 유지)
     db.prepare('PRAGMA user_version = 33').run();
     expect(getUserVersion(db)).toBe(33);
 
-    // 재기동 — 멱등 복구 기대
+    // 재기동 — 멱등 복구 기대. 33→MAX 재적용 과정에서 다음 재실행이 모두 가드로 skip 되어야 한다:
+    //   - ADD COLUMN(056 etc.) → 'duplicate column name'
+    //   - CREATE TABLE/INDEX → 'already exists'
+    //   - 056 `UPDATE requests SET payload_algo=NULL` + 063 `DROP COLUMN payload/payload_algo`
+    //     → 이미 DROP된 컬럼이라 'no such column' (063 멱등성 — DROP COLUMN 재실행 안전).
     runMigrations(db, false);
 
     expect(getUserVersion(db)).toBe(MAX_VERSION);
     // INSERT OR REPLACE 정책상 동일 version row가 갱신되므로 행 수는 동일하게 유지
     expect(countMigrationRows(db)).toBe(beforeRows);
+    // DROP COLUMN 재실행이 skip 되었으므로 컬럼은 여전히 부재(가드가 상태를 되돌리지 않음).
+    expect(reqCols().has('payload')).toBe(false);
+    expect(reqCols().has('payload_algo')).toBe(false);
   });
 
   it('detectMigrationLag — 미적용 상태일 때 lag 감지', () => {

@@ -32,15 +32,16 @@ console.log(`\n=== turn breakdown (session=${SID.slice(0, 8)}, iter=${ITER}) ===
 
 measure('SQL 1 unified (all requests, all cols + payload)', () => {
   d.query(`
-    SELECT turn_id, id, timestamp, type, preview, payload,
-           tokens_input, tokens_output, tokens_total, duration_ms,
-           model, cache_read_tokens, cache_creation_tokens, tokens_confidence,
-           tool_name, tool_detail, event_type, parent_tool_use_id
-    FROM requests
-    WHERE session_id = ? AND turn_id IS NOT NULL
-      AND type IN ('prompt', 'tool_call', 'response')
+    SELECT r.turn_id, r.id, r.timestamp, r.type, r.preview, p.payload,
+           r.tokens_input, r.tokens_output, r.tokens_total, r.duration_ms,
+           r.model, r.cache_read_tokens, r.cache_creation_tokens, r.tokens_confidence,
+           r.tool_name, r.tool_detail, r.event_type, r.parent_tool_use_id
+    FROM requests r
+    LEFT JOIN request_payloads p ON p.request_id = r.id
+    WHERE r.session_id = ? AND r.turn_id IS NOT NULL
+      AND r.type IN ('prompt', 'tool_call', 'response')
       AND ${ACTIVE_REQUEST_FILTER_SQL}
-    ORDER BY turn_id, timestamp ASC
+    ORDER BY r.turn_id, r.timestamp ASC
   `).all(SID);
 });
 
@@ -104,9 +105,11 @@ measure('SQL 2c proxy beta', () => {
 
 measure('JS Map build (5062 rows)', () => {
   const rows = d.query(`
-    SELECT turn_id, id, timestamp, type, preview, payload
-    FROM requests WHERE session_id = ? AND turn_id IS NOT NULL
-    ORDER BY turn_id, timestamp ASC
+    SELECT r.turn_id, r.id, r.timestamp, r.type, r.preview, p.payload
+    FROM requests r
+    LEFT JOIN request_payloads p ON p.request_id = r.id
+    WHERE r.session_id = ? AND r.turn_id IS NOT NULL
+    ORDER BY r.turn_id, r.timestamp ASC
   `).all(SID) as Array<{turn_id: string; id: string; timestamp: number; type: string; preview: string | null; payload: string | null}>;
   const map = new Map<string, typeof rows>();
   for (const r of rows) {

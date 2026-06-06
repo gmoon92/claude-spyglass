@@ -93,7 +93,15 @@ export function getRequestById(
   db: Database,
   id: string
 ): RequestQueryResult | null {
-  return decodeRequestRow(db.query('SELECT * FROM requests WHERE id = ?').get(id) as RequestQueryResult | null);
+  // storage-payload-detach 단계 C(Migration 063): payload 는 request_payloads off-row 테이블에 있다.
+  //   단건 상세는 payload 가 필요하므로 LEFT JOIN 으로 회수(p.payload/payload_algo). requests 본체엔
+  //   payload 컬럼이 없으므로(DROP) r.* 와 충돌하지 않는다. decodeRequestRow 가 row.payload 를 복호.
+  return decodeRequestRow(db.query(
+    `SELECT r.*, p.payload, p.payload_algo
+       FROM requests r
+       LEFT JOIN request_payloads p ON p.request_id = r.id
+      WHERE r.id = ?`
+  ).get(id) as RequestQueryResult | null);
 }
 
 // =============================================================================
@@ -126,8 +134,13 @@ export function getRequestsBySession(
   sessionId: string,
   limit: number = 100
 ): RequestQueryResult[] {
+  // 세션 상세 로그는 payload 가 필요(상세 펼침) → request_payloads LEFT JOIN(단계 C, Migration 063).
   return decodeRequestRows(db.query(
-    `SELECT * FROM requests WHERE session_id = ? AND ${ACTIVE_REQUEST_FILTER_SQL} ORDER BY timestamp DESC LIMIT ?`
+    `SELECT r.*, p.payload, p.payload_algo
+       FROM requests r
+       LEFT JOIN request_payloads p ON p.request_id = r.id
+      WHERE r.session_id = ? AND ${ACTIVE_REQUEST_FILTER_SQL}
+      ORDER BY r.timestamp DESC LIMIT ?`
   ).all(sessionId, limit) as RequestQueryResult[]);
 }
 
@@ -235,10 +248,13 @@ export function getChildRequestsByParentToolUseId(
   db: Database,
   parentToolUseId: string
 ): RequestQueryResult[] {
+  // Agent sub-transcript 펼침은 payload 가 필요 → request_payloads LEFT JOIN(단계 C).
   return decodeRequestRows(db.query(
-    `SELECT * FROM requests
-     WHERE parent_tool_use_id = ?
-     ORDER BY timestamp ASC`
+    `SELECT r.*, p.payload, p.payload_algo
+       FROM requests r
+       LEFT JOIN request_payloads p ON p.request_id = r.id
+      WHERE r.parent_tool_use_id = ?
+      ORDER BY r.timestamp ASC`
   ).all(parentToolUseId) as RequestQueryResult[]);
 }
 
@@ -253,10 +269,13 @@ export function getChildRequestsByParents(
 ): Record<string, RequestQueryResult[]> {
   if (parentToolUseIds.length === 0) return {};
   const placeholders = parentToolUseIds.map(() => '?').join(',');
+  // 배치 sub-transcript 회수도 payload 필요 → request_payloads LEFT JOIN(단계 C).
   const rows = decodeRequestRows(db.query(
-    `SELECT * FROM requests
-     WHERE parent_tool_use_id IN (${placeholders})
-     ORDER BY timestamp ASC`
+    `SELECT r.*, p.payload, p.payload_algo
+       FROM requests r
+       LEFT JOIN request_payloads p ON p.request_id = r.id
+      WHERE r.parent_tool_use_id IN (${placeholders})
+      ORDER BY r.timestamp ASC`
   ).all(...parentToolUseIds) as RequestQueryResult[]);
 
   const grouped: Record<string, RequestQueryResult[]> = {};

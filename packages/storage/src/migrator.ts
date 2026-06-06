@@ -393,8 +393,17 @@ export function runMigrations(db: Database, debug: boolean = false): void {
               db.prepare(stmt).run();
             } catch (e: unknown) {
               const msg: string = (e as Error)?.message ?? '';
-              // 이미 적용된 DDL(컬럼/테이블 중복)은 건너뜀 — 비정상 종료로 인한 버전 불일치 복구
-              if (msg.includes('duplicate column name') || msg.includes('already exists')) {
+              // 이미 적용된 DDL/DML은 건너뜀 — 비정상 종료(PRAGMA 후퇴)로 인한 버전 불일치 복구.
+              //   - 'duplicate column name' / 'already exists': ADD COLUMN·CREATE 재실행.
+              //   - 'no such column': DROP COLUMN(063: requests.payload/payload_algo) 또는 이미 DROP된
+              //     컬럼을 참조하는 후속 DML(056의 `UPDATE requests SET payload_algo=NULL`) 재실행.
+              //     SQLite는 DROP COLUMN에 IF EXISTS를 미지원하므로, 이미 적용된 DROP의 재실행은
+              //     "no such column"으로 실패한다 → 이미-적용으로 간주해 skip(063 멱등성 SSoT).
+              if (
+                msg.includes('duplicate column name') ||
+                msg.includes('already exists') ||
+                msg.includes('no such column')
+              ) {
                 if (debug) {
                   console.log(`[migrator] Skipping already-applied statement in ${file}: ${stmt.slice(0, 60)}`);
                 }

@@ -105,12 +105,16 @@ function resolveParentAgentToolUseId(
 ): string | null {
   const key = getActiveKey();
   // 같은 session 의 Agent 행만 후보(있으면 agent_type 으로 1차 좁힘 — 비용 절감).
+  // storage-payload-detach 단계 C(Migration 063): payload·payload_algo 는 requests 에서 DROP →
+  //   request_payloads off-row 테이블이 단일 소스. tool_response.agentId 매칭을 위해 LEFT JOIN 으로 회수.
   const rows = db.query(
-    `SELECT tool_use_id, payload, payload_algo FROM requests
-      WHERE tool_name = 'Agent'
-        AND session_id = ?
-        AND tool_use_id IS NOT NULL
-        ${agentType ? 'AND tool_detail = ?' : ''}`,
+    `SELECT r.tool_use_id, p.payload, p.payload_algo
+       FROM requests r
+       LEFT JOIN request_payloads p ON p.request_id = r.id
+      WHERE r.tool_name = 'Agent'
+        AND r.session_id = ?
+        AND r.tool_use_id IS NOT NULL
+        ${agentType ? 'AND r.tool_detail = ?' : ''}`,
   ).all(...(agentType ? [sessionId, agentType] : [sessionId])) as Array<{
     tool_use_id: string;
     payload: string | null;

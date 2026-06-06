@@ -212,17 +212,22 @@ export function getTurnsBySession(
     parent_tool_use_id: string | null;
   };
 
+  // storage-payload-detach 단계 C(Migration 063): payload 는 request_payloads off-row 테이블에 있다.
+  //   턴뷰 펼침이 payload 를 쓰므로 request_id PK LEFT JOIN(WITHOUT ROWID)으로 회수한다. requests
+  //   본체엔 payload 컬럼이 없으므로 p.payload/payload_algo 로 채운다. ACTIVE_REQUEST_FILTER_SQL 의
+  //   event_type/tool_name 은 requests 에만 있어 모호성 없음.
   const allRows = db.query(`
-    SELECT turn_id, id, timestamp, type, preview, preview_algo, payload, payload_algo,
-           tokens_input, tokens_output, tokens_total, duration_ms,
-           model, cache_read_tokens, cache_creation_tokens, tokens_confidence,
-           tool_name, tool_detail, event_type, parent_tool_use_id
-    FROM requests
-    WHERE session_id = ?
-      AND turn_id IS NOT NULL
-      AND type IN ('prompt', 'tool_call', 'response')
+    SELECT r.turn_id, r.id, r.timestamp, r.type, r.preview, r.preview_algo, p.payload, p.payload_algo,
+           r.tokens_input, r.tokens_output, r.tokens_total, r.duration_ms,
+           r.model, r.cache_read_tokens, r.cache_creation_tokens, r.tokens_confidence,
+           r.tool_name, r.tool_detail, r.event_type, r.parent_tool_use_id
+    FROM requests r
+    LEFT JOIN request_payloads p ON p.request_id = r.id
+    WHERE r.session_id = ?
+      AND r.turn_id IS NOT NULL
+      AND r.type IN ('prompt', 'tool_call', 'response')
       AND ${ACTIVE_REQUEST_FILTER_SQL}
-    ORDER BY turn_id, timestamp ASC
+    ORDER BY r.turn_id, r.timestamp ASC
   `).all(sessionId) as UnifiedRow[];
 
   // R3: payload를 payload_algo 분기로, preview를 preview_algo 분기로 서버측 복호(평문/암호문 혼재).
@@ -472,16 +477,17 @@ export function getTurnsBySession(
  */
 export function getOrphanRowsBySession(db: Database, sessionId: string): Request[] {
   const rows = db.query(`
-    SELECT id, session_id, timestamp, type, tool_name, tool_detail, turn_id, model,
-           tokens_input, tokens_output, tokens_total, duration_ms, payload, payload_algo, source,
-           cache_creation_tokens, cache_read_tokens, preview, tool_use_id, event_type,
-           tokens_confidence, tokens_source, parent_tool_use_id, api_request_id,
-           permission_mode, agent_id, agent_type, tool_interrupted, tool_user_modified,
-           created_at
-    FROM requests
-    WHERE session_id = ? AND turn_id IS NULL
+    SELECT r.id, r.session_id, r.timestamp, r.type, r.tool_name, r.tool_detail, r.turn_id, r.model,
+           r.tokens_input, r.tokens_output, r.tokens_total, r.duration_ms, p.payload, p.payload_algo, r.source,
+           r.cache_creation_tokens, r.cache_read_tokens, r.preview, r.tool_use_id, r.event_type,
+           r.tokens_confidence, r.tokens_source, r.parent_tool_use_id, r.api_request_id,
+           r.permission_mode, r.agent_id, r.agent_type, r.tool_interrupted, r.tool_user_modified,
+           r.created_at
+    FROM requests r
+    LEFT JOIN request_payloads p ON p.request_id = r.id
+    WHERE r.session_id = ? AND r.turn_id IS NULL
       AND ${ACTIVE_REQUEST_FILTER_SQL}
-    ORDER BY timestamp ASC
+    ORDER BY r.timestamp ASC
   `).all(sessionId) as Request[];
   // R3: payload_algo 분기 복호(평문/암호문 혼재).
   const key = getActiveKey();

@@ -38,8 +38,12 @@ describe('migration 057', () => {
     expect(cols(db, 'proxy_requests').has('preview_algo')).toBe(true);
   });
 
-  it('기존 payload_algo는 보존된다(056 자산 무영향)', () => {
-    expect(cols(db, 'requests').has('payload_algo')).toBe(true);
+  it('payload_algo 암호화 자산은 보존된다(063: requests→request_payloads 분리 이동, 056 자산 무영향)', () => {
+    // storage-payload-detach 단계 C(Migration 063): requests.payload_algo 는 payload 와 함께
+    //   request_payloads 로 이동. 056 자산("암호화 algo 마커 보존") 은 request_payloads.payload_algo
+    //   기준으로 유지 — 057 의 preview_algo 추가와 무관하게 보존된다.
+    expect(cols(db, 'requests').has('payload_algo')).toBe(false);
+    expect(cols(db, 'request_payloads').has('payload_algo')).toBe(true);
     expect(cols(db, 'proxy_requests').has('payload_algo')).toBe(true);
   });
 

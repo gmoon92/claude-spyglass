@@ -91,10 +91,14 @@ describe('requests.preview write/read (ⓝ1)', () => {
     mkReq('r4', 's4');
     // payload만 갱신(preview·preview_algo 미변경) — 공유 컬럼이었다면 corruption 발생할 시나리오
     updateRequest(db, 'r4', { payload: JSON.stringify({ updated: true }) });
-    const raw = db.query('SELECT preview, preview_algo, payload_algo FROM requests WHERE id = ?')
-      .get('r4') as { preview: string; preview_algo: string | null; payload_algo: string | null };
+    // preview·preview_algo 는 requests 에 유지(063 분리 대상 아님), payload_algo 는 request_payloads
+    //   로 이동(063 DROP). 독립 algo 불변식은 양 테이블에 걸쳐 동일하게 검증한다.
+    const raw = db.query('SELECT preview, preview_algo FROM requests WHERE id = ?')
+      .get('r4') as { preview: string; preview_algo: string | null };
+    const pay = db.query('SELECT payload_algo FROM request_payloads WHERE request_id = ?')
+      .get('r4') as { payload_algo: string | null };
     expect(raw.preview_algo).toBe('aes256gcm');
-    expect(raw.payload_algo).toBe('aes256gcm');
+    expect(pay.payload_algo).toBe('aes256gcm');
     expect(getRequestById(db, 'r4')!.preview).toBe(PREVIEW);
   });
 
@@ -104,11 +108,14 @@ describe('requests.preview write/read (ⓝ1)', () => {
       id: 'r5', session_id: 's5', timestamp: Date.now(), type: 'tool_call',
       payload: PAYLOAD, turn_id: 't1',
     } as Parameters<typeof createRequest>[1]);
-    const raw = db.query('SELECT preview, preview_algo, payload_algo FROM requests WHERE id = ?')
-      .get('r5') as { preview: string | null; preview_algo: string | null; payload_algo: string | null };
+    // preview 없는 행: requests.preview/preview_algo NULL, payload 는 request_payloads 에만 존재(063).
+    const raw = db.query('SELECT preview, preview_algo FROM requests WHERE id = ?')
+      .get('r5') as { preview: string | null; preview_algo: string | null };
+    const pay = db.query('SELECT payload_algo FROM request_payloads WHERE request_id = ?')
+      .get('r5') as { payload_algo: string | null };
     expect(raw.preview).toBeNull();
     expect(raw.preview_algo).toBeNull();
-    expect(raw.payload_algo).toBe('aes256gcm');
+    expect(pay.payload_algo).toBe('aes256gcm');
     expect(getRequestById(db, 'r5')!.payload).toBe(PAYLOAD);
   });
 });

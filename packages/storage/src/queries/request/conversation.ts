@@ -68,9 +68,10 @@ export function getConversationRows(
     SELECT
       r.session_id, s.project_name, s.started_at,
       r.timestamp, r.type,
-      r.payload, r.payload_algo, r.preview, r.preview_algo
+      p.payload, p.payload_algo, r.preview, r.preview_algo
     FROM requests r
     JOIN sessions s ON s.id = r.session_id
+    LEFT JOIN request_payloads p ON p.request_id = r.id
     WHERE ${conditions.join(' AND ')}
     ORDER BY r.session_id ASC, r.timestamp ASC
     LIMIT ?

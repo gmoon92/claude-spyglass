@@ -29,6 +29,11 @@ export function deleteOldData(db: Database, beforeTimestamp: number): number {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const run = (sql: string, ...params: unknown[]) => (db as any).run(sql, ...params);
 
+  // 0. request_payloads: requests off-row payload(Migration 061). timestamp 컬럼이 없으므로
+  //    삭제 대상 requests 의 id 기준으로 먼저 정리한다(FK ON DELETE CASCADE 는 PRAGMA foreign_keys
+  //    ON 일 때만 강제되므로 명시 DELETE 로 SSoT 보장). requests DELETE 보다 선행해야 id 참조가 유효.
+  run('DELETE FROM request_payloads WHERE request_id IN (SELECT id FROM requests WHERE timestamp < ?)', beforeTimestamp);
+
   // 1. requests: timestamp 기준 직접 삭제
   run('DELETE FROM requests WHERE timestamp < ?', beforeTimestamp);
 

@@ -52,6 +52,8 @@ export {
   deleteOldRequests,
   // R3: payload 인코딩 헬퍼
   encodeRequestPayload,
+  // storage-payload-detach: request_payloads off-row UPSERT (hook persist 등 외부 write 경로 공용)
+  upsertRequestPayload,
 } from './write';
 
 // 일반 통계 — 헤더/요약 카드

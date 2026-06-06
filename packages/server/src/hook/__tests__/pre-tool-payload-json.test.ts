@@ -110,8 +110,10 @@ describe('T4 — PreToolUse payload 직렬화/read-back', () => {
       tool_use_id: 'tu-pre-payload-algo',
       tool_input: { command: 'sentinel-plaintext-marker' },
     });
+    // storage-payload-detach 단계 C(Migration 063): payload 는 requests 에서 DROP → request_payloads
+    //   off-row 테이블이 단일 소스. raw 행 직접 검증도 request_payloads 를 조회한다(평문 + algo NULL).
     const rawRow = db.instance
-      .query('SELECT payload, payload_algo FROM requests WHERE id = ?')
+      .query('SELECT payload, payload_algo FROM request_payloads WHERE request_id = ?')
       .get(result.request_id) as { payload: string | null; payload_algo: string | null };
     expect(rawRow.payload_algo).toBeNull();
     expect(rawRow.payload).toContain('sentinel-plaintext-marker');

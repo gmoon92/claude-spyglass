@@ -56,7 +56,10 @@ function mkReq(id: string, sessionId: string, extra: Record<string, unknown> = {
 describe('requests.payload write/read', () => {
   test('OFF: 평문 저장(algo NULL) + getRequestById 복원', () => {
     mkReq('r1', 's1');
-    const raw = db.query('SELECT payload, payload_algo FROM requests WHERE id = ?').get('r1') as { payload: string; payload_algo: string | null };
+    // storage-payload-detach 단계 C(Migration 063): payload·payload_algo 는 requests 에서 DROP →
+    //   request_payloads off-row 테이블이 단일 소스. 직접 검증 대상을 request_payloads 로 이동
+    //   (round-trip 평문 복원 불변식은 동일 — 저장 위치만 변경).
+    const raw = db.query('SELECT payload, payload_algo FROM request_payloads WHERE request_id = ?').get('r1') as { payload: string; payload_algo: string | null };
     expect(raw.payload_algo).toBeNull();
     expect(getRequestById(db, 'r1')!.payload).toBe(PAYLOAD);
   });
@@ -64,16 +67,22 @@ describe('requests.payload write/read', () => {
   test('ON: 암호문 저장(평문 비노출) + getRequestById 복호', () => {
     enableEncryption();
     mkReq('r2', 's2');
-    const raw = db.query('SELECT payload, payload_algo FROM requests WHERE id = ?').get('r2') as { payload: string; payload_algo: string | null };
+    // 암호문은 request_payloads.payload 에 저장(063 이후), algo 마커도 request_payloads 에 동반.
+    const raw = db.query('SELECT payload, payload_algo FROM request_payloads WHERE request_id = ?').get('r2') as { payload: string; payload_algo: string | null };
     expect(raw.payload_algo).toBe('aes256gcm');
     expect(raw.payload).not.toContain('민감');
     expect(getRequestById(db, 'r2')!.payload).toBe(PAYLOAD);
   });
 
   test('혼재: 평문 행 + 암호문 행 getRequestsBySession 동시 복원', () => {
+    // 평문 행은 request_payloads 에 직접 삽입(requests 본체엔 payload 컬럼이 없음 — 063 DROP).
     db.run(
-      `INSERT INTO requests (id, session_id, timestamp, type, payload) VALUES (?, ?, ?, 'prompt', ?)`,
-      ['plain', 's3', Date.now(), PAYLOAD],
+      `INSERT INTO requests (id, session_id, timestamp, type) VALUES (?, ?, ?, 'prompt')`,
+      ['plain', 's3', Date.now()],
+    );
+    db.run(
+      `INSERT INTO request_payloads (request_id, payload, payload_algo) VALUES (?, ?, NULL)`,
+      ['plain', PAYLOAD],
     );
     enableEncryption();
     mkReq('enc', 's3', { id: 'enc' });
@@ -87,7 +96,8 @@ describe('requests.payload write/read', () => {
     mkReq('r4', 's4');
     const NEW = JSON.stringify({ updated: true, text: '갱신된 본문' });
     updateRequest(db, 'r4', { payload: NEW });
-    const raw = db.query('SELECT payload, payload_algo FROM requests WHERE id = ?').get('r4') as { payload: string; payload_algo: string | null };
+    // updateRequest 는 request_payloads UPSERT(063: single-write) — 재암호화 + algo 동기를 거기서 검증.
+    const raw = db.query('SELECT payload, payload_algo FROM request_payloads WHERE request_id = ?').get('r4') as { payload: string; payload_algo: string | null };
     expect(raw.payload_algo).toBe('aes256gcm');
     expect(raw.payload).not.toContain('갱신');
     expect(getRequestById(db, 'r4')!.payload).toBe(NEW);

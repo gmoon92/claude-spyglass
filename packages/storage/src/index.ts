@@ -128,6 +128,8 @@ export {
   createRequests,
   // R3: payload 인코딩 헬퍼(raw INSERT/UPDATE 경로에서 동일 정책 적용용)
   encodeRequestPayload,
+  // storage-payload-detach: request_payloads off-row UPSERT (hook persist 등 외부 write 경로 공용)
+  upsertRequestPayload,
   // 조회
   getRequestById,
   getAllRequests,
