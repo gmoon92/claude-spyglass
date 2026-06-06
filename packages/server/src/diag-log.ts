@@ -90,8 +90,8 @@ function ensureDir(): void {
       + `       - model-trace.log\n`
       + `       - hook-payload.jsonl\n`
       + `       - proxy-payload.jsonl\n`
-      + `       ⚠ SECURITY: raw hook/proxy payloads (대화 본문 평문)가 디스크에 평문으로 기록됩니다.\n`
-      + `         파일은 0o600으로 생성되며 재시작 시 truncate됩니다. 백업/공유에서 제외하세요.\n`
+      + `       ⚠ SECURITY: raw hook/proxy payloads (incl. plaintext conversation bodies) are written to disk in plaintext.\n`
+      + `         Files are created with 0o600 and truncated on restart. Exclude them from backups/sharing.\n`
       + `       (To disable: unset SPYGLASS_DIAG_ENABLED and restart)`,
   );
   initialized = true;
@@ -152,8 +152,8 @@ export function logDiagStatus(): void {
     console.log(
       `[Diag] SPYGLASS_DIAG_ENABLED=1 → diagnostic logs ON at ${LOG_DIR}\n`
         + `       categories: model-trace.log, hook-payload.jsonl, proxy-payload.jsonl\n`
-        + `       ⚠ SECURITY: 대화 본문 등 raw payload가 평문으로 디스크에 기록됩니다(0o600, 재시작 시 truncate).\n`
-        + `         백업/공유에서 제외하세요. (To disable: unset SPYGLASS_DIAG_ENABLED and restart)`,
+        + `       ⚠ SECURITY: raw payloads (incl. conversation bodies) are written to disk in plaintext (0o600, truncated on restart).\n`
+        + `         Exclude them from backups/sharing. (To disable: unset SPYGLASS_DIAG_ENABLED and restart)`,
     );
   } else {
     console.log(
