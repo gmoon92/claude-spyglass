@@ -18,29 +18,7 @@
  * 호출 마크업: packages/web/src/features/llm-input/ChatRoom.tsx
  */
 
-/* === 대화 ⇄ 원본 토글 (LLMInput 헤더, 양 뷰 공통) ========================= */
-.llm-input-view-toggle {
-  margin-left: auto;
-  display: inline-flex;
-  background: var(--bg);
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  padding: 2px;
-}
-.llm-input-view-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-3);
-  font-family: inherit;
-  font-size: var(--text-meta);
-  padding: var(--space-1) var(--space-3);
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
-}
-.llm-input-view-btn:hover { color: var(--text-2); }
-.llm-input-view-btn[aria-pressed="true"] { background: var(--raised); color: var(--text-1); }
-.llm-input-view-btn:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
+/* 대화/원본(viewMode) 토글은 폐기됨 — LLMInput 은 항상 대화 뷰. (인스펙터 전문/원본 토글은 chat-inspector-toggle 로 별개) */
 
 /* === 컨테이너 ============================================================= */
 .chat-room {
@@ -109,21 +87,7 @@
   .chat-main { border-right: none; border-bottom: 1px solid var(--border); height: 560px; }
 }
 
-/* 인스펙터 검색 입력 — feed-search-input 기본 200px 고정 폭을 패널 폭으로 채움.
-   (헤더 검색·녹화배지·범례·stateless 는 LLMInput a-head 로 이전 — 본 파일에서 제거됨) */
-.chat-inspector-search .feed-search-input,
-.chat-inspector-search .feed-search-input:focus {
-  flex: 1;
-  width: 100%;
-  min-width: 0;
-}
-
-/* 돋보기/clear 위치 보정 — .chat-inspector-search 는 wrapper 에 좌우 padding(--space-3)을 주는데,
-   base .feed-search-icon/clear 는 wrapper padding=0 을 전제로 absolute left/right 를 둔다.
-   그 padding 만큼 기준점을 안쪽으로 밀어 input 박스 내부 정렬을 base 와 동일하게 복원한다.
-   (값은 위 .chat-inspector-search padding 좌우값과 결합 — 그쪽을 바꾸면 여기도 함께 조정) */
-.chat-inspector-search .feed-search-icon { left: calc(var(--space-3) + var(--space-2)); }
-.chat-inspector-search .feed-search-clear { right: calc(var(--space-3) + var(--space-1)); }
+/* 인스펙터 자체 검색박스(.chat-inspector-search)는 폐기 — 헤더 a-bar 검색이 좌/우 본문을 동시 하이라이트. */
 
 /* === 리사이저 — 좌(타임라인)/우(인스펙터) 폭 드래그 ======================= */
 .chat-resizer {
@@ -444,7 +408,7 @@ button.chat-action.chat-selected { outline-offset: -2px; }
   font-size: var(--text-body);
 }
 .chat-inspector-title .chat-ico { color: var(--text-4); flex-shrink: 0; }
-.chat-inspector-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-inspector-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .chat-inspector-toggle {
   margin-left: auto;
   display: inline-flex;
@@ -466,14 +430,14 @@ button.chat-action.chat-selected { outline-offset: -2px; }
 }
 .chat-inspector-toggle button.on { background: var(--raised); color: var(--text-1); }
 .chat-inspector-toggle button:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
+/* 메타(역할·#idx·byte) — 제목 옆 인라인(hd 한 줄 통합). 비강조 data 톤. */
 .chat-inspector-meta {
-  padding: var(--space-1) var(--space-3);
   font-size: var(--text-small);
   font-family: var(--font-data);
+  font-weight: var(--weight-normal);
   color: var(--text-4);
-  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
-.chat-inspector-search { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border); }
 .chat-inspector-body {
   flex: 1;
   min-height: 0;

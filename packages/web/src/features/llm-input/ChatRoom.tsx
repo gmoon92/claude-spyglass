@@ -14,7 +14,7 @@
  * 재사용(재구현 금지):
  *   - 변환: toChatModel/groupParallelActions + inspectorPayloadOf/lastInspectablePayload (llm-input-chat-model.ts)
  *   - 도구 아이콘: ToolIcon (badges — toolIconHtml SSoT) / 분류 칩: Chip / 검색 하이라이트: splitHighlight
- *   - 글리프: ChatClaude/ChatUser/ChatThink/ChatReturn/ChatPin + Check/ErrorIcon/Warn/Search/Chevron / 검색입력: SearchBox
+ *   - 글리프: ChatClaude/ChatUser/ChatThink/ChatReturn/ChatPin + Check/ErrorIcon/Warn/Search/Chevron (인스펙터 검색은 헤더 a-bar 로 일원화)
  *
  * @module features/llm-input/ChatRoom
  */
@@ -43,7 +43,6 @@ import {
   Search,
   Chevron,
 } from '../../components/design-system/icons';
-import { SearchBox } from '../../components/SearchBox';
 import { type MessageLike, splitHighlight, formatBytes, SEARCH_MIN_LEN } from './llm-input-state';
 import {
   toChatModel,
@@ -83,7 +82,8 @@ const SPLIT_DEFAULT = 68;
 
 /** 검색 하이라이트 텍스트(splitHighlight 재사용, mark 클래스는 llm-input.css SSoT). */
 function Highlighted({ text, term }: { text: string; term: string }): ReactNode {
-  const segs = splitHighlight(text, term);
+  // splitHighlight 는 텍스트 길이에 비례 — (text,term) 불변이면 재실행 회피(선택 변경 등 무관 리렌더 보호).
+  const segs = useMemo(() => splitHighlight(text, term), [text, term]);
   return (
     <>
       {segs.map((s, i) =>
@@ -105,14 +105,41 @@ function isLong(text: string): boolean {
   return text.length > CLAMP_CHARS || (text.match(/\n/g)?.length ?? 0) > 8;
 }
 
+/**
+ * 타임라인 행에 실제로 DOM 주입할 본문 cap — 거대 메시지(수십~수백 KB)를 통째로 렌더하면
+ * 클램프(CSS 높이 제한)로 가려도 페인트·splitHighlight 비용이 메시지 크기에 비례해 폭증한다.
+ * 미리보기는 이 cap 까지만 그리고 전문은 인스펙터(행 클릭)에서 본다 — 렌더 비용을 크기와 무관하게 상한.
+ */
+const PREVIEW_CAP = 1200;
+
+/**
+ * 미리보기 슬라이스 — cap 이하면 원문, 초과면:
+ *  - 검색 term 매칭 위치가 있으면 그 주변 윈도우(매치 가시성 보존),
+ *  - 없으면 앞부분 cap. 잘린 끝/앞에는 … 표시. (대화 행은 미리보기 — 전문은 인스펙터)
+ */
+function previewSlice(text: string, term: string): string {
+  if (text.length <= PREVIEW_CAP) return text;
+  if (term.length >= SEARCH_MIN_LEN) {
+    const idx = text.toLowerCase().indexOf(term);
+    if (idx >= 0) {
+      const start = Math.max(0, idx - 200);
+      const end = Math.min(text.length, start + PREVIEW_CAP);
+      return (start > 0 ? '…' : '') + text.slice(start, end) + (end < text.length ? '…' : '');
+    }
+  }
+  return text.slice(0, PREVIEW_CAP) + '…';
+}
+
 /** 긴 본문 클램프 — 미리보기(max-height + 페이드). 검색 매칭 시 펼침. 전문은 인스펙터(박스 클릭). */
 function ClampText({ text, term }: { text: string; term: string }): ReactElement {
   const matched = term.length >= SEARCH_MIN_LEN && text.toLowerCase().includes(term);
   const expanded = matched || !isLong(text);
+  // 거대 본문은 cap 슬라이스만 DOM 주입(매치 시 윈도우) — 전문은 인스펙터. 렌더 비용 상한.
+  const body = previewSlice(text, term);
   return (
     <div className={`chat-clamp${expanded ? ' chat-clamp--open' : ''}`}>
       <div className="chat-clamp-content">
-        <Highlighted text={text} term={term} />
+        <Highlighted text={body} term={term} />
       </div>
     </div>
   );
@@ -420,25 +447,25 @@ function UnknownRow({ item, selected, onActivate, t }: { item: ChatItem; selecte
 }
 
 /**
- * 우측 상시 인스펙터 패널 — 선택 항목의 전문(full)/원본(raw)을 본문 내 검색과 함께 표시.
- * "인스펙터" 라벨 없이 선택 항목 제목만. 본문은 border-left accent 박스로 "선택 박스의 내용"임을 시각 연결.
+ * 우측 상시 인스펙터 패널 — 선택 항목의 전문(full)/원본(raw)을 표시.
+ *  - 자체 검색박스 폐기 — 헤더(a-bar) 검색(term)이 좌측 타임라인·우측 인스펙터 본문을 동시 하이라이트.
+ *  - 헤더 한 줄 통합: 제목 + meta(역할·#idx·byte)를 좌측에, 전문/원본 토글을 우측에.
+ *    전문/원본(mode)은 본문 표현 토글로 viewMode(폐기됨)와 무관하게 유지.
  */
 function InspectorPanel({
   insp,
   mode,
   onMode,
-  search,
-  onSearch,
+  term,
   t,
 }: {
   insp: InspectorPayload | null;
   mode: 'full' | 'raw';
   onMode: (m: 'full' | 'raw') => void;
-  search: string;
-  onSearch: (q: string) => void;
+  /** 헤더 검색에서 내려온 정규화 term(좌/우 공용 하이라이트). */
+  term: string;
   t: TFunc;
 }): ReactElement {
-  const term = search.trim().length >= SEARCH_MIN_LEN ? search.trim().toLowerCase() : '';
   const src = insp ? (mode === 'full' ? insp.text : insp.raw) : '';
   return (
     <aside className="chat-inspector" aria-label={t('ui.llm-input.chat.inspector-aria')}>
@@ -446,6 +473,7 @@ function InspectorPanel({
         <span className="chat-inspector-title">
           <span className="chat-ico"><Search size={13} /></span>
           <span className="chat-inspector-label">{insp ? insp.title : t('ui.llm-input.chat.inspector-empty')}</span>
+          {insp ? <span className="chat-inspector-meta">{insp.meta}</span> : null}
         </span>
         <span className="chat-inspector-toggle" role="group">
           <button type="button" className={mode === 'full' ? 'on' : ''} aria-pressed={mode === 'full'} onClick={() => onMode('full')}>
@@ -455,11 +483,6 @@ function InspectorPanel({
             {t('ui.llm-input.chat.inspector-raw')}
           </button>
         </span>
-      </div>
-      {insp ? <div className="chat-inspector-meta">{insp.meta}</div> : null}
-      {/* .feed-search 래퍼 필수 — feed-search-icon/clear 가 position:absolute. */}
-      <div className="feed-search chat-inspector-search">
-        <SearchBox value={search} placeholder={t('ui.llm-input.chat.inspector-search')} onSearch={onSearch} clearLabel={t('ui.llm-input.chat.search-clear')} />
       </div>
       {insp ? (
         <div className="chat-inspector-body">
@@ -497,17 +520,14 @@ export function ChatRoom(props: ChatRoomProps): ReactElement {
   // ── 상시 인스펙터 상태 ── 진입 기본 = 마지막 항목. 클릭 시 전환 + 선택 강조.
   const [insp, setInsp] = useState<InspectorPayload | null>(() => lastInspectablePayload(renderItems, t));
   const [inspMode, setInspMode] = useState<'full' | 'raw'>('full');
-  const [inspSearch, setInspSearch] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   useEffect(() => {
     setInsp(lastInspectablePayload(renderItems, t));
-    setInspSearch('');
     setSelectedKey(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renderItems]);
   const activate: ActivateFn = (item, key) => {
     setInsp(inspectorPayloadOf(item, t));
-    setInspSearch('');
     setSelectedKey(key);
   };
 
@@ -630,8 +650,8 @@ export function ChatRoom(props: ChatRoomProps): ReactElement {
           onPointerDown={onResizeStart}
         />
 
-        {/* 우측 — 상시 인스펙터 */}
-        <InspectorPanel insp={insp} mode={inspMode} onMode={setInspMode} search={inspSearch} onSearch={setInspSearch} t={t} />
+        {/* 우측 — 상시 인스펙터 (헤더 검색 term 공유) */}
+        <InspectorPanel insp={insp} mode={inspMode} onMode={setInspMode} term={term} t={t} />
       </div>
     </div>
   );
