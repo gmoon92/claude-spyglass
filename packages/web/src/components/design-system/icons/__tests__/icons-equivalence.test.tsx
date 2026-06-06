@@ -34,6 +34,11 @@ import {
   ToolDot,
   Trash,
   Warn,
+  ChatClaude,
+  ChatUser,
+  ChatThink,
+  ChatReturn,
+  ChatPin,
 } from '../index';
 
 /**
@@ -114,6 +119,22 @@ describe('icons golden — 20개 아이콘 default 출력', () => {
   });
   it('Warn (triangle + bang, size 12 passthrough)', () => {
     expect(tsx(<Warn />)).toMatchSnapshot();
+  });
+  // 대화형 페이로드 뷰 전용 위계 글리프 (payload-chat-redesign)
+  it('ChatClaude (모니터+눈, size 14)', () => {
+    expect(tsx(<ChatClaude />)).toMatchSnapshot();
+  });
+  it('ChatUser (인물 실루엣, size 14)', () => {
+    expect(tsx(<ChatUser />)).toMatchSnapshot();
+  });
+  it('ChatThink (사고 구름+점, size 14)', () => {
+    expect(tsx(<ChatThink />)).toMatchSnapshot();
+  });
+  it('ChatReturn (귀환 화살표, size 14)', () => {
+    expect(tsx(<ChatReturn />)).toMatchSnapshot();
+  });
+  it('ChatPin (압정, size 14)', () => {
+    expect(tsx(<ChatPin />)).toMatchSnapshot();
   });
 });
 

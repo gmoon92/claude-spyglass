@@ -21,6 +21,12 @@ export { AgentDot } from './AgentDot';
 export { Bolt } from './Bolt';
 export { Check, type CheckProps } from './Check';
 export { Chevron, type ChevronProps } from './Chevron';
+// 대화형 페이로드 뷰 전용 위계 글리프 (payload-chat-redesign · 3차 회의 g-claude/user/think/return/pin)
+export { ChatClaude } from './ChatClaude';
+export { ChatUser } from './ChatUser';
+export { ChatThink } from './ChatThink';
+export { ChatReturn } from './ChatReturn';
+export { ChatPin } from './ChatPin';
 export { Copy } from './Copy';
 export { Diamond } from './Diamond';
 export { ErrorIcon } from './ErrorIcon';
