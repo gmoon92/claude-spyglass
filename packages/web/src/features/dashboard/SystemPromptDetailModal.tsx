@@ -20,8 +20,14 @@
  * @see packages/web/assets/js/system-prompt-library.js#showDetailModal
  */
 import { useEffect, type ReactElement } from 'react';
+import { createPortal } from 'react-dom';
 import { CloseButton } from '../../components/design-system/primitives/CloseButton';
 import { formatBytes } from './syslib-sort';
+import {
+  cacheEfficiencyLevel,
+  formatTokenCompact,
+  type SystemUsageLike,
+} from '../llm-input/ChatRoom';
 
 export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
 
@@ -32,6 +38,51 @@ export interface SystemPromptDetail {
   byte_size?: number | null;
   segment_count?: number | null;
   ref_count?: number | null;
+  /** 재사용 비용 집계(server getSystemPromptUsageStats) — 있으면 캐시 카드 표시. */
+  usage?: SystemUsageLike | null;
+}
+
+/** ms timestamp → 로컬 짧은 날짜. null 이면 '—'. */
+function fmtDate(ts: number | null | undefined): string {
+  if (ts == null) return '—';
+  return new Date(ts).toLocaleDateString();
+}
+
+/**
+ * 재사용 비용 집계 카드 — "이 프롬프트가 어떻게 쓰였나"의 핵심 인사이트.
+ * 캐시 효율을 색으로 강조: low(빨강)면 매 요청 입력 토큰을 다시 과금하는 비용 누수 신호.
+ */
+function SystemUsageCard({ usage, t }: { usage: SystemUsageLike; t: TFunc }): ReactElement {
+  const pct = usage.cache_hit_pct ?? null;
+  const eff = cacheEfficiencyLevel(pct);
+  return (
+    <dl className="sys-usage-card">
+      <div className="sys-usage-cell" data-efficiency={eff ?? 'na'}>
+        <dt>{t('ui.syslib.usage-cache')}</dt>
+        <dd className="sys-usage-cache">{pct == null ? '—' : `${pct}%`}</dd>
+      </div>
+      <div className="sys-usage-cell">
+        <dt>{t('ui.syslib.usage-reqs')}</dt>
+        <dd>{(usage.reqs ?? 0).toLocaleString()}</dd>
+      </div>
+      <div className="sys-usage-cell">
+        <dt>{t('ui.syslib.usage-input-tokens')}</dt>
+        <dd>{formatTokenCompact(usage.total_input_tokens)}</dd>
+      </div>
+      <div className="sys-usage-cell">
+        <dt>{t('ui.syslib.usage-cache-read')}</dt>
+        <dd>{formatTokenCompact(usage.total_cache_read)}</dd>
+      </div>
+      <div className="sys-usage-cell">
+        <dt>{t('ui.syslib.usage-sessions')}</dt>
+        <dd>{(usage.distinct_sessions ?? 0).toLocaleString()}</dd>
+      </div>
+      <div className="sys-usage-cell">
+        <dt>{t('ui.syslib.usage-period')}</dt>
+        <dd>{fmtDate(usage.first_seen_at)} – {fmtDate(usage.last_seen_at)}</dd>
+      </div>
+    </dl>
+  );
 }
 
 export interface SystemPromptDetailModalProps {
@@ -123,12 +174,16 @@ export function SystemPromptDetailModal({
           <span>seg={detail.segment_count ?? '?'}</span>
           <span>ref={detail.ref_count ?? '?'}</span>
         </header>
+        {detail.usage ? <SystemUsageCard usage={detail.usage} t={t} /> : null}
         <pre className="syslib-detail-content">{detail.content ?? ''}</pre>
       </div>
     );
   }
 
-  return (
+  // Portal 로 document.body 에 렌더 — 탭 본문(detail-content) 안에 두면 조상의
+  // overflow/containing-block 에 fixed backdrop 이 갇혀 영역이 깨진다(LLM Input 탭 회귀).
+  // body 직속이면 어느 탭에서 열든 viewport 전체를 덮는다.
+  return createPortal(
     <div
       id="sysLibDetailModal"
       className="syslib-detail-modal"
@@ -140,6 +195,7 @@ export function SystemPromptDetailModal({
       }}
     >
       {inner}
-    </div>
+    </div>,
+    document.body,
   );
 }

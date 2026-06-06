@@ -24,6 +24,7 @@ import {
   fetchSystemPromptLibrary,
   type ProxyMetaRow,
   type SysLibRowRaw,
+  type SystemPromptResult,
 } from './detail-aux-fetcher';
 import { useSSEStore } from '../../stores/sse-store';
 
@@ -43,7 +44,7 @@ export interface UseLlmInputResult {
   systemHash: string | null;
   systemSize: number | null;
   systemContent: string | null;
-  systemMeta: Record<string, unknown> | null;
+  systemMeta: SystemPromptResult['meta'];
   messages: unknown[];
   decodeError: string | null;
   proxyList: ProxyMetaRow[];
@@ -87,7 +88,7 @@ export function useLlmInput(
   const [systemHash, setSystemHash] = useState<string | null>(null);
   const [systemSize, setSystemSize] = useState<number | null>(null);
   const [systemContent, setSystemContent] = useState<string | null>(null);
-  const [systemMeta, setSystemMeta] = useState<Record<string, unknown> | null>(null);
+  const [systemMeta, setSystemMeta] = useState<SystemPromptResult['meta']>(null);
   const [messages, setMessages] = useState<unknown[]>([]);
   const [decodeError, setDecodeError] = useState<string | null>(null);
   // LIVE 추적: 기본 ON(진입 시 최신 따라감). 수동 selectProxy 시 OFF, followLatest 로 재개.

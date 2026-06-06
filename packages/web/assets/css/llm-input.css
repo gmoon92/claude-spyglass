@@ -237,6 +237,18 @@
 .llm-input-syspin-btn .chat-ico { color: var(--chat-pin); }
 .llm-input-syspin-label { font-weight: var(--weight-strong); }
 .llm-input-syspin-meta { color: var(--text-3); font-weight: var(--weight-normal); }
+/* 캐시 효율 신호 dot — high(초록)=캐시 잘 탐, low(빨강)=매 요청 입력 토큰 재과금(비용 누수). */
+.llm-input-syspin-cache {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  cursor: help;
+}
+.llm-input-syspin-cache[data-efficiency="high"]   { background: var(--success); }
+.llm-input-syspin-cache[data-efficiency="medium"] { background: var(--warn); }
+.llm-input-syspin-cache[data-efficiency="low"]    { background: var(--error); }
 .llm-input-syspin .chat-refs-toggle {
   font-family: var(--font-data);
   font-size: var(--text-small);

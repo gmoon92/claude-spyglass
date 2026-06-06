@@ -254,6 +254,7 @@ export {
   getRecentProxyRequests,
   getProxyRequestsBySession,
   getProxyRequestsBySystemHash,
+  getSystemPromptUsageStats,
   getProxyRequestById,
   getProxyStats,
   getLatestProxyResponseBefore,
@@ -270,6 +271,9 @@ export {
   type ProxyStats,
   type LatestProxyResponse,
   type ProxyToolUse,
+  type ProxyRequestSummary,
+  type ProxyRequestSystemRef,
+  type ProxySystemUsageStats,
 } from './queries/proxy';
 
 // =============================================================================

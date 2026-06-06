@@ -225,6 +225,39 @@
   word-break: break-all;
 }
 
+/* 재사용 비용 집계 카드 — head 와 본문 pre 사이. 캐시 효율 셀은 등급 색으로 강조. */
+.sys-usage-card {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+.sys-usage-cell {
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.sys-usage-cell dt {
+  font-size: var(--text-small);
+  color: var(--text-3);
+  margin-bottom: 2px;
+}
+.sys-usage-cell dd {
+  margin: 0;
+  font-family: var(--font-data);
+  font-size: var(--text-data);
+  color: var(--text-2);
+  font-weight: var(--weight-strong);
+}
+/* 캐시 효율 셀 — low 면 토큰 비용 누수라 빨강 강조. */
+.sys-usage-cell[data-efficiency="high"]   { border-color: var(--success); }
+.sys-usage-cell[data-efficiency="high"]   .sys-usage-cache { color: var(--success); }
+.sys-usage-cell[data-efficiency="medium"] { border-color: var(--warn); }
+.sys-usage-cell[data-efficiency="medium"] .sys-usage-cache { color: var(--warn); }
+.sys-usage-cell[data-efficiency="low"]    { border-color: var(--error); }
+.sys-usage-cell[data-efficiency="low"]    .sys-usage-cache { color: var(--error); }
+
 .syslib-detail-content {
   flex: 1;
   margin: 0;

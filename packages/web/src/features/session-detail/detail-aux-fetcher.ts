@@ -104,6 +104,21 @@ export async function fetchProxyMessages(
 }
 
 // ── system 본문 lazy-fetch ────────────────────────────────────────────────────
+// usage: 서버가 /:hash 응답에 동봉하는 재사용 비용 집계(getSystemPromptUsageStats).
+//   칩의 캐시 효율 신호 + 모달 집계 카드의 SSoT — 클릭 전에도 신호를 띄우려고 본문과 함께 받는다.
+const SystemUsageSchema = z
+  .object({
+    reqs: z.number().nullable().optional(),
+    total_input_tokens: z.number().nullable().optional(),
+    total_cache_read: z.number().nullable().optional(),
+    total_cache_create: z.number().nullable().optional(),
+    cache_hit_pct: z.number().nullable().optional(),
+    distinct_sessions: z.number().nullable().optional(),
+    distinct_models: z.number().nullable().optional(),
+    first_seen_at: z.number().nullable().optional(),
+    last_seen_at: z.number().nullable().optional(),
+  })
+  .passthrough();
 const SystemPromptSchema = z
   .object({
     hash: z.string().optional(),
@@ -111,6 +126,7 @@ const SystemPromptSchema = z
     byte_size: z.number().nullable().optional(),
     segment_count: z.number().nullable().optional(),
     ref_count: z.number().nullable().optional(),
+    usage: SystemUsageSchema.nullable().optional(),
   })
   .passthrough();
 const SystemPromptEnvelope = z.object({ data: SystemPromptSchema.nullable() }).passthrough();

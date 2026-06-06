@@ -387,6 +387,66 @@ export function getProxyRequestsBySystemHash(
   return db.query(SQL_GET_BY_SYSTEM_HASH).all(hash, limit) as ProxyRequestSystemRef[];
 }
 
+/**
+ * 한 system_prompt(hash)의 재사용 비용 집계 — ref 칩의 캐시 효율 신호 SSoT.
+ *
+ * "이 프롬프트가 N회 재사용됐다"는 숫자 단독은 노이즈. 진짜 인사이트는 **캐시가 먹혔는가**다.
+ * 대부분의 프롬프트는 cache_read 로 97~99% 재활용되지만, 일부는 캐시가 깨져 매 요청마다
+ * 입력 토큰을 통째로 다시 과금한다(=비용 누수). cache_hit_pct 가 그 신호.
+ *
+ * cache_hit_pct = cache_read / (cache_read + cache_creation + fresh_input) · 100
+ *   - 분모는 "프롬프트 입력 측"에 청구된 총 토큰. output 은 캐시 대상이 아니라 제외.
+ *   - 행이 없으면(미참조 hash) reqs=0, pct=null.
+ *
+ * @param hash system_prompts.hash (SHA-256 hex)
+ */
+export interface ProxySystemUsageStats {
+  reqs: number;
+  total_input_tokens: number;     // SUM(tokens_input) — 캐시 미적용 시 매번 새로 과금된 입력
+  total_cache_read: number;       // SUM(cache_read_tokens)
+  total_cache_create: number;     // SUM(cache_creation_tokens)
+  cache_hit_pct: number | null;   // 0~100, 입력 측 토큰 기준. reqs=0이면 null
+  distinct_sessions: number;
+  distinct_models: number;
+  first_seen_at: number | null;
+  last_seen_at: number | null;
+}
+
+const SQL_SYSTEM_USAGE_STATS = `
+  SELECT
+    COUNT(*)                              AS reqs,
+    COALESCE(SUM(tokens_input), 0)        AS total_input_tokens,
+    COALESCE(SUM(cache_read_tokens), 0)   AS total_cache_read,
+    COALESCE(SUM(cache_creation_tokens), 0) AS total_cache_create,
+    COUNT(DISTINCT session_id)            AS distinct_sessions,
+    COUNT(DISTINCT model)                 AS distinct_models,
+    MIN(timestamp)                        AS first_seen_at,
+    MAX(timestamp)                        AS last_seen_at
+  FROM proxy_requests
+  WHERE system_hash = ?
+`;
+
+export function getSystemPromptUsageStats(db: Database, hash: string): ProxySystemUsageStats {
+  const row = db.query(SQL_SYSTEM_USAGE_STATS).get(hash) as {
+    reqs: number;
+    total_input_tokens: number;
+    total_cache_read: number;
+    total_cache_create: number;
+    distinct_sessions: number;
+    distinct_models: number;
+    first_seen_at: number | null;
+    last_seen_at: number | null;
+  };
+  const inputSide = row.total_cache_read + row.total_cache_create + row.total_input_tokens;
+  const cache_hit_pct =
+    row.reqs > 0 && inputSide > 0
+      ? Math.round((1000 * row.total_cache_read) / inputSide) / 10 // 소수 1자리
+      : row.reqs > 0
+        ? 0
+        : null;
+  return { ...row, cache_hit_pct };
+}
+
 export function getRecentProxyRequests(db: Database, limit = 50): ProxyRequest[] {
   const baseRows = db.query<ProxyRequest, [number]>(SQL_GET_RECENT_BASE).all(limit);
 
