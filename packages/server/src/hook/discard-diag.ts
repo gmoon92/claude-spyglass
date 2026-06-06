@@ -42,9 +42,13 @@ function inferEventLabel(raw: Record<string, unknown>): string | null {
     const v = raw[key];
     if (typeof v === 'string' && v.trim()) return v.trim();
   }
-  // 이벤트명은 없지만 tool_name 만 있으면 tool 단서로 표기 (PreToolUse 류 추정 근거).
+  // 표준 이벤트명 키가 없을 때, 특징적 payload 필드로 종류를 역추정해 'unknown' 묵인을 줄인다.
+  //   비표준 스키마로 들어온 이벤트가 콘솔에서 그냥 unknown 으로 뭉개지지 않게 하는 게 목적.
   const tool = raw['tool_name'];
-  if (typeof tool === 'string' && tool.trim()) return `tool:${tool.trim()}`;
+  if (typeof tool === 'string' && tool.trim()) return `tool:${tool.trim()}`;       // Pre/PostToolUse
+  if (typeof raw['prompt'] === 'string') return 'prompt(UserPromptSubmit?)';        // 프롬프트 제출
+  if (typeof raw['message'] === 'string') return 'message(Notification/MessageDisplay?)';
+  if (typeof raw['last_assistant_message'] === 'string') return 'stop(Stop?)';      // 턴 종료
   return null;
 }
 
