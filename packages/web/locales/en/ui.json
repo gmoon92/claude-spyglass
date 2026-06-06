@@ -216,6 +216,7 @@
       "inspector-empty": "Nothing selected",
       "inspector-empty-hint": "Click a bubble or card to show its full text & raw here.",
       "jump-latest": "Jump to latest",
+      "typing": "Composing…",
       "legend-toggle": "Show legend & guide",
       "live": "Live",
       "live-tip": "Auto-updates to the latest payload when a new call arrives in this session (SSE).",

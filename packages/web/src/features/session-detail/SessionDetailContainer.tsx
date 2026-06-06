@@ -205,6 +205,7 @@ export function SessionDetailContainer({
               isLive={llm.isLive}
               pendingNewCount={llm.pendingNewCount}
               onFollowLatest={llm.followLatest}
+              typing={llm.typing}
             />
           </div>
         </div>

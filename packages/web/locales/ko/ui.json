@@ -216,6 +216,7 @@
       "inspector-empty": "선택된 항목 없음",
       "inspector-empty-hint": "말풍선·카드를 클릭하면 여기에 전문·원본이 표시됩니다.",
       "jump-latest": "최신 대화로",
+      "typing": "작성 중",
       "legend-toggle": "범례·안내 펼치기",
       "live": "실시간",
       "live-tip": "이 세션에 새 호출이 도착하면 자동으로 최신 페이로드로 갱신됩니다 (SSE 실시간).",

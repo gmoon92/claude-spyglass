@@ -357,24 +357,24 @@ button.chat-action,
 .chat-act-call.chat-selected,
 button.chat-action.chat-selected { outline-offset: -2px; }
 
-/* === 타이핑 인디케이터 (입장 1회) ========================================= */
-.chat-typing {
-  margin-left: 38px;
+/* === "작성 중" 타이핑 버블 — Claude 메시지 행과 동일 골격(아바타+말풍선) + 점 애니메이션 ====== */
+.chat-bubble.chat-typing {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  background: var(--surface-alt);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  border-bottom-left-radius: var(--radius-sm);
   width: max-content;
+  cursor: default;
 }
-.chat-typing-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); animation: chat-typing 1.3s infinite; }
-.chat-typing-dot:nth-child(2) { animation-delay: .2s; }
-.chat-typing-dot:nth-child(3) { animation-delay: .4s; }
-.chat-typing-cap { font-size: var(--text-small); color: var(--text-4); margin-left: var(--space-1); }
-@keyframes chat-typing { 0%,60%,100%{opacity:.25; transform:translateY(0);} 30%{opacity:1; transform:translateY(-3px);} }
+.chat-typing-dots { display: inline-flex; align-items: center; gap: 4px; }
+.chat-typing-dots i {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent);
+  animation: chat-typing 1.3s var(--ease) infinite;
+}
+.chat-typing-dots i:nth-child(2) { animation-delay: .18s; }
+.chat-typing-dots i:nth-child(3) { animation-delay: .36s; }
+.chat-typing-label { font-size: var(--text-small); color: var(--text-4); }
+@keyframes chat-typing { 0%,60%,100%{ opacity:.3; transform:translateY(0);} 30%{ opacity:1; transform:translateY(-3px);} }
 
 /* === 입장 reveal (정적 데이터 1회) ======================================== */
 .chat-reveal { opacity: 0; transform: translateY(8px); animation: chat-reveal var(--dur-base) var(--ease) forwards; }
@@ -476,6 +476,6 @@ button.chat-action.chat-selected { outline-offset: -2px; }
 /* === 접근성: 모션 최소화 존중 ============================================= */
 @media (prefers-reduced-motion: reduce) {
   .chat-reveal { animation: none; opacity: 1; transform: none; }
-  .chat-typing-dot, .chat-rec-dot { animation: none; }
+  .chat-typing-dots i, .chat-rec-dot { animation: none; opacity: .6; }
   .chat-jump-latest { transition: none; }
 }

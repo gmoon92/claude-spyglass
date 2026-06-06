@@ -216,6 +216,7 @@
       "inspector-empty": "選択された項目なし",
       "inspector-empty-hint": "吹き出し・カードをクリックすると、ここに全文・原文が表示されます。",
       "jump-latest": "最新の会話へ",
+      "typing": "作成中…",
       "legend-toggle": "凡例・案内を開く",
       "live": "リアルタイム",
       "live-tip": "このセッションに新しい呼び出しが届くと自動で最新ペイロードに更新されます(SSE)。",

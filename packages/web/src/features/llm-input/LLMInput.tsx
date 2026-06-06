@@ -77,6 +77,8 @@ export interface LLMInputProps {
   initialSearch?: string;
   /** 세션 LIVE 추적 중 여부 — 현재 헤더 배지는 폐기됐고 호출처 호환을 위해 옵셔널 유지(미사용). */
   isLive?: boolean;
+  /** 대화방 "작성 중" 신호 — 타임라인 하단에 타이핑 버블 표시(LIVE 추적 중 세션 활동 시). */
+  typing?: boolean;
   /** 추적 해제 중 미확인 신규 proxy 수 — "새 요청 N ↓" 알림. 기본 0. */
   pendingNewCount?: number;
   /** "최신으로" 복귀(LIVE 추적 재개) — 헤더 알림 클릭. */
@@ -159,6 +161,7 @@ export function LLMInput(props: LLMInputProps): ReactElement {
     initialSearch = '',
     pendingNewCount = 0,
     onFollowLatest,
+    typing = false,
   } = props;
 
   // ── 선언적 로컬 상태 ── 대화(chat) 뷰 단일화(raw 아코디언 폐기). 검색어 + system 핀 펼침만 보유.
@@ -245,7 +248,7 @@ export function LLMInput(props: LLMInputProps): ReactElement {
         {pinOpen && systemHash ? <SystemPinBody content={systemContent} t={t} /> : null}
       </div>
 
-      <ChatRoom messages={messages} search={search} />
+      <ChatRoom messages={messages} search={search} typing={typing} />
     </>
   );
 }

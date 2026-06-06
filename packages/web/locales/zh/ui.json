@@ -216,6 +216,7 @@
       "inspector-empty": "未选择任何项",
       "inspector-empty-hint": "点击气泡或卡片，即可在此显示全文与原始数据。",
       "jump-latest": "跳到最新",
+      "typing": "正在输入…",
       "legend-toggle": "展开图例与说明",
       "live": "实时",
       "live-tip": "本会话有新调用到达时自动更新为最新载荷(SSE)。",

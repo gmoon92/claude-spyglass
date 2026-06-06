@@ -153,6 +153,15 @@ describe('LLMInput — 대화(chat) 뷰 골격', () => {
     expect(out).toContain('no-messages');
   });
 
+  it('typing=true → 타임라인 하단 타이핑 버블(점 애니메이션) 렌더', () => {
+    const messages: MessageLike[] = [{ role: 'assistant', content: '직전 답변' }];
+    const off = html(<LLMInput {...baseProps} messages={messages} />);
+    expect(off).not.toContain('chat-row--typing');
+    const on = html(<LLMInput {...baseProps} messages={messages} typing />);
+    expect(on).toContain('chat-row--typing');
+    expect(on).toContain('chat-typing-dots');
+  });
+
   it('거대 본문은 타임라인 행에 미리보기 cap 까지만 주입(전문은 인스펙터) — 렌더 비용 상한', () => {
     // 첫 메시지(거대)는 타임라인 행 → cap 슬라이스(꼬리 드롭). 마지막(소형)은 인스펙터 기본 노출.
     const messages: MessageLike[] = [

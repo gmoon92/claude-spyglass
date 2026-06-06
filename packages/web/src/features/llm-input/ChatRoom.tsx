@@ -69,6 +69,8 @@ export interface ChatRoomProps {
   messages: MessageLike[];
   /** 검색어(LLMInput a-head 소유 — 타임라인 하이라이트용). */
   search: string;
+  /** "작성 중" 신호 — true 면 타임라인 하단에 Claude 타이핑 버블(점 애니메이션). */
+  typing?: boolean;
 }
 
 /** 행 활성화(클릭) 콜백 — 자신의 ChatItem 과 선택 key 를 인스펙터로 올린다. */
@@ -447,6 +449,33 @@ function UnknownRow({ item, selected, onActivate, t }: { item: ChatItem; selecte
 }
 
 /**
+ * "작성 중" 타이핑 버블 — Claude 측(좌측 정렬, 말풍선 아바타 동반). 카카오톡/디스코드식 점 3개 애니메이션.
+ * 텍스트 라벨은 보조(시각은 점 애니메이션이 주). LIVE 활동 중 다음 턴 페이로드 도착 전까지 노출.
+ */
+function TypingBubble({ t }: { t: TFunc }): ReactElement {
+  return (
+    <div className="chat-row chat-row--typing" aria-live="polite">
+      <span className="chat-avatar chat-avatar--claude" aria-hidden="true">
+        <ChatClaude size={16} />
+      </span>
+      <div className="chat-bubble-wrap">
+        <span className="chat-speaker">
+          {t('ui.llm-input.chat.speaker-claude')} <span className="orig">(assistant)</span>
+        </span>
+        <div className="chat-bubble chat-bubble--claude chat-typing" role="status">
+          <span className="chat-typing-dots" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+          <span className="chat-typing-label">{t('ui.llm-input.chat.typing')}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * 우측 상시 인스펙터 패널 — 선택 항목의 전문(full)/원본(raw)을 표시.
  *  - 자체 검색박스 폐기 — 헤더(a-bar) 검색(term)이 좌측 타임라인·우측 인스펙터 본문을 동시 하이라이트.
  *  - 헤더 한 줄 통합: 제목 + meta(역할·#idx·byte)를 좌측에, 전문/원본 토글을 우측에.
@@ -512,7 +541,7 @@ function readSplit(): number {
 
 export function ChatRoom(props: ChatRoomProps): ReactElement {
   const { t } = useTranslation() as { t: TFunc };
-  const { messages, search } = props;
+  const { messages, search, typing = false } = props;
 
   const renderItems = useMemo<ChatRenderItem[]>(() => groupParallelActions(toChatModel(messages)), [messages]);
   const term = search.trim().length >= SEARCH_MIN_LEN ? search.trim().toLowerCase() : '';
@@ -556,6 +585,11 @@ export function ChatRoom(props: ChatRoomProps): ReactElement {
     if (!el) return;
     setScrolledUp(el.scrollHeight - el.scrollTop - el.clientHeight >= 48);
   };
+  // 타이핑 버블 등장 시 하단 추종(이미 바닥 근처일 때만 — 사용자가 위로 올려 읽는 중이면 방해 안 함).
+  useEffect(() => {
+    if (typing && !scrolledUp) scrollToLatest(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typing]);
 
   // ── 좌우 폭 리사이저 ── localStorage 영속. pointer 드래그로 좌측 % 산출(clamp 40~80).
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -631,6 +665,8 @@ export function ChatRoom(props: ChatRoomProps): ReactElement {
             ) : (
               renderItems.map((ri, i) => renderItem(ri, i))
             )}
+            {/* "작성 중" — Claude 측 타이핑 버블(점 애니메이션). LIVE 활동 중 다음 턴 도착 전까지. */}
+            {typing ? <TypingBubble t={t} /> : null}
           </div>
           <button
             type="button"
