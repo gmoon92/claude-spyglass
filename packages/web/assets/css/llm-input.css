@@ -682,14 +682,14 @@
 
 /* === 검색 highlight ====================================================== */
 /* applySearchHighlight()가 매칭된 텍스트를 <mark class="llm-input-mark">로 래핑.
-   톤은 --accent-bg-medium (orange 7% 알파) — system amber와 충돌하지 않음. */
+   톤은 --accent-bg-strong (orange 32% 알파) — 어두운 본문에서도 형광펜처럼 명확히 보이도록. */
 .llm-input-mark {
   padding: 0 2px;
-  background: var(--accent-bg-medium);
+  background: var(--accent-bg-strong);
   color: var(--text-1);
   border-radius: var(--radius-sm);
-  font-weight: var(--weight-medium);
-  border-bottom: 1px dotted var(--accent-border);
+  font-weight: var(--weight-strong);
+  box-shadow: 0 0 0 1px var(--accent-border);
 }
 
 /* ====================================================================== */
@@ -751,34 +751,53 @@
 .llm-input-abar-meta .pill--empty { font-style: italic; }
 .llm-input-abar-meta .pill--err { color: var(--error); border-color: var(--error); }
 
-/* LIVE 배지 — 녹화 메타포 폐기(세션 SSE 자동추적). 녹색 펄스. */
-.llm-input-live {
+/* 시스템 프롬프트 핀 칩 — a-head 헤더 한 줄에 흡수(둘째 줄 amber 배너 폐기).
+   req 옆에 amber 톤 토글 칩(seg·size) + ref 버튼. 클릭 시 전문(.llm-input-syspin-body) 펼침. */
+.llm-input-syspin { display: inline-flex; align-items: center; gap: var(--space-1); }
+.llm-input-syspin-btn {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+  cursor: pointer;
+  color: var(--chat-pin);
+  background: var(--yellow-bg-light);
+  border: 1px solid rgba(240, 183, 47, 0.35);
+}
+.llm-input-syspin-btn:hover { border-color: var(--chat-pin); }
+.llm-input-syspin-btn.is-open { background: rgba(240, 183, 47, 0.22); border-color: var(--chat-pin); }
+.llm-input-syspin-btn .chat-ico { color: var(--chat-pin); }
+.llm-input-syspin-label { font-weight: var(--weight-strong); }
+.llm-input-syspin-meta { color: var(--text-3); font-weight: var(--weight-normal); }
+.llm-input-syspin .chat-refs-toggle {
+  font-family: var(--font-data);
   font-size: var(--text-small);
-  font-weight: var(--weight-strong);
-  letter-spacing: .04em;
-  color: var(--success);
-  background: var(--green-bg-light);
-  border: 1px solid rgba(63, 185, 80, 0.35);
-  border-radius: 999px;
-  padding: 3px 9px;
+  color: var(--info);
+  background: var(--surface-alt);
+  border: 1px solid rgba(88, 166, 255, 0.4);
+  border-radius: var(--radius-sm);
+  padding: 1px 7px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
 }
-.llm-input-live-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--success);
-  animation: llm-input-live-pulse 1.8s var(--ease) infinite;
+.llm-input-syspin .chat-refs-toggle:hover { background: var(--blue-bg-light); }
+
+/* 시스템 프롬프트 전문 — 헤더 칩 토글 open 시 a-head 아래 표시. */
+.llm-input-syspin-body { margin: 0 var(--space-3) var(--space-2); }
+.llm-input-syspin-body pre {
+  margin: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--chat-pin);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  font-size: var(--text-meta);
+  color: var(--text-3);
+  max-height: var(--llm-input-pre-max-h);
+  overflow: auto;
+  white-space: pre-wrap;
 }
-@keyframes llm-input-live-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.55); }
-  70% { box-shadow: 0 0 0 6px rgba(63, 185, 80, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0); }
-}
-.llm-input-live--paused { color: var(--text-3); background: var(--surface-alt); border-color: var(--border); }
-.llm-input-live--paused .llm-input-live-dot { background: var(--text-4); animation: none; }
 
 /* 신규 proxy 알림 — "새 요청 N ↓"(클릭 시 최신 추적 재개). */
 .llm-input-newreq {

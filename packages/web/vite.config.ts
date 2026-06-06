@@ -36,6 +36,7 @@ const DAEMON_CSS = [
   '/assets/css/cache-panel.css',
   '/assets/css/turn-view.css',
   '/assets/css/llm-input.css',
+  '/assets/css/llm-input-chat.css',
   '/assets/css/syslib.css',
   '/assets/css/meta-docs.css',
   '/assets/css/context-chart.css',

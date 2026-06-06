@@ -21,7 +21,7 @@
       "sysrem-count": "· {count}件",
       "sysrem-close": "閉じる",
       "tab-log": "ログ",
-      "tab-llm": "API ペイロード",
+      "tab-llm": "会話",
       "tab-syslib": "System ライブラリ",
       "tab-llm-title": "proxy が Anthropic API に送信した元のペイロード",
       "max-cost-badge-title": "このセッションで最もトークンを消費したターン",

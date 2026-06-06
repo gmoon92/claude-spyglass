@@ -28,7 +28,7 @@ import { Chevron } from '../../components/design-system/icons/Chevron';
 import { Info } from '../../components/design-system/icons/Info';
 import { Bolt } from '../../components/design-system/icons/Bolt';
 import { SearchBox } from '../../components/SearchBox';
-import { ChatRoom, PinnedSystem } from './ChatRoom';
+import { ChatRoom, SystemPinChip, SystemPinBody } from './ChatRoom';
 import {
   type MessageLike,
   type ExpandedMap,
@@ -410,7 +410,6 @@ export function LLMInput(props: LLMInputProps): ReactElement {
     onRefsClick,
     initialSearch = '',
     initialViewMode = 'chat',
-    isLive = false,
     pendingNewCount = 0,
     onFollowLatest,
   } = props;
@@ -457,7 +456,19 @@ export function LLMInput(props: LLMInputProps): ReactElement {
           ) : null}
           <span className="llm-input-abar-meta">
             <span className="pill" data-tip={requestId}>req {requestId.slice(0, 8) || '—'}</span>
-            {systemHash ? (
+            {/* system 칩 — chat 뷰는 한 줄 토글 칩(둘째 줄 배너 흡수), raw 뷰는 정적 sys 메타 pill. */}
+            {viewMode === 'chat' ? (
+              <SystemPinChip
+                hash={systemHash}
+                size={systemSize}
+                content={systemContent}
+                meta={systemMeta}
+                open={pinOpen}
+                onToggle={setPinOpen}
+                onRefsClick={onRefsClick}
+                t={t}
+              />
+            ) : systemHash ? (
               <span className="pill" data-tip={`system: ${systemHash.slice(0, 12)}…`}>
                 sys {systemSize ? formatBytes(systemSize) : '—'}
               </span>
@@ -471,16 +482,7 @@ export function LLMInput(props: LLMInputProps): ReactElement {
             ) : null}
           </span>
 
-          {/* LIVE 추적 배지 / 추적 해제 중 신규 알림 — 녹화 메타포 폐기(세션 SSE 자동추적). */}
-          {isLive ? (
-            <span className="llm-input-live" data-tip={t('ui.llm-input.chat.live-tip')}>
-              <span className="llm-input-live-dot" /> {t('ui.llm-input.chat.live')}
-            </span>
-          ) : (
-            <span className="llm-input-live llm-input-live--paused" data-tip={t('ui.llm-input.chat.paused-tip')}>
-              <span className="llm-input-live-dot" /> {t('ui.llm-input.chat.paused')}
-            </span>
-          )}
+          {/* 신규 알림 — 과거 요청 보는 중 새 호출 도착 시 최신 복귀 CTA. (LIVE/과거 상태 배지는 제거 — 중복·과함) */}
           {pendingNewCount > 0 ? (
             <button type="button" className="llm-input-newreq" onClick={onFollowLatest}>
               <Bolt size={11} /> {t('ui.llm-input.chat.new-requests', { count: pendingNewCount })}
@@ -550,17 +552,9 @@ export function LLMInput(props: LLMInputProps): ReactElement {
           </span>
         </div>
 
-        {/* system 핀 — a-head 에 흡수(헤더 고정, 타임라인 분리). chat 뷰 전용. */}
-        {viewMode === 'chat' ? (
-          <PinnedSystem
-            hash={systemHash}
-            content={systemContent}
-            meta={systemMeta}
-            open={pinOpen}
-            onToggle={setPinOpen}
-            onRefsClick={onRefsClick}
-            t={t}
-          />
+        {/* system 프롬프트 전문 — 헤더 칩(SystemPinChip) 토글 시 헤더 바로 아래 펼침. chat 뷰 전용. */}
+        {viewMode === 'chat' && pinOpen && systemHash ? (
+          <SystemPinBody content={systemContent} t={t} />
         ) : null}
       </div>
 

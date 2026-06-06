@@ -176,67 +176,10 @@
 .chat-jump-latest--show { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
 .chat-jump-latest:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 
-/* === 핀 공지 (system prompt) — LLMInput a-head 에 흡수(헤더 고정) ============ */
-/* a-head 안에서 a-bar 아래 한 줄로 배치. 펼치면 본문이 헤더 하단으로 확장(타임라인 분리). */
-.llm-input-abar-head .chat-pin { margin: 0 var(--space-3) var(--space-2); }
-.chat-pin {
-  border-left: 3px solid var(--chat-pin);
-  background: var(--yellow-bg-light);
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
-}
-.chat-pin > summary {
-  list-style: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-.chat-pin > summary::-webkit-details-marker { display: none; }
-.chat-pin-title {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-size: var(--text-body);
-  font-weight: var(--weight-strong);
-  color: var(--chat-pin);
-}
+/* === 핀 공지 (system prompt) ===============================================
+   둘째 줄 amber 배너(.chat-pin)는 폐기 — LLMInput a-head 한 줄 칩(.llm-input-syspin*,
+   llm-input.css)으로 흡수됨. .chat-pin-sub 만 빈 대화/로딩 실패 안내 텍스트로 잔존. */
 .chat-pin-sub { font-size: var(--text-meta); color: var(--text-3); }
-.chat-pin-meta { display: inline-flex; gap: var(--space-1); margin-left: auto; flex-wrap: wrap; align-items: center; }
-.chat-pin-meta span,
-.chat-pin-meta .chat-refs-toggle {
-  font-family: var(--font-data);
-  font-size: var(--text-small);
-  color: var(--text-4);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 2px 7px;
-}
-.chat-pin-meta .chat-refs-toggle {
-  color: var(--info);
-  border-color: rgba(88, 166, 255, 0.4);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-.chat-pin-meta .chat-refs-toggle:hover { background: var(--blue-bg-light); }
-.chat-pin pre {
-  margin: var(--space-3) 0 0;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-3);
-  font-size: var(--text-meta);
-  color: var(--text-3);
-  max-height: var(--llm-input-pre-max-h);
-  overflow: auto;
-  white-space: pre-wrap;
-}
-.chat-pin--empty { border-left-color: var(--text-4); background: var(--surface-alt); }
-.chat-pin--empty p { color: var(--text-3); font-size: var(--text-meta); margin: 0; }
 
 /* === 말풍선 (text) ======================================================== */
 /* 아바타를 화자(speaker) 줄과 같은 높이로 — flex-start(상단 정렬). 기존 flex-end 는 말풍선 하단에 붙어 어색. */
@@ -562,8 +505,6 @@ button.chat-action.chat-selected { outline-offset: -2px; }
   font-family: var(--font-ui);
 }
 .chat-inspector-body--empty .chat-ico { color: var(--border-strong); }
-/* 인스펙터 본문(mono)에서 검색 하이라이트 점선 밑줄은 지저분 — 배경만 남기고 underline 제거. */
-.chat-inspector-body .llm-input-mark { border-bottom: none; padding: 0 1px; }
 
 /* === 공용 아이콘 헬퍼 ===================================================== */
 .chat-ico { display: inline-flex; align-items: center; justify-content: center; }

@@ -21,7 +21,7 @@
       "sysrem-count": "· {count}",
       "sysrem-close": "Close",
       "tab-log": "Log",
-      "tab-llm": "API payload",
+      "tab-llm": "Conversation",
       "tab-syslib": "System library",
       "tab-llm-title": "Original payload sent by proxy to the Anthropic API",
       "max-cost-badge-title": "Turn with the highest token consumption in this session",

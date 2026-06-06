@@ -150,60 +150,70 @@ function itemMatches(item: ChatItem, needle: string): boolean {
  * system 핀 공지 — meta 칩·ref_count·본문 토글. LLMInput a-head 가 렌더한다(헤더 흡수, 2차 현행화).
  * 타임라인이 아니라 헤더 영역에 고정해 대화 흐름과 분리한다.
  */
-export interface PinnedSystemProps {
+export interface SystemPinChipProps {
   hash?: string | null;
+  size?: number | null;
   content?: string | null;
   meta?: SystemMetaLike | null;
+  /** 본문 펼침 여부(controlled — 호출처 pinOpen). */
   open: boolean;
   onToggle: (open: boolean) => void;
   onRefsClick?: (hash: string) => void;
   t: TFunc;
 }
-export function PinnedSystem({ hash, content, meta, open, onToggle, onRefsClick, t }: PinnedSystemProps): ReactElement {
+/**
+ * 시스템 프롬프트 한 줄 칩 — a-head 헤더에 흡수(payload-chat-redesign, 헤더 1줄 통합).
+ *  - 과거 둘째 줄 amber 배너(`.chat-pin`)를 폐기하고 segment/size/ref 를 req 옆 칩 한 개로 압축.
+ *  - 클릭 = 본문 펼침 토글(전문 pre 는 SystemPinBody 가 헤더 아래에 렌더 — open SSoT 공유).
+ *  - hash 없으면 a-bar 빈 system 칩(pill--empty) — 기존 계약 유지.
+ */
+export function SystemPinChip({ hash, size, content, meta, open, onToggle, onRefsClick, t }: SystemPinChipProps): ReactElement {
   if (!hash) {
-    return (
-      <section className="chat-pin chat-pin--empty">
-        <p>{t('ui.llm-input.no-system-field')}</p>
-      </section>
-    );
+    return <span className="pill pill--empty">{t('ui.llm-input.system-none')}</span>;
   }
   const refCount = meta?.ref_count ?? 0;
+  const bytes = formatBytes(meta?.byte_size ?? size ?? content?.length ?? 0);
   return (
-    <details className="chat-pin" open={open} onToggle={(e) => onToggle((e.currentTarget as HTMLDetailsElement).open)}>
-      <summary>
-        <span className="chat-pin-title">
-          <span className="chat-ico">
-            <ChatPin size={13} />
-          </span>
-          {t('ui.llm-input.chat.system-title')}
-          <span className="chat-think-note" data-tip={t('ui.llm-input.chat.system-tip')}>
-            (system prompt)
-          </span>
+    <span className="llm-input-syspin">
+      <button
+        type="button"
+        className={`pill llm-input-syspin-btn${open ? ' is-open' : ''}`}
+        aria-expanded={open}
+        data-tip={t('ui.llm-input.chat.system-tip')}
+        onClick={() => onToggle(!open)}
+      >
+        <span className="chat-ico">
+          <ChatPin size={11} />
         </span>
-        <span className="chat-pin-sub">{t('ui.llm-input.chat.system-sub')}</span>
-        <span className="chat-pin-meta">
-          <span data-tip={t('ui.llm-input.segment-count-title')}>segment {meta?.segment_count ?? '?'}</span>
-          <span data-tip={t('ui.llm-input.byte-size-title')}>{formatBytes(meta?.byte_size ?? (content?.length ?? 0))}</span>
-          {hash ? (
-            <button
-              type="button"
-              className="chat-refs-toggle llm-input-refs-toggle"
-              data-refs-hash={hash}
-              aria-haspopup="dialog"
-              aria-expanded="false"
-              data-tip={t('ui.llm-input.ref-count-btn-title', { count: refCount })}
-              onClick={(e) => {
-                e.stopPropagation();
-                onRefsClick?.(hash);
-              }}
-            >
-              ref {refCount}
-            </button>
-          ) : null}
+        <span className="llm-input-syspin-label">{t('ui.llm-input.chat.system-title')}</span>
+        <span className="llm-input-syspin-meta" data-tip={t('ui.llm-input.segment-count-title')}>
+          seg {meta?.segment_count ?? '?'} · {bytes}
         </span>
-      </summary>
+      </button>
+      <button
+        type="button"
+        className="chat-refs-toggle llm-input-refs-toggle"
+        data-refs-hash={hash}
+        aria-haspopup="dialog"
+        aria-expanded="false"
+        data-tip={t('ui.llm-input.ref-count-btn-title', { count: refCount })}
+        onClick={(e) => {
+          e.stopPropagation();
+          onRefsClick?.(hash);
+        }}
+      >
+        ref {refCount}
+      </button>
+    </span>
+  );
+}
+
+/** 시스템 프롬프트 전문 — SystemPinChip 토글 open 시 헤더 바로 아래에 표시. */
+export function SystemPinBody({ content, t }: { content?: string | null; t: TFunc }): ReactElement {
+  return (
+    <div className="llm-input-syspin-body">
       {content ? <pre>{content}</pre> : <p className="chat-pin-sub">{t('ui.llm-input.system-load-failed')}</p>}
-    </details>
+    </div>
   );
 }
 

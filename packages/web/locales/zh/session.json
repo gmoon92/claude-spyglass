@@ -21,7 +21,7 @@
       "sysrem-count": "· {count}条",
       "sysrem-close": "关闭",
       "tab-log": "日志",
-      "tab-llm": "API 载荷",
+      "tab-llm": "对话",
       "tab-syslib": "System 库",
       "tab-llm-title": "proxy 发送至 Anthropic API 的原始载荷",
       "max-cost-badge-title": "此会话中 Token 消耗最多的轮次",

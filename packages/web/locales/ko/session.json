@@ -21,7 +21,7 @@
       "sysrem-count": "· {count}건",
       "sysrem-close": "닫기",
       "tab-log": "로그",
-      "tab-llm": "API 페이로드",
+      "tab-llm": "대화",
       "tab-syslib": "System 라이브러리",
       "tab-llm-title": "proxy가 Anthropic API에 전송한 원본 페이로드",
       "max-cost-badge-title": "이 세션에서 토큰을 가장 많이 소비한 턴",
