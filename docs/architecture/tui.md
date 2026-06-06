@@ -1,4 +1,21 @@
-# claude-spyglass TUI 가이드
+# TUI (Terminal UI)
+
+> React Ink 5 기반 터미널 대시보드. 브라우저 없이 키보드만으로 실시간 요청 피드, 세션, 툴 통계, 이상 이벤트를 확인합니다.
+
+---
+
+## 문서 기준
+
+| 항목 | 값 |
+|------|-----|
+| 시각 | 2026-06-06 16:44:03 KST |
+| 커밋 | `4ea9686` |
+| 태그 | `v4.4.0` |
+
+---
+
+> 연관 문서: [개요](./overview.md) · [웹 대시보드](./web.md) · [API & SSE](./api.md) · [데이터 흐름](./data-flow.md) · [운영](./operations.md)
+
 
 claude-spyglass는 Claude Code 실행 활동을 실시간으로 들여다보는 모니터링 도구입니다.
 TUI(Terminal UI, 터미널 사용자 인터페이스)는 같은 데이터를 브라우저 없이 키보드만으로
