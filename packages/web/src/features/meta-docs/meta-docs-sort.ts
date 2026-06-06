@@ -37,6 +37,20 @@ export type MetaDocSortKey = 'type' | 'name' | 'source' | 'invocations' | 'last_
 export type SortDir = 'asc' | 'desc';
 export type DisplayFilter = 'all' | 'unused' | 'orphan';
 
+/**
+ * 카탈로그 등록 여부 SSoT — meta_documents 에 정의가 있으면 id 가 부여된다(등록).
+ *   id==null 은 orphan(정의 없이 호출 잔재만 존재 — 빌트인/외부/삭제된 정의의 호출).
+ *   등록/orphan 판정은 applyDisplayFilter·computeRowCounts·랭킹(rankDocsByInvocations)이 공유한다
+ *   — 호출 측에서 `r.id != null` 을 재작성하지 말고 이 술어를 거칠 것(판정 단일화).
+ */
+export function isRegistered(r: MetaDocRow): boolean {
+  return r.id != null;
+}
+/** orphan(미등록 호출) 여부 — isRegistered 의 여집합. */
+export function isOrphan(r: MetaDocRow): boolean {
+  return r.id == null;
+}
+
 /** 정렬 가능 컬럼 SSoT (view.js:1247). */
 export const SORTABLE_KEYS: ReadonlySet<MetaDocSortKey> = new Set<MetaDocSortKey>([
   'type', 'name', 'source', 'invocations', 'last_used_at', 'total_tokens',
@@ -146,17 +160,17 @@ export function nextSort(
  *  - orphan : id==null (호출만 존재 — 명시 선택 시에만 노출)
  */
 export function applyDisplayFilter(rows: ReadonlyArray<MetaDocRow>, display: DisplayFilter): MetaDocRow[] {
-  if (display === 'unused') return rows.filter((r) => r.id != null && (r.invocations ?? 0) === 0);
-  if (display === 'orphan') return rows.filter((r) => r.id == null);
-  return rows.filter((r) => r.id != null);
+  if (display === 'unused') return rows.filter((r) => isRegistered(r) && (r.invocations ?? 0) === 0);
+  if (display === 'orphan') return rows.filter(isOrphan);
+  return rows.filter(isRegistered);
 }
 
 /** rows → {used,unused,orphan} 카운트(summary 카드 SSoT). (view.js:437) */
 export function computeRowCounts(rows: ReadonlyArray<MetaDocRow>): { used: number; unused: number; orphan: number } {
   return {
     used: rows.filter((r) => (r.invocations ?? 0) > 0).length,
-    unused: rows.filter((r) => r.id != null && (r.invocations ?? 0) === 0).length,
-    orphan: rows.filter((r) => r.id == null).length,
+    unused: rows.filter((r) => isRegistered(r) && (r.invocations ?? 0) === 0).length,
+    orphan: rows.filter(isOrphan).length,
   };
 }
 

@@ -17,10 +17,11 @@ import type { MetaDocRow, DisplayFilter } from '../meta-docs-sort';
 const t = (k: string) => k;
 
 const ROWS: MetaDocRow[] = [
-  { id: 1, type: 'skill', name: 'commit', invocations: 5 }, // used
-  { id: 2, type: 'skill', name: 'idle', invocations: 0 }, // unused
-  { id: null, type: 'agent', name: 'Explore', invocations: 15 }, // orphan + used
-  { id: 3, type: 'command', name: 'cmd', invocations: 2 }, // used
+  { id: 1, type: 'skill', name: 'commit', invocations: 5 }, // registered + used
+  { id: 2, type: 'skill', name: 'idle', invocations: 0 }, // registered + unused
+  { id: null, type: 'agent', name: 'Explore', invocations: 15 }, // orphan(미등록) + used → 랭킹 제외
+  { id: 3, type: 'command', name: 'cmd', invocations: 2 }, // registered + used
+  { id: 4, type: 'agent', name: 'reviewer', invocations: 9 }, // registered agent + used(agent 아이콘 유지)
 ];
 
 const noop = (_: DisplayFilter): void => {
@@ -30,11 +31,11 @@ const noop = (_: DisplayFilter): void => {
 describe('MetaDocsSummaryCards — 좌측 요약 카드 (원본 renderLeftSummaryCards)', () => {
   it('used/unused/orphan 카운트 렌더(computeRowCounts SSoT)', () => {
     const html = renderToStaticMarkup(createElement(MetaDocsSummaryCards, { rows: ROWS, onSelectDisplay: noop, t }));
-    // used = invocations>0 → 3, unused = id!=null && inv==0 → 1, orphan = id==null → 1
+    // used = invocations>0 → 4(commit,Explore,cmd,reviewer), unused = id!=null && inv==0 → 1(idle), orphan = id==null → 1(Explore)
     expect(html).toContain('meta-docs-summary-card--used');
     expect(html).toContain('meta-docs-summary-card--unused');
     expect(html).toContain('meta-docs-summary-card--orphan');
-    expect(html).toContain('>3<'); // used value
+    expect(html).toContain('>4<'); // used value(카운트는 orphan 포함 — 랭킹만 orphan 제외)
   });
   it('카드 display 필터 계약 보존(data-meta-filter/data-value)', () => {
     const html = renderToStaticMarkup(createElement(MetaDocsSummaryCards, { rows: ROWS, onSelectDisplay: noop, t }));
@@ -73,26 +74,36 @@ describe('MetaDocsBehaviorBars — behavior mini-bar (원본 #metaDocsToolStats 
     // 랭킹 계약: type 고정 라벨이 아닌 "top behaviors by invocations" 로 전환.
     expect(html).toContain('aria-label="top behaviors by invocations"');
   });
-  it('문서별 invocations 랭킹(desc) — 문서명 + 호출수 노출, unused(0건) 제외', () => {
+  it('문서별 invocations 랭킹(desc) — 등록 문서명 + 호출수 노출, unused(0건) 제외', () => {
     const html = renderToStaticMarkup(createElement(MetaDocsBehaviorBars, { rows: ROWS }));
     // 실제 문서명 노출(고정 type 라벨 폐기).
-    expect(html).toContain('>Explore<'); // agent, 15
+    expect(html).toContain('>reviewer<'); // agent, 9
     expect(html).toContain('>commit<'); // skill, 5
     expect(html).toContain('>cmd<'); // command, 2
     // 호출수(invocations) 노출.
-    expect(html).toContain('>15<');
+    expect(html).toContain('>9<');
     expect(html).toContain('>5<');
     expect(html).toContain('>2<');
     // invocations===0 문서(idle)는 랭킹에서 제외.
     expect(html).not.toContain('>idle<');
-    // 정렬: Explore(15) → commit(5) → cmd(2) 순(첫 행이 최다 호출).
-    expect(html.indexOf('Explore')).toBeLessThan(html.indexOf('commit'));
+    // 정렬: reviewer(9) → commit(5) → cmd(2) 순(첫 행이 최다 호출).
+    expect(html.indexOf('reviewer')).toBeLessThan(html.indexOf('commit'));
     expect(html.indexOf('commit')).toBeLessThan(html.indexOf('cmd'));
+  });
+
+  it('미등록(orphan, id==null) 호출은 호출수가 최다여도 랭킹에서 제외', () => {
+    const html = renderToStaticMarkup(createElement(MetaDocsBehaviorBars, { rows: ROWS }));
+    // Explore 는 orphan(id:null) + 최다 호출(15)이지만 카탈로그 미등록이라 랭킹/막대에 노출되지 않는다.
+    expect(html).not.toContain('>Explore<');
+    expect(html).not.toContain('>15<');
+    // 등록 문서만 남으므로 reviewer(9)가 최상위.
+    expect(html.indexOf('reviewer')).toBeGreaterThan(-1);
+    expect(html.indexOf('reviewer')).toBeLessThan(html.indexOf('commit'));
   });
   it('각 행 선행에 카탈로그와 동일한 서클(눈알) ToolIcon — agent=bullseye / skill·command=fish-eye', () => {
     const html = renderToStaticMarkup(createElement(MetaDocsBehaviorBars, { rows: ROWS }));
     // metaDocIconName SSoT 경유 ToolIcon — agent → tool-icon-agent, skill·command → tool-icon-skill.
-    expect(html).toContain('tool-icon-agent'); // Explore(agent)
+    expect(html).toContain('tool-icon-agent'); // reviewer(등록 agent — orphan Explore 제외 후에도 agent 아이콘 유지)
     expect(html).toContain('tool-icon-skill'); // commit(skill) + cmd(command 은 Skill 합류)
   });
   it('topN 상한 — invocations desc 상위 N 만 노출', () => {

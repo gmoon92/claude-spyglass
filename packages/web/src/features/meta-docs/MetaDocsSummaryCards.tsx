@@ -27,7 +27,7 @@
  * @module features/meta-docs/MetaDocsSummaryCards
  */
 import { memo, type ReactElement } from 'react';
-import { computeRowCounts, type MetaDocRow, type DisplayFilter } from './meta-docs-sort';
+import { computeRowCounts, isRegistered, type MetaDocRow, type DisplayFilter } from './meta-docs-sort';
 import { ToolIcon } from '../../components/render/badges';
 import { metaDocIconName } from './MetaDocTypeBadge';
 
@@ -55,13 +55,15 @@ interface RankedDoc {
 
 /**
  * behavior 문서별 invocations 랭킹 Top N — 단일 책임(순수).
- *  - 호출 0건(unused) · 무명 행은 제외(랭킹은 "실제 사용된 문서"만).
+ *  - 미등록(orphan, id==null) 행은 제외 — 카탈로그에 정의가 없는 호출 잔재(빌트인/외부/삭제된 정의)는
+ *    "어떤 behavior 인지" 가 불명확해 랭킹 노이즈다. 등록 판정은 meta-docs-sort.isRegistered SSoT 재사용.
+ *  - 호출 0건(unused) · 무명 행도 제외(랭킹은 "실제 사용된 등록 문서"만).
  *  - 정렬: invocations desc, 동률 시 name asc(결정적). 카탈로그 기본 정렬과 동치.
  *  - type 고정 합산을 폐기 — agent/skill/command 구분 없이 실제 호출 순위를 노출한다.
  */
 function rankDocsByInvocations(rows: ReadonlyArray<MetaDocRow>, topN: number): RankedDoc[] {
   return rows
-    .filter((r) => (r.invocations ?? 0) > 0 && r.name)
+    .filter((r) => isRegistered(r) && (r.invocations ?? 0) > 0 && r.name)
     .map((r) => ({
       key: r.id != null ? `id:${r.id}` : `name:${String(r.name)}`,
       name: String(r.name),
