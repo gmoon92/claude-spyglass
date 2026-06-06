@@ -34,7 +34,7 @@ export interface ChatResult {
   raw: unknown;
 }
 
-export type ChatItemKind = 'text' | 'think' | 'action' | 'orphan-result' | 'unknown';
+export type ChatItemKind = 'text' | 'think' | 'action' | 'orphan-result' | 'system' | 'unknown';
 
 /** 채팅 타임라인 단일 아이템(느슨한 합집합 — kind 로 분기). */
 export interface ChatItem {
@@ -84,6 +84,23 @@ export function toChatModel(messages: MessageLike[]): ChatItem[] {
   messages.forEach((m, i) => {
     const role = String(m?.role ?? 'unknown');
     const content = m?.content;
+
+    // role=system — 주입된 컨텍스트/리마인더(claudeMd·스킬 카탈로그·hook 출력 등). Claude 발화가 아니므로
+    // 'text'(=Claude 말풍선)로 흘려보내지 않고 별도 위계('system')로 분리한다. 보통 string 본문이지만
+    // 배열이면 text part 만 모아 한 덩어리로(나머지 part 는 system 컨텍스트에선 의미 없음).
+    if (role === 'system') {
+      const text =
+        typeof content === 'string'
+          ? content
+          : Array.isArray(content)
+            ? content
+                .filter((p): p is LoosePart => !!p && typeof p === 'object' && (p as LoosePart).type === 'text')
+                .map((p) => (typeof p.text === 'string' ? p.text : ''))
+                .join('\n')
+            : '';
+      items.push({ kind: 'system', role, msgIndex: i, text, raw: m });
+      return;
+    }
 
     if (typeof content === 'string') {
       items.push({ kind: 'text', role, msgIndex: i, text: content, raw: m });
@@ -271,6 +288,13 @@ export function inspectorPayloadOf(item: ChatItem, t: InspectorTFunc): Inspector
         title: 'tool_result',
         meta: `tool_result · ${idx}${item.toolUseId ? ` · ${item.toolUseId}` : ''}`,
         text: item.result?.preview ?? item.text ?? '',
+        raw,
+      };
+    case 'system':
+      return {
+        title: t('ui.llm-input.chat.system-context-title'),
+        meta: `system · ${idx} · ${formatBytes((item.text ?? '').length)}`,
+        text: item.text ?? '',
         raw,
       };
     default:

@@ -29,6 +29,18 @@ describe('toChatModel', () => {
     expect(items[0]).toMatchObject({ kind: 'text', role: 'user', text: '안녕', msgIndex: 0 });
   });
 
+  it('role=system 은 text(Claude 말풍선) 아니라 system 아이템으로 분리(문자열·배열 모두)', () => {
+    const items = toChatModel([
+      { role: 'system', content: '주입된 컨텍스트 본문' },
+      { role: 'system', content: [{ type: 'text', text: '리마인더 A' }, { type: 'text', text: '리마인더 B' }] },
+    ]);
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({ kind: 'system', role: 'system', text: '주입된 컨텍스트 본문', msgIndex: 0 });
+    // 배열은 text part 만 모아 한 덩어리(개행 결합) — Claude 말풍선(text)으로 새지 않음.
+    expect(items[1]).toMatchObject({ kind: 'system', role: 'system', text: '리마인더 A\n리마인더 B' });
+    expect(items.some((i) => i.kind === 'text')).toBe(false);
+  });
+
   it('thinking → think 아이템(role 강제 assistant), redacted 잠금 분기', () => {
     const items = toChatModel([
       {

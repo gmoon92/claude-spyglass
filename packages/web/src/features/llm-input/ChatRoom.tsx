@@ -42,6 +42,7 @@ import {
   Warn,
   Search,
   Chevron,
+  Info,
 } from '../../components/design-system/icons';
 import { type MessageLike, splitHighlight, formatBytes, SEARCH_MIN_LEN } from './llm-input-state';
 import {
@@ -57,12 +58,44 @@ import {
 
 type TFunc = (key: string, vars?: Record<string, unknown>) => string;
 
+/**
+ * system_prompt 재사용 비용 집계(server getSystemPromptUsageStats 와 동형).
+ * 칩의 캐시 효율 신호 + 모달 집계 카드가 공유하는 표면.
+ */
+export interface SystemUsageLike {
+  reqs?: number | null;
+  total_input_tokens?: number | null;
+  total_cache_read?: number | null;
+  total_cache_create?: number | null;
+  cache_hit_pct?: number | null;
+  distinct_sessions?: number | null;
+  distinct_models?: number | null;
+  first_seen_at?: number | null;
+  last_seen_at?: number | null;
+}
+
 /** system_prompts meta(LLMInput SystemMeta 와 동형 — PinnedSystem 이 export 와 함께 사용). */
 export interface SystemMetaLike {
   segment_count?: number | null;
   byte_size?: number | null;
   ref_count?: number | null;
+  usage?: SystemUsageLike | null;
   [k: string]: unknown;
+}
+
+/** 캐시 효율 등급 SSoT — 칩 dot 색과 모달 카드 색이 같은 임계값을 쓰도록 한 곳에서 결정. */
+export type CacheEfficiency = 'high' | 'medium' | 'low';
+export function cacheEfficiencyLevel(pct: number | null | undefined): CacheEfficiency | null {
+  if (pct == null) return null;
+  if (pct >= 90) return 'high';
+  if (pct >= 50) return 'medium';
+  return 'low';
+}
+
+/** 토큰 수 축약(45,824,080 → "45.8M") — 툴팁/카드 공용. */
+export function formatTokenCompact(n: number | null | undefined): string {
+  if (n == null) return '0';
+  return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(n);
 }
 
 export interface ChatRoomProps {
@@ -71,6 +104,12 @@ export interface ChatRoomProps {
   search: string;
   /** "작성 중" 신호 — true 면 타임라인 하단에 Claude 타이핑 버블(점 애니메이션). */
   typing?: boolean;
+  /**
+   * "보고 있는 대화"의 정체성 키(= sessionId). 이 값이 바뀌면 **신선한 진입**(세션 전환)으로 보고
+   * 다음 비어있지 않은 렌더에서 최신(맨 아래)으로 강제 점프한다. 같은 키 내 messages 변동(실시간 append·
+   * 같은 세션 proxy 자동 advance)은 진입이 아니므로 바닥 근처일 때만 추종(위로 올려 읽는 중이면 방해 안 함).
+   */
+  conversationKey?: string;
 }
 
 /** 행 활성화(클릭) 콜백 — 자신의 ChatItem 과 선택 key 를 인스펙터로 올린다. */
@@ -202,6 +241,20 @@ export function SystemPinChip({ hash, size, content, meta, open, onToggle, onRef
   }
   const refCount = meta?.ref_count ?? 0;
   const bytes = formatBytes(meta?.byte_size ?? size ?? content?.length ?? 0);
+  // 캐시 효율 신호 — "이 프롬프트가 N회 재사용됐다" 숫자 단독은 노이즈. 진짜 인사이트는
+  // 그 재사용이 캐시를 탔는가(=토큰 비용 절감)인가다. cache_hit_pct 가 낮으면 매 요청마다
+  // 입력 토큰을 통째로 다시 과금하는 비용 누수 신호 → dot 색(low=red)으로 즉시 인지시킨다.
+  const cachePct = meta?.usage?.cache_hit_pct ?? null;
+  const efficiency = cacheEfficiencyLevel(cachePct);
+  const inputTok = meta?.usage?.total_input_tokens ?? null;
+  const refTip =
+    efficiency != null
+      ? t('ui.llm-input.ref-count-btn-title', {
+          count: refCount,
+          pct: cachePct,
+          tokens: formatTokenCompact(inputTok),
+        })
+      : t('ui.llm-input.ref-count-btn-title-nostat', { count: refCount });
   return (
     <span className="llm-input-syspin">
       <button
@@ -218,6 +271,14 @@ export function SystemPinChip({ hash, size, content, meta, open, onToggle, onRef
         <span className="llm-input-syspin-meta" data-tip={t('ui.llm-input.segment-count-title')}>
           seg {meta?.segment_count ?? '?'} · {bytes}
         </span>
+        {efficiency != null ? (
+          <span
+            className="llm-input-syspin-cache"
+            data-efficiency={efficiency}
+            data-tip={t('ui.llm-input.cache-signal-title', { pct: cachePct })}
+            aria-label={t('ui.llm-input.cache-signal-title', { pct: cachePct })}
+          />
+        ) : null}
       </button>
       <button
         type="button"
@@ -225,7 +286,7 @@ export function SystemPinChip({ hash, size, content, meta, open, onToggle, onRef
         data-refs-hash={hash}
         aria-haspopup="dialog"
         aria-expanded="false"
-        data-tip={t('ui.llm-input.ref-count-btn-title', { count: refCount })}
+        data-tip={refTip}
         onClick={(e) => {
           e.stopPropagation();
           onRefsClick?.(hash);
@@ -449,8 +510,57 @@ function UnknownRow({ item, selected, onActivate, t }: { item: ChatItem; selecte
 }
 
 /**
+ * system 컨텍스트 행 — 주입된 컨텍스트/리마인더(claudeMd·스킬 목록·hook 출력 등). Claude 발화가 아니므로
+ * 말풍선이 아닌 중립 카드로 분리하고 기본 접힘(거대 본문 노이즈 차단). summary 펼침은 미리보기, 클릭은 인스펙터.
+ */
+function SystemRow({
+  item,
+  term,
+  selected,
+  onActivate,
+  t,
+}: {
+  item: ChatItem;
+  term: string;
+  selected: boolean;
+  onActivate: () => void;
+  t: TFunc;
+}): ReactElement {
+  const matched = term.length >= SEARCH_MIN_LEN && itemMatches(item, term);
+  const [open, setOpen] = useState(false);
+  const isOpen = open || matched;
+  const bytes = formatBytes((item.text ?? '').length);
+  return (
+    <details
+      className={`chat-system${selected ? ' chat-selected' : ''}`}
+      open={isOpen}
+      onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
+    >
+      <summary>
+        <span className="chat-ico">
+          <Info size={13} />
+        </span>
+        <span className="chat-system-lbl" data-tip={t('ui.llm-input.chat.system-context-tip')}>
+          {t('ui.llm-input.chat.system-context-title')}
+        </span>
+        <span className="chat-system-meta">#{item.msgIndex + 1} · {bytes}</span>
+      </summary>
+      <button
+        type="button"
+        className="chat-system-body"
+        data-tip={t('ui.llm-input.chat.inspect-tip')}
+        onClick={onActivate}
+      >
+        <ClampText text={item.text ?? ''} term={term} />
+      </button>
+    </details>
+  );
+}
+
+/**
  * "작성 중" 타이핑 버블 — Claude 측(좌측 정렬, 말풍선 아바타 동반). 카카오톡/디스코드식 점 3개 애니메이션.
- * 텍스트 라벨은 보조(시각은 점 애니메이션이 주). LIVE 활동 중 다음 턴 페이로드 도착 전까지 노출.
+ * 시각은 점 애니메이션만(텍스트 라벨 폐기 — 군더더기 제거). 의미는 aria-label 로 스크린리더에만 전달.
+ * LIVE 활동 중 다음 턴 페이로드 도착 전까지 노출.
  */
 function TypingBubble({ t }: { t: TFunc }): ReactElement {
   return (
@@ -462,13 +572,12 @@ function TypingBubble({ t }: { t: TFunc }): ReactElement {
         <span className="chat-speaker">
           {t('ui.llm-input.chat.speaker-claude')} <span className="orig">(assistant)</span>
         </span>
-        <div className="chat-bubble chat-bubble--claude chat-typing" role="status">
+        <div className="chat-bubble chat-bubble--claude chat-typing" role="status" aria-label={t('ui.llm-input.chat.typing')}>
           <span className="chat-typing-dots" aria-hidden="true">
             <i />
             <i />
             <i />
           </span>
-          <span className="chat-typing-label">{t('ui.llm-input.chat.typing')}</span>
         </div>
       </div>
     </div>
@@ -541,7 +650,7 @@ function readSplit(): number {
 
 export function ChatRoom(props: ChatRoomProps): ReactElement {
   const { t } = useTranslation() as { t: TFunc };
-  const { messages, search, typing = false } = props;
+  const { messages, search, typing = false, conversationKey } = props;
 
   const renderItems = useMemo<ChatRenderItem[]>(() => groupParallelActions(toChatModel(messages)), [messages]);
   const term = search.trim().length >= SEARCH_MIN_LEN ? search.trim().toLowerCase() : '';
@@ -563,31 +672,62 @@ export function ChatRoom(props: ChatRoomProps): ReactElement {
   // ── 진입 시 최신(맨 아래) 스크롤 + "최신으로" 점프 ──
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const [scrolledUp, setScrolledUp] = useState(false);
+  // scrolledUp 의 ref 미러 — 추종 effect 는 새 카드 추가 *전* 위치로 판정해야 하므로(stale state 회피) ref 로 읽는다.
+  const scrolledUpRef = useRef(false);
+  // 신규 카드 stagger 판정용 — 직전 렌더의 renderItems 길이(다음 렌더에서 baseCount 로 읽힘).
+  const prevCountRef = useRef(0);
+  // 최신 점프 "예약" 플래그 — 마운트 + conversationKey(세션) 변경 시 true. 다음 비어있지 않은 렌더에서 1회 소진.
+  // 빈 배열(로딩 중) 단계에서는 소진하지 않아, 세션 전환 후 실제 메시지가 도착한 프레임에 정확히 점프한다.
+  const pendingJumpRef = useRef(true);
   const scrollToLatest = (smooth: boolean): void => {
     const el = timelineRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
   };
+  // 세션(대화 정체성) 변경 = 신선한 진입 → 최신 점프 재예약. messages 는 같은 참조 유지라 renderItems effect
+  // 는 이 프레임에 발화하지 않고, 새 세션 payload 가 도착해 renderItems 가 바뀌는 프레임에서 점프가 일어난다.
   useEffect(() => {
-    scrollToLatest(false);
-    let raf2 = 0;
-    const raf1 = requestAnimationFrame(() => {
+    pendingJumpRef.current = true;
+  }, [conversationKey]);
+  useEffect(() => {
+    prevCountRef.current = renderItems.length; // 다음 렌더의 baseCount(신규 판정 기준) 갱신.
+
+    if (pendingJumpRef.current) {
+      // 진입/세션 전환 — 데이터가 아직 없으면 점프 보류(다음 갱신까지). 채워지면 즉시 맨 아래로(누가 첫 프롬프트를 보고 싶겠나).
+      if (renderItems.length === 0) return undefined;
+      pendingJumpRef.current = false;
+      // 즉시 맨 아래(이미지·거대 본문 레이아웃 정착까지 더블 RAF 재보정).
       scrollToLatest(false);
-      raf2 = requestAnimationFrame(() => scrollToLatest(false));
-    });
-    return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-    };
+      let raf2 = 0;
+      const raf1 = requestAnimationFrame(() => {
+        scrollToLatest(false);
+        raf2 = requestAnimationFrame(() => scrollToLatest(false));
+      });
+      return () => {
+        cancelAnimationFrame(raf1);
+        cancelAnimationFrame(raf2);
+      };
+    }
+    // 같은 대화 내 갱신(실시간 append) — Claude 가 새 카드를 만들면 자동으로 따라 내려간다.
+    // 판정은 **새 카드 추가 *전*** 사용자 위치(scrolledUpRef)로 한다 — 추가 *후* DOM 으로 nearBottom 을 재면
+    // 방금 들어온 카드 높이(특히 수백 px 의 tool 카드)만큼 바닥에서 멀어져 "안 따라감"으로 항상 오판하기 때문.
+    // 사용자가 위로 올려 과거를 읽는 중(scrolledUp)이면 끌어내리지 않고 "최신으로" 버튼으로 알린다.
+    if (scrolledUpRef.current) return undefined;
+    const raf = requestAnimationFrame(() => scrollToLatest(true));
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renderItems]);
   const onTimelineScroll = (): void => {
     const el = timelineRef.current;
     if (!el) return;
-    setScrolledUp(el.scrollHeight - el.scrollTop - el.clientHeight >= 48);
+    // 사용자 능동 스크롤만 반영(추종 effect 가 추가 *전* 위치로 판정하도록 ref 미러). 임계 48px.
+    const up = el.scrollHeight - el.scrollTop - el.clientHeight >= 48;
+    scrolledUpRef.current = up;
+    setScrolledUp(up);
   };
   // 타이핑 버블 등장 시 하단 추종(이미 바닥 근처일 때만 — 사용자가 위로 올려 읽는 중이면 방해 안 함).
   useEffect(() => {
-    if (typing && !scrolledUp) scrollToLatest(true);
+    if (typing && !scrolledUpRef.current) scrollToLatest(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typing]);
 
@@ -620,12 +760,15 @@ export function ChatRoom(props: ChatRoomProps): ReactElement {
     window.addEventListener('pointerup', up);
   };
 
-  const renderItem = (ri: ChatRenderItem, i: number): ReactElement => {
+  // 각 아이템을 chat-reveal 래퍼로 감싼다(페이드+슬라이드 입장). 인덱스 기반 key 라 기존 아이템은
+  // DOM 이 재사용돼 애니메이션이 재생되지 않고(이미 1회 forwards 종료), 새 턴으로 끝에 append 된 아이템만
+  // 새 노드로 마운트돼 자연스럽게 등장한다 — "지금 작성된 글"을 모션으로 구분.
+  const renderInner = (ri: ChatRenderItem, i: number): ReactElement => {
     const key = `i-${i}`;
     if ((ri as ActionGroup).kind === 'action-group') {
       const grp = ri as ActionGroup;
       return (
-        <div className="chat-action chat-action--parallel" key={`g-${i}`}>
+        <div className="chat-action chat-action--parallel">
           <div className="chat-parallel-hd">{t('ui.llm-input.chat.parallel', { count: grp.actions.length })}</div>
           {grp.actions.map((a, j) => {
             const gk = `g-${i}-${j}`;
@@ -637,20 +780,35 @@ export function ChatRoom(props: ChatRoomProps): ReactElement {
     const item = ri as ChatItem;
     switch (item.kind) {
       case 'text':
-        return <TextRow item={item} term={term} selected={selectedKey === key} onActivate={() => activate(item, key)} t={t} key={key} />;
+        return <TextRow item={item} term={term} selected={selectedKey === key} onActivate={() => activate(item, key)} t={t} />;
       case 'think':
-        return <ThinkRow item={item} term={term} selected={selectedKey === key} onActivate={() => activate(item, key)} t={t} key={key} />;
+        return <ThinkRow item={item} term={term} selected={selectedKey === key} onActivate={() => activate(item, key)} t={t} />;
       case 'action':
         return (
-          <div className="chat-action" key={key}>
+          <div className="chat-action">
             <ActionCall item={item} selected={selectedKey === key} onActivate={() => activate(item, key)} t={t} />
           </div>
         );
+      case 'system':
+        return <SystemRow item={item} term={term} selected={selectedKey === key} onActivate={() => activate(item, key)} t={t} />;
       case 'orphan-result':
-        return <OrphanRow item={item} selected={selectedKey === key} onActivate={() => activate(item, key)} t={t} key={key} />;
+        return <OrphanRow item={item} selected={selectedKey === key} onActivate={() => activate(item, key)} t={t} />;
       default:
-        return <UnknownRow item={item} selected={selectedKey === key} onActivate={() => activate(item, key)} t={t} key={key} />;
+        return <UnknownRow item={item} selected={selectedKey === key} onActivate={() => activate(item, key)} t={t} />;
     }
+  };
+  // 신규(이번 갱신에 끝에 append 된) 아이템만 순차 stagger 로 등장시킨다. baseCount = 직전 렌더 길이.
+  // 인덱스 ≥ baseCount = 새 노드 → animationDelay 부여(첫 마운트(base 0)는 동시 페이드 — 거대 이력 cascade 방지).
+  const baseCount = prevCountRef.current;
+  const renderItem = (ri: ChatRenderItem, i: number): ReactElement => {
+    const isNew = baseCount > 0 && i >= baseCount;
+    const delay = isNew ? Math.min(i - baseCount, 8) * 60 : 0;
+    const style = delay ? ({ animationDelay: `${delay}ms` } as CSSProperties) : undefined;
+    return (
+      <div className="chat-reveal" style={style} key={`i-${i}`}>
+        {renderInner(ri, i)}
+      </div>
+    );
   };
 
   return (

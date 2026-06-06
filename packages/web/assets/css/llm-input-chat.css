@@ -259,6 +259,44 @@
 .chat-think--locked .chat-think-body { color: var(--text-4); font-style: italic; }
 .chat-think-empty { color: var(--text-4); font-style: italic; }
 
+/* === system 컨텍스트 카드 (주입 컨텍스트/리마인더 — Claude 발화 아님) ============
+   말풍선/Claude 면과 구분되는 중립 dim 카드. 기본 접힘(거대 본문 노이즈 차단), 펼치면 미리보기. */
+.chat-system {
+  margin-left: 38px;
+  max-width: 78%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+}
+.chat-system > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-meta);
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.chat-system > summary::-webkit-details-marker { display: none; }
+.chat-system-lbl { font-weight: 600; color: var(--text-3); }
+.chat-system-meta { font-size: var(--text-small); color: var(--text-4); margin-left: auto; font-family: var(--font-data); }
+.chat-system-body {
+  display: block;
+  width: 100%;
+  text-align: left;
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  color: var(--text-3);
+  cursor: pointer;
+}
+.chat-system-body:hover { background: var(--surface); }
+
 /* === tool_use 행동 카드 (+ ↳ tool_result 결과 칩) ========================= */
 .chat-action {
   margin-left: 38px;

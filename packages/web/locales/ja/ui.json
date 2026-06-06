@@ -162,7 +162,9 @@
     "ref-session-current": "現在のセッション",
     "ref-jump-title": "このプロキシリクエストへジャンプ",
     "ref-other-session-title": "別セッションの参照 — ジャンプは現在のセッション内のみ対応",
-    "ref-count-btn-title": "このシステムプロンプトを参照する API リクエスト {count}件の一覧を表示。",
+    "ref-count-btn-title": "{count}回再利用 · キャッシュヒット {pct}% · 累計入力 {tokens} トークン。クリックで再利用・キャッシュ詳細。",
+    "ref-count-btn-title-nostat": "API リクエスト {count}件が参照。クリックで再利用詳細を表示。",
+    "cache-signal-title": "プロンプトキャッシュヒット率 {pct}%（入力トークン基準）。低いとリクエストごとに入力トークンを再課金。",
     "ref-count-span-title": "このシステムプロンプト（hash 基準）を参照する API リクエスト数。",
     "segment-count-title": "元の system 配列で本文として使用されたテキストセグメント数。(通常 idx[0] は課金用ヘッダー、idx[1] 以降が本文)",
     "byte-size-title": "システムプロンプト本文のバイトサイズ。",
@@ -176,6 +178,8 @@
       "system-title": "システムプロンプト",
       "system-tip": "リクエストごとに Claude へ毎回渡される規則・役割の説明です。会話の最初の発言ではなく、会話全体に敷かれた舞台設定です。",
       "system-sub": "· この会話に毎回敷かれる規則",
+      "system-context-title": "システムコンテキスト",
+      "system-context-tip": "Claudeに注入されたコンテキスト・リマインダー(プロジェクト指針・スキル一覧・hook出力など)です。Claudeの発言ではなく、システムが会話の途中に挿入した案内なので既定では折りたたみます。",
       "speaker-user": "あなた",
       "speaker-claude": "Claude",
       "raw-pin-tip": "このメッセージの原本データ(JSON)を表示",
@@ -325,7 +329,13 @@
     "load-failed": "読み込み失敗: {message}",
     "not-found": "本文が見つかりません。",
     "modal-load-failed": "読み込み失敗: {message}",
-    "close-label": "閉じる"
+    "close-label": "閉じる",
+    "usage-cache": "キャッシュヒット",
+    "usage-reqs": "再利用",
+    "usage-input-tokens": "入力トークン",
+    "usage-cache-read": "キャッシュ読取トークン",
+    "usage-sessions": "セッション数",
+    "usage-period": "使用期間"
   },
   "cache-panel": {
     "hit-rate": {

@@ -162,7 +162,9 @@
     "ref-session-current": "Current session",
     "ref-jump-title": "Jump to this proxy request",
     "ref-other-session-title": "Reference from another session — jump only supported within current session",
-    "ref-count-btn-title": "Click to view {count} API request(s) referencing this system prompt.",
+    "ref-count-btn-title": "Reused {count}× · {pct}% cache hit · {tokens} input tokens. Click for reuse & cache details.",
+    "ref-count-btn-title-nostat": "Referenced by {count} API request(s). Click for reuse details.",
+    "cache-signal-title": "Prompt cache hit rate {pct}% (by input tokens). Low = input tokens re-billed every request.",
     "ref-count-span-title": "Number of API requests referencing this system prompt (by hash).",
     "segment-count-title": "Number of text segments used as body in the original system array. (idx[0] is usually the billing header; idx[1]+ is the body)",
     "byte-size-title": "Byte size of the system prompt body.",
@@ -176,6 +178,8 @@
       "system-title": "System prompt",
       "system-tip": "Instructions sent to Claude with every request. Not the first message of the conversation, but the stage setting applied throughout.",
       "system-sub": "· rules applied to every turn",
+      "system-context-title": "System context",
+      "system-context-tip": "Context/reminders injected for Claude (project instructions, skill catalog, hook output, etc.). Not something Claude said — it's guidance the system inserted mid-conversation, so it's collapsed by default.",
       "speaker-user": "You",
       "speaker-claude": "Claude",
       "raw-pin-tip": "View this message's raw data (JSON)",
@@ -325,7 +329,13 @@
     "load-failed": "Failed to load: {message}",
     "not-found": "Body not found.",
     "modal-load-failed": "Failed to load: {message}",
-    "close-label": "Close"
+    "close-label": "Close",
+    "usage-cache": "Cache hit",
+    "usage-reqs": "Reuses",
+    "usage-input-tokens": "Input tokens",
+    "usage-cache-read": "Cache-read tokens",
+    "usage-sessions": "Sessions",
+    "usage-period": "Period"
   },
   "cache-panel": {
     "hit-rate": {

@@ -185,6 +185,10 @@ export function SessionDetailContainer({
   }, []);
   useSessionLoad(sessionId, { onAnomalies });
 
+  // System 칩(ref) 클릭 → 재사용/캐시 상세 모달. 본문·집계(usage)는 llm 훅이 이미 보유하므로
+  // 추가 fetch 없이 SystemPromptDetailModal 을 재사용한다(syslib 탭과 동일 컴포넌트).
+  const [refsModalOpen, setRefsModalOpen] = useState(false);
+
   const renderBody = (): ReactElement => {
     if (detailTab === 'llm') {
       // API 페이로드 — 원본 #detailLlmInputView.detail-content > #llmInputBody.llm-input-body 구조 복원.
@@ -193,6 +197,7 @@ export function SessionDetailContainer({
         <div id="detailLlmInputView" className="detail-content">
           <div id="llmInputBody" className="llm-input-body" role="region" aria-label="API payload">
             <LLMInput
+              sessionId={sessionId}
               requestId={llm.requestId}
               systemHash={llm.systemHash}
               systemSize={llm.systemSize}
@@ -206,8 +211,28 @@ export function SessionDetailContainer({
               pendingNewCount={llm.pendingNewCount}
               onFollowLatest={llm.followLatest}
               typing={llm.typing}
+              onRefsClick={() => setRefsModalOpen(true)}
             />
           </div>
+          {/* ref 칩 클릭 시 재사용/캐시 집계 모달 — content+usage 는 llm 훅이 이미 보유. */}
+          <SystemPromptDetailModal
+            hash={refsModalOpen && llm.systemHash ? llm.systemHash : null}
+            loading={false}
+            detail={
+              llm.systemHash
+                ? {
+                    hash: llm.systemHash,
+                    content: llm.systemContent,
+                    byte_size: llm.systemMeta?.byte_size ?? null,
+                    segment_count: llm.systemMeta?.segment_count ?? null,
+                    ref_count: llm.systemMeta?.ref_count ?? null,
+                    usage: llm.systemMeta?.usage ?? null,
+                  }
+                : null
+            }
+            onClose={() => setRefsModalOpen(false)}
+            t={t}
+          />
         </div>
       );
     }

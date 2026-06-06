@@ -162,7 +162,9 @@
     "ref-session-current": "현재 세션",
     "ref-jump-title": "이 proxy 요청으로 점프",
     "ref-other-session-title": "다른 세션의 참조 — 점프는 현재 세션 내에서만 지원",
-    "ref-count-btn-title": "클릭으로 이 시스템 프롬프트를 참조한 API 요청 {count}건의 목록 보기.",
+    "ref-count-btn-title": "{count}회 재사용 · 캐시 적중 {pct}% · 누적 입력 {tokens} 토큰. 클릭하여 재사용·캐시 상세 보기.",
+    "ref-count-btn-title-nostat": "API 요청 {count}건이 참조. 클릭하여 재사용 상세 보기.",
+    "cache-signal-title": "프롬프트 캐시 적중률 {pct}% (입력 토큰 기준). 낮으면 매 요청마다 입력 토큰을 다시 과금.",
     "ref-count-span-title": "이 시스템 프롬프트(hash 기준)를 참조한 API 요청 수.",
     "segment-count-title": "원본 system 배열에서 본문으로 사용된 텍스트 세그먼트 수. (보통 idx[0]은 결제용 헤더, idx[1] 이후가 본문)",
     "byte-size-title": "시스템 프롬프트 본문의 바이트 크기.",
@@ -176,6 +178,8 @@
       "system-title": "시스템 프롬프트",
       "system-tip": "Claude에게 매 요청마다 함께 전달되는 규칙·역할 안내문입니다. 대화의 첫 발화가 아니라 대화 전체에 깔린 무대 설정이에요.",
       "system-sub": "· 이 대화에 매번 깔리는 규칙",
+      "system-context-title": "시스템 컨텍스트",
+      "system-context-tip": "Claude에게 주입된 컨텍스트·리마인더(프로젝트 지침·스킬 목록·hook 출력 등)입니다. Claude가 한 말이 아니라 시스템이 대화 중간에 끼워 넣은 안내라 기본 접힘으로 둡니다.",
       "speaker-user": "당신",
       "speaker-claude": "Claude",
       "raw-pin-tip": "이 메시지의 원본 데이터(JSON) 보기",
@@ -325,7 +329,13 @@
     "load-failed": "불러오기 실패: {message}",
     "not-found": "본문을 찾을 수 없습니다.",
     "modal-load-failed": "불러오기 실패: {message}",
-    "close-label": "닫기"
+    "close-label": "닫기",
+    "usage-cache": "캐시 적중",
+    "usage-reqs": "재사용",
+    "usage-input-tokens": "입력 토큰",
+    "usage-cache-read": "캐시 읽기 토큰",
+    "usage-sessions": "세션 수",
+    "usage-period": "사용 기간"
   },
   "cache-panel": {
     "hit-rate": {

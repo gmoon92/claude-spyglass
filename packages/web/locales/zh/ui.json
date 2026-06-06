@@ -162,7 +162,9 @@
     "ref-session-current": "当前会话",
     "ref-jump-title": "跳转到此代理请求",
     "ref-other-session-title": "其他会话的引用 — 仅支持在当前会话内跳转",
-    "ref-count-btn-title": "点击查看引用此系统提示词的 {count} 条 API 请求。",
+    "ref-count-btn-title": "复用 {count} 次 · 缓存命中 {pct}% · 累计输入 {tokens} 词元。点击查看复用与缓存详情。",
+    "ref-count-btn-title-nostat": "被 {count} 条 API 请求引用。点击查看复用详情。",
+    "cache-signal-title": "提示词缓存命中率 {pct}%（按输入词元）。过低意味着每次请求都重新计费输入词元。",
     "ref-count-span-title": "引用此系统提示词（按 hash）的 API 请求数量。",
     "segment-count-title": "原始 system 数组中用作正文的文本段数量。(通常 idx[0] 为计费用头部，idx[1] 起为正文)",
     "byte-size-title": "系统提示词正文的字节大小。",
@@ -176,6 +178,8 @@
       "system-title": "系统提示词",
       "system-tip": "每次请求都会随附发送给 Claude 的规则与角色说明。它不是对话的首条发言，而是贯穿整个对话的背景设定。",
       "system-sub": "· 每轮都生效的规则",
+      "system-context-title": "系统上下文",
+      "system-context-tip": "注入给 Claude 的上下文/提醒(项目说明、技能列表、hook 输出等)。这不是 Claude 说的话,而是系统在对话中插入的说明,因此默认折叠。",
       "speaker-user": "你",
       "speaker-claude": "Claude",
       "raw-pin-tip": "查看此消息的原始数据(JSON)",
@@ -325,7 +329,13 @@
     "load-failed": "加载失败：{message}",
     "not-found": "未找到正文。",
     "modal-load-failed": "加载失败：{message}",
-    "close-label": "关闭"
+    "close-label": "关闭",
+    "usage-cache": "缓存命中",
+    "usage-reqs": "复用",
+    "usage-input-tokens": "输入词元",
+    "usage-cache-read": "缓存读取词元",
+    "usage-sessions": "会话数",
+    "usage-period": "使用期间"
   },
   "cache-panel": {
     "hit-rate": {

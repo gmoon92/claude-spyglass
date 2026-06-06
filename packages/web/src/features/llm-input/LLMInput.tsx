@@ -28,17 +28,18 @@ import { Chevron } from '../../components/design-system/icons/Chevron';
 import { Info } from '../../components/design-system/icons/Info';
 import { Bolt } from '../../components/design-system/icons/Bolt';
 import { SearchBox } from '../../components/SearchBox';
-import { ChatRoom, SystemPinChip, SystemPinBody } from './ChatRoom';
+import { ChatRoom, SystemPinChip, SystemPinBody, type SystemUsageLike } from './ChatRoom';
 import { type MessageLike } from './llm-input-state';
 
 /** i18n 번역 함수 시그니처 — react-i18next t(useTranslation) 와 동형. */
 type TFunc = (key: string, vars?: Record<string, unknown>) => string;
 
-/** system_prompts meta(원본 systemMeta 형태). */
+/** system_prompts meta(원본 systemMeta 형태). usage 는 ChatRoom SystemMetaLike 와 동형. */
 export interface SystemMeta {
   segment_count?: number | null;
   byte_size?: number | null;
   ref_count?: number | null;
+  usage?: SystemUsageLike | null;
   [k: string]: unknown;
 }
 
@@ -53,6 +54,8 @@ export interface ProxyMeta {
 }
 
 export interface LLMInputProps {
+  /** 세션 id — ChatRoom 의 "신선한 진입(세션 전환)" 판정 키(conversationKey). 바뀌면 최신으로 자동 점프. */
+  sessionId?: string;
   /** 활성 proxy 요청 id(헤더 + 셀렉터 활성값). */
   requestId: string;
   /** system_prompts hash(없으면 system 필드 미존재 분기). */
@@ -148,6 +151,7 @@ function ProxyChip({
 export function LLMInput(props: LLMInputProps): ReactElement {
   const { t } = useTranslation() as { t: TFunc };
   const {
+    sessionId,
     requestId,
     systemHash = null,
     systemSize = null,
@@ -248,7 +252,7 @@ export function LLMInput(props: LLMInputProps): ReactElement {
         {pinOpen && systemHash ? <SystemPinBody content={systemContent} t={t} /> : null}
       </div>
 
-      <ChatRoom messages={messages} search={search} typing={typing} />
+      <ChatRoom messages={messages} search={search} typing={typing} conversationKey={sessionId} />
     </>
   );
 }
