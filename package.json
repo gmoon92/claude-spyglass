@@ -32,6 +32,7 @@
     "@types/node": "latest",
     "electron": "^42.2.0",
     "electron-builder": "^26.8.1",
+    "playwright": "^1.60.0",
     "typescript": "^5.0.0"
   },
   "engines": {
@@ -40,6 +41,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",
     "eventsource": "^4.1.0",
+    "jimp": "^1.6.1",
     "react-devtools-core": "^7.0.1"
   },
   "trustedDependencies": [
