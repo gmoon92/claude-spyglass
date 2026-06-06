@@ -1,0 +1,576 @@
+/**
+ * llm-input-chat.css — "API 페이로드" 대화형(Chat) 뷰 시각 정의 (payload-chat-redesign · 컨셉 ③ Dual-Lane)
+ *
+ * 책임:
+ *  - LLMInput 의 'chat' viewMode 본문(ChatRoom.tsx)의 시각 폴리싱. 'raw' viewMode 는 기존 llm-input.css 가 담당.
+ *  - 3차 전문가 회의 hybrid 합의: 색·접근성·도구아이콘 SSoT 는 상속, '대화'라는 신규 정보 유형에만 한정해
+ *    형태(비대칭 말풍선)·전용 글리프·모션·읽기 타이포를 신규로 얹는다. 신규 hex 0개 — 전부 chat alias·토큰 derive.
+ *
+ * 4종 위계 분리(색 단독 의존 금지 — 형태+정렬+테두리+글리프+폰트 조합으로 색맹 안전):
+ *  - text        → 좌우 비대칭 말풍선(assistant 좌 / user 우)
+ *  - thinking    → 좌측 들여쓴 dashed '사고 거품'(채움 없음, 기본 접힘)
+ *  - tool_use    → 중립 rail '행동 카드'(말풍선과 다른 사각, cyan 아님)
+ *  - tool_result → 행동 카드 하단 ↳ '결과 칩'(성공 초록/실패 빨강 — toolHasError() SSoT 판정만 색 입힘)
+ *
+ * 의존 토큰(모두 design-tokens.css SSoT): chat alias, surface 계열, raised, border 계열, text-1~4,
+ *   success·error·warn·info·accent, space-1~6, radius-sm·md·lg, ease, dur-base·dur-fast.
+ *
+ * 호출 마크업: packages/web/src/features/llm-input/ChatRoom.tsx
+ */
+
+/* === 대화 ⇄ 원본 토글 (LLMInput 헤더, 양 뷰 공통) ========================= */
+.llm-input-view-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 2px;
+}
+.llm-input-view-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-3);
+  font-family: inherit;
+  font-size: var(--text-meta);
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.llm-input-view-btn:hover { color: var(--text-2); }
+.llm-input-view-btn[aria-pressed="true"] { background: var(--raised); color: var(--text-1); }
+.llm-input-view-btn:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
+
+/* === 컨테이너 ============================================================= */
+.chat-room {
+  font-size: var(--chat-bubble-size);
+  color: var(--text-2);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/*
+ * chat 뷰 스크롤 모델: 바깥(.detail-content)이 스크롤하면 헤더가 밀려 사라지고 진입 시 최신이
+ * 안 보인다. 그래서 chat 뷰에서는 .llm-input-body 를 viewport 잔여 높이에 고정(overflow:hidden)하고
+ * 내부 .chat-timeline 만 스크롤시킨다 → 헤더/banner 고정 + 진입 맨아래 스크롤 정상 작동.
+ *   :has(.chat-room) 로 chat 전용 — raw 뷰(.chat-room 부재)는 기존 자연 흐름(바깥 스크롤) 유지.
+ */
+/* 바깥 스크롤 컨테이너(.detail-content)를 chat 뷰에선 flex 컨테이너로 전환 — height:100% 의존 제거.
+   detail-content 는 flex:1 로 viewport 잔여 높이를 가지므로, 그 자식을 flex 로 늘리면 내부 timeline 만 스크롤. */
+.detail-content:has(.chat-room) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.llm-input-body:has(.chat-room) {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.llm-input-body:has(.chat-room) > .llm-input-abar-head { flex-shrink: 0; }
+.llm-input-body:has(.chat-room) > .chat-room { flex: 1; min-height: 0; }
+
+/* === split shell: [타임라인 | 6px 리사이저 | 인스펙터] — 좌측폭은 --chat-left(인라인 var) ==== */
+.chat-shell {
+  display: grid;
+  grid-template-columns: var(--chat-left, 68%) 6px minmax(0, 1fr);
+  /* row 를 minmax(0,1fr) 로 고정 — 미지정 시 grid row 가 내용(긴 타임라인)만큼 늘어나
+     grid item(chat-main/inspector)이 shell 높이를 초과 → 내부 overflow 가 안 생긴다. */
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--surface);
+}
+@media (max-width: 1080px) {
+  /* 좁은 화면: 1열 + 바깥 스크롤 허용(좌/우 각각 고정 높이로 자족). 리사이저 숨김. */
+  .llm-input-body:has(.chat-room) { height: auto; overflow: visible; }
+  .chat-shell { grid-template-columns: 1fr; flex: none; }
+}
+
+/* 좌측 — 대화 컬럼(내부 스크롤) */
+.chat-main {
+  position: relative;
+  min-width: 0;
+  min-height: 0; /* grid item 이 row 높이를 초과하지 않도록(내부 timeline 스크롤 전제) */
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+}
+@media (max-width: 1080px) {
+  .chat-main { border-right: none; border-bottom: 1px solid var(--border); height: 560px; }
+}
+
+/* 인스펙터 검색 입력 — feed-search-input 기본 200px 고정 폭을 패널 폭으로 채움.
+   (헤더 검색·녹화배지·범례·stateless 는 LLMInput a-head 로 이전 — 본 파일에서 제거됨) */
+.chat-inspector-search .feed-search-input,
+.chat-inspector-search .feed-search-input:focus {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+}
+
+/* 돋보기/clear 위치 보정 — .chat-inspector-search 는 wrapper 에 좌우 padding(--space-3)을 주는데,
+   base .feed-search-icon/clear 는 wrapper padding=0 을 전제로 absolute left/right 를 둔다.
+   그 padding 만큼 기준점을 안쪽으로 밀어 input 박스 내부 정렬을 base 와 동일하게 복원한다.
+   (값은 위 .chat-inspector-search padding 좌우값과 결합 — 그쪽을 바꾸면 여기도 함께 조정) */
+.chat-inspector-search .feed-search-icon { left: calc(var(--space-3) + var(--space-2)); }
+.chat-inspector-search .feed-search-clear { right: calc(var(--space-3) + var(--space-1)); }
+
+/* === 리사이저 — 좌(타임라인)/우(인스펙터) 폭 드래그 ======================= */
+.chat-resizer {
+  cursor: col-resize;
+  background: var(--border);
+  transition: background var(--dur-fast) var(--ease);
+  touch-action: none;
+}
+.chat-resizer:hover,
+.chat-resizer:active { background: var(--info); }
+@media (max-width: 1080px) { .chat-resizer { display: none; } }
+
+/* === 타임라인(내부 스크롤) + "최신으로" 점프 ============================== */
+.chat-timeline {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+/* flex column 에서 자식이 flex-shrink(기본 1)로 압축돼 카드가 2px 로 붕괴되는 것 방지 —
+   자식은 자연 높이를 유지하고, 넘치면 timeline 이 스크롤한다(지저분한 얇은 라인 해소). */
+.chat-timeline > * { flex-shrink: 0; }
+.chat-timeline::-webkit-scrollbar { width: 10px; }
+.chat-timeline::-webkit-scrollbar-thumb { background: var(--raised); border-radius: 8px; border: 2px solid var(--surface); }
+.chat-jump-latest {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%) translateY(6px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-base) var(--ease), transform var(--dur-base) var(--ease);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-medium);
+  color: var(--text-1);
+  background: var(--floating);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+  z-index: 5;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+.chat-jump-latest--show { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+.chat-jump-latest:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+/* === 핀 공지 (system prompt) — LLMInput a-head 에 흡수(헤더 고정) ============ */
+/* a-head 안에서 a-bar 아래 한 줄로 배치. 펼치면 본문이 헤더 하단으로 확장(타임라인 분리). */
+.llm-input-abar-head .chat-pin { margin: 0 var(--space-3) var(--space-2); }
+.chat-pin {
+  border-left: 3px solid var(--chat-pin);
+  background: var(--yellow-bg-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+.chat-pin > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.chat-pin > summary::-webkit-details-marker { display: none; }
+.chat-pin-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-body);
+  font-weight: var(--weight-strong);
+  color: var(--chat-pin);
+}
+.chat-pin-sub { font-size: var(--text-meta); color: var(--text-3); }
+.chat-pin-meta { display: inline-flex; gap: var(--space-1); margin-left: auto; flex-wrap: wrap; align-items: center; }
+.chat-pin-meta span,
+.chat-pin-meta .chat-refs-toggle {
+  font-family: var(--font-data);
+  font-size: var(--text-small);
+  color: var(--text-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 7px;
+}
+.chat-pin-meta .chat-refs-toggle {
+  color: var(--info);
+  border-color: rgba(88, 166, 255, 0.4);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.chat-pin-meta .chat-refs-toggle:hover { background: var(--blue-bg-light); }
+.chat-pin pre {
+  margin: var(--space-3) 0 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  font-size: var(--text-meta);
+  color: var(--text-3);
+  max-height: var(--llm-input-pre-max-h);
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.chat-pin--empty { border-left-color: var(--text-4); background: var(--surface-alt); }
+.chat-pin--empty p { color: var(--text-3); font-size: var(--text-meta); margin: 0; }
+
+/* === 말풍선 (text) ======================================================== */
+/* 아바타를 화자(speaker) 줄과 같은 높이로 — flex-start(상단 정렬). 기존 flex-end 는 말풍선 하단에 붙어 어색. */
+.chat-row { display: flex; gap: var(--space-2); align-items: flex-start; }
+.chat-row--me { justify-content: flex-end; }
+.chat-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-strong);
+}
+.chat-avatar--claude { background: rgba(255, 122, 69, 0.14); color: var(--chat-claude-accent); }
+.chat-avatar--user { background: var(--blue-bg-light); color: var(--chat-user-accent); }
+.chat-bubble-wrap { max-width: 78%; display: flex; flex-direction: column; gap: 3px; }
+.chat-bubble-wrap--me { align-items: flex-end; }
+.chat-speaker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-small);
+  color: var(--text-4);
+  padding: 0 var(--space-1);
+}
+.chat-speaker .orig { font-family: var(--font-data); opacity: .7; }
+.chat-bubble {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-lg);
+  font-size: var(--chat-bubble-size);
+  line-height: var(--chat-bubble-lh);
+  color: var(--text-1);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+/* 비대칭 radius — 꼬리쪽 모서리만 --radius-sm 로 squash(화자 방향 인코딩, SVG 자산 0) */
+.chat-bubble--claude {
+  background: var(--chat-surface-claude);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: var(--radius-sm);
+}
+.chat-bubble--me {
+  background: var(--chat-surface-user);
+  border-left: 3px solid var(--chat-user-accent);
+  border-bottom-right-radius: var(--radius-sm);
+}
+.chat-bubble-body { flex: 1; white-space: pre-wrap; word-break: break-word; min-width: 0; }
+
+/* === 긴 본문 클램프 (text 말풍선·thinking 본문) — 미리보기만(더 보기 폐기), 전문은 인스펙터 ===== */
+.chat-clamp-content { white-space: pre-wrap; word-break: break-word; }
+/* 클램프: max-height 로 가리고 하단 페이드 마스크(텍스트는 그대로 — 잘라내지 않음) */
+.chat-clamp:not(.chat-clamp--open) .chat-clamp-content {
+  max-height: 15.5em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
+}
+
+/* === 말풍선 하단 메타(인덱스 + ↗ 자세히) / 카드·거품 ↗ 행 ==================== */
+.chat-bubble-meta { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-1); }
+.chat-bubble-wrap--me .chat-bubble-meta { justify-content: flex-end; }
+.chat-idx { font-size: var(--text-small); color: var(--text-4); font-family: var(--font-data); }
+.chat-act-meta,
+.chat-think-meta { display: flex; padding: var(--space-1) var(--space-3) var(--space-2); }
+/* 공용 "↗ 자세히" 버튼 — 우측 인스펙터에 전문/원본 표시(더 보기 토글 대체) */
+.chat-inspect-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: transparent;
+  border: none;
+  color: var(--info);
+  font-family: inherit;
+  font-size: var(--text-small);
+  cursor: pointer;
+  padding: 0;
+}
+.chat-inspect-btn:hover { text-decoration: underline; }
+.chat-inspect-btn:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; border-radius: var(--radius-sm); }
+.chat-unknown-lbl { color: var(--text-3); }
+
+/* === thinking 사고 거품 =================================================== */
+.chat-think {
+  margin-left: 38px;
+  max-width: 74%;
+  border: 1px dashed var(--chat-think-line);
+  border-radius: var(--radius-lg);
+  background: transparent;
+}
+.chat-think > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-meta);
+  color: var(--chat-think-text);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.chat-think > summary::-webkit-details-marker { display: none; }
+.chat-think .chat-think-lbl { font-style: italic; color: var(--chat-think-text); }
+.chat-think .chat-think-note { font-size: var(--text-small); color: var(--text-4); margin-left: auto; }
+.chat-think .chat-think-body {
+  padding: 0 var(--space-3) var(--space-3) calc(var(--space-3) + 18px);
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  color: var(--chat-think-text);
+  white-space: pre-wrap;
+}
+.chat-think--locked .chat-think-body { color: var(--text-4); font-style: italic; }
+.chat-think-empty { color: var(--text-4); font-style: italic; }
+
+/* === tool_use 행동 카드 (+ ↳ tool_result 결과 칩) ========================= */
+.chat-action {
+  margin-left: 38px;
+  max-width: 78%;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--chat-action-rail);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+.chat-action--parallel { border-left-style: double; border-left-width: 5px; }
+.chat-parallel-hd {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-small);
+  color: var(--text-3);
+  font-family: var(--font-data);
+  padding: var(--space-1) var(--space-3) 0;
+}
+.chat-act-call { padding: var(--space-2) var(--space-3); }
+.chat-act-call + .chat-act-call { border-top: 1px dashed var(--border); }
+.chat-act-hd { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.chat-act-name { font-weight: var(--weight-strong); color: var(--text-1); font-size: var(--text-body); font-family: var(--font-data); }
+.chat-act-orig { font-size: var(--text-small); color: var(--text-4); font-family: var(--font-data); }
+.chat-act-id {
+  font-size: var(--text-small);
+  color: var(--text-3);
+  font-family: var(--font-data);
+  background: var(--surface-alt);
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+  margin-left: auto;
+}
+.chat-act-sub { font-size: var(--text-meta); color: var(--text-3); margin-top: var(--space-1); }
+.chat-act-detail { margin-top: var(--space-1); }
+.chat-act-detail > summary { font-size: var(--text-small); color: var(--text-4); cursor: pointer; font-family: var(--font-data); }
+.chat-act-detail pre {
+  margin: var(--space-1) 0 0;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  font-size: var(--text-small);
+  color: var(--text-4);
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow: auto;
+}
+
+/* ↳ 결과 칩 — toolHasError() SSoT 판정만 색 입힘(호출측 재계산 금지) */
+.chat-result {
+  border-top: 1px dashed var(--border);
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  background: rgba(0, 0, 0, 0.18);
+}
+.chat-result-hd { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-meta); flex-wrap: wrap; }
+.chat-result-arrow { color: var(--text-4); display: inline-flex; }
+.chat-result-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.chat-result--ok .chat-result-dot { background: var(--chat-result-ok); }
+.chat-result--err .chat-result-dot { background: var(--chat-result-err); }
+.chat-verdict { display: inline-flex; align-items: center; gap: var(--space-1); font-weight: var(--weight-medium); }
+.chat-result--ok .chat-verdict { color: var(--chat-result-ok); }
+.chat-result--err .chat-verdict { color: var(--chat-result-err); }
+.chat-result-hint { color: var(--text-3); }
+.chat-result-ru { font-size: var(--text-small); color: var(--text-4); margin-left: auto; font-family: var(--font-data); }
+.chat-orphan { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-small); color: var(--chat-orphan); font-family: var(--font-data); }
+.chat-orphan-card { border-left-color: var(--chat-orphan); }
+
+/* === 클릭 가능 박스(button 화) — 말풍선/카드/거품 클릭 → 인스펙터 표시 + 선택 강조 ===== */
+/* 면·테두리는 각 변종(.chat-bubble--*, .chat-action)이 재정의하므로 reset 은 appearance/타이포만. */
+.chat-bubble,
+.chat-act-call,
+button.chat-action,
+.chat-think-body--btn {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+/* 자체 면이 없는 박스는 button 기본 면/테두리 제거(.chat-act-call 은 .chat-action 카드 안). */
+.chat-act-call,
+.chat-think-body--btn {
+  background: none;
+  border: none;
+  width: 100%;
+  display: block;
+}
+.chat-bubble { width: 100%; }
+.chat-think-body--btn { color: var(--chat-think-text); }
+/* 선택 강조 — 인스펙터에 표시 중인 박스(info outline). 인스펙터 본문 accent 와 동색으로 연결 인지. */
+.chat-selected { outline: 2px solid var(--info); outline-offset: 2px; }
+.chat-act-call.chat-selected,
+button.chat-action.chat-selected { outline-offset: -2px; }
+
+/* === 타이핑 인디케이터 (입장 1회) ========================================= */
+.chat-typing {
+  margin-left: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  border-bottom-left-radius: var(--radius-sm);
+  width: max-content;
+}
+.chat-typing-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); animation: chat-typing 1.3s infinite; }
+.chat-typing-dot:nth-child(2) { animation-delay: .2s; }
+.chat-typing-dot:nth-child(3) { animation-delay: .4s; }
+.chat-typing-cap { font-size: var(--text-small); color: var(--text-4); margin-left: var(--space-1); }
+@keyframes chat-typing { 0%,60%,100%{opacity:.25; transform:translateY(0);} 30%{opacity:1; transform:translateY(-3px);} }
+
+/* === 입장 reveal (정적 데이터 1회) ======================================== */
+.chat-reveal { opacity: 0; transform: translateY(8px); animation: chat-reveal var(--dur-base) var(--ease) forwards; }
+@keyframes chat-reveal { to { opacity: 1; transform: translateY(0); } }
+
+/* === 우측 3 — 상시 인스펙터 ============================================== */
+.chat-inspector {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0; /* grid item — body 내부 스크롤 전제 */
+  background: var(--surface);
+}
+@media (max-width: 1080px) { .chat-inspector { height: 420px; } }
+/* 헤더: "인스펙터" 라벨 없이 선택 항목 제목 + 전문/원본 토글(헤더 간결화) */
+.chat-inspector-hd {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-alt);
+}
+.chat-inspector-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  color: var(--text-1);
+  font-weight: var(--weight-strong);
+  font-size: var(--text-body);
+}
+.chat-inspector-title .chat-ico { color: var(--text-4); flex-shrink: 0; }
+.chat-inspector-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-inspector-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 2px;
+  flex-shrink: 0;
+}
+.chat-inspector-toggle button {
+  background: transparent;
+  border: none;
+  color: var(--text-3);
+  font-family: inherit;
+  font-size: var(--text-small);
+  padding: 3px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.chat-inspector-toggle button.on { background: var(--raised); color: var(--text-1); }
+.chat-inspector-toggle button:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
+.chat-inspector-meta {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-small);
+  font-family: var(--font-data);
+  color: var(--text-4);
+  border-bottom: 1px solid var(--border);
+}
+.chat-inspector-search { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border); }
+.chat-inspector-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: var(--space-3);
+  padding: var(--space-3);
+  /* 선택된 대화 박스의 '내용'임을 시각 연결 — info accent 박스(말풍선 .chat-selected outline 과 동색). */
+  border-left: 3px solid var(--chat-user-accent);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  line-height: 1.65;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.chat-inspector-body--empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-3);
+  /* 빈 상태는 accent 박스 해제(선택 항목 없음). */
+  border-left: none;
+  background: none;
+  color: var(--text-4);
+  font-family: var(--font-ui);
+}
+.chat-inspector-body--empty .chat-ico { color: var(--border-strong); }
+/* 인스펙터 본문(mono)에서 검색 하이라이트 점선 밑줄은 지저분 — 배경만 남기고 underline 제거. */
+.chat-inspector-body .llm-input-mark { border-bottom: none; padding: 0 1px; }
+
+/* === 공용 아이콘 헬퍼 ===================================================== */
+.chat-ico { display: inline-flex; align-items: center; justify-content: center; }
+
+/* === 접근성: 모션 최소화 존중 ============================================= */
+@media (prefers-reduced-motion: reduce) {
+  .chat-reveal { animation: none; opacity: 1; transform: none; }
+  .chat-typing-dot, .chat-rec-dot { animation: none; }
+  .chat-jump-latest { transition: none; }
+}

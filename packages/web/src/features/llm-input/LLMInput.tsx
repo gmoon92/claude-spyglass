@@ -24,9 +24,11 @@
 import { useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fmtTime, fmtToken, shortModelName } from '../../lib/formatters';
-import { Search } from '../../components/design-system/icons/Search';
 import { Chevron } from '../../components/design-system/icons/Chevron';
 import { Info } from '../../components/design-system/icons/Info';
+import { Bolt } from '../../components/design-system/icons/Bolt';
+import { SearchBox } from '../../components/SearchBox';
+import { ChatRoom, PinnedSystem } from './ChatRoom';
 import {
   type MessageLike,
   type ExpandedMap,
@@ -86,6 +88,14 @@ export interface LLMInputProps {
   onRefsClick?: (hash: string) => void;
   /** 초기 검색어(테스트/딥링크용 — 보통 미지정). */
   initialSearch?: string;
+  /** 초기 뷰 모드(payload-chat-redesign). 기본 'chat'(대화형). 'raw'=현행 아코디언. 테스트/딥링크용. */
+  initialViewMode?: 'chat' | 'raw';
+  /** 세션 LIVE 추적 중(payload-chat-redesign 2차) — 헤더 LIVE 배지(녹색 펄스). 기본 false. */
+  isLive?: boolean;
+  /** 추적 해제 중 미확인 신규 proxy 수 — "새 요청 N ↓" 알림. 기본 0. */
+  pendingNewCount?: number;
+  /** "최신으로" 복귀(LIVE 추적 재개) — 헤더 알림 클릭. */
+  onFollowLatest?: () => void;
 }
 
 /**
@@ -246,19 +256,19 @@ function SystemSection({
       data-refs-hash={systemHash}
       aria-haspopup="dialog"
       aria-expanded="false"
-      title={t('ui.llm-input.ref-count-btn-title', { count: refCount })}
+      data-tip={t('ui.llm-input.ref-count-btn-title', { count: refCount })}
       onClick={() => onRefsClick?.(systemHash)}
     >
       ref_count: {refCount}
     </button>
   ) : (
-    <span title={t('ui.llm-input.ref-count-span-title')}>ref_count: {refCount}</span>
+    <span data-tip={t('ui.llm-input.ref-count-span-title')}>ref_count: {refCount}</span>
   );
 
   const metaLine = meta ? (
     <div className="llm-input-system-meta">
-      <span title={t('ui.llm-input.segment-count-title')}>segment_count: {meta.segment_count ?? '?'}</span>
-      <span title={t('ui.llm-input.byte-size-title')}>
+      <span data-tip={t('ui.llm-input.segment-count-title')}>segment_count: {meta.segment_count ?? '?'}</span>
+      <span data-tip={t('ui.llm-input.byte-size-title')}>
         byte_size: {formatBytes(meta.byte_size ?? content.length)}
       </span>
       {refsChip}
@@ -271,7 +281,7 @@ function SystemSection({
       open={open}
       onToggle={(e) => onToggle((e.currentTarget as HTMLDetailsElement).open)}
     >
-      <summary className="llm-input-system-summary" title={t('ui.llm-input.system-summary-title')}>
+      <summary className="llm-input-system-summary" data-tip={t('ui.llm-input.system-summary-title')}>
         System
       </summary>
       {metaLine}
@@ -325,8 +335,12 @@ function MessageDetails({
   );
 }
 
-/** 세션 proxy 드롭다운 — 원본 renderProxySelector(timestamp 오름차순 + 활성 selected). */
-function ProxySelector({
+/**
+ * 세션 proxy 칩 — a-bar 한 줄 압축(payload-chat-redesign 2차). 현재 선택 proxy 를 `#idx · model · tokens`
+ * 칩으로 요약하고, 칩 위에 투명 native `<select>` 를 겹쳐 클릭 시 214건 드롭다운을 그대로 펼친다
+ * (기능 100% 유지 + 한 줄 점유). 원본 renderProxySelector 의 option 라벨 계약 유지.
+ */
+function ProxyChip({
   proxyList,
   activeId,
   onSelect,
@@ -337,15 +351,23 @@ function ProxySelector({
 }): ReactElement {
   const { t } = useTranslation() as { t: TFunc };
   const total = proxyList.length;
+  const activeIdx = proxyList.findIndex((r) => r.id === activeId);
+  const cur = activeIdx >= 0 ? proxyList[activeIdx] : null;
+  const curModel = cur?.model ? shortModelName(cur.model) : '?';
+  const curTok =
+    cur && (cur.tokens_input || cur.tokens_output)
+      ? `${fmtToken(cur.tokens_input ?? 0)}+${fmtToken(cur.tokens_output ?? 0)}`
+      : '—';
   return (
-    <div className="llm-input-proxy-selector">
-      <label className="llm-input-proxy-selector-label" htmlFor="llm-input-proxy-select">
-        {t('ui.llm-input.proxy-selector-label', { count: total })}
-      </label>
+    <span className="llm-input-abar-proxy" data-tip={t('ui.llm-input.proxy-selector-label', { count: total })}>
+      <b>#{activeIdx >= 0 ? activeIdx + 1 : '?'}</b>
+      <span className="llm-input-abar-proxy-dim"> · {curModel} · {curTok}</span>
+      <Chevron dir="down" size={10} />
+      {/* 투명 native select — 칩 전체를 덮어 클릭 시 옵션 드롭다운 노출(접근성·키보드 보존). */}
       <select
-        id="llm-input-proxy-select"
-        className="llm-input-proxy-select"
+        className="llm-input-abar-proxy-select"
         data-proxy-select
+        aria-label={t('ui.llm-input.proxy-selector-label', { count: total })}
         value={activeId}
         onChange={(e) => onSelect?.(e.currentTarget.value)}
       >
@@ -365,7 +387,7 @@ function ProxySelector({
           );
         })}
       </select>
-    </div>
+    </span>
   );
 }
 
@@ -387,11 +409,19 @@ export function LLMInput(props: LLMInputProps): ReactElement {
     onSelectProxy,
     onRefsClick,
     initialSearch = '',
+    initialViewMode = 'chat',
+    isLive = false,
+    pendingNewCount = 0,
+    onFollowLatest,
   } = props;
 
   // ── 선언적 로컬 상태(원본 명령형 state/_pending* 정제) ──
+  // 뷰 모드(payload-chat-redesign 컨셉 ③ Dual-Lane): 'chat'=대화형(기본, 비개발자 우선) / 'raw'=현행 아코디언.
+  //   두 뷰가 동일 search/systemOpen 상태를 공유하므로 토글 시 검색어·system 펼침이 보존된다.
+  const [viewMode, setViewMode] = useState<'chat' | 'raw'>(initialViewMode);
   const [systemOpen, setSystemOpen] = useState(true); // 원본 <details open> + 사용자 조절
   const [search, setSearch] = useState(initialSearch); // 원본 state.currentSearch
+  const [pinOpen, setPinOpen] = useState(false); // system 핀(a-head 흡수) 본문 토글
   // 초기 펼침: system role 만(원본 renderMessageDetails isSystem). 검색 초기값이 있으면 매칭 자동 펼침 반영.
   const [expanded, setExpanded] = useState<ExpandedMap>(() => {
     const base = initialExpanded(messages);
@@ -415,122 +445,192 @@ export function LLMInput(props: LLMInputProps): ReactElement {
 
   return (
     <>
-      {/* banner — proxy 데이터의 본질(hook 관측과 다름) 인지 */}
-      <div className="llm-input-banner" role="note">
-        <span className="llm-input-banner-icon" aria-hidden="true">
-          <Info size={12} className="ds-icon" />
-        </span>
-        {/*
-         * 배너 문자열은 i18n 키(ui.llm-input.banner-text)에 <strong> 강조 태그가 포함된
-         * 신뢰 가능한 내부 리소스다. 레거시 llm-input-view.js 는 innerHTML 로 렌더해 태그가
-         * 살아났지만, React 의 기본 텍스트 보간({...})은 이를 escape 해 `<strong>` 이 문자
-         * 그대로 노출된다(P3 결함 #1). 키 신뢰를 전제로 dangerouslySetInnerHTML 로 렌더해
-         * 레거시와 동등한 강조 표시를 복원한다(사용자 입력 아님 — XSS 표면 없음).
-         */}
-        <span
-          className="llm-input-banner-text"
-          dangerouslySetInnerHTML={{ __html: t('ui.llm-input.banner-text') }}
-        />
+      {/*
+       * a-head — 한 줄 압축 헤더(payload-chat-redesign 2차, mockup a-head/a-bar).
+       * proxy 칩 + req/sys 메타 칩 + LIVE/신규알림 + 검색 + 대화/원본 토글 + ?(help).
+       * banner 안내·범례·stateless 는 ? 토글(a-sub)로 접어 상단 영역을 한 줄로.
+       */}
+      <div className="llm-input-abar-head">
+        <div className="llm-input-abar">
+          {proxyList.length > 0 ? (
+            <ProxyChip proxyList={proxyList} activeId={requestId} onSelect={onSelectProxy} />
+          ) : null}
+          <span className="llm-input-abar-meta">
+            <span className="pill" data-tip={requestId}>req {requestId.slice(0, 8) || '—'}</span>
+            {systemHash ? (
+              <span className="pill" data-tip={`system: ${systemHash.slice(0, 12)}…`}>
+                sys {systemSize ? formatBytes(systemSize) : '—'}
+              </span>
+            ) : (
+              <span className="pill pill--empty">{t('ui.llm-input.system-none')}</span>
+            )}
+            {decodeError ? (
+              <span className="pill pill--err" data-tip={decodeError}>
+                {t('ui.llm-input.payload-decode-failed')}
+              </span>
+            ) : null}
+          </span>
+
+          {/* LIVE 추적 배지 / 추적 해제 중 신규 알림 — 녹화 메타포 폐기(세션 SSE 자동추적). */}
+          {isLive ? (
+            <span className="llm-input-live" data-tip={t('ui.llm-input.chat.live-tip')}>
+              <span className="llm-input-live-dot" /> {t('ui.llm-input.chat.live')}
+            </span>
+          ) : (
+            <span className="llm-input-live llm-input-live--paused" data-tip={t('ui.llm-input.chat.paused-tip')}>
+              <span className="llm-input-live-dot" /> {t('ui.llm-input.chat.paused')}
+            </span>
+          )}
+          {pendingNewCount > 0 ? (
+            <button type="button" className="llm-input-newreq" onClick={onFollowLatest}>
+              <Bolt size={11} /> {t('ui.llm-input.chat.new-requests', { count: pendingNewCount })}
+            </button>
+          ) : null}
+
+          <span className="llm-input-abar-spacer" />
+
+          {/* 검색 — chat/raw 공통(search state 공유). .feed-search 래퍼(relative) 필수. */}
+          <span className="feed-search llm-input-abar-search">
+            <SearchBox
+              value={search}
+              placeholder={t('ui.llm-input.search-placeholder')}
+              onSearch={onSearchChange}
+              clearLabel={t('ui.llm-input.chat.search-clear')}
+            />
+          </span>
+
+          {/* 대화 ⇄ 원본 토글 */}
+          <div className="llm-input-view-toggle" role="group" aria-label={t('ui.llm-input.chat.view-toggle-aria')}>
+            <button
+              type="button"
+              className="llm-input-view-btn"
+              data-view="chat"
+              aria-pressed={viewMode === 'chat'}
+              onClick={() => setViewMode('chat')}
+            >
+              {t('ui.llm-input.chat.view-chat')}
+            </button>
+            <button
+              type="button"
+              className="llm-input-view-btn"
+              data-view="raw"
+              aria-pressed={viewMode === 'raw'}
+              onClick={() => setViewMode('raw')}
+            >
+              {t('ui.llm-input.chat.view-raw')}
+            </button>
+          </div>
+
+          {/* ? — 호버하면 banner 안내 + (chat) 범례·stateless 가 팝오버로(오버레이, 레이아웃 안 밀림). */}
+          <span className="llm-input-help">
+            <button
+              type="button"
+              className="llm-input-help-btn"
+              aria-label={t('ui.llm-input.chat.legend-toggle')}
+            >
+              <Info size={14} />
+            </button>
+            <div className="llm-input-asub" role="tooltip">
+              <span
+                className="llm-input-asub-banner"
+                dangerouslySetInnerHTML={{ __html: t('ui.llm-input.banner-text') }}
+              />
+              {viewMode === 'chat' ? (
+                <>
+                  <span className="llm-input-asub-legend">
+                    <span><i style={{ background: 'var(--info)' }} />{t('ui.llm-input.chat.legend-text')}</span>
+                    <span><i style={{ background: 'var(--text-3)', border: '1px dashed var(--text-1)' }} />{t('ui.llm-input.chat.legend-thinking')}</span>
+                    <span><i style={{ background: 'var(--text-3)' }} />{t('ui.llm-input.chat.legend-tool-use')}</span>
+                    <span><i style={{ background: 'var(--success)' }} />{t('ui.llm-input.chat.legend-tool-result')}</span>
+                  </span>
+                  <span className="llm-input-asub-stateless">{t('ui.llm-input.chat.stateless')}</span>
+                </>
+              ) : null}
+            </div>
+          </span>
+        </div>
+
+        {/* system 핀 — a-head 에 흡수(헤더 고정, 타임라인 분리). chat 뷰 전용. */}
+        {viewMode === 'chat' ? (
+          <PinnedSystem
+            hash={systemHash}
+            content={systemContent}
+            meta={systemMeta}
+            open={pinOpen}
+            onToggle={setPinOpen}
+            onRefsClick={onRefsClick}
+            t={t}
+          />
+        ) : null}
       </div>
 
-      {/* 세션 proxy 셀렉터 — 세션 컨텍스트(props) 있을 때만 */}
-      {proxyList.length > 0 ? (
-        <ProxySelector proxyList={proxyList} activeId={requestId} onSelect={onSelectProxy} />
-      ) : null}
-
-      <header className="llm-input-header">
-        <span className="llm-input-rid">
-          request: <code>{requestId}</code>
-        </span>
-        {systemHash ? (
-          <span className="llm-input-hash">
-            system: <code>{systemHash.slice(0, 12)}…</code>
-          </span>
-        ) : (
-          <span className="llm-input-hash llm-input-hash--empty">{t('ui.llm-input.system-none')}</span>
-        )}
-        {systemSize ? <span className="llm-input-size">{formatBytes(systemSize)}</span> : null}
-        {decodeError ? (
-          <span className="llm-input-error" title={decodeError}>
-            {t('ui.llm-input.payload-decode-failed')}
-          </span>
-        ) : null}
-      </header>
-
-      {systemHash ? (
-        <SystemSection
-          content={systemContent}
-          meta={systemMeta}
-          systemHash={systemHash}
-          open={systemOpen}
-          onToggle={setSystemOpen}
-          onRefsClick={onRefsClick}
-        />
+      {viewMode === 'chat' ? (
+        <ChatRoom messages={messages} search={search} />
       ) : (
-        <section className="llm-input-system llm-input-system--empty">
-          <p>{t('ui.llm-input.no-system-field')}</p>
-        </section>
-      )}
+        <>
+          {systemHash ? (
+            <SystemSection
+              content={systemContent}
+              meta={systemMeta}
+              systemHash={systemHash}
+              open={systemOpen}
+              onToggle={setSystemOpen}
+              onRefsClick={onRefsClick}
+            />
+          ) : (
+            <section className="llm-input-system llm-input-system--empty">
+              <p>{t('ui.llm-input.no-system-field')}</p>
+            </section>
+          )}
 
-      {messages.length === 0 ? (
-        <section className="llm-input-messages">
-          <h3>Messages (0)</h3>
-          <p className="llm-input-dim">{t('ui.llm-input.no-messages')}</p>
-        </section>
-      ) : (
-        <section className="llm-input-messages">
-          <header className="llm-input-messages-header">
-            <h3>Messages ({messages.length})</h3>
-            <div className="llm-input-messages-controls">
-              <label className="llm-input-search">
-                <span className="llm-input-search-icon" aria-hidden="true">
-                  <Search size={14} />
-                </span>
-                <input
-                  type="search"
-                  className="llm-input-search-input"
-                  data-messages-search
-                  placeholder={t('ui.llm-input.search-placeholder')}
-                  aria-label={t('ui.llm-input.search-aria-label')}
-                  value={search}
-                  onChange={(e) => onSearchChange(e.currentTarget.value)}
-                />
-              </label>
-              <div className="llm-input-messages-bulk">
-                <button
-                  type="button"
-                  className="llm-input-expand-all"
-                  data-action="expand-all"
-                  title={t('ui.llm-input.expand-all-title')}
-                  onClick={onExpandAll}
-                >
-                  <Chevron dir="down" size={10} /> {t('ui.llm-input.expand-all')}
-                </button>
-                <button
-                  type="button"
-                  className="llm-input-collapse-all"
-                  data-action="collapse-all"
-                  title={t('ui.llm-input.collapse-all-title')}
-                  onClick={onCollapseAll}
-                >
-                  <Chevron dir="right" size={10} /> {t('ui.llm-input.collapse-all')}
-                </button>
+          {messages.length === 0 ? (
+            <section className="llm-input-messages">
+              <h3>Messages (0)</h3>
+              <p className="llm-input-dim">{t('ui.llm-input.no-messages')}</p>
+            </section>
+          ) : (
+            <section className="llm-input-messages">
+              <header className="llm-input-messages-header">
+                <h3>Messages ({messages.length})</h3>
+                <div className="llm-input-messages-controls">
+                  {/* 검색은 상단 a-bar 로 일원화(검색어 공유) — raw 뷰는 펼침/접기 벌크 컨트롤만. */}
+                  <div className="llm-input-messages-bulk">
+                    <button
+                      type="button"
+                      className="llm-input-expand-all"
+                      data-action="expand-all"
+                      data-tip={t('ui.llm-input.expand-all-title')}
+                      onClick={onExpandAll}
+                    >
+                      <Chevron dir="down" size={10} /> {t('ui.llm-input.expand-all')}
+                    </button>
+                    <button
+                      type="button"
+                      className="llm-input-collapse-all"
+                      data-action="collapse-all"
+                      data-tip={t('ui.llm-input.collapse-all-title')}
+                      onClick={onCollapseAll}
+                    >
+                      <Chevron dir="right" size={10} /> {t('ui.llm-input.collapse-all')}
+                    </button>
+                  </div>
+                </div>
+              </header>
+              <div className="llm-input-messages-list">
+                {messages.map((m, i) => (
+                  <MessageDetails
+                    key={messageId(i)}
+                    m={m}
+                    index={i}
+                    open={expanded[messageId(i)] ?? false}
+                    term={search}
+                    onToggle={onMessageToggle}
+                  />
+                ))}
               </div>
-            </div>
-          </header>
-          <div className="llm-input-messages-list">
-            {messages.map((m, i) => (
-              <MessageDetails
-                key={messageId(i)}
-                m={m}
-                index={i}
-                open={expanded[messageId(i)] ?? false}
-                term={search}
-                onToggle={onMessageToggle}
-              />
-            ))}
-          </div>
-        </section>
+            </section>
+          )}
+        </>
       )}
     </>
   );

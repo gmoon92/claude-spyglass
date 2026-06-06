@@ -202,6 +202,9 @@ export function SessionDetailContainer({
               decodeError={llm.decodeError}
               proxyList={llm.proxyList as never}
               onSelectProxy={llm.selectProxy}
+              isLive={llm.isLive}
+              pendingNewCount={llm.pendingNewCount}
+              onFollowLatest={llm.followLatest}
             />
           </div>
         </div>

@@ -32,14 +32,17 @@ const baseProps = {
   systemMeta: { segment_count: 3, byte_size: 2048, ref_count: 5 },
   messages: [] as MessageLike[],
   decodeError: null as string | null,
+  // 본 파일은 'raw'(현행 아코디언) 뷰의 셀렉터 계약을 검증한다(payload-chat-redesign 후 기본은 'chat').
+  //   대화형 뷰 동작은 llm-input-chat-model.test.ts + ChatRoom 가 담당.
+  initialViewMode: 'raw' as const,
 };
 
 describe('LLMInput — 골격/헤더', () => {
-  it('banner + info 아이콘 렌더', () => {
+  it('banner(a-sub 접이판) + info(?) 아이콘 렌더', () => {
     const out = html(<LLMInput {...baseProps} />);
-    expect(out).toContain('class="llm-input-banner"');
-    expect(out).toContain('llm-input-banner-text');
-    expect(out).toContain('<svg'); // info 아이콘
+    // banner 안내는 a-head 의 a-sub(? 토글) 안으로 이동(payload-chat-redesign 2차).
+    expect(out).toContain('llm-input-asub-banner');
+    expect(out).toContain('<svg'); // ? help 아이콘(Info)
   });
 
   it('banner 텍스트에 <strong> 이 포함되면 escape 되지 않고 실제 태그로 렌더 (결함 #1)', () => {
@@ -60,23 +63,23 @@ describe('LLMInput — 골격/헤더', () => {
     }
   });
 
-  it('header: request id + system hash 12자 slice + size', () => {
+  it('a-bar 메타 칩: request id + system hash(data-tip) + size', () => {
     const out = html(<LLMInput {...baseProps} />);
-    expect(out).toContain('class="llm-input-header"');
-    expect(out).toContain('req-abc123def456');
-    expect(out).toContain('hash01234567'); // 12자 slice
+    expect(out).toContain('llm-input-abar-meta');
+    expect(out).toContain('req-abc123def456'); // req 칩 data-tip(full id)
+    expect(out).toContain('hash01234567'); // sys 칩 data-tip 12자 slice
     expect(out).toContain('2.0 KB'); // systemSize formatBytes
   });
 
-  it('systemHash 없음 → system-none 라벨 + no-system-field 섹션', () => {
+  it('systemHash 없음 → a-bar pill--empty + chat-pin/no-system-field 섹션', () => {
     const out = html(<LLMInput {...baseProps} systemHash={null} systemContent={null} systemMeta={null} />);
-    expect(out).toContain('llm-input-hash--empty');
-    expect(out).toContain('llm-input-system--empty');
+    expect(out).toContain('pill--empty'); // a-bar 빈 system 칩
+    expect(out).toContain('llm-input-system--empty'); // raw 뷰 no-system 섹션
   });
 
-  it('decodeError → 에러 배지', () => {
+  it('decodeError → a-bar 에러 칩', () => {
     const out = html(<LLMInput {...baseProps} decodeError="zstd failed" />);
-    expect(out).toContain('llm-input-error');
+    expect(out).toContain('pill--err');
   });
 });
 
@@ -115,9 +118,10 @@ describe('LLMInput — messages 아코디언', () => {
     expect(out).toContain('no-messages');
   });
 
-  it('컨트롤 바: 검색 input + expand-all/collapse-all 버튼', () => {
+  it('컨트롤 바: 검색(a-bar 일원화) + expand-all/collapse-all 버튼', () => {
     const out = html(<LLMInput {...baseProps} messages={messages} />);
-    expect(out).toContain('data-messages-search');
+    // 검색은 상단 a-bar 로 일원화 — raw 컨트롤바는 펼침/접기만.
+    expect(out).toContain('feed-search-input'); // a-bar 검색 입력
     expect(out).toContain('data-action="expand-all"');
     expect(out).toContain('data-action="collapse-all"');
     expect(out).toContain('Messages (3)');
@@ -158,18 +162,17 @@ describe('LLMInput — proxy 셀렉터(세션 데이터 props)', () => {
     { id: 'p-002', timestamp: 2, model: 'claude-3-5-haiku', tokens_input: 10, tokens_output: 5 },
   ];
 
-  it('proxyList 있으면 select(id=llm-input-proxy-select) + 활성 selected', () => {
+  it('proxyList 있으면 a-bar proxy 칩(숨은 select) + 활성 selected', () => {
     const out = html(<LLMInput {...baseProps} requestId="p-002" proxyList={proxyList} />);
-    expect(out).toContain('id="llm-input-proxy-select"');
+    expect(out).toContain('llm-input-abar-proxy'); // 칩 + 숨은 select 하이브리드
     expect(out).toContain('data-proxy-select');
     expect(out).toContain('value="p-001"');
     expect(out).toContain('value="p-002"');
-    // 활성(p-002) 옵션에 selected (React 는 select.value 로 표현하므로 selected 어트리뷰트 검증 대신 존재만)
   });
 
-  it('proxyList 비면 셀렉터 생략(전역 latest 폴백)', () => {
+  it('proxyList 비면 칩 생략(전역 latest 폴백)', () => {
     const out = html(<LLMInput {...baseProps} proxyList={[]} />);
-    expect(out).not.toContain('llm-input-proxy-select');
+    expect(out).not.toContain('llm-input-abar-proxy');
   });
 });
 
@@ -186,5 +189,61 @@ describe('LLMInput — 검색 하이라이트(선언적, initialSearch prop 경�
   it('initialSearch < MIN_LEN 은 하이라이트 없음', () => {
     const out = html(<LLMInput {...baseProps} messages={messages} initialSearch="n" />);
     expect(out).not.toContain('llm-input-mark');
+  });
+});
+
+describe('LLMInput — 대화형(chat) 뷰 (payload-chat-redesign 기본)', () => {
+  const chatProps = { ...baseProps, initialViewMode: 'chat' as const };
+
+  it('기본 viewMode=chat → chat-room + 토글(대화 pressed) 렌더, raw 아코디언 부재', () => {
+    const out = html(<LLMInput {...chatProps} />);
+    expect(out).toContain('class="chat-room"');
+    expect(out).toContain('llm-input-view-toggle');
+    expect(out).toMatch(/data-view="chat" aria-pressed="true"/);
+    // raw 전용 메시지 아코디언 마크업은 없어야 함
+    expect(out).not.toContain('llm-input-messages-list');
+  });
+
+  it('tool_use → 행동 카드(tool_use 라벨), tool_result 는 user 말풍선이 아니라 결과 칩으로 귀속', () => {
+    const messages: MessageLike[] = [
+      { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_1', name: 'Read', input: { file_path: 'a.ts' } }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: 'ok', is_error: false }] },
+    ];
+    const out = html(<LLMInput {...chatProps} messages={messages} />);
+    expect(out).toContain('chat-action');
+    expect(out).toContain('chat-result--ok');
+    expect(out).toContain('toolu_1');
+    // tool_result-only user 메시지를 우측 user 말풍선으로 렌더하지 않음(1급 함정 차단)
+    expect(out).not.toContain('chat-bubble--me');
+  });
+
+  it('thinking → 사고 거품(기본 접힘), redacted 는 잠금 분기', () => {
+    const messages: MessageLike[] = [
+      { role: 'assistant', content: [
+        { type: 'thinking', thinking: '속으로 생각', signature: 'sig' },
+        { type: 'redacted_thinking', data: 'blob' },
+      ] },
+    ];
+    const out = html(<LLMInput {...chatProps} messages={messages} />);
+    expect(out).toContain('chat-think');
+    expect(out).toContain('chat-think--locked');
+    expect(out).not.toContain('sig'); // signature 미노출
+  });
+
+  it('7:3 shell + 상시 인스펙터, 진입 시 타임라인 마지막 항목 기본 노출', () => {
+    const messages: MessageLike[] = [
+      { role: 'user', content: '첫 질문' },
+      { role: 'assistant', content: '마지막 답변 본문' },
+    ];
+    const out = html(<LLMInput {...chatProps} messages={messages} />);
+    expect(out).toContain('chat-shell'); // split grid
+    expect(out).toContain('chat-inspector'); // 우측 상시 인스펙터
+    expect(out).toContain('chat-resizer'); // 좌우 폭 리사이저
+    expect(out).toContain('chat-inspector-body'); // 본문 영역
+    // 진입 기본값 = 마지막 항목(lastInspectablePayload) → 인스펙터에 마지막 답변이 노출(empty 아님)
+    expect(out).not.toContain('chat-inspector-body--empty');
+    expect(out).toContain('마지막 답변 본문'); // 마지막 항목 전문이 인스펙터에 기본 노출
+    // 말풍선은 클릭 가능 박스(button) — 클릭 시 인스펙터 표시(↗ 버튼 폐기).
+    expect(out).toContain('ui.llm-input.chat.inspect-tip');
   });
 });

@@ -16,7 +16,7 @@
  *
  * @module features/session-detail/use-detail-aux
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchSessionProxyList,
   fetchProxyMessages,
@@ -25,6 +25,7 @@ import {
   type ProxyMetaRow,
   type SysLibRowRaw,
 } from './detail-aux-fetcher';
+import { useSSEStore } from '../../stores/sse-store';
 
 /** latest proxy 선택 — timestamp 최대(원본 list[list.length-1] 가정 + 안전 비교). */
 function pickLatest(list: ProxyMetaRow[]): ProxyMetaRow | null {
@@ -46,8 +47,24 @@ export interface UseLlmInputResult {
   messages: unknown[];
   decodeError: string | null;
   proxyList: ProxyMetaRow[];
-  /** 셀렉터 변경 — 다른 proxy 요청 선택(원본 renderLlmInput 재호출). */
+  /** 셀렉터 변경 — 다른 proxy 요청 선택(원본 renderLlmInput 재호출). 수동 선택은 LIVE 추적 해제. */
   selectProxy: (id: string) => void;
+  /**
+   * 세션 LIVE 추적 중 여부(payload-chat-redesign 2차). true 면 이 세션에 새 proxy 호출이 도착할 때
+   * 자동으로 최신 페이로드로 점프한다(녹화 재생 메타포 폐기). selectProxy(수동) 시 false 로 해제.
+   */
+  isLive: boolean;
+  /** 추적 해제 상태에서 아직 보지 않은 신규 proxy 도착 수(LLMInput "새 요청 N ↓" 알림). */
+  pendingNewCount: number;
+  /** 최신으로 복귀 — LIVE 추적 재개 + 최신 proxy 선택 + pending 리셋. */
+  followLatest: () => void;
+}
+
+/** proxyFeed 이벤트(느슨)에서 session_id 추출(서버 broadcastNewProxyRequest 가 동봉, 스키마 passthrough). */
+function proxySessionId(p: unknown): string | undefined {
+  return typeof (p as { session_id?: unknown })?.session_id === 'string'
+    ? (p as { session_id: string }).session_id
+    : undefined;
 }
 
 /**
@@ -67,20 +84,47 @@ export function useLlmInput(
   const [systemMeta, setSystemMeta] = useState<Record<string, unknown> | null>(null);
   const [messages, setMessages] = useState<unknown[]>([]);
   const [decodeError, setDecodeError] = useState<string | null>(null);
+  // LIVE 추적: 기본 ON(진입 시 최신 따라감). 수동 selectProxy 시 OFF, followLatest 로 재개.
+  const [following, setFollowing] = useState(true);
+  const [pendingNewCount, setPendingNewCount] = useState(0);
+  // SSE proxyFeed 구독(전역, prepend 최신순). 세션 필터는 effect 에서.
+  const proxyFeed = useSSEStore((s) => s.proxyFeed);
+  // 이미 반영한 신규 proxy id(중복 처리·pending 이중 증가 방지).
+  const lastSeenProxyRef = useRef<string | null>(null);
 
-  // 1) 세션 변경(+탭 활성) 시 proxy 목록 fetch → latest 선택.
+  // 1) 세션 변경(+탭 활성) 시 proxy 목록 fetch → latest 선택. 세션 전환 시 LIVE 추적 초기화.
   useEffect(() => {
     if (!enabled || !sessionId) return;
     const controller = new AbortController();
+    setFollowing(true);
+    setPendingNewCount(0);
+    lastSeenProxyRef.current = null;
     (async () => {
       const list = await fetchSessionProxyList(sessionId, controller.signal);
       if (controller.signal.aborted) return;
       setProxyList(list);
       const latest = pickLatest(list);
       setRequestId(latest ? latest.id : '');
+      if (latest) lastSeenProxyRef.current = latest.id;
     })();
     return () => controller.abort();
   }, [sessionId, enabled]);
+
+  // 1b) SSE — 이 세션에 새 proxy 호출이 도착하면 목록 merge + (추적 중이면) 최신 자동 점프.
+  useEffect(() => {
+    if (!enabled || !sessionId) return;
+    const newest = proxyFeed.find((p) => proxySessionId(p) === sessionId);
+    if (!newest || newest.id === lastSeenProxyRef.current) return;
+    lastSeenProxyRef.current = newest.id;
+    // ProxyMetaRow 는 { id } + passthrough — NewProxyRequestEvent 가 그대로 호환(셀렉터 칩 필드 보유).
+    const row = newest as unknown as ProxyMetaRow;
+    setProxyList((prev) => (prev.some((r) => r.id === row.id) ? prev : [row, ...prev]));
+    if (following) {
+      setRequestId(row.id); // 자동 점프(idempotent — 동일 id 면 재fetch effect 무시)
+    } else {
+      setPendingNewCount((c) => c + 1);
+    }
+  }, [proxyFeed, enabled, sessionId, following]);
 
   // 2) 선택 proxy 의 messages + system 본문 fetch(원본 renderLlmInput 2단계).
   useEffect(() => {
@@ -114,7 +158,22 @@ export function useLlmInput(
     return () => controller.abort();
   }, [requestId, enabled]);
 
-  const selectProxy = useCallback((id: string) => setRequestId(id), []);
+  // 수동 선택 — LIVE 추적 해제(사용자가 과거 proxy 를 보는 중엔 자동 점프 금지).
+  const selectProxy = useCallback((id: string) => {
+    setRequestId(id);
+    setFollowing(false);
+  }, []);
+
+  // 최신으로 복귀 — 추적 재개 + pending 리셋 + 최신 proxy 선택.
+  const followLatest = useCallback(() => {
+    setFollowing(true);
+    setPendingNewCount(0);
+    setProxyList((list) => {
+      const latest = pickLatest(list);
+      if (latest) setRequestId(latest.id);
+      return list;
+    });
+  }, []);
 
   return {
     requestId,
@@ -126,6 +185,9 @@ export function useLlmInput(
     decodeError,
     proxyList,
     selectProxy,
+    isLive: following,
+    pendingNewCount,
+    followLatest,
   };
 }
 

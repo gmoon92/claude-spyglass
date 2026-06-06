@@ -244,6 +244,7 @@
 
   /* ── 역할 배지 배경 ── */
   --blue-bg-light:   rgba(88,166,255,0.18);
+  --green-bg-light:  rgba(63,185,80,0.14);   /* LIVE 배지 면(success 의 저채도 배경) */
   --red-bg-light:    rgba(244,113,116,0.18);
   --yellow-bg-light: rgba(240,183,47,0.15);
   --sky-bg-light:    rgba(147,197,253,0.12);
@@ -386,6 +387,25 @@
   --badge-grad-error:    linear-gradient(135deg, rgba(244,113,116,0.30) 0%, rgba(255,94,58,0.15) 100%);
   --badge-grad-brand:    linear-gradient(135deg, rgba(255,176,136,0.30) 0%, rgba(255,212,59,0.15) 100%);
   --badge-grad-neutral:  linear-gradient(135deg, rgba(110,118,129,0.25) 0%, rgba(139,148,158,0.12) 100%);
+
+  /* === 대화형 페이로드 뷰 (Chat Surface Layer) — payload-chat-redesign 3차 회의 hybrid 합의 ===
+     원칙: 신규 hex 0개. 전부 기존 primitive 토큰을 alias 한다(직접 hex 작성 금지 — 변경 시 SSoT 분기 위험).
+     - tool_use 행동 카드 rail 은 cyan(MCP 분류 의미)이 아니라 중립 --text-3 로 둔다(의미 이중화 차단).
+     - --chat-bubble-size 만 유일한 신규 값(13px): 대화 줄글 가독 하한(=--text-body 12px +1). 이 예외는
+       '대화 표면' 한정이며 타 화면(표/피드/그래프)으로 확산 금지(12px 하한 SSoT 보호). */
+  --chat-claude-accent:  var(--accent);        /* assistant 아바타/꼬리 식별색 */
+  --chat-user-accent:    var(--info);          /* user 말풍선 좌측 accent */
+  --chat-surface-claude: var(--surface-alt);   /* assistant 말풍선 면 */
+  --chat-surface-user:   var(--raised);        /* user 말풍선 면 */
+  --chat-think-line:     var(--border-strong); /* thinking 점선 거품 테두리 */
+  --chat-think-text:     var(--text-3);
+  --chat-action-rail:    var(--text-3);        /* tool_use 카드 좌측 rail (중립 — cyan 아님) */
+  --chat-result-ok:      var(--success);
+  --chat-result-err:     var(--error);
+  --chat-orphan:         var(--warn);          /* 짝 못 찾은 결과 진단 */
+  --chat-pin:            var(--warn);          /* system 핀 공지 accent */
+  --chat-bubble-size:    13px;                 /* 신규값: 읽기 가독(=text-body+1). 위 주석 근거 */
+  --chat-bubble-lh:      1.55;
 }
 
 /* ── 페이지 기본 스타일 (UI Font 디폴트) ── */

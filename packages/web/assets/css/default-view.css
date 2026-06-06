@@ -387,6 +387,11 @@ canvas { display: block; }
 .feed-search-icon {
   position: absolute;
   left: var(--space-2);
+  /* 수직 중앙 — absolute 라 부모 flex align-items 가 안 먹는다. top/transform 으로 직접 정렬. */
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
   color: var(--text-3);
   font-size: var(--text-meta);
   pointer-events: none;
@@ -409,6 +414,9 @@ canvas { display: block; }
 .feed-search-clear {
   position: absolute;
   right: var(--space-1);
+  /* 수직 중앙(absolute). */
+  top: 50%;
+  transform: translateY(-50%);
   background: none;
   border: none;
   color: var(--text-3);
@@ -416,9 +424,9 @@ canvas { display: block; }
   cursor: pointer;
   padding: 0 2px;
   line-height: 1;
-  display: none;
 }
-.feed-search-clear.visible { display: block; }
+/* 빈 값에는 숨김. .ds-close-btn{display:inline-flex} 를 이기도록 :not(.visible) 로 specificity 확보. */
+.feed-search-clear:not(.visible) { display: none; }
 .feed-search-clear:hover { color: var(--text-2); }
 
 /* ── TYPE FILTER ────────────────────────────────────────────────────────── */
