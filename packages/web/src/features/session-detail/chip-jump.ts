@@ -10,21 +10,22 @@
  *    · logBodyRef    = SessionLog 의 tbody#turnLogBody (활성 턴 로그 행)
  *    · detailRootRef = DetailView 루트(#turnUnifiedBody, 구 #detailView 역할) (칩↔칩 2순위)
  *  - 칩(FlowPane subtree)과 타깃 행(SessionLog subtree)은 별개 React subtree라 props 만으로
- *    행의 로컬 펼침 state(RequestRow useState)를 못 건드린다. 따라서 타깃 행 안 `[data-expand-id]`
- *    에 합성 click 을 보내 RequestRow.onMsgCellClick 이 자기 useState 를 토글하게 한다
- *    (펼침 SSoT 단일화 — 펼침 로직 재구현 금지). ref 스코프 탐색은 React 표준 escape-hatch.
+ *    행의 로컬 펼침 state(RequestRow useState)를 못 건드린다. 이 단절은 expand-store 가 잇는다 —
+ *    RequestRow 가 접힌 동안에도 expand 진입점(expander)을 등록하고, chip-jump 는 expandByRid(rid)
+ *    로 행 로컬 useState 를 펼친다(펼침 SSoT 단일화 — 펼침 로직 재구현 금지).
  *
- * 합성 click 유지 사유(P5 검토 결과):
- *  - expand-store(stores/expand-store.ts)는 "펼쳐진 행의 collapse 콜백" 만 보관한다(ESC 닫기용).
- *    chip-jump 는 *접힌* 행을 *펼쳐야* 하는데, store 엔 expand-by-rid 진입점이 없다. 추가하려면
- *    RequestRow 가 접힌 동안에도 expand 콜백을 등록해야 해(effect/계약 확장) RequestRow 공개 시그니처
- *    변경 회귀 위험이 크다 → 안전 경계 내에서 합성 click escape-hatch 를 유지한다.
- *  - 후속 권장: expand-store 에 registerExpander(rid, expand)/expandByRid(rid) 를 추가하고
- *    RequestRow 가 항상 expander 를 등록하도록 정공법 전환(별 워크스트림에서 RequestRow 와 함께).
+ * 정공법 전환(합성 preview.click() 제거):
+ *  - 과거엔 타깃 행 안 `[data-expand-id]` 에 합성 click 을 보내 RequestRow.onMsgCellClick 이 자기
+ *    useState 를 토글하게 했다(escape-hatch). 그러나 토글이라 "이미 펼쳐진 행" 을 닫지 않으려고
+ *    DOM 형제(.prompt-expand-row) 구조를 검사하는 가드가 필요했다.
+ *  - 현재는 expand-store.expandByRid(rid) 가 expander(setExpanded(true))를 호출한다 — 토글이 아니라
+ *    set-true 라 idempotent: 이미 펼쳐진 행은 무해한 no-op(DOM 형제 가드 불필요, 합성 click 불필요).
+ *    타깃 행의 `data-request-id`(RequestRow 가 항상 부여)로 rid 를 얻어 호출한다.
  *
  * @module features/session-detail/chip-jump
  */
 import type { RefObject } from 'react';
+import { useExpandStore } from '../../stores/expand-store';
 
 /** flash 클래스 노출 시간 — 원본 main.js#CHIP_FLASH_MS(2200) 동치. */
 export const CHIP_FLASH_MS = 2200;
@@ -86,8 +87,8 @@ export function flashChipTarget(el: Element | null): void {
 /**
  * 칩 활성화 처리 — 타깃 결정 → flash → log-pane 행이면 자동 펼침. 원본 handleChipActivation(main.js:557).
  *  - 타깃 우선순위: data-target-request-id(그룹 칩 정확 지정) → data-chip-key 첫 매칭.
- *  - 타깃이 <tr>(log-pane 행)이면 행 안 `[data-expand-id]` 에 합성 click 을 보내 RequestRow
- *    펼침 토글을 트리거한다. 이미 펼쳐져 있으면 no-op(토글 닫힘 회피).
+ *  - 타깃이 <tr>(log-pane 행)이면 행의 `data-request-id` 로 expand-store.expandByRid(rid) 를 호출해
+ *    RequestRow 의 펼침 useState 를 펼친다. set-true 라 idempotent — 이미 펼쳐졌으면 무해한 no-op.
  *
  * @param chip [data-chip-key] 노드(선택적 data-target-request-id 동반).
  * @param refs 탐색 ref 스코프(DetailView 제공).
@@ -101,17 +102,11 @@ export function handleChipActivation(chip: HTMLElement, refs: ChipJumpRefs): voi
   flashChipTarget(target);
 
   // log-pane 행이면 점프 후 상세 메시지 자동 펼치기(원본 main.js:568-574).
+  //   정공법: 합성 preview.click() 대신 expand-store.expandByRid(rid) 로 행 로컬 useState 를 펼친다.
+  //   expander(setExpanded(true))는 idempotent — 이미 펼쳐진 행/미등록 행 모두 안전(no-op).
   if (target.tagName === 'TR') {
-    const tr = target as HTMLTableRowElement;
-    // 이미 펼침 행이 바로 뒤에 있으면 닫지 않는다(원본 dataset.expanded 가드 대응).
-    const next = tr.nextElementSibling;
-    const alreadyExpanded = !!next && next.classList.contains('prompt-expand-row');
-    if (alreadyExpanded) return;
-    const preview = tr.querySelector<HTMLElement>('[data-expand-id]');
-    if (preview) {
-      // RequestRow.onMsgCellClick(closest('[data-expand-id]')) 가 수신 → 자기 useState 펼침 토글.
-      preview.click();
-    }
+    const rid = target.getAttribute('data-request-id') || '';
+    if (rid) useExpandStore.getState().expandByRid(rid);
   }
 }
 

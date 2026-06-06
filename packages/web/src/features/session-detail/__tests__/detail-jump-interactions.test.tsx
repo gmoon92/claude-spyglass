@@ -13,6 +13,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { TurnSpine } from '../TurnSpine';
 import { handleChipActivation, installChipDelegation } from '../chip-jump';
+import { useExpandStore } from '../../../stores/expand-store';
 
 beforeAll(() => {
   // i18n 은 vitest.setup 의 기본 t(passthrough)가 담당 — window.I18n 전역 스텁 제거.
@@ -31,6 +32,8 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+  // expand-store 레지스트리 초기화 — 케이스 간 expander/collapser 누수 차단.
+  useExpandStore.setState({ collapsers: new Map(), expanders: new Map() });
 });
 
 afterEach(() => {
@@ -64,11 +67,13 @@ describe('기능 1 — 턴 마커 클릭 → onMarkerClick', () => {
 });
 
 describe('기능 2 — 칩 점프 → 행 flash + 펼침', () => {
-  // #turnLogBody 안에 chip-key 행 + 그 행의 [data-expand-id]. 칩은 별도 컨테이너.
+  // #turnLogBody 안에 chip-key 행(data-request-id 보유). 칩은 별도 컨테이너.
+  //   정공법: chip-jump 는 합성 click 대신 expand-store.expandByRid(rid) 로 행을 펼친다.
+  //   RequestRow 대역으로 rid='a1' 에 expander 를 등록해 호출 여부를 센다.
   function mountDom(): {
     chip: HTMLElement;
     row: HTMLTableRowElement;
-    expandClicks: { n: number };
+    expandCalls: { n: number };
     refs: { logBodyRef: { current: HTMLElement | null }; detailRootRef: { current: HTMLElement | null } };
   } {
     const detailView = document.createElement('div');
@@ -81,15 +86,12 @@ describe('기능 2 — 칩 점프 → 행 flash + 펼침', () => {
     row.setAttribute('data-chip-key', 'tool:Read');
     row.setAttribute('data-request-id', 'a1');
     const td = document.createElement('td');
-    const preview = document.createElement('span');
-    preview.className = 'prompt-preview';
-    preview.setAttribute('data-expand-id', 'a1');
-    const expandClicks = { n: 0 };
-    preview.addEventListener('click', () => { expandClicks.n += 1; }); // RequestRow.onMsgCellClick 대역
-    td.appendChild(preview);
     row.appendChild(td);
     tbody.appendChild(row);
     table.appendChild(tbody);
+    // RequestRow 의 expander 대역 — chip-jump 가 expandByRid('a1') 로 이 콜백을 호출한다.
+    const expandCalls = { n: 0 };
+    useExpandStore.getState().registerExpander('a1', () => { expandCalls.n += 1; });
     // chip(turn-spine)
     const chip = document.createElement('span');
     chip.className = 'tool-chip';
@@ -103,32 +105,30 @@ describe('기능 2 — 칩 점프 → 행 flash + 펼침', () => {
       logBodyRef: { current: tbody as HTMLElement | null },
       detailRootRef: { current: detailView as HTMLElement | null },
     };
-    return { chip, row, expandClicks, refs };
+    return { chip, row, expandCalls, refs };
   }
 
-  it('handleChipActivation: 매칭 행 flash + [data-expand-id] 합성 click(펼침 위임)', () => {
-    const { chip, row, expandClicks, refs } = mountDom();
+  it('handleChipActivation: 매칭 행 flash + expandByRid(rid) 호출(펼침 위임)', () => {
+    const { chip, row, expandCalls, refs } = mountDom();
     handleChipActivation(chip, refs);
     expect(row.classList.contains('row-highlight-flash')).toBe(true);
-    expect(expandClicks.n).toBe(1); // 행 펼침 토글이 1회 트리거됨.
+    expect(expandCalls.n).toBe(1); // 행 펼침이 1회 트리거됨.
   });
 
-  it('이미 펼쳐진 행(prompt-expand-row 형제 존재)은 재펼침 안 함(토글 닫힘 회피)', () => {
-    const { chip, row, expandClicks, refs } = mountDom();
-    const expandRow = document.createElement('tr');
-    expandRow.className = 'prompt-expand-row';
-    row.after(expandRow);
-    handleChipActivation(chip, refs);
+  it('expander 미등록 행이어도 flash 는 수행 + 에러 없음(silent no-op)', () => {
+    const { chip, row, refs } = mountDom();
+    // a1 의 expander 를 제거 → expandByRid 는 false 로 silent no-op.
+    useExpandStore.getState().unregisterExpander('a1');
+    expect(() => handleChipActivation(chip, refs)).not.toThrow();
     expect(row.classList.contains('row-highlight-flash')).toBe(true); // flash 는 여전히.
-    expect(expandClicks.n).toBe(0); // 펼침은 토글하지 않음.
   });
 
   it('installChipDelegation: 칩 click 위임이 handleChipActivation 을 트리거', () => {
-    const { chip, expandClicks, refs } = mountDom();
+    const { chip, expandCalls, refs } = mountDom();
     const root2 = refs.detailRootRef.current as HTMLElement;
     const cleanup = installChipDelegation(root2, refs);
     chip.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(expandClicks.n).toBe(1);
+    expect(expandCalls.n).toBe(1);
     cleanup();
   });
 

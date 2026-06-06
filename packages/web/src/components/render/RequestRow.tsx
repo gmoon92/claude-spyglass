@@ -152,6 +152,17 @@ export const RequestRow = memo(function RequestRow({ r, opts = {} }: { r: RowLik
     return () => useExpandStore.getState().unregister(rid);
   }, [expanded, rid]);
 
+  // chip-jump 합성 click 제거 — 접힌 동안에도 expand 진입점을 상시 등록한다.
+  //   chip-jump(FlowPane subtree)이 expandByRid(rid) 로 이 콜백을 호출해 행 로컬 useState 를 펼친다
+  //   (별 subtree 라 props 로 못 건드리는 단절을 expand-store 가 잇는다 — collapse 의 거울상).
+  //   setExpanded(true) 라 idempotent: 이미 펼쳐진 행에 다시 점프해도 닫히지 않는다(토글 아님).
+  //   dep=[rid] 이라 행 마운트당 1회만 등록 — 펼침 토글마다 재실행되지 않아 memo 행 부하가 없다.
+  useEffect(() => {
+    if (!rid) return;
+    useExpandStore.getState().registerExpander(rid, () => setExpanded(true));
+    return () => useExpandStore.getState().unregisterExpander(rid);
+  }, [rid]);
+
   // 기능 1 — Session 셀 클릭 → onGotoSession. 미주입이면 핸들러 자체를 달지 않아 무동작(안전).
   const gotoSession = opts.onGotoSession;
   const onSessClick = gotoSession
