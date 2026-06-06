@@ -345,11 +345,24 @@ export function MetaDocsLayout(): ReactElement {
   //   activeRow 는 리셋하지 않는다(프로젝트/동기화 effect 와 달리 사용자의 flow 선택을 보존). feedHeadId 가드로
   //   초기 빈 feed 중복 fetch 회피(첫 SSE 부터 작동). SSE 버스트 합치기 — 1.5s 디바운스(차트 선례와 동일).
   const feedHeadId = feed.length > 0 ? String((feed[0] as { id?: unknown }).id ?? feed.length) : '';
+  // SSE 재조회 leading-throttle — 직전 라이브 재조회 시각. 듬성한 도구 호출(예: 14s·34s 간격)에서는
+  //   1.5s 디바운스가 전혀 합쳐지지 않아 매 호출이 1:1 로 47KB 카탈로그를 재조회하던 비용을 상한한다.
+  const lastSseFetchRef = useRef(0);
   useEffect(() => {
-    if (!feedHeadId) return;
+    if (!feedHeadId) return undefined;
+    // 백그라운드 탭(사용자가 보고 있지 않음)에서는 라이브 갱신 스킵 — 다시 포커스되면 feedHeadId
+    //   변동으로 자연 재발화. 보이지 않는 화면을 위해 7GB DB 집계를 돌리지 않는다.
+    const doc = (globalThis as { document?: Document }).document;
+    if (doc && doc.hidden) return undefined;
     const ctrl = new AbortController();
     const { signal } = ctrl;
+    // 디바운스(버스트 합치기 1.5s) + leading throttle(최소 간격 10s 보장). 둘 중 큰 지연을 적용해
+    //   연속 호출이든 듬성한 호출이든 재조회 빈도에 상한을 둔다.
+    const MIN_INTERVAL_MS = 10_000;
+    const sinceLast = Date.now() - lastSseFetchRef.current;
+    const delay = Math.max(1500, MIN_INTERVAL_MS - sinceLast);
     const id = setTimeout(() => {
+      lastSseFetchRef.current = Date.now();
       fetchMetaDocs({ project: selectedProject, range: rangeToParams(activeRange), signal })
         .then((list) => {
           if (signal.aborted) return;
@@ -358,7 +371,7 @@ export function MetaDocsLayout(): ReactElement {
         .catch(() => {
           /* silent — fetcher 안전 폴백([]). 랭킹/카탈로그는 직전 값 유지. */
         });
-    }, 1500);
+    }, delay);
     return () => {
       clearTimeout(id);
       ctrl.abort();
@@ -458,7 +471,7 @@ export function MetaDocsLayout(): ReactElement {
                       type="button"
                       className={syncing ? 'thead-sync-btn is-loading' : 'thead-sync-btn'}
                       data-meta-left-refresh="1"
-                      title={tx('ui.html.left-panel.sync-title')}
+                      data-tip={tx('ui.html.left-panel.sync-title')}
                       aria-label={tx('ui.html.left-panel.sync-title')}
                       disabled={syncing}
                       onClick={onSync}
@@ -495,7 +508,7 @@ export function MetaDocsLayout(): ReactElement {
         <div
           className="panel-vertical-handle"
           id="panelVerticalHandle"
-          title="Drag to resize height"
+          data-tip="Drag to resize height"
           ref={vTopHandleRef}
         />
 
@@ -613,7 +626,7 @@ export function MetaDocsLayout(): ReactElement {
           <div
             className="panel-vertical-handle meta-docs-flow-handle"
             id="metaDocsFlowHandle"
-            title="Drag to resize height"
+            data-tip="Drag to resize height"
             ref={flowHandleRef}
           />
           {/* 카탈로그 영역(원본 .meta-docs-catalog-area:673) — 1fr + overflow-y:auto. */}

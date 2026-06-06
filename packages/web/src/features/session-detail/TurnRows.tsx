@@ -14,7 +14,7 @@
  *
  * @module features/session-detail/TurnRows
  */
-import { Fragment, type ReactElement } from 'react';
+import { Fragment, useMemo, type ReactElement } from 'react';
 import { RequestRow } from '../../components/render';
 // chipKey SSoT — 원본 turn-rows.js export 를 그대로 재사용(재구현 금지).
 import { chipKeyForRequest } from './turn-rows';
@@ -77,44 +77,54 @@ function legacyInterleave(toolCalls: RowLike[], responses: RowLike[]): TurnItemL
  * makeTurnLogRows(turn, {anomalyFlags, showSession}) 의 React 대응물.
  */
 export function TurnRows({ turn, anomalyFlags = null, showSession = false }: TurnRowsProps): ReactElement | null {
-  if (!turn) return null;
+  // makeTurnLogRows 출력(ReactElement 배열)을 입력 불변 시 메모이즈한다(meta-docs-perf 2026-06-07).
+  //   과거엔 매 렌더마다 행별 opts={{...}} 새 객체 + r={...request} 새 객체를 만들어 RequestRow(memo)의
+  //   shallow 비교를 전부 깨뜨렸다 — anomaly/SSE 갱신 한 번에 활성 턴 전체(수백 행)가 재렌더되고 각 행이
+  //   payload 를 재파싱. turn/anomalyFlags/showSession 이 같으면 동일 element 배열을 재사용해 React 가
+  //   하위 행 재조정을 통째로 건너뛴다(피드 feedRowOpts 안정화 패턴과 동일 취지, BrowseLayout 선례).
+  const rows = useMemo<ReactElement[] | null>(() => {
+    if (!turn) return null;
 
-  // 세션 상세 뷰는 9컬럼(showSession=false) 또는 10컬럼(showSession=true).
-  // 기본값 FEED_EXPAND_COLS=10 이 9컬럼 테이블에 걸리면 레이아웃이 깨지므로 명시 주입.
-  const expandCols = showSession ? 10 : 9;
+    // 세션 상세 뷰는 9컬럼(showSession=false) 또는 10컬럼(showSession=true).
+    // 기본값 FEED_EXPAND_COLS=10 이 9컬럼 테이블에 걸리면 레이아웃이 깨지므로 명시 주입.
+    const expandCols = showSession ? 10 : 9;
 
-  const rowOpts = (r: RowLike) => ({
-    showSession,
-    anomalyFlags: anomalyFlags?.get(String(r.id)) ?? null,
-    expandCols,
-  });
+    const rowOpts = (r: RowLike) => ({
+      showSession,
+      anomalyFlags: anomalyFlags?.get(String(r.id)) ?? null,
+      expandCols,
+    });
 
-  const rows: ReactElement[] = [];
+    const out: ReactElement[] = [];
 
-  // 1) prompt 행 — chip-key 없음(원본 turn-rows.js:356-359).
-  if (turn.prompt) {
-    const promptReq: RowLike = { ...turn.prompt, type: 'prompt' };
-    rows.push(<RequestRow key="prompt" r={promptReq} opts={rowOpts(promptReq)} />);
-  }
-
-  // 2) 본문 행 — 서버 items[] 우선, 미제공 시 시간순 머지 폴백(원본 turn-rows.js:362-378).
-  let respSeq = 0;
-  const walkItems = turn.items?.length
-    ? turn.items
-    : legacyInterleave(turn.tool_calls ?? [], turn.responses ?? []);
-
-  walkItems.forEach((it, idx) => {
-    if (it.kind === 'response') {
-      respSeq += 1;
-      const req: RowLike = { ...it.request, type: 'response' };
-      const key = chipKeyForRequest(req, respSeq);
-      rows.push(<RequestRow key={`body-${idx}`} r={req} opts={{ ...rowOpts(req), chipKey: key }} />);
-    } else if (it.kind === 'tool') {
-      const req: RowLike = { ...it.request, type: 'tool_call' };
-      const key = chipKeyForRequest(req, respSeq);
-      rows.push(<RequestRow key={`body-${idx}`} r={req} opts={{ ...rowOpts(req), chipKey: key }} />);
+    // 1) prompt 행 — chip-key 없음(원본 turn-rows.js:356-359).
+    if (turn.prompt) {
+      const promptReq: RowLike = { ...turn.prompt, type: 'prompt' };
+      out.push(<RequestRow key="prompt" r={promptReq} opts={rowOpts(promptReq)} />);
     }
-  });
 
+    // 2) 본문 행 — 서버 items[] 우선, 미제공 시 시간순 머지 폴백(원본 turn-rows.js:362-378).
+    let respSeq = 0;
+    const walkItems = turn.items?.length
+      ? turn.items
+      : legacyInterleave(turn.tool_calls ?? [], turn.responses ?? []);
+
+    walkItems.forEach((it, idx) => {
+      if (it.kind === 'response') {
+        respSeq += 1;
+        const req: RowLike = { ...it.request, type: 'response' };
+        const key = chipKeyForRequest(req, respSeq);
+        out.push(<RequestRow key={`body-${idx}`} r={req} opts={{ ...rowOpts(req), chipKey: key }} />);
+      } else if (it.kind === 'tool') {
+        const req: RowLike = { ...it.request, type: 'tool_call' };
+        const key = chipKeyForRequest(req, respSeq);
+        out.push(<RequestRow key={`body-${idx}`} r={req} opts={{ ...rowOpts(req), chipKey: key }} />);
+      }
+    });
+
+    return out;
+  }, [turn, anomalyFlags, showSession]);
+
+  if (!rows) return null;
   return <Fragment>{rows}</Fragment>;
 }
