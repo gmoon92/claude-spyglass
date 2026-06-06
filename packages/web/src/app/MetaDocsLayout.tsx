@@ -71,6 +71,7 @@ import { SidebarVersionFooter } from '../features/dashboard';
 import { MetaProjectList, type ProjectLike, type SidebarLabeler, type MetaCounts } from '../features/browse/Sidebar';
 import { useAppStore } from '../stores/app-store';
 import type { PresetValue } from '../stores/app-store';
+import { useSSEStore } from '../stores/sse-store';
 import { makeI18nLabeler } from './i18n-labeler';
 import { deriveBrowseData } from './browse-data';
 import { rangeToParams } from './compute-range';
@@ -180,6 +181,9 @@ export function MetaDocsLayout(): ReactElement {
   //   React 이식에서 슬롯이 빈 채로 남아 누락 — 카탈로그/도구 통계가 같은 기간 분모를 쓰도록 복원한다.
   const activeRange = useAppStore((s) => s.activeRange);
   const setActiveRange = useAppStore((s) => s.setActiveRange);
+
+  // SSE 라이브 피드(head=최신) — 새 도구 호출 도착 신호. 카탈로그/랭킹 라이브 재집계 트리거로만 사용.
+  const feed = useSSEStore((s) => s.feed);
 
   // 카탈로그 데이터 + 좌측 프로젝트 시드.
   const [rows, setRows] = useState<MetaDocRow[]>([]);
@@ -333,6 +337,34 @@ export function MetaDocsLayout(): ReactElement {
     return () => ctrl.abort();
   }, [selectedProject, refreshKey, activeRange]);
 
+  // ── 카탈로그/랭킹 SSE 라이브 갱신(BrowseLayout 차트 라이브 갱신:417 선례 차용) ──
+  //   진행 중 새 도구 호출이 SSE(new_request)로 도착하면(feed prepend) 카탈로그 rows 를 디바운스 재조회한다.
+  //   rows 는 좌측 behavior 랭킹 mini-bar(MetaDocsBehaviorBars) + 요약 카드 + 카탈로그 테이블의 공통 입력이라
+  //   재조회 한 번으로 invocations 집계가 모두 라이브 반영된다. 집계 SSoT 는 서버(listMetaDocsWithUsage, project
+  //   스코프)이므로 클라이언트는 재계산하지 않고 재조회만 한다(파생 중복 방지).
+  //   activeRow 는 리셋하지 않는다(프로젝트/동기화 effect 와 달리 사용자의 flow 선택을 보존). feedHeadId 가드로
+  //   초기 빈 feed 중복 fetch 회피(첫 SSE 부터 작동). SSE 버스트 합치기 — 1.5s 디바운스(차트 선례와 동일).
+  const feedHeadId = feed.length > 0 ? String((feed[0] as { id?: unknown }).id ?? feed.length) : '';
+  useEffect(() => {
+    if (!feedHeadId) return;
+    const ctrl = new AbortController();
+    const { signal } = ctrl;
+    const id = setTimeout(() => {
+      fetchMetaDocs({ project: selectedProject, range: rangeToParams(activeRange), signal })
+        .then((list) => {
+          if (signal.aborted) return;
+          setRows(list as unknown as MetaDocRow[]);
+        })
+        .catch(() => {
+          /* silent — fetcher 안전 폴백([]). 랭킹/카탈로그는 직전 값 유지. */
+        });
+    }, 1500);
+    return () => {
+      clearTimeout(id);
+      ctrl.abort();
+    };
+  }, [feedHeadId, selectedProject, activeRange]);
+
   // tools 탭 도구 통계 population — 원본 tool-stats.js loadProjectToolStats(view.js:311 onActivate).
   //   탭 진입('tools') / 프로젝트 변경 시 재조회(전체 기간 — 카탈로그 fetch 와 동형, range 미부착).
   //   AbortController 로 in-flight 취소. project null → fetcher 가 [] 반환(원본 select-project 빈 상태).
@@ -473,10 +505,10 @@ export function MetaDocsLayout(): ReactElement {
             (id 셀렉터) 가 가로 1줄 배치를 적용하므로 grid row3(auto) 에 콘텐츠 높이만 차지. */}
         <MetaDocsSummaryCards rows={rows} onSelectDisplay={setDisplay} t={tx} />
 
-        {/* behavior mini-bar(원본 #metaDocsToolStats / cardToolCategories, :274) — grid row4(auto).
-            요약 카드와 별도 컨테이너여야 가로폭 전체를 써 막대가 노출된다(둘을 한 flex-row 에 같이 두면 카드 옆에
-            붙어 눌리던 회귀). rows 비면 미렌더(트랙 0px). */}
-        <MetaDocsBehaviorBars rows={rows} />
+        {/* behavior 랭킹 mini-bar(원본 #metaDocsToolStats / cardToolCategories, :274) — grid row4(auto).
+            선택 프로젝트의 문서별 invocations 랭킹(projectFiltered 주입 — 다른 프로젝트 동명 문서 혼입 차단).
+            요약 카드와 별도 컨테이너여야 가로폭 전체를 써 막대가 노출된다. 사용 문서 0건이면 미렌더(트랙 0px). */}
+        <MetaDocsBehaviorBars rows={projectFiltered} />
 
         {/* footer — update-badge(metadocs grid row6, meta-docs.css 가 예약한 마지막 트랙).
             browse 와 동일한 SidebarVersionFooter 단일 출처로 렌더해, 과거 footer 미렌더로 인해

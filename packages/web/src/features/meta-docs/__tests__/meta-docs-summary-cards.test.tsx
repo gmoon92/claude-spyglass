@@ -3,9 +3,9 @@
  *
  * 원본: meta-docs-view.js renderLeftSummaryCards(:399) + computeRowCounts(:430).
  *   - 카드 3개(사용/미사용/orphan) 카운트 SSoT(computeRowCounts) + display 필터 클릭 전이.
- *   - behavior mini-bar(type별 invocations 합) — obs-panel.js#renderToolCategoriesCard 모드 B 마크업
- *     (obs-cat-bar/obs-meta-row + ds-bar-fill[data-tone]) 재사용. 신규 클래스(meta-docs-summary-bars)는
- *     CSS 부재로 평문 세로 나열 회귀를 유발했어서 폐기됨.
+ *   - behavior 랭킹 mini-bar(문서별 invocations Top N) — 과거 type 고정 합산 폐기, 실제 문서 랭킹으로 전환.
+ *     마크업(obs-cat-bar/obs-meta-row + ds-bar-fill[data-tone]) SSoT 재사용 + 선행 ToolIcon(서클/눈알) + 문서명.
+ *     신규 클래스(meta-docs-summary-bars)는 CSS 부재로 평문 세로 나열 회귀를 유발했어서 폐기됨.
  */
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -54,7 +54,7 @@ describe('MetaDocsSummaryCards — 좌측 요약 카드 (원본 renderLeftSummar
 });
 
 describe('MetaDocsBehaviorBars — behavior mini-bar (원본 #metaDocsToolStats / renderToolCategoriesCard 모드 B)', () => {
-  it('obs-panel.js#renderToolCategoriesCard 모드 B 마크업(obs-cat-bar/obs-meta-row) 1:1 + 별도 컨테이너', () => {
+  it('마크업 SSoT(obs-cat-bar/obs-meta-row/ds-bar-fill) 1:1 + 별도 컨테이너 유지', () => {
     const html = renderToStaticMarkup(createElement(MetaDocsBehaviorBars, { rows: ROWS }));
     // 레거시 좌측 툴스탯 컨테이너(#metaDocsToolStats > .obs-panel) — grid row4 트랙.
     expect(html).toContain('id="metaDocsToolStats"');
@@ -70,12 +70,49 @@ describe('MetaDocsBehaviorBars — behavior mini-bar (원본 #metaDocsToolStats 
     expect(html).toContain('obs-cat-pct');
     // 신규(미정의) 클래스로의 회귀 방지 가드.
     expect(html).not.toContain('meta-docs-summary-bars');
-    // 그룹 라벨 노출(agent/skill/command)
-    expect(html).toContain('agent');
-    expect(html).toContain('command');
+    // 랭킹 계약: type 고정 라벨이 아닌 "top behaviors by invocations" 로 전환.
+    expect(html).toContain('aria-label="top behaviors by invocations"');
   });
-  it('빈 rows → null(미렌더 — grid 트랙 0px)', () => {
-    const html = renderToStaticMarkup(createElement(MetaDocsBehaviorBars, { rows: [] }));
-    expect(html).toBe('');
+  it('문서별 invocations 랭킹(desc) — 문서명 + 호출수 노출, unused(0건) 제외', () => {
+    const html = renderToStaticMarkup(createElement(MetaDocsBehaviorBars, { rows: ROWS }));
+    // 실제 문서명 노출(고정 type 라벨 폐기).
+    expect(html).toContain('>Explore<'); // agent, 15
+    expect(html).toContain('>commit<'); // skill, 5
+    expect(html).toContain('>cmd<'); // command, 2
+    // 호출수(invocations) 노출.
+    expect(html).toContain('>15<');
+    expect(html).toContain('>5<');
+    expect(html).toContain('>2<');
+    // invocations===0 문서(idle)는 랭킹에서 제외.
+    expect(html).not.toContain('>idle<');
+    // 정렬: Explore(15) → commit(5) → cmd(2) 순(첫 행이 최다 호출).
+    expect(html.indexOf('Explore')).toBeLessThan(html.indexOf('commit'));
+    expect(html.indexOf('commit')).toBeLessThan(html.indexOf('cmd'));
+  });
+  it('각 행 선행에 카탈로그와 동일한 서클(눈알) ToolIcon — agent=bullseye / skill·command=fish-eye', () => {
+    const html = renderToStaticMarkup(createElement(MetaDocsBehaviorBars, { rows: ROWS }));
+    // metaDocIconName SSoT 경유 ToolIcon — agent → tool-icon-agent, skill·command → tool-icon-skill.
+    expect(html).toContain('tool-icon-agent'); // Explore(agent)
+    expect(html).toContain('tool-icon-skill'); // commit(skill) + cmd(command 은 Skill 합류)
+  });
+  it('topN 상한 — invocations desc 상위 N 만 노출', () => {
+    const many: MetaDocRow[] = Array.from({ length: 12 }, (_, i) => ({
+      id: i + 1,
+      type: 'skill',
+      name: `doc-${String(i).padStart(2, '0')}`,
+      invocations: i + 1,
+    }));
+    const html = renderToStaticMarkup(createElement(MetaDocsBehaviorBars, { rows: many, topN: 3 }));
+    const rowCount = (html.match(/obs-meta-row/g) ?? []).length;
+    expect(rowCount).toBe(3);
+    // 최다 호출(doc-11=12) 포함, 하위(doc-00=1) 제외.
+    expect(html).toContain('doc-11');
+    expect(html).not.toContain('doc-00');
+  });
+  it('빈 rows / 사용 문서 0건 → null(미렌더 — grid 트랙 0px)', () => {
+    expect(renderToStaticMarkup(createElement(MetaDocsBehaviorBars, { rows: [] }))).toBe('');
+    // 모두 invocations 0 → 랭킹 비어 미렌더.
+    const allUnused: MetaDocRow[] = [{ id: 1, type: 'skill', name: 'idle', invocations: 0 }];
+    expect(renderToStaticMarkup(createElement(MetaDocsBehaviorBars, { rows: allUnused }))).toBe('');
   });
 });
