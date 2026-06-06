@@ -331,32 +331,34 @@ export function listMetaDocsWithUsage(
   const projectClause = hasProject
     ? 'AND session_id IN (SELECT id FROM sessions WHERE project_name = ?)'
     : '';
-  // VIEW와 동일한 union — 'agent'/'skill'/'command' 3 분기.
-  //   range 절은 각 SELECT의 WHERE에 적용되어 GROUP BY 결과가 시간 윈도우 안으로 좁혀진다.
-  //   project 절은 동일 자리에 sessions JOIN 으로 들어가 사이드바 project 필터와
-  //   ego-graph 의 session 제약을 일치시킨다.
-  const usageInlineSql = useInline ? `(
-    SELECT 'agent' AS type, tool_detail AS name,
+
+  // meta-docs-query-cte (2026-06-07): 사용 집계를 단일 `WITH usage` CTE 로 묶어
+  //   LEFT JOIN + orphan UNION 양쪽에서 재사용한다. 두 가지 동시 개선:
+  //   (1) agent/skill 통합 IN-form — `tool_name = 'Agent'` 단일 등치는 부분 인덱스
+  //       idx_requests_meta_doc(tool_name IN ('Agent','Skill')) 의 가드를 구문적으로 함의하지
+  //       못해 옵티마이저가 idx_requests_timestamp 풀스캔 + TEMP B-TREE 로 떨어졌다.
+  //       `tool_name IN ('Agent','Skill')` + `GROUP BY tool_name, tool_detail` 로 쓰면
+  //       covering idx_requests_meta_doc 가 채택되고 GROUP BY 정렬용 TEMP B-TREE 도 사라진다.
+  //       VIEW 와 동일한 type 리터럴('agent'/'skill') 셰이프는 CASE tool_name 매핑으로 보존.
+  //   (2) CTE materialize — 과거엔 동일 집계 서브쿼리를 LEFT JOIN 용/orphan 용으로 2번
+  //       인라인해 두 번 계산했다. SQLite 는 여러 번 참조되는 CTE 를 MATERIALIZE 하므로
+  //       usage 가 1회만 계산된다(바인딩 파라미터도 절반).
+  //   range='all'(useInline=false) 경로는 기존 v_meta_doc_usage VIEW 를 CTE 로 감싸 동일하게
+  //   1회 materialize — VIEW 를 두 번 참조하던 중복 계산도 함께 제거된다.
+  const usageCte = useInline ? `
+    SELECT
+      CASE tool_name WHEN 'Agent' THEN 'agent' ELSE 'skill' END AS type,
+      tool_detail AS name,
       COUNT(*) AS invocations,
       COALESCE(SUM(tokens_total), 0)  AS total_tokens,
       COALESCE(SUM(duration_ms),  0)  AS total_duration_ms,
       MAX(timestamp) AS last_used_at,
       MIN(timestamp) AS first_used_at
     FROM requests
-    WHERE tool_name = 'Agent' AND tool_detail IS NOT NULL
+    WHERE tool_name IN ('Agent', 'Skill') AND tool_detail IS NOT NULL
       AND timestamp >= ? AND timestamp <= ?
       ${projectClause}
-    GROUP BY tool_detail
-    UNION ALL
-    SELECT 'skill', tool_detail, COUNT(*),
-      COALESCE(SUM(tokens_total), 0),
-      COALESCE(SUM(duration_ms),  0),
-      MAX(timestamp), MIN(timestamp)
-    FROM requests
-    WHERE tool_name = 'Skill' AND tool_detail IS NOT NULL
-      AND timestamp >= ? AND timestamp <= ?
-      ${projectClause}
-    GROUP BY tool_detail
+    GROUP BY tool_name, tool_detail
     UNION ALL
     SELECT 'command', slash_command, COUNT(*),
       COALESCE(SUM(tokens_total), 0),
@@ -367,15 +369,18 @@ export function listMetaDocsWithUsage(
       AND timestamp >= ? AND timestamp <= ?
       ${projectClause}
     GROUP BY slash_command
-  )` : 'v_meta_doc_usage';
-  // 인라인 SQL은 3 분기 × (from, to, project?) 파라미터 = useInline 시 6~9개. LEFT JOIN과
-  // orphan SELECT에서 각각 한 번씩 바인딩해야 한다(같은 서브쿼리가 두 번 등장).
-  const branchParams: (string | number)[] = hasProject
-    ? [rangeFrom, rangeTo, filter.project!, rangeFrom, rangeTo, filter.project!, rangeFrom, rangeTo, filter.project!]
-    : [rangeFrom, rangeTo, rangeFrom, rangeTo, rangeFrom, rangeTo];
-  const usageRangeParams: (string | number)[] = useInline ? branchParams : [];
+  ` : `SELECT * FROM v_meta_doc_usage`;
+
+  // CTE 는 1회만 바인딩(materialize). useInline 시 2 분기 × (from, to, project?) 파라미터.
+  //   range만이면 4개, project까지면 6개. range='all' 이면 0개.
+  const usageCteParams: (string | number)[] = useInline
+    ? (hasProject
+        ? [rangeFrom, rangeTo, filter.project!, rangeFrom, rangeTo, filter.project!]
+        : [rangeFrom, rangeTo, rangeFrom, rangeTo])
+    : [];
 
   const sql = `
+    WITH usage AS (${usageCte})
     SELECT
       d.id              AS id,
       d.type            AS type,
@@ -392,7 +397,7 @@ export function listMetaDocsWithUsage(
       u.first_used_at   AS first_used_at,
       d.deleted_at      AS deleted_at
     FROM meta_documents d
-    LEFT JOIN ${usageInlineSql} u
+    LEFT JOIN usage u
       ON u.type = d.type AND u.name = d.name
     ${leftWhere}
     ${includeOrphans ? `
@@ -401,7 +406,7 @@ export function listMetaDocsWithUsage(
       NULL, u.type, u.name, NULL, NULL, NULL, NULL, NULL,
       u.invocations, u.total_tokens, u.total_duration_ms,
       u.last_used_at, u.first_used_at, NULL
-    FROM ${usageInlineSql} u
+    FROM usage u
     WHERE NOT EXISTS (
       SELECT 1 FROM meta_documents d2
        WHERE d2.type = u.type
@@ -413,15 +418,13 @@ export function listMetaDocsWithUsage(
     ORDER BY invocations DESC, last_used_at DESC
   `;
 
-  // 바인딩 순서:
-  //   1) LEFT JOIN의 usageInlineSql 파라미터 (useInline 시 range만이면 6개, project까지면 9개)
+  // 바인딩 순서 (CTE materialize 로 usage 파라미터는 1회만):
+  //   1) WITH usage 의 CTE 파라미터 (useInline 시 range만 4개 / project까지 6개, 'all'이면 0개)
   //   2) 카탈로그 LEFT 조건 (type/source_root)
-  //   3) (orphan) usageInlineSql 파라미터 (1)과 동일 크기로 한 번 더)
-  //   4) (orphan) type 필터 파라미터
+  //   3) (orphan) type 필터 파라미터 — usage 는 CTE 재참조라 추가 바인딩 없음
   const allParams: (string | number)[] = [
-    ...usageRangeParams,
+    ...usageCteParams,
     ...leftParams,
-    ...(includeOrphans ? usageRangeParams : []),
     ...(includeOrphans ? orphanParams : []),
   ];
   return db.query(sql).all(...allParams) as unknown as MetaDocUsageRow[];
