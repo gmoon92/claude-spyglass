@@ -1,6 +1,10 @@
 # spyglass 설치 가이드
 
-Claude Code 실행 과정을 가시화하는 spyglass를 **로컬 클론 + Bun 직접 실행** 방식으로 설치하는 절차입니다.
+> **문서 버전**: v4.4.1  
+> **최종 갱신**: 2026-06-06
+
+Claude Code 실행 과정을 가시화하는 spyglass를 설치하는 절차입니다.
+비개발자도 단계를 따라 설치할 수 있도록 구성했습니다.
 
 > 모든 명령은 그대로 실행 가능하며, 사용자 환경에 따라 치환해야 하는 값은 `<...>` 형태로 명시합니다.
 
@@ -131,9 +135,9 @@ bun install
 
 bun 워크스페이스(`packages/*`)가 한 번에 설치됩니다.
 
-> **v2.10+ Graph DB(LadybugDB) 안내**
+> **Graph DB(LadybugDB) 안내**
 >
-> v2.10 이상에서는 그래프 프로젝션 레이어 (`@spyglass/storage-graph`) 가 추가되었고,
+> v4.x 에서는 그래프 프로젝션 레이어 (`@spyglass/storage-graph`) 가 포함되며,
 > `bun install` 시 `@ladybugdb/core` 의 platform 별 native binding 이 자동으로 설치됩니다.
 > macOS arm64/x64 + Linux arm64/x64 + Windows x64 prebuilt 가 npm 에서 다운로드되므로
 > 사용자 머신에서 별도 컴파일 단계는 없습니다. 다음 디렉토리에서 확인할 수 있습니다:
@@ -173,7 +177,37 @@ curl -sf http://127.0.0.1:9999/health && echo OK
 
 > **반드시 `~/.claude/settings.json`(글로벌 사용자 설정)** 에 등록합니다. 프로젝트 단위 설정에 등록하면 다른 프로젝트에서 데이터 공백이 발생합니다.
 
-### 4.1 SPYGLASS_DIR 확인
+### 방법 A: 대시보드 자동 설치 (권장)
+
+서버 기동 후 브라우저에서 설정 페이지를 엽니다:
+
+```bash
+# macOS
+open http://127.0.0.1:9999/settings
+
+# Linux
+xdg-open http://127.0.0.1:9999/settings
+```
+
+**연동(Integration)** 탭으로 이동한 뒤, 상단 **"Hook · Proxy 한 번에 설치"** 버튼을 클릭합니다.
+
+![설정 페이지 — 연동 탭 자동 설치](./images/settings-integration.png)
+
+이 버튼 하나로 다음 작업이 모두 처리됩니다:
+
+1. **Hook (이벤트 수집)** — `~/.claude/settings.json`에 `env.SPYGLASS_DIR`과 전체 이벤트 훅을 자동 병합
+2. **Proxy (API 메트릭 수집)** — 사용 중인 셸(zsh/bash 등) 프로필에 조건부 프록시 함수를 자동 등록
+3. 구문 검증(valid JSON / 셸 문법 체크) 및 백업 자동 정리
+
+설치 후 Claude Code를 **완전히 종료하고 다시 실행**해야 훅이 로드됩니다.
+
+> 버튼 클릭 시 실시간 진행 로그가 화면에 표시되며, 각 단계의 성공/실패 여부를 바로 확인할 수 있습니다.
+
+### 방법 B: 수동 병합 (jq 사용 — 고급)
+
+자동 설치가 실패하거나 기존 설정과 충돌할 경우 수동으로 병합합니다.
+
+#### 4.1 SPYGLASS_DIR 확인
 
 훅 명령은 `$SPYGLASS_DIR` 환경변수를 참조합니다. 이 값은 `~/.claude/settings.json`의 `env` 키에 설정하며, Claude Code가 훅 실행 시 자동으로 주입합니다.
 
@@ -192,7 +226,7 @@ SPYGLASS_DIR="$(cd "${HOME}/.spyglass-src" && pwd)"
 test -x "$SPYGLASS_DIR/hooks/spyglass-collect.sh" && echo OK || chmod +x "$SPYGLASS_DIR/hooks/spyglass-collect.sh"
 ```
 
-### 4.2 기존 설정 백업
+#### 4.2 기존 설정 백업
 
 ```bash
 mkdir -p "${HOME}/.claude"
@@ -201,17 +235,17 @@ if [ -f "${HOME}/.claude/settings.json" ]; then
 fi
 ```
 
-### 4.3 훅 프로파일 (full 단일 — 선택 아님)
+#### 4.3 훅 프로파일 (full 단일 — 선택 아님)
 
 spyglass 는 **full 프로파일을 기본이자 유일한 권장 구성**으로 제공합니다. 일부 이벤트만 등록하면
 시각화·통계·관계 흐름 그래프가 불완전해지므로, 전체 HOOK_EVENTS 를 등록하는 full 을 사용하세요.
-(대시보드 설정 → **연동** 탭의 **[자동 설치]** 버튼이 이 full 프로파일을 원클릭으로 적용합니다.)
+(대시보드 설정 → **연동** 탭의 **"Hook · Proxy 한 번에 설치"** 버튼이 이 full 프로파일을 원클릭으로 적용합니다.)
 
 | 프로파일 | 훅 수 | 수집 범위 | 예제 |
 |---------|------|----------|------|
 | **full** (기본) | 전체 | Subagent / Task / Permission / Compact / Worktree / FileChanged / CwdChanged 등 전체 HOOK_EVENTS | [`docs/examples/settings.hooks.full.json`](./examples/settings.hooks.full.json) |
 
-### 4.4 자동 병합 (jq 사용 — 권장)
+#### 4.4 자동 병합 (jq 사용 — 권장)
 
 기존 `~/.claude/settings.json`의 `model`, `enabledPlugins`, `statusLine` 등 다른 키를 보존하면서 `env.SPYGLASS_DIR`과 `hooks` 키만 병합합니다.
 
@@ -239,7 +273,7 @@ jq '.env.SPYGLASS_DIR, (.hooks | keys | length)' "$SETTINGS"
 # 30   (full 전체 이벤트)
 ```
 
-### 4.5 수동 병합 (jq 미사용 시)
+#### 4.5 수동 병합 (jq 미사용 시)
 
 `~/.claude/settings.json`을 텍스트 에디터로 열고 다음 두 키를 추가/병합합니다.
 
@@ -322,7 +356,13 @@ Claude Code  →  spyglass:9999/v1/messages  →  https://api.anthropic.com/v1/m
 
 ### 5.2 활성화 방법
 
-#### 방법 A — 조건부 셸 함수 (권장)
+#### 방법 1 — 대시보드 자동 설치 (권장)
+
+§4의 **"Hook · Proxy 한 번에 설치"** 버튼을 사용하면 Proxy 설정도 동시에 완료됩니다.
+
+설치 후 터미널을 **재시작**하거나 `source ~/.zshrc` (또는 `~/.bashrc`)를 실행해야 셸 함수가 로드됩니다.
+
+#### 방법 2 — 조건부 셸 함수 (수동)
 
 서버가 실행 중일 때만 경유하도록 헬스체크를 포함합니다. `.zshrc` / `.bashrc` 에 추가:
 
@@ -356,7 +396,7 @@ kimi() {
 }
 ```
 
-#### 방법 B — settings.json env 등록 (항상 경유)
+#### 방법 3 — settings.json env 등록 (항상 경유)
 
 Claude Code가 실행될 때마다 자동으로 프록시를 경유합니다.
 
@@ -370,7 +410,7 @@ Claude Code가 실행될 때마다 자동으로 프록시를 경유합니다.
 }
 ```
 
-> ⚠️ **주의**: spyglass 서버가 꺼진 상태에서 Claude Code를 실행하면 API 연결이 실패합니다. 항상 `bun run dev`로 서버를 먼저 기동하거나, 방법 A처럼 조건부 처리를 추가하세요.
+> ⚠️ **주의**: spyglass 서버가 꺼진 상태에서 Claude Code를 실행하면 API 연결이 실패합니다. 항상 `bun run dev`로 서버를 먼저 기동하거나, 방법 2처럼 조건부 처리를 추가하세요.
 
 ### 5.3 upstream 환경변수
 
@@ -460,6 +500,8 @@ xdg-open http://127.0.0.1:9999
 
 최소 한 번의 Claude Code 세션이 수집되면 세션 목록·실시간 피드·통계가 표시됩니다.
 
+![대시보드 — 세션 목록과 실시간 요청 피드](./images/dashboard.png)
+
 ---
 
 ## 7. 관리 명령어
@@ -530,103 +572,11 @@ DB 마이그레이션은 서버 기동 시 자동 적용됩니다(`PRAGMA user_v
 
 ---
 
-## 9. 문제 해결
-
-### 9.1 `curl http://127.0.0.1:9999/health`가 실패
-
-```bash
-# 1) 서버 상태 확인
-cd "${HOME}/.spyglass-src" && bun run status
-
-# 2) 포트 충돌 확인 (다른 프로세스가 9999를 점유 중인지)
-lsof -iTCP:9999 -sTCP:LISTEN
-
-# 3) 그냥 재기동 — bun run dev 가 stale PID 파일을 자동 정리합니다
-cd "${HOME}/.spyglass-src" && bun run dev
-```
-
-### 9.2 Claude Code 세션을 실행해도 데이터가 수집되지 않음
-
-```bash
-# 자동 진단
-cd "${HOME}/.spyglass-src" && bun run doctor
-```
-
-수동 체크리스트:
-
-1. **글로벌 설정 확인** — `jq '.env.SPYGLASS_DIR, (.hooks|keys|length)' ~/.claude/settings.json`
-2. **훅 스크립트 실행 권한** — `ls -l "$(jq -r '.env.SPYGLASS_DIR' ~/.claude/settings.json)/hooks/spyglass-collect.sh"`
-3. **Claude Code 재시작 여부** — 설정 변경 후 반드시 재시작
-4. **서버 실행 여부** — `curl -sf http://127.0.0.1:9999/health`
-5. **훅 로그** — `tail "${HOME}/.spyglass/logs/collect.log"` 에 오류가 있는지
-
-### 9.3 프록시 경유 시 API 요청이 실패
-
-```bash
-# 1) spyglass 서버 동작 확인
-curl -sf http://localhost:9999/health && echo OK
-
-# 2) ANTHROPIC_BASE_URL 값 확인 (trailing slash 금지)
-echo "$ANTHROPIC_BASE_URL"
-# http://localhost:9999  (/ 없이)
-
-# 3) proxy_requests 테이블에 행이 쌓이는지 확인
-sqlite3 "${HOME}/.spyglass/spyglass.db" \
-  "SELECT COUNT(*), MAX(timestamp) FROM proxy_requests;"
-```
-
-서버가 꺼져 있으면 `ANTHROPIC_BASE_URL`을 해제하거나 서버를 기동한 뒤 재시도합니다:
-
-```bash
-unset ANTHROPIC_BASE_URL   # 현재 셸에서 임시 해제
-```
-
-### 9.4 `~/.spyglass` 권한 오류
-
-서버는 DB를 열 때마다 `~/.spyglass/` 디렉토리에 `chmod 0o700`을 자동 적용합니다. 따라서 정상적인 흐름에서는 권한 문제가 생기지 않습니다.
-
-소유자 불일치(예: 과거 root로 생성됨)로 권한 자동 복구가 실패하는 경우에만 수동 수정합니다:
-
-```bash
-sudo chown -R "$(id -u):$(id -g)" "${HOME}/.spyglass"
-# 이후 bun run dev 한 번이면 chmod 700 까지 자동 복구
-```
-
-### 9.5 DB 마이그레이션 확인
-
-```bash
-bun -e 'const {Database}=require("bun:sqlite");
-  const db = new Database(`${process.env.HOME}/.spyglass/spyglass.db`);
-  console.log(db.query("PRAGMA user_version").get());'
-# { user_version: 35 }   (업데이트마다 증가, 현재 최신값 기준)
-```
-
-### 9.6 완전 초기화
-
-> ⚠️ **경고**: 이 명령은 모든 수집 데이터를 영구 삭제합니다.
-
-```bash
-cd "${HOME}/.spyglass-src" && bun run stop
-rm -rf "${HOME}/.spyglass"
-cd "${HOME}/.spyglass-src" && bun run dev
-```
-
-### 9.7 훅 등록 해제
-
-`~/.claude/settings.json`에서 `env.SPYGLASS_DIR`과 spyglass 관련 `hooks` 항목을 제거하거나, 백업 파일로 복원합니다.
-
-```bash
-# 가장 최근 백업으로 복원
-cp "$(ls -1t ${HOME}/.claude/settings.json.bak-* 2>/dev/null | head -1)" "${HOME}/.claude/settings.json"
-```
-
----
-
-## 5. 데이터 디렉토리 (`~/.spyglass/`) 와 그래프 DB
+## 9. 데이터 디렉토리 (`~/.spyglass/`) 와 그래프 DB
 
 spyglass 가 사용하는 모든 로컬 데이터는 `~/.spyglass/` 하위에 격리됩니다.
 
-### 5.1 디렉토리 구조
+### 9.1 디렉토리 구조
 
 ```
 ~/.spyglass/
@@ -640,13 +590,13 @@ spyglass 가 사용하는 모든 로컬 데이터는 `~/.spyglass/` 하위에 �
 │   ├── collect.log             # collect 명령 출력
 │   ├── server.log              # 서버 stdout/stderr 미러
 │   └── hook-raw.jsonl          # hook 원본 페이로드 (DIAG 모드)
-└── graph/                      # v2.10+ LadybugDB 그래프 프로젝션 (throw-away cache)
+└── graph/                      # LadybugDB 그래프 프로젝션 (throw-away cache)
     ├── KUZU_README.txt         # "이 폴더는 throw-away cache" 안내
     ├── spyglass.lbug           # Ladybug DB 파일 (자동 생성)
     └── sync_state.json         # sync worker cursor 메타
 ```
 
-### 5.2 그래프 DB 운영 모드 (v2.10+)
+### 9.2 그래프 DB 운영 모드
 
 환경변수 `SPYGLASS_GRAPH_MODE` 로 제어합니다.
 
@@ -678,7 +628,7 @@ curl http://localhost:9999/api/graph/status | jq
 # }
 ```
 
-### 5.3 그래프 폴더 안전성 (throw-away cache)
+### 9.3 그래프 폴더 안전성 (throw-away cache)
 
 `~/.spyglass/graph/` 는 **언제든 삭제 가능한 캐시** 입니다:
 
@@ -690,7 +640,7 @@ rm -rf ~/.spyglass/graph
 **SQLite (`spyglass.db`) 만 source of truth** 입니다. 백업 시 `spyglass.db` 한 파일만 복사하면 충분하며,
 그래프 폴더는 복사할 필요 없습니다.
 
-### 5.4 그래프 DB 로그 위치
+### 9.4 그래프 DB 로그 위치
 
 별도 로그 파일을 만들지 않습니다. 모든 그래프 관련 로그는 **표준 출력 → `~/.spyglass/logs/server.log`** 로
 미러링됩니다.
@@ -707,28 +657,108 @@ tail -f ~/.spyglass/logs/server.log | grep -E '\[graph-(circuit|sync|shadow|rout
 # [graph-shadow] result nodes=12 edges=8
 ```
 
-### 5.5 다운그레이드 시나리오 (v2.10+ → v2.9 이하)
+### 9.5 다운그레이드 시나리오
 
-v2.10 이상에서 v2.9 이하로 다운그레이드 시:
+v4.4.1 이상에서 이전 버전으로 다운그레이드 시:
 
-1. **SQLite 는 무영향** — `spyglass.db` 의 049 마이그레이션 (outbox table + trigger) 은 이전 버전이
-   무시합니다. 추가 컬럼/테이블만 있고 기존 스키마 변경은 없으므로 호환됩니다.
-2. **`~/.spyglass/graph/` 는 무시됨** — 이전 버전은 본 폴더를 읽지 않으므로 그대로 두거나 삭제해도
-   무관합니다.
-3. **단, 049 trigger 가 살아있어 outbox 가 누적됩니다** — 디스크 부담이 우려되면 다운그레이드 전
-   다음 명령으로 trigger 를 제거하세요:
-
-   ```bash
-   sqlite3 ~/.spyglass/spyglass.db <<'SQL'
-   DROP TRIGGER IF EXISTS trg_requests_to_kuzu_outbox;
-   DROP TRIGGER IF EXISTS trg_sessions_to_kuzu_outbox;
-   DELETE FROM kuzu_outbox;
-   SQL
-   ```
+1. **SQLite 는 무영향** — 추가 컬럼/테이블만 있고 기존 스키마 변경은 없으므로 호환됩니다.
+2. **`~/.spyglass/graph/` 는 무시됨** — 이전 버전은 본 폴더를 읽지 않으므로 그대로 두거나 삭제해도 무관합니다.
 
 ---
 
-## 6. 그래프 DB 자주 묻는 질문
+## 10. 문제 해결
+
+### 10.1 `curl http://127.0.0.1:9999/health`가 실패
+
+```bash
+# 1) 서버 상태 확인
+cd "${HOME}/.spyglass-src" && bun run status
+
+# 2) 포트 충돌 확인 (다른 프로세스가 9999를 점유 중인지)
+lsof -iTCP:9999 -sTCP:LISTEN
+
+# 3) 그냥 재기동 — bun run dev 가 stale PID 파일을 자동 정리합니다
+cd "${HOME}/.spyglass-src" && bun run dev
+```
+
+### 10.2 Claude Code 세션을 실행해도 데이터가 수집되지 않음
+
+```bash
+# 자동 진단
+cd "${HOME}/.spyglass-src" && bun run doctor
+```
+
+수동 체크리스트:
+
+1. **글로벌 설정 확인** — `jq '.env.SPYGLASS_DIR, (.hooks|keys|length)' ~/.claude/settings.json`
+2. **훅 스크립트 실행 권한** — `ls -l "$(jq -r '.env.SPYGLASS_DIR' ~/.claude/settings.json)/hooks/spyglass-collect.sh"`
+3. **Claude Code 재시작 여부** — 설정 변경 후 반드시 재시작
+4. **서버 실행 여부** — `curl -sf http://127.0.0.1:9999/health`
+5. **훅 로그** — `tail "${HOME}/.spyglass/logs/collect.log"` 에 오류가 있는지
+
+### 10.3 프록시 경유 시 API 요청이 실패
+
+```bash
+# 1) spyglass 서버 동작 확인
+curl -sf http://localhost:9999/health && echo OK
+
+# 2) ANTHROPIC_BASE_URL 값 확인 (trailing slash 금지)
+echo "$ANTHROPIC_BASE_URL"
+# http://localhost:9999  (/ 없이)
+
+# 3) proxy_requests 테이블에 행이 쌓이는지 확인
+sqlite3 "${HOME}/.spyglass/spyglass.db" \
+  "SELECT COUNT(*), MAX(timestamp) FROM proxy_requests;"
+```
+
+서버가 꺼져 있으면 `ANTHROPIC_BASE_URL`을 해제하거나 서버를 기동한 뒤 재시도합니다:
+
+```bash
+unset ANTHROPIC_BASE_URL   # 현재 셸에서 임시 해제
+```
+
+### 10.4 `~/.spyglass` 권한 오류
+
+서버는 DB를 열 때마다 `~/.spyglass/` 디렉토리에 `chmod 0o700`을 자동 적용합니다. 따라서 정상적인 흐름에서는 권한 문제가 생기지 않습니다.
+
+소유자 불일치(예: 과거 root로 생성됨)로 권한 자동 복구가 실패하는 경우에만 수동 수정합니다:
+
+```bash
+sudo chown -R "$(id -u):$(id -g)" "${HOME}/.spyglass"
+# 이후 bun run dev 한 번이면 chmod 700 까지 자동 복구
+```
+
+### 10.5 DB 마이그레이션 확인
+
+```bash
+bun -e 'const {Database}=require("bun:sqlite");
+  const db = new Database(`${process.env.HOME}/.spyglass/spyglass.db`);
+  console.log(db.query("PRAGMA user_version").get());'
+# { user_version: 57 }   (업데이트마다 증가, 현재 최신값 기준)
+```
+
+### 10.6 완전 초기화
+
+> ⚠️ **경고**: 이 명령은 모든 수집 데이터를 영구 삭제합니다.
+
+```bash
+cd "${HOME}/.spyglass-src" && bun run stop
+rm -rf "${HOME}/.spyglass"
+cd "${HOME}/.spyglass-src" && bun run dev
+```
+
+### 10.7 훅 등록 해제
+
+`~/.claude/settings.json`에서 `env.SPYGLASS_DIR`과 spyglass 관련 `hooks` 항목을 제거하거나, 백업 파일로 복원합니다.
+
+```bash
+# 가장 최근 백업으로 복원
+cp "$(ls -1t ${HOME}/.claude/settings.json.bak-* 2>/dev/null | head -1)" "${HOME}/.claude/settings.json"
+```
+
+---
+
+## 11. 그래프 DB 자주 묻는 질문
 
 ### Q1. 그래프 DB 를 별도로 설치해야 하나요?
 
@@ -757,10 +787,9 @@ v2.10 이상에서 v2.9 이하로 다운그레이드 시:
 ~/.spyglass/graph` 한 줄로 모두 초기화하면 다음 부팅에서 자동 재구축됩니다. 사용자 데이터는 모두
 `spyglass.db` 안에 있습니다.
 
-### Q6. 이전 버전 (v2.9 이하) 으로 돌아갈 때 안전한가요?
+### Q6. 이전 버전으로 돌아갈 때 안전한가요?
 
-**예**. §5.5 참조 — SQLite 스키마는 호환되며, 그래프 폴더는 이전 버전이 무시합니다. 단 049 trigger 가
-누적시키는 outbox 가 부담되면 다운그레이드 전 trigger 제거 SQL 을 실행하세요.
+**예**. §9.5 참조 — SQLite 스키마는 호환되며, 그래프 폴더는 이전 버전이 무시합니다.
 
 ---
 
@@ -768,5 +797,3 @@ v2.10 이상에서 v2.9 이하로 다운그레이드 시:
 
 - [README.md](../README.md) — 프로젝트 개요와 기능 설명
 - [examples/settings.hooks.full.json](./examples/settings.hooks.full.json) — 기본(전체) 훅 프로파일 — 선택 아님
-- [개발 작업 문서 — Sequential Flowchart 풀스택 구현](./development/sequential-flow-implementation.md)
-- [Graph DB 마스터 플랜 — 06 Sequential Flowchart](../.claude/.tmp/plans/spyglass/graph-db-research/06-sequential-flowchart.md)

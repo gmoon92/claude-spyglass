@@ -61,6 +61,11 @@ bun install
 bun run dev
 ```
 
+Once the server is running, open **Settings → Integration** in the dashboard and click
+**"Hook · Proxy 한 번에 설치"** for one-click setup of hooks and proxy.
+
+![Dashboard Settings — Integration tab one-click install](docs/images/settings-integration.png)
+
 ---
 
 ## Why this exists
@@ -86,6 +91,8 @@ Without runtime visibility, finding the root cause would have been extremely dif
 ---
 
 ## What spyglass helps you see
+
+![Dashboard — real-time session feed and token metrics](docs/images/dashboard.png)
 
 ### Hidden system prompt growth
 
@@ -123,6 +130,8 @@ call pulled in.
 Understand which agents, skills, and commands are active in a session.
 Spyglass scans `.claude/agents`, `.claude/skills`, and `.claude/commands` across the project
 chain and global `~/.claude`, resolves priority, and shows the effective catalog per workspace.
+
+![Meta-docs catalog — agents, skills, and commands per workspace](docs/images/meta-docs-catalog.png)
 
 ### Rule propagation
 
