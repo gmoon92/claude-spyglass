@@ -30,7 +30,7 @@
 | `SPYGLASS_DIAG_LOG_DIR` | `<cwd>/.claude/.tmp/logs` | 진단 로그 디렉토리 override |
 | `SPYGLASS_DIAG_RAW_SSE` | (없음) | `1`이면 proxy raw SSE 본문도 jsonl에 포함 |
 | `SPYGLASS_GRAPH_MODE` | `primary` | 그래프 sync 모드 (`off`\|`shadow`\|`primary`) |
-| `SPYGLASS_RETENTION_DAYS` | `30` | RDB·그래프 retention cutoff. 0/음수/non-numeric은 default 폼백 |
+| `SPYGLASS_RETENTION_DAYS` | `30` | RDB·그래프 retention cutoff. 0/음수/non-numeric은 default 폴백 |
 | `SPYGLASS_ENCRYPTION` | (없음) | `1`/`true`/`yes`/`on` 시 at-rest 암호화 활성 |
 | `SPYGLASS_ENCRYPTION_KEY` | (없음) | base64 32B 암호화 키 (우선) |
 | `ANTHROPIC_BASE_URL` | (없음) | 설정 시 `/v1/*` 프록시 미러링 활성화 |

@@ -46,7 +46,7 @@ Claude Code는 등록된 hook을 매 이벤트마다 호출합니다. spyglass�
 
 | hook 이름 | 발생 시점 | 운송 엔드포인트 |
 | --------- | -------- | -------------- |
-| `UserPromptSubmit` | 사용자가 프롬프트를 별냄 | `/collect` |
+| `UserPromptSubmit` | 사용자가 프롬프트를 보냄 | `/collect` |
 | `PreToolUse` | 도구 호출 시작 직전 | `/collect` |
 | `PostToolUse` | 도구 호출 종료 직후 | `/collect` |
 | `SessionStart` | 세션 시작 | `/events` |
@@ -62,7 +62,7 @@ Claude Code는 등록된 hook을 매 이벤트마다 호출합니다. spyglass�
 3. **`hook_event_name` 추출**: python3 인라인 스크립트로 파싱.
 4. **case 분기 라우팅**:
    - `UserPromptSubmit | PreToolUse | PostToolUse` → `/collect`
-   - 빈 문자열(레거시 hook) → `/collect` 폼백
+   - 빈 문자열(레거시 hook) → `/collect` 폴백
    - 그 외(`SessionStart`, `Stop`, `SessionEnd`, `Notification`, …) → `/events`
 5. **비동기 curl POST**: `( ... ) &`로 백그라운드 서브셸을 띄워 즉시 0 반환.
 
@@ -174,7 +174,7 @@ WHERE event_type IS NULL OR event_type = 'tool'
 | ---- | ---- | ---- |
 | 1 | Transcript backfill | `extractAssistantTextEntries`로 모든 assistant text를 idempotent INSERT. |
 | 2 | `last_assistant_message` | Stop 훅 payload에서 직접. |
-| 3 | Proxy 폼백 | 같은 세션의 최근 proxy 응답 본문을 120초 윈도우 내에서 조회. |
+| 3 | Proxy 폴백 | 같은 세션의 최근 proxy 응답 본문을 120초 윈도우 내에서 조회. |
 | 4 | (skip) | 이미 transcript backfill 행이 있으면 자체 INSERT 생략. |
 
 ---
@@ -229,10 +229,10 @@ flowchart TD
 
 ### 8.1 SSE 연결
 
-`packages/web/src/app/sse.ts`의 `connectSSE`는 3개 채널을 구독합니다.
+`packages/web/src/app/app-sse.ts`의 `buildAppSSECallbacks`는 3개 채널을 구독합니다.
 
 ```ts
-connectSSE({
+buildAppSSECallbacks({
   onNewRequest:        (e) => { /* hook 데이터 */ },
   onNewProxyRequest:   (e) => { /* proxy 데이터 */ },
   onSessionUpdate:     (e) => { /* 활성/비활성 전환 */ },

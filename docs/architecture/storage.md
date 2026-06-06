@@ -87,7 +87,7 @@ PRAGMA wal_autocheckpoint = 200;        -- ~800KB마다 자동 checkpoint
 ### 신규 마이그레이션 추가 절차
 
 1. `migrations/NNN-<설명>.sql` 작성 (NNN = `currentMax + 1`, 3자리 0-padded, `IF NOT EXISTS` 멱등성)
-2. 파일 낭부에 `BEGIN/COMMIT` 금지 — migrator가 트랜잭션으로 감쌉니다. 트리거는 `BEGIN ... END;` 블록으로 작성 (`splitSqlStatements`가 보존)
+2. 파일 내부에 `BEGIN/COMMIT` 금지 — migrator가 트랜잭션으로 감쌉니다. 트리거는 `BEGIN ... END;` 블록으로 작성 (`splitSqlStatements`가 보존)
 3. `bun test packages/storage/src/__tests__/` — 빈 DB와 기존 DB 양쪽 검증
 
 ### 마이그레이션 이력 요약

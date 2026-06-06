@@ -26,7 +26,7 @@ packages/server/src/
 ├── anomaly-thresholds.ts          — anomaly_thresholds 캐시.
 ├── tool-category.ts               — Tool 이름 → category.
 ├── mcp-tool-name.ts               — MCP 도구 이름 파싱.
-├── version-checker.ts             — npm registry 1h 평런.
+├── version-checker.ts             — npm registry 1h 평링.
 ├── diag-log.ts                    — 진단 jsonl 기록기.
 ├── i18n.ts                        — 서버측 i18n 로더.
 │

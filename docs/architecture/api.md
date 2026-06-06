@@ -56,6 +56,7 @@
 | `routes/dashboard.ts` | `GET /api/dashboard?range=...` (응답 캐시) |
 | `routes/sessions.ts` | `GET /api/sessions/active`, `/:id`, `/:id/requests`, `/:id/turns`, `/by-project` |
 | `routes/requests.ts` | `GET /api/requests/recent`, `/:id`, `/top-tokens` |
+| `routes/conversations.ts` | `GET /api/conversations?start=YYYY-MM-DD&end=YYYY-MM-DD&project=` |
 | `routes/stats.ts` | `GET /api/stats/sessions`, `/requests`, `/cache`, `/proxy`, `/proxy/by-model` |
 | `routes/proxy.ts` | `GET /api/proxy/recent`, `/by-session/:id`, `/:id` |
 | `routes/system-prompts.ts` | `GET /api/system-prompts`, `/:hash` (lazy fetch) |

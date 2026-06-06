@@ -21,7 +21,7 @@
 | 런타임 | React 18 | 선언적 UI + concurrent features |
 | 빌드 | Vite | 빠른 HMR, Rollup 기반 프로덕션 번들 |
 | 상태 | Zustand | 보일러플레이트 없는 글로벌 store. SSE 이벤트를 구독하는 store 패턴에 적합 |
-| 라우팅 | React Router v6 | `/browse`, `/meta-docs`, `/settings` 등 SPA 낭 낭 라우팅 |
+| 라우팅 | React Router v6 | `/browse`, `/meta-docs`, `/settings` 등 SPA 내 라우팅 |
 | i18n | react-i18next | ko/en/ja/zh 다국어. 서버와 동일한 JSON 구조 공유 |
 | 차트 | Custom Canvas | 30분 슬라이딩 윈도우 실시간 차트 |
 | 테스트 | vitest | Vite 기반 테스트 러너 |
@@ -77,7 +77,12 @@ packages/web/
     │   ├── llm-input/          — LLM 입력 뷰
     │   └── sse/                — SSE store, 이벤트 핸들러
     ├── stores/
-    │   └── (Zustand store 파일들)
+    │   ├── app-store.ts        — 글로벌 앱 상태(모드, 선택 세션 등)
+    │   ├── sse-store.ts        — SSE 이벤트 수신 및 피드/프록시 상태
+    │   ├── expand-store.ts     — 피드 행 펼침 상태
+    │   ├── anomaly-store.ts    — 이상치 표시 상태
+    │   ├── tooltip-store.ts    — 툴팁 위치·내용
+    │   └── version-store.ts    — 버전 체크·업데이트 배지
     └── lib/
         └── (유틸리티)
 ```
@@ -118,18 +123,21 @@ flowchart TD
 
 ### 3.3 SSE 연결
 
-`packages/web/src/app/app-sse.ts`가 `EventSource`를 관리합니다.
+`packages/web/src/app/app-sse.ts`의 `buildAppSSECallbacks`가 SSE 콜백을 합성합니다.
 
 ```ts
-connectSSE({
-  onNewRequest: (data) => {
-    useSseStore.getState().addRequest(data);
-    useBrowseStore.getState().maybePrepend(data);
-  },
-  onNewProxyRequest: (data) => useSseStore.getState().addProxyRequest(data),
-  onSessionUpdate: (data) => useBrowseStore.getState().updateSession(data),
+const callbacks = buildAppSSECallbacks({
+  onOpen: () => { /* 초기 데이터 페칭 */ },
+  onError: () => { /* 연결 상태 표시 */ },
 });
+// callbacks는 useSSE 훅에 주입되어 EventSource 생성 시 사용
 ```
+
+`features/sse/`의 `createSSEStoreCallbacks`가 데이터 3채널을 Zustand store로 dispatch합니다.
+
+- `onNewRequest` → `sse-store` 액션 → `browse-store` prepend/update
+- `onNewProxyRequest` → `sse-store` proxy 액션
+- `onSessionUpdate` → `browse-store` 세션 상태 갱신
 
 `event_phase` discriminator:
 - `'created'` — store에 prepend, 피드에 행 추가
