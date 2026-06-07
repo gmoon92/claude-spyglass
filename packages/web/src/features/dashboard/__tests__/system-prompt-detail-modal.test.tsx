@@ -4,26 +4,55 @@
  * 원본: assets/js/system-prompt-library.js#showDetailModal/renderModalShell.
  * 셀렉터 계약(syslib-detail-modal/syslib-detail-inner/syslib-detail-close/data-syslib-close/
  *   syslib-detail-head/syslib-detail-hash/syslib-detail-content) + 상태 분기(loading/error/not-found/content) 검증.
+ *
+ * 렌더 방식: SystemPromptDetailModal 은 createPortal(document.body) 로 렌더되므로 renderToStaticMarkup(SSR)는
+ *   "Portals are not supported by the server renderer" 로 실패한다. → jsdom 라이브 마운트(createRoot+act,
+ *   use-tooltip.test 선례)로 전환하고, body 직속 모달 노드(#sysLibDetailModal)의 outerHTML 로 마크업 계약을
+ *   단언한다(검증 의도 보존, 단언 약화 없음).
  */
-import { describe, it, expect } from 'vitest';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { act } from 'react';
+import type { ReactElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { ensureDom } from '../../../test-support/ensure-dom';
 import { SystemPromptDetailModal } from '../SystemPromptDetailModal';
+
+ensureDom();
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // i18n t 는 DI(필수 prop) — 키 passthrough stub(원본 window.I18n stub 동치). D-1: 전역 window.I18n 비의존.
 const t = (k: string) => k;
-const html = (el: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(el);
 const noop = () => {};
+
+let container: HTMLElement;
+let root: Root;
+beforeEach(() => {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+});
+afterEach(() => {
+  act(() => root.unmount());
+  document.body.innerHTML = '';
+});
+
+/** createPortal(document.body) → 모달은 body 직속. outerHTML 로 마크업 계약 검증(구 SSR out 대체). 미표시 시 ''. */
+function renderModal(el: ReactElement): string {
+  act(() => root.render(el));
+  const modal = document.getElementById('sysLibDetailModal');
+  return modal ? modal.outerHTML : '';
+}
 
 describe('SystemPromptDetailModal — 표시/숨김', () => {
   it('hash 없으면 null (모달 미표시)', () => {
-    const out = html(
+    const out = renderModal(
       <SystemPromptDetailModal hash={null} loading={false} detail={null} onClose={noop} t={t} />,
     );
     expect(out).toBe('');
   });
 
   it('hash 있으면 syslib-detail-modal 컨테이너 + role=dialog', () => {
-    const out = html(
+    const out = renderModal(
       <SystemPromptDetailModal hash="abc123" loading detail={null} onClose={noop} t={t} />,
     );
     expect(out).toContain('id="sysLibDetailModal"');
@@ -34,7 +63,7 @@ describe('SystemPromptDetailModal — 표시/숨김', () => {
 
 describe('SystemPromptDetailModal — 상태 분기', () => {
   it('content 있으면 head(hash/size/seg/ref) + 본문 pre + 닫기 버튼', () => {
-    const out = html(
+    const out = renderModal(
       <SystemPromptDetailModal
         hash="hash-full-0001"
         loading={false}
@@ -61,7 +90,7 @@ describe('SystemPromptDetailModal — 상태 분기', () => {
   });
 
   it('detail 없음(fetch 완료) → not-found', () => {
-    const out = html(
+    const out = renderModal(
       <SystemPromptDetailModal hash="abc" loading={false} detail={null} onClose={noop} t={t} />,
     );
     expect(out).toContain('ui.syslib.not-found');
@@ -69,7 +98,7 @@ describe('SystemPromptDetailModal — 상태 분기', () => {
   });
 
   it('error → modal-load-failed', () => {
-    const out = html(
+    const out = renderModal(
       <SystemPromptDetailModal hash="abc" loading={false} detail={null} error="HTTP 500" onClose={noop} t={t} />,
     );
     expect(out).toContain('ui.syslib.modal-load-failed');
