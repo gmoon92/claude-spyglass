@@ -245,6 +245,8 @@ export function TooltipLayer(): ReactElement | null {
   const [tip, setTip] = useState<ActiveTip>(null);
   // 표시 px 좌표 — useLayoutEffect 가 실측 후 설정. pos 변경은 tip effect 를 재실행하지 않는다(별도 state).
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  // 마지막으로 setState 한 좌표(ref) — setPos 호출 *자체*를 게이트한다(아래 repositionFromCursor 주석 참조).
+  const lastPosRef = useRef<{ x: number; y: number } | null>(null);
   // 마지막 커서 좌표 — 포인트호버는 차트가 좌표를 직접 주고, 설명 툴팁은 mouse 이벤트가 준다.
   const cursorRef = useRef<{ x: number; y: number; above: boolean } | null>(null);
   // 측정 후 위치 보정을 위한 ref(absolute positioning, pointer-events:none).
@@ -258,12 +260,26 @@ export function TooltipLayer(): ReactElement | null {
     const el = cacheElRef.current ?? statElRef.current;
     return { w: el?.offsetWidth || 220, h: el?.offsetHeight || 60 };
   };
-  /** cursorRef 기준 px 좌표 산정(above 면 점 위, 아니면 커서 추종). pos state 갱신. */
+  /**
+   * cursorRef 기준 px 좌표 산정(above 면 점 위, 아니면 커서 추종). pos state 갱신.
+   *
+   * ★ref-guard 필수(React #185 차단) — bail 을 setState updater *안*이 아니라 *바깥*에서 한다.
+   *   positionAtCursor/positionAbove 는 매 호출 새 {x,y} 를 반환한다. setPos 의 함수형 updater 안에서
+   *   같은 값이면 prev 를 반환하는 식으로 bail 해도, **setState 호출 자체가 nested-update 로 카운트**된다(React 가 같은 값인지
+   *   알려면 일단 렌더 패스를 스케줄해야 하기 때문). useLayoutEffect([tip]) 가 커밋마다 도는 상황과 결합하면
+   *   매 커밋 setPos 가 enqueue 되어 update depth 가 쌓이고 #185(Maximum update depth)로 흰 화면이 된다
+   *   (data-tip 밀집 화면=메타 문서 카탈로그 진입 시 재현 — 실측: measure/next 가 고정이어도 55회 폭주).
+   *   → 좌표가 실제로 바뀌었을 때만 setPos 를 **호출**해 enqueue 자체를 막는다(lastPosRef SSoT).
+   */
   const repositionFromCursor = (): void => {
     const cur = cursorRef.current;
     if (!cur) return;
     const m = measure();
-    setPos(cur.above ? positionAbove(cur.x, cur.y, m) : positionAtCursor(cur.x, cur.y, m));
+    const next = cur.above ? positionAbove(cur.x, cur.y, m) : positionAtCursor(cur.x, cur.y, m);
+    const last = lastPosRef.current;
+    if (last && last.x === next.x && last.y === next.y) return; // 좌표 불변 → setState 미호출(enqueue 방지)
+    lastPosRef.current = next;
+    setPos(next);
   };
 
   // ── point-hover(차트) 구독 — A-2: ctx/timeline CustomEvent → tooltip-store ──
@@ -429,7 +445,11 @@ export function TooltipLayer(): ReactElement | null {
   //   move 핸들러가 repositionFromCursor 로 pos 만 갱신한다. paint 전 보정(useLayoutEffect)으로 깜빡임 방지.
   useLayoutEffect(() => {
     if (!tip) {
-      setPos(null);
+      // null 복귀도 ref-guard — 이미 null 이면 setState 미호출(불필요 리렌더/누적 방지).
+      if (lastPosRef.current !== null) {
+        lastPosRef.current = null;
+        setPos(null);
+      }
       return;
     }
     repositionFromCursor();

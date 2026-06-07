@@ -164,3 +164,46 @@ describe('TooltipLayer — 설명 툴팁 document 위임', () => {
     expect(el!.querySelector('.stat-tooltip-title')?.textContent).toBe('__TURN__'); // 포인트호버 본문 유지
   });
 });
+
+describe('TooltipLayer — React #185(Maximum update depth) 회귀 가드', () => {
+  // 배경: useLayoutEffect([tip]) 가 repositionFromCursor → setPos 를 호출하는데, positionAtCursor 가 매 호출
+  //   새 {x,y} 를 반환한다. bail 을 setPos updater *안*에서 (`setPos(prev => prev===next? prev: next)`) 하면,
+  //   같은 값이어도 setState 호출 자체가 nested-update 로 enqueue 되어 (React 가 같은 값인지 알려면 렌더 패스를
+  //   스케줄해야 함) update depth 가 쌓이고, data-tip 밀집 화면(메타 문서 카탈로그) 진입 시 #185 흰 화면이 됐다.
+  //   수정: bail 을 updater 밖(lastPosRef)에서 — 좌표 불변이면 setPos 를 *호출하지 않는다*(enqueue 방지).
+
+  it('ref-guard 정적 계약 — 좌표 불변 시 setPos 미호출(updater 안 함수형 bail 금지)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const { dirname, resolve } = await import('node:path');
+    const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../use-tooltip.tsx'), 'utf8');
+    // ref-guard 존재: lastPosRef 로 직전 좌표를 들고, 동일하면 early-return(setState enqueue 자체 차단).
+    expect(src).toContain('lastPosRef');
+    expect(src).toMatch(/if\s*\(last\s*&&\s*last\.x === next\.x\s*&&\s*last\.y === next\.y\)\s*return/);
+    // 회귀 금지: repositionFromCursor 가 함수형 updater 로 bail(`setPos((prev) => ... ? prev : next)`)하면
+    //   enqueue 를 못 막아 #185 가 재발한다. 그 패턴이 없어야 한다.
+    expect(src).not.toMatch(/setPos\(\(prev\)\s*=>/);
+  });
+
+  it('data-tip 트리거 위 동일 좌표 mousemove 60회 — 폭주 없이 툴팁 유지', () => {
+    const trigger = document.createElement('button');
+    trigger.setAttribute('data-tip', '동일 좌표 반복 호버');
+    document.body.appendChild(trigger);
+    act(() => root.render(<TooltipLayer />));
+    // 최초 진입 → 툴팁 표시(pos 1회 설정).
+    act(() => {
+      trigger.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: 10, clientY: 10 }));
+    });
+    expect(document.querySelector('.stat-tooltip')).not.toBeNull();
+    // 동일 좌표 mousemove 60회 — ref-guard 가 없으면(또는 updater-bail 회귀 시) setPos 누적 → 무한 리렌더로
+    //   act 가 #185 를 throw 한다. 통과 = enqueue 가 좌표 불변 시 차단됨을 의미.
+    act(() => {
+      for (let i = 0; i < 60; i++) {
+        trigger.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 10, clientY: 10 }));
+      }
+    });
+    const el = document.querySelector('.stat-tooltip');
+    expect(el).not.toBeNull();
+    expect(el!.textContent).toContain('동일 좌표 반복 호버'); // raw data-tip desc 유지
+  });
+});
