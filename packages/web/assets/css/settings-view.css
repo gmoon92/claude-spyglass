@@ -389,6 +389,47 @@ body[data-app-mode="settings"] .main-layout {
   color: var(--text-3);
   font-size: 12px;
 }
+/* 콜드 로딩 스켈레톤 (SettingsSkeleton) — diag ~223ms 동안 패널 형태 placeholder */
+.settings-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0;
+}
+.settings-skeleton .sk-card {
+  background: var(--surface);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.settings-skeleton .sk-line {
+  height: 11px;
+  width: 100%;
+  border-radius: 5px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-2, rgba(255, 255, 255, 0.05)) 25%,
+    rgba(255, 255, 255, 0.12) 37%,
+    var(--surface-2, rgba(255, 255, 255, 0.05)) 63%
+  );
+  background-size: 400% 100%;
+  animation: settings-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+.settings-skeleton .sk-title {
+  height: 13px;
+  width: 38%;
+  margin-bottom: 3px;
+}
+@keyframes settings-skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-skeleton .sk-line { animation: none; }
+}
 .settings-error {
   padding: 10px 12px;
   background: rgba(224, 65, 62, 0.08);

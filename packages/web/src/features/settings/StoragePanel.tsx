@@ -10,6 +10,7 @@
 import { useCallback, useState } from 'react';
 import { StickyAlert } from '../../components/settings/StickyAlert';
 import { StoragePanelView } from './StoragePanelView';
+import { SettingsSkeleton } from './SettingsSkeleton';
 import { fetchDiag } from './hooks-api';
 import { fetchGraphDbStatus, fetchSqliteInfo, ladybugInstallStream } from './graph-api';
 import { isInstallSuccess } from './logic';
@@ -83,7 +84,7 @@ export function StoragePanel({ t, onCopy }: StoragePanelProps) {
   );
 
   if (status === 'loading' || !data) {
-    return <div className="settings-loading">{t('ui.settings-view.loading')}</div>;
+    return <SettingsSkeleton cards={3} label={t('ui.settings-view.loading')} />;
   }
   if (status === 'error') {
     return <div className="settings-error">⚠ {error}</div>;

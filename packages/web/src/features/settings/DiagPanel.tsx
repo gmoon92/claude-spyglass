@@ -9,6 +9,7 @@
  */
 import { useCallback } from 'react';
 import { DiagPanelView } from './DiagPanelView';
+import { SettingsSkeleton } from './SettingsSkeleton';
 import { fetchDiag } from './hooks-api';
 import { useAsyncResource } from './use-settings-diag';
 
@@ -23,7 +24,7 @@ export function DiagPanel({ t, onJump, onCopy }: DiagPanelProps) {
   const { status, data, error } = useAsyncResource(fetcher);
 
   if (status === 'loading' || !data) {
-    return <div className="settings-loading">{t('ui.settings-view.loading')}</div>;
+    return <SettingsSkeleton cards={4} label={t('ui.settings-view.loading')} />;
   }
   if (status === 'error') {
     return <div className="settings-error">⚠ {error}</div>;

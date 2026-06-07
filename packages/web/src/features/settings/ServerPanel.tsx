@@ -8,6 +8,7 @@
  */
 import { useCallback } from 'react';
 import { ServerPanelView } from './ServerPanelView';
+import { SettingsSkeleton } from './SettingsSkeleton';
 import { fetchDiag, fetchLogs } from './hooks-api';
 import { useAsyncResource } from './use-settings-diag';
 import type { DiagData, LogsData } from './types';
@@ -27,7 +28,7 @@ export function ServerPanel({ t, onCopy }: ServerPanelProps) {
   const { status, data, error } = useAsyncResource(fetcher);
 
   if (status === 'loading' || !data) {
-    return <div className="settings-loading">{t('ui.settings-view.loading')}</div>;
+    return <SettingsSkeleton cards={3} label={t('ui.settings-view.loading')} />;
   }
   if (status === 'error') {
     return <div className="settings-error">⚠ {error}</div>;

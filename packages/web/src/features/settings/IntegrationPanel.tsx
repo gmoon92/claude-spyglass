@@ -19,6 +19,7 @@ import { useCallback, useState, type ReactNode } from 'react';
 import { StickyAlert } from '../../components/settings/StickyAlert';
 import { HooksPanelView } from './HooksPanelView';
 import { ProxyPanelView } from './ProxyPanelView';
+import { SettingsSkeleton } from './SettingsSkeleton';
 import { fetchDiag, hookApply } from './hooks-api';
 import { fetchProxySnippet, fetchProxyStatus, proxyInstall } from './graph-api';
 import { useAsyncResource } from './use-settings-diag';
@@ -122,7 +123,7 @@ export function IntegrationPanel({ t, onCopy }: IntegrationPanelProps) {
   //   셸 선택마다 패널이 통째로 사라졌다 다시 그려져 아코디언이 닫히는 버그가 생긴다.
   const loading = !diag || !proxyData;
   if (loading) {
-    return <div className="settings-loading">{t('ui.settings-view.loading')}</div>;
+    return <SettingsSkeleton cards={2} label={t('ui.settings-view.loading')} />;
   }
   if (hookStatus === 'error') return <div className="settings-error">⚠ {hookError}</div>;
   if (proxyFetchStatus === 'error') return <div className="settings-error">⚠ {proxyError}</div>;
