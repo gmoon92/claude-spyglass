@@ -16,6 +16,7 @@
 import {
   getAllRequests,
   getP95DurationMs,
+  getRequestById,
   getRequestsByType,
   getTopTokenRequests,
 } from '@spyglass/storage';
@@ -44,6 +45,25 @@ export const requestsRouter: RouteHandler = (_req, db, url, path, method) => {
     const requests = enrichWithAnomalies(db, normalizeRequests(rawRequests));
     const p95DurationMs = getP95DurationMs(db, fromTs, toTs);
     return jsonResponse({ success: true, data: requests, meta: { total: requests.length, limit, p95DurationMs } });
+  }
+
+  // GET /api/requests/:id/payload — 단건 full payload lazy-load (additive).
+  //   피드/목록 응답은 payload 미포함(getAllRequests·getRequestsByType — 전송량 절감)이라,
+  //   특정 행의 본문 전체가 필요할 때(행 펼침·turn lazy-load) 이 경로로 단건만 회수한다.
+  //   getRequestById(read.ts) 재사용 — LEFT JOIN request_payloads + decodeText SSoT 경유.
+  //   대화 기능 전용이 아니다(피드 행 펼침 등 어느 화면이든 재사용 가능한 독립 primitive).
+  {
+    const m = path.match(/^\/api\/requests\/([^/]+)\/payload$/);
+    if (m && method === 'GET') {
+      const id = decodeURIComponent(m[1]);
+      const row = getRequestById(db, id);
+      if (!row) return jsonResponse({ success: false, error: 'request not found' }, 404);
+      // payload 는 평문 디코드 완료(null 가능 — 본문 없는 행). preview 도 함께 제공(폴백 용도).
+      return jsonResponse({
+        success: true,
+        data: { id: row.id, payload: row.payload ?? null, preview: row.preview ?? null },
+      });
+    }
   }
 
   // GET /api/requests/top
