@@ -92,57 +92,8 @@
    기간 필터는 이제 metaTabBar 우측 공유 슬롯(.meta-tabs-actions)에서 mount된다.
    center/turns 정보용 .flow-scope 베이스 룰은 그대로 유지. */
 .meta-docs-flow-region .flow-toolbar .flow-spacer { flex: 1; }
-.meta-docs-flow-region .flow-toolbar .flow-legend {
-  /* meta-docs-flow-strength (ADR-006): 5건(main + strength 4단)을 가로 한 줄에 배치.
-     gap 14→10px로 축소해 좁은 화면에서도 한 줄 유지 시도. wrap은 toolbar의
-     flex-wrap에 의해 자연 줄바꿈된다. */
-  display: inline-flex; gap: 10px; align-items: center;
-  flex-wrap: wrap;
-  font-size: var(--text-meta); color: var(--text-3);
-}
-.meta-docs-flow-region .flow-toolbar .flow-legend > span {
-  display: inline-flex; align-items: center;
-  white-space: nowrap;
-}
-.meta-docs-flow-region .flow-toolbar .flow-legend .flow-sw {
-  display: inline-block; width: 18px; height: 2px;
-  vertical-align: middle; margin-right: 5px;
-  border-radius: 2px;
-}
-.meta-docs-flow-region .flow-toolbar .flow-legend .flow-sw-dashed {
-  height: 0; border-top: 1px dashed var(--text-4); width: 18px;
-}
-/* call 범례 표지(meta-docs-flow-call-graph ADR-005) — 실선 막대, --text-3 톤.
-   기존 .flow-sw 인라인 style 패턴과 의도 동일하지만 시맨틱 클래스로 가독성 확보. */
-.meta-docs-flow-region .flow-toolbar .flow-legend .flow-sw-solid {
-  background: var(--text-3);
-}
-
-/* meta-docs-flow-strength (ADR-006) — 범례 표지 4단.
-   각 표지는 실제 edge의 stroke 톤/패턴을 미니어처로 재현해 시각 위계를
-   범례에서도 즉시 식별 가능하게 한다. width/dash는 stroke와 동일 패턴.
-   .flow-sw 베이스(18×2px)를 상속하되, 점선(weak/sparse)은 height:0 + border-top로
-   미니 dash를 표현해 실제 edge와 같은 톤 매핑을 유지. */
-.meta-docs-flow-region .flow-toolbar .flow-legend .flow-sw-strength-strong {
-  background: var(--text-2);
-  height: 3px;
-}
-.meta-docs-flow-region .flow-toolbar .flow-legend .flow-sw-strength-medium {
-  background: var(--text-3);
-  height: 2px;
-}
-.meta-docs-flow-region .flow-toolbar .flow-legend .flow-sw-strength-weak {
-  background: transparent;
-  height: 0;
-  border-top: 2px dashed var(--text-4);
-  border-radius: 0;
-}
-.meta-docs-flow-region .flow-toolbar .flow-legend .flow-sw-strength-sparse {
-  background: transparent;
-  height: 0;
-  border-top: 1px dotted var(--flow-edge-sparse);
-  border-radius: 0;
-}
+/* flow-legend(.flow-sw* strength/CALL·AFTER 범례 표지) 룰은 xyflow 전환 후 본체 toolbar(Panel)에서
+   미렌더 — 런타임 매칭 0이라 제거(죽은 셀렉터 정리). 범례가 필요해지면 Panel 안에 다시 추가한다. */
 .meta-docs-flow-region .flow-toolbar .flow-reset-btn,
 .meta-docs-flow-region .flow-toolbar .flow-zoom-btn,
 .meta-docs-flow-region .flow-toolbar .flow-info-btn {
@@ -286,7 +237,10 @@
   box-sizing: border-box;
 }
 .meta-docs-flow-region .node:hover { border-color: var(--text-4); }
-.meta-docs-flow-region .node.is-dragging {
+/* 드래그 중 강조 — 구 .node.is-dragging(bindDrag 부여)을 xyflow 가 드래그 노드에 부여하는
+   .react-flow__node.dragging 으로 재타겟. transform scale 은 카드(.node) 내부에만 적용(위치 transform 은
+   .react-flow__node 가 관리하므로 충돌 없음). */
+.meta-docs-flow-region .react-flow__node.dragging .node {
   cursor: grabbing;
   border-color: var(--text-2);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
@@ -316,13 +270,9 @@
 .meta-docs-flow-region .node .body .title {
   color: var(--text-1); font-weight: 600;
   font-size: var(--text-h3);
-  white-space: nowrap;
-}
-/* is-wrapped: resizeNodeToContent에서 자연 폭이 NODE_MAX_W를 초과해 폭이
-   cap된 경우 부여된다. 긴 이름(예: mcp__redmine_xxx_yyy_zzz)이 한 줄로
-   삐져나가지 않도록 wrap 허용 + 단어 내부 분리(break 지점이 없는 토큰 대응). */
-.meta-docs-flow-region .node.is-wrapped .body .title {
-  white-space: normal;
+  /* xyflow: .react-flow__node{width:max-content} + .node{max-width:260px} 조합에서 짧은 이름은 한 줄,
+     긴 토큰(예: mcp__redmine_xxx_yyy)은 max-width 도달 시 wrap + 단어 내부 분리. 구 is-wrapped 분기
+     (resizeNodeToContent 측정 의존)를 기본값으로 병합 — xyflow ResizeObserver 측정이 이 wrap 결과를 반영. */
   overflow-wrap: anywhere;
   line-height: 1.2;
 }
@@ -492,13 +442,8 @@
 .node-seq.is-after {
   border-style: dashed;
 }
-.node-seq.is-expanding {
-  animation: nodeSeqReveal 280ms ease-out both;
-}
-@keyframes nodeSeqReveal {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: none; }
-}
+/* 구 .node-seq.is-expanding(nodeSeqReveal 슬라이드/페이드 인) 제거 — xyflow 전환 후 노드 등장은
+   measure→layout 의 opacity 0→1 이 담당(JS 가 is-expanding 미부여, 런타임 매칭 0). */
 
 /* ── Sequential 모드 — 엣지 (SVG path) ───────────────────────────────────── */
 .edge {
@@ -566,7 +511,3 @@
   .meta-docs-flow-region .edge.is-flowing { animation: none; }
 }
 
-/* ── Sequential 모드 toolbar 변종 (ego 모드와 동일 룰 재활용 + 미세 보정) ── */
-.flow-toolbar-sequential .flow-legend .flow-sw {
-  /* 순서도 모드는 strength 4단계 대신 CALL/AFTER 2단계만. */
-}
