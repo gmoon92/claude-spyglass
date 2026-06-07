@@ -413,3 +413,24 @@ describe('ProxyPanelView (settings-view.js:1285 innerHTML#18)', () => {
     expect(installed).toBe(true);
   });
 });
+
+describe('SettingsSkeleton — 콜드 로딩 스켈레톤', () => {
+  it('cards/rows 개수만큼 shimmer placeholder + aria-busy 렌더', async () => {
+    const { SettingsSkeleton } = await import('../SettingsSkeleton');
+    const html = renderToStaticMarkup(<SettingsSkeleton cards={4} rows={3} label="로딩 중" />);
+    // 카드 4개
+    expect((html.match(/sk-card/g) || []).length).toBe(4);
+    // 카드당 title 1 + rows 3 = 4 라인 × 4 카드 = 16 sk-line
+    expect((html.match(/sk-line/g) || []).length).toBe(16);
+    // 접근성: status role + aria-busy + 라벨
+    expect(html).toContain('role="status"');
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain('aria-label="로딩 중"');
+  });
+
+  it('기본값(cards=3, rows=3)', async () => {
+    const { SettingsSkeleton } = await import('../SettingsSkeleton');
+    const html = renderToStaticMarkup(<SettingsSkeleton />);
+    expect((html.match(/sk-card/g) || []).length).toBe(3);
+  });
+});
