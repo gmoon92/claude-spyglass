@@ -86,11 +86,23 @@ export function useSessionDetail(sessionId: string | null | undefined): UseSessi
     setExplicitTurnId(null);
     setLoading(true);
     (async () => {
-      const result = await fetchSessionTurns(sessionId, signal);
+      // turns-payload-lazy-load (background prefetch):
+      //  1) fast — payload BLOB 없이 즉시 받아 렌더(세션 전환 cold 2s 의 주범인 비활성 turn
+      //     payload 디스크 I/O 를 초기 경로에서 제거). preview/tool_detail 로 스파인·행이 그대로 그려진다.
+      //  2) background — payload 포함 전체를 곧바로 다시 받아 turns 를 교체(클릭 펼침 본문·TaskUpdate
+      //     status 칩 등 payload 의존 요소 보강). 같은 controller 라 세션 전환 시 둘 다 자동 abort.
+      const fast = await fetchSessionTurns(sessionId, signal, { includePayload: false });
       if (signal.aborted) return;
-      setTurns(result.turns);
-      setPrologue(result.prologue);
+      setTurns(fast.turns);
+      setPrologue(fast.prologue);
       setLoading(false);
+      fetchSessionTurns(sessionId, signal, { includePayload: true })
+        .then((full) => {
+          if (signal.aborted || full.turns.length === 0) return; // 빈/에러면 fast 유지
+          setTurns(full.turns);
+          setPrologue(full.prologue);
+        })
+        .catch(() => { /* silent — fast 결과 유지(레거시 catch 동치) */ });
     })();
     return () => controller.abort();
   }, [sessionId]);

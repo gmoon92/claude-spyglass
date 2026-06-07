@@ -181,8 +181,15 @@ export function countTurnsForSession(db: Database, sessionId: string): number {
  */
 export function getTurnsBySession(
   db: Database,
-  sessionId: string
+  sessionId: string,
+  opts: { includePayload?: boolean } = {}
 ): TurnItem[] {
+  // turns-payload-lazy-load: includePayload=false 면 request_payloads JOIN 자체를 생략한다.
+  //   세션 전환 체감 병목의 실제 주범은 비활성 turn payload BLOB 의 cold 디스크 I/O 라,
+  //   payload 를 안 읽으면 cold 2s → 수 ms 로 떨어진다(preview 는 requests 본체라 그대로 회수).
+  //   기본값 true — 기존 호출자(SSE 라이브 refetch·background full fetch 등) 계약은 불변.
+  //   클라이언트는 초기엔 false(즉시 렌더), 직후 background 로 true(전체 payload prefetch)를 부른다.
+  const includePayload = opts.includePayload !== false;
   // ─── 1. 단일 SELECT — prompt / tool_call / response 행을 한 번에 회수 ───
   // 인덱스 활용: idx_requests_session_type_turn_ts (Migration 047) 가 ORDER BY (turn_id, timestamp)
   // 를 인덱스만으로 충족 (TEMP B-TREE 제거 — EXPLAIN QUERY PLAN 으로 검증됨).
@@ -216,13 +223,16 @@ export function getTurnsBySession(
   //   턴뷰 펼침이 payload 를 쓰므로 request_id PK LEFT JOIN(WITHOUT ROWID)으로 회수한다. requests
   //   본체엔 payload 컬럼이 없으므로 p.payload/payload_algo 로 채운다. ACTIVE_REQUEST_FILTER_SQL 의
   //   event_type/tool_name 은 requests 에만 있어 모호성 없음.
+  // payload 컬럼·JOIN 은 includePayload 일 때만 — 서버 제어 상수 보간이라 인젝션 무관.
+  const payloadSelect = includePayload ? ', p.payload, p.payload_algo' : '';
+  const payloadJoin = includePayload ? 'LEFT JOIN request_payloads p ON p.request_id = r.id' : '';
   const allRows = db.query(`
-    SELECT r.turn_id, r.id, r.timestamp, r.type, r.preview, r.preview_algo, p.payload, p.payload_algo,
+    SELECT r.turn_id, r.id, r.timestamp, r.type, r.preview, r.preview_algo${payloadSelect},
            r.tokens_input, r.tokens_output, r.tokens_total, r.duration_ms,
            r.model, r.cache_read_tokens, r.cache_creation_tokens, r.tokens_confidence,
            r.tool_name, r.tool_detail, r.event_type, r.parent_tool_use_id
     FROM requests r
-    LEFT JOIN request_payloads p ON p.request_id = r.id
+    ${payloadJoin}
     WHERE r.session_id = ?
       AND r.turn_id IS NOT NULL
       AND r.type IN ('prompt', 'tool_call', 'response')

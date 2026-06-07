@@ -58,10 +58,15 @@ const EMPTY: SessionTurnsResult = { turns: [], prologue: [] };
 export async function fetchSessionTurns(
   sessionId: string | null | undefined,
   signal?: AbortSignal,
+  opts?: { includePayload?: boolean },
 ): Promise<SessionTurnsResult> {
   if (!sessionId) return EMPTY;
   try {
-    const url = `${API}/api/sessions/${encodeURIComponent(sessionId)}/turns`;
+    // turns-payload-lazy-load: 초기 진입은 includePayload=false 로 payload BLOB 없이 즉시 받고,
+    //   직후 background 로 includePayload=true(기본)를 다시 받아 payload 를 채운다(use-session-detail).
+    //   서버 기본은 payload 포함이므로 ?payload=0 일 때만 명시.
+    const qs = opts?.includePayload === false ? '?payload=0' : '';
+    const url = `${API}/api/sessions/${encodeURIComponent(sessionId)}/turns${qs}`;
     const res = await fetch(url, { signal: signal ?? AbortSignal.timeout(DEFAULT_TIMEOUT_MS) });
     if (!res.ok) return EMPTY;
     const json: unknown = await res.json();

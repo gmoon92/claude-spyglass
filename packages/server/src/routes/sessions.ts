@@ -106,7 +106,11 @@ export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
   //  - prompt 있으면 orphan을 첫 turn의 tool_calls/responses에 합쳐 normalizeTurns에 넘김
   if (path.match(/^\/api\/sessions\/[^\/]+\/turns$/) && method === 'GET') {
     const sessionId = path.split('/')[3];
-    const rawTurns = getTurnsBySession(db, sessionId);
+    // turns-payload-lazy-load: ?payload=0 면 payload BLOB 을 빼고 빠르게 반환(세션 전환 즉시 렌더).
+    //   클라이언트는 초기 fast(payload=0) → 직후 background full(기본) prefetch 로 payload 를 채운다.
+    //   기본값(파라미터 없음)은 payload 포함 — TUI·외부 소비자·background fetch 계약 불변.
+    const includePayload = url.searchParams.get('payload') !== '0';
+    const rawTurns = getTurnsBySession(db, sessionId, { includePayload });
     const rawOrphans = getOrphanRowsBySession(db, sessionId);
 
     if (rawTurns.length === 0 && rawOrphans.length > 0) {
