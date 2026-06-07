@@ -621,7 +621,7 @@ export function BrowseLayout(): ReactElement {
                     <col style={{ width: '48px' }} />
                     <col style={{ width: '48px' }} />
                     <col style={{ width: '52px' }} />
-                    <col style={{ width: '68px' }} />
+                    <col style={{ width: '90px' }} />
                     <col style={{ width: '88px' }} />
                   </colgroup>
                   <thead>

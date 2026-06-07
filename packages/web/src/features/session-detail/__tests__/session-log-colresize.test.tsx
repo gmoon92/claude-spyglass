@@ -48,9 +48,9 @@ const turnB: any = {
   ],
 };
 
-describe('LOG_TABLE_COLS 상수 = 원본 9컬럼 폭(turn-views.js:1004-1009)', () => {
-  it('너비 시퀀스 일치', () => {
-    expect(LOG_TABLE_COLS).toEqual(['100px', '88px', '120px', '130px', null, '48px', '48px', '52px', '68px']);
+describe('LOG_TABLE_COLS 상수 = 9컬럼 폭', () => {
+  it('너비 시퀀스 일치 (Duration 은 "DURATION" 헤더가 잘리지 않도록 90px)', () => {
+    expect(LOG_TABLE_COLS).toEqual(['100px', '88px', '120px', '130px', null, '48px', '48px', '52px', '90px']);
   });
 });
 

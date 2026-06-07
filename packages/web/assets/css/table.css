@@ -63,7 +63,14 @@ td.cell-token  {
 td.cell-sess   {
   font-family: var(--font-data);
   font-size: var(--text-data);
-  max-width: 120px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* 셀 너비(table-layout:fixed col)를 넘는 세션 ID 가 우측으로 새어나가지 않도록
+ * 링크 span 도 블록 클립 — slice(0,12)+'…' 가 col 보다 길 때 CSS ellipsis 로 추가 절단. */
+td.cell-sess .sess-id-link {
+  display: inline-block; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  vertical-align: bottom;
 }
 .sess-id-link  { cursor: pointer; color: var(--text-3); transition: color var(--dur-fast) var(--ease); }
 .sess-id-link:hover { color: var(--accent); text-decoration: underline dotted; }

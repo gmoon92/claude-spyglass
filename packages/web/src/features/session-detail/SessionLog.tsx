@@ -52,7 +52,7 @@ export const LOG_TABLE_COLS: ReadonlyArray<string | null> = [
   '48px', // in
   '48px', // out
   '52px', // Cache
-  '68px', // Duration
+  '90px', // Duration ("DURATION" uppercase 헤더가 잘리지 않는 최소폭)
 ];
 
 interface SessionLogProps {
