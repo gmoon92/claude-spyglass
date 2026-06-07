@@ -26,7 +26,7 @@ import {
   getAllRequests,
   getChildRequestsByParentToolUseId,
 } from '../queries/request/read';
-import { getTurnsBySession, getOrphanRowsBySession } from '../queries/request/turn';
+import { getTurnsBySession, getTurnPayloads, getOrphanRowsBySession } from '../queries/request/turn';
 import { createSession } from '../queries/session/write';
 import { deleteOldData } from '../queries/session/retention';
 import { listVisibleSessions } from '../domain/session-status';
@@ -152,6 +152,18 @@ describe('createRequest → payload 복원(JOIN)', () => {
     // 기본(includePayload 생략)은 여전히 payload 포함 — 계약 불변 재확인.
     const full = getTurnsBySession(db, 's1');
     expect(full[0].prompt!.payload).toBe(PROMPT_PAYLOAD);
+  });
+
+  test('getTurnPayloads: 단일 turn 행별 payload 만 배치 복원(on-demand lazy-load)', () => {
+    seedTurn('s1');
+    const rows = getTurnPayloads(db, 's1', 't1');
+    const byId = new Map(rows.map((r) => [r.id, r.payload]));
+    // t1 의 prompt/tool_call/response 3행 모두 payload 보유 → 평문 복원.
+    expect(byId.get('p1')).toBe(PROMPT_PAYLOAD);
+    expect(byId.get('tc1')).toBe(TOOL_PAYLOAD);
+    expect(byId.get('rs1')).toBe(RESP_PAYLOAD);
+    // 다른/없는 turn 은 빈 배열(세션 전체 선로딩 방지 — 요청한 turn 만).
+    expect(getTurnPayloads(db, 's1', 'no-such-turn')).toEqual([]);
   });
 
   test('getOrphanRowsBySession(turn_id IS NULL): payload 복원', () => {
