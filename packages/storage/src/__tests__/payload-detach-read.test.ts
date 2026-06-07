@@ -130,6 +130,30 @@ describe('createRequest → payload 복원(JOIN)', () => {
     expect(t.responses.find((r) => r.id === 'rs1')!.payload).toBe(RESP_PAYLOAD);
   });
 
+  test('getTurnsBySession({includePayload:false}): payload 생략(lazy-load fast path)·preview/구조 보존', () => {
+    // turns-payload-lazy-load: 세션 전환 초기 fast 경로는 payload BLOB JOIN 을 생략해 cold 디스크
+    //   I/O 를 피한다. 단 turn 구조(prompt/tool_call/response)와 preview 는 그대로여야 스파인·행
+    //   렌더에 회귀가 없다. payload 는 직후 background full fetch(기본 includePayload=true)로 채운다.
+    seedTurn('s1');
+    const turns = getTurnsBySession(db, 's1', { includePayload: false });
+    expect(turns.length).toBe(1);
+    const t = turns[0];
+    // 구조 보존 — full 과 동일하게 prompt/tool_call/response 가 결합.
+    expect(t.prompt!.id).toBe('p1');
+    expect(t.tool_calls.find((c) => c.id === 'tc1')).toBeDefined();
+    expect(t.responses.find((r) => r.id === 'rs1')).toBeDefined();
+    // payload 는 JOIN 생략으로 비포함(undefined/null).
+    expect(t.prompt!.payload ?? null).toBeNull();
+    expect(t.tool_calls.find((c) => c.id === 'tc1')!.payload ?? null).toBeNull();
+    expect(t.responses.find((r) => r.id === 'rs1')!.payload ?? null).toBeNull();
+    // preview 는 requests 본체라 보존(렌더 회귀 가드).
+    expect(t.prompt!.preview).toBe('prompt-preview');
+    expect(t.responses.find((r) => r.id === 'rs1')!.preview).toBe('resp-preview');
+    // 기본(includePayload 생략)은 여전히 payload 포함 — 계약 불변 재확인.
+    const full = getTurnsBySession(db, 's1');
+    expect(full[0].prompt!.payload).toBe(PROMPT_PAYLOAD);
+  });
+
   test('getOrphanRowsBySession(turn_id IS NULL): payload 복원', () => {
     createSession(db, { id: 's2', project_name: 'detach', started_at: Date.now() });
     // turn_id 미지정 → orphan(프롤로그) 행.
