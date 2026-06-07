@@ -23,7 +23,7 @@
 import type { Database } from 'bun:sqlite';
 import { metricsRouter } from '@spyglass/metrics';
 import { applyCorsHeaders } from '@spyglass/types';
-import { jsonResponse } from './routes/_shared';
+import { jsonResponse, compressResponse } from './routes/_shared';
 import { sessionsRouter } from './routes/sessions';
 import { requestsRouter } from './routes/requests';
 import { conversationsRouter } from './routes/conversations';
@@ -74,8 +74,9 @@ const SYNC_ROUTERS = [
  */
 export async function apiRouter(req: Request, db: Database): Promise<Response> {
   const res = await dispatchApi(req, db);
+  // CORS 먼저(Vary: Origin 부여) → gzip 협상(Vary 에 Accept-Encoding 병합). 순서 중요.
   applyCorsHeaders(res.headers, req);
-  return res;
+  return compressResponse(res, req);
 }
 
 /** 실제 도메인 라우터 fan-out (CORS 미부여 — apiRouter 가 단일 지점에서 부여). */

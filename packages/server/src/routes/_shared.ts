@@ -59,6 +59,55 @@ export function jsonResponse(body: ApiResponse, status = 200): Response {
   });
 }
 
+/**
+ * gzip 압축 임계값(byte). 이보다 작은 본문은 압축 이득 < CPU/헤더 오버헤드라 평문 유지.
+ * 일반적 MTU(~1500B) 근처 — 대부분의 작은 JSON 응답은 그대로 통과한다.
+ */
+const GZIP_MIN_BYTES = 1400;
+
+/**
+ * Accept-Encoding 협상 기반 gzip 응답 압축 — `/api/*` 응답 contract 의 cross-cutting 변환.
+ *
+ *   apiRouter(api.ts) 단일 choke point 에서만 호출된다. CORS 와 동일하게 "한 곳에서 일괄"
+ *   적용하는 응답 변환이며, 97개 jsonResponse 호출 측은 압축을 알 필요가 없다.
+ *
+ * 안전 가드(다른 기능 사이드이펙트 방지):
+ *   - SSE(/events)·프록시(/v1)·hook(/collect)·static 은 dispatch.ts 에서 apiRouter 를
+ *     거치지 않으므로 애초에 대상이 아니다 — 스트리밍/이벤트 본문을 버퍼링할 위험 없음.
+ *   - Accept-Encoding 에 gzip 이 없으면 평문 그대로(비-gzip 클라이언트 폴백).
+ *   - 이미 Content-Encoding 이 있으면 건너뜀(이중 압축 방지).
+ *   - Content-Type 이 JSON/text 가 아니면 건너뜀(이미 압축된 바이너리 등 무의미·역효과 방지).
+ *   - 본문이 임계값 미만이면 평문 유지.
+ *
+ * Vary: CORS 가 먼저 부여한 `Vary: Origin` 을 보존하며 `Accept-Encoding` 을 **병합**한다
+ *   (캐시 정합 — origin·encoding 둘 다에 따라 응답이 달라짐). 따라서 호출 순서는
+ *   applyCorsHeaders → compressResponse 여야 한다.
+ */
+export async function compressResponse(res: Response, req: Request): Promise<Response> {
+  if (res.headers.has('Content-Encoding')) return res;
+
+  const accept = req.headers.get('accept-encoding') ?? '';
+  if (!/\bgzip\b/i.test(accept)) return res;
+
+  const ctype = res.headers.get('Content-Type') ?? '';
+  if (!/application\/json|text\//i.test(ctype)) return res;
+
+  // 본문 버퍼링(여기 도달하는 응답은 jsonResponse 류 버퍼드 JSON — 스트리밍 아님).
+  const buf = new Uint8Array(await res.arrayBuffer());
+  if (buf.byteLength < GZIP_MIN_BYTES) {
+    // 본문은 이미 소비됐으므로 동일 헤더로 재구성(CORS 헤더 포함)해 평문 반환.
+    return new Response(buf, { status: res.status, headers: res.headers });
+  }
+
+  const gz = Bun.gzipSync(buf);
+  const headers = new Headers(res.headers); // ACAO·Vary:Origin·Content-Type 보존
+  headers.set('Content-Encoding', 'gzip');
+  const existingVary = headers.get('Vary');
+  headers.set('Vary', existingVary ? `${existingVary}, Accept-Encoding` : 'Accept-Encoding');
+  headers.delete('Content-Length'); // Bun 이 압축 길이로 재계산
+  return new Response(gz, { status: res.status, headers });
+}
+
 // =============================================================================
 // 라우터 시그니처
 // =============================================================================
