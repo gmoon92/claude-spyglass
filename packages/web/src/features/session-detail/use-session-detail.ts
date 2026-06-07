@@ -21,7 +21,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { computeNewRemindersByTurn, type ReminderTurn } from '../../lib/system-reminder';
-import { fetchSessionTurns, type TurnRow, type PrologueRow } from './turns-fetcher';
+import { fetchSessionTurns, fetchTurnPayloads, type TurnRow, type PrologueRow } from './turns-fetcher';
 import { useSSEStore } from '../../stores/sse-store';
 
 /** useSessionDetail 반환 — DetailView 가 필요한 props 묶음. */
@@ -58,6 +58,63 @@ function resolveActiveTurnId(turns: TurnRow[], current: string | null): string |
   return latest ? latest.turn_id : null;
 }
 
+/** 한 행(prompt/tool_call/response)에 payload 가 채워져 있는지. */
+function rowHasPayload(r: unknown): boolean {
+  return !!r && (r as { payload?: unknown }).payload != null;
+}
+
+/** turn 의 어느 행이라도 payload 를 가졌는지(on-demand 로드 필요 판정). */
+function turnHasPayload(turn: TurnRow | null | undefined): boolean {
+  if (!turn) return false;
+  const t = turn as { prompt?: unknown; tool_calls?: unknown[]; responses?: unknown[] };
+  if (rowHasPayload(t.prompt)) return true;
+  if (Array.isArray(t.tool_calls) && t.tool_calls.some(rowHasPayload)) return true;
+  if (Array.isArray(t.responses) && t.responses.some(rowHasPayload)) return true;
+  return false;
+}
+
+/** 행 배열에 id→payload 맵을 적용(가진 id 만 payload 채움). 불변 갱신. */
+function applyPayloads<T extends { id?: string }>(rows: T[] | undefined, byId: Map<string, string | null>): T[] | undefined {
+  if (!Array.isArray(rows)) return rows;
+  return rows.map((r) => (r.id != null && byId.has(r.id) ? { ...r, payload: byId.get(r.id) ?? null } : r));
+}
+
+/** 특정 turn 에 배치 payload(id→payload)를 병합한다(다른 turn 은 그대로). */
+function mergeTurnPayloads(turns: TurnRow[], turnId: string, byId: Map<string, string | null>): TurnRow[] {
+  return turns.map((turn) => {
+    if (turn.turn_id !== turnId) return turn;
+    const t = turn as TurnRow & { prompt?: { id?: string } | null; tool_calls?: { id?: string }[]; responses?: { id?: string }[] };
+    const prompt = t.prompt && t.prompt.id != null && byId.has(t.prompt.id)
+      ? { ...t.prompt, payload: byId.get(t.prompt.id) ?? null }
+      : t.prompt;
+    return { ...t, prompt, tool_calls: applyPayloads(t.tool_calls, byId), responses: applyPayloads(t.responses, byId) } as TurnRow;
+  });
+}
+
+/**
+ * 새 turns(payload 없음, 라이브 재fetch)에 이전 turns 의 행 payload 를 id 기준 보존 병합.
+ *   라이브 갱신 시 이미 on-demand 로 로드된 활성 turn 의 펼침 본문이 깜빡이지 않게 한다.
+ */
+function carryPayloads(next: TurnRow[], prev: TurnRow[]): TurnRow[] {
+  const byId = new Map<string, string | null>();
+  const collect = (turn: TurnRow): void => {
+    const t = turn as { prompt?: { id?: string; payload?: string | null } | null; tool_calls?: { id?: string; payload?: string | null }[]; responses?: { id?: string; payload?: string | null }[] };
+    const add = (r?: { id?: string; payload?: string | null } | null): void => { if (r && r.id != null && r.payload != null) byId.set(r.id, r.payload); };
+    add(t.prompt);
+    (t.tool_calls ?? []).forEach(add);
+    (t.responses ?? []).forEach(add);
+  };
+  prev.forEach(collect);
+  if (byId.size === 0) return next;
+  return next.map((turn) => {
+    const t = turn as TurnRow & { prompt?: { id?: string } | null; tool_calls?: { id?: string }[]; responses?: { id?: string }[] };
+    const prompt = t.prompt && t.prompt.id != null && byId.has(t.prompt.id)
+      ? { ...t.prompt, payload: byId.get(t.prompt.id) ?? null }
+      : t.prompt;
+    return { ...t, prompt, tool_calls: applyPayloads(t.tool_calls, byId), responses: applyPayloads(t.responses, byId) } as TurnRow;
+  });
+}
+
 /**
  * useSessionDetail — 선택 세션의 turns 를 로드하고 활성 턴·파생 메타를 제공.
  *  - sessionId 변경 시 직전 fetch abort + 활성 턴/turns 초기화(원본 loadSessionDetail 의 상태 리셋).
@@ -86,26 +143,19 @@ export function useSessionDetail(sessionId: string | null | undefined): UseSessi
     setExplicitTurnId(null);
     setLoading(true);
     (async () => {
-      // turns-payload-lazy-load (background prefetch):
-      //  1) fast — payload BLOB 없이 즉시 받아 렌더(세션 전환 cold 2s 의 주범인 비활성 turn
-      //     payload 디스크 I/O 를 초기 경로에서 제거). preview/tool_detail 로 스파인·행이 그대로 그려진다.
-      //  2) background — payload 포함 전체를 곧바로 다시 받아 turns 를 교체(클릭 펼침 본문·TaskUpdate
-      //     status 칩 등 payload 의존 요소 보강). 같은 controller 라 세션 전환 시 둘 다 자동 abort.
+      // turns-payload-lazy-load: payload BLOB 없이 즉시 받아 렌더한다(세션 전환 cold I/O 회피).
+      //   스파인은 payload 불요(비활성 turn=마커만), 활성 turn 행/펼침은 preview/tool_detail 폴백으로
+      //   기능적으로 렌더된다. payload 는 활성 turn 으로 전환될 때만 on-demand 로 채운다(아래 effect) —
+      //   세션 전체를 background 로 당기던 낭비 제거. 본 turn 만 로드하므로 세션 크기와 무관하게 일정.
       const fast = await fetchSessionTurns(sessionId, signal, { includePayload: false });
       if (signal.aborted) return;
       setTurns(fast.turns);
       setPrologue(fast.prologue);
       setLoading(false);
-      fetchSessionTurns(sessionId, signal, { includePayload: true })
-        .then((full) => {
-          if (signal.aborted || full.turns.length === 0) return; // 빈/에러면 fast 유지
-          setTurns(full.turns);
-          setPrologue(full.prologue);
-        })
-        .catch(() => { /* silent — fast 결과 유지(레거시 catch 동치) */ });
     })();
     return () => controller.abort();
   }, [sessionId]);
+
 
   // ── SSE 라이브 갱신(레거시 refreshDetailSession 등가, React 포트 미이식분 복원) ──
   //   진행 중 세션 상세를 보는 동안 새 요청이 SSE 로 도착하면(sse-store.feed 에 prepend), 그 세션의
@@ -134,10 +184,12 @@ export function useSessionDetail(sessionId: string | null | undefined): UseSessi
     }
     const ctrl = new AbortController();
     const id = setTimeout(() => {
-      fetchSessionTurns(sessionId, ctrl.signal)
+      // 라이브 재fetch 도 payload=0(낭비 회피). 이미 on-demand 로 로드된 활성 turn 의 payload 는
+      //   carryPayloads 로 보존 병합해 펼침 본문이 깜빡이지 않게 한다 — 빠진 turn 은 on-demand effect 가 채움.
+      fetchSessionTurns(sessionId, ctrl.signal, { includePayload: false })
         .then((result) => {
           if (ctrl.signal.aborted) return;
-          setTurns(result.turns);
+          setTurns((prev) => carryPayloads(result.turns, prev));
           setPrologue(result.prologue);
         })
         .catch(() => { /* silent — 레거시 refreshDetailSession catch 동치 */ });
@@ -155,6 +207,23 @@ export function useSessionDetail(sessionId: string | null | undefined): UseSessi
     () => turns.find((t) => t.turn_id === activeTurnId) ?? null,
     [turns, activeTurnId],
   );
+
+  // 활성 turn payload on-demand 로드 — 활성 turn 이 payload 를 아직 안 가졌으면 그 turn 의 행 payload 만
+  //   배치로 가져와 병합한다. hasPayload 로 가드하므로 (1) 병합 후 재실행 시 skip 되어 루프가 없고,
+  //   (2) 라이브 재fetch(payload=0)로 payload 가 비워지면 자동 재로드된다. 빈 응답이면 setTurns 미호출.
+  useEffect(() => {
+    if (!sessionId || !activeTurnId || !activeTurn) return;
+    if (turnHasPayload(activeTurn)) return;
+    const ctrl = new AbortController();
+    fetchTurnPayloads(sessionId, activeTurnId, ctrl.signal)
+      .then((rows) => {
+        if (ctrl.signal.aborted || rows.length === 0) return;
+        const byId = new Map(rows.map((r) => [r.id, r.payload]));
+        setTurns((prev) => mergeTurnPayloads(prev, activeTurnId, byId));
+      })
+      .catch(() => { /* silent — preview/tool_detail 폴백 유지 */ });
+    return () => ctrl.abort();
+  }, [sessionId, activeTurnId, activeTurn]);
 
   // 신규 reminder by turn — computeNewRemindersByTurn(turns) (turn-views.js:929).
   const remindersByTurn = useMemo(

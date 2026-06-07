@@ -77,3 +77,36 @@ export async function fetchSessionTurns(
     return EMPTY;
   }
 }
+
+/** 단일 turn 의 행별 payload(on-demand lazy-load 응답 행). */
+export interface TurnPayloadRow {
+  id: string;
+  payload: string | null;
+}
+
+const TurnPayloadsEnvelopeSchema = z
+  .object({ data: z.array(z.object({ id: z.string(), payload: z.string().nullable() })) })
+  .passthrough();
+
+/**
+ * GET /api/sessions/:id/turns/:turnId/payloads — 단일 turn 행별 payload 배치.
+ *   turns fast 응답(payload 미포함) 이후, 활성 turn 으로 전환될 때 그 turn 의 payload 만 가져온다.
+ *   실패/abort 는 빈 배열 폴백(렌더는 preview/tool_detail 로 이미 동작 — enrichment 누락만).
+ */
+export async function fetchTurnPayloads(
+  sessionId: string | null | undefined,
+  turnId: string | null | undefined,
+  signal?: AbortSignal,
+): Promise<TurnPayloadRow[]> {
+  if (!sessionId || !turnId) return [];
+  try {
+    const url = `${API}/api/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnId)}/payloads`;
+    const res = await fetch(url, { signal: signal ?? AbortSignal.timeout(DEFAULT_TIMEOUT_MS) });
+    if (!res.ok) return [];
+    const json: unknown = await res.json();
+    const parsed = TurnPayloadsEnvelopeSchema.safeParse(json);
+    return parsed.success ? parsed.data.data : [];
+  } catch {
+    return [];
+  }
+}

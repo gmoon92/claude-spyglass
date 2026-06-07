@@ -470,6 +470,39 @@ export function getTurnsBySession(
   return turns.reverse();
 }
 
+/**
+ * 단일 turn 의 행별 payload 만 배치 회수 (turns-payload-lazy-load on-demand).
+ *
+ *   getTurnsBySession 의 includePayload=false fast 경로는 payload 를 싣지 않는다. 사용자가 그 turn 을
+ *   활성화(스파인 마커/칩 클릭)하면 클라이언트가 이 함수를 통해 **그 turn 의 행 payload 만** 가져온다.
+ *   세션 전체 payload 를 background 로 당기던 낭비를 제거 — 실제로 본 turn 만 로드하므로 세션이 아무리
+ *   커져도 한 번에 한 turn(평균 수십 행) 만 디코드한다(무한 확장).
+ *
+ *   request_payloads(WITHOUT ROWID PK) INNER JOIN — payload 있는 행만 반환. 인덱스
+ *   idx_requests_session_turn_ts_active(session_id, turn_id) 가 행 id 수집을 커버(추가 인덱스 불요).
+ *   payload 는 decodeText SSoT 로 평문 복원(R3 암호화/zstd 분기 포함).
+ */
+export function getTurnPayloads(
+  db: Database,
+  sessionId: string,
+  turnId: string,
+): Array<{ id: string; payload: string | null }> {
+  const rows = db.query(`
+    SELECT r.id, p.payload, p.payload_algo
+    FROM requests r
+    JOIN request_payloads p ON p.request_id = r.id
+    WHERE r.session_id = ?
+      AND r.turn_id = ?
+      AND r.type IN ('prompt', 'tool_call', 'response')
+      AND ${ACTIVE_REQUEST_FILTER_SQL}
+  `).all(sessionId, turnId) as Array<{ id: string; payload: string | null; payload_algo: string | null }>;
+  const key = getActiveKey();
+  return rows.map((r) => ({
+    id: r.id,
+    payload: r.payload != null ? (decodeText(r.payload, r.payload_algo, key) ?? r.payload) : null,
+  }));
+}
+
 // =============================================================================
 // orphan(NULL turn_id) 행 조회 — ADR-001 P1 (session-prologue)
 // =============================================================================

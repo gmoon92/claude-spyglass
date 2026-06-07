@@ -35,6 +35,7 @@ import {
   getSessionsByProject,
   getSessionToolStats,
   getTurnsBySession,
+  getTurnPayloads,
   getOrphanRowsBySession,
   type Request,
   type TurnItem,
@@ -134,6 +135,18 @@ export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
       prologue: [],
       meta: { total: turns.length, prologue_count: 0 },
     });
+  }
+
+  // GET /api/sessions/:id/turns/:turnId/payloads — 단일 turn 행별 payload 배치(on-demand lazy-load).
+  //   turns(?payload=0) fast 응답엔 payload 가 없다. 활성 turn 으로 전환될 때 클라이언트가 그 turn 의
+  //   payload 만 이 경로로 가져온다 — 세션 전체 선로딩(낭비) 대체. 본 정규식이 /turns$ 보다 구체적이라
+  //   순서 무관(서로 다른 경로).
+  const turnPayloadsMatch = path.match(/^\/api\/sessions\/([^/]+)\/turns\/([^/]+)\/payloads$/);
+  if (turnPayloadsMatch && method === 'GET') {
+    const sessionId = decodeURIComponent(turnPayloadsMatch[1]);
+    const turnId = decodeURIComponent(turnPayloadsMatch[2]);
+    const data = getTurnPayloads(db, sessionId, turnId);
+    return jsonResponse({ success: true, data, meta: { total: data.length } });
   }
 
   // GET /api/sessions/:id/tool-stats
