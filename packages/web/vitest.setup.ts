@@ -143,3 +143,31 @@ if (typeof AbortSignal.timeout !== 'function') {
     },
   });
 }
+
+// ── @xyflow/react(ReactFlowProvider/Handle) jsdom 공백 보정 ──
+//
+// 이유: MetaDocsFlow 의 xyflow 노드/엣지 컴포넌트 테스트는 ReactFlowProvider 컨텍스트가 필요한데,
+//   xyflow 는 노드 치수 측정에 ResizeObserver, viewport transform 파싱에 DOMMatrixReadOnly 를 쓴다.
+//   jsdom 은 둘 다 미제공이라 Provider 마운트가 throw 한다. → TZ/webstorage/AbortSignal 과 동일한
+//   "머신·CI 무관 결정론" 인프라 보정(검증 의도 보존). 프로덕션은 브라우저 네이티브 사용 — 무영향.
+if (typeof (globalThis as { ResizeObserver?: unknown }).ResizeObserver !== 'function') {
+  class ResizeObserverStub {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  (globalThis as { ResizeObserver?: unknown }).ResizeObserver = ResizeObserverStub;
+}
+if (typeof (globalThis as { DOMMatrixReadOnly?: unknown }).DOMMatrixReadOnly !== 'function') {
+  // xyflow 가 읽는 최소 필드(m22=scale, m41/m42=translate)만 제공하는 항등 행렬 stub.
+  class DOMMatrixReadOnlyStub {
+    m11 = 1; m12 = 0; m21 = 0; m22 = 1; m41 = 0; m42 = 0;
+    constructor(_init?: string | number[]) {
+      void _init;
+    }
+  }
+  (globalThis as { DOMMatrixReadOnly?: unknown }).DOMMatrixReadOnly = DOMMatrixReadOnlyStub;
+  if (typeof (globalThis as { DOMMatrix?: unknown }).DOMMatrix !== 'function') {
+    (globalThis as { DOMMatrix?: unknown }).DOMMatrix = DOMMatrixReadOnlyStub;
+  }
+}

@@ -8,10 +8,13 @@ import { describe, it, expect } from 'vitest';
 import {
   computePositions,
   contentBBox,
+  reflowColumns,
   LAYOUT,
+  NODE_GAP_Y,
   type RawFlowNode,
   type FlowColumn,
   type PositionedNode,
+  type MeasuredSize,
 } from '../flow-layout';
 
 const RAW: RawFlowNode[] = [
@@ -55,6 +58,36 @@ describe('contentBBox — 노드 geometry 합집합 (flow.js:1142)', () => {
       { ...mk('b'), x: 200, y: 0, w: 80, h: 40 },
     ];
     expect(contentBBox(nodes)).toEqual({ x: 10, y: 0, width: 200 + 80 - 10, height: 50 + 20 - 0 });
+  });
+});
+
+describe('reflowColumns — 측정 width 로 컬럼 x 재배치 (구 MetaDocsFlow:591-617 순수 추출)', () => {
+  it('컬럼 max width 만큼 다음 컬럼 x 를 민다(자연폭 침범 방지)', () => {
+    const layers = [['a'], ['b']];
+    const measured = new Map<string, MeasuredSize>([
+      ['a', { w: 260, h: 56 }], // nodeW(180) 초과 → 다음 컬럼이 260 기준으로 밀림
+      ['b', { w: 120, h: 56 }],
+    ]);
+    const pos = reflowColumns(layers, measured);
+    expect(pos.get('a')).toEqual({ x: LAYOUT.leftPad, y: LAYOUT.topPad });
+    expect(pos.get('b')!.x).toBe(LAYOUT.leftPad + 260 + LAYOUT.colGap);
+  });
+
+  it('컬럼 내 노드는 측정 height + NODE_GAP_Y 누적 배치', () => {
+    const layers = [['a', 'b']];
+    const measured = new Map<string, MeasuredSize>([
+      ['a', { w: 180, h: 56 }],
+      ['b', { w: 180, h: 80 }],
+    ]);
+    const pos = reflowColumns(layers, measured);
+    expect(pos.get('a')!.y).toBe(LAYOUT.topPad);
+    expect(pos.get('b')!.y).toBe(LAYOUT.topPad + 56 + NODE_GAP_Y);
+  });
+
+  it('측정값 누락 시 LAYOUT 기본값 사용', () => {
+    const layers = [['a'], ['b']];
+    const pos = reflowColumns(layers, new Map());
+    expect(pos.get('b')!.x).toBe(LAYOUT.leftPad + LAYOUT.nodeW + LAYOUT.colGap);
   });
 });
 

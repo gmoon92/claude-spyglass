@@ -184,35 +184,21 @@
 }
 
 /* ============================================================================
-   Canvas — 격자 배경 + SVG (자동 스케일)
+   Canvas — xyflow(@xyflow/react) 캔버스 (구 .flow-canvas/.flow-svg 재타겟)
+   - 격자 점 배경은 .react-flow 컨테이너가 담당(viewport transform 무관 고정 배경 — 구 .flow-canvas 동치).
+   - 줌/팬/드래그·스크롤·커서(grab/grabbing)는 xyflow 가 내장(구 bindPan/.is-panning·overflow 스크롤 폐기).
    ============================================================================ */
-.meta-docs-flow-region .flow-canvas {
-  position: relative;
-  /* pan/zoom (2026-05-21): 빈영역 클릭+드래그로 viewBox 이동. grab/grabbing 커서로 즉시 어포던스 표시.
-     .is-panning은 bindPan이 mousedown 시 부여, mouseup에 제거. */
-  cursor: grab;
-  overflow: auto;
+.meta-docs-flow-region .react-flow {
   background-image: radial-gradient(var(--flow-grid-dot) 1px, transparent 1px);
   background-size: 16px 16px;
-  flex: 1;
-  min-height: 0;
-  /* split-scroll (2026-05-21): 영역 내부 스크롤바 — viewBox가 작아져 SVG가 컨테이너보다 커질 때 노출. */
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-strong) transparent;
 }
-.meta-docs-flow-region .flow-canvas::-webkit-scrollbar { width: 8px; height: 8px; }
-.meta-docs-flow-region .flow-canvas::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: var(--radius-sm);
+/* xyflow 노드 래퍼 — 기본 스타일 제거(우리 .node 가 외형 전담). 자연폭 = 내용폭(구 resizeNodeToContent 대체). */
+.meta-docs-flow-region .react-flow__node {
+  width: max-content;
+  font: inherit;
 }
-.meta-docs-flow-region .flow-canvas::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
-.meta-docs-flow-region .flow-canvas::-webkit-scrollbar-track { background: transparent; }
-.meta-docs-flow-region .flow-canvas.is-panning { cursor: grabbing; }
-.meta-docs-flow-region .flow-canvas svg.flow-svg {
-  display: block;
-  width: 100%; height: 100%;
-  /* SVG 자체에 명시적으로 grab 커서를 잡아도 좋지만, 노드 위에서는 .node의 cursor가 우선. */
-}
+/* 자연폭 상한 — 구 NODE_MAX_W(260, flow.js:572). 초과 시 .node 내부에서 줄바꿈(구 is-wrapped 대체). */
+.meta-docs-flow-region .node { max-width: 260px; }
 
 /* ============================================================================
    Edges — meta-docs-flow-strength (ADR-001/004/005/008)
@@ -526,12 +512,14 @@
 .edge-call  { stroke: var(--border-strong); stroke-width: 1.5; }
 .edge-after { stroke: var(--border-strong); stroke-width: 1.2; stroke-dasharray: 4 4; }
 
-/* ── 엣지 hover 임시 강조 (highlight.js 의 hover 채널) ───────────────────── */
-.flow-svg.is-hovering foreignObject:not(.is-highlighted) .node {
+/* ── 엣지 hover 임시 강조 (구 highlight.js hover 채널 — xyflow 재타겟) ─────────
+   구 `.flow-svg foreignObject.is-highlighted .node` → FlowNodeCard 가 .node 에 직접 is-highlighted 부여하므로
+   `.node.is-highlighted` 로, `.flow-svg.is-hovering` → 본체가 region 에 부여하는 `.meta-docs-flow-region.is-hovering` 로. */
+.meta-docs-flow-region.is-hovering .node:not(.is-highlighted) {
   opacity: 0.25;
   filter: blur(0.5px);
 }
-.flow-svg.is-hovering .edge:not(.is-highlighted) {
+.meta-docs-flow-region.is-hovering .edge:not(.is-highlighted) {
   stroke-opacity: 0.15;
 }
 
@@ -540,20 +528,20 @@
      - 클릭한 카드의 모든 조상/자손 path 지속 강조 (배경 click / 같은 카드 재click 으로 해제).
      - 비강조 요소는 opacity 0.2 로 톤다운 — 중심 흐름을 부각.
      - 강조 엣지는 stroke-dashoffset 이동 애니메이션으로 데이터 *흐름 방향성* 시각화. */
-.flow-svg.has-selection foreignObject:not(.is-highlighted) .node {
+.meta-docs-flow-region.has-selection .node:not(.is-highlighted) {
   opacity: 0.2;
   filter: blur(0.3px);
 }
-.flow-svg.has-selection .edge:not(.is-highlighted) {
+.meta-docs-flow-region.has-selection .edge:not(.is-highlighted) {
   stroke-opacity: 0.2;
 }
 
 /* 강조 요소 공통 — hover / click 두 채널 모두 동일 시각 어휘. */
-.flow-svg foreignObject.is-highlighted .node {
+.meta-docs-flow-region .node.is-highlighted {
   border-color: var(--accent);
   box-shadow: 0 2px 8px rgba(217, 119, 87, 0.25);
 }
-.flow-svg .edge.is-highlighted {
+.meta-docs-flow-region .edge.is-highlighted {
   stroke: var(--accent);
   stroke-width: 2.2;
   stroke-opacity: 1;
@@ -566,7 +554,7 @@
    흘러가는* 시각 효과 (양수 방향 이동은 반대로 보이므로 음수). 0.8s linear infinite.
 
    prefers-reduced-motion: reduce 환경에선 애니메이션 자동 차단 (접근성). */
-.flow-svg .edge.is-flowing {
+.meta-docs-flow-region .edge.is-flowing {
   stroke-dasharray: 6 4;
   animation: flow-edge-dash 0.8s linear infinite;
 }
@@ -575,7 +563,7 @@
   to   { stroke-dashoffset: -20; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .flow-svg .edge.is-flowing { animation: none; }
+  .meta-docs-flow-region .edge.is-flowing { animation: none; }
 }
 
 /* ── Sequential 모드 toolbar 변종 (ego 모드와 동일 룰 재활용 + 미세 보정) ── */

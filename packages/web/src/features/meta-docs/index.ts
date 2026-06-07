@@ -40,8 +40,31 @@ export {
 export { fetchProjectToolStats, type FetchProjectToolStatsParams } from './tool-stats-fetcher';
 // 프로젝트(source_root) 카탈로그 필터 — 좌측 프로젝트 선택 시 해당 경로 문서로 좁힘(순수 SSoT).
 export { filterMetaDocsByProject, isGlobalMetaDoc, metaDocProjectKey } from './project-filter';
-// flow 순수 lib (arch §4.2 추출 — 컴포넌트 effect 가 호출).
-export { computeFitView, animateToView, applyImmediate, easeInOutCubic, viewBoxStr, type ViewState } from './flow-camera';
+// flow 순수 lib (arch §4.2 추출 — 컴포넌트가 호출). flow-camera 는 xyflow viewport 내장으로 대체·폐기됨.
 export { collectFullPathNodes, collectHoverPathNodes, collectEdgesBetween, buildAdjacency, bfsCollect, type FlowEdge } from './flow-graph';
 export { computeEdgeD, chooseAnchors, anchorPoint, offsetOutward, EDGE_END_OFFSET, type FlowBox, type Side } from './flow-edge';
-export { computePositions, contentBBox, LAYOUT, type PositionedNode, type FlowColumn, type RawFlowNode } from './flow-layout';
+export {
+  computePositions,
+  contentBBox,
+  reflowColumns,
+  LAYOUT,
+  NODE_GAP_Y,
+  type PositionedNode,
+  type FlowColumn,
+  type RawFlowNode,
+  type MeasuredSize,
+} from './flow-layout';
+// xyflow 변환 어댑터 + 공유 타입(xyflow 재작성).
+export {
+  toFlowNodes,
+  toFlowEdges,
+  toGraphEdges,
+  FLOW_NODE_TYPE,
+  FLOW_EDGE_TYPE,
+  type UnifiedFlowPayload,
+  type RawFlowEdge,
+  type FlowNodeData,
+  type FlowEdgeData,
+  type FlowCardNode,
+  type FlowFlowEdge,
+} from './flow-adapter';

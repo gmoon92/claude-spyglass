@@ -121,6 +121,50 @@ export function computePositions(rawNodes: RawFlowNode[], columns: FlowColumn[])
     });
 }
 
+/** 컬럼 내 노드 수직 간격(px) — 구 MetaDocsFlow 재배치 루프의 `cursorY += h + 12` 상수. */
+export const NODE_GAP_Y = 12;
+
+/** 측정된 노드 크기(px) — xyflow ResizeObserver 측정값(node.measured) 주입용. */
+export interface MeasuredSize {
+  w: number;
+  h: number;
+}
+
+/**
+ * 자연폭 측정 후 컬럼 x 재배치 — 구 MetaDocsFlow.tsx:591-617 명령형 루프의 순수 추출(xyflow 재작성).
+ *
+ *  - 컬럼(layers[i])마다 측정 width 의 최대값(colMaxW, 최소 LAYOUT.nodeW)을 구해 다음 컬럼 x 를 민다
+ *    (자연폭이 넓은 카드가 다음 컬럼을 침범하지 않게 — 구 동치).
+ *  - 컬럼 내 노드는 위→아래로 측정 height + NODE_GAP_Y 누적 배치.
+ *  - 측정값이 없는 노드는 LAYOUT.nodeW/nodeH 기본값 사용(측정 전/누락 안전).
+ *  - 반환: id → {x,y}. 본체가 xyflow setNodes(position) 로 반영. (totalMaxBottom/viewBox 는 fitView 가 대체.)
+ *
+ * @param layers   컬럼별 노드 id 배열(columns.map(c => c.nodeIds)).
+ * @param measured 노드 id → 측정 크기. 동기 offsetWidth 루프(layout thrashing) 대신 xyflow 측정 주입.
+ */
+export function reflowColumns(
+  layers: ReadonlyArray<ReadonlyArray<string>>,
+  measured: ReadonlyMap<string, MeasuredSize>,
+): Map<string, { x: number; y: number }> {
+  const pos = new Map<string, { x: number; y: number }>();
+  let cursorX: number = LAYOUT.leftPad;
+  for (const ids of layers) {
+    let colMaxW: number = LAYOUT.nodeW;
+    for (const id of ids) {
+      const m = measured.get(id);
+      if (m && m.w > colMaxW) colMaxW = m.w;
+    }
+    let cursorY = LAYOUT.topPad;
+    for (const id of ids) {
+      pos.set(id, { x: cursorX, y: cursorY });
+      const m = measured.get(id);
+      cursorY += (m?.h ?? LAYOUT.nodeH) + NODE_GAP_Y;
+    }
+    cursorX += colMaxW + LAYOUT.colGap;
+  }
+  return pos;
+}
+
 /**
  * 노드 geometry 직접 합집합으로 콘텐츠 경계(SVG 좌표) 계산. (flow.js:1142)
  * getBBox(foreignObject) 의 브라우저 편차 회피 — 레이아웃 단계 확정값 사용.

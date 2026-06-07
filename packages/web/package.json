@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@xyflow/react": "^12.11.0",
     "i18next": "^26.3.0",
     "i18next-http-backend": "^4.0.0",
     "react": "^18.3.1",
