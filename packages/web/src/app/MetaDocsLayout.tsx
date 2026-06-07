@@ -264,7 +264,8 @@ export function MetaDocsLayout(): ReactElement {
   // 리사이저 결선(레거시 미결선 갭 — react-resize.md §2.2) — browse 와 동일 메커니즘 재사용.
   //   vTopHandleRef → #panelVerticalHandle(프로젝트 ↔ 요약카드), flowHandleRef → #metaDocsFlowHandle
   //   (flow ↔ 카탈로그), catalogAreaRef → .meta-docs-catalog-area. vProjectsRef → #browserProjectsSection.
-  const { vTopHandleRef, vProjectsRef, flowHandleRef, catalogAreaRef } = useMetaDocsPanelResize();
+  const { panelRef, widthHandleRef, vTopHandleRef, vProjectsRef, flowHandleRef, catalogAreaRef } =
+    useMetaDocsPanelResize();
   // 카탈로그 테이블 컬럼 리사이즈(원본 col-resize.js, storageKey='metadocs') — 테이블 ref 는 레이아웃 소유.
   const catalogTableRef = useRef<HTMLTableElement>(null);
 
@@ -445,7 +446,16 @@ export function MetaDocsLayout(): ReactElement {
           전제하므로, 자식이 2개뿐이면(이전 회귀) 테이블이 220px 트랙에 잘리고 요약카드가 auto 트랙에서 stretch 된다.
           따라서 레거시와 동일하게 #browserProjectsSection(panel-section flex-section > panel-body) +
           #panelVerticalHandle + #metaDocsSummaryCards 순서로 조립한다. */}
-      <aside className="left-panel" data-testid="meta-docs-sidebar">
+      <aside className="left-panel" data-testid="meta-docs-sidebar" ref={panelRef}>
+        {/* 수평 너비 드래그 핸들(absolute) — useMetaDocsPanelResize 가 mousedown/dblclick 결선.
+            browse 사이드바와 동일한 .panel-resize-handle(좌측 패널 너비 resize) — metadocs 모드에서
+            누락됐던 회귀를 복원. layout.css 가 --left-panel-width 를 모드 무관 적용한다. */}
+        <div
+          className="panel-resize-handle"
+          data-tip="Drag to resize · Double-click to fit content"
+          ref={widthHandleRef}
+        />
+
         {/* ── 프로젝트 섹션(원본 #browserProjectsSection) — panel-body 가 flex:1 + overflow-y:auto 로
             220px 고정 트랙 안에서 자체 스크롤(레거시 동치). 테이블을 직접 grid 자식으로 두면 self-scroll 이
             사라지고 row1 에 박혀 잘리던 회귀를 본 래퍼가 해소. ── */}

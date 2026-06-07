@@ -35,12 +35,27 @@ function mouse(type: string, clientY: number): MouseEvent {
   return new MouseEvent(type, { bubbles: true, cancelable: true, clientY });
 }
 
+/** 수평 드래그용 MouseEvent(clientX). */
+function mouseX(type: string, clientX: number): MouseEvent {
+  return new MouseEvent(type, { bubbles: true, cancelable: true, clientX });
+}
+
+/** getBoundingClientRect().width 스텁(jsdom 은 0 반환). */
+function stubRectWidth(el: Element, width: number): void {
+  Object.defineProperty(el, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({ width, height: 0, top: 0, left: 0, right: width, bottom: 0, x: 0, y: 0 }),
+  });
+}
+
 /** metadocs 좌측 패널 + flow/카탈로그 골격을 useMetaDocsPanelResize 와 함께 마운트. */
 function Host(): ReturnType<typeof createElement> {
-  const { vTopHandleRef, vProjectsRef, flowHandleRef, catalogAreaRef } = useMetaDocsPanelResize();
+  const { panelRef, widthHandleRef, vTopHandleRef, vProjectsRef, flowHandleRef, catalogAreaRef } =
+    useMetaDocsPanelResize();
   return createElement(
     'aside',
-    { className: 'left-panel' },
+    { className: 'left-panel', ref: panelRef },
+    createElement('div', { className: 'panel-resize-handle', ref: widthHandleRef }),
     createElement('div', { id: 'browserProjectsSection', ref: vProjectsRef }),
     createElement('div', { className: 'panel-vertical-handle', id: 'panelVerticalHandle', ref: vTopHandleRef }),
     createElement('div', { id: 'metaDocsSummaryCards' }),
@@ -60,6 +75,7 @@ beforeEach(() => {
   localStorage.clear();
   document.documentElement.style.removeProperty('--projects-panel-height');
   document.documentElement.style.removeProperty('--meta-docs-flow-height');
+  document.documentElement.style.removeProperty('--left-panel-width');
   document.body.dataset.appMode = 'metadocs'; // computeAvailable metadocs 분기 활성
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -75,6 +91,49 @@ function mount() {
   root = createRoot(container);
   act(() => root.render(createElement(Host)));
 }
+
+describe('useMetaDocsPanelResize — .panel-resize-handle(수평 너비 — metadocs 좌측 패널 resize 회귀 복원)', () => {
+  it('훅이 panelRef·widthHandleRef 를 제공한다(좌측 패널 너비 resize 결선 가능)', () => {
+    mount();
+    // 핸들 엘리먼트가 마운트되어 ref 가 결선됐는지 확인(미제공 시 metadocs 좌우 resize 누락 회귀).
+    expect(container.querySelector('.panel-resize-handle')).not.toBeNull();
+  });
+
+  it('드래그 시 --left-panel-width 가 갱신되고 mouseup 에 너비가 저장된다', () => {
+    mount();
+    const panel = container.querySelector('.left-panel')!;
+    const handle = container.querySelector('.panel-resize-handle')!;
+    stubRectWidth(panel, 224); // 시작 너비(design-tokens 기본).
+
+    act(() => handle.dispatchEvent(mouseX('mousedown', 100)));
+    // delta +100 → 324px. clamp(180, 480, 324)=324px (jsdom getComputedStyle 빈값 → 폴백 min/max).
+    act(() => document.dispatchEvent(mouseX('mousemove', 200)));
+    expect(document.documentElement.style.getPropertyValue('--left-panel-width')).toBe('324px');
+
+    // mouseup 후 panel 실측 너비를 'spyglass:panel-width' 로 저장(stub 224 → "224").
+    act(() => document.dispatchEvent(mouseX('mouseup', 200)));
+    expect(localStorage.getItem('spyglass:panel-width')).toBe('224');
+  });
+
+  it('clamp — min(180px) 이하로는 줄지 않는다', () => {
+    mount();
+    const panel = container.querySelector('.left-panel')!;
+    const handle = container.querySelector('.panel-resize-handle')!;
+    stubRectWidth(panel, 224);
+    act(() => handle.dispatchEvent(mouseX('mousedown', 300)));
+    // delta -300 → -76px → clamp 최소 180px.
+    act(() => document.dispatchEvent(mouseX('mousemove', 0)));
+    expect(document.documentElement.style.getPropertyValue('--left-panel-width')).toBe('180px');
+    act(() => document.dispatchEvent(mouseX('mouseup', 0)));
+  });
+
+  it('마운트 시 저장 너비 복원 — localStorage spyglass:panel-width → --left-panel-width', () => {
+    localStorage.setItem('spyglass:panel-width', '300');
+    mount();
+    // 300 은 [180,480] 범위 내 → 그대로 적용.
+    expect(document.documentElement.style.getPropertyValue('--left-panel-width')).toBe('300px');
+  });
+});
 
 describe('useMetaDocsPanelResize — #panelVerticalHandle(프로젝트 ↔ 요약카드)', () => {
   it('드래그 시 --projects-panel-height 가 갱신된다', () => {

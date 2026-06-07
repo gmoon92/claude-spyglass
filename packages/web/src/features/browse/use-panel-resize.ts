@@ -52,6 +52,62 @@ function setLeftPanelWidth(px: number): number {
 }
 
 /**
+ * 수평 너비 핸들 1개 결선(원본 initPanelResize 1:1) — browse·metadocs 좌측 패널 공용 SSoT.
+ *  - 저장 너비 복원(localStorage 'spyglass:panel-width', index.html preinit 이후 idempotent).
+ *  - mousedown→mousemove/mouseup 드래그로 --left-panel-width 갱신 + mouseup 시 저장.
+ *  - dblclick Auto-fit — 패널 내 가장 긴 콘텐츠(td/.sess-row-preview/.tool-main/.panel-label) + 28px 여유.
+ *  - 반환된 cleanup 으로 mousedown/dblclick 리스너 해제.
+ *
+ * browse 와 metadocs 가 동일 핸들 동작·동일 storage 키를 공유하므로 좌측 패널 너비가 모드 간 일관된다
+ * (layout.css grid-template-columns 가 --left-panel-width 를 모드 무관 적용).
+ */
+function wireWidthHandle(panel: HTMLElement, handle: HTMLElement): () => void {
+  // 저장된 너비 복원(원본: localStorage → setPanelWidth).
+  const saved = localStorage.getItem(WIDTH_STORAGE_KEY);
+  if (saved) setLeftPanelWidth(parseInt(saved, 10));
+
+  const onMouseDown = (e: MouseEvent): void => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = panel.getBoundingClientRect().width;
+    document.body.style.userSelect = 'none';
+    handle.classList.add('dragging');
+
+    const onMove = (ev: MouseEvent): void => {
+      setLeftPanelWidth(startW + (ev.clientX - startX));
+    };
+    const onUp = (): void => {
+      document.body.style.userSelect = '';
+      handle.classList.remove('dragging');
+      localStorage.setItem(WIDTH_STORAGE_KEY, String(Math.round(panel.getBoundingClientRect().width)));
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
+  // 더블클릭 Auto-fit — 패널 내 가장 긴 콘텐츠 너비에 맞춤(원본 measureMaxWidth + 28 여유).
+  const onDblClick = (e: MouseEvent): void => {
+    e.preventDefault();
+    const targets = panel.querySelectorAll('td, .sess-row-preview, .tool-main, .panel-label');
+    let maxW = 0;
+    targets.forEach((el) => {
+      maxW = Math.max(maxW, (el as HTMLElement).scrollWidth);
+    });
+    const fitted = setLeftPanelWidth(maxW + 28);
+    localStorage.setItem(WIDTH_STORAGE_KEY, String(Math.round(fitted)));
+  };
+
+  handle.addEventListener('mousedown', onMouseDown);
+  handle.addEventListener('dblclick', onDblClick);
+  return () => {
+    handle.removeEventListener('mousedown', onMouseDown);
+    handle.removeEventListener('dblclick', onDblClick);
+  };
+}
+
+/**
  * 두 섹션 가용 높이(원본 computeAvailable 1:1).
  *  - normal path(browse, 그리고 metadocs flow↔카탈로그): topEl + bottomEl 합.
  *  - metadocs 좌측 패널(프로젝트 ↔ 요약카드): 하단 요약카드(~50px)가 너무 작아 available-MIN_PX<MIN_PX
@@ -159,55 +215,12 @@ export function usePanelResize(): UsePanelResizeRefs {
   const vSessionsRef = useRef<HTMLDivElement>(null);
   const vToolsRef = useRef<HTMLDivElement>(null);
 
-  // ── 수평 너비 드래그 + 더블클릭 Auto-fit(원본 initPanelResize). ──
+  // ── 수평 너비 드래그 + 더블클릭 Auto-fit(원본 initPanelResize) — wireWidthHandle SSoT. ──
   useEffect(() => {
     const panel = panelRef.current;
     const handle = widthHandleRef.current;
     if (!panel || !handle) return;
-
-    // 저장된 너비 복원(원본: localStorage → setPanelWidth). index.html preinit 이후 idempotent.
-    const saved = localStorage.getItem(WIDTH_STORAGE_KEY);
-    if (saved) setLeftPanelWidth(parseInt(saved, 10));
-
-    const onMouseDown = (e: MouseEvent): void => {
-      e.preventDefault();
-      const startX = e.clientX;
-      const startW = panel.getBoundingClientRect().width;
-      document.body.style.userSelect = 'none';
-      handle.classList.add('dragging');
-
-      const onMove = (ev: MouseEvent): void => {
-        setLeftPanelWidth(startW + (ev.clientX - startX));
-      };
-      const onUp = (): void => {
-        document.body.style.userSelect = '';
-        handle.classList.remove('dragging');
-        localStorage.setItem(WIDTH_STORAGE_KEY, String(Math.round(panel.getBoundingClientRect().width)));
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-      };
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    };
-
-    // 더블클릭 Auto-fit — 패널 내 가장 긴 콘텐츠 너비에 맞춤(원본 measureMaxWidth + 28 여유).
-    const onDblClick = (e: MouseEvent): void => {
-      e.preventDefault();
-      const targets = panel.querySelectorAll('td, .sess-row-preview, .tool-main, .panel-label');
-      let maxW = 0;
-      targets.forEach((el) => {
-        maxW = Math.max(maxW, (el as HTMLElement).scrollWidth);
-      });
-      const fitted = setLeftPanelWidth(maxW + 28);
-      localStorage.setItem(WIDTH_STORAGE_KEY, String(Math.round(fitted)));
-    };
-
-    handle.addEventListener('mousedown', onMouseDown);
-    handle.addEventListener('dblclick', onDblClick);
-    return () => {
-      handle.removeEventListener('mousedown', onMouseDown);
-      handle.removeEventListener('dblclick', onDblClick);
-    };
+    return wireWidthHandle(panel, handle);
   }, []);
 
   // ── 수직 분할 #1: 프로젝트 ↔ 세션(원본 initPanelVerticalResize). ──
@@ -232,6 +245,10 @@ export function usePanelResize(): UsePanelResizeRefs {
 }
 
 export interface UseMetaDocsPanelResizeRefs {
+  /** .left-panel aside — 수평 드래그 기준 너비 측정 + Auto-fit 콘텐츠 측정 대상. */
+  panelRef: RefObject<HTMLElement>;
+  /** .panel-resize-handle — 수평 너비 드래그 핸들(browse 와 동일 동작·storage 키). */
+  widthHandleRef: RefObject<HTMLDivElement>;
   /** #panelVerticalHandle(metadocs) — 프로젝트 섹션 ↔ 요약카드 상하 분할 핸들. */
   vTopHandleRef: RefObject<HTMLDivElement>;
   /** #browserProjectsSection — 프로젝트 섹션(top 핸들의 위쪽). */
@@ -252,10 +269,22 @@ export interface UseMetaDocsPanelResizeRefs {
  * browse 의 usePanelResize 와 동일한 wireVerticalHandle 을 재사용하므로 시그니처/동작은 변하지 않는다.
  */
 export function useMetaDocsPanelResize(): UseMetaDocsPanelResizeRefs {
+  const panelRef = useRef<HTMLElement>(null);
+  const widthHandleRef = useRef<HTMLDivElement>(null);
   const vTopHandleRef = useRef<HTMLDivElement>(null);
   const vProjectsRef = useRef<HTMLDivElement>(null);
   const flowHandleRef = useRef<HTMLDivElement>(null);
   const catalogAreaRef = useRef<HTMLDivElement>(null);
+
+  // ── 수평 너비 드래그 + 더블클릭 Auto-fit(원본 initPanelResize) — browse 와 동일 wireWidthHandle SSoT.
+  //   metadocs 좌측 패널 너비 resize 회귀(핸들 미렌더) 복원: layout.css 가 --left-panel-width 를 모드 무관
+  //   적용하므로 browse 와 동일 메커니즘으로 결선된다. ──
+  useEffect(() => {
+    const panel = panelRef.current;
+    const handle = widthHandleRef.current;
+    if (!panel || !handle) return;
+    return wireWidthHandle(panel, handle);
+  }, []);
 
   // ── 프로젝트 섹션 ↔ 요약카드(원본 initPanelVerticalResize, metadocs 좌측). ──
   //   bottomEl(요약카드)은 MetaDocsSummaryCards 소유(#metaDocsSummaryCards)라 id 로 resolve.
@@ -278,5 +307,5 @@ export function useMetaDocsPanelResize(): UseMetaDocsPanelResizeRefs {
     return wireVerticalHandle(handle, topEl, bottomEl, META_FLOW_HEIGHT_VAR, META_FLOW_STORAGE_KEY);
   }, []);
 
-  return { vTopHandleRef, vProjectsRef, flowHandleRef, catalogAreaRef };
+  return { panelRef, widthHandleRef, vTopHandleRef, vProjectsRef, flowHandleRef, catalogAreaRef };
 }

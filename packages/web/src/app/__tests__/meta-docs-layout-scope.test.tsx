@@ -134,6 +134,15 @@ describe('MetaDocsLayout — metadocs 프로젝트 클릭 = 카탈로그 스코�
     expect(container.querySelector('.bar-fill')).toBeNull();
   });
 
+  it('좌측 패널에 수평 너비 resize 핸들(.panel-resize-handle)을 렌더한다(metadocs 좌우 resize 회귀 방지)', async () => {
+    await mountLayout();
+    const sidebar = container.querySelector('[data-testid="meta-docs-sidebar"]')!;
+    expect(sidebar).not.toBeNull();
+    // browse 사이드바와 동일하게 좌측 패널 너비 드래그 핸들이 좌측 패널 직계로 존재해야 한다.
+    const handle = sidebar.querySelector('.panel-resize-handle');
+    expect(handle).not.toBeNull();
+  });
+
   it('프로젝트 행 클릭 → selectedProject 갱신 + 카탈로그를 ?project=alpha 로 재fetch(세션/detail 이동 없음)', async () => {
     await mountLayout();
     const before = metaDocsUrls.length;
