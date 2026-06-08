@@ -89,6 +89,7 @@ export interface MetaDocUsageRow {
   total_duration_ms: number;
   last_used_at: number | null;
   first_used_at: number | null;
+  first_seen_at: number | null;  // 카탈로그 등록 시각 (호출 0회여도 non-null) — STALE 판정용
   deleted_at: number | null;
 }
 
@@ -395,6 +396,7 @@ export function listMetaDocsWithUsage(
       COALESCE(u.total_duration_ms, 0)  AS total_duration_ms,
       u.last_used_at    AS last_used_at,
       u.first_used_at   AS first_used_at,
+      d.first_seen_at   AS first_seen_at,
       d.deleted_at      AS deleted_at
     FROM meta_documents d
     LEFT JOIN usage u
@@ -405,7 +407,7 @@ export function listMetaDocsWithUsage(
     SELECT
       NULL, u.type, u.name, NULL, NULL, NULL, NULL, NULL,
       u.invocations, u.total_tokens, u.total_duration_ms,
-      u.last_used_at, u.first_used_at, NULL
+      u.last_used_at, u.first_used_at, NULL, NULL
     FROM usage u
     WHERE NOT EXISTS (
       SELECT 1 FROM meta_documents d2
