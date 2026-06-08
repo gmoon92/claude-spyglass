@@ -58,9 +58,9 @@ function readShallowDismissed(): boolean {
  * 라우터 컨텍스트 안에서 마운트해야 한다(useLocation/AppModeSync 의존).
  */
 export function AppShell({ children }: { children: ReactNode }): ReactElement {
-  // i18n(태스크 #12) — 언어 변경 시 chrome 재렌더 구독. t 는 i18next(미스 키는 window.I18n 폴백).
-  //   memo 된 chrome(UpdateBadge/UpdateModal/DashboardWarning)에 t={t} 로 주입 → 언어 변경 시 t ref 변화로
-  //   memo 가 풀려 라벨이 갱신된다(t={t} 안정 ref 였다면 memo 가 막아 stale).
+  // i18n — react-i18next 단일 경로. chrome 컴포넌트(AppRail/ErrorBanner/Footer/UpdateBadge/UpdateModal/
+  //   DashboardWarning/KeyboardHelpModal)는 각자 useTranslation 으로 직접 구독한다(무전역). 본 셸은
+  //   자기 JSX(사이드바 토글 버튼 aria/title)에서만 t 를 직접 쓴다.
   const { t } = useTranslation();
   const location = useLocation();
   const setAppMode = useAppStore((s) => s.setAppMode);

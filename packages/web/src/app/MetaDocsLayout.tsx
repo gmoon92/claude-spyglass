@@ -162,10 +162,10 @@ function MetaCatalogColResize({ tableRef }: { tableRef: RefObject<HTMLTableEleme
 }
 
 export function MetaDocsLayout(): ReactElement {
-  // i18n — react-i18next 단일 경로. i18n.language 를 labeler 의존성으로 memo 된 자식(MetaProjectList 등)
-  //   갱신 + 직접 t() 는 재렌더로 재평가. reload 불요.
+  // i18n — react-i18next 단일 경로. 자식 컴포넌트는 각자 useTranslation 으로 직접 구독한다(무전역).
+  //   본 셸은 자기 JSX(프로젝트 테이블 헤더·탭 라벨·검색 placeholder 등)에서만 t 를 직접 쓴다. reload 불요.
   const { t: tBase, i18n } = useTranslation();
-  // 패널/라벨러 TFunc prop + 직접 호출 통일 — react-i18next t 를 (key,vars)=>string 으로 래핑.
+  // tx — react-i18next t 를 (key,vars)=>string 으로 래핑(비-JSX 호출처 시그니처 통일).
   const tx = useCallback(
     (key: string, vars?: Record<string, unknown>): string => tBase(key, vars) as unknown as string,
     [tBase],

@@ -36,7 +36,7 @@ export interface FilterGroup {
 
 /**
  * 그룹/항목 구조 SSoT — 원본 filter-bar.js getFilterGroups() 의 키/그룹 토폴로지 1:1.
- * 라벨/타이틀/aria 텍스트는 i18n 이라 여기 두지 않고 labeler 로 지연 평가(locale 전환 즉시 반영).
+ * 라벨/타이틀/aria 텍스트는 i18n 이라 여기 두지 않고 컴포넌트 내부 useTranslation 으로 해석(locale 전환 즉시 반영).
  */
 export const FILTER_GROUPS: FilterGroup[] = [
   { group: 'all', hasAria: false, items: [{ key: 'all', hasTitle: false }] },

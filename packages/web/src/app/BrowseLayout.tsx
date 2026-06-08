@@ -76,11 +76,10 @@ const FALLBACK_TOKENS: ChartTokens = {
 type FeedRowLike = { id?: string | null; [k: string]: unknown };
 
 export function BrowseLayout(): ReactElement {
-  // i18n — react-i18next 단일 경로. i18n.language 를 labeler useMemo 의존성으로 사용해 memo 된 자식
-  //   (BrowseSidebar→MemoProjectList/MemoSessionList · 메모 Chart)에 새 labeler ref 를 전달, reload 없이 갱신.
+  // i18n — react-i18next 단일 경로. 자식 컴포넌트는 각자 useTranslation 으로 직접 구독한다(무전역).
+  //   본 셸은 자기 JSX(차트 섹션 라벨·donutCache 데이터 라벨·SearchBox clearLabel)에서만 t 를 직접 쓴다.
   const { t: tBase, i18n } = useTranslation();
-  // 라벨러 TFunc prop + 직접 호출 통일 — react-i18next t 를 (key,vars)=>string 으로 래핑.
-  //   labeler useMemo 들은 i18n.language 를 이미 deps 로 가져(언어전환 시 재생성) tx 클로저도 함께 갱신된다.
+  // tx — react-i18next t 를 (key,vars)=>string 으로 래핑(데이터 라벨/clearLabel 등 비-JSX 호출처 시그니처 통일).
   const tx = useCallback(
     (key: string, vars?: Record<string, unknown>): string => tBase(key, vars) as unknown as string,
     [tBase],
