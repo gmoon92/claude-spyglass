@@ -76,7 +76,7 @@ export function SessionDetailHeader({
   const hasCtxSat = !!contextSaturationInfo(contextSaturation);
   const showTurnHint = Number.isFinite(turnCount) && (turnCount as number) >= 20;
   const turnHint = showTurnHint
-    ? t('ui.detail-view.turn-count-hint', { count: turnCount as number })
+    ? t('ui:detail-view.turn-count-hint', { count: turnCount as number })
     : '';
   const badgesHidden = !hasBloated && !hasCtxSat && !showTurnHint;
 
@@ -88,11 +88,11 @@ export function SessionDetailHeader({
       <span id="detailProject">{projectName ?? ''}</span>
       <span id="detailTokens">
         {totalTokens != null
-          ? t('ui.detail-view.total-tokens', { tokens: fmtToken(totalTokens) })
+          ? t('ui:detail-view.total-tokens', { tokens: fmtToken(totalTokens) })
           : ''}
       </span>
       <span id="detailEndedAt">
-        {endedAt ? t('ui.detail-view.ended-at', { time: fmtDate(endedAt) }) : ''}
+        {endedAt ? t('ui:detail-view.ended-at', { time: fmtDate(endedAt) }) : ''}
       </span>
       <div
         id="detailBadges"

@@ -11,7 +11,7 @@
  *  - 명령형 createFilterBar(controller 반환, 내부 active 상태) → controlled React 컴포넌트.
  *    active(현재 필터 키)는 호출처가 app-store(feedFilter/detailFilter)에서 주입.
  *    클릭 시 onChange(key) 통지 → 호출처가 setFeedFilter/setDetailFilter 로 스토어 갱신.
- *  - 전역 window.I18n 의존 제거 → labeler(라벨/타이틀/그룹aria) 명시 prop 주입(무전역).
+ *  - i18n 은 react-i18next useTranslation 으로 직접 구독(ui.filter-bar.* 키). 언어 전환 자동 재렌더.
  *  - data-strength 는 원본 renderFilterBtn 기본 'soft'(filter-bar.js:48) 보존.
  *
  * 셀렉터 계약 유지(arch §2.2): filter-group(--{group}) / type-filter-btn / type-filter-{key}
@@ -19,6 +19,7 @@
  *
  * @module components/FilterBar
  */
+import { useTranslation } from 'react-i18next';
 
 /** 필터 항목 — 키 + title 보유 여부(원본 filter-bar.js item 형태). */
 export interface FilterItem {
@@ -59,35 +60,32 @@ export const FILTER_GROUPS: FilterGroup[] = [
   },
 ];
 
-/** i18n 라벨러 — 컴포넌트 무전역. 호출처(features/app)가 react-i18next t 를 감싸 주입. */
-export interface FilterBarLabeler {
-  /** 그룹 aria-label(request/tool 만 호출됨). */
-  groupAria: (group: string) => string;
-  /** 항목 표시 라벨. */
-  itemLabel: (key: string) => string;
-  /** 항목 title(hasTitle=true 인 항목만 호출). */
-  itemTitle: (key: string) => string;
-}
-
 export interface FilterBarProps {
   /** data-* 속성 접미사(예: 'feed-filter' / 'detail-filter'). 셀렉터 계약. */
   dataAttr: string;
   /** 현재 활성 필터 키(controlled). 호출처가 app-store 슬라이스에서 주입. */
   active: string;
-  /** i18n 라벨러. */
-  labeler: FilterBarLabeler;
   /** 필터 변경 통지. 호출처가 setFeedFilter/setDetailFilter 로 스토어 갱신. */
   onChange?: (filter: string) => void;
 }
 
-export function FilterBar({ dataAttr, active, labeler, onChange }: FilterBarProps) {
+/** 필터 키(data-type 계약, 'tool_call') → i18n 키 세그먼트(하이픈 'tool-call'). 원본 filter-bar.js 매핑 1:1. */
+function i18nKeySeg(key: string): string {
+  return key.replace(/_/g, '-');
+}
+
+export function FilterBar({ dataAttr, active, onChange }: FilterBarProps) {
+  const { t } = useTranslation();
+  // 그룹 aria: request→request-type / tool→tool-category(원본 filter-bar.js:15,23).
+  const groupAria = (group: string) =>
+    t(group === 'request' ? 'ui:filter-bar.request-type' : 'ui:filter-bar.tool-category');
   return (
     <>
       {FILTER_GROUPS.map((g) => (
         <div
           key={g.group}
           className={`filter-group filter-group--${g.group}`}
-          {...(g.hasAria ? { 'aria-label': labeler.groupAria(g.group) } : {})}
+          {...(g.hasAria ? { 'aria-label': groupAria(g.group) } : {})}
         >
           {g.items.map((item) => {
             const isActive = item.key === active;
@@ -101,10 +99,10 @@ export function FilterBar({ dataAttr, active, labeler, onChange }: FilterBarProp
                 aria-pressed={isActive ? 'true' : 'false'}
                 data-strength="soft"
                 {...{ [`data-${dataAttr}`]: item.key }}
-                {...(item.hasTitle ? { title: labeler.itemTitle(item.key) } : {})}
+                {...(item.hasTitle ? { title: t(`ui:filter-bar.${i18nKeySeg(item.key)}-title`) } : {})}
                 onClick={() => onChange?.(item.key)}
               >
-                {labeler.itemLabel(item.key)}
+                {t(`ui:filter-bar.${i18nKeySeg(item.key)}`)}
               </button>
             );
           })}

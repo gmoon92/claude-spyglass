@@ -26,9 +26,9 @@ beforeAll(() => {
 beforeEach(() => {
   globalThis.__setTestT?.((key) => {
     const map: Record<string, string> = {
-      'session.rows.empty-message': '메시지 없음',
-      'ui.main.expand.copy': '복사',
-      'ui.main.expand.copied': '✓복사됨',
+      'session:rows.empty-message': '메시지 없음',
+      'ui:main.expand.copy': '복사',
+      'ui:main.expand.copied': '✓복사됨',
     };
     return map[key] ?? key;
   });

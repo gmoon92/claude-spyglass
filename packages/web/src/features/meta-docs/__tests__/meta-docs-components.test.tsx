@@ -5,7 +5,7 @@
  * 셀렉터 계약을 renderToStaticMarkup 으로 고정한다. 컨트롤드(props) — store 무참조 leaf.
  * getCollator(getLocale) 결정론을 위해 'en' 로케일 고정.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { i18next } from '../../../lib/i18n';
 import { MetaDocsCatalog } from '../MetaDocsCatalog';
@@ -17,12 +17,16 @@ import type { MetaDocRow } from '../meta-docs-sort';
 beforeAll(async () => { await i18next.changeLanguage('en'); });
 afterAll(async () => { await i18next.changeLanguage('ko'); });
 
-// vars 보간하는 t prop — {placeholder} 를 치환(empty-project 안내가 project 주입 검증).
-const t = (key: string, vars?: Record<string, unknown>) => {
-  let out = `t:${key}`;
-  if (vars) for (const [k, v] of Object.entries(vars)) out += ` ${k}=${String(v)}`;
-  return out;
-};
+// 컴포넌트는 useTranslation 으로 t 를 자체 구독한다(prop 주입 폐기). 테스트 t 는 vitest.setup
+//   __setTestT 로 주입 — 키 passthrough + vars 를 ` k=v` 로 부착(empty-project 가 project 주입 검증).
+//   afterEach 자동 복원 대응으로 각 테스트 전 재주입.
+beforeEach(() => {
+  globalThis.__setTestT?.((key, vars) => {
+    let out = key;
+    if (vars) for (const [k, v] of Object.entries(vars)) out += ` ${k}=${String(v)}`;
+    return out;
+  });
+});
 
 const ROWS: MetaDocRow[] = [
   { id: 1, type: 'agent', name: 'designer', source: 'projectSettings', source_root: '/proj/a', file_path: '/proj/a/designer.md', invocations: 12, last_used_at: 1_700_000_000_000, total_tokens: 3400, description: 'desc here' },
@@ -55,58 +59,58 @@ describe('MetaDocTypeBadge — 타입 칩 SSoT (view.js:811)', () => {
 // ── MetaDocsCatalog ──────────────────────────────────────────────────────────────
 describe('MetaDocsCatalog — 테이블 마크업 (view.js:682-704)', () => {
   it('빈 rows → state-empty (global)', () => {
-    const html = renderToStaticMarkup(<MetaDocsCatalog rows={[]} t={t} />);
+    const html = renderToStaticMarkup(<MetaDocsCatalog rows={[]} />);
     expect(html).toContain('state-empty');
     expect(html).not.toContain('meta-docs-table');
   });
   it('빈 rows + project 미매칭 → empty-project 안내', () => {
-    const html = renderToStaticMarkup(<MetaDocsCatalog rows={[]} project="myproj" matched={false} t={t} />);
+    const html = renderToStaticMarkup(<MetaDocsCatalog rows={[]} project="myproj" matched={false} />);
     expect(html).toContain('state-empty');
     expect(html).toContain('myproj');
   });
   it('rows → meta-docs-table + 6 thead 컬럼', () => {
-    const html = renderToStaticMarkup(<MetaDocsCatalog rows={ROWS} t={t} />);
+    const html = renderToStaticMarkup(<MetaDocsCatalog rows={ROWS} />);
     expect(html).toContain('meta-docs-table');
     expect((html.match(/data-meta-sort=/g) ?? []).length).toBe(6);
     expect(html).toContain('data-meta-sort="invocations"');
     expect(html).toContain('data-meta-sort="last_used_at"');
   });
   it('행 → meta-doc-row + data-type/data-name (view.js:786)', () => {
-    const html = renderToStaticMarkup(<MetaDocsCatalog rows={ROWS} t={t} />);
+    const html = renderToStaticMarkup(<MetaDocsCatalog rows={ROWS} />);
     expect(html).toContain('data-name="designer"');
     expect(html).toContain('data-type="agent"');
   });
   it('orphan 행(id null) → meta-doc-orphan + 경로 라벨 (orphan 필터에서만 노출)', () => {
     // orphan 은 기본 all 목록에서 제외되므로 orphan 필터로 명시해야 노출된다.
-    const html = renderToStaticMarkup(<MetaDocsCatalog rows={ROWS} display="orphan" t={t} />);
+    const html = renderToStaticMarkup(<MetaDocsCatalog rows={ROWS} display="orphan" />);
     expect(html).toContain('meta-doc-orphan');
     expect(html).toContain('meta-doc-source-orphan');
   });
   it('unused 행(inv 0, id!=null) → meta-doc-unused', () => {
-    const html = renderToStaticMarkup(<MetaDocsCatalog rows={ROWS} t={t} />);
+    const html = renderToStaticMarkup(<MetaDocsCatalog rows={ROWS} />);
     expect(html).toContain('meta-doc-unused');
   });
   it('정렬 상태 prop → 해당 th aria-sort/sort-desc', () => {
     const html = renderToStaticMarkup(
-      <MetaDocsCatalog rows={ROWS} sort={{ key: 'invocations', dir: 'desc' }} t={t} />,
+      <MetaDocsCatalog rows={ROWS} sort={{ key: 'invocations', dir: 'desc' }} />,
     );
     expect(html).toContain('aria-sort="descending"');
     expect(html).toContain('sort-desc');
   });
   it('정렬 적용 → 행 순서 (invocations desc: designer(12),committer(0); orphan ghost 는 all 에서 제외)', () => {
     const html = renderToStaticMarkup(
-      <MetaDocsCatalog rows={ROWS} sort={{ key: 'invocations', dir: 'desc' }} t={t} />,
+      <MetaDocsCatalog rows={ROWS} sort={{ key: 'invocations', dir: 'desc' }} />,
     );
     const order = [...html.matchAll(/data-name="([^"]+)"/g)].map((m) => m[1]);
     expect(order).toEqual(['designer', 'committer']);
   });
   it('display=unused 필터 → committer 만', () => {
-    const html = renderToStaticMarkup(<MetaDocsCatalog rows={ROWS} display="unused" t={t} />);
+    const html = renderToStaticMarkup(<MetaDocsCatalog rows={ROWS} display="unused" />);
     const order = [...html.matchAll(/data-name="([^"]+)"/g)].map((m) => m[1]);
     expect(order).toEqual(['committer']);
   });
   it('searchTerm 필터 → 비매칭 행 hidden 속성 (view.js:1019 동치)', () => {
-    const html = renderToStaticMarkup(<MetaDocsCatalog rows={ROWS} searchTerm="design" t={t} />);
+    const html = renderToStaticMarkup(<MetaDocsCatalog rows={ROWS} searchTerm="design" />);
     // designer 만 visible — committer 는 hidden. ghost(orphan)는 all 에서 이미 제외되어 행 자체가 없음.
     expect(html).toContain('data-name="designer"');
     expect(html).toMatch(/data-name="committer"[^>]*hidden/);
@@ -131,7 +135,7 @@ describe('MetaDocsSearch — 검색 입력 (view.js:890, P2-08 SearchBox 재사�
 describe('MetaDocsFilterBar — 타입/표시/includeDeleted (view.js:836-908)', () => {
   it('type/display 그룹 + 버튼 셀렉터 (data-meta-filter)', () => {
     const html = renderToStaticMarkup(
-      <MetaDocsFilterBar type="all" display="all" includeDeleted={false} t={t} />,
+      <MetaDocsFilterBar type="all" display="all" includeDeleted={false} />,
     );
     expect(html).toContain('data-meta-filter="type"');
     expect(html).toContain('data-meta-filter="display"');
@@ -139,27 +143,27 @@ describe('MetaDocsFilterBar — 타입/표시/includeDeleted (view.js:836-908)',
   });
   it('active type → 해당 버튼 active + aria-pressed', () => {
     const html = renderToStaticMarkup(
-      <MetaDocsFilterBar type="agent" display="all" includeDeleted={false} t={t} />,
+      <MetaDocsFilterBar type="agent" display="all" includeDeleted={false} />,
     );
     // agent 버튼이 active
     expect(html).toMatch(/data-value="agent"[^>]*class="[^"]*active|class="[^"]*active[^"]*"[^>]*data-value="agent"/);
   });
   it('includeDeleted 토글 체크박스 (data-meta-include-deleted)', () => {
     const html = renderToStaticMarkup(
-      <MetaDocsFilterBar type="all" display="all" includeDeleted t={t} />,
+      <MetaDocsFilterBar type="all" display="all" includeDeleted />,
     );
     expect(html).toContain('data-meta-include-deleted');
     expect(html).toContain('checked');
   });
   it('showOrphan 기본값(미지정) → orphan 버튼 노출 (기존 동작 보존)', () => {
     const html = renderToStaticMarkup(
-      <MetaDocsFilterBar type="all" display="all" includeDeleted={false} t={t} />,
+      <MetaDocsFilterBar type="all" display="all" includeDeleted={false} />,
     );
     expect(html).toContain('data-value="orphan"');
   });
   it('showOrphan=false → orphan 버튼 숨김 (0건 시 노이즈 제거)', () => {
     const html = renderToStaticMarkup(
-      <MetaDocsFilterBar type="all" display="all" includeDeleted={false} showOrphan={false} t={t} />,
+      <MetaDocsFilterBar type="all" display="all" includeDeleted={false} showOrphan={false} />,
     );
     expect(html).not.toContain('data-value="orphan"');
     // all/unused 는 그대로 노출

@@ -11,8 +11,8 @@ import { createElement } from 'react';
 import { MetaDocsToolStats } from '../MetaDocsToolStats';
 import type { ToolStatRow } from '../../dashboard/tool-stats-sort';
 
-// i18n t 는 DI(필수 prop) — 키 passthrough stub. D-1: 전역 window.I18n 비의존.
-const t = (k: string) => k;
+// i18n t 는 위임 대상 ToolStatsMatrix 가 useTranslation 으로 자체 구독한다(prop 폐기).
+//   테스트는 vitest.setup 기본 passthrough(키 그대로 반환)에 의존.
 
 const STATS: ToolStatRow[] = [
   { tool_name: 'Read', call_count: 10, error_count: 0, total_tokens: 5000, avg_duration_ms: 120 },
@@ -21,16 +21,16 @@ const STATS: ToolStatRow[] = [
 
 describe('MetaDocsToolStats — P3-09 ToolStatsMatrix 위임 (arch §2.2)', () => {
   it('stats 주입 → ts-mx 매트릭스 mount', () => {
-    const html = renderToStaticMarkup(createElement(MetaDocsToolStats, { stats: STATS, t }));
+    const html = renderToStaticMarkup(createElement(MetaDocsToolStats, { stats: STATS }));
     expect(html).toContain('ts-mx');
     expect(html).toContain('Read');
   });
   it('빈 stats → no-data 빈 상태(ToolStatsMatrix 위임)', () => {
-    const html = renderToStaticMarkup(createElement(MetaDocsToolStats, { stats: [], t }));
+    const html = renderToStaticMarkup(createElement(MetaDocsToolStats, { stats: [] }));
     expect(html).toContain('state-empty');
   });
   it('ToolIcon 슬롯 주입 → mcp 도구 아이콘 (P3-09 renderIcon 계약)', () => {
-    const html = renderToStaticMarkup(createElement(MetaDocsToolStats, { stats: STATS, t }));
+    const html = renderToStaticMarkup(createElement(MetaDocsToolStats, { stats: STATS }));
     // mcp__ 도구는 tool-icon-mcp 라우팅(badges ToolIcon).
     expect(html).toContain('tool-icon-mcp');
   });

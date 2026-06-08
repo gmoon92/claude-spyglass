@@ -42,11 +42,11 @@ export function fmtRelative(ts: string | number | null | undefined) {
   const d = new Date(toDateArg(ts));
   const diffMs  = Date.now() - d.getTime();
   const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1)  return t('common.formatters.just-now');
-  if (diffMin < 60) return t('common.formatters.minutes-ago', { n: diffMin });
+  if (diffMin < 1)  return t('common:formatters.just-now');
+  if (diffMin < 60) return t('common:formatters.minutes-ago', { n: diffMin });
   const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24)   return t('common.formatters.hours-ago', { n: diffH });
-  return t('common.formatters.days-ago', { n: Math.floor(diffH / 24) });
+  if (diffH < 24)   return t('common:formatters.hours-ago', { n: diffH });
+  return t('common:formatters.days-ago', { n: Math.floor(diffH / 24) });
 }
 
 export function fmtTime(ts: string | number | null | undefined) {

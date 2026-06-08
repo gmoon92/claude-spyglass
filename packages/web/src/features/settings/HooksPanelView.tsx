@@ -13,13 +13,13 @@
  * @module features/settings/HooksPanelView
  */
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { SettingsRow } from '../../components/settings/SettingsRow';
 import { hookHealthState } from './logic';
 import type { HookData } from './types';
 
 export interface HooksPanelViewProps {
   hooks: HookData;
-  t: (key: string, vars?: Record<string, unknown>) => string;
   /** 원클릭 자동 설치(항상 full 프로필 적용). */
   onInstall?: () => void;
   /** 설치 진행 중 — 버튼 비활성. */
@@ -30,19 +30,22 @@ export interface HooksPanelViewProps {
   result?: ReactNode;
 }
 
-export function HooksPanelView({ hooks, t, onInstall, installing, disabled, result }: HooksPanelViewProps) {
+export function HooksPanelView({ hooks, onInstall, installing, disabled, result }: HooksPanelViewProps) {
+  const { t: tBase } = useTranslation();
+  // react-i18next t → (key, vars)=>string 시그니처 래핑(보간 타입 회피, UpdateBadge 선례).
+  const t = (key: string, vars?: Record<string, unknown>): string => tBase(key, vars) as unknown as string;
   const state = hookHealthState(hooks);
   const installed = state === 'ok';
   const statusText = installed
-    ? t('ui.settings-view.hooks.status-ok', { n: hooks.registeredCount, total: hooks.expectedCount })
-    : t('ui.settings-view.hooks.status-off');
+    ? t('ui:settings-view.hooks.status-ok', { n: hooks.registeredCount, total: hooks.expectedCount })
+    : t('ui:settings-view.hooks.status-off');
 
   return (
     <>
-      <h3 className="settings-section-title">{t('ui.settings-view.hooks.title')}</h3>
+      <h3 className="settings-section-title">{t('ui:settings-view.hooks.title')}</h3>
 
       <div className="settings-card">
-        <div className="settings-card-sub">{t('ui.settings-view.hooks.subtitle')}</div>
+        <div className="settings-card-sub">{t('ui:settings-view.hooks.subtitle')}</div>
 
         {/* 컴팩트 상태 (+ onInstall 제공 시에만 설치 버튼 — 통합 설치 모드에선 상태만). */}
         <div className="settings-install-row">
@@ -58,7 +61,7 @@ export function HooksPanelView({ hooks, t, onInstall, installing, disabled, resu
               onClick={onInstall}
               disabled={installing || disabled}
             >
-              {installed ? t('ui.settings-view.hooks.reinstall') : t('ui.settings-view.hooks.apply')}
+              {installed ? t('ui:settings-view.hooks.reinstall') : t('ui:settings-view.hooks.apply')}
             </button>
           )}
         </div>
@@ -67,19 +70,19 @@ export function HooksPanelView({ hooks, t, onInstall, installing, disabled, resu
 
         {/* 상세 진단 — 접기(아코디언). 기본 닫힘으로 영역 축소. */}
         <details className="settings-engineering">
-          <summary>{t('ui.settings-view.hooks.detail-summary')}</summary>
+          <summary>{t('ui:settings-view.hooks.detail-summary')}</summary>
           <div className="settings-meta" style={{ margin: '6px 0' }}>
             <code>{hooks.path}</code>
           </div>
           <SettingsRow
             label="SPYGLASS_DIR"
             status={hooks.spyglassDir ? 'ok' : 'warn'}
-            value={hooks.spyglassDir ? '✓' : t('ui.settings-view.hooks.unregistered')}
+            value={hooks.spyglassDir ? '✓' : t('ui:settings-view.hooks.unregistered')}
             tail={
               hooks.spyglassDir ? (
                 <code className="settings-meta">{hooks.spyglassDir}</code>
               ) : (
-                <span className="settings-meta">{t('ui.settings-view.hooks.spyglass-dir-missing')}</span>
+                <span className="settings-meta">{t('ui:settings-view.hooks.spyglass-dir-missing')}</span>
               )
             }
           />
@@ -88,7 +91,7 @@ export function HooksPanelView({ hooks, t, onInstall, installing, disabled, resu
               key={ev.event}
               label={ev.event}
               status={ev.count > 0 ? 'ok' : 'warn'}
-              value={ev.count > 0 ? t('ui.settings-view.hooks.registered') : t('ui.settings-view.hooks.unregistered')}
+              value={ev.count > 0 ? t('ui:settings-view.hooks.registered') : t('ui:settings-view.hooks.unregistered')}
             />
           ))}
         </details>

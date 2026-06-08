@@ -14,6 +14,7 @@
  * @module features/dashboard/ToolStatsMatrix
  */
 import type { ReactElement, ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { fmtToken } from '../../lib/formatters';
 import { SkeletonRows } from '../../components/Skeleton';
 import { computeMatrixView } from './tool-stats-view';
@@ -27,15 +28,11 @@ import {
   type SortDir,
 } from './tool-stats-sort';
 
-export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
-
 export interface ToolStatsMatrixProps {
   stats: ToolStatRow[] | null;
   sort?: { key: ToolStatsSortKey; dir: SortDir };
   /** 헤더 클릭 → 정렬 전이(호출처가 nextSort 적용). */
   onSort?: (key: ToolStatsSortKey) => void;
-  /** i18n t(필수 — DI). 호출처가 react-i18next t 주입, 테스트가 stub 주입. */
-  t: TFunc;
   /** 도구 아이콘 슬롯(원본 toolIconHtml). 미주입 시 폴백 없음(텍스트만). */
   renderIcon?: (toolName: string) => ReactNode;
   /** fetch 대기 중 여부 — true 면 빈 상태("데이터 없음") 대신 스켈레톤(로딩 오해 방지). */
@@ -44,11 +41,11 @@ export interface ToolStatsMatrixProps {
 
 const HEADERS: Array<{ key: ToolStatsSortKey; label: string; cls: string }> = [
   { key: 'tool', label: 'Tool', cls: 'ts-mx-tool' },
-  { key: 'avg', label: 'ui.tool-stats.col-avg', cls: 'ts-mx-num' },
-  { key: 'calls', label: 'ui.tool-stats.col-calls', cls: 'ts-mx-num' },
-  { key: 'tokens', label: 'ui.tool-stats.col-tokens', cls: 'ts-mx-num' },
-  { key: 'pct', label: 'ui.tool-stats.col-pct', cls: 'ts-mx-num' },
-  { key: 'errors', label: 'ui.tool-stats.col-errors', cls: 'ts-mx-err' },
+  { key: 'avg', label: 'ui:tool-stats.col-avg', cls: 'ts-mx-num' },
+  { key: 'calls', label: 'ui:tool-stats.col-calls', cls: 'ts-mx-num' },
+  { key: 'tokens', label: 'ui:tool-stats.col-tokens', cls: 'ts-mx-num' },
+  { key: 'pct', label: 'ui:tool-stats.col-pct', cls: 'ts-mx-num' },
+  { key: 'errors', label: 'ui:tool-stats.col-errors', cls: 'ts-mx-err' },
 ];
 
 const DEFAULT_SORT = { key: 'tokens' as ToolStatsSortKey, dir: 'desc' as SortDir };
@@ -57,10 +54,10 @@ export function ToolStatsMatrix({
   stats,
   sort = DEFAULT_SORT,
   onSort,
-  t,
   renderIcon,
   loading = false,
 }: ToolStatsMatrixProps): ReactElement {
+  const { t } = useTranslation();
   // 로딩 중(아직 데이터 없음) → 스켈레톤. "데이터 없음" 빈 상태가 fetch 대기 중 뜨는 오해를 막는다.
   if (loading && (!stats || stats.length === 0)) {
     return <SkeletonRows rows={6} className="ts-mx-skeleton" />;
@@ -68,7 +65,7 @@ export function ToolStatsMatrix({
   if (!stats || stats.length === 0) {
     return (
       <div className="state-empty">
-        <span className="state-empty-title">{t('ui.tool-stats.no-data')}</span>
+        <span className="state-empty-title">{t('ui:tool-stats.no-data')}</span>
       </div>
     );
   }

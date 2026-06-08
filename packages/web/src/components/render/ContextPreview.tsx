@@ -38,7 +38,7 @@ export function ContextPreview({ r, maxLen = 60, data: dataProp }: ContextPrevie
   if (!data) return null;
 
   const tooltip = data.tooltipTruncated
-    ? `${data.tooltipBase}… (${t('badges.renderers.extract.chars', { n: data.rawLength.toLocaleString() })})`
+    ? `${data.tooltipBase}… (${t('badges:renderers.extract.chars', { n: data.rawLength.toLocaleString() })})`
     : data.tooltipBase;
 
   const hintText = data.hint ? t(data.hint.key, data.hint.vars) : '';

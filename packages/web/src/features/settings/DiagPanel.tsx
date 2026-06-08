@@ -8,26 +8,27 @@
  * @module features/settings/DiagPanel
  */
 import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { DiagPanelView } from './DiagPanelView';
 import { SettingsSkeleton } from './SettingsSkeleton';
 import { fetchDiag } from './hooks-api';
 import { useAsyncResource } from './use-settings-diag';
 
 export interface DiagPanelProps {
-  t: (key: string, vars?: Record<string, unknown>) => string;
   onJump?: (tab: string) => void;
   onCopy?: (text: string) => void;
 }
 
-export function DiagPanel({ t, onJump, onCopy }: DiagPanelProps) {
+export function DiagPanel({ onJump, onCopy }: DiagPanelProps) {
+  const { t } = useTranslation();
   const fetcher = useCallback((signal: AbortSignal) => fetchDiag(signal), []);
   const { status, data, error } = useAsyncResource(fetcher);
 
   if (status === 'loading' || !data) {
-    return <SettingsSkeleton cards={4} label={t('ui.settings-view.loading')} />;
+    return <SettingsSkeleton cards={4} label={t('ui:settings-view.loading')} />;
   }
   if (status === 'error') {
     return <div className="settings-error">⚠ {error}</div>;
   }
-  return <DiagPanelView data={data} t={t} onJump={onJump} onCopy={onCopy} />;
+  return <DiagPanelView data={data} onJump={onJump} onCopy={onCopy} />;
 }

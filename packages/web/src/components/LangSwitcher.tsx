@@ -46,7 +46,7 @@ export function LangSwitcher(): ReactElement {
     <div className="lang-switcher-wrap">
       <select
         id="lang-switcher"
-        aria-label={t('ui.html.chart-section.lang-switcher-aria')}
+        aria-label={t('ui:html.chart-section.lang-switcher-aria')}
         role="combobox"
         value={i18n.language}
         onChange={onChange}

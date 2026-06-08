@@ -28,26 +28,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ReactElement } from 'react';
-import type { ProjectLike, SidebarLabeler } from '../features/browse/Sidebar';
+import type { ProjectLike } from '../features/browse/Sidebar';
 import { BrowseSidebar } from '../features/browse';
-import { type ChartTokens, type ChartLegendLabeler } from '../components/Chart';
+import { type ChartTokens } from '../components/Chart';
 import { TimelineChart } from '../components/TimelineChart';
 import { useColResize } from '../components/use-col-resize';
 import { type DataByKind, type DonutDatum } from '../components/chart-data';
 import { RequestRow, buildSearchHaystack } from '../components/render/RequestRow';
 import { SearchBox } from '../components/SearchBox';
-import { FilterBar, type FilterBarLabeler } from '../components/FilterBar';
+import { FilterBar } from '../components/FilterBar';
 import { subTypeOf, SUB_TYPES } from '../features/dashboard/request-types';
 import { SessionDetailContainer } from '../features/session-detail';
 import type { TurnRow } from '../features/session-detail/turns-fetcher';
 import { ContextChart } from '../features/dashboard/ContextChart';
 import { toContextTurns, buildCacheDonut, type SessionTurnLike } from '../features/dashboard/detail-chart-data';
-import { DateRangeDropdown, type DateRangeLabeler } from '../components/DateRangeDropdown';
+import { DateRangeDropdown } from '../components/DateRangeDropdown';
 import { useFloatingMenuPosition } from '../components/use-floating-menu-position';
 import { useSSEStore } from '../stores/sse-store';
 import { useAppStore } from '../stores/app-store';
 import type { PresetValue } from '../stores/app-store';
-import { makeI18nLabeler } from './i18n-labeler';
 import { deriveBrowseData } from './browse-data';
 import { rangeToParams, rangeToMetricParams, buildModelUsageParams } from './compute-range';
 import {
@@ -126,7 +125,6 @@ export function BrowseLayout(): ReactElement {
   // cache-panel-overall(/api/stats/cache) — 레거시 fetchCacheStats→renderCachePanel 복원.
   const [cacheStats, setCacheStats] = useState<CacheStats | null>(null);
 
-  const labeler: SidebarLabeler = useMemo(() => makeI18nLabeler(tx), [i18n.language, tx]);
 
   // detail 활성 판정 — rightView==='detail' && 선택 세션 존재.
   const detailActive = rightView === 'detail' && !!selectedSession;
@@ -156,8 +154,8 @@ export function BrowseLayout(): ReactElement {
     () =>
       detailActive
         ? buildCacheDonut(detailTurns as unknown as SessionTurnLike[], {
-            cache: tx('ui.chart.label.cache'),
-            others: tx('ui.chart.label.others'),
+            cache: tx('ui:chart.label.cache'),
+            others: tx('ui:chart.label.others'),
           })
         : [],
     [detailActive, detailTurns],
@@ -208,19 +206,6 @@ export function BrowseLayout(): ReactElement {
       return true;
     });
   }, [feedRows, feedFilter, searchQuery]);
-
-  // FilterBar 라벨러 — window.I18n 키를 계약 형태로(무전역). 원본 filter-bar.js getFilterGroups SSoT 1:1.
-  //   key 'tool_call'(data-type 계약) → i18n 키는 하이픈 'tool-call'(locale ui.filter-bar.tool-call). 그 외 동일.
-  //   그룹 aria: request→request-type, tool→tool-category(원본 filter-bar.js:15,23).
-  const filterLabeler: FilterBarLabeler = useMemo(() => {
-    const i18nKey = (key: string) => key.replace(/_/g, '-');
-    return {
-      groupAria: (group) =>
-        tx(group === 'request' ? 'ui.filter-bar.request-type' : 'ui.filter-bar.tool-category'),
-      itemLabel: (key) => tx(`ui.filter-bar.${i18nKey(key)}`),
-      itemTitle: (key) => tx(`ui.filter-bar.${i18nKey(key)}-title`),
-    };
-  }, [i18n.language]);
 
   // 피드 Session 셀(sess-id-link) 클릭 → 상세 이동(원본 feed-interactions.js#wireDefaultViewClicks).
   //   프로젝트 전환 분기 포함(레거시: data-goto-project 가 현재와 다르면 프로젝트도 전환).
@@ -277,57 +262,6 @@ export function BrowseLayout(): ReactElement {
     doc?.addEventListener('mousedown', onDocDown);
     return () => doc?.removeEventListener('mousedown', onDocDown);
   }, [dateOpen]);
-
-  // date-filter i18n 라벨러 — 원본 date-range-dropdown.js 키(ui.main.date-filter.*) 1:1.
-  const dateLabeler: DateRangeLabeler = useMemo(
-    () => ({
-      presetLabel: (v) => tx(`ui.main.date-filter.${v}.label`),
-      presetTitle: (v) => tx(`ui.main.date-filter.${v}.title`),
-      triggerAria: () => tx('ui.main.date-filter.trigger-aria'),
-      customFrom: () => tx('ui.main.date-filter.custom.from'),
-      customTo: () => tx('ui.main.date-filter.custom.to'),
-      customApply: () => tx('ui.main.date-filter.custom.apply'),
-      customLabel: () => tx('ui.main.date-filter.custom.label'),
-      formatCustom: (from, to) => {
-        const fmt = (ms: number): string => {
-          const d = new Date(ms);
-          return Number.isFinite(ms) ? d.toISOString().slice(0, 10) : '';
-        };
-        return `${fmt(from)} ~ ${fmt(to)}`;
-      },
-    }),
-    [i18n.language],
-  );
-
-  // 도넛 범례/하단 total i18n 라벨러(레거시 renderTypeLegend 복원) — Chart 가 무전역 leaf 라 주입.
-  //   cacheLabel: cache 슬라이스 안정 id → ui.chart.label.<id>(cache='캐시'/others='그 외').
-  //   countUnit: 하단 #typeTotal — ui.chart.count-unit('{count}건'). noData: ui.chart.no-data.
-  const donutLegendLabeler: ChartLegendLabeler = useMemo(
-    () => ({
-      cacheLabel: (id) => tx(`ui.chart.label.${id}`),
-      countUnit: (countText) => tx('ui.chart.count-unit', { count: countText }),
-      noData: () => tx('ui.chart.no-data'),
-    }),
-    [i18n.language],
-  );
-
-  // timeline-meta i18n 라벨러 — 원본 index.html data-i18n 키(ui.html.timeline-meta.*) 1:1.
-  const timelineMetaLabeler = useMemo(
-    () => ({
-      aria: () => tx('ui.html.timeline-meta.aria'),
-      qualityGroupAria: () => tx('ui.html.timeline-meta.quality-group-aria'),
-      qualityGroupLabel: () => tx('ui.html.timeline-meta.quality-group-label'),
-      avgLabel: () => tx('ui.html.timeline-meta.avg-label'),
-      errorRateLabel: () => tx('ui.html.timeline-meta.error-rate-label'),
-      volumeGroupAria: () => tx('ui.html.timeline-meta.volume-group-aria'),
-      volumeGroupLabel: () => tx('ui.html.timeline-meta.volume-group-label'),
-      sessionsLabel: () => tx('ui.html.timeline-meta.sessions-label'),
-      requestsLabel: () => tx('ui.html.timeline-meta.requests-label'),
-      tokensLabel: () => tx('ui.html.timeline-meta.tokens-label'),
-    }),
-    [i18n.language],
-  );
-
 
   // population — activeRange 기준 로드. 마운트 1회 + activeRange 변경 시 재조회(date-filter-propagation).
   //   레거시 api.js: range 변경 → cs:active-range-changed → buildQuery(getDateRange()) 로 요청/통계/세션
@@ -481,7 +415,6 @@ export function BrowseLayout(): ReactElement {
         selectedProject={selectedProject}
         selectedSession={selectedSession}
         sessionsLoading={sessionsLoading}
-        labeler={labeler}
         onSelectProject={handleSelectProject}
         onSelectSession={handleSelectSession}
       />
@@ -498,8 +431,8 @@ export function BrowseLayout(): ReactElement {
           <div className="view-section-header">
             {/* default-meta(원본 chart-default-meta) — 30분 sliding 타임라인 고정 라벨. */}
             <div className="chart-default-meta">
-              <span className="panel-label">{tx('ui.html.chart-section.label')}</span>
-              <span className="panel-hint" id="chartSubtitle">{tx('ui.html.chart-section.subtitle')}</span>
+              <span className="panel-label">{tx('ui:html.chart-section.label')}</span>
+              <span className="panel-hint" id="chartSubtitle">{tx('ui:html.chart-section.subtitle')}</span>
             </div>
             {/* detail-meta(원본 chart-detail-meta) — 세션 선택 시 세션ID/프로젝트 노출.
                 레거시 setChartMode 가 hidden 속성을 토글(default-view.css :87 .chart-detail-meta[hidden]).
@@ -525,7 +458,6 @@ export function BrowseLayout(): ReactElement {
               >
                 <DateRangeDropdown
                   activeRange={activeRange}
-                  labeler={dateLabeler}
                   open={dateOpen}
                   triggerRef={dateTriggerRef}
                   menuRef={dateMenuRef}
@@ -547,8 +479,8 @@ export function BrowseLayout(): ReactElement {
                 className="btn-toggle"
                 id="btnToggleChart"
                 type="button"
-                data-tip={tx('ui.html.chart-section.toggle-title')}
-                aria-label={tx('ui.html.chart-section.toggle-aria')}
+                data-tip={tx('ui:html.chart-section.toggle-title')}
+                aria-label={tx('ui:html.chart-section.toggle-aria')}
                 onClick={() => setChartCollapsed((v) => !v)}
               >
                 <svg className="ds-chevron" data-dir={chartCollapsed ? 'up' : 'down'} aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -566,7 +498,7 @@ export function BrowseLayout(): ReactElement {
               donutMode={donutMode}
               feedTimestamps={feedTimestamps}
               tokens={FALLBACK_TOKENS}
-              timelineMeta={<TimelineMeta summary={summary} labeler={timelineMetaLabeler} />}
+              timelineMeta={<TimelineMeta summary={summary} />}
               contextSlot={
                 <ContextChart
                   turns={contextTurns}
@@ -574,11 +506,10 @@ export function BrowseLayout(): ReactElement {
                   sessionKey={selectedSession}
                 />
               }
-              legendLabeler={donutLegendLabeler}
             />
             {/* cache-panel-overall(원본 index.html :520~543) — charts-inner 3번째 행(.cache-panel grid 1/-1 전체폭).
                 fetchCacheStats 결과 결선. CachePanel 이 .cache-panel 래퍼까지 출력하므로 추가 래핑하지 않는다. */}
-            <CachePanel data={cacheStats} t={tx} />
+            <CachePanel data={cacheStats} />
           </div>
         </div>
 
@@ -594,7 +525,7 @@ export function BrowseLayout(): ReactElement {
                     <SearchBox
                       value={searchQuery}
                       placeholder="model / tool / message"
-                      clearLabel={tx('ui.search-box.clear-label')}
+                      clearLabel={tx('ui:search-box.clear-label')}
                       onSearch={setSearchQuery}
                       focusSignal={searchFocusSignal}
                     />
@@ -603,7 +534,6 @@ export function BrowseLayout(): ReactElement {
                     <FilterBar
                       dataAttr="feed-filter"
                       active={feedFilter}
-                      labeler={filterLabeler}
                       onChange={setFeedFilter}
                     />
                   </div>

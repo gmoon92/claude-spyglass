@@ -30,21 +30,12 @@ ensureDom();
 
 // 버전 키만 한국어로 돌려주는 테스트 t — vitest.setup.ts 의 i18next 위임이 __setTestT 로 조회한다.
 const KO: Record<string, string> = {
-  'ui.version-check.latest': '__KO_최신__',
-  'ui.version-check.available': '__KO_업데이트__',
-  'ui.version-check.loading': '__KO_확인중__',
+  'ui:version-check.latest': '__KO_최신__',
+  'ui:version-check.available': '__KO_업데이트__',
+  'ui:version-check.loading': '__KO_확인중__',
 };
 
 const realFetch = globalThis.fetch;
-
-const labeler = {
-  noData: () => 'no-data',
-  liveCount: (n: number) => `live:${n}`,
-  selectProject: () => 'select-project',
-  sessionCount: (project: string, count: number) => `count:${project}:${count}`,
-  globalRowLabel: () => 'user (global)',
-  globalRowTitle: () => 'global-title',
-};
 
 let container: HTMLDivElement;
 let root: Root;
@@ -87,7 +78,6 @@ function mountBrowse(): void {
         sessions={[]}
         selectedProject={null}
         selectedSession={null}
-        labeler={labeler}
         obsIntervalMs={0}
       />,
     );

@@ -51,20 +51,20 @@ export function PrologueCard({ prologue }: { prologue: PrologueRow[] | null | un
     <div
       className="turn-prologue-card"
       role="region"
-      aria-label={t('session.session-detail.turn-views.prologue-aria')}
+      aria-label={t('session:session-detail.turn-views.prologue-aria')}
     >
       <div className="turn-prologue-header">
         <span className="turn-prologue-title">
-          {t('session.session-detail.turn-views.prologue-title')}
+          {t('session:session-detail.turn-views.prologue-title')}
         </span>
         <span className="turn-prologue-count">
-          {t('ui.chart.count-unit', { count: prologue.length })}
+          {t('ui:chart.count-unit', { count: prologue.length })}
         </span>
         <span
           className="turn-prologue-hint"
-          data-tip={t('session.session-detail.turn-views.prologue-hint-title')}
+          data-tip={t('session:session-detail.turn-views.prologue-hint-title')}
         >
-          {t('session.session-detail.turn-views.prologue-hint')}
+          {t('session:session-detail.turn-views.prologue-hint')}
         </span>
       </div>
       <div className="turn-prologue-body">
@@ -74,7 +74,7 @@ export function PrologueCard({ prologue }: { prologue: PrologueRow[] | null | un
             r.source === 'transcript-assistant-text' ? (
               <span
                 className="prologue-source-tag"
-                data-tip={t('session.session-detail.turn-views.prologue-transcript-tag')}
+                data-tip={t('session:session-detail.turn-views.prologue-transcript-tag')}
               >
                 transcript
               </span>

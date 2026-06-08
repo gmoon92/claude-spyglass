@@ -41,9 +41,9 @@ export const STAT_TOOLTIP_KEYS = [
 export const CTX_TOOLTIP_KEYS = ['context-growth'] as const;
 export const MINI_BADGE_KEYS = ['spike', 'loop', 'slow', 'error', 'cache'] as const;
 
-/** title/desc i18n 키 빌더 — 'ui.<ns>.<key>.title|desc'(원본 getter 규칙 SSoT). */
+/** title/desc i18n 키 빌더 — 'ui:<ns>.<key>.title|desc'(원본 getter 규칙 SSoT). */
 export function tooltipContentKeys(ns: string, key: string): { titleKey: string; descKey: string } {
-  return { titleKey: `ui.${ns}.${key}.title`, descKey: `ui.${ns}.${key}.desc` };
+  return { titleKey: `ui:${ns}.${key}.title`, descKey: `ui:${ns}.${key}.desc` };
 }
 
 export interface Viewport {

@@ -10,22 +10,21 @@
 // 레이어: app 셸 컴포넌트(controlled, 무전역). 호출처(AppShell)가 connected 상태/재연결 결선.
 
 import type { ReactElement } from 'react';
-
-export type BannerLabeler = (key: string, vars?: Record<string, unknown>) => string;
+import { useTranslation } from 'react-i18next';
 
 export interface ErrorBannerProps {
   /** 연결 실패 여부 — true 일 때만 배너 노출(SSE onError 결선). */
   visible: boolean;
   /** retry 버튼 클릭 콜백 — 원본 retryBtn → 재연결 트리거. */
   onRetry: () => void;
-  /** i18n 라벨러 — 미주입 시 호출처가 tt 폴백. */
-  t: BannerLabeler;
 }
 
 /**
  * SSE 연결 실패 배너 — #errorBanner 1:1. visible=false 면 미렌더.
+ * i18n 은 react-i18next useTranslation 으로 직접 구독.
  */
-export function ErrorBanner({ visible, onRetry, t }: ErrorBannerProps): ReactElement | null {
+export function ErrorBanner({ visible, onRetry }: ErrorBannerProps): ReactElement | null {
+  const { t } = useTranslation();
   if (!visible) return null;
   return (
     <div className="error-banner" role="alert">
@@ -46,9 +45,9 @@ export function ErrorBanner({ visible, onRetry, t }: ErrorBannerProps): ReactEle
         <line x1="8" y1="5" x2="8" y2="9" />
         <circle cx="8" cy="11.5" r="0.6" fill="currentColor" stroke="none" />
       </svg>
-      <span>{t('ui.html.error-banner.msg', undefined) || 'Cannot connect to server.'}</span>
+      <span>{t('ui:html.error-banner.msg', undefined) || 'Cannot connect to server.'}</span>
       <button type="button" className="retry-btn" onClick={onRetry}>
-        {t('ui.html.error-banner.retry', undefined) || 'Retry'}
+        {t('ui:html.error-banner.retry', undefined) || 'Retry'}
       </button>
     </div>
   );

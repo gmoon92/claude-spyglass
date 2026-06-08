@@ -78,7 +78,7 @@ export function FlowPane({
     () => turns.find((t) => t.turn_id === activeTurnId) ?? null,
     [turns, activeTurnId],
   );
-  const summaryLabel = t('session.session-detail.turn-views.meta-tool-count', { count: turns.length });
+  const summaryLabel = t('session:session-detail.turn-views.meta-tool-count', { count: turns.length });
 
   // 칩 클릭 위임 — 원본 main.js#initChipActivationDelegation 대응. flow-pane section 한 곳에 1회 부착해
   //   turn-spine / flow-head 안 모든 [data-chip-key] 칩 클릭을 단일 핸들러로 처리(행 점프 + flash + 펼침).
@@ -98,7 +98,7 @@ export function FlowPane({
       <section
         ref={flowRef}
         className="flow-pane"
-        aria-label={t('session.session-detail.turn-views.prologue-aria')}
+        aria-label={t('session:session-detail.turn-views.prologue-aria')}
         data-region="flow"
       >
         <FlowHead activeTurn={activeTurn} sessionTotalTokens={sessionTotalTokens} extra={extra} />

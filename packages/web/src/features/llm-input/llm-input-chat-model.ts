@@ -251,7 +251,7 @@ export function inspectorPayloadOf(item: ChatItem, t: InspectorTFunc): Inspector
   switch (item.kind) {
     case 'text': {
       const who = item.role === 'user' ? 'user' : 'assistant';
-      const label = item.role === 'user' ? t('ui.llm-input.chat.speaker-user') : t('ui.llm-input.chat.speaker-claude');
+      const label = item.role === 'user' ? t('ui:llm-input.chat.speaker-user') : t('ui:llm-input.chat.speaker-claude');
       return {
         title: `${label} (${who})`,
         meta: `${who} · ${idx} · ${formatBytes((item.text ?? '').length)}`,
@@ -262,12 +262,12 @@ export function inspectorPayloadOf(item: ChatItem, t: InspectorTFunc): Inspector
     case 'think': {
       const thinkBody = (item.text ?? '').trim();
       return {
-        title: item.redacted ? t('ui.llm-input.chat.thinking-redacted') : t('ui.llm-input.chat.thinking-label'),
+        title: item.redacted ? t('ui:llm-input.chat.thinking-redacted') : t('ui:llm-input.chat.thinking-label'),
         meta: `thinking · ${idx}`,
         // redacted=봉인 안내 / 본문 빈(서명만 재전송)=미포함 안내 / 그 외=본문.
         text: item.redacted
-          ? t('ui.llm-input.chat.thinking-redacted-body')
-          : thinkBody || t('ui.llm-input.chat.thinking-empty-body'),
+          ? t('ui:llm-input.chat.thinking-redacted-body')
+          : thinkBody || t('ui:llm-input.chat.thinking-empty-body'),
         raw,
       };
     }
@@ -292,7 +292,7 @@ export function inspectorPayloadOf(item: ChatItem, t: InspectorTFunc): Inspector
       };
     case 'system':
       return {
-        title: t('ui.llm-input.chat.system-context-title'),
+        title: t('ui:llm-input.chat.system-context-title'),
         meta: `system · ${idx} · ${formatBytes((item.text ?? '').length)}`,
         text: item.text ?? '',
         raw,

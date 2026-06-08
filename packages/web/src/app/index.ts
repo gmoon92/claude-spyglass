@@ -19,4 +19,3 @@ export {
   ROUTE_PATHS, APP_MODE_PATHS, appModeToPath, pathToAppMode,
 } from './app-mode-route';
 export { buildAppSSECallbacks, type AppSSELifecycle } from './app-sse';
-export { makeI18nLabeler, type TFunc } from './i18n-labeler';

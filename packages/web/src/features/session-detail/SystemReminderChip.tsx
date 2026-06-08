@@ -156,15 +156,15 @@ export function SystemReminderChip({
     >
       <header className="turn-system-reminder-popover-header">
         <span className="turn-system-reminder-popover-title">
-          <strong>{t('session.session-detail.turn-views.sysrem-title')}</strong>
+          <strong>{t('session:session-detail.turn-views.sysrem-title')}</strong>
           <span className="turn-system-reminder-popover-count">
-            {t('session.session-detail.turn-views.sysrem-count', { count })}
+            {t('session:session-detail.turn-views.sysrem-count', { count })}
           </span>
         </span>
         <button
           type="button"
           className="turn-system-reminder-popover-close"
-          aria-label={t('session.session-detail.turn-views.sysrem-close')}
+          aria-label={t('session:session-detail.turn-views.sysrem-close')}
           data-sysrem-close={popoverId}
           onClick={(e) => {
             e.preventDefault();
@@ -196,7 +196,7 @@ export function SystemReminderChip({
         aria-expanded={open}
         aria-controls={popoverId}
         data-sysrem-toggle={popoverId}
-        data-tip={t('session.session-detail.turn-views.sysrem-chip-title', { count })}
+        data-tip={t('session:session-detail.turn-views.sysrem-chip-title', { count })}
         onClick={onChipClick}
       >
         <Note size={12} />

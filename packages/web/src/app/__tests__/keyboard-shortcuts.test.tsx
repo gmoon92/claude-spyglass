@@ -29,25 +29,25 @@ import { ensureDom } from '../../test-support/ensure-dom';
 ensureDom();
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const t = (key: string) => key;
+// KeyboardHelpModal 은 react-i18next useTranslation 직접 구독 → vitest.setup 기본 passthrough t(키 그대로).
 
 describe('KeyboardHelpModal — 레거시 renderKbdHelpModal 마크업 동치', () => {
   it('open=true 면 #kbdHelpBackdrop(dialog) + 섹션 3종 + 필터 7행을 렌더한다', () => {
-    const html = renderToStaticMarkup(<KeyboardHelpModal open onClose={() => {}} t={t} />);
+    const html = renderToStaticMarkup(<KeyboardHelpModal open onClose={() => {}} />);
     expect(html).toContain('id="kbdHelpBackdrop"');
     expect(html).toContain('kbd-help-backdrop visible');
     expect(html).toContain('role="dialog"');
     expect(html).toContain('id="kbdHelpClose"');
-    expect(html).toContain('ui.main.kbd-help.section.nav');
-    expect(html).toContain('ui.main.kbd-help.section.filter');
-    expect(html).toContain('ui.main.kbd-help.section.help');
+    expect(html).toContain('ui:main.kbd-help.section.nav');
+    expect(html).toContain('ui:main.kbd-help.section.filter');
+    expect(html).toContain('ui:main.kbd-help.section.help');
     // 필터 행은 단축키 매핑 SSoT(7키)에서 파생 — 1~7 키 캡 모두 노출.
     expect(KEYBOARD_FILTER_KEYS).toHaveLength(7);
     for (let i = 1; i <= 7; i++) expect(html).toContain(`<span class="kbd-key">${i}</span>`);
   });
 
   it('open=false 면 아무것도 렌더하지 않는다(레거시 .visible 제거 동치)', () => {
-    const html = renderToStaticMarkup(<KeyboardHelpModal open={false} onClose={() => {}} t={t} />);
+    const html = renderToStaticMarkup(<KeyboardHelpModal open={false} onClose={() => {}} />);
     expect(html).toBe('');
   });
 

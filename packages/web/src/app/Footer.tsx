@@ -7,26 +7,24 @@
 // 레이어: app 셸 컴포넌트(controlled, 무전역).
 
 import type { ReactElement } from 'react';
-
-export type FooterLabeler = (key: string, vars?: Record<string, unknown>) => string;
+import { useTranslation } from 'react-i18next';
 
 export interface FooterProps {
   /** 단축키 도움말 버튼 클릭 콜백(원본 btnHelpOpen → keyboard-help 오버레이). */
   onHelp: () => void;
-  /** i18n 라벨러 — title/aria-label 용. */
-  t: FooterLabeler;
 }
 
-/** 앱 푸터 — 브랜드 텍스트 + 단축키 도움말 버튼(.footer 1:1). */
-export function Footer({ onHelp, t }: FooterProps): ReactElement {
+/** 앱 푸터 — 브랜드 텍스트 + 단축키 도움말 버튼(.footer 1:1). i18n 은 useTranslation 직접 구독. */
+export function Footer({ onHelp }: FooterProps): ReactElement {
+  const { t } = useTranslation();
   return (
     <footer className="footer">
       Claude Spyglass — real-time Claude Code monitor
       <button
         type="button"
         className="footer-help-btn"
-        data-tip={t('ui.html.footer.help-title', undefined) || 'Keyboard shortcuts (?)'}
-        aria-label={t('ui.html.footer.help-aria', undefined) || 'Keyboard shortcuts'}
+        data-tip={t('ui:html.footer.help-title', undefined) || 'Keyboard shortcuts (?)'}
+        aria-label={t('ui:html.footer.help-aria', undefined) || 'Keyboard shortcuts'}
         onClick={onHelp}
       >
         ?

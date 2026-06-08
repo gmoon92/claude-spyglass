@@ -12,9 +12,8 @@
 // 레이어: app 셸 컴포넌트(controlled, 무전역). i18n 키 ui.main.kbd-help.* (4 locale 기존재).
 
 import type { ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 import { KEYBOARD_FILTER_KEYS } from './use-keyboard-shortcuts';
-
-export type KbdHelpLabeler = (key: string, vars?: Record<string, unknown>) => string;
 
 /** 필터 키 → 도움말 표시 라벨(레거시 renderKbdHelpModal 하드코딩 텍스트 1:1). */
 const FILTER_KEY_LABELS: Record<string, string> = {
@@ -33,12 +32,11 @@ export interface KeyboardHelpModalProps {
   open: boolean;
   /** 닫기 통지(백드롭 클릭 / × 버튼 — 레거시 hideKbdHelp 경로). */
   onClose: () => void;
-  /** i18n 라벨러 — ui.main.kbd-help.* 키. */
-  t: KbdHelpLabeler;
 }
 
-/** 단축키 도움말 모달 — 레거시 #kbdHelpBackdrop(role=dialog) 1:1. */
-export function KeyboardHelpModal({ open, onClose, t }: KeyboardHelpModalProps): ReactElement | null {
+/** 단축키 도움말 모달 — 레거시 #kbdHelpBackdrop(role=dialog) 1:1. i18n 은 useTranslation 직접 구독. */
+export function KeyboardHelpModal({ open, onClose }: KeyboardHelpModalProps): ReactElement | null {
+  const { t } = useTranslation();
   if (!open) return null;
   return (
     <div
@@ -54,12 +52,12 @@ export function KeyboardHelpModal({ open, onClose, t }: KeyboardHelpModalProps):
     >
       <div className="kbd-help-modal" role="document">
         <div className="kbd-help-header">
-          <span className="kbd-help-title" id="kbdHelpTitle">{t('ui.main.kbd-help.title')}</span>
+          <span className="kbd-help-title" id="kbdHelpTitle">{t('ui:main.kbd-help.title')}</span>
           <button
             className="kbd-help-close ds-close-btn"
             id="kbdHelpClose"
             type="button"
-            aria-label={t('ui.main.kbd-help.close')}
+            aria-label={t('ui:main.kbd-help.close')}
             data-size="lg"
             onClick={onClose}
           >
@@ -68,22 +66,22 @@ export function KeyboardHelpModal({ open, onClose, t }: KeyboardHelpModalProps):
         </div>
         <div className="kbd-help-body">
           <div className="kbd-help-section">
-            <div className="kbd-help-section-title">{t('ui.main.kbd-help.section.nav')}</div>
+            <div className="kbd-help-section-title">{t('ui:main.kbd-help.section.nav')}</div>
             <div className="kbd-help-row">
               <span className="kbd-key">/</span>
-              <span className="kbd-help-desc">{t('ui.main.kbd-help.focus-search')}</span>
+              <span className="kbd-help-desc">{t('ui:main.kbd-help.focus-search')}</span>
             </div>
             <div className="kbd-help-row">
               <span className="kbd-key">Esc</span>
-              <span className="kbd-help-desc">{t('ui.main.kbd-help.close-modal')}</span>
+              <span className="kbd-help-desc">{t('ui:main.kbd-help.close-modal')}</span>
             </div>
             <div className="kbd-help-row">
               <span className="kbd-key">⌘F</span>
-              <span className="kbd-help-desc">{t('ui.main.kbd-help.focus-search-cmd')}</span>
+              <span className="kbd-help-desc">{t('ui:main.kbd-help.focus-search-cmd')}</span>
             </div>
           </div>
           <div className="kbd-help-section">
-            <div className="kbd-help-section-title">{t('ui.main.kbd-help.section.filter')}</div>
+            <div className="kbd-help-section-title">{t('ui:main.kbd-help.section.filter')}</div>
             {KEYBOARD_FILTER_KEYS.map((key, i) => (
               <div className="kbd-help-row" key={key}>
                 <span className="kbd-key">{i + 1}</span>
@@ -92,10 +90,10 @@ export function KeyboardHelpModal({ open, onClose, t }: KeyboardHelpModalProps):
             ))}
           </div>
           <div className="kbd-help-section">
-            <div className="kbd-help-section-title">{t('ui.main.kbd-help.section.help')}</div>
+            <div className="kbd-help-section-title">{t('ui:main.kbd-help.section.help')}</div>
             <div className="kbd-help-row">
               <span className="kbd-key">?</span>
-              <span className="kbd-help-desc">{t('ui.main.kbd-help.help-toggle')}</span>
+              <span className="kbd-help-desc">{t('ui:main.kbd-help.help-toggle')}</span>
             </div>
           </div>
         </div>

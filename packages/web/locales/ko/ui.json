@@ -42,8 +42,8 @@
       "subtitle": "최근 30분 · 실시간",
       "lang-switcher-aria": "언어 선택",
       "update-badge-aria": "업데이트 사용 가능",
-      "update-badge-aria-available": "업데이트 사용 가능 — v{tag}",
-      "update-badge-aria-latest": "최신 버전 — v{tag}",
+      "update-badge-aria-available": "업데이트 사용 가능 — v{{tag}}",
+      "update-badge-aria-latest": "최신 버전 — v{{tag}}",
       "update-badge-aria-loading": "업데이트 확인 중",
       "toggle-title": "접기 / 펼치기",
       "toggle-aria": "접기"
@@ -108,7 +108,7 @@
   },
   "chart": {
     "no-data": "데이터가 없습니다",
-    "count-unit": "{count}건",
+    "count-unit": "{{count}}건",
     "label": {
       "cache": "캐시",
       "others": "그 외",
@@ -119,26 +119,26 @@
       "hit-rate": "히트율"
     },
     "footer": {
-      "split": "system {sys}% / user {user}%"
+      "split": "system {{sys}}% / user {{user}}%"
     }
   },
   "left-panel": {
     "no-data": "데이터가 없습니다",
-    "live-count": "라이브 {count}개",
+    "live-count": "라이브 {{count}}개",
     "select-project": "프로젝트를 선택하세요",
-    "session-count": "{project} · {count}개",
+    "session-count": "{{project}} · {{count}}개",
     "global-row-label": "전체",
     "global-row-title": "user(global) — 모든 cwd + 글로벌 카탈로그 합산"
   },
   "infra": {
-    "new-requests-banner": "새 요청 {count}개 — 클릭하여 최신으로 이동"
+    "new-requests-banner": "새 요청 {{count}}개 — 클릭하여 최신으로 이동"
   },
   "llm-input": {
     "no-recent-proxy": "최근 프록시 요청이 없습니다",
     "no-session-proxy": "이 세션에는 proxy 요청이 없습니다",
     "session-id-label": "세션 ID:",
-    "load-failed": "불러오기 실패: {message}",
-    "request-not-found": "요청을 찾을 수 없습니다 ({id})",
+    "load-failed": "불러오기 실패: {{message}}",
+    "request-not-found": "요청을 찾을 수 없습니다 ({{id}})",
     "no-system-field": "이 요청에 system 필드가 없습니다.",
     "system-load-failed": "본문 로딩 실패 또는 미존재 — system_hash만 알려진 상태.",
     "no-messages": "메시지 없음",
@@ -148,23 +148,23 @@
     "collapse-all": "전체 접기",
     "expand-all-title": "모든 메시지 펼치기",
     "collapse-all-title": "모든 메시지 접기",
-    "proxy-selector-label": "Proxy 요청 ({count}건)",
+    "proxy-selector-label": "Proxy 요청 ({{count}}건)",
     "banner-text": "이 탭은 proxy가 Anthropic API에 전송한 <strong>원본 페이로드</strong>입니다 — 훅 관측 데이터(턴 뷰)와 다를 수 있습니다.",
     "refs-popover-aria-label": "System 프롬프트 참조 목록",
     "refs-popover-title": "참조 목록",
     "refs-popover-loading": "불러오는 중…",
     "refs-popover-wait": "잠시만요…",
-    "refs-popover-count": "{count}건 · 최근순 · hash {hash}…",
+    "refs-popover-count": "{{count}}건 · 최근순 · hash {{hash}}…",
     "refs-popover-empty": "참조 요청이 없습니다.",
-    "refs-popover-load-failed": "불러오기 실패: {message}",
+    "refs-popover-load-failed": "불러오기 실패: {{message}}",
     "refs-close-label": "닫기",
     "ref-session-unspecified": "세션 미지정",
     "ref-session-current": "현재 세션",
     "ref-jump-title": "이 proxy 요청으로 점프",
     "ref-other-session-title": "다른 세션의 참조 — 점프는 현재 세션 내에서만 지원",
-    "ref-count-btn-title": "{count}회 재사용 · 캐시 적중 {pct}% · 누적 입력 {tokens} 토큰. 클릭하여 재사용·캐시 상세 보기.",
-    "ref-count-btn-title-nostat": "API 요청 {count}건이 참조. 클릭하여 재사용 상세 보기.",
-    "cache-signal-title": "프롬프트 캐시 적중률 {pct}% (입력 토큰 기준). 낮으면 매 요청마다 입력 토큰을 다시 과금.",
+    "ref-count-btn-title": "{{count}}회 재사용 · 캐시 적중 {{pct}}% · 누적 입력 {{tokens}} 토큰. 클릭하여 재사용·캐시 상세 보기.",
+    "ref-count-btn-title-nostat": "API 요청 {{count}}건이 참조. 클릭하여 재사용 상세 보기.",
+    "cache-signal-title": "프롬프트 캐시 적중률 {{pct}}% (입력 토큰 기준). 낮으면 매 요청마다 입력 토큰을 다시 과금.",
     "ref-count-span-title": "이 시스템 프롬프트(hash 기준)를 참조한 API 요청 수.",
     "segment-count-title": "원본 system 배열에서 본문으로 사용된 텍스트 세그먼트 수. (보통 idx[0]은 결제용 헤더, idx[1] 이후가 본문)",
     "byte-size-title": "시스템 프롬프트 본문의 바이트 크기.",
@@ -191,15 +191,15 @@
       "thinking-empty-body": "사고 본문이 이 페이로드에 포함되지 않았습니다 (signature만 재전송됨).",
       "thinking-empty-tip": "Claude는 멀티턴 재전송 시 이전 turn의 thinking 본문을 빼고 signature만 보냅니다. 본문은 그 응답이 생성된 시점에만 존재합니다.",
       "tool-use-tip": "Claude가 도구 사용을 요청한 것(tool_use)입니다. 아직 결과가 아니라 '요청' 단계예요.",
-      "tool-use-sub": "{tool} 실행 요청 ·",
+      "tool-use-sub": "{{tool}} 실행 요청 ·",
       "input-view": "input 보기",
       "result-pending": "실행 대기 / 결과 미수신",
       "result-error": "도구 실패",
       "result-ok": "완료",
       "result-view": "결과 보기",
       "tool-result-tip": "도구를 실행한 환경(CLI)이 Claude에게 돌려준 응답입니다. 당신이 친 말이 아니에요. tool_use_id 로 위 요청과 짝지어집니다.",
-      "orphan": "짝 tool_use를 찾지 못한 결과 ({id}) — 서브에이전트 경계이거나 수집 누락일 수 있어요",
-      "unknown": "기타 파트: {type}",
+      "orphan": "짝 tool_use를 찾지 못한 결과 ({{id}}) — 서브에이전트 경계이거나 수집 누락일 수 있어요",
+      "unknown": "기타 파트: {{type}}",
       "recorded": "녹화된 대화 재생 중 (실시간 아님)",
       "search-clear": "검색 지우기",
       "legend-text": "text · 발화",
@@ -208,7 +208,7 @@
       "legend-tool-result": "tool_result · 도구 응답",
       "stateless": "이 세션의 API 호출은 매번 전체 대화를 다시 보냅니다 (왜 반복되나요?)",
       "stateless-tip": "Claude는 기억이 없어 매 호출마다 지금까지의 대화 전체를 다시 받습니다. 같은 내용 반복은 정상이에요.",
-      "parallel": "병렬 도구 요청 {count}개 (동시 실행)",
+      "parallel": "병렬 도구 요청 {{count}}개 (동시 실행)",
       "more": "더 보기",
       "collapse": "접기",
       "inspect": "자세히",
@@ -226,7 +226,7 @@
       "live-tip": "이 세션에 새 호출이 도착하면 자동으로 최신 페이로드로 갱신됩니다 (SSE 실시간).",
       "paused": "과거 보기",
       "paused-tip": "특정 과거 요청을 보는 중 — 자동 갱신 일시정지. '새 요청'을 누르면 실시간으로 복귀합니다.",
-      "new-requests": "새 요청 {count} ↓",
+      "new-requests": "새 요청 {{count}} ↓",
       "resize-aria": "대화·인스펙터 폭 조절"
     }
   },
@@ -235,9 +235,9 @@
     "tab-tools-label": "도구",
     "flow": {
       "scope-center": "중심",
-      "scope-window": "윈도우: 최근 {days}일",
-      "scope-turns": "관측: {turns}/{total}턴",
-      "scope-calls": "{calls}회 호출 (같은 턴 반복 포함)",
+      "scope-window": "윈도우: 최근 {{days}}일",
+      "scope-turns": "관측: {{turns}}/{{total}}턴",
+      "scope-calls": "{{calls}}회 호출 (같은 턴 반복 포함)",
       "legend-main": "트리거 흐름",
       "legend-normal": "일반",
       "legend-strength-strong": "자주 호출 (≥50%)",
@@ -245,7 +245,7 @@
       "legend-strength-weak": "가끔 호출 (5-20%)",
       "legend-strength-sparse": "드물게 호출 (<5%)",
       "info-aria": "집계 기준 정보",
-      "info-tooltip": "집계 기준: 최근 {days}일 / 중심 문서 등장 turn 수 분모. 양방향 BFS — 좌(부모-3..-1) → 중심 → 우(자식 1..3, 최대 3단). 우측 끝 \"같은 턴 후속\" 컬럼은 호출 인과는 없지만 같은 turn 의 중심 이후에 등장한 메타 문서 (점선 엣지). 호출 빈도 4단 — 자주(≥50%) · 보통(20-50%) · 가끔(5-20%) · 드물게(<5%).",
+      "info-tooltip": "집계 기준: 최근 {{days}}일 / 중심 문서 등장 turn 수 분모. 양방향 BFS — 좌(부모-3..-1) → 중심 → 우(자식 1..3, 최대 3단). 우측 끝 \"같은 턴 후속\" 컬럼은 호출 인과는 없지만 같은 turn 의 중심 이후에 등장한 메타 문서 (점선 엣지). 호출 빈도 4단 — 자주(≥50%) · 보통(20-50%) · 가끔(5-20%) · 드물게(<5%).",
       "section-depth-1": "직접 호출",
       "section-depth-2": "전이",
       "section-depth-3": "심층",
@@ -254,10 +254,10 @@
       "zoom-in-title": "확대",
       "zoom-out-title": "축소",
       "empty-no-center": "표시할 메타 문서가 없습니다",
-      "empty-no-center-project": "{project}에 사용 이력이 있는 메타 문서가 없습니다",
-      "empty-zero-turns": "{name}의 호출 이력이 아직 없습니다",
+      "empty-no-center-project": "{{project}}에 사용 이력이 있는 메타 문서가 없습니다",
+      "empty-zero-turns": "{{name}}의 호출 이력이 아직 없습니다",
       "empty-hint": "흐름은 최근 턴 데이터를 기반으로 계산됩니다. 선택 범위에서 최소 1턴 이상 실행되면 표시됩니다.",
-      "fetch-failed": "흐름을 불러오지 못했습니다: {message}",
+      "fetch-failed": "흐름을 불러오지 못했습니다: {{message}}",
       "section-parent-3": "호출 인과 (-3)",
       "section-parent-2": "호출 인과 (-2)",
       "section-parent-1": "호출 인과 (-1)",
@@ -293,22 +293,22 @@
     "orphan-path-label": "미등록 호출",
     "orphan-tooltip": "이 호출은 다른 워크스페이스(.claude/) 또는 빌트인/플러그인 정의에서 발생했을 수 있습니다. 동기화 시 다중 작업 공간을 함께 스캔하면 이 행이 카탈로그 행으로 합쳐집니다.",
     "deleted-badge-title": "현재 디스크에서 사라진 정의 (soft-deleted)",
-    "empty-project-title": "{project} 프로젝트에 등록된 메타 문서가 없습니다",
+    "empty-project-title": "{{project}} 프로젝트에 등록된 메타 문서가 없습니다",
     "empty-project-hint": "이 프로젝트가 SessionStart로 동기화된 적이 없을 수 있습니다. 좌측 thead의 <strong>동기화</strong> 버튼을 누르면 알려진 모든 작업 공간을 다시 스캔합니다.",
     "empty-global-title": "메타 문서가 없습니다 — SessionStart 이후 자동 동기화됩니다",
-    "load-failed": "불러오기 실패: {message}",
+    "load-failed": "불러오기 실패: {{message}}",
     "syncing-label": "동기화 중…",
     "toast-sync-start": "동기화 시작…",
-    "toast-sync-done": "동기화 완료 — {summary}",
-    "toast-sync-failed": "동기화 실패: {message}",
+    "toast-sync-done": "동기화 완료 — {{summary}}",
+    "toast-sync-failed": "동기화 실패: {{message}}",
     "sync-restore-label": "동기화",
     "orphan-scope-switch": "orphan은 어느 프로젝트 호출인지 단정할 수 없어 전체 프로젝트 모드로 전환했습니다.",
     "refresh-no-change": "변동 없음",
-    "refresh-add": "{n}개 추가",
-    "refresh-del": "{n}개 삭제",
-    "refresh-global": "글로벌 {detail}",
-    "refresh-project": "프로젝트 {detail}",
-    "refresh-workspaces": "작업 공간 {n}개",
+    "refresh-add": "{{n}}개 추가",
+    "refresh-del": "{{n}}개 삭제",
+    "refresh-global": "글로벌 {{detail}}",
+    "refresh-project": "프로젝트 {{detail}}",
+    "refresh-workspaces": "작업 공간 {{n}}개",
     "refresh-no-result": "결과 없음"
   },
   "tool-stats": {
@@ -326,9 +326,9 @@
   "syslib": {
     "no-prompts": "시스템 프롬프트가 없습니다 (아직 dedup 카탈로그 비어있음)",
     "view-prompt-aria": "시스템 프롬프트 본문 보기",
-    "load-failed": "불러오기 실패: {message}",
+    "load-failed": "불러오기 실패: {{message}}",
     "not-found": "본문을 찾을 수 없습니다.",
-    "modal-load-failed": "불러오기 실패: {message}",
+    "modal-load-failed": "불러오기 실패: {{message}}",
     "close-label": "닫기",
     "usage-cache": "캐시 적중",
     "usage-reqs": "재사용",
@@ -346,7 +346,7 @@
       "title": "Creation / Read Ratio",
       "desc": "캐시 토큰의 Write(초기 생성) vs Read(재사용) 비율.\nstable: Read ≥ 70% — 캐시가 잘 재사용되고 있음.\nbuilding: Read < 70% — 캐시를 채우는 중."
     },
-    "precision-tooltip": "{pct}% (정밀)"
+    "precision-tooltip": "{{pct}}% (정밀)"
   },
   "obs-panel": {
     "no-data": "데이터 없음",
@@ -355,8 +355,8 @@
     "no-tool-calls": "도구 호출 없음",
     "no-behavior-defs": "메타 문서 호출 없음",
     "recent-activity": "최근 활동",
-    "yesterday": "어제 {val}",
-    "savings": "절감 {val}"
+    "yesterday": "어제 {{val}}",
+    "savings": "절감 {{val}}"
   },
   "obs-tooltip": {
     "burn-rate": {
@@ -397,39 +397,39 @@
     }
   },
   "context-chart": {
-    "indicator": "누적 {value} / {limit} tokens ({percent}%)",
-    "footer": "Turn {turn} · 최대 {max} tokens · 모델 한도: {limit}{model}"
+    "indicator": "누적 {{value}} / {{limit}} tokens ({{percent}}%)",
+    "footer": "Turn {{turn}} · 최대 {{max}} tokens · 모델 한도: {{limit}}{{model}}"
   },
   "anomaly": {
     "bloated-sys": {
       "warn": {
-        "label": "sys {pct}%",
-        "tooltip": "시스템 컨텍스트 비대 ({pct}%)",
+        "label": "sys {{pct}}%",
+        "tooltip": "시스템 컨텍스트 비대 ({{pct}}%)",
         "modal": "시스템 비대 · /mcp list 검토"
       },
       "critical": {
-        "label": "bloated {pct}%",
-        "tooltip": "system이 user를 압도 ({pct}%)",
+        "label": "bloated {{pct}}%",
+        "tooltip": "system이 user를 압도 ({{pct}}%)",
         "modal": "시스템 압도 · compact 무효 · CLAUDE.md 축소"
       }
     },
     "context-saturation": {
       "warn": {
-        "label": "▦ ctx {pct}%",
-        "tooltip": "세션 컨텍스트 {pct}% 사용 — 한도 가까움",
+        "label": "▦ ctx {{pct}}%",
+        "tooltip": "세션 컨텍스트 {{pct}}% 사용 — 한도 가까움",
         "modal": "/clear 또는 /compact 권장"
       },
       "critical": {
-        "label": "▦ ctx {pct}%",
-        "tooltip": "세션 컨텍스트 {pct}% 사용 — 한도 가까움",
+        "label": "▦ ctx {{pct}}%",
+        "tooltip": "세션 컨텍스트 {{pct}}% 사용 — 한도 가까움",
         "modal": "/clear 또는 /compact 권장"
       }
     },
     "agent-spike": {
-      "label": "↑×{n}",
-      "tooltip": "Agent가 부모 대비 {n}배",
-      "modal": "Agent 토큰 폭증 · ↑×{n} · 세션 분리 권장",
-      "summary": "↑{n}× larger than parent row"
+      "label": "↑×{{n}}",
+      "tooltip": "Agent가 부모 대비 {{n}}배",
+      "modal": "Agent 토큰 폭증 · ↑×{{n}} · 세션 분리 권장",
+      "summary": "↑{{n}}× larger than parent row"
     }
   },
   "main": {
@@ -461,7 +461,7 @@
         "from": "시작일",
         "to": "종료일",
         "warn-long-range": "90일 초과 조회는 서버에 부하를 줄 수 있습니다",
-        "label-with-range": "사용자 지정 ({from} ~ {to})",
+        "label-with-range": "사용자 지정 ({{from}} ~ {{to}})",
         "ephemeral-toast": "사용자 지정 범위는 새로고침 시 초기화됩니다"
       },
       "all": {
@@ -492,8 +492,8 @@
     }
   },
   "version-check": {
-    "available": "{tag} 사용 가능",
-    "latest": "{tag} · 최신",
+    "available": "{{tag}} 사용 가능",
+    "latest": "{{tag}} · 최신",
     "loading": "확인 중…",
     "updating": "업데이트 중…",
     "confirm": "업데이트",
@@ -503,23 +503,23 @@
     "restarting": "업데이트 완료. 서버를 재시작합니다…",
     "restart-complete": "재시작 완료. 페이지를 새로고침합니다…",
     "restart-timeout": "서버가 돌아오지 않습니다. 페이지를 수동으로 새로고침해 주세요.",
-    "network-error": "네트워크 오류: {message}",
+    "network-error": "네트워크 오류: {{message}}",
     "update-request-failed": "업데이트 요청 실패",
     "migration": {
-      "applied": "마이그레이션 {n}건 적용 (v{from} → v{to})",
-      "applied-single": "마이그레이션 1건 적용 (v{from} → v{to})",
+      "applied": "마이그레이션 {{n}}건 적용 (v{{from}} → v{{to}})",
+      "applied-single": "마이그레이션 1건 적용 (v{{from}} → v{{to}})",
       "none": "스키마 변경 없음",
-      "none-detail": "DB 버전 v{version} · 이번 업데이트엔 마이그레이션이 없습니다.",
+      "none-detail": "DB 버전 v{{version}} · 이번 업데이트엔 마이그레이션이 없습니다.",
       "failed": "마이그레이션 실패",
-      "failed-file": "실패한 파일: {file}",
+      "failed-file": "실패한 파일: {{file}}",
       "failed-guide": "서버 로그를 확인하고, 필요하면 운영 가이드의 복구 절차를 따르세요.",
-      "duration": "{ms}ms 소요"
+      "duration": "{{ms}}ms 소요"
     },
     "local-changes": {
       "title": "git 변경사항 감지",
       "body": "working tree에 미커밋 변경이 있어 자동 업데이트를 진행할 수 없습니다. 아래 명령으로 변경을 정리한 뒤 다시 시도하세요.",
       "files-label": "변경 파일",
-      "files-more": "외 {n}건"
+      "files-more": "외 {{n}}건"
     },
     "shallow": {
       "warning": "shallow clone 환경 — 자동 업데이트 실패 위험",
@@ -601,17 +601,17 @@
       "title": "오류율"
     },
     "point-hover": {
-      "title": "턴 {turn}",
-      "accumulated-with-limit": "누적 {value} / {limit} tokens ({percent}%)",
-      "accumulated": "누적 {value} tokens",
-      "delta": "전 턴 대비 {delta} tokens",
-      "model": "모델 {model}"
+      "title": "턴 {{turn}}",
+      "accumulated-with-limit": "누적 {{value}} / {{limit}} tokens ({{percent}}%)",
+      "accumulated": "누적 {{value}} tokens",
+      "delta": "전 턴 대비 {{delta}} tokens",
+      "model": "모델 {{model}}"
     }
   },
   "detail-view": {
-    "total-tokens": "총 {tokens} 토큰",
-    "ended-at": "종료: {time}",
-    "turn-count-hint": "세션 {count}턴 누적 — /clear 또는 새 세션 권장"
+    "total-tokens": "총 {{tokens}} 토큰",
+    "ended-at": "종료: {{time}}",
+    "turn-count-hint": "세션 {{count}}턴 누적 — /clear 또는 새 세션 권장"
   },
   "settings-view": {
     "title": "설정",
@@ -632,7 +632,7 @@
       "missing": "미설치",
       "hook-label": "Hook 설정",
       "proxy-label": "Proxy 설정",
-      "hook-registered": "{n}/{total} 등록",
+      "hook-registered": "{{n}}/{{total}} 등록",
       "hook-broken": "JSON 손상",
       "hook-missing": "설정 파일 없음",
       "jump-hooks": "Hook 설정 →",
@@ -653,7 +653,7 @@
     "hooks": {
       "title": "이벤트 수집 (Hook)",
       "subtitle": "Claude Code 의 라이프사이클 이벤트(프롬프트·도구 호출·세션 등)를 수집합니다.",
-      "status-ok": "수집 중 ({n}/{total} 이벤트)",
+      "status-ok": "수집 중 ({{n}}/{{total}} 이벤트)",
       "status-off": "미설치 — 자동 설치가 필요합니다",
       "reinstall": "재설치",
       "detail-summary": "상세 정보 보기",
@@ -682,7 +682,7 @@
       },
       "health": {
         "ok": "Hook 상태: 모두 등록되었습니다",
-        "warn": "Hook 상태: {n}/{total} 등록 — 자동 설치를 권장합니다",
+        "warn": "Hook 상태: {{n}}/{{total}} 등록 — 자동 설치를 권장합니다",
         "missing": "Hook 상태: ~/.claude/settings.json 이 없습니다 — 자동 설치로 만들어집니다",
         "broken": "Hook 상태: settings.json 파일이 손상됐습니다 — 직접 백업 후 자동 설치하세요"
       },
@@ -707,7 +707,7 @@
       "summary-title": "전체 사용량",
       "total-size": "총 용량",
       "retention": "보관 기간",
-      "retention-days": "{n}일",
+      "retention-days": "{{n}}일",
       "rdb": {
         "title": "대화·이벤트 기록",
         "subtitle": "프롬프트·도구 호출·세션 등 모든 활동 기록을 저장합니다.",
@@ -754,7 +754,7 @@
       "copied": "✓ 클립보드에 복사됨",
       "outro": "직접 편집을 원하면 위 스니펫을 ~/.zshrc 등 셸 프로필 끝에 붙여 넣고 새 셸에서 사용하세요.",
       "install": "프록시 자동 등록",
-      "status-ok": "수집 중 ({shell})",
+      "status-ok": "수집 중 ({{shell}})",
       "status-off": "미설치 — 자동 설치가 필요합니다",
       "status-broken": "마커 손상 — 수동 정정이 필요합니다",
       "reinstall": "재설치",
@@ -773,7 +773,7 @@
       "engineering-summary": "고급 엔지니어링 진단 정보 보기 ▼",
       "engineering-title": "진단 정보",
       "action-help": "위의 [프록시 자동 등록] 버튼을 눌러야 실제로 셸 프로필이 수정됩니다. 카드 선택만으로는 등록되지 않습니다.",
-      "health-target": "검사 대상 파일: {path}",
+      "health-target": "검사 대상 파일: {{path}}",
       "detected-shell": "감지된 셸",
       "profile-path": "프로필 경로",
       "profile-exists": "존재함",
@@ -809,7 +809,7 @@
         }
       },
       "health": {
-        "ok": "Proxy 상태: {shell} 에 정상 설치되어 있습니다",
+        "ok": "Proxy 상태: {{shell}} 에 정상 설치되어 있습니다",
         "warn": "Proxy 상태: 아직 설치되지 않았습니다 — [프록시 자동 등록] 으로 1번에 완료",
         "broken": "Proxy 상태: 마커 블록이 손상되었습니다 — 셸 프로필을 수동으로 정정해 주세요",
         "missing": "Proxy 상태: 셸 프로필 파일이 없습니다 — 자동 등록 시 새로 생성됩니다"

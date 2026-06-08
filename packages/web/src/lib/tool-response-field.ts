@@ -93,26 +93,26 @@ export function toolResponseHintKey(r: { payload?: unknown; tool_name?: string |
   try {
     if (tn === 'Read') {
       const lines = numVar(tr.totalLines ?? tr.total_lines);
-      if (lines != null) return { key: 'badges.renderers.tool-hint.lines', vars: { n: lines } };
+      if (lines != null) return { key: 'badges:renderers.tool-hint.lines', vars: { n: lines } };
     }
     if (tn === 'Bash') {
-      return nonEmptyStr(tr.stderr) ? { key: 'badges.renderers.tool-hint.error' } : null;
+      return nonEmptyStr(tr.stderr) ? { key: 'badges:renderers.tool-hint.error' } : null;
     }
     if (tn === 'Edit' || tn === 'Write' || tn === 'MultiEdit') {
-      return { key: 'badges.renderers.tool-hint.saved' };
+      return { key: 'badges:renderers.tool-hint.saved' };
     }
     if (tn === 'Grep') {
       const num = numVar(tr.numFiles ?? tr.num_files);
-      if (num != null) return { key: 'badges.renderers.tool-hint.files', vars: { n: num } };
+      if (num != null) return { key: 'badges:renderers.tool-hint.files', vars: { n: num } };
     }
     if (tn === 'Glob') {
       const arr = Array.isArray(tr.filenames ?? tr.results ?? tr.paths ?? tr)
         ? tr.filenames ?? tr.results ?? tr.paths
         : null;
-      if (Array.isArray(arr)) return { key: 'badges.renderers.tool-hint.matches', vars: { n: arr.length } };
+      if (Array.isArray(arr)) return { key: 'badges:renderers.tool-hint.matches', vars: { n: arr.length } };
     }
     if (tn === 'Agent' || tn === 'Skill') {
-      return tr.is_error ? { key: 'badges.renderers.tool-hint.failed' } : null;
+      return tr.is_error ? { key: 'badges:renderers.tool-hint.failed' } : null;
     }
   } catch {
     /* 파싱 실패는 무시 */

@@ -37,7 +37,7 @@ describe('LLMInput — a-head 헤더', () => {
 
   it('banner 텍스트에 <strong> 이 포함되면 escape 되지 않고 실제 태그로 렌더 (결함 #1)', () => {
     globalThis.__setTestT?.((k) =>
-      k === 'ui.llm-input.banner-text'
+      k === 'ui:llm-input.banner-text'
         ? '이 탭은 proxy가 전송한 <strong>원본 페이로드</strong>입니다.'
         : k,
     );

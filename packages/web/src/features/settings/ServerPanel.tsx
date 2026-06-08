@@ -7,6 +7,7 @@
  * @module features/settings/ServerPanel
  */
 import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ServerPanelView } from './ServerPanelView';
 import { SettingsSkeleton } from './SettingsSkeleton';
 import { fetchDiag, fetchLogs } from './hooks-api';
@@ -14,11 +15,11 @@ import { useAsyncResource } from './use-settings-diag';
 import type { DiagData, LogsData } from './types';
 
 export interface ServerPanelProps {
-  t: (key: string, vars?: Record<string, unknown>) => string;
   onCopy?: (text: string) => void;
 }
 
-export function ServerPanel({ t, onCopy }: ServerPanelProps) {
+export function ServerPanel({ onCopy }: ServerPanelProps) {
+  const { t } = useTranslation();
   // diag + logs 병렬(원본 :1465). 단일 AbortSignal 로 둘 다 취소.
   const fetcher = useCallback(
     (signal: AbortSignal): Promise<{ diag: DiagData; logs: LogsData }> =>
@@ -28,10 +29,10 @@ export function ServerPanel({ t, onCopy }: ServerPanelProps) {
   const { status, data, error } = useAsyncResource(fetcher);
 
   if (status === 'loading' || !data) {
-    return <SettingsSkeleton cards={3} label={t('ui.settings-view.loading')} />;
+    return <SettingsSkeleton cards={3} label={t('ui:settings-view.loading')} />;
   }
   if (status === 'error') {
     return <div className="settings-error">⚠ {error}</div>;
   }
-  return <ServerPanelView server={data.diag.server} logs={data.logs} t={t} onCopy={onCopy} />;
+  return <ServerPanelView server={data.diag.server} logs={data.logs} onCopy={onCopy} />;
 }

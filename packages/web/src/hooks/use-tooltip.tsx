@@ -35,7 +35,7 @@
  *   위임해 data-tip/data-*-tooltip 요소가 포커스될 때 요소 박스(getBoundingClientRect) 기준으로 툴팁을
  *   표시한다(키보드/스크린리더 사용자 대응 — 네이티브 대비 순개선).
  *
- * i18n: 콘텐츠 키는 'ui.stat-tooltip.*' / 'ui.obs-tooltip.*' / 'ui.cache-panel.*'. react-i18next t 를
+ * i18n: 콘텐츠 키는 'ui:stat-tooltip.*' / 'ui:obs-tooltip.*' / 'ui:cache-panel.*'. react-i18next t 를
  *   useTranslation 으로 받아 모듈 헬퍼(statContent 등)에 인자로 주입(레거시 window.I18n/tt 직접참조 폐기).
  *
  * 위치: 레거시는 커서 추종(position(e): clientX+8 / clientY+12, viewport 충돌 시 반대편 뒤집기)을 썼다 —
@@ -65,7 +65,7 @@ type TFunc = (key: string, vars?: Record<string, unknown>) => string;
  * timeline-meta 통계 카드: sessions / requests / tokens / active / avg-duration / p95 / err.
  */
 function statContent(key: string, t: TFunc): TooltipContent | null {
-  const ns = `ui.stat-tooltip.${key}`;
+  const ns = `ui:stat-tooltip.${key}`;
   const title = t(`${ns}.title`);
   // t 는 키 부재 시 키 자체를 passthrough — 알 수 없는 key 는 무시(레거시 content map 미존재 동치).
   if (title === `${ns}.title`) return null;
@@ -77,7 +77,7 @@ function statContent(key: string, t: TFunc): TooltipContent | null {
  * 차트 영역(chart-wrap): context-growth.
  */
 function ctxContent(key: string, t: TFunc): TooltipContent | null {
-  const ns = `ui.stat-tooltip.${key}`;
+  const ns = `ui:stat-tooltip.${key}`;
   const title = t(`${ns}.title`);
   if (title === `${ns}.title`) return null;
   return { title, desc: t(`${ns}.desc`) };
@@ -88,7 +88,7 @@ function ctxContent(key: string, t: TFunc): TooltipContent | null {
  * anomaly mini-badge: spike / loop / slow / error / cache (desc 만, title 없음).
  */
 function miniBadgeContent(key: string, t: TFunc): TooltipContent | null {
-  const ns = `ui.stat-tooltip.badge.${key}`;
+  const ns = `ui:stat-tooltip.badge.${key}`;
   const desc = t(ns);
   if (desc === ns) return null;
   return { desc };
@@ -100,7 +100,7 @@ function miniBadgeContent(key: string, t: TFunc): TooltipContent | null {
  *   cat-Agent / cat-Skill / cat-MCP / cat-Native / anomaly.
  */
 function obsContent(key: string, t: TFunc): TooltipContent | null {
-  const ns = `ui.obs-tooltip.${key}`;
+  const ns = `ui:obs-tooltip.${key}`;
   const title = t(`${ns}.title`);
   if (title === `${ns}.title`) return null;
   return { title, desc: t(`${ns}.desc`) };
@@ -111,7 +111,7 @@ function obsContent(key: string, t: TFunc): TooltipContent | null {
  * Cache Intelligence Panel: hit-rate / ratio.
  */
 function cachePanelContent(key: string, t: TFunc): TooltipContent | null {
-  const ns = `ui.cache-panel.${key}`;
+  const ns = `ui:cache-panel.${key}`;
   const title = t(`${ns}.title`);
   if (title === `${ns}.title`) return null;
   return { title, desc: t(`${ns}.desc`) };
@@ -145,7 +145,7 @@ function StatBody({ content }: { content: TooltipContent }): ReactElement {
 
 /** ctx-point-hover detail → .stat-tooltip 본문 content(레거시 renderPointHoverHtml 산술 1:1). */
 function pointHoverContent(detail: CtxPointHoverDetail, t: TFunc): TooltipContent {
-  const ns = 'ui.stat-tooltip.point-hover';
+  const ns = 'ui:stat-tooltip.point-hover';
   const title = t(`${ns}.title`, { turn: detail.turnIndex });
   const lines: string[] = [];
   if (detail.windowLabel && detail.usagePercent !== null) {
@@ -296,7 +296,7 @@ export function TooltipLayer(): ReactElement | null {
           kind: 'stat',
           content: {
             title: pointHover.detail.label,
-            desc: tRef.current('ui.chart.count-unit', { count: pointHover.detail.count.toLocaleString() }),
+            desc: tRef.current('ui:chart.count-unit', { count: pointHover.detail.count.toLocaleString() }),
           },
         });
       }

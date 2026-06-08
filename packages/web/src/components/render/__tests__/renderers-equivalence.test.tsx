@@ -26,19 +26,19 @@ const originalDateNow = Date.now;
 beforeEach(() => {
   globalThis.__setTestT?.((key, vars) => {
     const map: Record<string, string> = {
-      'common.formatters.just-now': '방금',
-      'common.formatters.minutes-ago': `${vars?.n}분 전`,
-      'common.formatters.hours-ago': `${vars?.n}시간 전`,
-      'common.formatters.days-ago': `${vars?.n}일 전`,
-      'session.rows.empty-message': '메시지 없음',
-      'session.rows.no-data': '데이터가 없습니다',
-      'session.rows.status.ended': '종료된 세션',
-      'session.rows.status.live': '라이브 세션',
-      'session.rows.status.stale': 'stale — SessionEnd 누락 의심',
-      'badges.renderers.tool-status.error': '오류',
-      'badges.renderers.model.unknown': '모델불명',
-      'badges.renderers.model.synthetic': 'SDK 합성',
-      'badges.renderers.model.no-info': '모델 정보 없음',
+      'common:formatters.just-now': '방금',
+      'common:formatters.minutes-ago': `${vars?.n}분 전`,
+      'common:formatters.hours-ago': `${vars?.n}시간 전`,
+      'common:formatters.days-ago': `${vars?.n}일 전`,
+      'session:rows.empty-message': '메시지 없음',
+      'session:rows.no-data': '데이터가 없습니다',
+      'session:rows.status.ended': '종료된 세션',
+      'session:rows.status.live': '라이브 세션',
+      'session:rows.status.stale': 'stale — SessionEnd 누락 의심',
+      'badges:renderers.tool-status.error': '오류',
+      'badges:renderers.model.unknown': '모델불명',
+      'badges:renderers.model.synthetic': 'SDK 합성',
+      'badges:renderers.model.no-info': '모델 정보 없음',
     };
     return map[key] ?? key;
   });

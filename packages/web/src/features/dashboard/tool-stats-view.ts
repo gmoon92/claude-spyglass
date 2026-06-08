@@ -55,7 +55,7 @@ export function computeMatrixView(stats: ReadonlyArray<ToolStatRow>): MatrixView
     const errCount = s.confidence_error_count || 0;
     const lowCount = s.confidence_low_count || 0;
     const hasLowConf = !!s.has_low_confidence || errCount + lowCount > 0;
-    const confTipKey = errCount > 0 ? 'common.token-confidence-error' : 'common.token-confidence-low';
+    const confTipKey = errCount > 0 ? 'common:token-confidence-error' : 'common:token-confidence-low';
 
     return {
       toolName: s.tool_name ?? '',

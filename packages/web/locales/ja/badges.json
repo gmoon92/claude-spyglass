@@ -4,11 +4,11 @@
       "error": "エラー"
     },
     "tool-hint": {
-      "lines": "[{n}行]",
+      "lines": "[{{n}}行]",
       "error": "[エラー]",
       "saved": "[保存済み]",
-      "files": "[{n}ファイル]",
-      "matches": "[{n}件マッチ]",
+      "files": "[{{n}}ファイル]",
+      "matches": "[{{n}}件マッチ]",
       "failed": "[失敗]"
     },
     "model": {
@@ -17,7 +17,7 @@
       "no-info": "モデル情報なし"
     },
     "extract": {
-      "chars": "計{n}文字"
+      "chars": "計{{n}}文字"
     }
   }
 }

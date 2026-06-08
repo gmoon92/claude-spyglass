@@ -21,6 +21,7 @@
  * @module features/settings/StoragePanelView
  */
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { HealthBadge } from '../../components/settings/HealthBadge';
 import { InlineCopyButton } from '../../components/settings/InlineCopyButton';
 import { SettingsRow } from '../../components/settings/SettingsRow';
@@ -36,7 +37,6 @@ export interface StoragePanelViewProps {
   ladybug: LadybugStatus | null;
   /** 보관 기간(일) — diag.retention.days. */
   retentionDays: number;
-  t: (key: string, vars?: Record<string, unknown>) => string;
   /** CLI 명령 복사 통지(무전역 clipboard). */
   onCopy?: (text: string) => void;
   /** Ladybug 자동 설치 통지(strategy='auto'). */
@@ -63,11 +63,13 @@ export function StoragePanelView({
   graph: g,
   ladybug,
   retentionDays,
-  t,
   onCopy,
   onInstall,
   installResult,
 }: StoragePanelViewProps) {
+  const { t: tBase } = useTranslation();
+  // react-i18next t → (key, vars)=>string 시그니처로 래핑(동적 키·보간 타입 회피, UpdateBadge 선례).
+  const t = (key: string, vars?: Record<string, unknown>): string => tBase(key, vars) as unknown as string;
   // ── 요약 — 총 용량 + 비율 ────────────────────────────────────────────────
   const sqliteBytes = sqlite.dbSizeBytes ?? 0;
   const graphBytes = g.cacheSizeBytes ?? 0;
@@ -81,7 +83,7 @@ export function StoragePanelView({
 
   // ── Graph 섹션 메타 (친화적 상태값 — raw circuit/cursor 미노출) ───────────
   const graphState = graphHealthState(g);
-  const graphHealthLabel = t(`ui.settings-view.storage.graph.health.${graphState}`);
+  const graphHealthLabel = t(`ui:settings-view.storage.graph.health.${graphState}`);
   const graphSize = g.cacheSizeBytes != null ? formatBytes(g.cacheSizeBytes) : '—';
   const connectionOk = g.circuit?.state === 'CLOSED';
   const syncOn = !!g.sync?.running;
@@ -92,13 +94,13 @@ export function StoragePanelView({
 
   return (
     <>
-      <h3 className="settings-section-title">{t('ui.settings-view.storage.title')}</h3>
+      <h3 className="settings-section-title">{t('ui:settings-view.storage.title')}</h3>
 
       {/* 요약 카드 — 총 용량 + 비율 바 + 보관 기간. */}
       <div className="settings-card">
-        <div className="settings-card-title">{t('ui.settings-view.storage.summary-title')}</div>
+        <div className="settings-card-title">{t('ui:settings-view.storage.summary-title')}</div>
         <SettingsRow
-          label={t('ui.settings-view.storage.total-size')}
+          label={t('ui:settings-view.storage.total-size')}
           status="ok"
           value={formatBytes(totalBytes)}
         />
@@ -106,71 +108,71 @@ export function StoragePanelView({
           segments={[
             {
               key: 'rdb',
-              label: t('ui.settings-view.storage.rdb.title'),
+              label: t('ui:settings-view.storage.rdb.title'),
               bytes: sqliteBytes,
               sizeText: sqliteSize,
             },
             {
               key: 'graph',
-              label: t('ui.settings-view.storage.graph.title'),
+              label: t('ui:settings-view.storage.graph.title'),
               bytes: graphBytes,
               sizeText: graphSize,
             },
           ]}
         />
         <SettingsRow
-          label={t('ui.settings-view.storage.retention')}
+          label={t('ui:settings-view.storage.retention')}
           status="ok"
-          value={t('ui.settings-view.storage.retention-days', { n: retentionDays })}
+          value={t('ui:settings-view.storage.retention-days', { n: retentionDays })}
         />
       </div>
 
       {/* 상세 ①「대화·이벤트 기록」(SQLite). */}
       <div className="settings-card">
         <StorageSectionHead
-          title={t('ui.settings-view.storage.rdb.title')}
-          subtitle={t('ui.settings-view.storage.rdb.subtitle')}
-          badge={<HealthBadge variant="ok" icon="✓" label={t('ui.settings-view.storage.rdb.health-ok')} />}
+          title={t('ui:settings-view.storage.rdb.title')}
+          subtitle={t('ui:settings-view.storage.rdb.subtitle')}
+          badge={<HealthBadge variant="ok" icon="✓" label={t('ui:settings-view.storage.rdb.health-ok')} />}
         />
         <SettingsRow
-          label={t('ui.settings-view.storage.rdb.size-label')}
+          label={t('ui:settings-view.storage.rdb.size-label')}
           status="ok"
           value={sqliteSize}
         />
         <SettingsRow
-          label={t('ui.settings-view.storage.rdb.path-label')}
+          label={t('ui:settings-view.storage.rdb.path-label')}
           status="ok"
           value=""
           tail={<code className="settings-meta">{sqlite.dbPath || ''}</code>}
         />
         <SettingsRow
-          label={t('ui.settings-view.storage.rdb.migration-label')}
+          label={t('ui:settings-view.storage.rdb.migration-label')}
           status={migVersion != null ? 'ok' : 'warn'}
           value={migVersion != null ? `v${migVersion}` : '—'}
           tail={<code className="settings-meta">{migFilename}</code>}
         />
         <SettingsRow
-          label={t('ui.settings-view.storage.rdb.engine-label')}
+          label={t('ui:settings-view.storage.rdb.engine-label')}
           status="ok"
-          value={t('ui.settings-view.storage.rdb.engine-value')}
+          value={t('ui:settings-view.storage.rdb.engine-value')}
         />
         {cli && (
           cli.available ? (
             <SettingsRow
-              label={t('ui.settings-view.storage.rdb.cli-label')}
+              label={t('ui:settings-view.storage.rdb.cli-label')}
               status="ok"
               value={cli.version || cli.raw || '?'}
               tail={<code className="settings-meta">sqlite3</code>}
             />
           ) : (
             <SettingsRow
-              label={t('ui.settings-view.storage.rdb.cli-label')}
+              label={t('ui:settings-view.storage.rdb.cli-label')}
               status="warn"
-              value={t('ui.settings-view.diag.missing')}
+              value={t('ui:settings-view.diag.missing')}
               tail={
                 <>
                   <code className="settings-cmd">brew install sqlite</code>
-                  <InlineCopyButton text="brew install sqlite" title={t('ui.settings-view.proxy.copy')} onCopy={onCopy} />
+                  <InlineCopyButton text="brew install sqlite" title={t('ui:settings-view.proxy.copy')} onCopy={onCopy} />
                 </>
               }
             />
@@ -181,57 +183,57 @@ export function StoragePanelView({
       {/* 상세 ②「관계 흐름 그래프」(Graph). */}
       <div className="settings-card">
         <StorageSectionHead
-          title={t('ui.settings-view.storage.graph.title')}
-          subtitle={t('ui.settings-view.storage.graph.subtitle')}
+          title={t('ui:settings-view.storage.graph.title')}
+          subtitle={t('ui:settings-view.storage.graph.subtitle')}
           badge={<HealthBadge variant={graphHealthBadgeVariant(graphState)} icon={graphHealthIcon(graphState)} label={graphHealthLabel} />}
         />
 
         {/* Ladybug 의존성 카드 — 미설치일 때만(자동 설치 보장). */}
         {ladybugMissing && (
           <div className="settings-card settings-card--nested">
-            <div className="settings-card-title">{t('ui.settings-view.storage.graph.install-title')}</div>
+            <div className="settings-card-title">{t('ui:settings-view.storage.graph.install-title')}</div>
             <SettingsRow
-              label={t('ui.settings-view.storage.graph.status-label')}
+              label={t('ui:settings-view.storage.graph.status-label')}
               status="warn"
-              value={t('ui.settings-view.storage.graph.missing')}
+              value={t('ui:settings-view.storage.graph.missing')}
             />
-            <div className="settings-card-sub">{t('ui.settings-view.storage.graph.missing-hint')}</div>
+            <div className="settings-card-sub">{t('ui:settings-view.storage.graph.missing-hint')}</div>
             {canInstall ? (
               <div className="settings-actions">
                 <button className="settings-action-btn" data-ladybug-install="auto" onClick={() => onInstall?.('auto')}>
-                  {t('ui.settings-view.storage.graph.install')}
+                  {t('ui:settings-view.storage.graph.install')}
                 </button>
               </div>
             ) : (
-              <div className="settings-card-sub">{t('ui.settings-view.storage.graph.no-package-manager')}</div>
+              <div className="settings-card-sub">{t('ui:settings-view.storage.graph.no-package-manager')}</div>
             )}
             <div className="settings-result" id="ladybugInstallResult">{installResult}</div>
           </div>
         )}
 
         <SettingsRow
-          label={t('ui.settings-view.storage.graph.size-label')}
+          label={t('ui:settings-view.storage.graph.size-label')}
           status="ok"
           value={graphSize}
           tail={<code className="settings-meta">{g.cacheDir || ''}</code>}
         />
         <SettingsRow
-          label={t('ui.settings-view.storage.graph.connection')}
+          label={t('ui:settings-view.storage.graph.connection')}
           status={connectionOk ? 'ok' : 'warn'}
-          value={connectionOk ? t('ui.settings-view.storage.graph.connection-ok') : t('ui.settings-view.storage.graph.connection-warn')}
+          value={connectionOk ? t('ui:settings-view.storage.graph.connection-ok') : t('ui:settings-view.storage.graph.connection-warn')}
         />
         <SettingsRow
-          label={t('ui.settings-view.storage.graph.sync')}
+          label={t('ui:settings-view.storage.graph.sync')}
           status={syncOn ? 'ok' : 'warn'}
-          value={syncOn ? t('ui.settings-view.storage.graph.sync-on') : t('ui.settings-view.storage.graph.sync-off')}
+          value={syncOn ? t('ui:settings-view.storage.graph.sync-on') : t('ui:settings-view.storage.graph.sync-off')}
         />
         <SettingsRow
-          label={t('ui.settings-view.storage.graph.engine-label')}
+          label={t('ui:settings-view.storage.graph.engine-label')}
           status={ladybug?.installed ? 'ok' : 'warn'}
           value={
             ladybug?.installed
               ? `Ladybug${ladybug.version ? ` v${ladybug.version}` : ''}`
-              : t('ui.settings-view.storage.graph.missing')
+              : t('ui:settings-view.storage.graph.missing')
           }
         />
       </div>

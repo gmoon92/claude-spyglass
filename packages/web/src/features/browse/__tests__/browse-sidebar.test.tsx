@@ -22,14 +22,8 @@ afterAll(() => {
   delete (globalThis as unknown as { window?: unknown }).window;
 });
 
-const labeler = {
-  noData: () => 'no-data',
-  liveCount: (n: number) => `live:${n}`,
-  selectProject: () => 'select-project',
-  sessionCount: (project: string, count: number) => `count:${project}:${count}`,
-  globalRowLabel: () => 'user (global)',
-  globalRowTitle: () => 'global-title',
-};
+// i18n 은 BrowseSidebar 가 useTranslation 으로 직접 구독(무전역 labeler 폐기). vitest.setup 기본 t 는
+//   key passthrough → 힌트/세션카운트 단언은 ui.left-panel.* 키로(보간 검증은 __setTestT 주입 케이스).
 
 function render(): string {
   return renderToStaticMarkup(
@@ -38,7 +32,6 @@ function render(): string {
       sessions={[]}
       selectedProject={null}
       selectedSession={null}
-      labeler={labeler}
       obsIntervalMs={0}
     />,
   );
@@ -74,13 +67,13 @@ describe('BrowseSidebar — left-panel 골격 + 리사이저 셀렉터 계약', 
     expect(html).toContain('class="panel-header"');
     expect(html).toContain('class="panel-label"');
     expect(html).toContain('id="sessionPaneHint"');
-    // 미선택 프로젝트 → labeler.selectProject() 힌트.
-    expect(html).toContain('select-project');
+    // 미선택 프로젝트 → ui.left-panel.select-project 힌트(useTranslation 직접 구독).
+    expect(html).toContain('ui:left-panel.select-project');
   });
 
   it('미선택 프로젝트일 때 세션 hint 가 selectProject 라벨이다', () => {
     const html = render();
-    expect(html).toContain('>select-project<');
+    expect(html).toContain('>ui:left-panel.select-project<');
   });
 
   it('floating anomaly badge 는 hidden 으로 마운트된다(원본 ADR-006)', () => {
@@ -103,23 +96,23 @@ describe('BrowseSidebar — 프로젝트 테이블 thead-browse(colgroup + 3컬�
   it('thead-browse 라벨이 i18n 키(ui.html.left-panel.th-*)로 해석된다', () => {
     // 테스트 스텁 I18n.t 는 key passthrough → tt() 가 키를 그대로 반환하는지로 i18n 경로 입증.
     const html = render();
-    expect(html).toContain('ui.html.left-panel.th-project');
-    expect(html).toContain('ui.html.left-panel.th-session');
-    expect(html).toContain('ui.html.left-panel.th-token');
+    expect(html).toContain('ui:html.left-panel.th-project');
+    expect(html).toContain('ui:html.left-panel.th-session');
+    expect(html).toContain('ui:html.left-panel.th-token');
   });
 
   it('세션 panel-label 이 i18n 키(ui.html.session-panel.label)로 해석된다', () => {
     const html = render();
-    expect(html).toContain('ui.html.session-panel.label');
+    expect(html).toContain('ui:html.session-panel.label');
   });
 
   it('i18next.t 가 번역값을 주면 thead/panel-label 이 그 값으로 렌더된다', () => {
     // 로케일 해석 입증: 임시로 테스트 t 를 한국어 값 반환으로 교체(vitest.setup __setTestT).
     const dict: Record<string, string> = {
-      'ui.html.left-panel.th-project': '프로젝트',
-      'ui.html.left-panel.th-session': '세션',
-      'ui.html.left-panel.th-token': '토큰',
-      'ui.html.session-panel.label': '세션',
+      'ui:html.left-panel.th-project': '프로젝트',
+      'ui:html.left-panel.th-session': '세션',
+      'ui:html.left-panel.th-token': '토큰',
+      'ui:html.session-panel.label': '세션',
     };
     globalThis.__setTestT?.((key) => dict[key] ?? key);
     try {
@@ -139,7 +132,6 @@ describe('BrowseSidebar — 프로젝트 테이블 thead-browse(colgroup + 3컬�
         sessions={[]}
         selectedProject={null}
         selectedSession={null}
-        labeler={labeler}
         obsIntervalMs={0}
         chromeLabels={{ thProject: 'P!', thSession: 'S!', thToken: 'T!', sessionPanelLabel: 'SP!' }}
       />,
@@ -161,22 +153,29 @@ describe('BrowseSidebar — left-panel-footer + update-badge', () => {
 
 describe('BrowseSidebar — 세션 hint(선택 프로젝트)', () => {
   it('선택 프로젝트가 있으면 sessionCount(project, n) 힌트를 표시한다', () => {
-    const html = renderToStaticMarkup(
-      <BrowseSidebar
-        projects={[{ project_name: 'alpha', total_tokens: 1000, active_count: 2 }]}
-        sessions={[
-          { id: 's1', project_name: 'alpha' },
-          { id: 's2', project_name: 'alpha' },
-          { id: 's3', project_name: 'beta' },
-        ]}
-        selectedProject="alpha"
-        selectedSession={null}
-        labeler={labeler}
-        obsIntervalMs={0}
-      />,
+    // 보간 vars(project/count) 전달을 검증 — __setTestT 로 키→`count:{project}:{count}` 매핑 주입.
+    globalThis.__setTestT?.((key, vars) =>
+      key === 'ui:left-panel.session-count' ? `count:${vars?.project}:${vars?.count}` : key,
     );
-    // alpha 세션 2개만 카운트.
-    expect(html).toContain('count:alpha:2');
+    try {
+      const html = renderToStaticMarkup(
+        <BrowseSidebar
+          projects={[{ project_name: 'alpha', total_tokens: 1000, active_count: 2 }]}
+          sessions={[
+            { id: 's1', project_name: 'alpha' },
+            { id: 's2', project_name: 'alpha' },
+            { id: 's3', project_name: 'beta' },
+          ]}
+          selectedProject="alpha"
+          selectedSession={null}
+          obsIntervalMs={0}
+        />,
+      );
+      // alpha 세션 2개만 카운트.
+      expect(html).toContain('count:alpha:2');
+    } finally {
+      globalThis.__resetTestT?.();
+    }
   });
 });
 

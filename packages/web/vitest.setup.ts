@@ -9,21 +9,21 @@ import { i18next } from './src/lib/i18n';
 // 과거: i18next.t/getFixedT 를 레거시 전역 window.I18n.t(각 테스트가 주입한 stub)로 위임했다. window.I18n
 //   전역이 react-i18next 단일화로 제거됐으므로, 여기서 테스트용 t 출처를 자체적으로 관리한다.
 //
-// 기본 동작 = 레거시 stub `t:(k)=>k` + i18n.js#interpolate 동치:
+// 기본 동작 = 키 passthrough + i18next 기본 보간 동치:
 //   - 키 미해석 시 key 문자열 그대로 반환(passthrough).
-//   - vars 가 있으면 `{var}` 단일 중괄호 보간(locales JSON·i18next prefix/suffix 와 동일 포맷).
+//   - vars 가 있으면 `{{var}}` double-brace 보간(locales JSON·i18next 기본 포맷과 동일).
 //
 // 커스텀 번역/보간이 필요한 테스트(update-badge-i18n·meta-docs-components·llm-input·equivalence 등)는
 //   globalThis.__setTestT(fn) 으로 t 구현을 주입하고, afterEach 가 자동으로 __resetTestT(기본 동작)로 복원한다.
 //   런타임 중 t 를 교체하는 테스트(llm-input)는 __setTestT 를 재호출하면 된다.
 
-/** {var} 단일 중괄호 보간 — locales JSON·i18next prefix/suffix 와 동일(레거시 i18n.js#interpolate 동치). */
+/** {{var}} double-brace 보간 — locales JSON·i18next 기본 포맷과 동일. */
 function interpolate(tpl: string, vars?: Record<string, unknown>): string {
   if (!vars) return tpl;
-  return tpl.replace(/\{(\w+)\}/g, (_m, k) => (vars[k] != null ? String(vars[k]) : `{${k}}`));
+  return tpl.replace(/\{\{(\w+)\}\}/g, (_m, k) => (vars[k] != null ? String(vars[k]) : `{{${k}}}`));
 }
 
-/** 기본 t — 키 passthrough + {var} 보간. */
+/** 기본 t — 키 passthrough + {{var}} 보간. */
 const defaultT = (key: string, vars?: Record<string, unknown>): string => interpolate(key, vars);
 
 type TestT = (key: string, vars?: Record<string, unknown>) => string;

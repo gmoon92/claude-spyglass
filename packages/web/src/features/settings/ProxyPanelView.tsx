@@ -12,6 +12,7 @@
  * @module features/settings/ProxyPanelView
  */
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CodeCopyBox } from '../../components/settings/CodeCopyBox';
 import { OptionCard } from '../../components/settings/OptionCard';
 import { SettingsRow } from '../../components/settings/SettingsRow';
@@ -27,7 +28,6 @@ export interface ProxyPanelViewProps {
   status: ProxyStatus;
   snippet: ProxySnippet;
   selectedShell: ProxyShell;
-  t: (key: string, vars?: Record<string, unknown>) => string;
   onSelectShell?: (shell: ProxyShell) => void;
   onInstall?: () => void;
   installing?: boolean;
@@ -43,7 +43,6 @@ export function ProxyPanelView({
   status,
   snippet,
   selectedShell,
-  t,
   onSelectShell,
   onInstall,
   installing,
@@ -51,21 +50,24 @@ export function ProxyPanelView({
   onCopy,
   result,
 }: ProxyPanelViewProps) {
+  const { t: tBase } = useTranslation();
+  // react-i18next t → (key, vars)=>string 시그니처 래핑(동적 키·보간 타입 회피, UpdateBadge 선례).
+  const t = (key: string, vars?: Record<string, unknown>): string => tBase(key, vars) as unknown as string;
   const state = proxyHealthState(status);
   const installed = state === 'ok';
   const fullSnippet = `${MARKER_OPEN}\n${snippet.snippet}\n${MARKER_CLOSE}`;
   const statusText = installed
-    ? t('ui.settings-view.proxy.status-ok', { shell: status.shell })
+    ? t('ui:settings-view.proxy.status-ok', { shell: status.shell })
     : state === 'broken'
-    ? t('ui.settings-view.proxy.status-broken')
-    : t('ui.settings-view.proxy.status-off');
+    ? t('ui:settings-view.proxy.status-broken')
+    : t('ui:settings-view.proxy.status-off');
 
   return (
     <>
-      <h3 className="settings-section-title">{t('ui.settings-view.proxy.title')}</h3>
+      <h3 className="settings-section-title">{t('ui:settings-view.proxy.title')}</h3>
 
       <div className="settings-card">
-        <div className="settings-card-sub">{t('ui.settings-view.proxy.intro')}</div>
+        <div className="settings-card-sub">{t('ui:settings-view.proxy.intro')}</div>
 
         {/* 컴팩트 상태 (+ onInstall 제공 시에만 설치 버튼 — 통합 설치 모드에선 상태만). */}
         <div className="settings-install-row">
@@ -81,7 +83,7 @@ export function ProxyPanelView({
               onClick={onInstall}
               disabled={installing || disabled}
             >
-              {installed ? t('ui.settings-view.proxy.reinstall') : t('ui.settings-view.proxy.install')}
+              {installed ? t('ui:settings-view.proxy.reinstall') : t('ui:settings-view.proxy.install')}
             </button>
           )}
         </div>
@@ -90,20 +92,20 @@ export function ProxyPanelView({
 
         {/* 상세/고급 — 접기(아코디언): 셸 선택 + 마커 진단 + 스니펫 미리보기. */}
         <details className="settings-engineering">
-          <summary>{t('ui.settings-view.proxy.detail-summary')}</summary>
+          <summary>{t('ui:settings-view.proxy.detail-summary')}</summary>
 
           {/* 셸 직접 선택(기본 자동 감지). */}
-          <div className="settings-card-sub" style={{ margin: '6px 0' }}>{t('ui.settings-view.proxy.shell-pick-title')}</div>
-          <div className="settings-option-grid" role="radiogroup" aria-label={t('ui.settings-view.proxy.shell-pick-title')}>
+          <div className="settings-card-sub" style={{ margin: '6px 0' }}>{t('ui:settings-view.proxy.shell-pick-title')}</div>
+          <div className="settings-option-grid" role="radiogroup" aria-label={t('ui:settings-view.proxy.shell-pick-title')}>
             {SHELLS.map((s) => (
               <OptionCard
                 key={s}
                 dataAttr="proxy-shell"
                 value={s}
                 active={selectedShell === s}
-                label={t(`ui.settings-view.proxy.shells.${s}.label`)}
-                desc={t(`ui.settings-view.proxy.shells.${s}.desc`)}
-                tooltip={t(`ui.settings-view.proxy.shells.${s}.tooltip`)}
+                label={t(`ui:settings-view.proxy.shells.${s}.label`)}
+                desc={t(`ui:settings-view.proxy.shells.${s}.desc`)}
+                tooltip={t(`ui:settings-view.proxy.shells.${s}.tooltip`)}
                 onSelect={(v) => onSelectShell?.(v as ProxyShell)}
               />
             ))}
@@ -111,34 +113,34 @@ export function ProxyPanelView({
 
           {/* 마커 진단. */}
           <div className="settings-card-sub" style={{ margin: '12px 0 4px' }}>
-            {t('ui.settings-view.proxy.engineering-title')}{' '}
-            <TooltipHost text={t('ui.settings-view.proxy.marker-explain-body')} />
+            {t('ui:settings-view.proxy.engineering-title')}{' '}
+            <TooltipHost text={t('ui:settings-view.proxy.marker-explain-body')} />
           </div>
-          <SettingsRow label={t('ui.settings-view.proxy.detected-shell')} status="ok" value={status.shell} />
+          <SettingsRow label={t('ui:settings-view.proxy.detected-shell')} status="ok" value={status.shell} />
           <SettingsRow
-            label={t('ui.settings-view.proxy.profile-path')}
+            label={t('ui:settings-view.proxy.profile-path')}
             status={status.profileExisted ? 'ok' : 'warn'}
-            value={status.profileExisted ? t('ui.settings-view.proxy.profile-exists') : t('ui.settings-view.proxy.profile-not-found')}
+            value={status.profileExisted ? t('ui:settings-view.proxy.profile-exists') : t('ui:settings-view.proxy.profile-not-found')}
             tail={<code className="settings-meta">{status.profilePath}</code>}
           />
           <SettingsRow label="Port" status="ok" value={String(snippet.port)} />
           <SettingsRow
-            label={t('ui.settings-view.proxy.marker-open-label')}
+            label={t('ui:settings-view.proxy.marker-open-label')}
             status={status.hasMarkerOpen ? 'ok' : 'warn'}
-            value={status.hasMarkerOpen ? t('ui.settings-view.proxy.marker-found') : t('ui.settings-view.proxy.marker-not-found')}
+            value={status.hasMarkerOpen ? t('ui:settings-view.proxy.marker-found') : t('ui:settings-view.proxy.marker-not-found')}
             tail={<code className="settings-meta">{MARKER_OPEN}</code>}
           />
           <SettingsRow
-            label={t('ui.settings-view.proxy.marker-close-label')}
+            label={t('ui:settings-view.proxy.marker-close-label')}
             status={status.hasMarkerClose ? 'ok' : 'warn'}
-            value={status.hasMarkerClose ? t('ui.settings-view.proxy.marker-found') : t('ui.settings-view.proxy.marker-not-found')}
+            value={status.hasMarkerClose ? t('ui:settings-view.proxy.marker-found') : t('ui:settings-view.proxy.marker-not-found')}
             tail={<code className="settings-meta">{MARKER_CLOSE}</code>}
           />
 
           {/* 스니펫 미리보기(수동 설치). */}
-          <div className="settings-card-sub" style={{ margin: '12px 0 6px' }}>{t('ui.settings-view.proxy.preview-summary')}</div>
-          <CodeCopyBox code={fullSnippet} copyLabel={t('ui.settings-view.proxy.copy')} onCopy={onCopy} />
-          <div className="settings-card-sub">{t('ui.settings-view.proxy.outro')}</div>
+          <div className="settings-card-sub" style={{ margin: '12px 0 6px' }}>{t('ui:settings-view.proxy.preview-summary')}</div>
+          <CodeCopyBox code={fullSnippet} copyLabel={t('ui:settings-view.proxy.copy')} onCopy={onCopy} />
+          <div className="settings-card-sub">{t('ui:settings-view.proxy.outro')}</div>
         </details>
       </div>
     </>

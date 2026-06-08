@@ -166,7 +166,7 @@ export function computeToolCategories(
   // ── 모드 B: Behavior Definitions Top N ──
   if (payload && !Array.isArray(payload) && payload.mode === 'meta-docs') {
     const items = Array.isArray(payload.items) ? payload.items : [];
-    if (items.length === 0) return { kind: 'empty', messageKey: 'ui.obs-panel.no-behavior-defs' };
+    if (items.length === 0) return { kind: 'empty', messageKey: 'ui:obs-panel.no-behavior-defs' };
     const max = Math.max(1, ...items.map((i) => i.invocations || 0));
     const rows: MetaDocRow[] = items.map((i) => ({
       name: i.name,
@@ -182,7 +182,7 @@ export function computeToolCategories(
 
   const categories = Array.isArray(payload) ? payload : [];
   if (categories.length === 0 || categories.every((c) => !c.request_count)) {
-    return { kind: 'empty', messageKey: 'ui.obs-panel.no-tool-calls' };
+    return { kind: 'empty', messageKey: 'ui:obs-panel.no-tool-calls' };
   }
   const max = Math.max(1, ...categories.map((c) => c.request_count || 0));
   const rows: CategoryBarRow[] = categories.map((c) => {

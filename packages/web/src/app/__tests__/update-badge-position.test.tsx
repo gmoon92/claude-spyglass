@@ -31,15 +31,6 @@ afterAll(async () => {
   delete (globalThis as unknown as { window?: unknown }).window;
 });
 
-const labeler = {
-  noData: () => 'no-data',
-  liveCount: (n: number) => `live:${n}`,
-  selectProject: () => 'select-project',
-  sessionCount: (project: string, count: number) => `count:${project}:${count}`,
-  globalRowLabel: () => 'user (global)',
-  globalRowTitle: () => 'global-title',
-};
-
 function renderBrowse(): string {
   return renderToStaticMarkup(
     <BrowseSidebar
@@ -47,7 +38,6 @@ function renderBrowse(): string {
       sessions={[]}
       selectedProject={null}
       selectedSession={null}
-      labeler={labeler}
       obsIntervalMs={0}
     />,
   );

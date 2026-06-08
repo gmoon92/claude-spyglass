@@ -118,8 +118,8 @@ export function AgentSpikeBadge({ agentSpike }: { agentSpike: unknown }): ReactE
   const info = agentSpikeInfo(agentSpike);
   if (!info) return null;
   const { n } = info;
-  const tooltip = t('ui.anomaly.agent-spike.tooltip', { n });
-  const action = t('ui.anomaly.agent-spike.modal', { n });
+  const tooltip = t('ui:anomaly.agent-spike.tooltip', { n });
+  const action = t('ui:anomaly.agent-spike.modal', { n });
   const fullTip = `${tooltip} · ${action}`;
   return (
     <span
@@ -219,7 +219,7 @@ export function TurnSpikeSummary({
   const t: TFn = tProp ?? hook.t;
   const info = agentSpikeInfo(agentSpike);
   if (!info) return null;
-  const label = t('ui.anomaly.agent-spike.summary', { n: info.n });
+  const label = t('ui:anomaly.agent-spike.summary', { n: info.n });
   return (
     <span className="turn-spike-summary" data-tip={label} aria-label={label}>
       <span className="turn-spike-summary-label">{label}</span>

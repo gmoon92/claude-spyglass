@@ -4,11 +4,11 @@
       "error": "오류"
     },
     "tool-hint": {
-      "lines": "[{n}줄]",
+      "lines": "[{{n}}줄]",
       "error": "[오류]",
       "saved": "[저장됨]",
-      "files": "[{n}개 파일]",
-      "matches": "[{n}개 매칭]",
+      "files": "[{{n}}개 파일]",
+      "matches": "[{{n}}개 매칭]",
       "failed": "[실패]"
     },
     "model": {
@@ -17,7 +17,7 @@
       "no-info": "모델 정보 없음"
     },
     "extract": {
-      "chars": "총 {n}자"
+      "chars": "총 {{n}}자"
     }
   }
 }

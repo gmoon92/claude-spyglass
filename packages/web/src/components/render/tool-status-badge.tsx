@@ -5,7 +5,7 @@
  *
  * 정공법(SSoT 이중화 금지):
  *  - 오류 판정은 lib/tool-response-field.ts#toolHasError(순수 SSoT) 단독.
- *  - 라벨은 useTranslation 의 t('badges.renderers.tool-status.error') — 원본 window.I18n.t 와 동일 키.
+ *  - 라벨은 useTranslation 의 t('badges:renderers.tool-status.error') — 원본 window.I18n.t 와 동일 키.
  *  - 마크업(span class/data-tone) 1:1 재현.
  *
  * @module render/tool-status-badge
@@ -25,7 +25,7 @@ export function ToolStatusBadge({ r }: { r: RowLike }): ReactElement | null {
   if (!toolHasError(r)) return null;
   return (
     <span className="mini-badge badge-error ds-badge" data-tone="error">
-      {t('badges.renderers.tool-status.error')}
+      {t('badges:renderers.tool-status.error')}
     </span>
   );
 }

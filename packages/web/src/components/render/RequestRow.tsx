@@ -237,7 +237,7 @@ export const RequestRow = memo(function RequestRow({ r, opts = {} }: { r: RowLik
         </td>
       ) : (
         <td className="cell-msg" data-cell="msg">
-          <span className="cell-msg-empty" aria-label={t('session.rows.empty-message')} />
+          <span className="cell-msg-empty" aria-label={t('session:rows.empty-message')} />
         </td>
       )}
       <td className="cell-token num" data-cell="in">

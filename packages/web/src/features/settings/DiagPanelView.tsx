@@ -10,6 +10,7 @@
  *
  * @module features/settings/DiagPanelView
  */
+import { useTranslation } from 'react-i18next';
 import { SettingsRow } from '../../components/settings/SettingsRow';
 import { InlineCopyButton } from '../../components/settings/InlineCopyButton';
 import { formatUptime } from '../../lib/settings-format';
@@ -18,8 +19,6 @@ import type { DiagData, VersionInfo, VersionKey } from './types';
 
 export interface DiagPanelViewProps {
   data: DiagData;
-  /** i18n 라벨러(미존재 키는 key 그대로 — 원본 t 동일). */
-  t: (key: string, vars?: Record<string, unknown>) => string;
   /** jump 버튼 → sub-tab 전환 통지(§5.4). */
   onJump?: (tab: string) => void;
   /** inline 복사 통지(무전역 clipboard). */
@@ -35,14 +34,15 @@ function JumpButton({ tab, label, onJump }: { tab: string; label: string; onJump
   );
 }
 
-export function DiagPanelView({ data, t, onJump, onCopy }: DiagPanelViewProps) {
+export function DiagPanelView({ data, onJump, onCopy }: DiagPanelViewProps) {
+  const { t } = useTranslation();
   const { versions, hooks, graph, server } = data;
 
   // 외부 도구 row(원본 versionRow :202-216) — 미설치+명령형 installHint 면 inline 복사.
   const versionRow = (key: VersionKey, label: string) => {
     const v: VersionInfo = versions[key];
     const status = versionRowStatus(v);
-    const valueText = v.available ? v.version || v.raw || '?' : t('ui.settings-view.diag.missing');
+    const valueText = v.available ? v.version || v.raw || '?' : t('ui:settings-view.diag.missing');
     let tail: React.ReactNode = null;
     if (!v.available && v.installHint) {
       const comment = isCommentHint(v.installHint);
@@ -50,7 +50,7 @@ export function DiagPanelView({ data, t, onJump, onCopy }: DiagPanelViewProps) {
         <>
           <code className="settings-cmd">{v.installHint}</code>
           {!comment && (
-            <InlineCopyButton text={v.installHint} title={t('ui.settings-view.proxy.copy')} onCopy={onCopy} />
+            <InlineCopyButton text={v.installHint} title={t('ui:settings-view.proxy.copy')} onCopy={onCopy} />
           )}
         </>
       );
@@ -63,29 +63,29 @@ export function DiagPanelView({ data, t, onJump, onCopy }: DiagPanelViewProps) {
   const hookValue = hooks.exists
     ? hooks.parsed
       ? hooks.registeredCount === hooks.expectedCount
-        ? t('ui.settings-view.diag.configured')
+        ? t('ui:settings-view.diag.configured')
         : hooks.registeredCount === 0
-          ? t('ui.settings-view.diag.hook-missing')
-          : t('ui.settings-view.diag.hook-partial')
-      : t('ui.settings-view.diag.hook-broken')
-    : t('ui.settings-view.diag.hook-missing');
-  const hookTail = <JumpButton tab="integration" label={t('ui.settings-view.diag.jump-page')} onJump={onJump} />;
+          ? t('ui:settings-view.diag.hook-missing')
+          : t('ui:settings-view.diag.hook-partial')
+      : t('ui:settings-view.diag.hook-broken')
+    : t('ui:settings-view.diag.hook-missing');
+  const hookTail = <JumpButton tab="integration" label={t('ui:settings-view.diag.jump-page')} onJump={onJump} />;
 
   // Proxy row(원본 proxyRowHtml :248-271).
   const p = data.proxy;
-  const proxyLabel = t('ui.settings-view.diag.proxy-label');
-  const proxyJump = <JumpButton tab="integration" label={t('ui.settings-view.diag.jump-page')} onJump={onJump} />;
+  const proxyLabel = t('ui:settings-view.diag.proxy-label');
+  const proxyJump = <JumpButton tab="integration" label={t('ui:settings-view.diag.jump-page')} onJump={onJump} />;
   let proxyRow: React.ReactNode;
   if (!p) {
-    proxyRow = <SettingsRow label={proxyLabel} status="warn" value={t('ui.settings-view.diag.missing')} tail={proxyJump} />;
+    proxyRow = <SettingsRow label={proxyLabel} status="warn" value={t('ui:settings-view.diag.missing')} tail={proxyJump} />;
   } else if (p.corrupted) {
-    proxyRow = <SettingsRow label={proxyLabel} status="fail" value={t('ui.settings-view.diag.proxy-corrupted')} tail={proxyJump} />;
+    proxyRow = <SettingsRow label={proxyLabel} status="fail" value={t('ui:settings-view.diag.proxy-corrupted')} tail={proxyJump} />;
   } else if (p.installed) {
-    proxyRow = <SettingsRow label={proxyLabel} status="ok" value={t('ui.settings-view.diag.proxy-installed')} tail={proxyJump} />;
+    proxyRow = <SettingsRow label={proxyLabel} status="ok" value={t('ui:settings-view.diag.proxy-installed')} tail={proxyJump} />;
   } else if (!p.profileExisted) {
-    proxyRow = <SettingsRow label={proxyLabel} status="warn" value={t('ui.settings-view.diag.proxy-no-profile')} tail={proxyJump} />;
+    proxyRow = <SettingsRow label={proxyLabel} status="warn" value={t('ui:settings-view.diag.proxy-no-profile')} tail={proxyJump} />;
   } else {
-    proxyRow = <SettingsRow label={proxyLabel} status="warn" value={t('ui.settings-view.diag.missing')} tail={proxyJump} />;
+    proxyRow = <SettingsRow label={proxyLabel} status="warn" value={t('ui:settings-view.diag.missing')} tail={proxyJump} />;
   }
 
   // 관계 흐름 그래프 통합 row — 그래프는 항상 켜진 상태로 고정(v4.3.x). circuit/설치 기준만 판정.
@@ -94,23 +94,23 @@ export function DiagPanelView({ data, t, onJump, onCopy }: DiagPanelViewProps) {
   let graphValueText: string;
   if (!ladybugInstalled) {
     graphStatus = 'warn';
-    graphValueText = t('ui.settings-view.diag.missing');
+    graphValueText = t('ui:settings-view.diag.missing');
   } else if (graph.circuit?.state !== 'CLOSED') {
     graphStatus = 'warn';
-    graphValueText = t('ui.settings-view.diag.graph-circuit-open');
+    graphValueText = t('ui:settings-view.diag.graph-circuit-open');
   } else {
     graphStatus = 'ok';
-    graphValueText = t('ui.settings-view.diag.installed');
+    graphValueText = t('ui:settings-view.diag.installed');
   }
-  const graphTail = <JumpButton tab="storage" label={t('ui.settings-view.diag.jump-page')} onJump={onJump} />;
+  const graphTail = <JumpButton tab="storage" label={t('ui:settings-view.diag.jump-page')} onJump={onJump} />;
 
   // 대화·이벤트 기록(SQLite) row — Storage 탭으로 점프. 마이그레이션 상세(버전/파일명)는
   //   진단을 어수선하게 하므로 *저장소 페이지* 항목으로 이관 — 여기선 점프 링크만.
-  const sqliteTail = <JumpButton tab="storage" label={t('ui.settings-view.diag.jump-page')} onJump={onJump} />;
+  const sqliteTail = <JumpButton tab="storage" label={t('ui:settings-view.diag.jump-page')} onJump={onJump} />;
 
   return (
     <>
-      <h3 className="settings-section-title">{t('ui.settings-view.diag.title')}</h3>
+      <h3 className="settings-section-title">{t('ui:settings-view.diag.title')}</h3>
       <div className="settings-card">
         {versionRow('bun', 'Bun')}
         {versionRow('claude', 'Claude Code')}
@@ -121,19 +121,19 @@ export function DiagPanelView({ data, t, onJump, onCopy }: DiagPanelViewProps) {
       <div className="settings-card">
         {/* Row order matches left sub-tab menu: Proxy → Hook → SQLite → Graph DB(원본 :320). */}
         {proxyRow}
-        <SettingsRow label={t('ui.settings-view.diag.hook-label')} status={hookStatus} value={hookValue} tail={hookTail} />
-        <SettingsRow label="SQLite" status="ok" value={t('ui.settings-view.diag.installed')} tail={sqliteTail} />
+        <SettingsRow label={t('ui:settings-view.diag.hook-label')} status={hookStatus} value={hookValue} tail={hookTail} />
+        <SettingsRow label="SQLite" status="ok" value={t('ui:settings-view.diag.installed')} tail={sqliteTail} />
         <SettingsRow label="Graph DB" status={graphStatus} value={graphValueText} tail={graphTail} />
       </div>
       <div className="settings-card">
-        <SettingsRow label={t('ui.settings-view.diag.port')} status="ok" value={String(server.port)} />
+        <SettingsRow label={t('ui:settings-view.diag.port')} status="ok" value={String(server.port)} />
         <SettingsRow
           label="PID"
           status="ok"
           value={String(server.pid)}
           tail={<span className="settings-meta">uptime {formatUptime(server.uptimeSec)}</span>}
         />
-        <SettingsRow label={t('ui.settings-view.diag.logs-dir')} status="ok" value={server.logsDir} />
+        <SettingsRow label={t('ui:settings-view.diag.logs-dir')} status="ok" value={server.logsDir} />
       </div>
     </>
   );

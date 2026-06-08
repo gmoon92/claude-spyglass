@@ -23,13 +23,13 @@ interface RowLike {
 
 /**
  * 모델 칩 — 원본 model.js#modelChipHtml 의 마크업 1:1.
- *  title 은 r.model || 'badges.renderers.model.no-info'.
+ *  title 은 r.model || 'badges:renderers.model.no-info'.
  */
 export function ModelChip({ r, mini = false }: { r: RowLike; mini?: boolean }): ReactElement {
   const { t } = useTranslation();
   const cls = modelClassOf(r?.model ?? null);
   const label = modelChipLabel(r?.model ?? null, cls);
-  const title = r?.model || t('badges.renderers.model.no-info');
+  const title = r?.model || t('badges:renderers.model.no-info');
   const sizeCls = mini ? ' model-chip-mini' : '';
   return (
     <span className={`model-chip model-chip-${cls}${sizeCls} ds-chip`} data-tone={cls} data-tip={title}>

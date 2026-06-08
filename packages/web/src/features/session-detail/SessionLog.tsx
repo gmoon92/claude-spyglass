@@ -89,7 +89,7 @@ export function SessionLog({
       {flowPane}
       <section
         className="log-pane"
-        aria-label={t('session.session-detail.turn-views.active-turn-log-aria')}
+        aria-label={t('session:session-detail.turn-views.active-turn-log-aria')}
         data-region="log"
       >
         <div className="log-table-wrap">

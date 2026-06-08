@@ -40,7 +40,7 @@ function Host(): ReturnType<typeof createElement> {
   return createElement(
     'div',
     { id: 'sysLibBody', className: 'syslib-body', ref: bodyRef },
-    createElement(SystemPromptLibrary, { rows, sort: { key: 'last_seen_at', dir: 'desc' }, t: (k: string) => k }),
+    createElement(SystemPromptLibrary, { rows, sort: { key: 'last_seen_at', dir: 'desc' } }),
     createElement(SysLibColResize, { tableRef }),
   );
 }

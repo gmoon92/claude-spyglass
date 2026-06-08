@@ -53,7 +53,7 @@ export interface BloatedSysInfo {
   tone: 'warn' | 'error';
   /** is-warn | is-critical stage 클래스 (앞 공백 포함, 원본 stageCls 동치). */
   stageCls: ' is-warn' | ' is-critical';
-  /** i18n 키 base — `ui.anomaly.bloated-sys.{stage}`. */
+  /** i18n 키 base — `ui:anomaly.bloated-sys.{stage}`. */
   i18nBase: string;
 }
 
@@ -69,7 +69,7 @@ export function bloatedSysInfo(bs: unknown): BloatedSysInfo | null {
     pct: toPct(anomalyNum(bs, 'pct')),
     tone: stage === 'critical' ? 'error' : 'warn',
     stageCls: stage === 'critical' ? ' is-critical' : ' is-warn',
-    i18nBase: `ui.anomaly.bloated-sys.${stage}`,
+    i18nBase: `ui:anomaly.bloated-sys.${stage}`,
   };
 }
 
@@ -94,7 +94,7 @@ export function contextSaturationInfo(ctxSat: unknown): ContextSaturationInfo | 
     pct: toPct(anomalyNum(ctxSat, 'pct')),
     tone: stage === 'critical' ? 'error' : 'warn',
     stageCls: stage === 'critical' ? ' is-critical' : ' is-warn',
-    i18nBase: `ui.anomaly.context-saturation.${stage}`,
+    i18nBase: `ui:anomaly.context-saturation.${stage}`,
   };
 }
 

@@ -14,8 +14,8 @@
  *  - renderBrowserProjects/renderBrowserSessions(innerHTML) → <ProjectList>/<SessionList> JSX.
  *  - escHtml 불필요: React 텍스트 노드 자동 이스케이프(원본 escHtml 호출과 동치 안전).
  *  - 세션 행은 P2-04 SessionRow.tsx 재사용. onClick 은 cloneElement 로 비침습 주입(SessionRow 무변경).
- *  - 전역 i18n 직접 의존 제거 → labeler prop 주입(FilterBar 선례, 컴포넌트 무전역).
- *    SessionRow(P2-04)/fmtRelative 는 react-i18next(i18next.t)를 SSoT 로 참조한다.
+ *  - i18n 은 각 행/리스트 컴포넌트가 react-i18next useTranslation 으로 직접 구독한다(ui.left-panel.* 키).
+ *    SessionRow(P2-04)/fmtRelative 도 react-i18next(i18next.t)를 SSoT 로 참조한다. 언어 전환 자동 재렌더.
  *
  * 신규 계약(Gap — 원본 미보장):
  *  - createAnomalySubscription: 원본 top-level addEventListener(left-panel.js:36-50)는 모듈
@@ -28,6 +28,7 @@
  */
 import { cloneElement, memo, useEffect } from 'react';
 import type { ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 import { fmt, fmtToken } from '../../lib/formatters';
 import { SessionRow } from '../../components/render/SessionRow';
 import { Skeleton } from '../../components/Skeleton';
@@ -61,22 +62,6 @@ export interface MetaCounts {
   projects: Record<string, number>;
   global: number;
   total: number;
-}
-
-/** i18n 라벨러 — 컴포넌트 무전역(FilterBar 선례). 호출처가 react-i18next t 를 감싸 주입. */
-export interface SidebarLabeler {
-  /** 빈 데이터 행 라벨(ui.left-panel.no-data). */
-  noData: () => string;
-  /** 활성 세션 수 title(ui.left-panel.live-count). */
-  liveCount: (count: number) => string;
-  /** 프로젝트 미선택 힌트(ui.left-panel.select-project). */
-  selectProject: () => string;
-  /** 세션 수 힌트(ui.left-panel.session-count). */
-  sessionCount: (project: string, count: number) => string;
-  /** 가상 global 행 라벨(ui.left-panel.global-row-label). */
-  globalRowLabel: () => string;
-  /** 가상 global 행 title(ui.left-panel.global-row-title). */
-  globalRowTitle: () => string;
 }
 
 /**
@@ -130,23 +115,22 @@ export function createAnomalySubscription(
 function GlobalRow({
   selected,
   total,
-  labeler,
   onSelect,
 }: {
   selected: boolean;
   total: number;
-  labeler: SidebarLabeler;
   onSelect?: (p: string) => void;
 }): ReactElement {
+  const { t } = useTranslation();
   return (
     <tr
       className={`clickable cell-proj-global${selected ? ' row-selected' : ''}`}
       data-project={GLOBAL_PROJECT_KEY}
-      data-tip={labeler.globalRowTitle()}
+      data-tip={t('ui:left-panel.global-row-title')}
       onClick={() => onSelect?.(GLOBAL_PROJECT_KEY)}
     >
-      <td className="cell-proj-name" data-tip={labeler.globalRowLabel()}>
-        {labeler.globalRowLabel()}
+      <td className="cell-proj-name" data-tip={t('ui:left-panel.global-row-label')}>
+        {t('ui:left-panel.global-row-label')}
       </td>
       <td className="num cell-proj-meta-count" style={{ textAlign: 'right' }}>
         {fmt(total)}
@@ -161,15 +145,14 @@ function BrowseProjectRow({
   p,
   maxT,
   selected,
-  labeler,
   onSelect,
 }: {
   p: ProjectLike;
   maxT: number;
   selected: boolean;
-  labeler: SidebarLabeler;
   onSelect?: (p: string) => void;
 }): ReactElement {
+  const { t } = useTranslation();
   const pct = Math.max(1, Math.round(((p.total_tokens || 0) / maxT) * 100));
   const active = p.active_count ?? 0;
   const sessCls = active > 0 ? ' proj-active' : '';
@@ -182,7 +165,7 @@ function BrowseProjectRow({
       <td className="cell-proj-name" data-tip={p.project_name || ''}>
         {p.project_name || '—'}
       </td>
-      <td className={`num cell-proj-sess${sessCls}`} style={{ textAlign: 'right' }} data-tip={labeler.liveCount(active)}>
+      <td className={`num cell-proj-sess${sessCls}`} style={{ textAlign: 'right' }} data-tip={t('ui:left-panel.live-count', { count: active })}>
         {active === 0 ? '—' : <span className="proj-sess-active">{fmt(active)}</span>}
       </td>
       <td>
@@ -237,7 +220,6 @@ export interface ProjectListProps {
   isMetaMode: boolean;
   /** metadocs 항목 수(원본 _metaCounts). browse 모드면 null 허용. */
   metaCounts: MetaCounts | null;
-  labeler: SidebarLabeler;
   /** 행 클릭 통지(원본 main.js data-project 위임 대체). */
   onSelectProject?: (project: string) => void;
 }
@@ -248,23 +230,22 @@ export interface ProjectListProps {
  *  - metadocs 모드 → 최상단 가상 global 행 + 프로젝트별 meta 행.
  *  - browse 모드 → token bar 행(maxT 정규화는 원본 :83 동일).
  *
- * 직접 호출(white-box) 테스트 계약 유지: 본 함수는 plain 함수로 보존한다(sidebar.test.tsx 가
- *   `ProjectList({...})` 로 직접 호출해 element tree 를 walk). 메모화는 Sidebar 의 렌더 경로에만
- *   적용한다(아래 MemoProjectList) — public API/타입/출력 불변, 메모는 호출처 결합으로 격리.
+ * i18n 은 react-i18next useTranslation 으로 직접 구독한다(hook 이므로 JSX 로 렌더되어야 함 —
+ *   테스트는 createRoot 라이브 렌더로 검증). 메모화는 Sidebar 렌더 경로(아래 MemoProjectList)에 적용.
  */
 export function ProjectList({
   projects,
   selectedProject,
   isMetaMode,
   metaCounts,
-  labeler,
   onSelectProject,
 }: ProjectListProps): ReactElement {
+  const { t } = useTranslation();
   if (!projects.length && !isMetaMode) {
     return (
       <tr>
         <td colSpan={3} className="table-empty">
-          {labeler.noData()}
+          {t('ui:left-panel.no-data')}
         </td>
       </tr>
     );
@@ -276,7 +257,6 @@ export function ProjectList({
         <GlobalRow
           selected={selectedProject === GLOBAL_PROJECT_KEY}
           total={metaCounts?.total ?? 0}
-          labeler={labeler}
           onSelect={onSelectProject}
         />
       )}
@@ -295,7 +275,6 @@ export function ProjectList({
             p={p}
             maxT={maxT}
             selected={selectedProject === p.project_name}
-            labeler={labeler}
             onSelect={onSelectProject}
           />
         )
@@ -328,7 +307,6 @@ export interface MetaProjectListProps {
   selectedProject: string | null;
   /** metadocs 항목 수(원본 _metaCounts). */
   metaCounts: MetaCounts | null;
-  labeler: SidebarLabeler;
   /** 행 클릭 통지(원본 main.js data-project 위임 대체). */
   onSelectProject?: (project: string) => void;
 }
@@ -354,7 +332,6 @@ export function MetaProjectList({
   projects,
   selectedProject,
   metaCounts,
-  labeler,
   onSelectProject,
 }: MetaProjectListProps): ReactElement {
   return (
@@ -362,7 +339,6 @@ export function MetaProjectList({
       <GlobalRow
         selected={selectedProject === GLOBAL_PROJECT_KEY}
         total={metaCounts?.total ?? 0}
-        labeler={labeler}
         onSelect={onSelectProject}
       />
       {projects.map((p) => (
@@ -385,7 +361,6 @@ export interface SessionListProps {
   selectedProject: string | null;
   /** 선택 세션(원본 getSelectedSession()) — row-selected 강조. */
   selectedSession: string | null;
-  labeler: SidebarLabeler;
   /** 세션 행 클릭 통지(원본 main.js data-session-id 위임 대체). */
   onSelectSession?: (id: string) => void;
   /** 초기/전환 fetch 대기 중 여부 — 빈 목록을 no-data 대신 스켈레톤 행으로(로딩 오해 방지). */
@@ -402,14 +377,14 @@ export function SessionList({
   sessions,
   selectedProject,
   selectedSession,
-  labeler,
   onSelectSession,
   loading = false,
 }: SessionListProps): ReactElement {
+  const { t } = useTranslation();
   if (!selectedProject) {
     return (
       <tr>
-        <td colSpan={4} className="table-empty" data-tip={labeler.selectProject()}>
+        <td colSpan={4} className="table-empty" data-tip={t('ui:left-panel.select-project')}>
           —
         </td>
       </tr>
@@ -433,8 +408,8 @@ export function SessionList({
     }
     return (
       <tr>
-        <td colSpan={4} className="table-empty" data-tip={labeler.sessionCount(selectedProject, 0)}>
-          {labeler.noData()}
+        <td colSpan={4} className="table-empty" data-tip={t('ui:left-panel.session-count', { project: selectedProject, count: 0 })}>
+          {t('ui:left-panel.no-data')}
         </td>
       </tr>
     );
@@ -474,7 +449,6 @@ export interface SidebarProps {
   selectedSession: string | null;
   isMetaMode: boolean;
   metaCounts: MetaCounts | null;
-  labeler: SidebarLabeler;
   onSelectProject?: (project: string) => void;
   onSelectSession?: (id: string) => void;
   /** anomaly 구독 통지(원본 left-panel.js 핸들러의 _allSessions 변이 → 상위 상태 위임). */
@@ -496,7 +470,6 @@ export function Sidebar({
   selectedSession,
   isMetaMode,
   metaCounts,
-  labeler,
   onSelectProject,
   onSelectSession,
   onAnomalyUpdate,
@@ -514,14 +487,12 @@ export function Sidebar({
         selectedProject={selectedProject}
         isMetaMode={isMetaMode}
         metaCounts={metaCounts}
-        labeler={labeler}
         onSelectProject={onSelectProject}
       />
       <MemoSessionList
         sessions={sessions}
         selectedProject={selectedProject}
         selectedSession={selectedSession}
-        labeler={labeler}
         onSelectSession={onSelectSession}
         loading={sessionsLoading}
       />

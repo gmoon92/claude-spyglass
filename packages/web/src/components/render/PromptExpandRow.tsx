@@ -34,8 +34,8 @@ export function PromptExpandRow({ rid, cols }: { rid: string; cols: number }): R
   const isAskq =
     !!cached && typeof cached === 'object' && cached.kind === 'askq' && Array.isArray(cached.questions);
 
-  const copyLabel = t('ui.main.expand.copy');
-  const copiedLabel = t('ui.main.expand.copied');
+  const copyLabel = t('ui:main.expand.copy');
+  const copiedLabel = t('ui:main.expand.copied');
 
   // 복사 버튼 — 원본은 this.nextElementSibling.textContent 를 복사했다. React 는 본문 박스에 ref 를 달아
   //   동일하게 textContent 를 읽는다(텍스트/구조화 모드 공통, AskUserQuestionCard 의 가시 텍스트 포함).

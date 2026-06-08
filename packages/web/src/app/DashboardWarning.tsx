@@ -12,8 +12,7 @@
 // 제안 명령(git fetch --unshallow)은 비번역 코드 블록(version-check.js T-10 1:1, 라벨만 i18n).
 
 import { memo, type ReactElement } from 'react';
-
-export type WarningLabeler = (key: string, vars?: Record<string, unknown>) => string;
+import { useTranslation } from 'react-i18next';
 
 /** 제안 명령 SSoT — index.html :957 1:1(shallow clone 해소). */
 export const SHALLOW_FIX_COMMAND = 'git fetch --unshallow';
@@ -25,8 +24,6 @@ export interface DashboardWarningProps {
   onDismiss: () => void;
   /** 명령 복사 콜백 — 호출처가 navigator.clipboard 결선(SHALLOW_FIX_COMMAND 전달). */
   onCopy: (command: string) => void;
-  /** i18n 라벨러. */
-  t: WarningLabeler;
 }
 
 /** 복사 아이콘 — index.html copy 버튼 SVG 1:1. */
@@ -43,27 +40,28 @@ function CopyIcon(): ReactElement {
  * shallow clone 경고 배너 — #dashboardShallowWarning 1:1. visible=false 면 미렌더.
  * memo: AppShell 로컬 state(connected/leftPanelHidden/modalOpen) 변화로부터 격리 — visible/콜백 불변 시 재렌더 생략.
  */
-export const DashboardWarning = memo(function DashboardWarning({ visible, onDismiss, onCopy, t }: DashboardWarningProps): ReactElement | null {
+export const DashboardWarning = memo(function DashboardWarning({ visible, onDismiss, onCopy }: DashboardWarningProps): ReactElement | null {
+  const { t } = useTranslation();
   if (!visible) return null;
   return (
     <div className="dashboard-warning dashboard-warning--shallow" role="status" aria-live="polite">
       <span className="dashboard-warning-glyph" aria-hidden="true">!</span>
       <div className="dashboard-warning-body">
         <span className="dashboard-warning-title">
-          {t('ui.version-check.shallow.warning', undefined) || 'Shallow clone — auto-update may fail'}
+          {t('ui:version-check.shallow.warning', undefined) || 'Shallow clone — auto-update may fail'}
         </span>
         <p className="dashboard-warning-text">
-          {t('ui.version-check.shallow.body', undefined) || 'This install is a git shallow clone…'}
+          {t('ui:version-check.shallow.body', undefined) || 'This install is a git shallow clone…'}
         </p>
         <div className="dashboard-warning-cmd-row">
           <span className="dashboard-warning-cmd-label">
-            {t('ui.html.dashboard-warning.shallow-cmd-label', undefined) || 'Suggested command'}
+            {t('ui:html.dashboard-warning.shallow-cmd-label', undefined) || 'Suggested command'}
           </span>
           <code className="dashboard-warning-cmd">{SHALLOW_FIX_COMMAND}</code>
           <button
             type="button"
             className="dashboard-warning-cmd-copy"
-            aria-label={t('ui.html.update-modal.copy', undefined) || 'Copy'}
+            aria-label={t('ui:html.update-modal.copy', undefined) || 'Copy'}
             onClick={() => onCopy(SHALLOW_FIX_COMMAND)}
           >
             <CopyIcon />
@@ -73,7 +71,7 @@ export const DashboardWarning = memo(function DashboardWarning({ visible, onDism
       <button
         type="button"
         className="dashboard-warning-dismiss"
-        aria-label={t('ui.html.dashboard-warning.shallow-dismiss-aria', undefined) || 'Dismiss'}
+        aria-label={t('ui:html.dashboard-warning.shallow-dismiss-aria', undefined) || 'Dismiss'}
         onClick={onDismiss}
       >
         <svg viewBox="0 0 12 12" width="10" height="10" fill="none" aria-hidden="true">

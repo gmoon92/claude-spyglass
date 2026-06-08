@@ -32,7 +32,7 @@ const rows: MetaDocRow[] = [
 function Host(): ReturnType<typeof createElement> {
   const tableRef = useRef<HTMLTableElement>(null);
   useColResize(tableRef, { storageKey: 'metadocs' });
-  return createElement(MetaDocsCatalog, { rows, tableRef, t: (k: string) => k });
+  return createElement(MetaDocsCatalog, { rows, tableRef });
 }
 
 let container: HTMLDivElement;

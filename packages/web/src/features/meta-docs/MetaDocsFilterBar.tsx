@@ -14,9 +14,8 @@
  * @module features/meta-docs/MetaDocsFilterBar
  */
 import { memo, type ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { DisplayFilter } from './meta-docs-sort';
-
-export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
 
 export type TypeFilter = 'all' | 'agent' | 'skill' | 'command';
 export type MetaFilterGroup = 'type' | 'display';
@@ -38,8 +37,6 @@ export interface MetaDocsFilterBarProps {
   onFilterChange?: (group: MetaFilterGroup, value: string) => void;
   /** includeDeleted 토글 통지. */
   onIncludeDeletedChange?: (checked: boolean) => void;
-  /** i18n t(필수 — DI). 호출처가 react-i18next t 주입, 테스트가 stub 주입. */
-  t: TFunc;
 }
 
 /** 원본 svgTrash({size:12}) 1:1 — stroke-only 휴지통. */
@@ -95,25 +92,25 @@ export const MetaDocsFilterBar = memo(function MetaDocsFilterBar({
   showOrphan = true,
   onFilterChange,
   onIncludeDeletedChange,
-  t,
 }: MetaDocsFilterBarProps): ReactElement {
+  const { t } = useTranslation();
   const types: FilterBtnDef[] = [
-    { v: 'all', label: t('ui.meta-docs-view.filter-all') },
+    { v: 'all', label: t('ui:meta-docs-view.filter-all') },
     { v: 'agent', label: 'Agent' },
     { v: 'skill', label: 'Skill' },
     { v: 'command', label: 'Command' },
   ];
   // orphan(미등록 호출)은 showOrphan 일 때만 노출 — 0건이면 호출처가 숨긴다.
   const displays: FilterBtnDef[] = [
-    { v: 'all', label: t('ui.meta-docs-view.filter-all') },
-    { v: 'unused', label: t('ui.meta-docs-view.filter-unused') },
-    ...(showOrphan ? [{ v: 'orphan', label: t('ui.meta-docs-view.filter-orphan') }] : []),
+    { v: 'all', label: t('ui:meta-docs-view.filter-all') },
+    { v: 'unused', label: t('ui:meta-docs-view.filter-unused') },
+    ...(showOrphan ? [{ v: 'orphan', label: t('ui:meta-docs-view.filter-orphan') }] : []),
   ];
 
   return (
     <div className="meta-docs-filters">
       <div className="meta-docs-filter-group">
-        <span className="meta-docs-filter-label">{t('ui.meta-docs-view.filter-type-label')}</span>
+        <span className="meta-docs-filter-label">{t('ui:meta-docs-view.filter-type-label')}</span>
         {types.map((d) => (
           <FilterBtn
             key={d.v}
@@ -125,7 +122,7 @@ export const MetaDocsFilterBar = memo(function MetaDocsFilterBar({
         ))}
       </div>
       <div className="meta-docs-filter-group">
-        <span className="meta-docs-filter-label">{t('ui.meta-docs-view.filter-display-label')}</span>
+        <span className="meta-docs-filter-label">{t('ui:meta-docs-view.filter-display-label')}</span>
         {displays.map((d) => (
           <FilterBtn
             key={d.v}
@@ -136,7 +133,7 @@ export const MetaDocsFilterBar = memo(function MetaDocsFilterBar({
           />
         ))}
       </div>
-      <label className="meta-docs-include-deleted" data-tip={t('ui.meta-docs-view.include-deleted-title')}>
+      <label className="meta-docs-include-deleted" data-tip={t('ui:meta-docs-view.include-deleted-title')}>
         <input
           type="checkbox"
           data-meta-include-deleted
@@ -146,7 +143,7 @@ export const MetaDocsFilterBar = memo(function MetaDocsFilterBar({
         <span className="meta-docs-include-deleted-icon" aria-hidden="true">
           <TrashIcon />
         </span>
-        <span className="meta-docs-include-deleted-label">{t('ui.meta-docs-view.include-deleted-label')}</span>
+        <span className="meta-docs-include-deleted-label">{t('ui:meta-docs-view.include-deleted-label')}</span>
       </label>
     </div>
   );

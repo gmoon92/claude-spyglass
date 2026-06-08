@@ -56,15 +56,12 @@ function SysLibPane({
   sort,
   onSort,
   onOpenRow,
-  t,
 }: {
   rows: SysLibRow[] | null;
   sort: { key: SysLibSortKey; dir: SortDir };
   onSort: (key: SysLibSortKey) => void;
   /** 행 클릭 → 본문 상세 모달(원본 .syslib-row 클릭 → showDetailModal). */
   onOpenRow: (hash: string) => void;
-  /** i18n t — 호출처(SessionDetailContainer)가 useTranslation 으로 주입. */
-  t: (key: string, vars?: Record<string, unknown>) => string;
 }): ReactElement {
   const bodyRef = useRef<HTMLDivElement>(null);
   // useColResize 가 effect 안에서 1회 읽는 tableRef.current 를 #sysLibBody 내부 .syslib-table 로 lazy resolve.
@@ -79,7 +76,7 @@ function SysLibPane({
   const hasRows = !!rows && rows.length > 0;
   return (
     <div id="sysLibBody" className="syslib-body" role="region" aria-label="System prompt library" ref={bodyRef}>
-      <SystemPromptLibrary rows={rows} sort={sort} onSort={onSort} onOpenRow={onOpenRow} t={t} />
+      <SystemPromptLibrary rows={rows} sort={sort} onSort={onSort} onOpenRow={onOpenRow} />
       {hasRows ? <SysLibColResize key={`syslib-colresize-${String(hasRows)}`} tableRef={tableRef} /> : null}
     </div>
   );
@@ -98,13 +95,13 @@ interface TabDef {
   titleKey?: string;
 }
 const TABS: TabDef[] = [
-  { value: 'log', labelKey: 'session.session-detail.turn-views.tab-log' },
+  { value: 'log', labelKey: 'session:session-detail.turn-views.tab-log' },
   {
     value: 'llm',
-    labelKey: 'session.session-detail.turn-views.tab-llm',
-    titleKey: 'session.session-detail.turn-views.tab-llm-title',
+    labelKey: 'session:session-detail.turn-views.tab-llm',
+    titleKey: 'session:session-detail.turn-views.tab-llm-title',
   },
-  { value: 'syslib', labelKey: 'session.session-detail.turn-views.tab-syslib' },
+  { value: 'syslib', labelKey: 'session:session-detail.turn-views.tab-syslib' },
 ];
 
 export interface SessionDetailContainerProps {
@@ -231,7 +228,6 @@ export function SessionDetailContainer({
                 : null
             }
             onClose={() => setRefsModalOpen(false)}
-            t={t}
           />
         </div>
       );
@@ -245,7 +241,6 @@ export function SessionDetailContainer({
             sort={sysSort}
             onSort={onSysSort}
             onOpenRow={sysDetail.open}
-            t={t}
           />
           {/* 본문 상세 모달 — hash 활성일 때만 렌더(원본 #sysLibDetailModal). */}
           <SystemPromptDetailModal
@@ -254,7 +249,6 @@ export function SessionDetailContainer({
             detail={sysDetail.detail}
             error={sysDetail.error}
             onClose={sysDetail.close}
-            t={t}
           />
         </div>
       );

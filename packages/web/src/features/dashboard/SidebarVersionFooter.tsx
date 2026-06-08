@@ -19,22 +19,16 @@
 //   위치/스타일/로케일 정합 보장. 사이드바가 없는 settings 모드만 AppShell 의 fixed 폴백 뱃지를 쓴다.
 
 import { type ReactElement } from 'react';
-import { useTranslation } from 'react-i18next';
 import { UpdateBadge } from './UpdateBadge';
-import type { BadgeLabeler } from './UpdateBadge';
 import { useVersionStore } from '../../stores/version-store';
 
 /**
  * 좌측 패널 하단 update-badge footer — 레거시 .left-panel-footer 1:1.
  *   version-store(단일 폴러 결과, 버그 #6) 를 구독해 controlled 뱃지를 렌더하고,
  *   available 클릭 시 store.openModal 로 AppShell 의 단일 UpdateModal 을 연다(트리거만 보유).
- *   라벨은 react-i18next(useTranslation)로 스스로 해석 — 호출처 주입 불요(update-badge-i18n 회귀 해소).
+ *   라벨은 UpdateBadge 가 react-i18next(useTranslation)로 스스로 해석 — 주입 불요(update-badge-i18n 회귀 해소).
  */
 export function SidebarVersionFooter(): ReactElement {
-  // i18n — react-i18next 단일 경로. 언어 변경 시 useTranslation 구독으로 재렌더 → 라벨 재평가.
-  //   UpdateBadge 의 BadgeLabeler((key,vars)=>string) 계약으로 래핑(react-i18next t 는 TFunction).
-  const { t: tBase } = useTranslation();
-  const t: BadgeLabeler = (key, vars) => tBase(key, vars) as unknown as string;
   const view = useVersionStore((s) => s.view);
   const openModal = useVersionStore((s) => s.openModal);
   return (
@@ -44,7 +38,6 @@ export function SidebarVersionFooter(): ReactElement {
         currentVersion={view.currentVersion}
         latestTag={view.latestTag}
         onOpen={openModal}
-        t={t}
       />
     </div>
   );

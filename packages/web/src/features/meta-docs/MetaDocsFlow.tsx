@@ -16,6 +16,7 @@
  * @module features/meta-docs/MetaDocsFlow
  */
 import { memo, useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -43,8 +44,6 @@ import { reflowColumns, LAYOUT, type MeasuredSize } from './flow-layout';
 import { collectFullPathNodes, collectHoverPathNodes, collectEdgesBetween, type FlowEdge as GraphEdge } from './flow-graph';
 import { activeRowToFlowArgs, type FlowActiveRow, type FlowArgs } from './flow-types';
 
-export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
-
 const CONTAINER_ID = 'metaDocsFlowRegion';
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 4;
@@ -68,8 +67,6 @@ export interface MetaDocsFlowProps {
   depth?: number;
   /** 날짜 범위(app-store.activeRange→rangeToParams). fetch fromTs/toTs 로 전파. */
   dateRange?: { from?: number; to?: number };
-  /** i18n t(필수 — DI). */
-  t: TFunc;
 }
 
 // =============================================================================
@@ -92,14 +89,15 @@ async function fetchUnifiedFlow(args: FlowArgs, getDateRange: () => { from?: num
 // =============================================================================
 // 종단 상태 — 구 emptyNode/skeletonNode/errorNode JSX 이식.
 // =============================================================================
-function EmptyState({ centerName, t }: { centerName: string | null; t: TFunc }): ReactElement {
+function EmptyState({ centerName }: { centerName: string | null }): ReactElement {
+  const { t } = useTranslation();
   const title = !centerName
-    ? t('ui.meta-docs-view.flow.empty-no-center')
-    : t('ui.meta-docs-view.flow.empty-zero-turns', { name: centerName });
+    ? t('ui:meta-docs-view.flow.empty-no-center')
+    : t('ui:meta-docs-view.flow.empty-zero-turns', { name: centerName });
   return (
     <div className="flow-empty flow-empty-sequential">
       <span className="flow-empty-title">{title}</span>
-      <span>{t('ui.meta-docs-view.flow.empty-hint')}</span>
+      <span>{t('ui:meta-docs-view.flow.empty-hint')}</span>
     </div>
   );
 }
@@ -120,7 +118,8 @@ function FlowArrowDefs(): ReactElement {
 // =============================================================================
 // 본체(Provider 내부) — useReactFlow/useNodesInitialized 사용.
 // =============================================================================
-function MetaDocsFlowInner({ activeRow, project = null, onRecenter, depth = 3, dateRange, t }: MetaDocsFlowProps): ReactElement {
+function MetaDocsFlowInner({ activeRow, project = null, onRecenter, depth = 3, dateRange }: MetaDocsFlowProps): ReactElement {
+  const { t } = useTranslation();
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowCardNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowFlowEdge>([]);
   const [status, setStatus] = useState<'empty' | 'loading' | 'error' | 'ready'>('empty');
@@ -262,7 +261,7 @@ function MetaDocsFlowInner({ activeRow, project = null, onRecenter, depth = 3, d
   if (status === 'empty') {
     return (
       <div id={CONTAINER_ID} className="meta-docs-flow-region">
-        <EmptyState centerName={centerName} t={t} />
+        <EmptyState centerName={centerName} />
       </div>
     );
   }
@@ -279,7 +278,7 @@ function MetaDocsFlowInner({ activeRow, project = null, onRecenter, depth = 3, d
     return (
       <div id={CONTAINER_ID} className="meta-docs-flow-region">
         <div className="flow-empty">
-          <span className="flow-empty-title">{t('ui.meta-docs-view.flow.fetch-failed', { message: errMsg })}</span>
+          <span className="flow-empty-title">{t('ui:meta-docs-view.flow.fetch-failed', { message: errMsg })}</span>
         </div>
       </div>
     );
@@ -309,15 +308,15 @@ function MetaDocsFlowInner({ activeRow, project = null, onRecenter, depth = 3, d
           <FlowArrowDefs />
           <Panel position="top-left" className="flow-toolbar flow-toolbar-sequential">
             <span className="flow-scope">
-              {t('ui.meta-docs-view.flow.scope-center')}: <b data-flow-scope-name>{centerName ?? '—'}</b>
+              {t('ui:meta-docs-view.flow.scope-center')}: <b data-flow-scope-name>{centerName ?? '—'}</b>
             </span>
             <div className="flow-spacer" />
             <span className="flow-zoom-group">
               <button
                 type="button"
                 className="flow-zoom-btn"
-                data-tip={t('ui.meta-docs-view.flow.zoom-out-title')}
-                aria-label={t('ui.meta-docs-view.flow.zoom-out-title')}
+                data-tip={t('ui:meta-docs-view.flow.zoom-out-title')}
+                aria-label={t('ui:meta-docs-view.flow.zoom-out-title')}
                 onClick={() => void zoomOut({ duration: 200 })}
               >
                 −
@@ -325,8 +324,8 @@ function MetaDocsFlowInner({ activeRow, project = null, onRecenter, depth = 3, d
               <button
                 type="button"
                 className="flow-zoom-btn"
-                data-tip={t('ui.meta-docs-view.flow.zoom-in-title')}
-                aria-label={t('ui.meta-docs-view.flow.zoom-in-title')}
+                data-tip={t('ui:meta-docs-view.flow.zoom-in-title')}
+                aria-label={t('ui:meta-docs-view.flow.zoom-in-title')}
                 onClick={() => void zoomIn({ duration: 200 })}
               >
                 ＋
@@ -340,7 +339,7 @@ function MetaDocsFlowInner({ activeRow, project = null, onRecenter, depth = 3, d
                 void fitView({ padding: 0.12, duration: 600, maxZoom: 1 });
               }}
             >
-              {t('ui.meta-docs-view.flow.reset-label')}
+              {t('ui:meta-docs-view.flow.reset-label')}
             </button>
           </Panel>
         </ReactFlow>

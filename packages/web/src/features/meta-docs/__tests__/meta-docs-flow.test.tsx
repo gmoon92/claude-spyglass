@@ -13,19 +13,19 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { MetaDocsFlow, activeRowToFlowArgs } from '../MetaDocsFlow';
 
-// i18n t 는 DI(필수 prop) — 키 passthrough stub. D-1: 전역 window.I18n 비의존.
-const t = (k: string) => k;
+// i18n t 는 컴포넌트가 useTranslation 으로 자체 구독한다(prop 폐기). 테스트는 vitest.setup 기본
+//   passthrough(키 그대로 반환)에 의존 — EmptyState 라벨이 'ui:xxx' 키 문자열로 노출됨.
 
 describe('MetaDocsFlow — 컨테이너 + 종단상태 셸 (xyflow 재작성)', () => {
   it('flow region 컨테이너 렌더 (metaDocsFlowRegion 셀렉터 계약 — useMetaDocsPanelResize topEl 보존)', () => {
-    const html = renderToStaticMarkup(createElement(MetaDocsFlow, { activeRow: null, t }));
+    const html = renderToStaticMarkup(createElement(MetaDocsFlow, { activeRow: null }));
     expect(html).toContain('id="metaDocsFlowRegion"');
   });
   it('activeRow 미지정 → empty 종단상태(no-center) — ReactFlow pane 미마운트', () => {
-    const html = renderToStaticMarkup(createElement(MetaDocsFlow, { activeRow: null, t }));
+    const html = renderToStaticMarkup(createElement(MetaDocsFlow, { activeRow: null }));
     // 빈 flow 는 EmptyState(flow-empty)만 — fetch 전이라 ReactFlow pane 미렌더.
     expect(html).toContain('flow-empty');
-    expect(html).toContain('ui.meta-docs-view.flow.empty-no-center'); // t passthrough 키
+    expect(html).toContain('ui:meta-docs-view.flow.empty-no-center'); // t passthrough 키
     expect(html).not.toContain('react-flow__pane');
   });
 });

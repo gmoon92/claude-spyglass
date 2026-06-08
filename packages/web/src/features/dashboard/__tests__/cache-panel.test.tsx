@@ -13,8 +13,6 @@ import {
 } from '../cache-stats';
 import { CachePanel } from '../CachePanel';
 
-const t = (key: string, vars?: Record<string, unknown>) => `t:${key}:${JSON.stringify(vars ?? {})}`;
-
 // 구 cache-panel.js 원본 동치 oracle 비교 블록은 P5 데드 vanilla 삭제로 제거됨.
 // 합산/제외 규칙은 cache-stats.ts(src) 골든마스터 리터럴로 고정한다.
 describe('computeSessionCacheStats — 합산/제외 골든마스터', () => {
@@ -86,14 +84,13 @@ describe('computeRatioView — creation/read 비율', () => {
 
 describe('CachePanel — 골든마스터', () => {
   it('data=null → 미렌더(빈 마크업)', () => {
-    expect(renderToStaticMarkup(<CachePanel data={null} t={t} />)).toBe('');
+    expect(renderToStaticMarkup(<CachePanel data={null} />)).toBe('');
   });
 
   it('정상 → hit fill width/tone + 라벨 + 비율 바 + precision tooltip', () => {
     const html = renderToStaticMarkup(
       <CachePanel
         data={{ hitRate: 0.85, cacheReadTokens: 800, cacheCreationTokens: 200, totalInputTokens: 0 }}
-        t={t}
       />,
     );
     expect(html).toContain('id="cacheHitFill"');
@@ -106,14 +103,13 @@ describe('CachePanel — 골든마스터', () => {
     expect(html).toContain('data-tone="read"');
     // read 80% → stable
     expect(html).toContain('stable');
-    expect(html).toContain('t:ui.cache-panel.precision-tooltip');
+    expect(html).toContain('ui:cache-panel.precision-tooltip');
   });
 
   it('경계 라벨 >99% 도 렌더', () => {
     const html = renderToStaticMarkup(
       <CachePanel
         data={{ hitRate: 0.995, cacheReadTokens: 995, cacheCreationTokens: 5, totalInputTokens: 0 }}
-        t={t}
       />,
     );
     expect(html).toContain('&gt;99%'); // JSX escape of >

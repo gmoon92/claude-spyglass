@@ -1,19 +1,19 @@
 {
   "formatters": {
     "just-now": "刚刚",
-    "minutes-ago": "{n}分钟前",
-    "hours-ago": "{n}小时前",
-    "days-ago": "{n}天前"
+    "minutes-ago": "{{n}}分钟前",
+    "hours-ago": "{{n}}小时前",
+    "days-ago": "{{n}}天前"
   },
   "close": "关闭",
   "no-data": "暂无数据",
-  "load-failed": "加载失败：{message}",
+  "load-failed": "加载失败：{{message}}",
   "retry": "重试",
   "server-unavailable": "无法连接到服务器。",
   "token-confidence-error": "Token 可信度错误（采集失败）",
   "token-confidence-low": "Token 可信度偏低（transcript 解析失败或 proxy 回退）",
   "api-error": {
-    "dashboard-load-failed": "仪表板加载失败：{message}",
+    "dashboard-load-failed": "仪表板加载失败：{{message}}",
     "request-list-load-failed": "请求列表加载失败"
   }
 }

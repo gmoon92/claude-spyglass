@@ -4,7 +4,7 @@
  * 정렬 SSoT(nextSort/applySort)·행 산술(computeMatrixView)·임계(sizeClassFor) 결정론 고정 +
  * ToolStatsMatrix/SystemPromptLibrary 마크업 계약. getCollator(getLocale)가 활성 언어 의존 → 'en' 고정.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { i18next } from '../../../lib/i18n';
 import {
@@ -31,7 +31,10 @@ import { SystemPromptLibrary } from '../SystemPromptLibrary';
 beforeAll(async () => { await i18next.changeLanguage('en'); });
 afterAll(async () => { await i18next.changeLanguage('ko'); });
 
-const t = (key: string) => `t:${key}`;
+// 컴포넌트는 useTranslation 직접 구독 — 결정론 라벨을 위해 매 테스트 전 key passthrough t 주입(setup afterEach 복원).
+beforeEach(() => {
+  (globalThis as { __setTestT?: (fn: (key: string) => string) => void }).__setTestT?.((key) => `t:${key}`);
+});
 
 // ── tool-stats ────────────────────────────────────────────────────────────────
 const TS_ROWS: ToolStatRow[] = [
@@ -86,13 +89,13 @@ describe('computeMatrixView — 행 산술(duration 0 제외 max)', () => {
 
 describe('ToolStatsMatrix — 골든마스터', () => {
   it('빈 stats → state-empty + no-data', () => {
-    const html = renderToStaticMarkup(<ToolStatsMatrix stats={[]} t={t} />);
+    const html = renderToStaticMarkup(<ToolStatsMatrix stats={[]} />);
     expect(html).toContain('state-empty');
-    expect(html).toContain('t:ui.tool-stats.no-data');
+    expect(html).toContain('t:ui:tool-stats.no-data');
   });
   it('정상 → ts-mx 헤더/행 + 정렬 aria + 에러 배지 + duration unavailable', () => {
     const html = renderToStaticMarkup(
-      <ToolStatsMatrix stats={TS_ROWS} sort={{ key: 'tokens', dir: 'desc' }} t={t} />,
+      <ToolStatsMatrix stats={TS_ROWS} sort={{ key: 'tokens', dir: 'desc' }} />,
     );
     expect(html).toContain('ts-mx-head');
     expect(html).toContain('data-ts-sort="tokens"');
@@ -147,12 +150,12 @@ describe('syslib-sort — 정렬/임계/포맷', () => {
 
 describe('SystemPromptLibrary — 골든마스터', () => {
   it('빈 rows → state-empty + no-prompts', () => {
-    const html = renderToStaticMarkup(<SystemPromptLibrary rows={[]} t={t} />);
-    expect(html).toContain('t:ui.syslib.no-prompts');
+    const html = renderToStaticMarkup(<SystemPromptLibrary rows={[]} />);
+    expect(html).toContain('t:ui:syslib.no-prompts');
   });
   it('정상 → syslib-table + 행 + size 임계 클래스 + 정렬 헤더', () => {
     const html = renderToStaticMarkup(
-      <SystemPromptLibrary rows={SL_ROWS} sort={{ key: 'last_seen_at', dir: 'desc' }} t={t} />,
+      <SystemPromptLibrary rows={SL_ROWS} sort={{ key: 'last_seen_at', dir: 'desc' }} />,
     );
     expect(html).toContain('syslib-table');
     expect(html).toContain('data-syslib-sort="byte_size"');
@@ -163,13 +166,13 @@ describe('SystemPromptLibrary — 골든마스터', () => {
   });
   it('ref_count 정렬 시 상위 hot 강조(syslib-ref-hot)', () => {
     const html = renderToStaticMarkup(
-      <SystemPromptLibrary rows={SL_ROWS} sort={{ key: 'ref_count', dir: 'desc' }} t={t} />,
+      <SystemPromptLibrary rows={SL_ROWS} sort={{ key: 'ref_count', dir: 'desc' }} />,
     );
     expect(html).toContain('syslib-ref-hot'); // 상위 25% = 1행
   });
   it('다른 키 정렬 시 hot 강조 없음', () => {
     const html = renderToStaticMarkup(
-      <SystemPromptLibrary rows={SL_ROWS} sort={{ key: 'byte_size', dir: 'desc' }} t={t} />,
+      <SystemPromptLibrary rows={SL_ROWS} sort={{ key: 'byte_size', dir: 'desc' }} />,
     );
     expect(html).not.toContain('syslib-ref-hot');
   });

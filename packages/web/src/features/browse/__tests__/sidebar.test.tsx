@@ -11,9 +11,11 @@
  *    bloated_sys 변경 통지를 검증. A-2 에서 원본 document 'session-anomalies-loaded' CustomEvent 구독을
  *    stores/anomaly-store(Zustand) 구독으로 전환했다(전역 이벤트버스 폐기 — React 채널 일원화).
  */
-import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { ReactElement } from 'react';
+import { act, type ReactElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { ensureDom } from '../../../test-support/ensure-dom';
 import {
   Sidebar,
   ProjectList,
@@ -25,66 +27,27 @@ import {
 import { useAppStore } from '../../../stores/app-store';
 import { useAnomalyStore } from '../../../stores/anomaly-store';
 
-// SessionRow(P2-04)/fmtRelative 가 i18next.t 를 참조 → 테스트 t 주입(vitest.setup __setTestT).
-beforeAll(() => {
-  (globalThis as unknown as { window?: object }).window =
-    (globalThis as unknown as { window?: object }).window as never ?? ({} as never);
-});
-// afterEach 자동 복원 대응으로 각 테스트 전 커스텀 t 재주입.
+ensureDom();
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// i18n 은 각 행/리스트 컴포넌트가 useTranslation 으로 직접 구독한다(무전역 labeler 폐기).
+//   SessionRow(P2-04)/fmtRelative 는 i18next.t 직접 참조 → 테스트 t 주입(vitest.setup __setTestT).
+//   afterEach 자동 복원 대응으로 각 테스트 전 커스텀 t 재주입(ProjectList/SessionList 의 ui.* 키는
+//   맵에 없어 passthrough → 단언은 구조 셀렉터 위주, 라벨 텍스트 비의존).
 beforeEach(() => {
   globalThis.__setTestT?.((key, vars) => {
     const map: Record<string, string> = {
-      'common.formatters.just-now': '방금',
-      'common.formatters.minutes-ago': `${vars?.n}분 전`,
-      'common.formatters.hours-ago': `${vars?.n}시간 전`,
-      'common.formatters.days-ago': `${vars?.n}일 전`,
-      'session.rows.status.ended': '종료된 세션',
-      'session.rows.status.live': '라이브 세션',
-      'session.rows.status.stale': 'stale',
+      'common:formatters.just-now': '방금',
+      'common:formatters.minutes-ago': `${vars?.n}분 전`,
+      'common:formatters.hours-ago': `${vars?.n}시간 전`,
+      'common:formatters.days-ago': `${vars?.n}일 전`,
+      'session:rows.status.ended': '종료된 세션',
+      'session:rows.status.live': '라이브 세션',
+      'session:rows.status.stale': 'stale',
     };
     return map[key] ?? key;
   });
 });
-afterAll(() => {
-  delete (globalThis as unknown as { window?: unknown }).window;
-});
-
-/**
- * 트리 깊이우선 탐색(DOM 하네스 없이 핸들러 배선 검증) — filter-bar.test findNode 확장.
- * ProjectList 가 행을 함수형 하위 컴포넌트(BrowseProjectRow/GlobalRow)로 노출하므로,
- * 함수형 element 를 만나면 1회 호출(렌더)하여 내부 <tr> 까지 descend 한다(props invoke 선례).
- */
-function findNode(node: unknown, pred: (el: ReactElement) => boolean): ReactElement | null {
-  if (!node || typeof node !== 'object') return null;
-  const el = node as ReactElement & { type?: unknown; props?: { children?: unknown } };
-  if (el.props && pred(el)) return el;
-  // 함수형 컴포넌트 element → 호출해 반환 트리를 탐색.
-  if (typeof el.type === 'function') {
-    try {
-      const rendered = (el.type as (p: unknown) => unknown)(el.props);
-      const hit = findNode(rendered, pred);
-      if (hit) return hit;
-    } catch {
-      /* 훅 의존 컴포넌트는 건너뜀(본 탐색 대상은 순수 행 컴포넌트) */
-    }
-  }
-  const children = el.props?.children;
-  const arr = Array.isArray(children) ? children : [children];
-  for (const c of arr.flat(Infinity)) {
-    const hit = findNode(c, pred);
-    if (hit) return hit;
-  }
-  return null;
-}
-
-const labeler = {
-  noData: () => 'no-data',
-  liveCount: (n: number) => `live:${n}`,
-  selectProject: () => 'select-project',
-  sessionCount: (project: string, count: number) => `count:${project}:${count}`,
-  globalRowLabel: () => 'user (global)',
-  globalRowTitle: () => 'global-title',
-};
 
 const PROJECTS = [
   { project_name: 'alpha', total_tokens: 1000, active_count: 2 },
@@ -94,6 +57,12 @@ const PROJECTS = [
 beforeEach(() => {
   useAppStore.setState({ selectedProject: null, selectedSession: null });
 });
+
+/** 라이브 마운트 헬퍼 — 컴포넌트가 useTranslation(hook)을 쓰므로 함수 직접 호출 불가, createRoot 렌더.
+ *  <tr> 루트 컴포넌트는 유효한 table 컨텍스트(table>tbody) 안에서 렌더한다. */
+function renderLive(root: Root, node: ReactElement): void {
+  act(() => root.render(<table><tbody>{node}</tbody></table>));
+}
 
 // ── GLOBAL_PROJECT_KEY 동치 (원본 left-panel.js:17) ──────────────────────────
 describe('GLOBAL_PROJECT_KEY — 원본 상수 동치', () => {
@@ -183,9 +152,21 @@ describe('createAnomalySubscription — store 구독 등록/해제 + 변경 통�
 
 // ── ProjectList — browse 모드 행 계약 (원본 renderBrowseProjectRow :95-115) ────
 describe('ProjectList — browse 모드 DOM/선택 계약', () => {
+  let container: HTMLElement;
+  let root: Root;
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    document.body.innerHTML = '';
+  });
+
   it('프로젝트마다 data-project + clickable 행을 렌더', () => {
     const html = renderToStaticMarkup(
-      <ProjectList projects={PROJECTS} selectedProject={null} isMetaMode={false} metaCounts={null} labeler={labeler} />
+      <ProjectList projects={PROJECTS} selectedProject={null} isMetaMode={false} metaCounts={null} />
     );
     expect(html).toContain('data-project="alpha"');
     expect(html).toContain('data-project="beta"');
@@ -194,7 +175,7 @@ describe('ProjectList — browse 모드 DOM/선택 계약', () => {
 
   it('selectedProject 행만 row-selected', () => {
     const html = renderToStaticMarkup(
-      <ProjectList projects={PROJECTS} selectedProject="alpha" isMetaMode={false} metaCounts={null} labeler={labeler} />
+      <ProjectList projects={PROJECTS} selectedProject="alpha" isMetaMode={false} metaCounts={null} />
     );
     // alpha 행에 row-selected, beta 행엔 없음
     expect(html).toMatch(/data-project="alpha"[^>]*class="[^"]*row-selected|class="[^"]*row-selected[^"]*"[^>]*data-project="alpha"/);
@@ -202,7 +183,7 @@ describe('ProjectList — browse 모드 DOM/선택 계약', () => {
 
   it('active_count>0 은 활성 수 노출, 0 은 dash(—)', () => {
     const html = renderToStaticMarkup(
-      <ProjectList projects={PROJECTS} selectedProject={null} isMetaMode={false} metaCounts={null} labeler={labeler} />
+      <ProjectList projects={PROJECTS} selectedProject={null} isMetaMode={false} metaCounts={null} />
     );
     expect(html).toContain('proj-sess-active'); // alpha active=2
     expect(html).toContain('—'); // beta active=0
@@ -210,7 +191,7 @@ describe('ProjectList — browse 모드 DOM/선택 계약', () => {
 
   it('프로젝트가 없고 browse 모드면 table-empty 행(colspan 3)', () => {
     const html = renderToStaticMarkup(
-      <ProjectList projects={[]} selectedProject={null} isMetaMode={false} metaCounts={null} labeler={labeler} />
+      <ProjectList projects={[]} selectedProject={null} isMetaMode={false} metaCounts={null} />
     );
     expect(html).toContain('table-empty');
     expect(html).toContain('colSpan="3"'); // renderToStaticMarkup 은 colSpan 을 그대로 직렬화
@@ -218,17 +199,19 @@ describe('ProjectList — browse 모드 DOM/선택 계약', () => {
 
   it('행 클릭 → onSelectProject(project_name)', () => {
     let picked: string | null = null;
-    const tree = ProjectList({
-      projects: PROJECTS,
-      selectedProject: null,
-      isMetaMode: false,
-      metaCounts: null,
-      labeler,
-      onSelectProject: (p) => { picked = p; },
-    });
-    const row = findNode(tree, (el) => (el.props as Record<string, unknown>)['data-project'] === 'beta');
+    renderLive(
+      root,
+      <ProjectList
+        projects={PROJECTS}
+        selectedProject={null}
+        isMetaMode={false}
+        metaCounts={null}
+        onSelectProject={(p) => { picked = p; }}
+      />,
+    );
+    const row = container.querySelector<HTMLElement>('[data-project="beta"]')!;
     expect(row).not.toBeNull();
-    (row!.props.onClick as () => void)();
+    act(() => row.click());
     expect(picked!).toBe('beta');
   });
 });
@@ -236,10 +219,21 @@ describe('ProjectList — browse 모드 DOM/선택 계약', () => {
 // ── ProjectList — metadocs 모드 (원본 renderMetaProjectRow/renderMetaGlobalRow) ──
 describe('ProjectList — metadocs 모드 가상 global 행 + 항목 수', () => {
   const metaCounts = { projects: { alpha: 7 } as Record<string, number>, global: 3, total: 10 };
+  let container: HTMLElement;
+  let root: Root;
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    document.body.innerHTML = '';
+  });
 
   it('최상단 가상 global 행(data-project=__global__) 을 노출', () => {
     const html = renderToStaticMarkup(
-      <ProjectList projects={PROJECTS} selectedProject={null} isMetaMode metaCounts={metaCounts} labeler={labeler} />
+      <ProjectList projects={PROJECTS} selectedProject={null} isMetaMode metaCounts={metaCounts} />
     );
     expect(html).toContain(`data-project="${GLOBAL_PROJECT_KEY}"`);
     expect(html).toContain('cell-proj-global');
@@ -247,7 +241,7 @@ describe('ProjectList — metadocs 모드 가상 global 행 + 항목 수', () =>
 
   it('프로젝트별 항목 수를 _metaCounts.projects 에서 조회(미주입 0)', () => {
     const html = renderToStaticMarkup(
-      <ProjectList projects={PROJECTS} selectedProject={null} isMetaMode metaCounts={metaCounts} labeler={labeler} />
+      <ProjectList projects={PROJECTS} selectedProject={null} isMetaMode metaCounts={metaCounts} />
     );
     expect(html).toContain('cell-proj-meta-count');
     expect(html).toContain('>7<'); // alpha = 7
@@ -256,17 +250,19 @@ describe('ProjectList — metadocs 모드 가상 global 행 + 항목 수', () =>
 
   it('global 행 클릭 → onSelectProject(GLOBAL_PROJECT_KEY)', () => {
     let picked: string | null = null;
-    const tree = ProjectList({
-      projects: PROJECTS,
-      selectedProject: null,
-      isMetaMode: true,
-      metaCounts,
-      labeler,
-      onSelectProject: (p) => { picked = p; },
-    });
-    const row = findNode(tree, (el) => (el.props as Record<string, unknown>)['data-project'] === GLOBAL_PROJECT_KEY);
+    renderLive(
+      root,
+      <ProjectList
+        projects={PROJECTS}
+        selectedProject={null}
+        isMetaMode
+        metaCounts={metaCounts}
+        onSelectProject={(p) => { picked = p; }}
+      />,
+    );
+    const row = container.querySelector<HTMLElement>(`[data-project="${GLOBAL_PROJECT_KEY}"]`)!;
     expect(row).not.toBeNull();
-    (row!.props.onClick as () => void)();
+    act(() => row.click());
     expect(picked!).toBe(GLOBAL_PROJECT_KEY);
   });
 });
@@ -277,17 +273,28 @@ describe('SessionList — selectedProject 필터 + 세션 행 렌더', () => {
     { id: 'aaaaaaaa-1', project_name: 'alpha', ended_at: null, started_at: '2026-05-31', last_activity_at: 100 },
     { id: 'bbbbbbbb-2', project_name: 'beta', ended_at: null, started_at: '2026-05-31', last_activity_at: 90 },
   ];
+  let container: HTMLElement;
+  let root: Root;
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    document.body.innerHTML = '';
+  });
 
   it('selectedProject 미선택 시 select-project 힌트 + 빈 행', () => {
     const html = renderToStaticMarkup(
-      <SessionList sessions={SESSIONS} selectedProject={null} selectedSession={null} labeler={labeler} />
+      <SessionList sessions={SESSIONS} selectedProject={null} selectedSession={null} />
     );
     expect(html).toContain('table-empty');
   });
 
   it('selectedProject 의 세션만 SessionRow 로 렌더(타 프로젝트 제외)', () => {
     const html = renderToStaticMarkup(
-      <SessionList sessions={SESSIONS} selectedProject="alpha" selectedSession={null} labeler={labeler} />
+      <SessionList sessions={SESSIONS} selectedProject="alpha" selectedSession={null} />
     );
     expect(html).toContain('sess-row-cell'); // SessionRow(P2-04) 마크업
     expect(html).toContain('data-session-id="aaaaaaaa-1"');
@@ -296,24 +303,25 @@ describe('SessionList — selectedProject 필터 + 세션 행 렌더', () => {
 
   it('선택 프로젝트에 세션이 없으면 no-data 행', () => {
     const html = renderToStaticMarkup(
-      <SessionList sessions={SESSIONS} selectedProject="gamma" selectedSession={null} labeler={labeler} />
+      <SessionList sessions={SESSIONS} selectedProject="gamma" selectedSession={null} />
     );
     expect(html).toContain('table-empty');
   });
 
   it('세션 행 클릭 → onSelectSession(id) (cloneElement 로 onClick 주입)', () => {
     let picked: string | null = null;
-    const tree = SessionList({
-      sessions: SESSIONS,
-      selectedProject: 'alpha',
-      selectedSession: null,
-      labeler,
-      onSelectSession: (id) => { picked = id; },
-    });
-    const row = findNode(tree, (el) => (el.props as Record<string, unknown>)['data-session-id'] === 'aaaaaaaa-1');
+    renderLive(
+      root,
+      <SessionList
+        sessions={SESSIONS}
+        selectedProject="alpha"
+        selectedSession={null}
+        onSelectSession={(id) => { picked = id; }}
+      />,
+    );
+    const row = container.querySelector<HTMLElement>('[data-session-id="aaaaaaaa-1"]')!;
     expect(row).not.toBeNull();
-    expect(typeof row!.props.onClick).toBe('function');
-    (row!.props.onClick as () => void)();
+    act(() => row.click());
     expect(picked!).toBe('aaaaaaaa-1');
   });
 });
@@ -328,7 +336,7 @@ describe('Sidebar — 스토어 연동(selectedProject ↔ app-store)', () => {
         selectedProject={useAppStore.getState().selectedProject}
         isMetaMode={false}
         metaCounts={null}
-        labeler={labeler}
+       
       />
     );
     expect(html).toContain('row-selected');
@@ -343,7 +351,7 @@ describe('Sidebar — 스토어 연동(selectedProject ↔ app-store)', () => {
         selectedSession={null}
         isMetaMode={false}
         metaCounts={null}
-        labeler={labeler}
+       
       />
     );
     expect(html).toContain('data-project="alpha"');

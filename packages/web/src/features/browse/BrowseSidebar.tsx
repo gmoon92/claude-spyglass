@@ -31,7 +31,6 @@ import {
   MemoSessionList,
   type ProjectLike,
   type SessionLike,
-  type SidebarLabeler,
 } from './Sidebar';
 import {
   BurnRateCard,
@@ -44,7 +43,7 @@ import { usePanelResize } from './use-panel-resize';
 import { useTranslation } from 'react-i18next';
 
 /** 패널 크롬 라벨(thead/세션 panel-label) — 레거시 정적 i18n(ui.html.left-panel / session-panel.label).
- *  SidebarLabeler(공유)에는 없는 chrome-only 라벨이라 별도 옵셔널 prop 으로 주입(미지정 시 레거시 영문 폴백). */
+ *  chrome-only 라벨이라 별도 옵셔널 prop 으로 주입 가능(미지정 시 useTranslation 으로 직접 해석). */
 export interface BrowseSidebarChromeLabels {
   thProject?: string;
   thSession?: string;
@@ -57,7 +56,6 @@ export interface BrowseSidebarProps {
   sessions: readonly SessionLike[];
   selectedProject: string | null;
   selectedSession: string | null;
-  labeler: SidebarLabeler;
   onSelectProject?: (project: string) => void;
   onSelectSession?: (id: string) => void;
   /** 세션 목록 초기/전환 fetch 대기 — 빈 목록을 스켈레톤으로(SessionList 로 위임). */
@@ -77,7 +75,6 @@ export function BrowseSidebar({
   sessions,
   selectedProject,
   selectedSession,
-  labeler,
   onSelectProject,
   onSelectSession,
   sessionsLoading,
@@ -94,16 +91,19 @@ export function BrowseSidebar({
 
   // 세션 패널 hint — renderBrowserSessions(:155/169) 1:1: 미선택 → select-project, 선택 → session-count.
   const sessionHint = selectedProject
-    ? labeler.sessionCount(selectedProject, sessions.filter((s) => s.project_name === selectedProject).length)
-    : labeler.selectProject();
+    ? tr('ui:left-panel.session-count', {
+        project: selectedProject,
+        count: sessions.filter((s) => s.project_name === selectedProject).length,
+      })
+    : tr('ui:left-panel.select-project');
 
   // 패널 크롬 라벨(thead/세션 panel-label) — 레거시 정적 i18n 1:1 (index.html data-i18n).
   //   chromeLabels prop 으로 명시 주입되면 그것을 우선(테스트·호출처 override), 미지정 시 i18n 어댑터
   //   t() 로 해석(react-i18next, 키 부재 시 key passthrough — 레거시 data-i18n 미해석 폴백과 동치).
-  const thProject = chromeLabels?.thProject ?? tr('ui.html.left-panel.th-project');
-  const thSession = chromeLabels?.thSession ?? tr('ui.html.left-panel.th-session');
-  const thToken = chromeLabels?.thToken ?? tr('ui.html.left-panel.th-token');
-  const sessionPanelLabel = chromeLabels?.sessionPanelLabel ?? tr('ui.html.session-panel.label');
+  const thProject = chromeLabels?.thProject ?? tr('ui:html.left-panel.th-project');
+  const thSession = chromeLabels?.thSession ?? tr('ui:html.left-panel.th-session');
+  const thToken = chromeLabels?.thToken ?? tr('ui:html.left-panel.th-token');
+  const sessionPanelLabel = chromeLabels?.sessionPanelLabel ?? tr('ui:html.session-panel.label');
 
   return (
     <aside className="left-panel" data-testid="browse-sidebar" ref={panelRef}>
@@ -145,7 +145,6 @@ export function BrowseSidebar({
                 selectedProject={selectedProject}
                 isMetaMode={false}
                 metaCounts={null}
-                labeler={labeler}
                 onSelectProject={onSelectProject}
               />
             </tbody>
@@ -176,7 +175,6 @@ export function BrowseSidebar({
                 sessions={sessions}
                 selectedProject={selectedProject}
                 selectedSession={selectedSession}
-                labeler={labeler}
                 onSelectSession={onSelectSession}
                 loading={sessionsLoading}
               />
@@ -197,9 +195,9 @@ export function BrowseSidebar({
       <div className="panel-section tool-stats-section" id="panelTools" ref={vToolsRef}>
         <div className="panel-body">
           <div className="obs-panel" id="obsPanel">
-            <BurnRateCard payload={obs.burnRate} t={tr} />
-            <CacheHealthCard payload={obs.cacheHealth} t={tr} />
-            <LivePulseCard payload={obs.livePulse} t={tr} />
+            <BurnRateCard payload={obs.burnRate} />
+            <CacheHealthCard payload={obs.cacheHealth} />
+            <LivePulseCard payload={obs.livePulse} />
           </div>
         </div>
       </div>

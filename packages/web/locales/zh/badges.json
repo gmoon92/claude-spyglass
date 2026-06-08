@@ -4,11 +4,11 @@
       "error": "错误"
     },
     "tool-hint": {
-      "lines": "[{n}行]",
+      "lines": "[{{n}}行]",
       "error": "[错误]",
       "saved": "[已保存]",
-      "files": "[{n}个文件]",
-      "matches": "[{n}个匹配]",
+      "files": "[{{n}}个文件]",
+      "matches": "[{{n}}个匹配]",
       "failed": "[失败]"
     },
     "model": {
@@ -17,7 +17,7 @@
       "no-info": "无模型信息"
     },
     "extract": {
-      "chars": "共{n}字"
+      "chars": "共{{n}}字"
     }
   }
 }

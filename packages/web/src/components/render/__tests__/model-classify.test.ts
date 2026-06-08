@@ -9,9 +9,9 @@ import { modelClassOf, modelChipLabel, modelChipHtml } from '../model-classify';
 beforeEach(() => {
   globalThis.__setTestT?.((key) => {
     const map: Record<string, string> = {
-      'badges.renderers.model.unknown': '모델불명',
-      'badges.renderers.model.synthetic': 'SDK 합성',
-      'badges.renderers.model.no-info': '모델 정보 없음',
+      'badges:renderers.model.unknown': '모델불명',
+      'badges:renderers.model.synthetic': 'SDK 합성',
+      'badges:renderers.model.no-info': '모델 정보 없음',
     };
     return map[key] ?? key;
   });

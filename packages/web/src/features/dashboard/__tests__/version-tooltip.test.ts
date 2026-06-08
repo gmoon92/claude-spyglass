@@ -81,8 +81,8 @@ describe('tooltip — 콘텐츠 키 레지스트리', () => {
   });
   it('tooltipContentKeys: ui.<ns>.<key>.title|desc', () => {
     expect(tooltipContentKeys('obs-tooltip', 'burn-rate')).toEqual({
-      titleKey: 'ui.obs-tooltip.burn-rate.title',
-      descKey: 'ui.obs-tooltip.burn-rate.desc',
+      titleKey: 'ui:obs-tooltip.burn-rate.title',
+      descKey: 'ui:obs-tooltip.burn-rate.desc',
     });
   });
   it('parseCacheTokens: read/write parseInt || 0', () => {

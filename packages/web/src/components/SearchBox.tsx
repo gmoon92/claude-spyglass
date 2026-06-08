@@ -32,7 +32,7 @@ export interface SearchBoxProps {
   placeholder?: string;
   /** 정규화된 질의 통지(입력/클리어 모두 단일 진입점). */
   onSearch: (query: string) => void;
-  /** 클리어 버튼 aria-label(원본 window.I18n.t('ui.search-box.clear-label') 대체). */
+  /** 클리어 버튼 aria-label(원본 window.I18n.t('ui:search-box.clear-label') 대체). */
   clearLabel: string;
   /**
    * 포커스 신호(선택) — 단조 증가 값. 값이 바뀌면 input 을 focus + select 한다.

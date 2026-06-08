@@ -13,6 +13,7 @@
  * @module features/dashboard/SystemPromptLibrary
  */
 import type { ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   applySort,
   sizeClassFor,
@@ -24,16 +25,12 @@ import {
   type SortDir,
 } from './syslib-sort';
 
-export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
-
 export interface SystemPromptLibraryProps {
   rows: SysLibRow[] | null;
   sort?: { key: SysLibSortKey; dir: SortDir };
   onSort?: (key: SysLibSortKey) => void;
   /** 행 클릭(본문 lazy-fetch 모달 — 호출처 위임). */
   onOpenRow?: (hash: string) => void;
-  /** i18n t(필수 — DI). 호출처가 react-i18next t 주입, 테스트가 stub 주입. */
-  t: TFunc;
 }
 
 const HEADERS: Array<{ key: SysLibSortKey; label: string; cls: string }> = [
@@ -61,12 +58,12 @@ export function SystemPromptLibrary({
   sort = DEFAULT_SORT,
   onSort,
   onOpenRow,
-  t,
 }: SystemPromptLibraryProps): ReactElement {
+  const { t } = useTranslation();
   if (!rows || rows.length === 0) {
     return (
       <div className="state-empty">
-        <span className="state-empty-title">{t('ui.syslib.no-prompts')}</span>
+        <span className="state-empty-title">{t('ui:syslib.no-prompts')}</span>
       </div>
     );
   }
@@ -115,7 +112,7 @@ export function SystemPromptLibrary({
               data-syslib-hash={r.hash}
               tabIndex={0}
               role="button"
-              aria-label={t('ui.syslib.view-prompt-aria')}
+              aria-label={t('ui:syslib.view-prompt-aria')}
               onClick={onOpenRow ? () => onOpenRow(r.hash) : undefined}
             >
               <td className="syslib-hash">

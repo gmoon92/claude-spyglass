@@ -9,6 +9,7 @@
  *
  * @module features/settings/ServerPanelView
  */
+import { useTranslation } from 'react-i18next';
 import { CodeCopyBox } from '../../components/settings/CodeCopyBox';
 import { SettingsRow } from '../../components/settings/SettingsRow';
 import { formatBytes, formatRelTime, formatUptime } from '../../lib/settings-format';
@@ -17,32 +18,32 @@ import type { LogsData, ServerInfo } from './types';
 export interface ServerPanelViewProps {
   server: ServerInfo;
   logs: LogsData;
-  t: (key: string, vars?: Record<string, unknown>) => string;
   onCopy?: (text: string) => void;
 }
 
-export function ServerPanelView({ server: s, logs, t, onCopy }: ServerPanelViewProps) {
+export function ServerPanelView({ server: s, logs, onCopy }: ServerPanelViewProps) {
+  const { t } = useTranslation();
   // 포트 토글(원본 :1483): 9999면 8888, 아니면 9999.
   const portCmd = `SPYGLASS_PORT=${s.port === 9999 ? 8888 : 9999} bun run dev`;
   const files = logs.files || [];
 
   return (
     <>
-      <h3 className="settings-section-title">{t('ui.settings-view.server.title')}</h3>
+      <h3 className="settings-section-title">{t('ui:settings-view.server.title')}</h3>
       <div className="settings-card">
-        <SettingsRow label={t('ui.settings-view.diag.port')} status="ok" value={String(s.port)} />
+        <SettingsRow label={t('ui:settings-view.diag.port')} status="ok" value={String(s.port)} />
         <SettingsRow label="PID" status="ok" value={String(s.pid)} />
-        <SettingsRow label={t('ui.settings-view.server.uptime')} status="ok" value={formatUptime(s.uptimeSec)} />
+        <SettingsRow label={t('ui:settings-view.server.uptime')} status="ok" value={formatUptime(s.uptimeSec)} />
         <SettingsRow label="Bun" status="ok" value={s.bunVersion || '?'} />
         <SettingsRow label="cwd" status="ok" value="" tail={<code className="settings-meta">{s.cwd}</code>} />
       </div>
       <div className="settings-card">
-        <div className="settings-card-title">{t('ui.settings-view.server.port-change-title')}</div>
-        <div className="settings-card-sub">{t('ui.settings-view.server.port-change-hint')}</div>
-        <CodeCopyBox code={portCmd} copyLabel={t('ui.settings-view.proxy.copy')} onCopy={onCopy} />
+        <div className="settings-card-title">{t('ui:settings-view.server.port-change-title')}</div>
+        <div className="settings-card-sub">{t('ui:settings-view.server.port-change-hint')}</div>
+        <CodeCopyBox code={portCmd} copyLabel={t('ui:settings-view.proxy.copy')} onCopy={onCopy} />
       </div>
       <div className="settings-card">
-        <div className="settings-card-title">{t('ui.settings-view.server.logs-title')}</div>
+        <div className="settings-card-title">{t('ui:settings-view.server.logs-title')}</div>
         <div className="settings-card-sub">
           <code>{logs.dir}</code>
         </div>
@@ -56,7 +57,7 @@ export function ServerPanelView({ server: s, logs, t, onCopy }: ServerPanelViewP
               </div>
             ))
           ) : (
-            <div className="settings-meta">{t('ui.settings-view.server.no-logs')}</div>
+            <div className="settings-meta">{t('ui:settings-view.server.no-logs')}</div>
           )}
         </div>
       </div>

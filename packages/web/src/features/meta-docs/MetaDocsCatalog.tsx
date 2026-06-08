@@ -17,6 +17,7 @@
  * @module features/meta-docs/MetaDocsCatalog
  */
 import { memo, useMemo, type ReactElement, type RefObject } from 'react';
+import { useTranslation } from 'react-i18next';
 import { SortHead, type SortState } from '../../components/design-system/markers/SortHead';
 import { SkeletonRows } from '../../components/Skeleton';
 import { MetaDocTypeBadge } from './MetaDocTypeBadge';
@@ -32,8 +33,6 @@ import {
   type SortDir,
   type DisplayFilter,
 } from './meta-docs-sort';
-
-export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
 
 /** fmtTime 동치 — 원본 formatters.fmtTime(로컬 'YYYY-MM-DD HH:MM'). 누락 → null(호출처 '—'). */
 function fmtTime(ms: number | null | undefined): string | null {
@@ -66,17 +65,15 @@ export interface MetaDocsCatalogProps {
   tableRef?: RefObject<HTMLTableElement>;
   /** fetch 대기 중 여부 — 미로드 시 스켈레톤(빈 상태 오해 방지). */
   loading?: boolean;
-  /** i18n t(필수 — DI). 호출처가 react-i18next t 주입, 테스트가 stub 주입. */
-  t: TFunc;
 }
 
 const HEADERS: Array<{ key: MetaDocSortKey; label: string; cls: string }> = [
-  { key: 'type', label: 'ui.meta-docs-view.col-type', cls: '' },
-  { key: 'name', label: 'ui.meta-docs-view.col-name', cls: '' },
-  { key: 'source', label: 'ui.meta-docs-view.col-source', cls: '' },
-  { key: 'invocations', label: 'ui.meta-docs-view.col-invocations', cls: 'num' },
-  { key: 'last_used_at', label: 'ui.meta-docs-view.col-last-used', cls: '' },
-  { key: 'total_tokens', label: 'ui.meta-docs-view.col-total-tokens', cls: 'num' },
+  { key: 'type', label: 'ui:meta-docs-view.col-type', cls: '' },
+  { key: 'name', label: 'ui:meta-docs-view.col-name', cls: '' },
+  { key: 'source', label: 'ui:meta-docs-view.col-source', cls: '' },
+  { key: 'invocations', label: 'ui:meta-docs-view.col-invocations', cls: 'num' },
+  { key: 'last_used_at', label: 'ui:meta-docs-view.col-last-used', cls: '' },
+  { key: 'total_tokens', label: 'ui:meta-docs-view.col-total-tokens', cls: 'num' },
 ];
 
 const COL_WIDTHS = ['96px', '180px', '280px', '70px', '150px', '100px'];
@@ -125,8 +122,8 @@ export const MetaDocsCatalog = memo(function MetaDocsCatalog({
   activeRowName = null,
   tableRef,
   loading = false,
-  t,
 }: MetaDocsCatalogProps): ReactElement {
+  const { t } = useTranslation();
   // 표시필터 → 정렬(순수 lib). 원본 loadMetaDocsLibrary 순서(view.js:521-522) 동치.
   //   useMemo deps 에서 searchTerm 을 **제외**한다: 검색은 행 hidden 토글(visibleBySearch)일 뿐
   //   정렬 집합을 바꾸지 않으므로, 키 입력마다 O(n log n) applySort(+Intl.Collator 생성)를 재실행할
@@ -147,13 +144,13 @@ export const MetaDocsCatalog = memo(function MetaDocsCatalog({
       project && !matched ? (
         <div className="state-empty">
           <span className="state-empty-title">
-            {t('ui.meta-docs-view.empty-project-title', { project })}
+            {t('ui:meta-docs-view.empty-project-title', { project })}
           </span>
-          <span className="state-empty-hint">{t('ui.meta-docs-view.empty-project-hint')}</span>
+          <span className="state-empty-hint">{t('ui:meta-docs-view.empty-project-hint')}</span>
         </div>
       ) : (
         <div className="state-empty">
-          <span className="state-empty-title">{t('ui.meta-docs-view.empty-global-title')}</span>
+          <span className="state-empty-title">{t('ui:meta-docs-view.empty-global-title')}</span>
         </div>
       );
     return <>{empty}</>;
@@ -222,10 +219,10 @@ export const MetaDocsCatalog = memo(function MetaDocsCatalog({
                 {orphan ? (
                   <span
                     className="meta-doc-source-orphan"
-                    data-tip={t('ui.meta-docs-view.orphan-tooltip')}
+                    data-tip={t('ui:meta-docs-view.orphan-tooltip')}
                     tabIndex={0}
                   >
-                    {t('ui.meta-docs-view.orphan-path-label')}
+                    {t('ui:meta-docs-view.orphan-path-label')}
                   </span>
                 ) : (
                   <PathCell row={r} />

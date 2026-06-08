@@ -31,9 +31,6 @@ import { SearchBox } from '../../components/SearchBox';
 import { ChatRoom, SystemPinChip, SystemPinBody, type SystemUsageLike } from './ChatRoom';
 import { type MessageLike } from './llm-input-state';
 
-/** i18n 번역 함수 시그니처 — react-i18next t(useTranslation) 와 동형. */
-type TFunc = (key: string, vars?: Record<string, unknown>) => string;
-
 /** system_prompts meta(원본 systemMeta 형태). usage 는 ChatRoom SystemMetaLike 와 동형. */
 export interface SystemMeta {
   segment_count?: number | null;
@@ -102,7 +99,7 @@ function ProxyChip({
   activeId: string;
   onSelect?: (id: string) => void;
 }): ReactElement {
-  const { t } = useTranslation() as { t: TFunc };
+  const { t } = useTranslation();
   const total = proxyList.length;
   const activeIdx = proxyList.findIndex((r) => r.id === activeId);
   const cur = activeIdx >= 0 ? proxyList[activeIdx] : null;
@@ -112,7 +109,7 @@ function ProxyChip({
       ? `${fmtToken(cur.tokens_input ?? 0)}+${fmtToken(cur.tokens_output ?? 0)}`
       : '—';
   return (
-    <span className="llm-input-abar-proxy" data-tip={t('ui.llm-input.proxy-selector-label', { count: total })}>
+    <span className="llm-input-abar-proxy" data-tip={t('ui:llm-input.proxy-selector-label', { count: total })}>
       <b>#{activeIdx >= 0 ? activeIdx + 1 : '?'}</b>
       <span className="llm-input-abar-proxy-dim"> · {curModel} · {curTok}</span>
       <Chevron dir="down" size={10} />
@@ -120,7 +117,7 @@ function ProxyChip({
       <select
         className="llm-input-abar-proxy-select"
         data-proxy-select
-        aria-label={t('ui.llm-input.proxy-selector-label', { count: total })}
+        aria-label={t('ui:llm-input.proxy-selector-label', { count: total })}
         value={activeId}
         onChange={(e) => onSelect?.(e.currentTarget.value)}
       >
@@ -149,7 +146,7 @@ function ProxyChip({
  * 명령형 DOM 변이를 useState 기반 선언적 렌더로 정제. 원본 renderHtml 구성 순서 1:1 유지.
  */
 export function LLMInput(props: LLMInputProps): ReactElement {
-  const { t } = useTranslation() as { t: TFunc };
+  const { t } = useTranslation();
   const {
     sessionId,
     requestId,
@@ -195,11 +192,10 @@ export function LLMInput(props: LLMInputProps): ReactElement {
               open={pinOpen}
               onToggle={setPinOpen}
               onRefsClick={onRefsClick}
-              t={t}
             />
             {decodeError ? (
               <span className="pill pill--err" data-tip={decodeError}>
-                {t('ui.llm-input.payload-decode-failed')}
+                {t('ui:llm-input.payload-decode-failed')}
               </span>
             ) : null}
           </span>
@@ -207,7 +203,7 @@ export function LLMInput(props: LLMInputProps): ReactElement {
           {/* 신규 알림 — 과거 요청 보는 중 새 호출 도착 시 최신 복귀 CTA. (LIVE/과거 상태 배지는 제거 — 중복·과함) */}
           {pendingNewCount > 0 ? (
             <button type="button" className="llm-input-newreq" onClick={onFollowLatest}>
-              <Bolt size={11} /> {t('ui.llm-input.chat.new-requests', { count: pendingNewCount })}
+              <Bolt size={11} /> {t('ui:llm-input.chat.new-requests', { count: pendingNewCount })}
             </button>
           ) : null}
 
@@ -217,9 +213,9 @@ export function LLMInput(props: LLMInputProps): ReactElement {
           <span className="feed-search llm-input-abar-search">
             <SearchBox
               value={search}
-              placeholder={t('ui.llm-input.search-placeholder')}
+              placeholder={t('ui:llm-input.search-placeholder')}
               onSearch={setSearch}
-              clearLabel={t('ui.llm-input.chat.search-clear')}
+              clearLabel={t('ui:llm-input.chat.search-clear')}
             />
           </span>
 
@@ -228,28 +224,28 @@ export function LLMInput(props: LLMInputProps): ReactElement {
             <button
               type="button"
               className="llm-input-help-btn"
-              aria-label={t('ui.llm-input.chat.legend-toggle')}
+              aria-label={t('ui:llm-input.chat.legend-toggle')}
             >
               <Info size={14} />
             </button>
             <div className="llm-input-asub" role="tooltip">
               <span
                 className="llm-input-asub-banner"
-                dangerouslySetInnerHTML={{ __html: t('ui.llm-input.banner-text') }}
+                dangerouslySetInnerHTML={{ __html: t('ui:llm-input.banner-text') }}
               />
               <span className="llm-input-asub-legend">
-                <span><i style={{ background: 'var(--info)' }} />{t('ui.llm-input.chat.legend-text')}</span>
-                <span><i style={{ background: 'var(--text-3)', border: '1px dashed var(--text-1)' }} />{t('ui.llm-input.chat.legend-thinking')}</span>
-                <span><i style={{ background: 'var(--text-3)' }} />{t('ui.llm-input.chat.legend-tool-use')}</span>
-                <span><i style={{ background: 'var(--success)' }} />{t('ui.llm-input.chat.legend-tool-result')}</span>
+                <span><i style={{ background: 'var(--info)' }} />{t('ui:llm-input.chat.legend-text')}</span>
+                <span><i style={{ background: 'var(--text-3)', border: '1px dashed var(--text-1)' }} />{t('ui:llm-input.chat.legend-thinking')}</span>
+                <span><i style={{ background: 'var(--text-3)' }} />{t('ui:llm-input.chat.legend-tool-use')}</span>
+                <span><i style={{ background: 'var(--success)' }} />{t('ui:llm-input.chat.legend-tool-result')}</span>
               </span>
-              <span className="llm-input-asub-stateless">{t('ui.llm-input.chat.stateless')}</span>
+              <span className="llm-input-asub-stateless">{t('ui:llm-input.chat.stateless')}</span>
             </div>
           </span>
         </div>
 
         {/* system 프롬프트 전문 — 헤더 칩(SystemPinChip) 토글 시 헤더 바로 아래 펼침. */}
-        {pinOpen && systemHash ? <SystemPinBody content={systemContent} t={t} /> : null}
+        {pinOpen && systemHash ? <SystemPinBody content={systemContent} /> : null}
       </div>
 
       <ChatRoom messages={messages} search={search} typing={typing} conversationKey={sessionId} />

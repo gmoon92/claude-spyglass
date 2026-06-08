@@ -24,11 +24,11 @@ ensureDom();
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const LABELS: Record<string, string> = {
-  'ui.stat-tooltip.point-hover.title': '__TURN__',
-  'ui.stat-tooltip.point-hover.accumulated': '__ACC__',
-  'ui.chart.count-unit': '__COUNT__',
-  'ui.stat-tooltip.sessions.title': '__SESS_TITLE__',
-  'ui.stat-tooltip.sessions.desc': '__SESS_DESC__',
+  'ui:stat-tooltip.point-hover.title': '__TURN__',
+  'ui:stat-tooltip.point-hover.accumulated': '__ACC__',
+  'ui:chart.count-unit': '__COUNT__',
+  'ui:stat-tooltip.sessions.title': '__SESS_TITLE__',
+  'ui:stat-tooltip.sessions.desc': '__SESS_DESC__',
 };
 
 beforeEach(() => {

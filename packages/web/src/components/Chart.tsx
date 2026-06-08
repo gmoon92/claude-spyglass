@@ -24,6 +24,7 @@
  */
 import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useChartReveal } from '../hooks/use-chart-reveal';
 import { useTooltipStore } from '../stores/tooltip-store';
 import {
@@ -49,18 +50,6 @@ export interface ChartTokens {
   typeColors: TypeColors;
 }
 
-/**
- * 범례(#typeLegend) + 하단 total(#typeTotal) i18n 라벨러 — 무전역(leaf) 위해 호출처 주입.
- *  - cacheLabel(id): cache 슬라이스 안정 id(cache/others/...) → ui.chart.label.<id> 텍스트.
- *  - countUnit(count): 하단 #typeTotal — ui.chart.count-unit('{count}건') 보간(count 는 콤마포맷 문자열).
- *  - noData(): 빈 데이터 시 범례 자리 텍스트(ui.chart.no-data).
- */
-export interface ChartLegendLabeler {
-  cacheLabel: (id: string) => string;
-  countUnit: (countText: string) => string;
-  noData: () => string;
-}
-
 export interface ChartProps {
   /** 종류별 도넛 데이터(setSourceData 외부주입 대체). 활성셋 = dataByKind[donutMode]. */
   dataByKind: DataByKind;
@@ -83,8 +72,6 @@ export interface ChartProps {
    *  형제로 두 캔버스를 두고 .chart-mode-detail 클래스로 display 를 모드별 토글한다. 호출처(BrowseLayout)가
    *  ContextChart 를 주입하고 모드 클래스는 #chartSection 에 부여 — Chart 는 .chart-wrap 레이아웃 소유만. */
   contextSlot?: import('react').ReactNode;
-  /** 범례/하단 total i18n 라벨러(레거시 renderTypeLegend 복원). 미주입 시 범례/total 미렌더(폴백 안전). */
-  legendLabeler?: ChartLegendLabeler;
 }
 
 // 원본 chart.js COLORS — CSS 변수 미주입 영역(축선/배경/텍스트)의 폴백 상수.
@@ -352,8 +339,8 @@ function ChartImpl({
   donutStyle,
   timelineMeta,
   contextSlot,
-  legendLabeler,
 }: ChartProps) {
+  const { t } = useTranslation();
   const timelineRef = useRef<HTMLCanvasElement>(null);
   const donutRef = useRef<HTMLCanvasElement>(null);
   // 타임라인 호버 hit-test 좌표(draw 가 반환) — mousemove 가 동일 좌표계로 nearest 버킷을 찾는다.
@@ -363,16 +350,14 @@ function ChartImpl({
   const clearPointHover = useTooltipStore((s) => s.clearPointHover);
 
   // 범례 + 하단 total 뷰모델(레거시 renderTypeLegend) — 활성 도넛셋(dataByKind[donutMode]) 기준.
-  //   labeler 미주입 시 미렌더(폴백). i18n 해석은 labeler.cacheLabel/countUnit/noData 에 위임(leaf 무전역).
+  //   i18n 은 react-i18next useTranslation 으로 직접 해석(ui.chart.label.<id> / count-unit / no-data).
   const activeDonut = dataByKind[donutMode] || [];
-  const legend = legendLabeler
-    ? buildDonutLegend(activeDonut, donutMode, {
-        modelTokens: tokens.modelTokens,
-        cacheTokens: tokens.cacheTokens,
-        typeColors: tokens.typeColors,
-        items: activeDonut,
-      }, legendLabeler.cacheLabel)
-    : null;
+  const legend = buildDonutLegend(activeDonut, donutMode, {
+    modelTokens: tokens.modelTokens,
+    cacheTokens: tokens.cacheTokens,
+    typeColors: tokens.typeColors,
+    items: activeDonut,
+  }, (id) => t(`ui:chart.label.${id}`));
 
   // 도넛 reveal(슬라이스 sweep + 가운데 카운트업, ease-out 600ms)은 "모드 전환/마운트" 에서만.
   //   prefers-reduced-motion 이면 즉시 완성(useChartReveal 내부 처리).
@@ -474,7 +459,7 @@ function ChartImpl({
         {contextSlot}
       </div>
       {/* donut-section(레거시 index.html :488~517) — .donut-wrap(canvas + #typeLegend) + .donut-meta(#typeTotal).
-          범례·하단 total 은 legendLabeler 주입 시 렌더(레거시 renderTypeLegend 선언적 복원). */}
+          범례·하단 total 은 react-i18next 구독으로 직접 해석(레거시 renderTypeLegend 선언적 복원). */}
       <div className="donut-section">
         <div className="donut-wrap">
           <canvas
@@ -485,39 +470,35 @@ function ChartImpl({
             height={DONUT_SIZE}
             style={donutStyle}
           />
-          {legend && legendLabeler ? (
-            <div className="type-legend" id="typeLegend">
-              {legend.hasData ? (
-                legend.rows.map((row, i) => (
-                  <div className="legend-item" key={`${row.name}-${i}`}>
-                    <div
-                      className="legend-dot ds-dot"
-                      data-size="md"
-                      style={{ background: row.color }}
-                    />
-                    <span className="legend-name" data-tip={row.title}>{row.name}</span>
-                    <span className="legend-val">{row.count.toLocaleString()}</span>
-                    <span className="legend-pct">{row.pct}%</span>
-                  </div>
-                ))
-              ) : (
-                <div
-                  className="state-empty"
-                  style={{ padding: 0, fontSize: 'var(--font-meta)' }}
-                >
-                  {legendLabeler.noData()}
+          <div className="type-legend" id="typeLegend">
+            {legend.hasData ? (
+              legend.rows.map((row, i) => (
+                <div className="legend-item" key={`${row.name}-${i}`}>
+                  <div
+                    className="legend-dot ds-dot"
+                    data-size="md"
+                    style={{ background: row.color }}
+                  />
+                  <span className="legend-name" data-tip={row.title}>{row.name}</span>
+                  <span className="legend-val">{row.count.toLocaleString()}</span>
+                  <span className="legend-pct">{row.pct}%</span>
                 </div>
-              )}
-            </div>
-          ) : null}
-        </div>
-        {legend && legendLabeler ? (
-          <div className="donut-meta">
-            <div className="donut-total" id="typeTotal">
-              {legendLabeler.countUnit(legend.total.toLocaleString())}
-            </div>
+              ))
+            ) : (
+              <div
+                className="state-empty"
+                style={{ padding: 0, fontSize: 'var(--font-meta)' }}
+              >
+                {t('ui:chart.no-data')}
+              </div>
+            )}
           </div>
-        ) : null}
+        </div>
+        <div className="donut-meta">
+          <div className="donut-total" id="typeTotal">
+            {t('ui:chart.count-unit', { count: legend.total.toLocaleString() })}
+          </div>
+        </div>
       </div>
     </>
   );

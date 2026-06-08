@@ -22,17 +22,8 @@ import { useAppStore } from '../../stores/app-store';
 ensureDom();
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-// i18n 라벨러 — 컴포넌트는 무전역(라벨러 함수를 prop 으로 주입). 테스트는 식별 가능한 라벨 반환.
-const labeler = {
-  presetLabel: (v: string) => `label:${v}`,
-  presetTitle: (v: string) => `title:${v}`,
-  triggerAria: () => 'Select date range',
-  customFrom: () => 'From',
-  customTo: () => 'To',
-  customApply: () => 'Apply',
-  customLabel: () => 'Custom range…',
-  formatCustom: (from: number, to: number) => `Custom (${from} – ${to})`,
-};
+// i18n 은 react-i18next useTranslation 으로 컴포넌트가 직접 구독한다(무전역 prop 라벨러 폐기).
+//   vitest.setup 의 기본 passthrough t 가 키 문자열을 그대로 반환 → 단언은 ui.main.date-filter.* 키로.
 
 beforeEach(() => {
   useAppStore.setState({ activeRange: null });
@@ -41,7 +32,7 @@ beforeEach(() => {
 describe('DateRangeDropdown — DOM 계약(셀렉터/aria 보존)', () => {
   it('combobox trigger + listbox 구조를 렌더한다', () => {
     const html = renderToStaticMarkup(
-      <DateRangeDropdown activeRange={{ type: 'preset', value: 'all' }} labeler={labeler} />
+      <DateRangeDropdown activeRange={{ type: 'preset', value: 'all' }} />
     );
     expect(html).toContain('class="ds-dropdown"');
     expect(html).toContain('data-component="date-range-dropdown"');
@@ -53,7 +44,7 @@ describe('DateRangeDropdown — DOM 계약(셀렉터/aria 보존)', () => {
 
   it('프리셋 6개(1h/today/yesterday/7d/30d/all)를 role=option data-value 로 렌더', () => {
     const html = renderToStaticMarkup(
-      <DateRangeDropdown activeRange={{ type: 'preset', value: 'all' }} labeler={labeler} />
+      <DateRangeDropdown activeRange={{ type: 'preset', value: 'all' }} />
     );
     expect(DATE_RANGE_PRESETS).toEqual(['1h', 'today', 'yesterday', '7d', '30d', 'all']);
     for (const v of DATE_RANGE_PRESETS) {
@@ -64,24 +55,25 @@ describe('DateRangeDropdown — DOM 계약(셀렉터/aria 보존)', () => {
 
   it('활성 preset 항목만 aria-selected="true"', () => {
     const html = renderToStaticMarkup(
-      <DateRangeDropdown activeRange={{ type: 'preset', value: '7d' }} labeler={labeler} />
+      <DateRangeDropdown activeRange={{ type: 'preset', value: '7d' }} />
     );
     // 7d 옵션은 selected, 그 외는 false. 옵션 마크업에서 data-value 와 aria-selected 가 같은 li 안.
     expect(html).toMatch(/data-value="7d"[^>]*aria-selected="true"|aria-selected="true"[^>]*data-value="7d"/);
     expect(html).toMatch(/data-value="all"[^>]*aria-selected="false"|aria-selected="false"[^>]*data-value="all"/);
   });
 
-  it('custom range 일 때 트리거 라벨은 formatCustom, 프리셋 항목은 모두 aria-selected=false', () => {
+  it('custom range 일 때 트리거 라벨은 formatCustom(ISO range), 프리셋 항목은 모두 aria-selected=false', () => {
     const html = renderToStaticMarkup(
-      <DateRangeDropdown activeRange={{ type: 'custom', from: 1, to: 2 }} labeler={labeler} />
+      <DateRangeDropdown activeRange={{ type: 'custom', from: 1, to: 2 }} />
     );
-    expect(html).toContain('Custom (1 – 2)');
+    // from/to 1·2ms → 둘 다 1970-01-01 (ISO slice, locale 무관 순수 포맷).
+    expect(html).toContain('1970-01-01 ~ 1970-01-01');
     expect(html).not.toContain('aria-selected="true"');
   });
 
   it('custom footer(from/to input + apply 버튼) 렌더', () => {
     const html = renderToStaticMarkup(
-      <DateRangeDropdown activeRange={{ type: 'preset', value: 'all' }} labeler={labeler} />
+      <DateRangeDropdown activeRange={{ type: 'preset', value: 'all' }} />
     );
     expect(html).toContain('data-role="custom-from"');
     expect(html).toContain('data-role="custom-to"');
@@ -89,11 +81,11 @@ describe('DateRangeDropdown — DOM 계약(셀렉터/aria 보존)', () => {
     expect(html).toContain('type="date"');
   });
 
-  it('트리거 라벨은 활성 preset 의 presetLabel 을 표시', () => {
+  it('트리거 라벨은 활성 preset 의 i18n 라벨 키를 표시', () => {
     const html = renderToStaticMarkup(
-      <DateRangeDropdown activeRange={{ type: 'preset', value: 'today' }} labeler={labeler} />
+      <DateRangeDropdown activeRange={{ type: 'preset', value: 'today' }} />
     );
-    expect(html).toContain('label:today');
+    expect(html).toContain('ui:main.date-filter.today.label');
   });
 });
 
@@ -116,7 +108,7 @@ describe('DateRangeDropdown — 스토어 연동(activeRange ↔ app-store)', ()
       liveRoot.render(
         <DateRangeDropdown
           activeRange={{ type: 'preset', value: 'all' }}
-          labeler={labeler}
+         
           open
           onSelectPreset={(v) => useAppStore.getState().setActiveRange({ type: 'preset', value: v })}
         />,
@@ -130,7 +122,7 @@ describe('DateRangeDropdown — 스토어 연동(activeRange ↔ app-store)', ()
 
   it('apply 버튼이 listbox footer 에 존재(셀렉터 계약)', () => {
     act(() =>
-      liveRoot.render(<DateRangeDropdown activeRange={{ type: 'preset', value: 'all' }} labeler={labeler} open />),
+      liveRoot.render(<DateRangeDropdown activeRange={{ type: 'preset', value: 'all' }} open />),
     );
     const applyBtn = liveContainer.querySelector<HTMLButtonElement>('[data-role="custom-apply"]');
     expect(applyBtn).not.toBeNull();
@@ -139,8 +131,8 @@ describe('DateRangeDropdown — 스토어 연동(activeRange ↔ app-store)', ()
   it('store.activeRange 를 prop 으로 받아 렌더하면 라벨이 store 상태를 반영(셀렉터 연동)', () => {
     useAppStore.getState().setActiveRange({ type: 'preset', value: 'yesterday' });
     const ar = useAppStore.getState().activeRange;
-    const html = renderToStaticMarkup(<DateRangeDropdown activeRange={ar} labeler={labeler} />);
-    expect(html).toContain('label:yesterday');
+    const html = renderToStaticMarkup(<DateRangeDropdown activeRange={ar} />);
+    expect(html).toContain('ui:main.date-filter.yesterday.label');
     expect(html).toMatch(/data-value="yesterday"[^>]*aria-selected="true"|aria-selected="true"[^>]*data-value="yesterday"/);
   });
 });
@@ -165,7 +157,7 @@ describe('DateRangeDropdown — controlled custom 입력(DOM 역참조 제거)',
       root.render(
         <DateRangeDropdown
           activeRange={{ type: 'preset', value: 'all' }}
-          labeler={labeler}
+         
           open
           onApplyCustom={(from, to) => {
             applied = { from, to };
@@ -204,7 +196,7 @@ describe('DateRangeDropdown — controlled custom 입력(DOM 역참조 제거)',
       root.render(
         <DateRangeDropdown
           activeRange={{ type: 'preset', value: 'all' }}
-          labeler={labeler}
+         
           open
           onApplyCustom={() => {
             called = true;
@@ -233,7 +225,7 @@ describe('DateRangeDropdown — controlled custom 입력(DOM 역참조 제거)',
       root.render(
         <DateRangeDropdown
           activeRange={{ type: 'preset', value: 'all' }}
-          labeler={labeler}
+         
           open
           menuStyle={{ left: '120px', top: '40px' }}
         />,

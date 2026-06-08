@@ -1,19 +1,19 @@
 {
   "formatters": {
     "just-now": "たった今",
-    "minutes-ago": "{n}分前",
-    "hours-ago": "{n}時間前",
-    "days-ago": "{n}日前"
+    "minutes-ago": "{{n}}分前",
+    "hours-ago": "{{n}}時間前",
+    "days-ago": "{{n}}日前"
   },
   "close": "閉じる",
   "no-data": "データなし",
-  "load-failed": "読み込み失敗: {message}",
+  "load-failed": "読み込み失敗: {{message}}",
   "retry": "再試行",
   "server-unavailable": "サーバーに接続できません。",
   "token-confidence-error": "トークン信頼度エラー（収集失敗）",
   "token-confidence-low": "トークン信頼度低下（transcript 解析失敗または proxy フォールバック）",
   "api-error": {
-    "dashboard-load-failed": "ダッシュボード読み込み失敗: {message}",
+    "dashboard-load-failed": "ダッシュボード読み込み失敗: {{message}}",
     "request-list-load-failed": "リクエストリスト読み込み失敗"
   }
 }

@@ -25,7 +25,6 @@ import {
   ProjectList,
   MemoProjectList,
   MemoSessionList,
-  type SidebarLabeler,
   type ProjectLike,
 } from '../../features/browse/Sidebar';
 import { RequestRow } from '../../components/render/RequestRow';
@@ -79,14 +78,6 @@ describe('P5-04 Chart 메모화', () => {
   });
 });
 
-const LABELER: SidebarLabeler = {
-  noData: () => 'no-data',
-  liveCount: (n) => `live-${n}`,
-  selectProject: () => 'select-project',
-  sessionCount: (p, n) => `${p}-${n}`,
-  globalRowLabel: () => 'global',
-  globalRowTitle: () => 'global-title',
-};
 const PROJECTS: ProjectLike[] = [
   { project_name: 'alpha', total_tokens: 100, active_count: 2 },
   { project_name: 'beta', total_tokens: 50, active_count: 0 },
@@ -104,7 +95,6 @@ describe('P5-04 Sidebar 의 ProjectList 메모 경로(동작 보존)', () => {
         selectedSession: null,
         isMetaMode: false,
         metaCounts: null,
-        labeler: LABELER,
       }),
     );
     const viaDirect = renderToStaticMarkup(
@@ -113,7 +103,6 @@ describe('P5-04 Sidebar 의 ProjectList 메모 경로(동작 보존)', () => {
         selectedProject: null,
         isMetaMode: false,
         metaCounts: null,
-        labeler: LABELER,
       }),
     );
     // Sidebar 는 ProjectList + SessionList 를 모두 포함하므로, 프로젝트 행 마크업이 포함되는지로 동치 확인.

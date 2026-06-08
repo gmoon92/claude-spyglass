@@ -54,9 +54,8 @@ import {
   type ChatRenderItem,
   type ActionGroup,
   type InspectorPayload,
+  type InspectorTFunc,
 } from './llm-input-chat-model';
-
-type TFunc = (key: string, vars?: Record<string, unknown>) => string;
 
 /**
  * system_prompt 재사용 비용 집계(server getSystemPromptUsageStats 와 동형).
@@ -227,7 +226,6 @@ export interface SystemPinChipProps {
   open: boolean;
   onToggle: (open: boolean) => void;
   onRefsClick?: (hash: string) => void;
-  t: TFunc;
 }
 /**
  * 시스템 프롬프트 한 줄 칩 — a-head 헤더에 흡수(payload-chat-redesign, 헤더 1줄 통합).
@@ -235,9 +233,10 @@ export interface SystemPinChipProps {
  *  - 클릭 = 본문 펼침 토글(전문 pre 는 SystemPinBody 가 헤더 아래에 렌더 — open SSoT 공유).
  *  - hash 없으면 a-bar 빈 system 칩(pill--empty) — 기존 계약 유지.
  */
-export function SystemPinChip({ hash, size, content, meta, open, onToggle, onRefsClick, t }: SystemPinChipProps): ReactElement {
+export function SystemPinChip({ hash, size, content, meta, open, onToggle, onRefsClick }: SystemPinChipProps): ReactElement {
+  const { t } = useTranslation();
   if (!hash) {
-    return <span className="pill pill--empty">{t('ui.llm-input.system-none')}</span>;
+    return <span className="pill pill--empty">{t('ui:llm-input.system-none')}</span>;
   }
   const refCount = meta?.ref_count ?? 0;
   const bytes = formatBytes(meta?.byte_size ?? size ?? content?.length ?? 0);
@@ -249,34 +248,34 @@ export function SystemPinChip({ hash, size, content, meta, open, onToggle, onRef
   const inputTok = meta?.usage?.total_input_tokens ?? null;
   const refTip =
     efficiency != null
-      ? t('ui.llm-input.ref-count-btn-title', {
+      ? t('ui:llm-input.ref-count-btn-title', {
           count: refCount,
           pct: cachePct,
           tokens: formatTokenCompact(inputTok),
         })
-      : t('ui.llm-input.ref-count-btn-title-nostat', { count: refCount });
+      : t('ui:llm-input.ref-count-btn-title-nostat', { count: refCount });
   return (
     <span className="llm-input-syspin">
       <button
         type="button"
         className={`pill llm-input-syspin-btn${open ? ' is-open' : ''}`}
         aria-expanded={open}
-        data-tip={t('ui.llm-input.chat.system-tip')}
+        data-tip={t('ui:llm-input.chat.system-tip')}
         onClick={() => onToggle(!open)}
       >
         <span className="chat-ico">
           <ChatPin size={11} />
         </span>
-        <span className="llm-input-syspin-label">{t('ui.llm-input.chat.system-title')}</span>
-        <span className="llm-input-syspin-meta" data-tip={t('ui.llm-input.segment-count-title')}>
+        <span className="llm-input-syspin-label">{t('ui:llm-input.chat.system-title')}</span>
+        <span className="llm-input-syspin-meta" data-tip={t('ui:llm-input.segment-count-title')}>
           seg {meta?.segment_count ?? '?'} · {bytes}
         </span>
         {efficiency != null ? (
           <span
             className="llm-input-syspin-cache"
             data-efficiency={efficiency}
-            data-tip={t('ui.llm-input.cache-signal-title', { pct: cachePct })}
-            aria-label={t('ui.llm-input.cache-signal-title', { pct: cachePct })}
+            data-tip={t('ui:llm-input.cache-signal-title', { pct: cachePct })}
+            aria-label={t('ui:llm-input.cache-signal-title', { pct: cachePct })}
           />
         ) : null}
       </button>
@@ -299,10 +298,11 @@ export function SystemPinChip({ hash, size, content, meta, open, onToggle, onRef
 }
 
 /** 시스템 프롬프트 전문 — SystemPinChip 토글 open 시 헤더 바로 아래에 표시. */
-export function SystemPinBody({ content, t }: { content?: string | null; t: TFunc }): ReactElement {
+export function SystemPinBody({ content }: { content?: string | null }): ReactElement {
+  const { t } = useTranslation();
   return (
     <div className="llm-input-syspin-body">
-      {content ? <pre>{content}</pre> : <p className="chat-pin-sub">{t('ui.llm-input.system-load-failed')}</p>}
+      {content ? <pre>{content}</pre> : <p className="chat-pin-sub">{t('ui:llm-input.system-load-failed')}</p>}
     </div>
   );
 }
@@ -313,14 +313,13 @@ function TextRow({
   term,
   selected,
   onActivate,
-  t,
 }: {
   item: ChatItem;
   term: string;
   selected: boolean;
   onActivate: () => void;
-  t: TFunc;
 }): ReactElement {
+  const { t } = useTranslation();
   const isUser = item.role === 'user';
   return (
     <div className={`chat-row${isUser ? ' chat-row--me' : ''}`}>
@@ -333,11 +332,11 @@ function TextRow({
         <span className="chat-speaker">
           {isUser ? (
             <>
-              <ChatUser size={12} /> {t('ui.llm-input.chat.speaker-user')} <span className="orig">(user)</span>
+              <ChatUser size={12} /> {t('ui:llm-input.chat.speaker-user')} <span className="orig">(user)</span>
             </>
           ) : (
             <>
-              {t('ui.llm-input.chat.speaker-claude')} <span className="orig">(assistant)</span>
+              {t('ui:llm-input.chat.speaker-claude')} <span className="orig">(assistant)</span>
             </>
           )}
           {/* 인덱스를 화자 줄 뒤에 — "Claude (assistant) #476" */}
@@ -347,7 +346,7 @@ function TextRow({
           type="button"
           className={`chat-bubble${isUser ? ' chat-bubble--me' : ' chat-bubble--claude'}${selected ? ' chat-selected' : ''}`}
           aria-pressed={selected}
-          data-tip={t('ui.llm-input.chat.inspect-tip')}
+          data-tip={t('ui:llm-input.chat.inspect-tip')}
           onClick={onActivate}
         >
           <span className="chat-bubble-body">
@@ -365,14 +364,13 @@ function ThinkRow({
   term,
   selected,
   onActivate,
-  t,
 }: {
   item: ChatItem;
   term: string;
   selected: boolean;
   onActivate: () => void;
-  t: TFunc;
 }): ReactElement {
+  const { t } = useTranslation();
   const matched = term.length >= SEARCH_MIN_LEN && itemMatches(item, term);
   const [open, setOpen] = useState(false);
   // 본문 빈(서명만 재전송된 thinking) — 클릭/펼침 대신 안내 문구. redacted 와 별개.
@@ -388,19 +386,19 @@ function ThinkRow({
         <span className="chat-ico">
           <ChatThink size={13} />
         </span>
-        <span className="chat-think-lbl" data-tip={t('ui.llm-input.chat.thinking-tip')}>
-          {item.redacted ? t('ui.llm-input.chat.thinking-redacted') : t('ui.llm-input.chat.thinking-label')}
+        <span className="chat-think-lbl" data-tip={t('ui:llm-input.chat.thinking-tip')}>
+          {item.redacted ? t('ui:llm-input.chat.thinking-redacted') : t('ui:llm-input.chat.thinking-label')}
         </span>
-        <span className="chat-think-note">· {t('ui.llm-input.chat.thinking-note')}</span>
+        <span className="chat-think-note">· {t('ui:llm-input.chat.thinking-note')}</span>
       </summary>
       {item.redacted ? (
-        <div className="chat-think-body">{t('ui.llm-input.chat.thinking-redacted-body')}</div>
+        <div className="chat-think-body">{t('ui:llm-input.chat.thinking-redacted-body')}</div>
       ) : emptyBody ? (
-        <div className="chat-think-body chat-think-empty" data-tip={t('ui.llm-input.chat.thinking-empty-tip')}>
-          {t('ui.llm-input.chat.thinking-empty-body')}
+        <div className="chat-think-body chat-think-empty" data-tip={t('ui:llm-input.chat.thinking-empty-tip')}>
+          {t('ui:llm-input.chat.thinking-empty-body')}
         </div>
       ) : (
-        <button type="button" className="chat-think-body chat-think-body--btn" data-tip={t('ui.llm-input.chat.inspect-tip')} onClick={onActivate}>
+        <button type="button" className="chat-think-body chat-think-body--btn" data-tip={t('ui:llm-input.chat.inspect-tip')} onClick={onActivate}>
           <ClampText text={item.text ?? ''} term={term} />
         </button>
       )}
@@ -409,7 +407,8 @@ function ThinkRow({
 }
 
 /** ↳ 결과 칩 — is_error 직독(이 소스 SSoT). 색+아이콘+라벨 동반(색맹 안전). 전문은 인스펙터. */
-function ResultChip({ result, t }: { result: NonNullable<ChatItem['result']>; t: TFunc }): ReactElement {
+function ResultChip({ result }: { result: NonNullable<ChatItem['result']> }): ReactElement {
+  const { t } = useTranslation();
   const err = result.isError;
   return (
     <div className={`chat-result${err ? ' chat-result--err' : ' chat-result--ok'}`}>
@@ -418,10 +417,10 @@ function ResultChip({ result, t }: { result: NonNullable<ChatItem['result']>; t:
         <span className="chat-result-dot" />
         <span className="chat-verdict">
           {err ? <ErrorIcon size={12} /> : <Check selected size={12} />}
-          {err ? t('ui.llm-input.chat.result-error') : t('ui.llm-input.chat.result-ok')}
+          {err ? t('ui:llm-input.chat.result-error') : t('ui:llm-input.chat.result-ok')}
         </span>
         {result.toolUseId ? (
-          <span className="chat-result-ru" data-tip={t('ui.llm-input.chat.tool-result-tip')}>
+          <span className="chat-result-ru" data-tip={t('ui:llm-input.chat.tool-result-tip')}>
             tool_result · {result.toolUseId}
           </span>
         ) : null}
@@ -435,13 +434,12 @@ function ActionCall({
   item,
   selected,
   onActivate,
-  t,
 }: {
   item: ChatItem;
   selected: boolean;
   onActivate: () => void;
-  t: TFunc;
 }): ReactElement {
+  const { t } = useTranslation();
   const tone = toolTone(item.toolName ?? '');
   const sub = actionSubtitle(item.input);
   const res = item.result ?? null;
@@ -449,13 +447,13 @@ function ActionCall({
     <button
       type="button"
       className={`chat-act-call${selected ? ' chat-selected' : ''}`}
-      data-tip={t('ui.llm-input.chat.inspect-tip')}
+      data-tip={t('ui:llm-input.chat.inspect-tip')}
       onClick={onActivate}
     >
       <div className="chat-act-hd">
         <ToolIcon toolName={item.toolName} eventType={res ? null : 'pre_tool'} />
         <span className="chat-act-name">{item.toolName || 'tool'}</span>
-        <span className="chat-act-orig" data-tip={t('ui.llm-input.chat.tool-use-tip')}>
+        <span className="chat-act-orig" data-tip={t('ui:llm-input.chat.tool-use-tip')}>
           tool_use
         </span>
         {tone ? <Chip tone={tone} label={tone.toUpperCase()} /> : null}
@@ -463,16 +461,16 @@ function ActionCall({
       </div>
       {sub ? (
         <div className="chat-act-sub">
-          {t('ui.llm-input.chat.tool-use-sub', { tool: item.toolName || 'tool' })} <code>{sub}</code>
+          {t('ui:llm-input.chat.tool-use-sub', { tool: item.toolName || 'tool' })} <code>{sub}</code>
         </div>
       ) : null}
       {res ? (
-        <ResultChip result={res} t={t} />
+        <ResultChip result={res} />
       ) : (
         <div className="chat-result">
           <div className="chat-result-hd">
             <span className="chat-result-arrow"><ChatReturn size={13} /></span>
-            <span className="chat-result-hint">{t('ui.llm-input.chat.result-pending')}</span>
+            <span className="chat-result-hint">{t('ui:llm-input.chat.result-pending')}</span>
           </div>
         </div>
       )}
@@ -481,15 +479,16 @@ function ActionCall({
 }
 
 /** orphan tool_result — 짝 못 찾은 결과(숨기지 않고 진단). 클릭 시 인스펙터. */
-function OrphanRow({ item, selected, onActivate, t }: { item: ChatItem; selected: boolean; onActivate: () => void; t: TFunc }): ReactElement {
+function OrphanRow({ item, selected, onActivate }: { item: ChatItem; selected: boolean; onActivate: () => void }): ReactElement {
+  const { t } = useTranslation();
   return (
-    <button type="button" className={`chat-action chat-orphan-card${selected ? ' chat-selected' : ''}`} data-tip={t('ui.llm-input.chat.inspect-tip')} onClick={onActivate}>
+    <button type="button" className={`chat-action chat-orphan-card${selected ? ' chat-selected' : ''}`} data-tip={t('ui:llm-input.chat.inspect-tip')} onClick={onActivate}>
       <div className="chat-act-call">
         <div className="chat-result">
           <div className="chat-result-hd">
             <span className="chat-orphan">
               <Warn size={12} />
-              {t('ui.llm-input.chat.orphan', { id: item.toolUseId ?? '?' })}
+              {t('ui:llm-input.chat.orphan', { id: item.toolUseId ?? '?' })}
             </span>
           </div>
         </div>
@@ -499,11 +498,12 @@ function OrphanRow({ item, selected, onActivate, t }: { item: ChatItem; selected
 }
 
 /** unknown part — 클릭 시 인스펙터(원본 JSON)로 진단. */
-function UnknownRow({ item, selected, onActivate, t }: { item: ChatItem; selected: boolean; onActivate: () => void; t: TFunc }): ReactElement {
+function UnknownRow({ item, selected, onActivate }: { item: ChatItem; selected: boolean; onActivate: () => void }): ReactElement {
+  const { t } = useTranslation();
   return (
-    <button type="button" className={`chat-action${selected ? ' chat-selected' : ''}`} data-tip={t('ui.llm-input.chat.inspect-tip')} onClick={onActivate}>
+    <button type="button" className={`chat-action${selected ? ' chat-selected' : ''}`} data-tip={t('ui:llm-input.chat.inspect-tip')} onClick={onActivate}>
       <div className="chat-act-call">
-        <div className="chat-act-sub chat-unknown-lbl">{t('ui.llm-input.chat.unknown', { type: item.partType ?? 'part' })}</div>
+        <div className="chat-act-sub chat-unknown-lbl">{t('ui:llm-input.chat.unknown', { type: item.partType ?? 'part' })}</div>
       </div>
     </button>
   );
@@ -518,14 +518,13 @@ function SystemRow({
   term,
   selected,
   onActivate,
-  t,
 }: {
   item: ChatItem;
   term: string;
   selected: boolean;
   onActivate: () => void;
-  t: TFunc;
 }): ReactElement {
+  const { t } = useTranslation();
   const matched = term.length >= SEARCH_MIN_LEN && itemMatches(item, term);
   const [open, setOpen] = useState(false);
   const isOpen = open || matched;
@@ -540,15 +539,15 @@ function SystemRow({
         <span className="chat-ico">
           <Info size={13} />
         </span>
-        <span className="chat-system-lbl" data-tip={t('ui.llm-input.chat.system-context-tip')}>
-          {t('ui.llm-input.chat.system-context-title')}
+        <span className="chat-system-lbl" data-tip={t('ui:llm-input.chat.system-context-tip')}>
+          {t('ui:llm-input.chat.system-context-title')}
         </span>
         <span className="chat-system-meta">#{item.msgIndex + 1} · {bytes}</span>
       </summary>
       <button
         type="button"
         className="chat-system-body"
-        data-tip={t('ui.llm-input.chat.inspect-tip')}
+        data-tip={t('ui:llm-input.chat.inspect-tip')}
         onClick={onActivate}
       >
         <ClampText text={item.text ?? ''} term={term} />
@@ -562,7 +561,8 @@ function SystemRow({
  * 시각은 점 애니메이션만(텍스트 라벨 폐기 — 군더더기 제거). 의미는 aria-label 로 스크린리더에만 전달.
  * LIVE 활동 중 다음 턴 페이로드 도착 전까지 노출.
  */
-function TypingBubble({ t }: { t: TFunc }): ReactElement {
+function TypingBubble(): ReactElement {
+  const { t } = useTranslation();
   return (
     <div className="chat-row chat-row--typing" aria-live="polite">
       <span className="chat-avatar chat-avatar--claude" aria-hidden="true">
@@ -570,9 +570,9 @@ function TypingBubble({ t }: { t: TFunc }): ReactElement {
       </span>
       <div className="chat-bubble-wrap">
         <span className="chat-speaker">
-          {t('ui.llm-input.chat.speaker-claude')} <span className="orig">(assistant)</span>
+          {t('ui:llm-input.chat.speaker-claude')} <span className="orig">(assistant)</span>
         </span>
-        <div className="chat-bubble chat-bubble--claude chat-typing" role="status" aria-label={t('ui.llm-input.chat.typing')}>
+        <div className="chat-bubble chat-bubble--claude chat-typing" role="status" aria-label={t('ui:llm-input.chat.typing')}>
           <span className="chat-typing-dots" aria-hidden="true">
             <i />
             <i />
@@ -595,30 +595,29 @@ function InspectorPanel({
   mode,
   onMode,
   term,
-  t,
 }: {
   insp: InspectorPayload | null;
   mode: 'full' | 'raw';
   onMode: (m: 'full' | 'raw') => void;
   /** 헤더 검색에서 내려온 정규화 term(좌/우 공용 하이라이트). */
   term: string;
-  t: TFunc;
 }): ReactElement {
+  const { t } = useTranslation();
   const src = insp ? (mode === 'full' ? insp.text : insp.raw) : '';
   return (
-    <aside className="chat-inspector" aria-label={t('ui.llm-input.chat.inspector-aria')}>
+    <aside className="chat-inspector" aria-label={t('ui:llm-input.chat.inspector-aria')}>
       <div className="chat-inspector-hd">
         <span className="chat-inspector-title">
           <span className="chat-ico"><Search size={13} /></span>
-          <span className="chat-inspector-label">{insp ? insp.title : t('ui.llm-input.chat.inspector-empty')}</span>
+          <span className="chat-inspector-label">{insp ? insp.title : t('ui:llm-input.chat.inspector-empty')}</span>
           {insp ? <span className="chat-inspector-meta">{insp.meta}</span> : null}
         </span>
         <span className="chat-inspector-toggle" role="group">
           <button type="button" className={mode === 'full' ? 'on' : ''} aria-pressed={mode === 'full'} onClick={() => onMode('full')}>
-            {t('ui.llm-input.chat.inspector-full')}
+            {t('ui:llm-input.chat.inspector-full')}
           </button>
           <button type="button" className={mode === 'raw' ? 'on' : ''} aria-pressed={mode === 'raw'} onClick={() => onMode('raw')}>
-            {t('ui.llm-input.chat.inspector-raw')}
+            {t('ui:llm-input.chat.inspector-raw')}
           </button>
         </span>
       </div>
@@ -629,7 +628,7 @@ function InspectorPanel({
       ) : (
         <div className="chat-inspector-body chat-inspector-body--empty">
           <span className="chat-ico"><Search size={28} /></span>
-          <span>{t('ui.llm-input.chat.inspector-empty-hint')}</span>
+          <span>{t('ui:llm-input.chat.inspector-empty-hint')}</span>
         </div>
       )}
     </aside>
@@ -649,7 +648,8 @@ function readSplit(): number {
 }
 
 export function ChatRoom(props: ChatRoomProps): ReactElement {
-  const { t } = useTranslation() as { t: TFunc };
+  const { t: tBase } = useTranslation();
+  const t = tBase as unknown as InspectorTFunc;
   const { messages, search, typing = false, conversationKey } = props;
 
   const renderItems = useMemo<ChatRenderItem[]>(() => groupParallelActions(toChatModel(messages)), [messages]);
@@ -769,10 +769,10 @@ export function ChatRoom(props: ChatRoomProps): ReactElement {
       const grp = ri as ActionGroup;
       return (
         <div className="chat-action chat-action--parallel">
-          <div className="chat-parallel-hd">{t('ui.llm-input.chat.parallel', { count: grp.actions.length })}</div>
+          <div className="chat-parallel-hd">{t('ui:llm-input.chat.parallel', { count: grp.actions.length })}</div>
           {grp.actions.map((a, j) => {
             const gk = `g-${i}-${j}`;
-            return <ActionCall item={a} selected={selectedKey === gk} onActivate={() => activate(a, gk)} t={t} key={gk} />;
+            return <ActionCall item={a} selected={selectedKey === gk} onActivate={() => activate(a, gk)} key={gk} />;
           })}
         </div>
       );
@@ -780,21 +780,21 @@ export function ChatRoom(props: ChatRoomProps): ReactElement {
     const item = ri as ChatItem;
     switch (item.kind) {
       case 'text':
-        return <TextRow item={item} term={term} selected={selectedKey === key} onActivate={() => activate(item, key)} t={t} />;
+        return <TextRow item={item} term={term} selected={selectedKey === key} onActivate={() => activate(item, key)} />;
       case 'think':
-        return <ThinkRow item={item} term={term} selected={selectedKey === key} onActivate={() => activate(item, key)} t={t} />;
+        return <ThinkRow item={item} term={term} selected={selectedKey === key} onActivate={() => activate(item, key)} />;
       case 'action':
         return (
           <div className="chat-action">
-            <ActionCall item={item} selected={selectedKey === key} onActivate={() => activate(item, key)} t={t} />
+            <ActionCall item={item} selected={selectedKey === key} onActivate={() => activate(item, key)} />
           </div>
         );
       case 'system':
-        return <SystemRow item={item} term={term} selected={selectedKey === key} onActivate={() => activate(item, key)} t={t} />;
+        return <SystemRow item={item} term={term} selected={selectedKey === key} onActivate={() => activate(item, key)} />;
       case 'orphan-result':
-        return <OrphanRow item={item} selected={selectedKey === key} onActivate={() => activate(item, key)} t={t} />;
+        return <OrphanRow item={item} selected={selectedKey === key} onActivate={() => activate(item, key)} />;
       default:
-        return <UnknownRow item={item} selected={selectedKey === key} onActivate={() => activate(item, key)} t={t} />;
+        return <UnknownRow item={item} selected={selectedKey === key} onActivate={() => activate(item, key)} />;
     }
   };
   // 신규(이번 갱신에 끝에 append 된) 아이템만 순차 stagger 로 등장시킨다. baseCount = 직전 렌더 길이.
@@ -819,19 +819,19 @@ export function ChatRoom(props: ChatRoomProps): ReactElement {
           <div className="chat-timeline" ref={timelineRef} onScroll={onTimelineScroll}>
             {/* system 핀은 LLMInput a-head 로 흡수됨(헤더 고정). 타임라인은 순수 대화만. */}
             {messages.length === 0 ? (
-              <p className="chat-pin-sub">{t('ui.llm-input.no-messages')}</p>
+              <p className="chat-pin-sub">{t('ui:llm-input.no-messages')}</p>
             ) : (
               renderItems.map((ri, i) => renderItem(ri, i))
             )}
             {/* "작성 중" — Claude 측 타이핑 버블(점 애니메이션). LIVE 활동 중 다음 턴 도착 전까지. */}
-            {typing ? <TypingBubble t={t} /> : null}
+            {typing ? <TypingBubble /> : null}
           </div>
           <button
             type="button"
             className={`chat-jump-latest${scrolledUp ? ' chat-jump-latest--show' : ''}`}
             onClick={() => scrollToLatest(true)}
           >
-            <Chevron dir="down" size={12} /> {t('ui.llm-input.chat.jump-latest')}
+            <Chevron dir="down" size={12} /> {t('ui:llm-input.chat.jump-latest')}
           </button>
         </div>
 
@@ -840,12 +840,12 @@ export function ChatRoom(props: ChatRoomProps): ReactElement {
           className="chat-resizer"
           role="separator"
           aria-orientation="vertical"
-          aria-label={t('ui.llm-input.chat.resize-aria')}
+          aria-label={t('ui:llm-input.chat.resize-aria')}
           onPointerDown={onResizeStart}
         />
 
         {/* 우측 — 상시 인스펙터 (헤더 검색 term 공유) */}
-        <InspectorPanel insp={insp} mode={inspMode} onMode={setInspMode} term={term} t={t} />
+        <InspectorPanel insp={insp} mode={inspMode} onMode={setInspMode} term={term} />
       </div>
     </div>
   );

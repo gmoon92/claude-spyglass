@@ -30,14 +30,14 @@ type SettingsTab = 'diag' | 'integration' | 'server' | 'storage';
  *   비개발자 친화: Hook·Proxy(데이터 수집 연동)는 'Integration', SQLite·Graph(저장)는 'Storage' 로 통합.
  */
 const SETTINGS_TABS: ReadonlyArray<{ key: SettingsTab; labelKey: string }> = [
-  { key: 'diag', labelKey: 'ui.settings-view.tab-diag' },
-  { key: 'integration', labelKey: 'ui.settings-view.tab-integration' },
-  { key: 'storage', labelKey: 'ui.settings-view.tab-storage' },
-  { key: 'server', labelKey: 'ui.settings-view.tab-server' },
+  { key: 'diag', labelKey: 'ui:settings-view.tab-diag' },
+  { key: 'integration', labelKey: 'ui:settings-view.tab-integration' },
+  { key: 'storage', labelKey: 'ui:settings-view.tab-storage' },
+  { key: 'server', labelKey: 'ui:settings-view.tab-server' },
 ];
 
 /**
- * 활성 탭 → 해당 패널. 각 패널은 t 주입(+자체 fetch).
+ * 활성 탭 → 해당 패널. 각 패널은 useTranslation 으로 i18n 을 자체 구독(+자체 fetch).
  *   - diag 만 onJump 로 탭 전환 통지(원본 :349 jump 버튼).
  *   - copy 가능 패널(diag/storage/integration/server)은 onCopy → 상위 Toast 호스트(원본 toast :1579).
  *   - refreshKey 는 "전체 진단 다시 실행"(원본 settingsRefreshBtn :131) — 키 변경 시 패널 remount→refetch.
@@ -46,27 +46,22 @@ function renderPanel(
   tab: SettingsTab,
   onJump: (t: SettingsTab) => void,
   onCopy: (text: string) => void,
-  t: (key: string, vars?: Record<string, unknown>) => string,
 ): ReactElement {
   switch (tab) {
-    case 'integration': return <IntegrationPanel t={t} onCopy={onCopy} />;
-    case 'server': return <ServerPanel t={t} onCopy={onCopy} />;
-    case 'storage': return <StoragePanel t={t} onCopy={onCopy} />;
+    case 'integration': return <IntegrationPanel onCopy={onCopy} />;
+    case 'server': return <ServerPanel onCopy={onCopy} />;
+    case 'storage': return <StoragePanel onCopy={onCopy} />;
     case 'diag':
     default:
-      return <DiagPanel t={t} onJump={(x) => onJump(x as SettingsTab)} onCopy={onCopy} />;
+      return <DiagPanel onJump={(x) => onJump(x as SettingsTab)} onCopy={onCopy} />;
   }
 }
 
 export function SettingsLayout(): ReactElement {
   // i18n — react-i18next 단일 경로. 언어 변경 시 useTranslation 구독으로 재렌더 → t() 재평가(reload 불요).
+  //   패널/헤더는 각자 useTranslation 으로 자체 구독한다(prop drilling 제거) — 본 셸은 자기 JSX(탭 라벨·
+  //   토스트 메시지)에서만 t 를 직접 쓴다.
   const { t } = useTranslation();
-  // 패널/헤더(모듈 함수 renderPanel 경유)는 TFunc 계약((key,vars)=>string)을 prop 으로 받는다.
-  //   react-i18next t 를 그 시그니처로 래핑 — 레거시 tt 주입을 대체(window.I18n 비참조).
-  const tx = useCallback(
-    (key: string, vars?: Record<string, unknown>): string => t(key, vars) as unknown as string,
-    [t],
-  );
   const [tab, setTab] = useState<SettingsTab>('diag');
   // 새로고침 카운터 — 증가 시 활성 패널을 remount 시켜 useAsyncResource 재페치(원본 renderActiveTab 재실행 :131).
   const [refreshKey, setRefreshKey] = useState(0);
@@ -77,11 +72,11 @@ export function SettingsLayout(): ReactElement {
   const onCopy = useCallback((text: string) => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(text).then(
-        () => setToast(t('ui.settings-view.proxy.copied')),
+        () => setToast(t('ui:settings-view.proxy.copied')),
         () => setToast('Copy failed'),
       );
     } else {
-      setToast(t('ui.settings-view.proxy.copied'));
+      setToast(t('ui:settings-view.proxy.copied'));
     }
   }, [t]);
 
@@ -97,7 +92,7 @@ export function SettingsLayout(): ReactElement {
       data-testid="settings-layout"
       aria-label="Settings panel"
     >
-      <SettingsHeader onRefresh={onRefresh} t={tx} />
+      <SettingsHeader onRefresh={onRefresh} />
       {/* 본문 2-column grid — 좌 .settings-nav(200px) + 우 .settings-content(1fr). 원본 :829. */}
       <div className="settings-body">
         <nav className="settings-nav" data-testid="settings-nav" role="tablist" aria-label="Settings sub-tabs">
@@ -120,7 +115,7 @@ export function SettingsLayout(): ReactElement {
         <div className="settings-content" data-testid="settings-panel" role="tabpanel">
           {/* key=tab:refreshKey — 탭 전환·새로고침 모두 패널 remount → useAsyncResource 재페치(원본 :131). */}
           <div key={`${tab}:${refreshKey}`} className="settings-content-body">
-            {renderPanel(tab, setTab, onCopy, tx)}
+            {renderPanel(tab, setTab, onCopy)}
           </div>
         </div>
       </div>

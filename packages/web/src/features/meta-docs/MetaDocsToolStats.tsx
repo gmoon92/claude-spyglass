@@ -14,7 +14,6 @@ import { ToolIcon } from '../../components/render/badges';
 import {
   ToolStatsMatrix,
   type ToolStatsMatrixProps,
-  type TFunc,
 } from '../dashboard/ToolStatsMatrix';
 import type { ToolStatRow, ToolStatsSortKey, SortDir } from '../dashboard/tool-stats-sort';
 
@@ -25,8 +24,6 @@ export interface MetaDocsToolStatsProps {
   sort?: { key: ToolStatsSortKey; dir: SortDir };
   /** 헤더 클릭 → 정렬 전이 통지(호출처가 nextSort 적용). */
   onSort?: (key: ToolStatsSortKey) => void;
-  /** i18n t(필수 — DI). 호출처가 react-i18next t 주입, 테스트가 stub 주입. */
-  t: TFunc;
   /** fetch 대기 중 여부 — 미로드 시 스켈레톤(빈 상태 오해 방지). */
   loading?: boolean;
 }
@@ -35,6 +32,6 @@ export interface MetaDocsToolStatsProps {
 const renderIcon: ToolStatsMatrixProps['renderIcon'] = (toolName) => <ToolIcon toolName={toolName} />;
 
 // memo: stats/sort 불변(부모 재렌더) 시 매트릭스 재렌더를 건너뛴다.
-export const MetaDocsToolStats = memo(function MetaDocsToolStats({ stats, sort, onSort, t, loading }: MetaDocsToolStatsProps): ReactElement {
-  return <ToolStatsMatrix stats={stats} sort={sort} onSort={onSort} t={t} renderIcon={renderIcon} loading={loading} />;
+export const MetaDocsToolStats = memo(function MetaDocsToolStats({ stats, sort, onSort, loading }: MetaDocsToolStatsProps): ReactElement {
+  return <ToolStatsMatrix stats={stats} sort={sort} onSort={onSort} renderIcon={renderIcon} loading={loading} />;
 });

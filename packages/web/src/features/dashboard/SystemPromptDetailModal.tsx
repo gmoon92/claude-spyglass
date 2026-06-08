@@ -20,6 +20,7 @@
  * @see packages/web/assets/js/system-prompt-library.js#showDetailModal
  */
 import { useEffect, type ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import { CloseButton } from '../../components/design-system/primitives/CloseButton';
 import { formatBytes } from './syslib-sort';
@@ -28,8 +29,6 @@ import {
   formatTokenCompact,
   type SystemUsageLike,
 } from '../llm-input/ChatRoom';
-
-export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
 
 /** 모달이 표시할 본문 상태(컨테이너의 fetch 결과). */
 export interface SystemPromptDetail {
@@ -52,33 +51,34 @@ function fmtDate(ts: number | null | undefined): string {
  * 재사용 비용 집계 카드 — "이 프롬프트가 어떻게 쓰였나"의 핵심 인사이트.
  * 캐시 효율을 색으로 강조: low(빨강)면 매 요청 입력 토큰을 다시 과금하는 비용 누수 신호.
  */
-function SystemUsageCard({ usage, t }: { usage: SystemUsageLike; t: TFunc }): ReactElement {
+function SystemUsageCard({ usage }: { usage: SystemUsageLike }): ReactElement {
+  const { t } = useTranslation();
   const pct = usage.cache_hit_pct ?? null;
   const eff = cacheEfficiencyLevel(pct);
   return (
     <dl className="sys-usage-card">
       <div className="sys-usage-cell" data-efficiency={eff ?? 'na'}>
-        <dt>{t('ui.syslib.usage-cache')}</dt>
+        <dt>{t('ui:syslib.usage-cache')}</dt>
         <dd className="sys-usage-cache">{pct == null ? '—' : `${pct}%`}</dd>
       </div>
       <div className="sys-usage-cell">
-        <dt>{t('ui.syslib.usage-reqs')}</dt>
+        <dt>{t('ui:syslib.usage-reqs')}</dt>
         <dd>{(usage.reqs ?? 0).toLocaleString()}</dd>
       </div>
       <div className="sys-usage-cell">
-        <dt>{t('ui.syslib.usage-input-tokens')}</dt>
+        <dt>{t('ui:syslib.usage-input-tokens')}</dt>
         <dd>{formatTokenCompact(usage.total_input_tokens)}</dd>
       </div>
       <div className="sys-usage-cell">
-        <dt>{t('ui.syslib.usage-cache-read')}</dt>
+        <dt>{t('ui:syslib.usage-cache-read')}</dt>
         <dd>{formatTokenCompact(usage.total_cache_read)}</dd>
       </div>
       <div className="sys-usage-cell">
-        <dt>{t('ui.syslib.usage-sessions')}</dt>
+        <dt>{t('ui:syslib.usage-sessions')}</dt>
         <dd>{(usage.distinct_sessions ?? 0).toLocaleString()}</dd>
       </div>
       <div className="sys-usage-cell">
-        <dt>{t('ui.syslib.usage-period')}</dt>
+        <dt>{t('ui:syslib.usage-period')}</dt>
         <dd>{fmtDate(usage.first_seen_at)} – {fmtDate(usage.last_seen_at)}</dd>
       </div>
     </dl>
@@ -96,8 +96,6 @@ export interface SystemPromptDetailModalProps {
   error?: string | null;
   /** 닫기(× / backdrop / ESC 공통). */
   onClose: () => void;
-  /** i18n t(필수 — DI). 호출처가 react-i18next t 주입, 테스트가 stub 주입. */
-  t: TFunc;
 }
 
 /**
@@ -110,8 +108,8 @@ export function SystemPromptDetailModal({
   detail,
   error = null,
   onClose,
-  t,
 }: SystemPromptDetailModalProps): ReactElement | null {
+  const { t } = useTranslation();
   // ESC 닫기(레거시 document.addEventListener('keydown', onKey)). hash 활성일 때만 등록.
   useEffect(() => {
     if (!hash) return;
@@ -129,7 +127,7 @@ export function SystemPromptDetailModal({
   if (loading) {
     inner = (
       <div className="syslib-detail-inner" data-skeleton="1">
-        <p className="syslib-dim">{t('ui.html.detail-loading')}</p>
+        <p className="syslib-dim">{t('ui:html.detail-loading')}</p>
       </div>
     );
   } else if (error) {
@@ -137,12 +135,12 @@ export function SystemPromptDetailModal({
       <div className="syslib-detail-inner">
         <CloseButton
           size="lg"
-          label={t('ui.syslib.close-label')}
+          label={t('ui:syslib.close-label')}
           dataAttrs={{ 'syslib-close': '' }}
           className="syslib-detail-close ds-close-btn"
           onClick={onClose}
         />
-        <p className="syslib-dim">{t('ui.syslib.modal-load-failed', { message: error })}</p>
+        <p className="syslib-dim">{t('ui:syslib.modal-load-failed', { message: error })}</p>
       </div>
     );
   } else if (!detail) {
@@ -150,12 +148,12 @@ export function SystemPromptDetailModal({
       <div className="syslib-detail-inner">
         <CloseButton
           size="lg"
-          label={t('ui.syslib.close-label')}
+          label={t('ui:syslib.close-label')}
           dataAttrs={{ 'syslib-close': '' }}
           className="syslib-detail-close ds-close-btn"
           onClick={onClose}
         />
-        <p className="syslib-dim">{t('ui.syslib.not-found')}</p>
+        <p className="syslib-dim">{t('ui:syslib.not-found')}</p>
       </div>
     );
   } else {
@@ -163,7 +161,7 @@ export function SystemPromptDetailModal({
       <div className="syslib-detail-inner">
         <CloseButton
           size="lg"
-          label={t('ui.syslib.close-label')}
+          label={t('ui:syslib.close-label')}
           dataAttrs={{ 'syslib-close': '' }}
           className="syslib-detail-close ds-close-btn"
           onClick={onClose}
@@ -174,7 +172,7 @@ export function SystemPromptDetailModal({
           <span>seg={detail.segment_count ?? '?'}</span>
           <span>ref={detail.ref_count ?? '?'}</span>
         </header>
-        {detail.usage ? <SystemUsageCard usage={detail.usage} t={t} /> : null}
+        {detail.usage ? <SystemUsageCard usage={detail.usage} /> : null}
         <pre className="syslib-detail-content">{detail.content ?? ''}</pre>
       </div>
     );

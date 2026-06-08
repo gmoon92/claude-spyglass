@@ -184,7 +184,7 @@ describe('inspectorPayloadOf', () => {
   it('redacted think → 본문 대신 잠금 라벨 키', () => {
     const items = toChatModel([{ role: 'assistant', content: [{ type: 'redacted_thinking', data: 'blob' }] }]);
     const p = inspectorPayloadOf(items[0], tStub);
-    expect(p.text).toBe('ui.llm-input.chat.thinking-redacted-body');
+    expect(p.text).toBe('ui:llm-input.chat.thinking-redacted-body');
   });
 });
 

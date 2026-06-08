@@ -58,17 +58,17 @@ export function SessionRow({ s, isSelected, t: tProp }: { s: SessionLike; isSele
   if (liveState === 'ended') {
     statusGlyph = <StatusEnded size={12} />;
     statusCls = '';
-    statusTitle = t('session.rows.status.ended');
+    statusTitle = t('session:rows.status.ended');
     statusTone = 'ended';
   } else if (liveState === 'stale') {
     statusGlyph = <StatusStale size={12} />;
     statusCls = ' stale';
-    statusTitle = t('session.rows.status.stale');
+    statusTitle = t('session:rows.status.stale');
     statusTone = 'stale';
   } else {
     statusGlyph = <StatusActive size={12} />;
     statusCls = ' active';
-    statusTitle = t('session.rows.status.live');
+    statusTitle = t('session:rows.status.live');
     statusTone = 'active';
   }
   const shortId = s.id.slice(0, 8);

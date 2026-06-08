@@ -37,10 +37,10 @@ interface TurnLike {
 /** 복잡도 라벨/톤 — 원본 updateFlowHead(turn-views.js:340-355) 분기 1:1. t 는 호출처(컴포넌트)가 주입. */
 function complexityOf(toolCount: number, t: TFn): { label: string; tone: string } {
   if (toolCount > 15) {
-    return { label: t('session.session-detail.turn-views.complexity-high'), tone: 'warn' };
+    return { label: t('session:session-detail.turn-views.complexity-high'), tone: 'warn' };
   }
   if (toolCount > 5) {
-    return { label: t('session.session-detail.turn-views.complexity-mid'), tone: 'info' };
+    return { label: t('session:session-detail.turn-views.complexity-mid'), tone: 'info' };
   }
   return { label: '', tone: 'neutral' };
 }

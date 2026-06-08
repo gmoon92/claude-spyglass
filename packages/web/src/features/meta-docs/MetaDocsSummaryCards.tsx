@@ -27,19 +27,16 @@
  * @module features/meta-docs/MetaDocsSummaryCards
  */
 import { memo, type ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 import { computeRowCounts, isRegistered, type MetaDocRow, type DisplayFilter } from './meta-docs-sort';
 import { ToolIcon } from '../../components/render/badges';
 import { metaDocIconName } from './MetaDocTypeBadge';
-
-export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
 
 export interface MetaDocsSummaryCardsProps {
   /** 전체 카탈로그 행(type 필터 전 — 원본 probe rows 동치). 카운트/mini-bar 파생 입력. */
   rows: ReadonlyArray<MetaDocRow>;
   /** 카드 클릭 → display 필터 전환 통지(호출처가 셸 상태 반영). */
   onSelectDisplay: (display: DisplayFilter) => void;
-  /** i18n t(필수 — DI). 호출처가 react-i18next t 주입, 테스트가 stub 주입. */
-  t: TFunc;
 }
 
 /** 랭킹 mini-bar 기본 노출 개수 — 카탈로그 스켈레톤(8행, MetaDocsCatalog) 과 정합. */
@@ -83,7 +80,8 @@ function rankDocsByInvocations(rows: ReadonlyArray<MetaDocRow>, topN: number): R
  *     MetaDocsBehaviorBars 로 분리됐다(그 둘을 한 flex-row 컨테이너에 같이 두면 카드 옆에 바가 붙어 눌린다).
  */
 // memo: rows 불변(검색 입력 등 부모 재렌더) 시 computeRowCounts 재계산·카드 재렌더를 건너뛴다.
-export const MetaDocsSummaryCards = memo(function MetaDocsSummaryCards({ rows, onSelectDisplay, t }: MetaDocsSummaryCardsProps): ReactElement {
+export const MetaDocsSummaryCards = memo(function MetaDocsSummaryCards({ rows, onSelectDisplay }: MetaDocsSummaryCardsProps): ReactElement {
+  const { t } = useTranslation();
   const counts = computeRowCounts(rows);
 
   return (
@@ -93,29 +91,29 @@ export const MetaDocsSummaryCards = memo(function MetaDocsSummaryCards({ rows, o
         className="meta-docs-summary-card meta-docs-summary-card--used"
         data-meta-filter="display"
         data-value="all"
-        data-tip={t('ui.meta-docs-view.card-used-title')}
+        data-tip={t('ui:meta-docs-view.card-used-title')}
         onClick={() => onSelectDisplay('all')}
       >
         <span className="meta-docs-summary-card-value">{counts.used}</span>
-        <span className="meta-docs-summary-card-label">{t('ui.meta-docs-view.card-used-label')}</span>
+        <span className="meta-docs-summary-card-label">{t('ui:meta-docs-view.card-used-label')}</span>
       </button>
       <button
         type="button"
         className="meta-docs-summary-card meta-docs-summary-card--unused"
         data-meta-filter="display"
         data-value="unused"
-        data-tip={t('ui.meta-docs-view.card-unused-title')}
+        data-tip={t('ui:meta-docs-view.card-unused-title')}
         onClick={() => onSelectDisplay('unused')}
       >
         <span className="meta-docs-summary-card-value">{counts.unused}</span>
-        <span className="meta-docs-summary-card-label">{t('ui.meta-docs-view.card-unused-label')}</span>
+        <span className="meta-docs-summary-card-label">{t('ui:meta-docs-view.card-unused-label')}</span>
       </button>
       <button
         type="button"
         className="meta-docs-summary-card meta-docs-summary-card--orphan"
         data-meta-filter="display"
         data-value="orphan"
-        data-tip={t('ui.meta-docs-view.card-orphan-title')}
+        data-tip={t('ui:meta-docs-view.card-orphan-title')}
         onClick={() => onSelectDisplay('orphan')}
       >
         <span className="meta-docs-summary-card-value">{counts.orphan}</span>

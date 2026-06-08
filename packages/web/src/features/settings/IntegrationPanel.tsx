@@ -16,6 +16,7 @@
  * @module features/settings/IntegrationPanel
  */
 import { useCallback, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { StickyAlert } from '../../components/settings/StickyAlert';
 import { HooksPanelView } from './HooksPanelView';
 import { ProxyPanelView } from './ProxyPanelView';
@@ -26,7 +27,6 @@ import { useAsyncResource } from './use-settings-diag';
 import type { ProxyShell, ProxySnippet, ProxyStatus } from './types';
 
 export interface IntegrationPanelProps {
-  t: (key: string, vars?: Record<string, unknown>) => string;
   onCopy?: (text: string) => void;
 }
 
@@ -46,7 +46,8 @@ type StreamState =
 const STEP_DELAY = 130;
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-export function IntegrationPanel({ t, onCopy }: IntegrationPanelProps) {
+export function IntegrationPanel({ onCopy }: IntegrationPanelProps) {
+  const { t } = useTranslation();
 
   // ── 페칭 ──────────────────────────────────────────────────────────────────
   const hookFetcher = useCallback((signal: AbortSignal) => fetchDiag(signal), []);
@@ -123,7 +124,7 @@ export function IntegrationPanel({ t, onCopy }: IntegrationPanelProps) {
   //   셸 선택마다 패널이 통째로 사라졌다 다시 그려져 아코디언이 닫히는 버그가 생긴다.
   const loading = !diag || !proxyData;
   if (loading) {
-    return <SettingsSkeleton cards={2} label={t('ui.settings-view.loading')} />;
+    return <SettingsSkeleton cards={2} label={t('ui:settings-view.loading')} />;
   }
   if (hookStatus === 'error') return <div className="settings-error">⚠ {hookError}</div>;
   if (proxyFetchStatus === 'error') return <div className="settings-error">⚠ {proxyError}</div>;
@@ -141,7 +142,7 @@ export function IntegrationPanel({ t, onCopy }: IntegrationPanelProps) {
             <span key={i} className={l.tone === 'err' ? 'stream-stderr' : undefined}>{l.text}{'\n'}</span>
           ))}
         </pre>
-        {s.running && <div className="install-running">{t('ui.settings-view.proxy.installing')}</div>}
+        {s.running && <div className="install-running">{t('ui:settings-view.proxy.installing')}</div>}
       </>
     );
   })();
@@ -152,7 +153,7 @@ export function IntegrationPanel({ t, onCopy }: IntegrationPanelProps) {
     <>
       {showRestart && (
         <StickyAlert
-          message={t('ui.settings-view.hooks.restart-required-banner')}
+          message={t('ui:settings-view.hooks.restart-required-banner')}
           kind="restart"
           onDismissed={() => setShowRestart(false)}
         />
@@ -162,8 +163,8 @@ export function IntegrationPanel({ t, onCopy }: IntegrationPanelProps) {
       <div className="settings-card">
         <div className="storage-section-head">
           <div className="storage-section-head-text">
-            <div className="settings-card-title">{t('ui.settings-view.integration.install-title')}</div>
-            <div className="settings-card-sub">{t('ui.settings-view.integration.install-sub')}</div>
+            <div className="settings-card-title">{t('ui:settings-view.integration.install-title')}</div>
+            <div className="settings-card-sub">{t('ui:settings-view.integration.install-sub')}</div>
           </div>
           <button
             type="button"
@@ -172,21 +173,20 @@ export function IntegrationPanel({ t, onCopy }: IntegrationPanelProps) {
             onClick={onInstallAll}
             disabled={installing}
           >
-            {t('ui.settings-view.integration.install-all')}
+            {t('ui:settings-view.integration.install-all')}
           </button>
         </div>
         <div className="settings-result" id="integrationResult">{streamNode}</div>
       </div>
 
       {/* ① 이벤트 수집 (Hook) — 상태 + 상세 아코디언만(설치는 상단 통합 버튼) */}
-      <HooksPanelView hooks={diag.hooks} t={t} />
+      <HooksPanelView hooks={diag.hooks} />
 
       {/* ② API 메트릭 수집 (Proxy) — 상태 + 셸 선택/상세 아코디언만 */}
       <ProxyPanelView
         status={proxyData.status}
         snippet={proxyData.snippet}
         selectedShell={selectedShell}
-        t={t}
         onSelectShell={setSelectedShell}
         onCopy={onCopy}
       />

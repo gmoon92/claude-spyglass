@@ -26,21 +26,21 @@ import {
 // ── i18n stub — React(useTranslation→parseMissingKeyHandler 폴백 window.I18n.t).
 //   locales/en/ui.json 의 anomaly 키를 {var} 보간으로 재현(라벨/tooltip 문자열 고정).
 const I18N_MAP: Record<string, string> = {
-  'ui.anomaly.bloated-sys.warn.label': 'sys {pct}%',
-  'ui.anomaly.bloated-sys.warn.tooltip': 'system context bloated ({pct}%)',
-  'ui.anomaly.bloated-sys.warn.modal': 'system bloated · /mcp list',
-  'ui.anomaly.bloated-sys.critical.label': 'bloated {pct}%',
-  'ui.anomaly.bloated-sys.critical.tooltip': 'system dominates user ({pct}%)',
-  'ui.anomaly.bloated-sys.critical.modal': "system dominates · compact won't help",
-  'ui.anomaly.context-saturation.warn.label': '▦ ctx {pct}%',
-  'ui.anomaly.context-saturation.warn.tooltip': 'Session context {pct}% used — approaching limit',
-  'ui.anomaly.context-saturation.warn.modal': '/clear or /compact recommended',
-  'ui.anomaly.context-saturation.critical.label': '▦ ctx {pct}%',
-  'ui.anomaly.context-saturation.critical.tooltip': 'Session context {pct}% used — approaching limit',
-  'ui.anomaly.context-saturation.critical.modal': '/clear or /compact recommended',
-  'ui.anomaly.agent-spike.tooltip': 'Agent is {n}× parent row',
-  'ui.anomaly.agent-spike.modal': 'Agent token spike · ↑×{n} · split session',
-  'ui.anomaly.agent-spike.summary': '↑{n}× larger than parent row',
+  'ui:anomaly.bloated-sys.warn.label': 'sys {pct}%',
+  'ui:anomaly.bloated-sys.warn.tooltip': 'system context bloated ({pct}%)',
+  'ui:anomaly.bloated-sys.warn.modal': 'system bloated · /mcp list',
+  'ui:anomaly.bloated-sys.critical.label': 'bloated {pct}%',
+  'ui:anomaly.bloated-sys.critical.tooltip': 'system dominates user ({pct}%)',
+  'ui:anomaly.bloated-sys.critical.modal': "system dominates · compact won't help",
+  'ui:anomaly.context-saturation.warn.label': '▦ ctx {pct}%',
+  'ui:anomaly.context-saturation.warn.tooltip': 'Session context {pct}% used — approaching limit',
+  'ui:anomaly.context-saturation.warn.modal': '/clear or /compact recommended',
+  'ui:anomaly.context-saturation.critical.label': '▦ ctx {pct}%',
+  'ui:anomaly.context-saturation.critical.tooltip': 'Session context {pct}% used — approaching limit',
+  'ui:anomaly.context-saturation.critical.modal': '/clear or /compact recommended',
+  'ui:anomaly.agent-spike.tooltip': 'Agent is {n}× parent row',
+  'ui:anomaly.agent-spike.modal': 'Agent token spike · ↑×{n} · split session',
+  'ui:anomaly.agent-spike.summary': '↑{n}× larger than parent row',
 };
 
 /** {var} 단일 중괄호 보간 — locales JSON·i18next prefix/suffix 와 동일. */

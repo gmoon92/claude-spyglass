@@ -160,7 +160,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
         | { success?: boolean; error?: string }
         | null;
       if (res.ok && json?.success) {
-        setUpdateSuccess(t('ui.html.update-modal.success'));
+        setUpdateSuccess(t('ui:html.update-modal.success'));
         // 서버 재시작(1.2s) + 부팅 여유 후 reload — 재시작 중 연결 실패는 SSE 재연결/이 reload 가 흡수.
         setTimeout(() => {
           try { (globalThis as { location?: Location }).location?.reload(); } catch { /* noop */ }
@@ -168,12 +168,12 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
         return; // 성공 경로는 reload 까지 updating 유지(버튼 비활성 + "업데이트 중…").
       }
       const key = json?.error === 'local_changes'
-        ? 'ui.html.update-modal.error-local-changes'
-        : 'ui.html.update-modal.error-generic';
+        ? 'ui:html.update-modal.error-local-changes'
+        : 'ui:html.update-modal.error-generic';
       setUpdateError(t(key));
       setUpdating(false);
     } catch {
-      setUpdateError(t('ui.html.update-modal.error-generic'));
+      setUpdateError(t('ui:html.update-modal.error-generic'));
       setUpdating(false);
     }
   }, [updating, t]);
@@ -193,17 +193,17 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
     <>
       <div className="app-shell" data-testid="app-shell">
       {/* 연결 실패 배너 — .app-shell grid row1(auto). main-layout 보다 먼저 와야 row 정합. */}
-      <ErrorBanner visible={!connected} onRetry={onRetry} t={t} />
+      <ErrorBanner visible={!connected} onRetry={onRetry} />
 
       <div className={`main-layout${leftPanelHidden ? ' left-panel-hidden' : ''}`}>
-        <AppRail appMode={activeMode} onSelect={setAppMode} t={t} />
+        <AppRail appMode={activeMode} onSelect={setAppMode} />
         {/* 좌측 패널 접기 토글(원본 sidebar-edge-toggle) — ⌘B 단축키와 동작 공유. */}
         <button
           className="sidebar-edge-toggle"
           id="btnPanelCollapse"
           type="button"
-          data-tip={t('ui.html.sidebar-toggle.title')}
-          aria-label={t('ui.html.sidebar-toggle.aria')}
+          data-tip={t('ui:html.sidebar-toggle.title')}
+          aria-label={t('ui:html.sidebar-toggle.aria')}
           onClick={toggleLeftPanel}
         >
           <svg className="ds-chevron" data-dir={leftPanelHidden ? 'right' : 'left'} aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -214,7 +214,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
         {children}
       </div>
 
-      <Footer onHelp={onHelp} t={t} />
+      <Footer onHelp={onHelp} />
       </div>
 
       {/* fallback 배지(버그 #6) — 사이드바가 없는 모드(settings)에서만 노출한다. browse/metadocs 는
@@ -229,7 +229,6 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
           currentVersion={view.currentVersion}
           latestTag={view.latestTag}
           onOpen={openModal}
-          t={t}
         />
       </div>
       <UpdateModal
@@ -239,7 +238,6 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
         onConfirm={onConfirmUpdate}
         onCancel={handleModalClose}
         onClose={handleModalClose}
-        t={t}
         busy={updating}
         errorMessage={updateError}
         successMessage={updateSuccess}
@@ -249,11 +247,10 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
         visible={isShallow && !shallowDismissed}
         onDismiss={onDismissShallow}
         onCopy={onCopyShallow}
-        t={t}
       />
 
       {/* 키보드 단축키 도움말 모달(레거시 #kbdHelpBackdrop) — footer `?` 버튼·`?` 키 토글, ESC/백드롭/× 닫기. */}
-      <KeyboardHelpModal open={helpOpen} onClose={onCloseHelp} t={t} />
+      <KeyboardHelpModal open={helpOpen} onClose={onCloseHelp} />
 
       {/* 전역 호버 툴팁(B-1 — React Portal). document 위임으로 [data-*-tooltip]/.cache-cell 감지 +
           tooltip-store point-hover 구독 → createPortal(body) 로 .stat-tooltip/.cache-tooltip 표시.

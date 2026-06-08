@@ -42,8 +42,8 @@
       "subtitle": "Last 30 min · live",
       "lang-switcher-aria": "Select language",
       "update-badge-aria": "Update available",
-      "update-badge-aria-available": "Update available — v{tag}",
-      "update-badge-aria-latest": "Up to date — v{tag}",
+      "update-badge-aria-available": "Update available — v{{tag}}",
+      "update-badge-aria-latest": "Up to date — v{{tag}}",
       "update-badge-aria-loading": "Checking for updates",
       "toggle-title": "Collapse / expand",
       "toggle-aria": "Collapse"
@@ -108,7 +108,7 @@
   },
   "chart": {
     "no-data": "No data",
-    "count-unit": "{count} reqs",
+    "count-unit": "{{count}} reqs",
     "label": {
       "cache": "Cache",
       "others": "Others",
@@ -119,26 +119,26 @@
       "hit-rate": "Hit rate"
     },
     "footer": {
-      "split": "system {sys}% / user {user}%"
+      "split": "system {{sys}}% / user {{user}}%"
     }
   },
   "left-panel": {
     "no-data": "No data",
-    "live-count": "{count} live",
+    "live-count": "{{count}} live",
     "select-project": "Select a project",
-    "session-count": "{project} · {count}",
+    "session-count": "{{project}} · {{count}}",
     "global-row-label": "All",
     "global-row-title": "user(global) — all cwds + global catalog"
   },
   "infra": {
-    "new-requests-banner": "{count} new request(s) — click to jump to latest"
+    "new-requests-banner": "{{count}} new request(s) — click to jump to latest"
   },
   "llm-input": {
     "no-recent-proxy": "No recent proxy requests",
     "no-session-proxy": "This session has no proxy requests",
     "session-id-label": "Session ID:",
-    "load-failed": "Failed to load: {message}",
-    "request-not-found": "Request not found ({id})",
+    "load-failed": "Failed to load: {{message}}",
+    "request-not-found": "Request not found ({{id}})",
     "no-system-field": "This request has no system field.",
     "system-load-failed": "Body load failed or missing — only system_hash is known.",
     "no-messages": "No messages",
@@ -148,23 +148,23 @@
     "collapse-all": "Collapse all",
     "expand-all-title": "Expand all messages",
     "collapse-all-title": "Collapse all messages",
-    "proxy-selector-label": "Proxy requests ({count})",
+    "proxy-selector-label": "Proxy requests ({{count}})",
     "banner-text": "This tab shows the <strong>original payload</strong> sent by the proxy to the Anthropic API — it may differ from hook observation data (Turn view).",
     "refs-popover-aria-label": "System prompt references",
     "refs-popover-title": "References",
     "refs-popover-loading": "Loading…",
     "refs-popover-wait": "Please wait…",
-    "refs-popover-count": "{count} · newest first · hash {hash}…",
+    "refs-popover-count": "{{count}} · newest first · hash {{hash}}…",
     "refs-popover-empty": "No reference requests found.",
-    "refs-popover-load-failed": "Failed to load: {message}",
+    "refs-popover-load-failed": "Failed to load: {{message}}",
     "refs-close-label": "Close",
     "ref-session-unspecified": "No session",
     "ref-session-current": "Current session",
     "ref-jump-title": "Jump to this proxy request",
     "ref-other-session-title": "Reference from another session — jump only supported within current session",
-    "ref-count-btn-title": "Reused {count}× · {pct}% cache hit · {tokens} input tokens. Click for reuse & cache details.",
-    "ref-count-btn-title-nostat": "Referenced by {count} API request(s). Click for reuse details.",
-    "cache-signal-title": "Prompt cache hit rate {pct}% (by input tokens). Low = input tokens re-billed every request.",
+    "ref-count-btn-title": "Reused {{count}}× · {{pct}}% cache hit · {{tokens}} input tokens. Click for reuse & cache details.",
+    "ref-count-btn-title-nostat": "Referenced by {{count}} API request(s). Click for reuse details.",
+    "cache-signal-title": "Prompt cache hit rate {{pct}}% (by input tokens). Low = input tokens re-billed every request.",
     "ref-count-span-title": "Number of API requests referencing this system prompt (by hash).",
     "segment-count-title": "Number of text segments used as body in the original system array. (idx[0] is usually the billing header; idx[1]+ is the body)",
     "byte-size-title": "Byte size of the system prompt body.",
@@ -191,15 +191,15 @@
       "thinking-empty-body": "Thinking body is not included in this payload (signature only).",
       "thinking-empty-tip": "On multi-turn resends, Claude omits prior turns' thinking bodies and sends only the signature. The body exists only when that response was generated.",
       "tool-use-tip": "Claude requested a tool call (tool_use). This is the request, not the result yet.",
-      "tool-use-sub": "{tool} requested ·",
+      "tool-use-sub": "{{tool}} requested ·",
       "input-view": "view input",
       "result-pending": "awaiting / no result received",
       "result-error": "tool failed",
       "result-ok": "done",
       "result-view": "view result",
       "tool-result-tip": "Response returned to Claude by the environment (CLI) that ran the tool. Not something you typed. Paired to the request above via tool_use_id.",
-      "orphan": "Result with no matching tool_use ({id}) — may be a subagent boundary or a collection gap",
-      "unknown": "Other part: {type}",
+      "orphan": "Result with no matching tool_use ({{id}}) — may be a subagent boundary or a collection gap",
+      "unknown": "Other part: {{type}}",
       "recorded": "Replaying a recorded conversation (not live)",
       "search-clear": "Clear search",
       "legend-text": "text · message",
@@ -208,7 +208,7 @@
       "legend-tool-result": "tool_result · tool response",
       "stateless": "Each API call in this session resends the whole conversation (why the repeats?)",
       "stateless-tip": "Claude is stateless, so every call resends the entire conversation so far. Repeated content is normal.",
-      "parallel": "{count} parallel tool requests (run together)",
+      "parallel": "{{count}} parallel tool requests (run together)",
       "more": "Show more",
       "collapse": "Show less",
       "inspect": "Details",
@@ -226,7 +226,7 @@
       "live-tip": "Auto-updates to the latest payload when a new call arrives in this session (SSE).",
       "paused": "Past view",
       "paused-tip": "Viewing a past request — auto-update paused. Click 'New requests' to resume live.",
-      "new-requests": "{count} new ↓",
+      "new-requests": "{{count}} new ↓",
       "resize-aria": "Resize chat / inspector"
     }
   },
@@ -235,9 +235,9 @@
     "tab-tools-label": "Tools",
     "flow": {
       "scope-center": "Center",
-      "scope-window": "window: last {days} days",
-      "scope-turns": "observed: {turns}/{total} turns",
-      "scope-calls": "{calls} calls (same-turn repeats counted)",
+      "scope-window": "window: last {{days}} days",
+      "scope-turns": "observed: {{turns}}/{{total}} turns",
+      "scope-calls": "{{calls}} calls (same-turn repeats counted)",
       "legend-main": "Trigger flow",
       "legend-normal": "Normal",
       "legend-strength-strong": "Frequent (≥50%)",
@@ -245,7 +245,7 @@
       "legend-strength-weak": "Occasional (5-20%)",
       "legend-strength-sparse": "Rare (<5%)",
       "info-aria": "Aggregation basis",
-      "info-tooltip": "Aggregation: last {days} days / denominator = turns where the center document appears. Bidirectional BFS — left (caller chain -3..-1) → center → right (callees 1..3, up to 3 hops). The rightmost \"turn follow-up\" column shows meta documents that appeared in the same turn after the center, without a call chain (dashed edges). Call frequency in 4 tiers — Frequent (≥50%) · Regular (20-50%) · Occasional (5-20%) · Rare (<5%).",
+      "info-tooltip": "Aggregation: last {{days}} days / denominator = turns where the center document appears. Bidirectional BFS — left (caller chain -3..-1) → center → right (callees 1..3, up to 3 hops). The rightmost \"turn follow-up\" column shows meta documents that appeared in the same turn after the center, without a call chain (dashed edges). Call frequency in 4 tiers — Frequent (≥50%) · Regular (20-50%) · Occasional (5-20%) · Rare (<5%).",
       "section-depth-1": "Direct calls",
       "section-depth-2": "Transit",
       "section-depth-3": "Deep",
@@ -254,10 +254,10 @@
       "zoom-in-title": "Zoom in",
       "zoom-out-title": "Zoom out",
       "empty-no-center": "No behavior definitions to visualize",
-      "empty-no-center-project": "No behavior definitions used in {project}",
-      "empty-zero-turns": "No invocations recorded for {name} yet",
+      "empty-no-center-project": "No behavior definitions used in {{project}}",
+      "empty-zero-turns": "No invocations recorded for {{name}} yet",
       "empty-hint": "Flow is computed from recent turns. It appears once at least one turn has run in the selected scope.",
-      "fetch-failed": "Failed to load flow: {message}",
+      "fetch-failed": "Failed to load flow: {{message}}",
       "section-parent-3": "Caller (-3)",
       "section-parent-2": "Caller (-2)",
       "section-parent-1": "Caller (-1)",
@@ -293,22 +293,22 @@
     "orphan-path-label": "Unregistered",
     "orphan-tooltip": "This invocation may have originated from another workspace (.claude/) or a built-in/plugin definition. Re-scanning multiple workspaces during sync will merge this row into a catalog entry.",
     "deleted-badge-title": "Definition no longer on disk (soft-deleted)",
-    "empty-project-title": "No Behavior Definitions registered for {project}",
+    "empty-project-title": "No Behavior Definitions registered for {{project}}",
     "empty-project-hint": "This project may never have been synced via SessionStart. Click the <strong>Sync</strong> button in the left thead to re-scan all known workspaces.",
     "empty-global-title": "No Behavior Definitions — auto-synced after SessionStart",
-    "load-failed": "Failed to load: {message}",
+    "load-failed": "Failed to load: {{message}}",
     "syncing-label": "Syncing…",
     "toast-sync-start": "Sync started…",
-    "toast-sync-done": "Sync complete — {summary}",
-    "toast-sync-failed": "Sync failed: {message}",
+    "toast-sync-done": "Sync complete — {{summary}}",
+    "toast-sync-failed": "Sync failed: {{message}}",
     "sync-restore-label": "Sync",
     "orphan-scope-switch": "Orphan rows have no project context — switched to all-projects mode.",
     "refresh-no-change": "No changes",
-    "refresh-add": "+{n}",
-    "refresh-del": "-{n}",
-    "refresh-global": "Global {detail}",
-    "refresh-project": "Project {detail}",
-    "refresh-workspaces": "{n} workspace(s)",
+    "refresh-add": "+{{n}}",
+    "refresh-del": "-{{n}}",
+    "refresh-global": "Global {{detail}}",
+    "refresh-project": "Project {{detail}}",
+    "refresh-workspaces": "{{n}} workspace(s)",
     "refresh-no-result": "No results"
   },
   "tool-stats": {
@@ -326,9 +326,9 @@
   "syslib": {
     "no-prompts": "No system prompts (dedup catalog is empty)",
     "view-prompt-aria": "View system prompt body",
-    "load-failed": "Failed to load: {message}",
+    "load-failed": "Failed to load: {{message}}",
     "not-found": "Body not found.",
-    "modal-load-failed": "Failed to load: {message}",
+    "modal-load-failed": "Failed to load: {{message}}",
     "close-label": "Close",
     "usage-cache": "Cache hit",
     "usage-reqs": "Reuses",
@@ -346,7 +346,7 @@
       "title": "Creation / Read Ratio",
       "desc": "Write (initial creation) vs. Read (reuse) ratio of cache tokens.\nstable: Read ≥ 70% — cache is being reused well.\nbuilding: Read < 70% — cache is still being populated."
     },
-    "precision-tooltip": "{pct}% (precise)"
+    "precision-tooltip": "{{pct}}% (precise)"
   },
   "obs-panel": {
     "no-data": "No data",
@@ -355,8 +355,8 @@
     "no-tool-calls": "No tool calls",
     "no-behavior-defs": "No Behavior Definitions calls",
     "recent-activity": "Recent activity",
-    "yesterday": "Yesterday {val}",
-    "savings": "Saved {val}"
+    "yesterday": "Yesterday {{val}}",
+    "savings": "Saved {{val}}"
   },
   "obs-tooltip": {
     "burn-rate": {
@@ -397,39 +397,39 @@
     }
   },
   "context-chart": {
-    "indicator": "Accumulated {value} / {limit} tokens ({percent}%)",
-    "footer": "Turn {turn} · Max {max} tokens · Model limit: {limit}{model}"
+    "indicator": "Accumulated {{value}} / {{limit}} tokens ({{percent}}%)",
+    "footer": "Turn {{turn}} · Max {{max}} tokens · Model limit: {{limit}}{{model}}"
   },
   "anomaly": {
     "bloated-sys": {
       "warn": {
-        "label": "sys {pct}%",
-        "tooltip": "system context bloated ({pct}%)",
+        "label": "sys {{pct}}%",
+        "tooltip": "system context bloated ({{pct}}%)",
         "modal": "system bloated · /mcp list"
       },
       "critical": {
-        "label": "bloated {pct}%",
-        "tooltip": "system dominates user ({pct}%)",
+        "label": "bloated {{pct}}%",
+        "tooltip": "system dominates user ({{pct}}%)",
         "modal": "system dominates · compact won't help"
       }
     },
     "context-saturation": {
       "warn": {
-        "label": "▦ ctx {pct}%",
-        "tooltip": "Session context {pct}% used — approaching limit",
+        "label": "▦ ctx {{pct}}%",
+        "tooltip": "Session context {{pct}}% used — approaching limit",
         "modal": "/clear or /compact recommended"
       },
       "critical": {
-        "label": "▦ ctx {pct}%",
-        "tooltip": "Session context {pct}% used — approaching limit",
+        "label": "▦ ctx {{pct}}%",
+        "tooltip": "Session context {{pct}}% used — approaching limit",
         "modal": "/clear or /compact recommended"
       }
     },
     "agent-spike": {
-      "label": "↑×{n}",
-      "tooltip": "Agent is {n}× parent row",
-      "modal": "Agent token spike · ↑×{n} · split session",
-      "summary": "↑{n}× larger than parent row"
+      "label": "↑×{{n}}",
+      "tooltip": "Agent is {{n}}× parent row",
+      "modal": "Agent token spike · ↑×{{n}} · split session",
+      "summary": "↑{{n}}× larger than parent row"
     }
   },
   "main": {
@@ -461,7 +461,7 @@
         "from": "From",
         "to": "To",
         "warn-long-range": "Ranges over 90 days may strain the server",
-        "label-with-range": "Custom ({from} – {to})",
+        "label-with-range": "Custom ({{from}} – {{to}})",
         "ephemeral-toast": "Custom ranges reset on page reload"
       },
       "all": {
@@ -492,8 +492,8 @@
     }
   },
   "version-check": {
-    "available": "{tag} available",
-    "latest": "{tag} · Up to date",
+    "available": "{{tag}} available",
+    "latest": "{{tag}} · Up to date",
     "loading": "Checking…",
     "updating": "Updating…",
     "confirm": "Update",
@@ -503,23 +503,23 @@
     "restarting": "Update complete. Restarting server…",
     "restart-complete": "Restart complete. Reloading page…",
     "restart-timeout": "Server did not come back. Please reload the page manually.",
-    "network-error": "Network error: {message}",
+    "network-error": "Network error: {{message}}",
     "update-request-failed": "Update request failed",
     "migration": {
-      "applied": "{n} migrations applied (v{from} → v{to})",
-      "applied-single": "1 migration applied (v{from} → v{to})",
+      "applied": "{{n}} migrations applied (v{{from}} → v{{to}})",
+      "applied-single": "1 migration applied (v{{from}} → v{{to}})",
       "none": "No schema changes",
-      "none-detail": "DB v{version} · no migrations in this update.",
+      "none-detail": "DB v{{version}} · no migrations in this update.",
       "failed": "Migration failed",
-      "failed-file": "Failed file: {file}",
+      "failed-file": "Failed file: {{file}}",
       "failed-guide": "Check server logs and follow the recovery steps in the ops guide if needed.",
-      "duration": "{ms}ms"
+      "duration": "{{ms}}ms"
     },
     "local-changes": {
       "title": "Git changes detected",
       "body": "Your working tree has uncommitted changes, so auto-update cannot proceed. Clean them up with the commands below, then retry.",
       "files-label": "Changed files",
-      "files-more": "+{n} more"
+      "files-more": "+{{n}} more"
     },
     "shallow": {
       "warning": "Shallow clone — auto-update may fail",
@@ -601,17 +601,17 @@
       "title": "Error rate"
     },
     "point-hover": {
-      "title": "Turn {turn}",
-      "accumulated-with-limit": "Accumulated {value} / {limit} tokens ({percent}%)",
-      "accumulated": "Accumulated {value} tokens",
-      "delta": "{delta} tokens vs. previous turn",
-      "model": "Model {model}"
+      "title": "Turn {{turn}}",
+      "accumulated-with-limit": "Accumulated {{value}} / {{limit}} tokens ({{percent}}%)",
+      "accumulated": "Accumulated {{value}} tokens",
+      "delta": "{{delta}} tokens vs. previous turn",
+      "model": "Model {{model}}"
     }
   },
   "detail-view": {
-    "total-tokens": "Total {tokens} tokens",
-    "ended-at": "Ended: {time}",
-    "turn-count-hint": "Session {count} turns accumulated — /clear or start a new session"
+    "total-tokens": "Total {{tokens}} tokens",
+    "ended-at": "Ended: {{time}}",
+    "turn-count-hint": "Session {{count}} turns accumulated — /clear or start a new session"
   },
   "settings-view": {
     "title": "Settings",
@@ -632,7 +632,7 @@
       "missing": "not installed",
       "hook-label": "Hook Setup",
       "proxy-label": "Proxy Setup",
-      "hook-registered": "{n}/{total} registered",
+      "hook-registered": "{{n}}/{{total}} registered",
       "hook-broken": "JSON corrupted",
       "hook-missing": "settings file not found",
       "jump-hooks": "Hook Setup →",
@@ -653,7 +653,7 @@
     "hooks": {
       "title": "Event Collection (Hook)",
       "subtitle": "Collects Claude Code lifecycle events (prompts, tool calls, sessions, and more).",
-      "status-ok": "Collecting ({n}/{total} events)",
+      "status-ok": "Collecting ({{n}}/{{total}} events)",
       "status-off": "Not installed — auto-install required",
       "reinstall": "Reinstall",
       "detail-summary": "Show details",
@@ -682,7 +682,7 @@
       },
       "health": {
         "ok": "Hook status: all events registered",
-        "warn": "Hook status: {n}/{total} registered — auto-install recommended",
+        "warn": "Hook status: {{n}}/{{total}} registered — auto-install recommended",
         "missing": "Hook status: ~/.claude/settings.json not found — auto-install will create it",
         "broken": "Hook status: settings.json is corrupted — back up manually before auto-install"
       },
@@ -707,7 +707,7 @@
       "summary-title": "Total usage",
       "total-size": "Total size",
       "retention": "Retention",
-      "retention-days": "{n} days",
+      "retention-days": "{{n}} days",
       "rdb": {
         "title": "Conversation & Event Log",
         "subtitle": "Stores all activity — prompts, tool calls, sessions, and more.",
@@ -754,7 +754,7 @@
       "copied": "✓ Copied to clipboard",
       "outro": "Manual install: paste the snippet above into your shell profile (e.g. ~/.zshrc) and open a new shell.",
       "install": "Auto-install proxy",
-      "status-ok": "Collecting ({shell})",
+      "status-ok": "Collecting ({{shell}})",
       "status-off": "Not installed — auto-install required",
       "status-broken": "Marker corrupted — manual fix required",
       "reinstall": "Reinstall",
@@ -774,7 +774,7 @@
       "engineering-summary": "Advanced engineering details ▼",
       "engineering-title": "Diagnostics",
       "action-help": "Click [Auto-install proxy] above to actually modify the shell profile. Selecting a card alone does not install anything.",
-      "health-target": "Inspected file: {path}",
+      "health-target": "Inspected file: {{path}}",
       "detected-shell": "Detected shell",
       "profile-path": "Profile path",
       "profile-exists": "exists",
@@ -810,7 +810,7 @@
         }
       },
       "health": {
-        "ok": "Proxy status: installed in {shell}",
+        "ok": "Proxy status: installed in {{shell}}",
         "warn": "Proxy status: not installed yet — one click of [Auto-install proxy] is enough",
         "broken": "Proxy status: marker block is corrupted — please fix the shell profile manually",
         "missing": "Proxy status: shell profile file does not exist — auto-install will create it"

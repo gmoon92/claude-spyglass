@@ -42,8 +42,8 @@
       "subtitle": "直近30分 · リアルタイム",
       "lang-switcher-aria": "言語を選択",
       "update-badge-aria": "アップデートあり",
-      "update-badge-aria-available": "アップデートあり — v{tag}",
-      "update-badge-aria-latest": "最新版 — v{tag}",
+      "update-badge-aria-available": "アップデートあり — v{{tag}}",
+      "update-badge-aria-latest": "最新版 — v{{tag}}",
       "update-badge-aria-loading": "アップデートを確認中",
       "toggle-title": "折りたたむ / 展開する",
       "toggle-aria": "折りたたむ"
@@ -108,7 +108,7 @@
   },
   "chart": {
     "no-data": "データなし",
-    "count-unit": "{count}件",
+    "count-unit": "{{count}}件",
     "label": {
       "cache": "キャッシュ",
       "others": "その他",
@@ -119,26 +119,26 @@
       "hit-rate": "ヒット率"
     },
     "footer": {
-      "split": "system {sys}% / user {user}%"
+      "split": "system {{sys}}% / user {{user}}%"
     }
   },
   "left-panel": {
     "no-data": "データなし",
-    "live-count": "{count} ライブ",
+    "live-count": "{{count}} ライブ",
     "select-project": "プロジェクトを選択",
-    "session-count": "{project} · {count}件",
+    "session-count": "{{project}} · {{count}}件",
     "global-row-label": "全体",
     "global-row-title": "user(global) — すべての cwd + グローバルカタログ合算"
   },
   "infra": {
-    "new-requests-banner": "新しいリクエスト {count}件 — クリックして最新へ移動"
+    "new-requests-banner": "新しいリクエスト {{count}}件 — クリックして最新へ移動"
   },
   "llm-input": {
     "no-recent-proxy": "最近のプロキシリクエストなし",
     "no-session-proxy": "このセッションにはプロキシリクエストがありません",
     "session-id-label": "セッション ID:",
-    "load-failed": "読み込み失敗: {message}",
-    "request-not-found": "リクエストが見つかりません ({id})",
+    "load-failed": "読み込み失敗: {{message}}",
+    "request-not-found": "リクエストが見つかりません ({{id}})",
     "no-system-field": "このリクエストには system フィールドがありません。",
     "system-load-failed": "本文の読み込み失敗または未存在 — system_hash のみ判明。",
     "no-messages": "メッセージなし",
@@ -148,23 +148,23 @@
     "collapse-all": "すべて折りたたむ",
     "expand-all-title": "すべてのメッセージを展開",
     "collapse-all-title": "すべてのメッセージを折りたたむ",
-    "proxy-selector-label": "プロキシリクエスト ({count}件)",
+    "proxy-selector-label": "プロキシリクエスト ({{count}}件)",
     "banner-text": "このタブは proxy が Anthropic API に送信した <strong>元のペイロード</strong>です — フック観測データ（ターンビュー）と異なる場合があります。",
     "refs-popover-aria-label": "System プロンプト参照リスト",
     "refs-popover-title": "参照リスト",
     "refs-popover-loading": "読み込み中…",
     "refs-popover-wait": "しばらくお待ちください…",
-    "refs-popover-count": "{count}件 · 新しい順 · hash {hash}…",
+    "refs-popover-count": "{{count}}件 · 新しい順 · hash {{hash}}…",
     "refs-popover-empty": "参照リクエストがありません。",
-    "refs-popover-load-failed": "読み込み失敗: {message}",
+    "refs-popover-load-failed": "読み込み失敗: {{message}}",
     "refs-close-label": "閉じる",
     "ref-session-unspecified": "セッション未指定",
     "ref-session-current": "現在のセッション",
     "ref-jump-title": "このプロキシリクエストへジャンプ",
     "ref-other-session-title": "別セッションの参照 — ジャンプは現在のセッション内のみ対応",
-    "ref-count-btn-title": "{count}回再利用 · キャッシュヒット {pct}% · 累計入力 {tokens} トークン。クリックで再利用・キャッシュ詳細。",
-    "ref-count-btn-title-nostat": "API リクエスト {count}件が参照。クリックで再利用詳細を表示。",
-    "cache-signal-title": "プロンプトキャッシュヒット率 {pct}%（入力トークン基準）。低いとリクエストごとに入力トークンを再課金。",
+    "ref-count-btn-title": "{{count}}回再利用 · キャッシュヒット {{pct}}% · 累計入力 {{tokens}} トークン。クリックで再利用・キャッシュ詳細。",
+    "ref-count-btn-title-nostat": "API リクエスト {{count}}件が参照。クリックで再利用詳細を表示。",
+    "cache-signal-title": "プロンプトキャッシュヒット率 {{pct}}%（入力トークン基準）。低いとリクエストごとに入力トークンを再課金。",
     "ref-count-span-title": "このシステムプロンプト（hash 基準）を参照する API リクエスト数。",
     "segment-count-title": "元の system 配列で本文として使用されたテキストセグメント数。(通常 idx[0] は課金用ヘッダー、idx[1] 以降が本文)",
     "byte-size-title": "システムプロンプト本文のバイトサイズ。",
@@ -191,15 +191,15 @@
       "thinking-empty-body": "思考の本文はこのペイロードに含まれていません(signature のみ再送)。",
       "thinking-empty-tip": "Claude はマルチターン再送時、過去ターンの思考本文を省きsignature のみを送ります。本文はその応答が生成された時点にのみ存在します。",
       "tool-use-tip": "Claude がツール使用を要求したもの(tool_use)です。まだ結果ではなく『要求』の段階です。",
-      "tool-use-sub": "{tool} 実行要求 ·",
+      "tool-use-sub": "{{tool}} 実行要求 ·",
       "input-view": "input を表示",
       "result-pending": "実行待ち / 結果未受信",
       "result-error": "ツール失敗",
       "result-ok": "完了",
       "result-view": "結果を表示",
       "tool-result-tip": "ツールを実行した環境(CLI)が Claude へ返した応答です。あなたが入力したものではありません。tool_use_id で上の要求と対応します。",
-      "orphan": "対応する tool_use が見つからない結果 ({id}) — サブエージェント境界か収集漏れの可能性",
-      "unknown": "その他のパート: {type}",
+      "orphan": "対応する tool_use が見つからない結果 ({{id}}) — サブエージェント境界か収集漏れの可能性",
+      "unknown": "その他のパート: {{type}}",
       "recorded": "録画された会話を再生中(リアルタイムではありません)",
       "search-clear": "検索をクリア",
       "legend-text": "text · 発言",
@@ -208,7 +208,7 @@
       "legend-tool-result": "tool_result · ツール応答",
       "stateless": "このセッションの API 呼び出しは毎回会話全体を再送します(なぜ繰り返す?)",
       "stateless-tip": "Claude は状態を持たないため、呼び出しごとにこれまでの会話全体を再送します。内容の繰り返しは正常です。",
-      "parallel": "並列ツール要求 {count} 件(同時実行)",
+      "parallel": "並列ツール要求 {{count}} 件(同時実行)",
       "more": "もっと見る",
       "collapse": "折りたたむ",
       "inspect": "詳細",
@@ -226,7 +226,7 @@
       "live-tip": "このセッションに新しい呼び出しが届くと自動で最新ペイロードに更新されます(SSE)。",
       "paused": "過去表示",
       "paused-tip": "過去のリクエストを表示中 — 自動更新は一時停止。「新着」を押すとリアルタイムに復帰します。",
-      "new-requests": "新着 {count} ↓",
+      "new-requests": "新着 {{count}} ↓",
       "resize-aria": "会話・インスペクターの幅調整"
     }
   },
@@ -235,9 +235,9 @@
     "tab-tools-label": "ツール",
     "flow": {
       "scope-center": "中心",
-      "scope-window": "ウィンドウ: 過去{days}日",
-      "scope-turns": "観測: {turns}/{total}ターン",
-      "scope-calls": "{calls} 回呼出 (同ターン重複を含む)",
+      "scope-window": "ウィンドウ: 過去{{days}}日",
+      "scope-turns": "観測: {{turns}}/{{total}}ターン",
+      "scope-calls": "{{calls}} 回呼出 (同ターン重複を含む)",
       "legend-main": "トリガーフロー",
       "legend-normal": "通常",
       "legend-strength-strong": "頻繁な呼出 (≥50%)",
@@ -245,7 +245,7 @@
       "legend-strength-weak": "時々 (5-20%)",
       "legend-strength-sparse": "稀 (<5%)",
       "info-aria": "集計基準",
-      "info-tooltip": "集計基準: 過去 {days} 日 / 分母は中心ドキュメントが出現したターン数。双方向 BFS — 左(呼出元 -3..-1) → 中心 → 右(呼出先 1..3、最大 3 段階)。最右端の\"同ターン後続\"列は呼出因果は無いが同じターン内で中心以降に登場したメタドキュメント (破線エッジ)。呼出頻度 4 段階 — 頻繁(≥50%)・通常(20-50%)・時々(5-20%)・稀(<5%)。",
+      "info-tooltip": "集計基準: 過去 {{days}} 日 / 分母は中心ドキュメントが出現したターン数。双方向 BFS — 左(呼出元 -3..-1) → 中心 → 右(呼出先 1..3、最大 3 段階)。最右端の\"同ターン後続\"列は呼出因果は無いが同じターン内で中心以降に登場したメタドキュメント (破線エッジ)。呼出頻度 4 段階 — 頻繁(≥50%)・通常(20-50%)・時々(5-20%)・稀(<5%)。",
       "section-depth-1": "直接呼出",
       "section-depth-2": "経由",
       "section-depth-3": "深層",
@@ -254,10 +254,10 @@
       "zoom-in-title": "拡大",
       "zoom-out-title": "縮小",
       "empty-no-center": "表示できる Behavior Definition がありません",
-      "empty-no-center-project": "{project} で使用された Behavior Definition がありません",
-      "empty-zero-turns": "{name} の呼び出し履歴がまだありません",
+      "empty-no-center-project": "{{project}} で使用された Behavior Definition がありません",
+      "empty-zero-turns": "{{name}} の呼び出し履歴がまだありません",
       "empty-hint": "フローは直近ターンから計算されます。選択範囲で1ターン以上実行されると表示されます。",
-      "fetch-failed": "フローの読み込みに失敗しました: {message}",
+      "fetch-failed": "フローの読み込みに失敗しました: {{message}}",
       "section-parent-3": "呼出元 (-3)",
       "section-parent-2": "呼出元 (-2)",
       "section-parent-1": "呼出元 (-1)",
@@ -293,22 +293,22 @@
     "orphan-path-label": "未登録",
     "orphan-tooltip": "この呼び出しは別のワークスペース(.claude/)またはビルトイン/プラグイン定義から発生した可能性があります。同期時に複数のワークスペースをスキャンするとこの行がカタログ行に統合されます。",
     "deleted-badge-title": "現在ディスクから消えた定義 (soft-deleted)",
-    "empty-project-title": "{project} に登録された Behavior Definitions がありません",
+    "empty-project-title": "{{project}} に登録された Behavior Definitions がありません",
     "empty-project-hint": "このプロジェクトは SessionStart で同期されていない可能性があります。左 thead の<strong>同期</strong>ボタンをクリックすると既知の全ワークスペースを再スキャンします。",
     "empty-global-title": "Behavior Definitions がありません — SessionStart 後に自動同期されます",
-    "load-failed": "読み込み失敗: {message}",
+    "load-failed": "読み込み失敗: {{message}}",
     "syncing-label": "同期中…",
     "toast-sync-start": "同期開始…",
-    "toast-sync-done": "同期完了 — {summary}",
-    "toast-sync-failed": "同期失敗: {message}",
+    "toast-sync-done": "同期完了 — {{summary}}",
+    "toast-sync-failed": "同期失敗: {{message}}",
     "sync-restore-label": "同期",
     "orphan-scope-switch": "孤立行はプロジェクトのコンテキストがないため、全プロジェクトモードに切り替えました。",
     "refresh-no-change": "変更なし",
-    "refresh-add": "{n}件追加",
-    "refresh-del": "{n}件削除",
-    "refresh-global": "グローバル {detail}",
-    "refresh-project": "プロジェクト {detail}",
-    "refresh-workspaces": "ワークスペース {n}個",
+    "refresh-add": "{{n}}件追加",
+    "refresh-del": "{{n}}件削除",
+    "refresh-global": "グローバル {{detail}}",
+    "refresh-project": "プロジェクト {{detail}}",
+    "refresh-workspaces": "ワークスペース {{n}}個",
     "refresh-no-result": "結果なし"
   },
   "tool-stats": {
@@ -326,9 +326,9 @@
   "syslib": {
     "no-prompts": "システムプロンプトがありません（dedup カタログが空）",
     "view-prompt-aria": "システムプロンプト本文を表示",
-    "load-failed": "読み込み失敗: {message}",
+    "load-failed": "読み込み失敗: {{message}}",
     "not-found": "本文が見つかりません。",
-    "modal-load-failed": "読み込み失敗: {message}",
+    "modal-load-failed": "読み込み失敗: {{message}}",
     "close-label": "閉じる",
     "usage-cache": "キャッシュヒット",
     "usage-reqs": "再利用",
@@ -346,7 +346,7 @@
       "title": "Creation / Read Ratio",
       "desc": "キャッシュトークンの Write(初回生成) vs Read(再利用) 比率。\nstable: Read ≥ 70% — キャッシュが十分再利用されています。\nbuilding: Read < 70% — キャッシュを蓄積中です。"
     },
-    "precision-tooltip": "{pct}% (精密値)"
+    "precision-tooltip": "{{pct}}% (精密値)"
   },
   "obs-panel": {
     "no-data": "データなし",
@@ -355,8 +355,8 @@
     "no-tool-calls": "ツール呼び出しなし",
     "no-behavior-defs": "Behavior Definitions 呼び出しなし",
     "recent-activity": "最近のアクティビティ",
-    "yesterday": "昨日 {val}",
-    "savings": "節約 {val}"
+    "yesterday": "昨日 {{val}}",
+    "savings": "節約 {{val}}"
   },
   "obs-tooltip": {
     "burn-rate": {
@@ -397,39 +397,39 @@
     }
   },
   "context-chart": {
-    "indicator": "累積 {value} / {limit} tokens ({percent}%)",
-    "footer": "Turn {turn} · 最大 {max} tokens · モデル上限: {limit}{model}"
+    "indicator": "累積 {{value}} / {{limit}} tokens ({{percent}}%)",
+    "footer": "Turn {{turn}} · 最大 {{max}} tokens · モデル上限: {{limit}}{{model}}"
   },
   "anomaly": {
     "bloated-sys": {
       "warn": {
-        "label": "sys {pct}%",
-        "tooltip": "system コンテキスト肥大 ({pct}%)",
+        "label": "sys {{pct}}%",
+        "tooltip": "system コンテキスト肥大 ({{pct}}%)",
         "modal": "system 肥大 · /mcp list 確認"
       },
       "critical": {
-        "label": "bloated {pct}%",
-        "tooltip": "system が user を圧迫 ({pct}%)",
+        "label": "bloated {{pct}}%",
+        "tooltip": "system が user を圧迫 ({{pct}}%)",
         "modal": "system 圧迫 · compact 無効"
       }
     },
     "context-saturation": {
       "warn": {
-        "label": "▦ ctx {pct}%",
-        "tooltip": "セッションコンテキスト {pct}% 使用 — 上限に近づいています",
+        "label": "▦ ctx {{pct}}%",
+        "tooltip": "セッションコンテキスト {{pct}}% 使用 — 上限に近づいています",
         "modal": "/clear または /compact を推奨"
       },
       "critical": {
-        "label": "▦ ctx {pct}%",
-        "tooltip": "セッションコンテキスト {pct}% 使用 — 上限に近づいています",
+        "label": "▦ ctx {{pct}}%",
+        "tooltip": "セッションコンテキスト {{pct}}% 使用 — 上限に近づいています",
         "modal": "/clear または /compact を推奨"
       }
     },
     "agent-spike": {
-      "label": "↑×{n}",
-      "tooltip": "Agent が親比 {n} 倍",
-      "modal": "Agent トークン急増 · ↑×{n} · セッション分離推奨",
-      "summary": "↑{n}× larger than parent row"
+      "label": "↑×{{n}}",
+      "tooltip": "Agent が親比 {{n}} 倍",
+      "modal": "Agent トークン急増 · ↑×{{n}} · セッション分離推奨",
+      "summary": "↑{{n}}× larger than parent row"
     }
   },
   "main": {
@@ -461,7 +461,7 @@
         "from": "開始日",
         "to": "終了日",
         "warn-long-range": "90日を超える検索はサーバー負荷の恐れがあります",
-        "label-with-range": "カスタム ({from} 〜 {to})",
+        "label-with-range": "カスタム ({{from}} 〜 {{to}})",
         "ephemeral-toast": "カスタム範囲はページ再読み込み時にリセットされます"
       },
       "all": {
@@ -492,8 +492,8 @@
     }
   },
   "version-check": {
-    "available": "{tag} が利用可能",
-    "latest": "{tag} · 最新",
+    "available": "{{tag}} が利用可能",
+    "latest": "{{tag}} · 最新",
     "loading": "確認中…",
     "updating": "アップデート中…",
     "confirm": "アップデート",
@@ -503,23 +503,23 @@
     "restarting": "アップデート完了。サーバーを再起動しています…",
     "restart-complete": "再起動完了。ページを再読み込みします…",
     "restart-timeout": "サーバーが復帰しませんでした。手動でページを再読み込みしてください。",
-    "network-error": "ネットワークエラー: {message}",
+    "network-error": "ネットワークエラー: {{message}}",
     "update-request-failed": "アップデートリクエスト失敗",
     "migration": {
-      "applied": "マイグレーション {n} 件を適用 (v{from} → v{to})",
-      "applied-single": "マイグレーション 1 件を適用 (v{from} → v{to})",
+      "applied": "マイグレーション {{n}} 件を適用 (v{{from}} → v{{to}})",
+      "applied-single": "マイグレーション 1 件を適用 (v{{from}} → v{{to}})",
       "none": "スキーマ変更なし",
-      "none-detail": "DB バージョン v{version} · 今回のアップデートにマイグレーションはありません。",
+      "none-detail": "DB バージョン v{{version}} · 今回のアップデートにマイグレーションはありません。",
       "failed": "マイグレーション失敗",
-      "failed-file": "失敗したファイル: {file}",
+      "failed-file": "失敗したファイル: {{file}}",
       "failed-guide": "サーバーログを確認し、必要に応じて運用ガイドの復旧手順に従ってください。",
-      "duration": "{ms}ms"
+      "duration": "{{ms}}ms"
     },
     "local-changes": {
       "title": "git の変更を検出",
       "body": "working tree に未コミットの変更があるため自動アップデートを実行できません。下記コマンドで変更を整理してから再試行してください。",
       "files-label": "変更ファイル",
-      "files-more": "他 {n} 件"
+      "files-more": "他 {{n}} 件"
     },
     "shallow": {
       "warning": "shallow clone 環境 — 自動アップデートが失敗する可能性",
@@ -601,17 +601,17 @@
       "title": "エラー率"
     },
     "point-hover": {
-      "title": "ターン {turn}",
-      "accumulated-with-limit": "累積 {value} / {limit} tokens ({percent}%)",
-      "accumulated": "累積 {value} tokens",
-      "delta": "前ターン比 {delta} tokens",
-      "model": "モデル {model}"
+      "title": "ターン {{turn}}",
+      "accumulated-with-limit": "累積 {{value}} / {{limit}} tokens ({{percent}}%)",
+      "accumulated": "累積 {{value}} tokens",
+      "delta": "前ターン比 {{delta}} tokens",
+      "model": "モデル {{model}}"
     }
   },
   "detail-view": {
-    "total-tokens": "合計 {tokens} トークン",
-    "ended-at": "終了: {time}",
-    "turn-count-hint": "セッション {count} ターン累積 — /clear または新しいセッションを推奨"
+    "total-tokens": "合計 {{tokens}} トークン",
+    "ended-at": "終了: {{time}}",
+    "turn-count-hint": "セッション {{count}} ターン累積 — /clear または新しいセッションを推奨"
   },
   "settings-view": {
     "title": "設定",
@@ -632,7 +632,7 @@
       "missing": "未インストール",
       "hook-label": "Hook 設定",
       "proxy-label": "Proxy 設定",
-      "hook-registered": "{n}/{total} 登録済",
+      "hook-registered": "{{n}}/{{total}} 登録済",
       "hook-broken": "JSON 破損",
       "hook-missing": "設定ファイルなし",
       "jump-hooks": "Hook 設定 →",
@@ -653,7 +653,7 @@
     "hooks": {
       "title": "イベント収集 (Hook)",
       "subtitle": "Claude Code のライフサイクルイベント(プロンプト・ツール呼び出し・セッション等)を収集します。",
-      "status-ok": "収集中 ({n}/{total} イベント)",
+      "status-ok": "収集中 ({{n}}/{{total}} イベント)",
       "status-off": "未インストール — 自動インストールが必要です",
       "reinstall": "再インストール",
       "detail-summary": "詳細を表示",
@@ -682,7 +682,7 @@
       },
       "health": {
         "ok": "Hook 状態: すべて登録済み",
-        "warn": "Hook 状態: {n}/{total} 登録 — 自動インストールを推奨",
+        "warn": "Hook 状態: {{n}}/{{total}} 登録 — 自動インストールを推奨",
         "missing": "Hook 状態: ~/.claude/settings.json がありません — 自動インストールで作成されます",
         "broken": "Hook 状態: settings.json が破損しています — 手動でバックアップ後、自動インストール"
       },
@@ -707,7 +707,7 @@
       "summary-title": "全体の使用量",
       "total-size": "合計サイズ",
       "retention": "保存期間",
-      "retention-days": "{n}日",
+      "retention-days": "{{n}}日",
       "rdb": {
         "title": "会話・イベント記録",
         "subtitle": "プロンプト・ツール呼び出し・セッションなど、すべての活動記録を保存します。",
@@ -754,7 +754,7 @@
       "copied": "✓ クリップボードにコピーしました",
       "outro": "手動編集を希望する場合は上記スニペットを ~/.zshrc などシェルプロファイル末尾に貼り付け、新しいシェルで使用してください。",
       "install": "プロキシ自動登録",
-      "status-ok": "収集中 ({shell})",
+      "status-ok": "収集中 ({{shell}})",
       "status-off": "未インストール — 自動インストールが必要です",
       "status-broken": "マーカー破損 — 手動修正が必要です",
       "reinstall": "再インストール",
@@ -773,7 +773,7 @@
       "engineering-summary": "高度なエンジニアリング診断情報を表示 ▼",
       "engineering-title": "診断情報",
       "action-help": "上の [プロキシ自動登録] ボタンを押すと実際にシェルプロファイルが変更されます。カード選択だけでは登録されません。",
-      "health-target": "検査対象ファイル: {path}",
+      "health-target": "検査対象ファイル: {{path}}",
       "detected-shell": "検出されたシェル",
       "profile-path": "プロファイルパス",
       "profile-exists": "存在",
@@ -809,7 +809,7 @@
         }
       },
       "health": {
-        "ok": "Proxy 状態: {shell} に正常にインストール済み",
+        "ok": "Proxy 状態: {{shell}} に正常にインストール済み",
         "warn": "Proxy 状態: まだインストールされていません — [プロキシ自動登録] 1回で完了",
         "broken": "Proxy 状態: マーカーブロックが破損しています — シェルプロファイルを手動で修正してください",
         "missing": "Proxy 状態: シェルプロファイルファイルがありません — 自動登録で新規作成されます"

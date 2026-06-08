@@ -24,11 +24,11 @@ const originalDateNow = Date.now;
 beforeEach(() => {
   globalThis.__setTestT?.((key) => {
     const map: Record<string, string> = {
-      'session.rows.empty-message': '메시지 없음',
-      'badges.renderers.tool-status.error': '오류',
-      'badges.renderers.model.unknown': '모델불명',
-      'badges.renderers.model.synthetic': 'SDK 합성',
-      'badges.renderers.model.no-info': '모델 정보 없음',
+      'session:rows.empty-message': '메시지 없음',
+      'badges:renderers.tool-status.error': '오류',
+      'badges:renderers.model.unknown': '모델불명',
+      'badges:renderers.model.synthetic': 'SDK 합성',
+      'badges:renderers.model.no-info': '모델 정보 없음',
     };
     return map[key] ?? key;
   });

@@ -6,10 +6,10 @@ import { fmt, formatDuration, fmtToken, fmtRelative, fmtTime, fmtDate, fmtTimest
 beforeEach(() => {
   globalThis.__setTestT?.((key, vars) => {
     const map: Record<string, string> = {
-      'common.formatters.just-now': '방금',
-      'common.formatters.minutes-ago': `${vars?.n}분 전`,
-      'common.formatters.hours-ago': `${vars?.n}시간 전`,
-      'common.formatters.days-ago': `${vars?.n}일 전`,
+      'common:formatters.just-now': '방금',
+      'common:formatters.minutes-ago': `${vars?.n}분 전`,
+      'common:formatters.hours-ago': `${vars?.n}시간 전`,
+      'common:formatters.days-ago': `${vars?.n}일 전`,
     };
     return map[key] ?? key;
   });

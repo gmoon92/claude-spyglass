@@ -10,8 +10,8 @@
  *  - payload 만 prop 으로 주입(원본 호출처 main.js 가 dispatch). 무전역·무스토어 leaf.
  *  - delta 트렌드 아이콘은 P2-01 Chevron 컴포넌트 재사용(원본 svgChevron).
  *  - sparkline 은 P3-09 Sparkline.tsx 재사용(원본 sparklineBars/Line).
- *  - i18n: t prop 주입(필수 — DI). 호출처(BrowseSidebar)가 useTranslation t 주입, 테스트가 stub 주입.
- *    키 미스 전역 폴백은 lib/i18n.ts parseMissingKeyHandler 가 담당(window.I18n 직접참조 제거 — D-1).
+ *  - i18n: useTranslation 직접 구독(각 카드 self-subscribe). 키 미스 전역 폴백은
+ *    lib/i18n.ts parseMissingKeyHandler 가 담당(window.I18n 직접참조 제거 — D-1).
  *  - 토큰/숫자/상대시각 포맷은 원본 formatters.js(병존) 재사용 — 표기 동치.
  *  - 셀렉터 계약 유지: 카드 id(cardBurnRate/cardCacheHealth/cardLivePulse/cardToolCategories),
  *    anomalyBadge, obs-card-* / obs-cat-* / anomaly-badge-* 클래스(향후 CSS/E2E 호환).
@@ -19,6 +19,7 @@
  * @module features/dashboard/ObsPanel
  */
 import type { ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 import { fmt, fmtToken, fmtRelative } from '../../lib/formatters';
 import { Chevron } from '../../components/design-system/icons/Chevron';
 import { SparklineBars, SparklineLine } from './Sparkline';
@@ -39,9 +40,6 @@ import {
   type AnomalyPayload,
   type DeltaView,
 } from './obs-card-data';
-
-/** i18n 라벨러 — react-i18next t / 테스트 stub 공통 시그니처(필수 prop, DI). */
-export type TFunc = (key: string, vars?: Record<string, unknown>) => string;
 
 const SPARK_W = 76;
 const SPARK_H = 24;
@@ -69,15 +67,14 @@ function EmptyCard({ message }: { message: string }): ReactElement {
 // ── W1. Burn Rate ─────────────────────────────────────────────────────────────
 export function BurnRateCard({
   payload,
-  t,
 }: {
   payload: BurnRatePayload | null;
-  t: TFunc;
 }): ReactElement {
+  const { t } = useTranslation();
   if (isBurnRateEmpty(payload)) {
     return (
       <div className="obs-card" id="cardBurnRate">
-        <EmptyCard message={t('ui.obs-panel.no-data')} />
+        <EmptyCard message={t('ui:obs-panel.no-data')} />
       </div>
     );
   }
@@ -86,7 +83,7 @@ export function BurnRateCard({
   const total = p.current_total || 0;
   const sub =
     (p.yesterday_same_window ?? 0) > 0
-      ? t('ui.obs-panel.yesterday', { val: fmtToken(p.yesterday_same_window) })
+      ? t('ui:obs-panel.yesterday', { val: fmtToken(p.yesterday_same_window) })
       : '';
   return (
     <div className="obs-card" id="cardBurnRate">
@@ -103,22 +100,21 @@ export function BurnRateCard({
 // ── W2. Cache Health ──────────────────────────────────────────────────────────
 export function CacheHealthCard({
   payload,
-  t,
 }: {
   payload: CacheHealthPayload | null;
-  t: TFunc;
 }): ReactElement {
+  const { t } = useTranslation();
   if (isCacheHealthEmpty(payload)) {
     return (
       <div className="obs-card" id="cardCacheHealth">
-        <EmptyCard message={t('ui.obs-panel.no-cache')} />
+        <EmptyCard message={t('ui:obs-panel.no-cache')} />
       </div>
     );
   }
   const p = payload as CacheHealthPayload;
   const hitPct = ((p.hit_rate_now as number) * 100).toFixed(1);
   const series = (p.buckets ?? []).map((b) => b.hit_rate ?? null);
-  const sub = t('ui.obs-panel.savings', { val: fmtToken(p.savings_tokens_total || 0) });
+  const sub = t('ui:obs-panel.savings', { val: fmtToken(p.savings_tokens_total || 0) });
   const trendCls = cacheHealthTrendCls(p.hit_rate_now as number);
   return (
     <div className="obs-card" id="cardCacheHealth">
@@ -137,15 +133,14 @@ export function CacheHealthCard({
 // ── W3. Live Pulse ────────────────────────────────────────────────────────────
 export function LivePulseCard({
   payload,
-  t,
 }: {
   payload: LivePulsePayload | null;
-  t: TFunc;
 }): ReactElement {
+  const { t } = useTranslation();
   if (isLivePulseEmpty(payload)) {
     return (
       <div className="obs-card" id="cardLivePulse">
-        <EmptyCard message={t('ui.obs-panel.no-activity')} />
+        <EmptyCard message={t('ui:obs-panel.no-activity')} />
       </div>
     );
   }
@@ -159,7 +154,7 @@ export function LivePulseCard({
         <span className="obs-card-trend-icon">●</span>
         {fmt(p.active_count || 0)}
       </span>
-      <span className="obs-card-sub">{t('ui.obs-panel.recent-activity')}</span>
+      <span className="obs-card-sub">{t('ui:obs-panel.recent-activity')}</span>
       <span className="obs-card-spark">
         <SparklineBars values={series} width={SPARK_W} height={SPARK_H} />
       </span>
@@ -171,12 +166,11 @@ export function LivePulseCard({
 export function ToolCategoriesCard({
   payload,
   mode = 'default',
-  t,
 }: {
   payload: ToolCategoriesPayload;
   mode?: ToolCategoriesMode;
-  t: TFunc;
 }): ReactElement | null {
+  const { t } = useTranslation();
   const view = computeToolCategories(payload, mode);
   // 'suppressed' — meta-docs 모드에서 배열 payload 도착 → 렌더 변경 없음(원본 early return).
   if (view.kind === 'suppressed') return null;

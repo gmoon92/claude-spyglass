@@ -30,7 +30,6 @@ export {
   ToolCategoriesCard,
   AnomalyBadge,
 } from './ObsPanel';
-export type { TFunc } from './ObsPanel';
 export * from './obs-card-data';
 
 // ── Cache 패널 ──

@@ -65,8 +65,8 @@ export function trustOf(r: { model?: string | null; tokens_source?: string | nul
  *     "<synthetic>" / "synthetic"   → "SDK 합성"
  */
 export function modelChipLabel(model: string | null | undefined, cls: string): string {
-  if (cls === 'unknown')   return i18next.t('badges.renderers.model.unknown');
-  if (cls === 'synthetic') return i18next.t('badges.renderers.model.synthetic');
+  if (cls === 'unknown')   return i18next.t('badges:renderers.model.unknown');
+  if (cls === 'synthetic') return i18next.t('badges:renderers.model.synthetic');
   if (cls === 'external') {
     const m = String(model);
     const head = m.split('-').slice(0, 2).join(' ');
@@ -121,7 +121,7 @@ export function modelChipLabel(model: string | null | undefined, cls: string): s
 export function modelChipHtml(r: { model?: string | null } | null | undefined, opts: { mini?: boolean } = {}) {
   const cls     = modelClassOf(r?.model);
   const label   = modelChipLabel(r?.model, cls);
-  const title   = r?.model || i18next.t('badges.renderers.model.no-info');
+  const title   = r?.model || i18next.t('badges:renderers.model.no-info');
   const sizeCls = opts.mini ? ' model-chip-mini' : '';
   return `<span class="model-chip model-chip-${cls}${sizeCls} ds-chip" data-tone="${cls}" data-tip="${escHtml(title)}">${escHtml(label)}</span>`;
 }

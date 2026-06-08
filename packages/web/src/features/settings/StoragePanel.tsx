@@ -8,6 +8,7 @@
  * @module features/settings/StoragePanel
  */
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { StickyAlert } from '../../components/settings/StickyAlert';
 import { StoragePanelView } from './StoragePanelView';
 import { SettingsSkeleton } from './SettingsSkeleton';
@@ -18,7 +19,6 @@ import { useAsyncResource } from './use-settings-diag';
 import type { DiagData, InstallEvent, InstallResult, LadybugStatus, SqliteInfo } from './types';
 
 export interface StoragePanelProps {
-  t: (key: string, vars?: Record<string, unknown>) => string;
   onCopy?: (text: string) => void;
 }
 
@@ -35,7 +35,8 @@ interface StorageResource {
   ladybug: LadybugStatus | null;
 }
 
-export function StoragePanel({ t, onCopy }: StoragePanelProps) {
+export function StoragePanel({ onCopy }: StoragePanelProps) {
+  const { t } = useTranslation();
   // diag(graph/retention) + sqlite/info + graph-db/status 병렬. 단일 AbortSignal 로 모두 취소.
   const fetcher = useCallback(
     (signal: AbortSignal): Promise<StorageResource> =>
@@ -84,7 +85,7 @@ export function StoragePanel({ t, onCopy }: StoragePanelProps) {
   );
 
   if (status === 'loading' || !data) {
-    return <SettingsSkeleton cards={3} label={t('ui.settings-view.loading')} />;
+    return <SettingsSkeleton cards={3} label={t('ui:settings-view.loading')} />;
   }
   if (status === 'error') {
     return <div className="settings-error">⚠ {error}</div>;
@@ -108,7 +109,7 @@ export function StoragePanel({ t, onCopy }: StoragePanelProps) {
       return (
         <>
           {stream}
-          <div className="install-running">{t('ui.settings-view.storage.graph.installing')}</div>
+          <div className="install-running">{t('ui:settings-view.storage.graph.installing')}</div>
         </>
       );
     }
@@ -120,13 +121,13 @@ export function StoragePanel({ t, onCopy }: StoragePanelProps) {
         <div className="install-summary">
           {ok ? (
             <div className="settings-success">
-              {t('ui.settings-view.storage.graph.install-success')}{r.version ? ` v${r.version}` : ''}
+              {t('ui:settings-view.storage.graph.install-success')}{r.version ? ` v${r.version}` : ''}
             </div>
           ) : (
-            <div className="settings-error">{t('ui.settings-view.storage.graph.install-failed')}: {r.error || ''}</div>
+            <div className="settings-error">{t('ui:settings-view.storage.graph.install-failed')}: {r.error || ''}</div>
           )}
           {r.restartRequired && (
-            <div className="settings-warn-banner">⚠ {t('ui.settings-view.storage.graph.restart-required')}</div>
+            <div className="settings-warn-banner">⚠ {t('ui:settings-view.storage.graph.restart-required')}</div>
           )}
           {Array.isArray(r.hints) && r.hints.length > 0 && (
             <ul className="install-hint-list">
@@ -142,7 +143,7 @@ export function StoragePanel({ t, onCopy }: StoragePanelProps) {
     <>
       {showRestart && (
         <StickyAlert
-          message={t('ui.settings-view.hooks.restart-required-banner')}
+          message={t('ui:settings-view.hooks.restart-required-banner')}
           kind="restart"
           onDismissed={() => setShowRestart(false)}
         />
@@ -152,7 +153,6 @@ export function StoragePanel({ t, onCopy }: StoragePanelProps) {
         graph={data.diag.graph}
         ladybug={data.ladybug}
         retentionDays={data.diag.retention?.days ?? 0}
-        t={t}
         onCopy={onCopy}
         onInstall={onInstall}
         installResult={installResult}

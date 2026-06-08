@@ -4,11 +4,11 @@
       "error": "Error"
     },
     "tool-hint": {
-      "lines": "[{n} lines]",
+      "lines": "[{{n}} lines]",
       "error": "[Error]",
       "saved": "[Saved]",
-      "files": "[{n} files]",
-      "matches": "[{n} matches]",
+      "files": "[{{n}} files]",
+      "matches": "[{{n}} matches]",
       "failed": "[Failed]"
     },
     "model": {
@@ -17,7 +17,7 @@
       "no-info": "No model info"
     },
     "extract": {
-      "chars": "{n} chars total"
+      "chars": "{{n}} chars total"
     }
   }
 }
