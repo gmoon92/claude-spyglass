@@ -10,9 +10,11 @@
  *  - 누군가 ko.json에서 키를 지웠는데 코드에서 여전히 호출하면 → fail
  *  - 키가 ko에만 있고 en/ja/zh 누락이면 → fail (4언어 parity)
  *
- * web i18n.js의 t() 해상도 로직을 동형으로 시뮬레이션:
- *  1. 첫 segment가 namespace면 그 ns에서 path 탐색
- *  2. 미해상도면 모든 ns에서 전체 path 탐색
+ * web 은 순수 i18next colon 키(`ns:path.to.key`), server 는 flat dot 키, tui 는 dot ns 키.
+ * t() 해상도 로직을 동형으로 시뮬레이션:
+ *  1. colon(`ns:path`) 이면 그 ns 에서 path 탐색(web 정공법)
+ *  2. dot 이고 첫 segment 가 namespace 면 그 ns 에서 path 탐색(tui)
+ *  3. 미해상도면 모든 ns 에서 전체 path 탐색
  */
 
 import { describe, it, expect } from 'bun:test';
@@ -73,16 +75,17 @@ function extractLiteralKeys(content: string): string[] {
   const keys: string[] = [];
 
   // Pattern A — t(), tSafe() 등의 첫 인자가 직접 literal인 일반 케이스.
-  const reFirst = /(?:window\.I18n\??\.?t\??\.?|\bi18n\.t|\btSafe|\btFallback|\bt)\(\s*['"`]([a-zA-Z][\w.-]*)['"`]/g;
+  //   char class 에 ':' 포함 — web colon 키(ns:path) 추출(server/tui dot 키는 colon 미포함이라 무영향).
+  const reFirst = /(?:window\.I18n\??\.?t\??\.?|\bi18n\.t|\btSafe|\btFallback|\bt)\(\s*['"`]([a-zA-Z][\w.:-]*)['"`]/g;
   for (const m of stripped.matchAll(reFirst)) keys.push(m[1]);
 
   // Pattern B — ternary/conditional 내부 literal까지 모두 잡기:
-  //   t(cond ? 'a.b' : 'c.d')  같은 케이스에서 'a.b'와 'c.d' 모두 매칭되어야 함.
+  //   t(cond ? 'a:b.c' : 'd:e.f')  같은 케이스에서 둘 다 매칭되어야 함.
   // t() 호출 시작 후 같은 라인(또는 한 줄 안의) 닫는 `)` 까지의 string literal 전부 추출.
   const reCall = /(?:window\.I18n\??\.?t\??\.?|\bi18n\.t|\btSafe|\btFallback|\bt)\(([^)]*)\)/g;
   for (const call of stripped.matchAll(reCall)) {
     const args = call[1];
-    for (const lit of args.matchAll(/['"`]([a-zA-Z][\w.-]*\.[\w.-]+)['"`]/g)) {
+    for (const lit of args.matchAll(/['"`]([a-zA-Z][\w.:-]*[.:][\w.:-]+)['"`]/g)) {
       keys.push(lit[1]);
     }
   }
@@ -104,10 +107,20 @@ function getByPath(obj: unknown, parts: string[]): unknown {
  * 매칭 성공 시 string 값을 반환, 실패 시 null.
  */
 function resolveKey(key: string, langData: Record<string, unknown>): string | null {
+  // 시도 0(web 정공법): colon ns 분리 — `ns:path.to.key` → langData[ns] 에서 path 탐색.
+  if (key.includes(':')) {
+    const [ns, path] = key.split(':');
+    if ((NAMESPACES as readonly string[]).includes(ns) && path) {
+      const v = getByPath(langData[ns], path.split('.'));
+      return typeof v === 'string' ? v : null;
+    }
+    return null;
+  }
+
   const segments = key.split('.');
   if (segments.length < 1) return null;
 
-  // 시도 1: 첫 segment가 namespace
+  // 시도 1: 첫 segment가 namespace (tui dot ns 키)
   if (segments.length >= 2 && (NAMESPACES as readonly string[]).includes(segments[0])) {
     const v = getByPath(langData[segments[0]], segments.slice(1));
     if (typeof v === 'string') return v;
@@ -178,12 +191,9 @@ describe('i18n 키 정합성 (정적 검증)', () => {
     expect(missing).toEqual({});
   }, 15_000);
 
-  it('web 모든 호출이 명시적 namespace prefix를 사용해야 한다 (fallback 우연 의존 차단)', () => {
-    // ns-less 호출은 i18n.js의 fallback 로직(모든 ns 순회)에 의존 → fragile.
-    // 미래에 같은 path가 다른 ns에 추가되면 어느 ns가 hit될지 예측 불가.
-    // 모든 호출에 명시적 ns prefix를 강제해 단일 SSoT 보장.
-    // P5-01: assets/js SSoT 가 .ts 로 전환됨 — .ts/.tsx 도 스캔 대상에 포함.
-    // React 마이그레이션 후 t() 호출 대부분이 src/ 에 있으므로 src/ 도 스캔.
+  it('web 모든 호출이 명시적 colon namespace prefix를 사용해야 한다 (fallback 우연 의존 차단)', () => {
+    // ns-less 호출은 fallback 로직(모든 ns 순회)에 의존 → fragile.
+    // web 정공법은 순수 i18next colon 키(`ns:path`) — 모든 호출에 명시적 ns prefix(콜론)를 강제해 단일 SSoT 보장.
     const files = [
       ...collectFiles(WEB_JS_DIR, ['.js', '.ts', '.tsx']),
       ...collectFiles(WEB_SRC_DIR, ['.ts', '.tsx']),
@@ -192,7 +202,8 @@ describe('i18n 키 정합성 (정적 검증)', () => {
     for (const file of files) {
       const content = readFileSync(file, 'utf-8');
       for (const k of extractLiteralKeys(content)) {
-        const first = k.split('.')[0];
+        // colon 키면 ns = ':' 앞, 아니면 dot 첫 세그먼트 — 어느 쪽이든 NAMESPACES 여야 통과.
+        const first = k.includes(':') ? k.split(':')[0] : k.split('.')[0];
         if (!(NAMESPACES as readonly string[]).includes(first)) {
           offenders.push({ file: file.replace(PROJECT_ROOT + '/', ''), key: k });
         }
@@ -208,7 +219,7 @@ describe('i18n 키 정합성 (정적 검증)', () => {
             .map(({ file, key }) => `  ${file} → t('${key}') (ns 누락)`)
             .join('\n') +
           (offenders.length > 15 ? `\n  ... (${offenders.length - 15} more)` : '') +
-          `\n→ t('${NAMESPACES.join('|')}.X.Y') 형태로 명시적 ns prefix 사용. fallback 우연 의존 차단.\n`,
+          `\n→ t('${NAMESPACES.join('|')}:X.Y') 형태로 명시적 colon ns prefix 사용. fallback 우연 의존 차단.\n`,
       );
     }
     expect(offenders).toEqual([]);
