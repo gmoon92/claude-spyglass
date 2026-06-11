@@ -43,6 +43,7 @@ import {
   Search,
   Chevron,
   Info,
+  Bolt,
 } from '../../components/design-system/icons';
 import { type MessageLike, splitHighlight, formatBytes, SEARCH_MIN_LEN } from './llm-input-state';
 import {
@@ -50,6 +51,7 @@ import {
   groupParallelActions,
   inspectorPayloadOf,
   lastInspectablePayload,
+  injectedLabelKey,
   type ChatItem,
   type ChatRenderItem,
   type ActionGroup,
@@ -557,6 +559,54 @@ function SystemRow({
 }
 
 /**
+ * 하네스 자동 주입 user 메시지 행(recap/caveat/슬래시 래퍼). role='user' 지만 사람 발화가 아니므로
+ * "당신" 말풍선이 아닌 별도 중립 카드로 분리한다(SystemRow 와 동형 위계). 기본 접힘, summary 펼침은
+ * 미리보기, 본문 클릭은 인스펙터. 라벨은 injectedLabelKey(SSoT)로 종류별 매핑.
+ */
+function InjectedRow({
+  item,
+  term,
+  selected,
+  onActivate,
+}: {
+  item: ChatItem;
+  term: string;
+  selected: boolean;
+  onActivate: () => void;
+}): ReactElement {
+  const { t } = useTranslation();
+  const matched = term.length >= SEARCH_MIN_LEN && itemMatches(item, term);
+  const [open, setOpen] = useState(false);
+  const isOpen = open || matched;
+  const bytes = formatBytes((item.text ?? '').length);
+  return (
+    <details
+      className={`chat-injected${selected ? ' chat-selected' : ''}`}
+      open={isOpen}
+      onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
+    >
+      <summary>
+        <span className="chat-ico">
+          <Bolt size={13} />
+        </span>
+        <span className="chat-injected-lbl" data-tip={t('ui:llm-input.chat.injected-tip')}>
+          {t(injectedLabelKey(item.injectedKind))}
+        </span>
+        <span className="chat-injected-meta">#{item.msgIndex + 1} · {bytes}</span>
+      </summary>
+      <button
+        type="button"
+        className="chat-injected-body"
+        data-tip={t('ui:llm-input.chat.inspect-tip')}
+        onClick={onActivate}
+      >
+        <ClampText text={item.text ?? ''} term={term} />
+      </button>
+    </details>
+  );
+}
+
+/**
  * "작성 중" 타이핑 버블 — Claude 측(좌측 정렬, 말풍선 아바타 동반). 카카오톡/디스코드식 점 3개 애니메이션.
  * 시각은 점 애니메이션만(텍스트 라벨 폐기 — 군더더기 제거). 의미는 aria-label 로 스크린리더에만 전달.
  * LIVE 활동 중 다음 턴 페이로드 도착 전까지 노출.
@@ -791,6 +841,8 @@ export function ChatRoom(props: ChatRoomProps): ReactElement {
         );
       case 'system':
         return <SystemRow item={item} term={term} selected={selectedKey === key} onActivate={() => activate(item, key)} />;
+      case 'injected':
+        return <InjectedRow item={item} term={term} selected={selectedKey === key} onActivate={() => activate(item, key)} />;
       case 'orphan-result':
         return <OrphanRow item={item} selected={selectedKey === key} onActivate={() => activate(item, key)} />;
       default:

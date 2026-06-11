@@ -297,6 +297,47 @@
 }
 .chat-system-body:hover { background: var(--surface); }
 
+/* === 하네스 자동 주입 user 메시지 카드 (recap/caveat/슬래시 래퍼 — 사람 발화 아님) ====
+   "당신" 말풍선에서 빼낸 중립 카드. system 카드와 구조는 같되, 점선 보더 + 좌측 warn accent +
+   warn 톤 아이콘/라벨로 "사람이 아니라 하네스가 끼워 넣음"을 색맹 안전하게(아이콘+라벨 동반) 신호. */
+.chat-injected {
+  margin-left: 38px;
+  max-width: 78%;
+  border: 1px dashed var(--border);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+}
+.chat-injected > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-meta);
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.chat-injected > summary::-webkit-details-marker { display: none; }
+.chat-injected .chat-ico { color: var(--warn); }
+.chat-injected-lbl { font-weight: 600; color: var(--text-3); }
+.chat-injected-meta { font-size: var(--text-small); color: var(--text-4); margin-left: auto; font-family: var(--font-data); }
+.chat-injected-body {
+  display: block;
+  width: 100%;
+  text-align: left;
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-top: 1px dashed var(--border);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-data);
+  font-size: var(--text-meta);
+  color: var(--text-3);
+  cursor: pointer;
+}
+.chat-injected-body:hover { background: var(--surface); }
+
 /* === tool_use 행동 카드 (+ ↳ tool_result 결과 칩) ========================= */
 .chat-action {
   margin-left: 38px;
