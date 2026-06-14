@@ -91,14 +91,17 @@ export function getContextText(r: RowTextReader) {
     if (r.tool_name === 'Agent' || r.tool_name === 'Skill') {
       const ti = parsePayloadToolInput(r.payload);
       if (ti) {
-        // Skill은 args(실제 요청 내용)를 우선 노출 — TARGET 컬럼이 이미 skill 이름을 보여주므로
-        // MESSAGE에 이름을 반복하지 않는다. args 없을 때만 tool_detail(=skill 이름)으로 폴백.
+        // payload 동반 경로(세션 상세 on-demand): Skill은 args, Agent는 description 우선 노출.
+        // TARGET 컬럼이 이미 이름을 보여주므로 MESSAGE에 이름을 반복하지 않는다.
         const text = r.tool_name === 'Agent'
           ? (strOf(ti, 'description') || strOf(ti, 'prompt') || r.tool_detail)
           : (strOf(ti, 'args') || r.tool_detail || strOf(ti, 'skill'));
         return text || null;
       }
-      return r.tool_detail || null;
+      // 피드는 payload를 싣지 않는다(전송 최적화) → 수집 시 저장된 preview(Skill=args/Agent=description)를
+      // tool_detail(이름)보다 우선 사용. preview는 requests 본체라 모든 피드가 이미 전송(DB read 비용 0).
+      const pv = typeof r.preview === 'string' && r.preview ? r.preview : null;
+      return pv || r.tool_detail || null;
     }
     return r.tool_detail || null;
   }
