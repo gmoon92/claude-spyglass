@@ -42,6 +42,10 @@ export interface TurnToolCall {
   tokens_total: number;
   duration_ms: number;
   payload: string | null;
+  /** Skill/Agent 의 실제 지시문(args/description) — 피드 MESSAGE 가 tool_detail(이름) 대신 표시.
+   *  hook(extractPreview) 신규 수집 + Migration 064 백필. 그 외 도구는 보통 null.
+   *  optional — getTurnsBySession 주 경로가 채우고, orphan 병합 등 일부 생성처는 생략(미표시 폴백). */
+  preview?: string | null;
   event_type: string | null;
   model: string | null;
   /** data-honesty-ui: 자식 도구 호출 추적 (sub-agent transcript) */
@@ -438,6 +442,7 @@ export function getTurnsBySession(
         tokens_total: t.tokens_total,
         duration_ms: t.duration_ms,
         payload: t.payload,
+        preview: t.preview,
         event_type: t.event_type,
         model: t.model,
         parent_tool_use_id: t.parent_tool_use_id,

@@ -130,6 +130,21 @@ describe('createRequest → payload 복원(JOIN)', () => {
     expect(t.responses.find((r) => r.id === 'rs1')!.payload).toBe(RESP_PAYLOAD);
   });
 
+  test('getTurnsBySession: tool_call(Skill) preview 전달 — 세션 상세 MESSAGE 표시용', () => {
+    // turns 경로 회귀 가드: TurnToolCall 에 preview 가 빠지면 세션 상세에서 Skill/Agent MESSAGE 가
+    // tool_detail(이름)로 폴백한다(전체 피드는 정상인데 세션 상세만 이름 노출되던 버그).
+    createSession(db, { id: 's2', project_name: 'detach', started_at: Date.now() - 5000 });
+    createRequest(db, {
+      id: 'sk1', session_id: 's2', timestamp: Date.now() - 1000, type: 'tool_call',
+      turn_id: 't2', tool_name: 'Skill', tool_detail: 'commit', tool_use_id: 'tu-sk',
+      event_type: 'tool', preview: '변경사항 전체 커밋',
+      payload: JSON.stringify({ tool_input: { skill: 'commit', args: '변경사항 전체 커밋' } }),
+    });
+    const tc = getTurnsBySession(db, 's2')[0].tool_calls.find((c) => c.id === 'sk1')!;
+    expect(tc.preview).toBe('변경사항 전체 커밋'); // MESSAGE 표시용 preview 전달
+    expect(tc.tool_detail).toBe('commit');         // 식별자 불변
+  });
+
   test('getTurnsBySession({includePayload:false}): payload 생략(lazy-load fast path)·preview/구조 보존', () => {
     // turns-payload-lazy-load: 세션 전환 초기 fast 경로는 payload BLOB JOIN 을 생략해 cold 디스크
     //   I/O 를 피한다. 단 turn 구조(prompt/tool_call/response)와 preview 는 그대로여야 스파인·행
