@@ -17,9 +17,9 @@
  *
  * @module render/PromptExpandRow
  */
-import { useRef, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
-import { _promptCache, type AskQuestion } from './extract';
+import { _promptCache, fullDetailFromPayload, type AskQuestion } from './extract';
 import { AskUserQuestionCard } from './AskUserQuestionCard';
 
 /**
@@ -33,6 +33,25 @@ export function PromptExpandRow({ rid, cols }: { rid: string; cols: number }): R
   const cached = _promptCache.get(rid);
   const isAskq =
     !!cached && typeof cached === 'object' && cached.kind === 'askq' && Array.isArray(cached.questions);
+
+  // 펼침은 본문 전체를 보여야 한다 — 미리보기 preview(2000자 cap)로 폴백된 경우를 대비해
+  //   `/api/requests/:id/payload`(단건 full payload)에서 slice 없는 전체 지시문을 회수해 교체한다.
+  //   fetch 전에는 cached(즉시 표시), 완료되면 fullText 로 교체. tool_input 없는 행(prompt/response
+  //   /Bash 등)은 fullDetailFromPayload 가 null → cached 유지(무영향).
+  const [fullText, setFullText] = useState<string | null>(null);
+  useEffect(() => {
+    if (isAskq) return; // 구조화 카드는 payload 본문 교체 대상 아님
+    let cancelled = false;
+    fetch(`/api/requests/${encodeURIComponent(rid)}/payload`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((d) => {
+        if (cancelled) return;
+        const text = fullDetailFromPayload(d?.data?.payload);
+        if (text) setFullText(text);
+      })
+      .catch(() => { /* 펼침 본문은 cached 폴백으로 충분 — 네트워크 실패 무시 */ });
+    return () => { cancelled = true; };
+  }, [rid, isAskq]);
 
   const copyLabel = t('ui:main.expand.copy');
   const copiedLabel = t('ui:main.expand.copied');
@@ -73,7 +92,7 @@ export function PromptExpandRow({ rid, cols }: { rid: string; cols: number }): R
                 contentRef.current = el;
               }}
             >
-              {typeof cached === 'string' ? cached : ''}
+              {fullText ?? (typeof cached === 'string' ? cached : '')}
             </pre>
           )}
         </div>

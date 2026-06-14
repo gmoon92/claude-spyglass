@@ -208,6 +208,12 @@ function getDetailText(r: RowTextReader | null | undefined): ExpandContent | nul
         return out || (r.tool_detail || null);
       }
     }
+    // payload 미동반(피드/items): Skill/Agent 는 수집 시 저장된 preview(args/description) 우선.
+    // getContextText(MESSAGE)와 동일 폴백으로 펼침 상세도 이름(tool_detail) 대신 지시문을 보여준다.
+    if ((r.tool_name === 'Skill' || r.tool_name === 'Agent') &&
+        typeof r.preview === 'string' && r.preview) {
+      return r.preview;
+    }
     return r.tool_detail || null;
   }
   if (r.type === 'prompt' || r.type === 'system') return extractPromptText(r) || null;
@@ -336,6 +342,21 @@ export interface ContextPreviewData {
   rawLength: number;
   /** tool_call 결과 힌트 i18n 지시(없으면 null). 원본은 tool_call 타입에만 부여. */
   hint: ToolHint | null;
+}
+
+/**
+ * 펼침 상세 전용 — payload(전체)에서 Skill/Agent 본문 전체를 추출(slice 없음).
+ *
+ * 미리보기 preview(requests.preview)는 2000자 cap 이라 펼침에 쓰면 본문이 잘린다. 펼침은
+ * `/api/requests/:id/payload` 로 회수한 원본 payload 에서 tool_input 의 전체 지시문을 반환한다.
+ * 우선순위는 getDetailText 의 payload 경로와 동일(Skill=args / Agent=description→prompt).
+ */
+export function fullDetailFromPayload(payload: unknown): string | null {
+  const ti = parsePayloadToolInput(payload);
+  if (!ti) return null;
+  // 펼침은 가장 상세한 본문 우선: Skill=args, Agent=prompt(긴 실제 지시문).
+  // description 은 짧은 요약(MESSAGE 미리보기용)이라 최후 폴백 — prompt 보다 뒤.
+  return strOf(ti, 'args') || strOf(ti, 'prompt') || strOf(ti, 'description') || null;
 }
 
 export function contextPreviewData(r: RowTextReader, maxLen = 60): ContextPreviewData | null {

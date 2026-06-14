@@ -11,7 +11,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { getContextText } from '../extract';
+import { getContextText, fullDetailFromPayload } from '../extract';
 
 describe('getContextText — Skill/Agent MESSAGE', () => {
   it('Skill, payload 없음, preview=args → preview 사용(이름 중복 회피)', () => {
@@ -53,5 +53,28 @@ describe('getContextText — Skill/Agent MESSAGE', () => {
       tool_detail: 'ls -la', preview: undefined, payload: undefined,
     };
     expect(getContextText(r)).toBe('ls -la');
+  });
+});
+
+describe('fullDetailFromPayload — 펼침 전체 본문 (slice 없음)', () => {
+  it('Skill: args 전체', () => {
+    const p = JSON.stringify({ tool_input: { skill: 'commit', args: '아주 긴 args 전체 지시문' } });
+    expect(fullDetailFromPayload(p)).toBe('아주 긴 args 전체 지시문');
+  });
+
+  it('Agent: prompt(긴 지시문) 우선 — description(짧은 요약)보다 앞', () => {
+    const p = JSON.stringify({ tool_input: { subagent_type: 'cc-docs', description: '배치 분류', prompt: '분석 전용 작업이다. 파일을 절대 Edit/Write 하지 말고...' } });
+    expect(fullDetailFromPayload(p)).toBe('분석 전용 작업이다. 파일을 절대 Edit/Write 하지 말고...');
+  });
+
+  it('Agent: prompt 없으면 description 폴백', () => {
+    const p = JSON.stringify({ tool_input: { subagent_type: 'Explore', description: '요약만 있음' } });
+    expect(fullDetailFromPayload(p)).toBe('요약만 있음');
+  });
+
+  it('tool_input 없음(prompt/response payload)은 null → cached 유지', () => {
+    expect(fullDetailFromPayload(JSON.stringify({ role: 'user', content: 'x' }))).toBeNull();
+    expect(fullDetailFromPayload(undefined)).toBeNull();
+    expect(fullDetailFromPayload('not-json{')).toBeNull();
   });
 });
