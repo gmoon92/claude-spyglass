@@ -8,12 +8,12 @@
  *    JSX 로 1:1 이식. 도구 아이콘은 동치 검증된 TSX ToolIcon 재사용.
  *  - 오류 배지(ToolStatusBadge)·agent-spike 배지(AgentSpikeBadge)는 React 컴포넌트로 직접 렌더
  *    (B-2: dangerouslySetInnerHTML 제거). 판정 SSoT 는 lib/anomaly-field·tool-status-field(순수).
- *  - shortModelName/escHtml 도 원본 formatters SSoT 재사용.
+ *  - fmtToken/escHtml 도 원본 formatters SSoT 재사용.
  *
  * @module render/cells
  */
 import type { ReactElement, ReactNode } from 'react';
-import { fmtToken, shortModelName } from '../../lib/formatters';
+import { fmtToken } from '../../lib/formatters';
 import { ToolIcon } from './badges';
 import { ToolStatusBadge } from './tool-status-badge';
 import { AgentSpikeBadge } from './anomaly-badges';
@@ -88,14 +88,11 @@ export function targetInner(r: RowLike): { node: ReactNode; empty: boolean } {
   const toolName = r.tool_name;
   let nameNode: ReactNode;
   if ((toolName === 'Skill' || toolName === 'Agent') && r.tool_detail) {
-    const ms = shortModelName(r.model ?? null);
-    // 원본: `${toolName}(<span class="action-sub-name">${detail}</span>)${modelBadge}`.
-    // 원본은 detail 앞 '(' 와 modelBadge 앞 ' '(공백) 을 텍스트로 둔다. React 텍스트로 동치.
+    // MODEL 컬럼이 이미 모델을 보여주므로 TARGET 에는 이름만 노출한다(모델명 중복 제거).
     nameNode = (
       <span className="action-name">
         <ToolIcon toolName={toolName} eventType={r.event_type ?? null} />
         {toolName}(<span className="action-sub-name">{r.tool_detail}</span>)
-        {ms ? <> <span className="action-model">{ms}</span></> : null}
       </span>
     );
   } else {
