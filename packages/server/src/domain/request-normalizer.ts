@@ -226,6 +226,8 @@ function toolCallToRequest(
     tokens_total: tc.tokens_total,
     duration_ms: tc.duration_ms,
     payload: tc.payload ?? undefined,
+    // Skill/Agent MESSAGE 표시용 preview — 누락 시 items 경로(normalizeTurn)에서 tool_detail(이름) 폴백.
+    preview: tc.preview ?? undefined,
     event_type: tc.event_type,
     parent_tool_use_id: tc.parent_tool_use_id,
     tokens_confidence: tc.tokens_confidence ?? undefined,
