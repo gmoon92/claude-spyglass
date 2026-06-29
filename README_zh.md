@@ -1,6 +1,6 @@
 # 🔭 Spyglass
 
-[English](README.md) | [한국어](README_ko.md) | [日本語](README_ja.md) | **简体中文**
+[English](README.md) | [한국어](README_ko.md) | [日本語](README_ja.md) | **简体中文** | [繁體中文](README_zh-TW.md)
 
 `claude-spyglass` 帮助你观察 Claude Code 会话内部实际发生的事情:
 

@@ -1,6 +1,6 @@
 # 🔭 Spyglass
 
-[English](README.md) | **한국어** | [日本語](README_ja.md) | [简体中文](README_zh.md)
+[English](README.md) | **한국어** | [日本語](README_ja.md) | [简体中文](README_zh.md) | [繁體中文](README_zh-TW.md)
 
 `claude-spyglass`는 Claude Code 세션 내부에서 실제로 무슨 일이 일어나는지 들여다볼 수 있게 해줍니다:
 

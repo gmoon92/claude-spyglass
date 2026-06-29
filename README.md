@@ -1,6 +1,6 @@
 # 🔭 Spyglass
 
-**English** | [한국어](README_ko.md) | [日本語](README_ja.md) | [简体中文](README_zh.md)
+**English** | [한국어](README_ko.md) | [日本語](README_ja.md) | [简体中文](README_zh.md) | [繁體中文](README_zh-TW.md)
 
 `claude-spyglass` helps you inspect what actually happens inside Claude Code sessions:
 
