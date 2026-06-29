@@ -136,7 +136,8 @@ export interface CleanupResult {
 export async function runCleanupNow(database: SpyglassDatabase): Promise<CleanupResult> {
   const retentionDays = getRetentionDays();
   const cutoff = getRetentionCutoffTs();
-  const deletedSessions = runRetentionCycle(database.instance, cutoff);
+  // 실제 DB 경로를 함께 넘겨 full VACUUM의 임시 공간 disk 가드가 올바른 파일시스템을 보게 한다.
+  const deletedSessions = runRetentionCycle(database.instance, cutoff, database.getStatus().path);
 
   await deleteOldGraphData(cutoff).catch((err) => {
     console.warn('[Maintenance] graph retention skipped:', err);

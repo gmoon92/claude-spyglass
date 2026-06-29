@@ -1,0 +1,26 @@
+-- =============================================================================
+-- 065 — auto_vacuum = INCREMENTAL 전환 (freelist 무한 누적 차단)
+-- =============================================================================
+-- 배경 (실측 — 2026-06-30, storage profiler):
+--   dev 2.5GB DB에서 freelist(삭제 후 미회수 페이지)만 2.4GB(94%) 관측. 원인 두 가지:
+--     1) auto_vacuum = NONE (기본값) → 삭제된 페이지가 OS로 반환되지 않고 freelist에 적재.
+--     2) runRetentionCycle()이 `PRAGMA VACUUM`(존재하지 않는 pragma → silent no-op)을 호출해
+--        실제 VACUUM이 한 번도 돌지 않음(같은 커밋에서 runtime/vacuum.ts로 수정).
+--   프로덕션에서 보고된 ~16GB 증가의 가장 유력한 단일 원인.
+--
+-- 자동 적용 메커니즘 (태그 버저닝 + 자동업데이트로 모든 환경에 전파):
+--   - 본 PRAGMA는 migrator가 트랜잭션 밖에서 실행한다(connection.ts runMigrations → pragmaStmts).
+--   - auto_vacuum 변경은 기존 DB에서 **즉시 적용되지 않고**, 다음 full VACUUM 1회로 전환된다(SQLite 사양).
+--   - 그 full VACUUM은 runtime/vacuum.ts의 runVacuumMaintenance()가 첫 retention 사이클에서
+--     freelist가 임계 이상일 때 1회 수행 → 전환 완료. 이후로는 incremental_vacuum(저비용)만으로 유지.
+--   - 즉 사용자 수동 개입 없이, 자동업데이트로 이 마이그레이션이 적용되면 다음 유지보수 주기에
+--     자동으로 죽은 공간이 회수되고 incremental 모드로 안정화된다.
+--
+-- 안전성/멱등성:
+--   - PRAGMA는 항상 같은 값으로 수렴 — 재실행 안전. user_version 65로 1회만 전진.
+--   - 데이터/스키마 변경 없음(저장 구조 무손상). full VACUUM의 임시 공간은 vacuum.ts가 disk 가드.
+--   - FULL(1)이 아니라 INCREMENTAL(2): 커밋마다 자동 회수하는 FULL은 쓰기 증폭이 커
+--     쓰기 빈번한 Spyglass hot path에 부적합. INCREMENTAL은 회수 시점을 retention 주기로 제어.
+-- =============================================================================
+
+PRAGMA auto_vacuum = INCREMENTAL;

@@ -7,6 +7,7 @@
 
 import type { Database } from 'bun:sqlite';
 import { rebuildStatsHourly } from '../stats/build-aggregate';
+import { runVacuumMaintenance } from '../../runtime/vacuum';
 
 /**
  * 보관 기간이 지난 데이터 전체 삭제 (일일 유지보수용)
@@ -85,11 +86,19 @@ export function deleteOldData(db: Database, beforeTimestamp: number): number {
  * delete → vacuum 은 한 묶음으로 수행해야 디스크가 실제로 회수된다.
  * 이 사이클의 동작을 변경할 때(쿼리 추가, vacuum 전략 변경 등) 이 파일만 수정하면 된다.
  *
+ * VACUUM 전략 자체는 `runtime/vacuum.ts`가 SSoT다(incremental vs full, disk 가드).
+ * (과거 버그: 여기서 `PRAGMA VACUUM`을 호출했는데 이는 존재하지 않는 pragma라 silent no-op
+ *  였고, 그래서 삭제분이 freelist에 무한 누적됐다. 반드시 vacuum.ts 경유로만 회수한다.)
+ *
+ * @param dbPath full VACUUM의 임시 공간 disk 가드에 필요(생략 시 기본 경로).
  * @returns 삭제된 sessions 행 수
  */
-export function runRetentionCycle(db: Database, beforeTimestamp: number): number {
+export function runRetentionCycle(
+  db: Database,
+  beforeTimestamp: number,
+  dbPath: string = `${process.env.HOME || process.env.USERPROFILE}/.spyglass/spyglass.db`,
+): number {
   const deleted = deleteOldData(db, beforeTimestamp);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (db as any).run('PRAGMA VACUUM');
+  runVacuumMaintenance(db, dbPath);
   return deleted;
 }
