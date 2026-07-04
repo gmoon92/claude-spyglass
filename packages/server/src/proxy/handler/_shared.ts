@@ -41,12 +41,11 @@ export interface HandlerContext {
   /** payload 인코딩 알고리즘(payload_algo 적재값) — 'zstd' | 'zstd+aes256gcm' | null (R3) */
   payloadAlgo: PayloadAlgo;
   /**
-   * v66(CAS Phase 3): SPYGLASS_CAS_WRITE ON + conversation 파싱 성공 시 splitConversation 결과
-   * (chunks[0]=envelope, 이후 블록). persist가 트랜잭션 내에서 artifact store+manifest로 적재.
-   * null이면 레거시 통짜 경로(payload BLOB 사용).
+   * v66(CAS, 기본): conversation 본문의 splitConversation 결과(chunks[0]=envelope, 이후 블록).
+   * persist가 트랜잭션 내에서 artifact store+manifest로 적재. null이면 비-conversation 통짜 경로(payload 사용).
    */
   payloadChunks: string[] | null;
-  /** v66: 'chunks/v1'=CAS 청크 저장, null=레거시. proxy_requests.payload_manifest_algo 적재값. */
+  /** v66: 'chunks/v1'=CAS 청크 저장, null=비-conversation 통짜. proxy_requests.payload_manifest_algo 적재값. */
   payloadManifestAlgo: string | null;
   /** v19 hook ↔ proxy 매칭 키 */
   sessionId: string | null;

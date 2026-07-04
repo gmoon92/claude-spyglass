@@ -22,16 +22,6 @@ import { encodeBlob, getActiveKey, shouldEncrypt, splitConversation, MANIFEST_CH
 import { applyCorsHeaders } from '@spyglass/types';
 import type { HandlerContext } from './_shared';
 
-/**
- * CAS 쓰기 게이트 (roadmap Phase 3). 기본 OFF — env로만 활성화.
- * ON이면 conversation payload를 청크로 분해 저장(dedup), OFF면 기존 통짜 zstd 저장.
- * 이미 생성된 CAS 행 읽기는 이 게이트와 무관하게 항상 재조립되므로, 롤백은 이 값만 끄면 된다.
- */
-function casWriteEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  const v = (env.SPYGLASS_CAS_WRITE ?? '').toLowerCase();
-  return v === '1' || v === 'true' || v === 'yes' || v === 'on';
-}
-
 const EMPTY_REQ_META: RequestMeta = {
   model: null, messagesCount: 0, maxTokens: null,
   toolsCount: 0, requestPreview: null, isStreamReq: false,
@@ -58,8 +48,9 @@ export async function buildInboundContext(
   const reqMeta: RequestMeta = bodyBuffer ? parseRequestBody(bodyBuffer) : { ...EMPTY_REQ_META };
 
   // v21: 요청 본문 저장. bodyBuffer가 없거나 0 byte면 생략 (DB에는 NULL).
-  // v66(CAS Phase 3): SPYGLASS_CAS_WRITE ON + conversation 파싱 성공 시 청크로 분해 저장(payload NULL).
-  //   그 외(게이트 OFF, 비-conversation, 파싱 불가)는 기존 통짜 zstd 저장으로 fallback.
+  // v66(CAS): payload 저장은 기본 CAS다(옵션 아님). conversation 본문은 청크로 분해 저장하고
+  //   (payload NULL, persist가 artifact 적재), splitConversation이 null인 비-conversation 본문만
+  //   통짜 zstd로 저장한다. 이 통짜 경로는 on/off 토글이 아니라 "conversation이 아닐 때"의 필수 fallback.
   // R3: 옵트인(SPYGLASS_ENCRYPTION) 시 압축 후 AES-256-GCM 암호화. 인코딩 분기는 payload-codec(encodeBlob) SSoT.
   let payload: Uint8Array | null = null;
   let payloadRawSize: number | null = null;
@@ -67,16 +58,14 @@ export async function buildInboundContext(
   let payloadChunks: string[] | null = null;
   let payloadManifestAlgo: string | null = null;
   if (bodyBuffer && bodyBuffer.byteLength > 0) {
-    payloadRawSize = bodyBuffer.byteLength; // rawSize는 본문 속성 — 인코딩 방식과 무관하게 항상 기록.
-    const split = casWriteEnabled()
-      ? splitConversation(new TextDecoder().decode(new Uint8Array(bodyBuffer)))
-      : null;
+    payloadRawSize = bodyBuffer.byteLength; // rawSize는 본문 속성 — 저장 방식과 무관하게 항상 기록.
+    const split = splitConversation(new TextDecoder().decode(new Uint8Array(bodyBuffer)));
     if (split) {
-      // CAS 경로: 청크 분해 성공. 통짜 payload는 저장하지 않는다(persist가 artifact로 적재).
+      // CAS(기본): 청크 분해. 통짜 payload는 저장하지 않는다(persist가 artifact로 적재).
       payloadChunks = split.chunks;
       payloadManifestAlgo = MANIFEST_CHUNKS_V1;
     } else {
-      // 레거시 경로: 통짜 zstd(±암호화). 기존 동작 그대로.
+      // 비-conversation 본문 fallback: 통짜 zstd(±암호화). CAS 대상이 아닌 형태(배열/스칼라 등).
       try {
         const key = shouldEncrypt() ? getActiveKey() : null;
         const encoded = encodeBlob(new Uint8Array(bodyBuffer), key);

@@ -115,8 +115,8 @@ export interface CreateProxyRequestParams {
   // v22: system_prompts 참조 (system_hash NULL 허용 — body.system 미존재 또는 backfill 미수행 행 보존)
   system_hash?: string | null;
   system_byte_size?: number | null;
-  // v66(CAS Phase 3): 'chunks/v1'=payload를 proxy_request_chunks로 분해 저장(payload는 NULL),
-  // NULL=레거시(payload BLOB 직접 저장). inbound가 SPYGLASS_CAS_WRITE 게이트로 결정.
+  // v66(CAS, 기본): 'chunks/v1'=payload를 proxy_request_chunks로 분해 저장(payload는 NULL),
+  // NULL=비-conversation 통짜 저장. inbound가 splitConversation 성공 여부로 결정(옵션 아님).
   payload_manifest_algo?: string | null;
 }
 

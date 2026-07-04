@@ -1,4 +1,4 @@
-# Storage Evolution — 작업 핸드오프 (2026-06-30)
+# Storage Evolution — 작업 핸드오프 (2026-07-05 갱신)
 
 > 다른 노트북/세션에서 이어서 작업하기 위한 인계 문서. 세션 컨텍스트 없이 이 문서만 읽고
 > 진행 상황·다음 할 일을 파악할 수 있도록 작성했다.
@@ -10,8 +10,10 @@
 ## 0. 한 줄 요약
 
 저장소를 `SQLite(Index) + Artifact Store(CAS) + Archive(ELK식)`로 진화시키는 다단계 작업 중.
-**원칙: 측정 → 결정 → 리팩토링.** 현재 **Phase 0(측정) 완료 + VACUUM 운영 버그 수정 배포(v4.11.7)**.
-**CAS·ELK·Archive는 아직 미구현(로드맵 문서에만 존재).** 다음 관문은 **프로덕션 16GB 환경 프로파일링**.
+**원칙: 측정 → 결정 → 리팩토링.** 현재 **Phase 0(측정) + Phase 2·3(CAS) 완료**.
+proxy payload를 청크 단위 content-addressed로 저장(기본 동작, 옵션 아님)하고, 레거시 행은 대량
+백필로 전환한다. **ELK/Archive(Phase 5-7)·ZSTD 확대(Phase 4)는 아직 미구현.** 다음 관문은
+**프로덕션 16GB 환경 프로파일링 + 프로덕션 백필**.
 
 ## 1. 지금까지 한 것 (배포됨 — v4.11.7, origin/main)
 
@@ -29,11 +31,26 @@
      **best-effort: throw 금지** → 자동업데이트 체인 안 깨짐)
    - `migrations/065-auto-vacuum-incremental.sql` — `auto_vacuum=INCREMENTAL`, 자동업데이트로 전파
 
-## 2. ⚠️ 아직 안 한 것 (문서만, 미구현)
+## 1-b. CAS 도입 (Phase 2·3 완료 — 커밋 `fa36c0b`, 아직 origin/main push 전일 수 있음)
 
-- **CAS (Phase 2-3)** — ArtifactStore도 content-addressed 저장도 **코드로 없음**. dev에서
-  청크 dedup **95.2% "잠재력만 측정"**한 상태.
-- **ZSTD 확대 (Phase 4)**, **ELK/Archive (Phase 5-7)** — 전부 로드맵 위에만 존재.
+- **artifacts 테이블(마이그레이션 066)** + `SqliteArtifactStore` + `chunker`(splitConversation/
+  joinConversation, envelope+`$spyref` placeholder로 재조립·키 순서 보존) — `packages/storage/src/artifacts/`.
+- **재조립 SSoT** `reconstructProxyPayloadText`(`queries/proxy-payload.ts`): `payload_manifest_algo`로
+  CAS/레거시 분기(역호환). 읽기 3곳(routes/proxy·backfill-system-prompts·cli/analyze) 모두 이 경유.
+- **쓰기 = 기본 CAS**(옵션/게이트 없음): `inbound.ts`가 conversation 본문을 splitConversation으로 분해해
+  청크 저장(payload NULL). 비-conversation 본문만 통짜 zstd fallback. `persist.ts` 트랜잭션 원자 저장.
+- **retention artifact GC**: proxy_requests 삭제 시 ref_count 차감 → 고아 청크 회수(`session/retention.ts`).
+- **profiler 정합(정공법 A)**: 측정 청킹을 CAS 실제 단위(splitConversation)로 통합 → 측정 hash 집합 =
+  `artifacts.hash` 집합. 재측정 **94.7%**(초측정 95.2% content-only와 근사).
+- **대량 백필**: `backfillProxyPayloadToCas`(`queries/proxy-payload.ts`) + CLI `scripts/backfill-proxy-cas.ts`.
+  행별 round-trip 검증(`Bun.deepEquals`) 통과분만 payload NULL화. keyset 커서·멱등·배치 트랜잭션.
+  **dev DB 397행 전량 전환 완료**(논리 52.4MB→고유 8MB). 프로덕션은 미실행.
+
+## 2. ⚠️ 아직 안 한 것
+
+- **프로덕션 16GB 프로파일링 + 프로덕션 백필** — dev만 검증/전환됨(§4-A).
+- **ZSTD 확대 (Phase 4)** — `requests.payload`·`claude_events.payload`(TEXT 평문) 압축 미착수.
+- **ELK/Archive (Phase 5-7)** — 전부 로드맵 위에만 존재.
 
 ## 3. 핵심 측정 결과 (dev 2.5GB — 대표성 없음, 메커니즘 확인용)
 
@@ -64,13 +81,21 @@ bun run packages/storage/src/scripts/profile-storage.ts \
 - 암호화 환경이면 `SPYGLASS_ENCRYPTION_KEY` env 주입해야 암호문 청크까지 측정(없으면 분리 집계).
 - 확인할 가설: H1 청크 dedup 실제 비율 / H2 16GB 중 freelist(죽은 공간) 비중 / H3 request_payloads dedup.
 
-### (B) 결과로 로드맵 Phase 1(Strategy Report) 확정 → Phase 2 착수
-- Phase 2 = **ArtifactStore 추상화 + 단일 쓰기 게이트**.
-- 단일 게이트 불변식(절대 깨지면 안 됨):
-  `normalize → SHA-256(평문!) → exists? → zstd → encrypt → store`
-  (해시는 반드시 평문에 — 압축/암호화 후 해시하면 zstd 사전상태·AES nonce로 dedup 깨짐)
-- decode 측은 이미 `payload-codec.ts`가 단일 게이트 → encode/write 측 대칭만 완성.
-- 목적: 새 테이블 추가 시 압축/CAS 누락 방지(구조로 강제). 본문은 raw 저장 금지, ref/manifest만.
+### (A-2) 프로덕션 CAS 대량 백필 (프로파일링과 함께)
+레거시 payload 행을 CAS로 전환(비가역). **dry-run 선행 필수**:
+```bash
+bun run packages/server/scripts/backfill-proxy-cas.ts --dry-run           # 전환 가능 수 + round-trip 검증
+bun run packages/server/scripts/backfill-proxy-cas.ts --limit 5           # 소량 실전환 검증
+bun run packages/server/scripts/backfill-proxy-cas.ts                     # 전체
+```
+- 행별 round-trip 검증 통과분만 payload NULL화 → 안전. 멱등(재실행 무해). VACUUM은 daily-cleanup 주기.
+- **주의**: 백필 후 CAS 행을 읽으려면 서버가 이 커밋(reconstruct 경유) 이상이어야 함 — 구버전은 빈 messages.
+
+### (B) 남은 로드맵 — Phase 4(ZSTD 확대) → Phase 5-7(Archive/ELK/Query Layer)
+- **Phase 4**: `requests.payload`·`claude_events.payload`(TEXT 평문)를 zstd 확대. Phase 0의 "추가 압축 여지"
+  측정으로 우선순위 결정. `encodeText`/`decodeText` 확장(현재 TEXT는 압축 없이 평문/AES만).
+- **Phase 5-7**: Hot/Warm/Archive 경계 + archive_index + Query Layer(Hot/Archive 투명 병합). 로드맵 참조.
+- CAS 불변식(유지): `normalize → SHA-256(평문!) → exists? → zstd → encrypt → store`. 이미 `artifacts`에 구현됨.
 
 ## 5. 미해결 결정 / 주의사항
 
