@@ -721,7 +721,8 @@
         "migration-label": "スキーマバージョン",
         "engine-label": "エンジン",
         "engine-value": "SQLite (Bun 内蔵)",
-        "cli-label": "sqlite3 CLI (任意)"
+        "cli-label": "sqlite3 CLI (任意)",
+        "cas-label": "CAS チャンク削減"
       },
       "graph": {
         "title": "関係フローグラフ",

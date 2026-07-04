@@ -431,3 +431,5 @@ export {
   type BackfillCasOptions,
   type BackfillCasResult,
 } from './queries/proxy-payload';
+
+export { getCasStats, type CasStats } from './queries/cas-stats';

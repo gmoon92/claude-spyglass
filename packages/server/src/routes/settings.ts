@@ -41,7 +41,7 @@ import type { Database } from 'bun:sqlite';
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { getLatestMigrationFile, getRetentionDays } from '@spyglass/storage';
+import { getLatestMigrationFile, getRetentionDays, getCasStats, type CasStats } from '@spyglass/storage';
 import { jsonResponse } from './_shared';
 import { probeAllVersions, probeSqlite3, type VersionProbeResult } from '../settings/version-probe';
 import { detectHookStatus } from '../settings/hook-detect';
@@ -285,6 +285,7 @@ async function collectSqliteInfo(db: Database): Promise<{
   dbSizeBytes: number | null;
   migration: { version: number | null; filename: string | null };
   cliVersion: VersionProbeResult;
+  cas: CasStats;
 }> {
   // config.DB_PATH 가 env 별칭(SPYGLASS_*/SPGLASS_*)+기본값을 일원화한 SSoT —
   // 직접 process.env 를 읽으면 구철자 설정 시 실제 열린 DB 와 경로가 어긋난다.
@@ -311,7 +312,16 @@ async function collectSqliteInfo(db: Database): Promise<{
     console.warn('[settings-route] getLatestMigrationFile failed:', err);
   }
 
-  return { dbPath, dbSizeBytes, migration, cliVersion };
+  // CAS 실현 절감(artifacts + proxy_request_chunks 집계) — 저장소 패널 dedup 카드용. 집계 실패는 0 폴백.
+  let cas: CasStats;
+  try {
+    cas = getCasStats(db);
+  } catch (err) {
+    console.warn('[settings-route] getCasStats failed:', err);
+    cas = { artifactCount: 0, chunkRefCount: 0, casRowCount: 0, logicalBytes: 0, uniqueBytes: 0, storedBytes: 0, savedBytes: 0, savedPct: 0 };
+  }
+
+  return { dbPath, dbSizeBytes, migration, cliVersion, cas };
 }
 
 // =============================================================================

@@ -144,6 +144,20 @@ export interface SqliteInfo {
   dbSizeBytes: number | null;
   migration: { version: number | null; filename: string | null };
   cliVersion: SqliteCliVersion | null;
+  /**
+   * CAS(Content-Addressed Storage) 실현 절감 — settings.ts getCasStats 1:1.
+   * 구버전 서버 응답 호환을 위해 옵셔널(없으면 저장소 패널이 CAS 행을 숨김).
+   */
+  cas?: {
+    artifactCount: number;
+    chunkRefCount: number;
+    casRowCount: number;
+    logicalBytes: number;
+    uniqueBytes: number;
+    storedBytes: number;
+    savedBytes: number;
+    savedPct: number;
+  };
 }
 
 // ── Proxy (진단 카드 proxyRowHtml 이 읽는 형태 — settings.ts checkProxyInstalled) ─

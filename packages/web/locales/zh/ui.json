@@ -721,7 +721,8 @@
         "migration-label": "架构版本",
         "engine-label": "引擎",
         "engine-value": "SQLite (Bun 内置)",
-        "cli-label": "sqlite3 CLI (可选)"
+        "cli-label": "sqlite3 CLI (可选)",
+        "cas-label": "CAS 分块去重"
       },
       "graph": {
         "title": "关系流程图",

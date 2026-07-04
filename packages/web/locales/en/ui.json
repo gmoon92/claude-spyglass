@@ -721,7 +721,8 @@
         "migration-label": "Schema version",
         "engine-label": "Engine",
         "engine-value": "SQLite (built into Bun)",
-        "cli-label": "sqlite3 CLI (optional)"
+        "cli-label": "sqlite3 CLI (optional)",
+        "cas-label": "CAS chunk savings"
       },
       "graph": {
         "title": "Relationship Flow Graph",

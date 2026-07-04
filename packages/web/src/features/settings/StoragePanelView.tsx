@@ -80,6 +80,7 @@ export function StoragePanelView({
   const migVersion = sqlite.migration?.version;
   const migFilename = sqlite.migration?.filename || '—';
   const cli = sqlite.cliVersion;
+  const cas = sqlite.cas; // CAS 실현 절감(옵셔널 — 구버전 서버 응답엔 없음)
 
   // ── Graph 섹션 메타 (친화적 상태값 — raw circuit/cursor 미노출) ───────────
   const graphState = graphHealthState(g);
@@ -139,6 +140,19 @@ export function StoragePanelView({
           status="ok"
           value={sqliteSize}
         />
+        {/* CAS 청크 절감 — CAS로 저장된 요청이 있을 때만 노출(realized dedup). */}
+        {cas && cas.casRowCount > 0 && (
+          <SettingsRow
+            label={t('ui:settings-view.storage.rdb.cas-label')}
+            status="ok"
+            value={`${cas.savedPct.toFixed(1)}% ↓`}
+            tail={
+              <code className="settings-meta">
+                {formatBytes(cas.logicalBytes)} → {formatBytes(cas.uniqueBytes)} · {cas.artifactCount}/{cas.chunkRefCount} chunks
+              </code>
+            }
+          />
+        )}
         <SettingsRow
           label={t('ui:settings-view.storage.rdb.path-label')}
           status="ok"

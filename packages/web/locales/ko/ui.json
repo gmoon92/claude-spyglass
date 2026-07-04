@@ -721,7 +721,8 @@
         "migration-label": "스키마 버전",
         "engine-label": "엔진",
         "engine-value": "SQLite (Bun 내장)",
-        "cli-label": "sqlite3 CLI (선택)"
+        "cli-label": "sqlite3 CLI (선택)",
+        "cas-label": "CAS 청크 절감"
       },
       "graph": {
         "title": "관계 흐름 그래프",
