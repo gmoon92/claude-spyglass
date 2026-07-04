@@ -65,6 +65,9 @@ export interface ProxyRequest {
   // R3(ⓝ1, Migration 057): request/response/system preview at-rest 암호화 마커(3컬럼 공유).
   // NULL=평문, 'aes256gcm'=암호문(base64-in-TEXT). 읽기 시 decodeText로 분기 복호.
   preview_algo?: string | null;
+  // v66(CAS Phase 3): payload 저장 방식 신호. 'chunks/v1'=proxy_request_chunks로 재조립(CAS),
+  // NULL=레거시(payload BLOB 직접 decodeBlob). reconstructProxyPayloadText가 이 값으로 분기.
+  payload_manifest_algo?: string | null;
 }
 
 export interface CreateProxyRequestParams {
@@ -112,6 +115,9 @@ export interface CreateProxyRequestParams {
   // v22: system_prompts 참조 (system_hash NULL 허용 — body.system 미존재 또는 backfill 미수행 행 보존)
   system_hash?: string | null;
   system_byte_size?: number | null;
+  // v66(CAS Phase 3): 'chunks/v1'=payload를 proxy_request_chunks로 분해 저장(payload는 NULL),
+  // NULL=레거시(payload BLOB 직접 저장). inbound가 SPYGLASS_CAS_WRITE 게이트로 결정.
+  payload_manifest_algo?: string | null;
 }
 
 // =============================================================================
@@ -134,7 +140,8 @@ const SQL_CREATE = `
     thinking_type, temperature, system_preview, system_reminder,
     tool_names, metadata_user_id, client_meta_json,
     payload, payload_raw_size, payload_algo,
-    system_hash, system_byte_size, preview_algo
+    system_hash, system_byte_size, preview_algo,
+    payload_manifest_algo
   ) VALUES (
     ?, ?, ?, ?, ?, ?,
     ?, ?, ?, ?, ?,
@@ -148,7 +155,8 @@ const SQL_CREATE = `
     ?, ?, ?, ?,
     ?, ?, ?,
     ?, ?, ?,
-    ?, ?, ?
+    ?, ?, ?,
+    ?
   )
 `;
 
@@ -262,6 +270,7 @@ export function createProxyRequest(db: Database, p: CreateProxyRequestParams): v
     p.system_hash ?? null,
     p.system_byte_size ?? null,
     previewAlgo,
+    p.payload_manifest_algo ?? null,
   ]);
 }
 

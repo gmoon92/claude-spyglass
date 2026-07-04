@@ -195,7 +195,16 @@ export const SCHEMA_VERSION = 23;
 
 export const SCHEMA_META = {
   version: SCHEMA_VERSION,
-  tables: ['sessions', 'requests', 'claude_events', 'proxy_requests', 'system_prompts'],
+  tables: [
+    'sessions',
+    'requests',
+    'claude_events',
+    'proxy_requests',
+    'system_prompts',
+    // v66: CAS Artifact Layer (066-artifacts.sql)
+    'artifacts',
+    'proxy_request_chunks',
+  ],
   indexes: [
     'idx_sessions_started_at',
     'idx_sessions_project',
@@ -210,5 +219,9 @@ export const SCHEMA_META = {
     'idx_system_prompts_last_seen',
     'idx_system_prompts_ref_count',
     'idx_proxy_requests_system_hash',
+    // v66: CAS Artifact Layer (066-artifacts.sql)
+    'idx_artifacts_last_seen',
+    'idx_artifacts_ref_count',
+    'idx_prc_chunk_hash',
   ],
 } as const;

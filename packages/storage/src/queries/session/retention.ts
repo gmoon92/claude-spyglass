@@ -15,7 +15,10 @@ import { runVacuumMaintenance } from '../../runtime/vacuum';
  * 삭제 순서 (자식 → 부모):
  *  1. requests       — timestamp 기준 직접 삭제 (FK CASCADE에 의존하지 않음으로써
  *                      세션이 오늘 이후 활동 중이더라도 과거 requests를 정리)
+ *  1b. proxy CAS(v66)— 삭제 대상 proxy_requests가 참조하던 artifact ref_count 차감 + manifest 삭제.
+ *                      proxy_requests DELETE보다 선행(timestamp 서브쿼리 id 집합이 유효해야 함).
  *  2. proxy_requests — timestamp 기준 (sessions FK 없음)
+ *  2b. artifacts     — 참조가 0이 된 고아 청크만 삭제 (system_prompts GC와 대칭).
  *  3. claude_events  — timestamp 기준 (sessions FK 없음)
  *  4. sessions       — started_at 기준, 단 오늘 이후 자식이 남아있는 세션은 보존
  *                      (requests/claude_events/proxy_requests 모두 소진된 세션만 삭제)
@@ -38,8 +41,32 @@ export function deleteOldData(db: Database, beforeTimestamp: number): number {
   // 1. requests: timestamp 기준 직접 삭제
   run('DELETE FROM requests WHERE timestamp < ?', beforeTimestamp);
 
+  // 1b. proxy CAS(v66): 삭제 대상 proxy_requests가 참조하던 artifact의 ref_count를, 그 요청들의
+  //     manifest 참조 개수만큼 정확히 차감한다. 공유 청크(살아있는 다른 요청도 참조)는 이 차감으로도
+  //     ref_count>0을 유지해 보존된다. 반드시 proxy_requests DELETE보다 선행(id 서브쿼리 유효성).
+  run(
+    `UPDATE artifacts
+       SET ref_count = ref_count - (
+         SELECT COUNT(*) FROM proxy_request_chunks
+          WHERE proxy_request_chunks.chunk_hash = artifacts.hash
+            AND proxy_request_chunks.request_id IN (SELECT id FROM proxy_requests WHERE timestamp < ?)
+       )
+     WHERE hash IN (
+       SELECT DISTINCT chunk_hash FROM proxy_request_chunks
+        WHERE request_id IN (SELECT id FROM proxy_requests WHERE timestamp < ?)
+     )`,
+    beforeTimestamp,
+    beforeTimestamp
+  );
+  // manifest 삭제 — ref_count 차감(위)이 proxy_request_chunks를 읽으므로 반드시 그 다음.
+  run('DELETE FROM proxy_request_chunks WHERE request_id IN (SELECT id FROM proxy_requests WHERE timestamp < ?)', beforeTimestamp);
+
   // 2. proxy_requests: timestamp 기준
   run('DELETE FROM proxy_requests WHERE timestamp < ?', beforeTimestamp);
+
+  // 2b. artifacts: 아무 요청도 참조하지 않게 된(ref_count<=0) 고아 청크 회수.
+  //     실제 디스크 페이지 반환은 runVacuumMaintenance(runRetentionCycle)가 담당.
+  run('DELETE FROM artifacts WHERE ref_count <= 0');
 
   // 3. claude_events: timestamp 기준
   run('DELETE FROM claude_events WHERE timestamp < ?', beforeTimestamp);

@@ -18,9 +18,19 @@ import { logInbound, proxyInfoLog } from '../log-result';
 import { parseRequestBody } from '../request-parser';
 import { extractClientHeaders } from '../audit-headers';
 import { getLastTurnId } from '../../hook';
-import { encodeBlob, getActiveKey, shouldEncrypt, type PayloadAlgo } from '@spyglass/storage';
+import { encodeBlob, getActiveKey, shouldEncrypt, splitConversation, MANIFEST_CHUNKS_V1, type PayloadAlgo } from '@spyglass/storage';
 import { applyCorsHeaders } from '@spyglass/types';
 import type { HandlerContext } from './_shared';
+
+/**
+ * CAS 쓰기 게이트 (roadmap Phase 3). 기본 OFF — env로만 활성화.
+ * ON이면 conversation payload를 청크로 분해 저장(dedup), OFF면 기존 통짜 zstd 저장.
+ * 이미 생성된 CAS 행 읽기는 이 게이트와 무관하게 항상 재조립되므로, 롤백은 이 값만 끄면 된다.
+ */
+function casWriteEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const v = (env.SPYGLASS_CAS_WRITE ?? '').toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+}
 
 const EMPTY_REQ_META: RequestMeta = {
   model: null, messagesCount: 0, maxTokens: null,
@@ -47,21 +57,34 @@ export async function buildInboundContext(
   const bodyBuffer = req.body ? await req.arrayBuffer() : null;
   const reqMeta: RequestMeta = bodyBuffer ? parseRequestBody(bodyBuffer) : { ...EMPTY_REQ_META };
 
-  // v21: 요청 본문 zstd 압축 — bodyBuffer가 없거나 0 byte면 생략 (DB에는 NULL).
-  // R3: 옵트인(SPYGLASS_ENCRYPTION) 시 압축 후 AES-256-GCM 암호화(payload_algo='zstd+aes256gcm').
-  // 인코딩 분기는 payload-codec(encodeBlob)에 SSoT로 위임.
+  // v21: 요청 본문 저장. bodyBuffer가 없거나 0 byte면 생략 (DB에는 NULL).
+  // v66(CAS Phase 3): SPYGLASS_CAS_WRITE ON + conversation 파싱 성공 시 청크로 분해 저장(payload NULL).
+  //   그 외(게이트 OFF, 비-conversation, 파싱 불가)는 기존 통짜 zstd 저장으로 fallback.
+  // R3: 옵트인(SPYGLASS_ENCRYPTION) 시 압축 후 AES-256-GCM 암호화. 인코딩 분기는 payload-codec(encodeBlob) SSoT.
   let payload: Uint8Array | null = null;
   let payloadRawSize: number | null = null;
   let payloadAlgo: PayloadAlgo = null;
+  let payloadChunks: string[] | null = null;
+  let payloadManifestAlgo: string | null = null;
   if (bodyBuffer && bodyBuffer.byteLength > 0) {
-    try {
-      const key = shouldEncrypt() ? getActiveKey() : null;
-      const encoded = encodeBlob(new Uint8Array(bodyBuffer), key);
-      payload = encoded.value;
-      payloadAlgo = encoded.algo;
-      payloadRawSize = bodyBuffer.byteLength;
-    } catch (err) {
-      console.warn('[PROXY] Payload encoding failed:', err);
+    payloadRawSize = bodyBuffer.byteLength; // rawSize는 본문 속성 — 인코딩 방식과 무관하게 항상 기록.
+    const split = casWriteEnabled()
+      ? splitConversation(new TextDecoder().decode(new Uint8Array(bodyBuffer)))
+      : null;
+    if (split) {
+      // CAS 경로: 청크 분해 성공. 통짜 payload는 저장하지 않는다(persist가 artifact로 적재).
+      payloadChunks = split.chunks;
+      payloadManifestAlgo = MANIFEST_CHUNKS_V1;
+    } else {
+      // 레거시 경로: 통짜 zstd(±암호화). 기존 동작 그대로.
+      try {
+        const key = shouldEncrypt() ? getActiveKey() : null;
+        const encoded = encodeBlob(new Uint8Array(bodyBuffer), key);
+        payload = encoded.value;
+        payloadAlgo = encoded.algo;
+      } catch (err) {
+        console.warn('[PROXY] Payload encoding failed:', err);
+      }
     }
   }
 
@@ -78,6 +101,7 @@ export async function buildInboundContext(
     ctx: {
       requestId, startMs, method, path, url, req,
       reqMeta, payload, payloadRawSize, payloadAlgo,
+      payloadChunks, payloadManifestAlgo,
       sessionId, turnId,
       clientUserAgent, clientApp, anthropicBeta, clientMeta,
     },

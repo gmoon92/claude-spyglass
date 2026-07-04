@@ -406,3 +406,28 @@ export {
   shouldEncrypt,
   resetEncryptionRuntime,
 } from './runtime/encryption';
+
+// =============================================================================
+// CAS Artifact Layer (roadmap Phase 2) — 청크 분해/재조립 + content-addressed 저장
+// 소비처: proxy payload 쓰기(persist) / 읽기(reconstructProxyPayloadText).
+// =============================================================================
+
+export {
+  splitConversation,
+  joinConversation,
+  sha256HexBytes,
+  SqliteArtifactStore,
+  type SplitConversation,
+  type ArtifactStore,
+  type ArtifactRef,
+} from './artifacts';
+
+export {
+  reconstructProxyPayloadText,
+  storeProxyPayloadChunks,
+  backfillProxyPayloadToCas,
+  MANIFEST_CHUNKS_V1,
+  type ReconstructedPayload,
+  type BackfillCasOptions,
+  type BackfillCasResult,
+} from './queries/proxy-payload';

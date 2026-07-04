@@ -28,7 +28,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { getDatabase, upsertSystemPrompt, invalidateAnomalyThresholdsCache, decodeBlob, getActiveKey } from '@spyglass/storage';
+import { getDatabase, upsertSystemPrompt, invalidateAnomalyThresholdsCache, reconstructProxyPayloadText } from '@spyglass/storage';
 import { normalizeSystem } from '../proxy/system-hash';
 import { t } from '../i18n';
 
@@ -115,16 +115,18 @@ interface ParentBackfillReport {
  * `backfill-system-prompts.ts` 스크립트 로직과 동일하되 본 CLI 내부에서 범위 필터를 추가하고
  * 진행 로그만 자체 출력. 멱등 보장 (이미 채워진 행은 WHERE system_hash IS NULL 로 건너뜀).
  */
-function backfillSystemByteSize(
+export function backfillSystemByteSize(
   db: Database,
   range: BackfillRange,
   dryRun: boolean,
 ): SystemBackfillReport {
+  // 정공법 B: CAS 행(payload NULL, manifest='chunks/v1')도 대상에 포함. reconstructProxyPayloadText가
+  //   레거시/CAS 둘 다 흡수하므로 payload OR manifest면 system을 복원해 system_hash를 채울 수 있다.
   const eligibleRow = db
     .query(
       `SELECT COUNT(*) AS cnt FROM proxy_requests
         WHERE system_hash IS NULL
-          AND payload IS NOT NULL
+          AND (payload IS NOT NULL OR payload_manifest_algo IS NOT NULL)
           AND timestamp BETWEEN ? AND ?`,
     )
     .get(range.fromMs, range.toMs) as { cnt: number };
@@ -149,10 +151,10 @@ function backfillSystemByteSize(
   let offset = 0;
   while (offset < eligible) {
     const rows = db
-      .query<{ id: string; timestamp: number; payload: Uint8Array; payload_algo: string | null }, [number, number, number]>(
-        `SELECT id, timestamp, payload, payload_algo FROM proxy_requests
+      .query<{ id: string; timestamp: number; payload: Uint8Array | null; payload_algo: string | null; payload_manifest_algo: string | null }, [number, number, number]>(
+        `SELECT id, timestamp, payload, payload_algo, payload_manifest_algo FROM proxy_requests
           WHERE system_hash IS NULL
-            AND payload IS NOT NULL
+            AND (payload IS NOT NULL OR payload_manifest_algo IS NOT NULL)
             AND timestamp BETWEEN ? AND ?
           ORDER BY timestamp ASC LIMIT ?`,
       )
@@ -164,10 +166,15 @@ function backfillSystemByteSize(
       for (const row of rows) {
         processed++;
         let body: { system?: unknown };
+        // CAS Phase 3: payload 재조립 SSoT 경유(decodeBlob 직접 호출 제거).
+        //   정공법 B로 CAS 행(payload NULL, manifest='chunks/v1')도 여기 들어올 수 있으며,
+        //   reconstructProxyPayloadText가 레거시/CAS를 payload_manifest_algo로 자동 분기한다.
+        const { text, error } = reconstructProxyPayloadText(db, row);
+        if (error || !text) {
+          decodeError++;
+          continue;
+        }
         try {
-          // R3: payload_algo 분기 디코드(zstd/zstd+aes256gcm) — 무조건 zstd 가정 제거.
-          const raw = decodeBlob(row.payload, row.payload_algo, getActiveKey());
-          const text = new TextDecoder().decode(raw!);
           body = JSON.parse(text);
         } catch {
           decodeError++;

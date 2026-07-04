@@ -22,14 +22,17 @@
  * 호출자: 사용자 직접 (npm/bun script). v21 이전 행은 payload BLOB 자체가 없어 backfill 불가능 — 의도된 한계.
  */
 
-import { getDatabase, upsertSystemPrompt, decodeBlob, getActiveKey } from '@spyglass/storage';
+import { getDatabase, upsertSystemPrompt, reconstructProxyPayloadText } from '@spyglass/storage';
 import { normalizeSystem } from '../src/proxy/system-hash';
 
 interface BackfillRow {
   id: string;
   timestamp: number;
-  payload: Uint8Array;
+  // 정공법 B: CAS 행은 payload NULL이므로 nullable. reconstructProxyPayloadText가 manifest로 재조립.
+  payload: Uint8Array | null;
   payload_algo: string | null;
+  // CAS Phase 3 + 정공법 B: 'chunks/v1'=CAS 행(reconstruct가 청크 재조립), NULL=레거시(payload BLOB).
+  payload_manifest_algo: string | null;
 }
 
 const BATCH_SIZE = 100;
@@ -52,12 +55,14 @@ function main(): void {
   const db = wrapper.instance;
 
   // 백필 대상 카운트 — 진행도 가늠용
+  // 정공법 B: CAS 행(payload NULL, manifest='chunks/v1')도 포함. reconstructProxyPayloadText가
+  //   레거시/CAS 둘 다 흡수하므로 payload OR manifest면 system_hash를 채울 수 있다.
   const totalRow = db.query(
-    "SELECT COUNT(*) AS cnt FROM proxy_requests WHERE system_hash IS NULL AND payload IS NOT NULL"
+    "SELECT COUNT(*) AS cnt FROM proxy_requests WHERE system_hash IS NULL AND (payload IS NOT NULL OR payload_manifest_algo IS NOT NULL)"
   ).get() as { cnt: number };
   const eligibleTotal = totalRow.cnt;
 
-  console.log(`[backfill] eligible rows (system_hash NULL AND payload NOT NULL): ${eligibleTotal}`);
+  console.log(`[backfill] eligible rows (system_hash NULL AND (payload OR manifest)): ${eligibleTotal}`);
   if (eligibleTotal === 0) {
     console.log(`[backfill] nothing to do.`);
     return;
@@ -88,8 +93,8 @@ function main(): void {
   while (offset < remaining) {
     const batchSize = Math.min(BATCH_SIZE, remaining - offset);
     const rows = db.query(
-      `SELECT id, timestamp, payload, payload_algo FROM proxy_requests
-       WHERE system_hash IS NULL AND payload IS NOT NULL
+      `SELECT id, timestamp, payload, payload_algo, payload_manifest_algo FROM proxy_requests
+       WHERE system_hash IS NULL AND (payload IS NOT NULL OR payload_manifest_algo IS NOT NULL)
        ORDER BY timestamp ASC LIMIT ?`
     ).all(batchSize) as BackfillRow[];
 
@@ -100,10 +105,14 @@ function main(): void {
       for (const row of batch) {
         processed++;
         let body: { system?: unknown };
+        // CAS Phase 3 + 정공법 B: payload 재조립 SSoT 경유(decodeBlob 직접 호출 제거).
+        //   CAS 행(manifest='chunks/v1')·레거시 행 모두 reconstructProxyPayloadText가 자동 분기 처리.
+        const { text, error } = reconstructProxyPayloadText(db, row);
+        if (error || !text) {
+          decodeError++;
+          continue;
+        }
         try {
-          // R3: payload_algo 분기 디코드(zstd/zstd+aes256gcm) — 무조건 zstd 가정 제거.
-          const raw = decodeBlob(row.payload, row.payload_algo, getActiveKey());
-          const text = new TextDecoder().decode(raw!);
           body = JSON.parse(text);
         } catch {
           decodeError++;

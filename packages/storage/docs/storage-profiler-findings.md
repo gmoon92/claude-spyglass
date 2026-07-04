@@ -14,16 +14,23 @@
 | **freelist (죽은 공간)** | **2.40 GB (94%)** | 삭제 후 미회수 페이지. VACUUM으로 즉시 회수 가능 |
 | 실제 사용 데이터 | **~150 MB** | 진짜 live 데이터 |
 | proxy_requests.payload — document dedup | 0.0% | 통짜 해시는 무의미 |
-| **proxy_requests.payload — 청크 dedup** | **95.2% (264MB)** | message/tool/system 블록 단위. **CAS의 실제 잠재력** |
-| request_payloads.payload — 청크 dedup | 12.6% | 모니터링만 |
-| system_prompts (기존 CAS) | 이미 98.3% 실현 | 신규 CAS 제외 |
+| **proxy_requests.payload — 청크 dedup** | **94.7%** (splitConversation 단위, 2026-07-05 재측정) · 95.2%/264MB (2026-06-30, content-only 초측정) | message/tool/system 블록 단위 = **CAS가 실제 저장하는 단위**. **CAS의 실제 잠재력** |
+| request_payloads.payload — 청크 dedup | 14.4% (재측정) · 12.6%(초측정) | 모니터링만 |
+| system_prompts (기존 CAS) | 이미 95%+ 실현 | 신규 CAS 제외 |
+
+> **측정 단위 정합 (정공법 A, 2026-07-05):** 청크 dedup 측정을 CAS가 실제 저장하는 단위
+> (`chunker.splitConversation` — envelope + system + message 전체객체 + tool)로 통일했다. 초측정(95.2%)은
+> message `content`만 세분화한 이론 상한이었고, 재측정(94.7%)은 실제 CAS 저장 단위 기준이라 profiler
+> 수치 = 실제 CAS 절감이 정합한다(측정 hash 집합 = `artifacts.hash` 집합). 소폭 하락은 envelope 청크가
+> 요청마다 거의 고유(저dedup)하기 때문이며, 절감의 본질(≈95%)은 동일하다.
 
 ## 2. 결정적 발견 — dedup은 "청크 단위"로 측정해야 한다
 
 document(payload 통째) 단위 dedup은 0%지만, 같은 데이터를 message/tool/system **블록**으로
-쪼개 측정하면 **95.2%**가 중복이다. conversation payload가 append 구조라 매 요청이 이전 턴을
-통째로 다시 담기 때문. → **CAS는 레코드가 아니라 청크(Git blob) 단위로 설계해야** 효과가 난다.
-초안 로드맵이 우려한 "CAS 효과 5~10%"는 *document 단위로 봤을 때*의 함정이었다.
+쪼개 측정하면 **94.7%(splitConversation 단위 재측정) / 95.2%(content-only 초측정)**가 중복이다.
+conversation payload가 append 구조라 매 요청이 이전 턴을 통째로 다시 담기 때문. → **CAS는 레코드가
+아니라 청크(Git blob) 단위로 설계해야** 효과가 난다. 초안 로드맵이 우려한 "CAS 효과 5~10%"는
+*document 단위로 봤을 때*의 함정이었다.
 
 ## 3. 발견한 버그 — VACUUM이 한 번도 돌지 않았다
 
@@ -73,7 +80,7 @@ DB를 소유할 때 — 같은 connection 내 VACUUM은 락 경합 없음)에 �
 
 | # | 가설 | 확인 |
 | - | --- | --- |
-| H1 | conversation payload 청크 dedup ≫ document → 청크 CAS가 대부분 제거 | dev 95.2% 확인. **프로덕션 재측정 필요** |
+| H1 | conversation payload 청크 dedup ≫ document → 청크 CAS가 대부분 제거 | dev 94.7%(CAS 실제 단위) 확인. **프로덕션 재측정 필요** |
 | H2 | 16GB 상당 부분은 `auto_vacuum=NONE` + VACUUM no-op로 인한 죽은 freelist | 프로덕션 freelist 측정 |
 | H3 | request_payloads(hook tool output)도 dedup 여지 | 프로덕션 청크 측정 |
 

@@ -19,6 +19,7 @@ import {
   upsertSystemPrompt,
   persistProxyToolUses,
   backfillRequestApiRequestIdByToolUse,
+  storeProxyPayloadChunks,
   type CreateProxyRequestParams,
 } from '@spyglass/storage';
 import type { RequestMeta, StreamState } from '../types';
@@ -106,9 +107,11 @@ function buildPersistArgs(
     metadata_user_id: reqMeta.metadataUserId,
     client_meta_json: ctx.clientMeta,
     // v21: compressed payload / R3: 인코딩 알고리즘은 inbound(encodeBlob)가 결정
+    // v66(CAS): CAS 행이면 payload/payload_algo는 null(청크로 분해), payload_manifest_algo='chunks/v1'.
     payload: ctx.payload,
     payload_raw_size: ctx.payloadRawSize,
     payload_algo: ctx.payloadAlgo ?? null,
+    payload_manifest_algo: ctx.payloadManifestAlgo,
     // v22: system_prompts cross-link
     system_hash: reqMeta.systemHash ?? null,
     system_byte_size: reqMeta.systemByteSize ?? null,
@@ -141,6 +144,12 @@ export function persistProxyRequest(
     args.status_code = statusCode;
     args.response_time_ms = responseTimeMs;
     createProxyRequest(db, args);
+
+    // v66(CAS Phase 3): CAS 행이면 payload 청크를 artifact store + manifest에 적재.
+    //   같은 트랜잭션이라 proxy_requests INSERT와 원자적으로 commit/rollback된다.
+    if (ctx.payloadChunks) {
+      storeProxyPayloadChunks(db, ctx.requestId, ctx.payloadChunks, ctx.startMs);
+    }
 
     // v23 (ADR-001 P1-E): 응답 안의 tool_use 블록 메타를 proxy_tool_uses에 일괄 기록.
     // 이후 hook의 PostToolUse가 tool_use_id로 정확한 api_request_id를 역조회 가능.

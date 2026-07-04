@@ -8,15 +8,19 @@
  *   dev 환경 실측에서 document 0.0% → chunk 95.2%가 확인된 바로 그 측정이다.
  *
  *   청크 추출 정책(content-class별):
- *     - proxy_requests.payload : Anthropic /messages 본문 → system + messages[].content + tools[]
- *     - request_payloads.payload: 훅 JSON → 배열이면 원소별, 객체면 top-level 값별, 그 외 통짜
+ *     - proxy_requests.payload (conversation): **chunker.splitConversation에 위임** — CAS가 실제로
+ *       저장하는 단위(envelope + system + messages[전체객체] + tools)와 동일하게 측정한다. 이렇게 해야
+ *       profiler 수치가 "실제 CAS 절감"을 정직하게 반영한다(정공법 A). 측정 hash 집합 = artifacts.hash 집합.
+ *     - request_payloads.payload (hook): CAS 대상이 아니므로 로컬 extractChunks 유지 — 배열이면
+ *       원소별, 객체면 top-level 값별, 그 외 통짜.
  *
- * @dependencies bun:sqlite, ../../payload-codec, Bun.CryptoHasher
+ * @dependencies bun:sqlite, ../../payload-codec, ../../artifacts(splitConversation/sha256HexBytes)
  * @flow profiler/index.ts → collectChunkDedup(db, key, sampleLimit)
  */
 
 import type { Database } from 'bun:sqlite';
 import { decodeText, decodeBlob } from '../../payload-codec';
+import { splitConversation, sha256HexBytes } from '../../artifacts';
 import type { ChunkDedupMeasure } from '../types';
 
 type ContentClass = 'conversation' | 'hook';
@@ -47,19 +51,18 @@ const TARGETS: ChunkTarget[] = [
 ];
 
 const decoder = new TextDecoder();
-
-function sha256Hex(s: string): string {
-  const h = new Bun.CryptoHasher('sha256');
-  h.update(s);
-  return h.digest('hex');
-}
+const encoder = new TextEncoder();
 
 function isEncrypted(algo: string | null): boolean {
   return algo === 'aes256gcm' || algo === 'zstd+aes256gcm';
 }
 
-/** payload JSON → 청크 문자열 배열. 추출 실패(파싱 불가)는 null. */
-function extractChunks(text: string, cls: ContentClass): string[] | null {
+/**
+ * hook payload(request_payloads) 전용 청킹 — 배열이면 원소별, 객체면 top-level 값별, 그 외 통짜.
+ * conversation 청킹은 chunker.splitConversation이 SSoT(정공법 A) — 여기서 다루지 않는다.
+ * 추출 실패(JSON 파싱 불가)는 null.
+ */
+function extractHookChunks(text: string): string[] | null {
   let obj: unknown;
   try {
     obj = JSON.parse(text);
@@ -68,22 +71,6 @@ function extractChunks(text: string, cls: ContentClass): string[] | null {
   }
 
   const chunks: string[] = [];
-  if (cls === 'conversation' && obj && typeof obj === 'object') {
-    const o = obj as Record<string, unknown>;
-    if (o.system != null) chunks.push(typeof o.system === 'string' ? o.system : JSON.stringify(o.system));
-    if (Array.isArray(o.messages)) {
-      for (const m of o.messages) {
-        const content = (m as Record<string, unknown>)?.content ?? m;
-        chunks.push(typeof content === 'string' ? content : JSON.stringify(content));
-      }
-    }
-    if (Array.isArray(o.tools)) {
-      for (const t of o.tools) chunks.push(JSON.stringify(t));
-    }
-    return chunks;
-  }
-
-  // hook: 배열이면 원소별, 객체면 top-level 값별, 스칼라/그 외는 통짜.
   if (Array.isArray(obj)) {
     for (const el of obj) chunks.push(typeof el === 'string' ? el : JSON.stringify(el));
   } else if (obj && typeof obj === 'object') {
@@ -141,17 +128,23 @@ function measureTarget(
       continue;
     }
 
-    const chunks = extractChunks(text, t.contentClass);
+    // 정공법 A: conversation은 CAS 실제 저장 단위(splitConversation), hook은 로컬 extractHookChunks.
+    const chunks =
+      t.contentClass === 'conversation'
+        ? (splitConversation(text)?.chunks ?? null)
+        : extractHookChunks(text);
     if (chunks == null) {
       parseFailed++;
       continue;
     }
     measuredRows++;
     for (const c of chunks) {
-      const size = Buffer.byteLength(c);
+      // 해시·바이트를 chunker/artifact-store와 동일 함수로 계산 → 측정 hash 집합 = artifacts.hash 집합.
+      const bytes = encoder.encode(c);
+      const size = bytes.byteLength;
       chunkCount++;
       totalChunkBytes += size;
-      const h = sha256Hex(c);
+      const h = sha256HexBytes(bytes);
       if (!uniq.has(h)) uniq.set(h, size);
     }
   }
