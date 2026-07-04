@@ -46,10 +46,20 @@ proxy payload를 청크 단위 content-addressed로 저장(기본 동작, 옵션
   행별 round-trip 검증(`Bun.deepEquals`) 통과분만 payload NULL화. keyset 커서·멱등·배치 트랜잭션.
   **dev DB 397행 전량 전환 완료**(논리 52.4MB→고유 8MB). 프로덕션은 미실행.
 
+## 1-c. Phase 4 — TEXT payload zstd 압축 (코덱 완료)
+
+- `payload-codec.ts` `encodeText`/`decodeText` 확장: 512B 이상 + 압축 이득 있는 TEXT payload를
+  zstd(→base64)로 저장. 마커 `zstd-b64` / `zstd-b64+aes256gcm`(암호화 병행). 마이그레이션 불필요
+  (algo 컬럼 재사용), 기존 평문/AES 행은 passthrough(역호환).
+- 적용 범위: `encodeText`를 쓰는 모든 TEXT 경로 자동 — `claude_events.payload`, `request_payloads.payload`,
+  `system_prompts.content`(CAS dedup + 압축 이중 이득). **신규 쓰기부터** 압축.
+- dev 실측 압축 여지: request_payloads 61.2%(4.99→1.94MB), claude_events 50.1%(0.52→0.26MB).
+- ⚠️ **기존 TEXT payload 백필은 미실행**(선택) — 신규 쓰기만 압축됨. 기존분 압축 실현은 별도 백필 필요.
+
 ## 2. ⚠️ 아직 안 한 것
 
-- **프로덕션 16GB 프로파일링 + 프로덕션 백필** — dev만 검증/전환됨(§4-A).
-- **ZSTD 확대 (Phase 4)** — `requests.payload`·`claude_events.payload`(TEXT 평문) 압축 미착수.
+- **프로덕션 16GB 프로파일링 + 프로덕션 백필**(CAS) — dev만 검증/전환됨(§4-A).
+- **Phase 4 기존 TEXT payload 백필**(선택) — 코덱은 완료, 기존분 압축은 미실행.
 - **ELK/Archive (Phase 5-7)** — 전부 로드맵 위에만 존재.
 
 ## 3. 핵심 측정 결과 (dev 2.5GB — 대표성 없음, 메커니즘 확인용)

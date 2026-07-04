@@ -18,27 +18,60 @@
 
 import { encryptBytes, decryptBytes } from './crypto';
 
-export type PayloadAlgo = 'zstd' | 'aes256gcm' | 'zstd+aes256gcm' | null | undefined;
+export type PayloadAlgo =
+  | 'zstd'
+  | 'aes256gcm'
+  | 'zstd+aes256gcm'
+  // Phase 4 — TEXT 컬럼 압축: zstd(평문)→base64. +aes는 zstd→AES→base64.
+  // BLOB의 'zstd'/'zstd+aes256gcm'과 이름을 구분(-b64)해 decodeText/decodeBlob 분기 혼동을 막는다.
+  | 'zstd-b64'
+  | 'zstd-b64+aes256gcm'
+  | null
+  | undefined;
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+
+/**
+ * TEXT 압축 임계값(byte). 이 미만은 압축하지 않는다 — 짧은 payload는 zstd 프레임 오버헤드로
+ * 오히려 커지고, dedup/조회 이득도 없다. dev 실측상 request_payloads의 상당수가 256B 미만이라
+ * 여유를 둬 512B로 잡는다.
+ */
+const TEXT_COMPRESS_MIN_BYTES = 512;
 
 // =============================================================================
 // TEXT 컬럼 (requests.payload, claude_events.payload, system_prompts.content)
 // =============================================================================
 
-/** 평문 string → 저장값+algo. key 없으면 평문 그대로(기존 동작). */
+/**
+ * 평문 string → 저장값+algo.
+ *  - 512B 이상이고 압축 이득이 있으면 zstd(→base64), key 있으면 zstd→AES(→base64).
+ *  - 그 외에는 기존 동작: key 없으면 평문 그대로(algo null), 있으면 AES(algo 'aes256gcm').
+ * 해시(dedup)는 호출자가 '평문' 기준으로 계산하므로 압축 여부와 무관하다.
+ */
 export function encodeText(
   plain: string,
   key: Buffer | null,
 ): { value: string; algo: PayloadAlgo } {
+  const raw = encoder.encode(plain);
+  if (raw.byteLength >= TEXT_COMPRESS_MIN_BYTES) {
+    const compressed = Bun.zstdCompressSync(raw);
+    // 압축 이득이 있을 때만 압축 경로 채택(랜덤/이미 압축된 데이터는 커질 수 있음).
+    if (compressed.byteLength < raw.byteLength) {
+      if (!key) {
+        return { value: Buffer.from(compressed).toString('base64'), algo: 'zstd-b64' };
+      }
+      const framed = encryptBytes(compressed, key);
+      return { value: Buffer.from(framed).toString('base64'), algo: 'zstd-b64+aes256gcm' };
+    }
+  }
   if (!key) return { value: plain, algo: null };
-  const framed = encryptBytes(encoder.encode(plain), key);
+  const framed = encryptBytes(raw, key);
   return { value: Buffer.from(framed).toString('base64'), algo: 'aes256gcm' };
 }
 
 /**
- * 저장값+algo → 평문 string. 평문/암호문 혼재 모두 처리.
+ * 저장값+algo → 평문 string. 평문/암호문/압축 혼재 모두 처리.
  * algo는 DB 컬럼(string|null)에서 직접 와도 되도록 넓게 받고, 미지원 값은 throw로 검증한다.
  */
 export function decodeText(
@@ -47,13 +80,19 @@ export function decodeText(
   key: Buffer | null,
 ): string | null {
   if (value == null) return value;
-  // TEXT 컬럼의 암호화 마커는 'aes256gcm' 하나뿐. 그 외 값(NULL, 그리고 requests.payload_algo의
-  // 죽은 DEFAULT 'zstd' — 021이 넣었으나 requests.payload는 실제 압축된 적 없는 평문 TEXT)은
-  // 모두 평문으로 간주해 passthrough한다. 'aes256gcm'+키부재만 throw(암호문을 못 읽는 진짜 위험).
+  // 'aes256gcm': base64 → AES 복호. 'zstd-b64': base64 → unzstd. 'zstd-b64+aes256gcm': base64 → AES → unzstd.
+  // 그 외 값(NULL, 그리고 requests.payload_algo의 죽은 DEFAULT 'zstd' — 평문 TEXT)은 평문 passthrough.
+  // 암호화 마커 + 키부재만 throw(암호문을 못 읽는 진짜 위험).
   if (algo === 'aes256gcm') {
     if (!key) throw new Error('decodeText: encrypted value but no key available');
-    const framed = Buffer.from(value, 'base64');
-    return decoder.decode(decryptBytes(framed, key));
+    return decoder.decode(decryptBytes(Buffer.from(value, 'base64'), key));
+  }
+  if (algo === 'zstd-b64') {
+    return decoder.decode(Bun.zstdDecompressSync(Buffer.from(value, 'base64')));
+  }
+  if (algo === 'zstd-b64+aes256gcm') {
+    if (!key) throw new Error('decodeText: encrypted value but no key available');
+    return decoder.decode(Bun.zstdDecompressSync(decryptBytes(Buffer.from(value, 'base64'), key)));
   }
   return value;
 }

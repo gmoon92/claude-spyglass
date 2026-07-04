@@ -60,6 +60,55 @@ describe('TEXT codec (requests/claude_events/system_prompts)', () => {
   });
 });
 
+describe('TEXT codec — zstd 압축 (Phase 4)', () => {
+  // 512B 임계값 이상 + 압축 이득 있는 평문(반복 JSON류).
+  const BIG = JSON.stringify({ log: 'tool output line 반복 '.repeat(80), n: 1 });
+
+  test('큰 평문(key 없음) → zstd-b64 압축 + round-trip', () => {
+    const { value, algo } = encodeText(BIG, null);
+    expect(algo).toBe('zstd-b64');
+    expect(value.length).toBeLessThan(BIG.length); // 실제 압축됨
+    expect(decodeText(value, algo, null)).toBe(BIG);
+  });
+
+  test('큰 평문(key 있음) → zstd-b64+aes256gcm + round-trip + 평문 비노출', () => {
+    const key = generateKey();
+    const { value, algo } = encodeText(BIG, key);
+    expect(algo).toBe('zstd-b64+aes256gcm');
+    expect(value).not.toContain('tool output'); // 평문 노출 없음
+    expect(decodeText(value, algo, key)).toBe(BIG);
+  });
+
+  test('작은 평문(임계값 미만)은 압축 안 함 — 기존 동작 유지', () => {
+    expect(encodeText(SAMPLE, null).algo).toBeNull();            // 평문
+    expect(encodeText(SAMPLE, generateKey()).algo).toBe('aes256gcm'); // AES만
+  });
+
+  test('평문/aes/zstd-b64/zstd-b64+aes 4종 혼재 동시 디코드', () => {
+    const key = generateKey();
+    const rows = [
+      encodeText(SAMPLE, null),   // 평문
+      encodeText(SAMPLE, key),    // aes256gcm
+      encodeText(BIG, null),      // zstd-b64
+      encodeText(BIG, key),       // zstd-b64+aes256gcm
+    ];
+    expect(decodeText(rows[0].value, rows[0].algo, key)).toBe(SAMPLE);
+    expect(decodeText(rows[1].value, rows[1].algo, key)).toBe(SAMPLE);
+    expect(decodeText(rows[2].value, rows[2].algo, key)).toBe(BIG);
+    expect(decodeText(rows[3].value, rows[3].algo, key)).toBe(BIG);
+  });
+
+  test('zstd-b64(암호화 아님)은 key 없이도 복원', () => {
+    const { value, algo } = encodeText(BIG, null);
+    expect(decodeText(value, algo, null)).toBe(BIG);
+  });
+
+  test('zstd-b64+aes256gcm을 key 없이 디코드하면 예외(silent corruption 방지)', () => {
+    const { value, algo } = encodeText(BIG, generateKey());
+    expect(() => decodeText(value, algo, null)).toThrow();
+  });
+});
+
 describe('BLOB codec (proxy_requests.payload)', () => {
   const raw = enc.encode(SAMPLE);
 
