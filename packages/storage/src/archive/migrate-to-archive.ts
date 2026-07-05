@@ -21,18 +21,37 @@ import type { Database, SQLQueryBindings } from 'bun:sqlite';
 import { insertArchiveIndexRows, type ArchiveIndexRow } from './archive-index';
 import type { ArchiveStore } from './archive-store';
 
-/** 이주 대상 테이블 명세. row_id/ts/session/type 컬럼 매핑. */
+/** 이주 대상 테이블 명세. row_id/ts/session/type 컬럼 매핑 + off-row body JOIN/삭제 옵션. */
 interface ArchiveTableSpec {
   table: string;
   rowIdCol: string;
   tsCol: string;
   sessionCol: string | null;
   typeCol: string | null;
+  /** off-row body 컬럼 SELECT 추가(예: ', rp.payload AS __payload'). 별칭은 __ 접두(재구성 마커). */
+  selectExtra?: string;
+  /** off-row body JOIN(예: ' LEFT JOIN request_payloads rp ON rp.request_id = requests.id'). */
+  fromExtra?: string;
+  /** 함께 삭제할 off-row 테이블(예: request_payloads). FK로 대상 행과 함께 Hot에서 제거. */
+  extraDelete?: { table: string; fkCol: string };
 }
 
-// 1차: claude_events만. SPECS에 추가하면 다른 테이블로 확장(requests/sessions는 관계 정합 검토 후).
+// claude_events(독립) + requests(+request_payloads off-row body). sessions는 자식 관계 정합 검토 후 추가.
+// proxy_requests는 CAS ref_count 때문에 제외(ADR A7).
 const SPECS: readonly ArchiveTableSpec[] = [
   { table: 'claude_events', rowIdCol: 'event_id', tsCol: 'timestamp', sessionCol: 'session_id', typeCol: 'event_type' },
+  {
+    table: 'requests',
+    rowIdCol: 'id',
+    tsCol: 'timestamp',
+    sessionCol: 'session_id',
+    typeCol: 'type',
+    // request_payloads는 off-row 저장(migration 061-063). archive 라인에 인코딩 형태 그대로 인라인
+    // (평문 디코드 안 함 — 암호화/압축 저장 형태 보존, 조회 시 decodeText가 payload_algo로 복원).
+    selectExtra: ', rp.payload AS __payload, rp.payload_algo AS __payload_algo',
+    fromExtra: ' LEFT JOIN request_payloads rp ON rp.request_id = requests.id',
+    extraDelete: { table: 'request_payloads', fkCol: 'request_id' },
+  },
 ];
 
 export interface ArchiveResult {
@@ -85,11 +104,13 @@ function archiveTable(
   result: ArchiveResult,
 ): void {
   // keyset 커서((ts,rowId)) — offset 회피(이주로 대상이 사라져 offset이 어긋남).
+  // JOIN(off-row body) 시 컬럼 모호성 방지 위해 테이블명 프리픽스.
+  const t = spec.table;
   const sql = `
-    SELECT * FROM ${spec.table}
-    WHERE ${spec.tsCol} < ?
-      AND (${spec.tsCol} > ? OR (${spec.tsCol} = ? AND ${spec.rowIdCol} > ?))
-    ORDER BY ${spec.tsCol} ASC, ${spec.rowIdCol} ASC
+    SELECT ${t}.*${spec.selectExtra ?? ''} FROM ${t}${spec.fromExtra ?? ''}
+    WHERE ${t}.${spec.tsCol} < ?
+      AND (${t}.${spec.tsCol} > ? OR (${t}.${spec.tsCol} = ? AND ${t}.${spec.rowIdCol} > ?))
+    ORDER BY ${t}.${spec.tsCol} ASC, ${t}.${spec.rowIdCol} ASC
     LIMIT ?
   `;
   const stmt = db.query(sql);
@@ -136,6 +157,10 @@ function archiveTable(
       for (const [, g] of byFile) {
         insertArchiveIndexRows(db, g.index);
         const placeholders = g.ids.map(() => '?').join(',');
+        // off-row body(request_payloads 등) 먼저 삭제 — FK 무결성(부모 삭제 전 자식 정리).
+        if (spec.extraDelete) {
+          db.run(`DELETE FROM ${spec.extraDelete.table} WHERE ${spec.extraDelete.fkCol} IN (${placeholders})`, g.ids);
+        }
         db.run(`DELETE FROM ${spec.table} WHERE ${spec.rowIdCol} IN (${placeholders})`, g.ids);
       }
     })();

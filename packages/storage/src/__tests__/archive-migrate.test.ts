@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Database } from 'bun:sqlite';
 import { runMigrations } from '../migrator';
+import { createRequest } from '../queries/request/write';
 import { FileArchiveStore, type ArchiveStore } from '../archive/archive-store';
 import { getArchiveIndexRows } from '../archive/archive-index';
 import { archiveOldData } from '../archive/migrate-to-archive';
@@ -104,5 +105,39 @@ describe('archiveOldData — claude_events', () => {
     archiveOldData(db, { safeArchiveTs: DAY * 20, store });
     const files = new Set(getArchiveIndexRows(db, 'claude_events').map((x) => x.archive_file));
     expect(files.size).toBe(2); // day10, day11
+  });
+});
+
+describe('archiveOldData — requests (+ request_payloads off-row body)', () => {
+  function seedRequest(id: string, ts: number, body: string): void {
+    createRequest(db, {
+      id, session_id: 's1', timestamp: ts, type: 'prompt', event_type: '',
+      payload: body, tokens_input: 0, tokens_output: 0, tokens_total: 0,
+    });
+  }
+  function reqCount(): number {
+    return (db.query('SELECT COUNT(*) AS n FROM requests').get() as { n: number }).n;
+  }
+  function payloadCount(): number {
+    return (db.query('SELECT COUNT(*) AS n FROM request_payloads').get() as { n: number }).n;
+  }
+
+  test('requests 이주 + request_payloads 동시 삭제 + body 인라인 round-trip', () => {
+    seedRequest('r1', DAY * 10, '{"prompt":"오래된 요청 본문"}');
+    seedRequest('r2', DAY * 50, '{"prompt":"최신"}'); // 이주 대상 아님
+    expect(payloadCount()).toBe(2);
+
+    const r = archiveOldData(db, { safeArchiveTs: DAY * 20, store });
+    expect(r.byTable.requests).toBe(1);
+    expect(reqCount()).toBe(1);       // r2만 남음
+    expect(payloadCount()).toBe(1);   // r1의 request_payloads 함께 삭제
+
+    // archive 라인에 off-row body가 __payload로 인라인됨
+    const idx = getArchiveIndexRows(db, 'requests');
+    expect(idx.map((x) => x.row_id)).toEqual(['r1']);
+    const line = JSON.parse(store.readDay(idx[0].archive_file)[0]);
+    expect(line.id).toBe('r1');
+    expect(line.__payload).toContain('오래된 요청 본문'); // 저장 형태(평문 TEXT) 보존
+    expect(line.type).toBe('prompt');
   });
 });
