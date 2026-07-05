@@ -29,3 +29,9 @@ export {
   floorToUtcDay,
   computeSafeArchiveTs,
 } from './flush-gate';
+
+export {
+  archiveOldData,
+  type ArchiveResult,
+  type ArchiveOptions,
+} from './migrate-to-archive';

@@ -381,10 +381,13 @@ export {
   getOldestUnflushedTs,
   floorToUtcDay,
   computeSafeArchiveTs,
+  archiveOldData,
   type ArchiveIndexRow,
   type ArchiveIndexQuery,
   type PartitionedQuery,
   type ArchiveStore,
+  type ArchiveResult,
+  type ArchiveOptions,
 } from './archive';
 
 // 디스크 가드 (서버 diag-log·maintenance + hook 이 동일 임계치 참조하는 SoT)
