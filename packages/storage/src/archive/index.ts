@@ -18,3 +18,14 @@ export {
   queryPartitioned,
   type PartitionedQuery,
 } from './partition-router';
+
+export {
+  FileArchiveStore,
+  type ArchiveStore,
+} from './archive-store';
+
+export {
+  getOldestUnflushedTs,
+  floorToUtcDay,
+  computeSafeArchiveTs,
+} from './flush-gate';
