@@ -204,6 +204,10 @@ export const SCHEMA_META = {
     // v66: CAS Artifact Layer (066-artifacts.sql)
     'artifacts',
     'proxy_request_chunks',
+    // v67: Archive/ELK Layer (067-archive-index.sql)
+    'archive_index',
+    'archive_stats_hourly',
+    'archive_stats_proxy_hourly',
   ],
   indexes: [
     'idx_sessions_started_at',
@@ -223,5 +227,11 @@ export const SCHEMA_META = {
     'idx_artifacts_last_seen',
     'idx_artifacts_ref_count',
     'idx_prc_chunk_hash',
+    // v67: Archive/ELK Layer (067-archive-index.sql)
+    'idx_archive_index_ts',
+    'idx_archive_index_session',
+    'idx_archive_index_file',
+    'idx_archive_stats_hourly_ts',
+    'idx_archive_stats_proxy_hourly_ts',
   ],
 } as const;

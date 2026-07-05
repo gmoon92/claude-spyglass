@@ -360,10 +360,27 @@ export {
   DEFAULT_RETENTION_DAYS,
   getRetentionDays,
   getRetentionCutoffTs,
+  getArchiveDays,
+  getArchiveCutoffTs,
   DEFAULT_RAW_LOG_RETENTION_DAYS,
   getRawLogRetentionDays,
   getRawLogRetentionCutoffTs,
 } from './runtime/retention';
+
+// =============================================================================
+// Archive/ELK Layer (roadmap Phase 5-7) — archive_index CRUD + Hot/Archive 병합 라우터
+// =============================================================================
+
+export {
+  insertArchiveIndexRows,
+  archiveHasRowsInRange,
+  getArchiveIndexRows,
+  deleteArchiveIndexByFile,
+  queryPartitioned,
+  type ArchiveIndexRow,
+  type ArchiveIndexQuery,
+  type PartitionedQuery,
+} from './archive';
 
 // 디스크 가드 (서버 diag-log·maintenance + hook 이 동일 임계치 참조하는 SoT)
 export {

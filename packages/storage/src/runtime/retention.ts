@@ -45,6 +45,38 @@ export function getRetentionCutoffTs(now: number = Date.now()): number {
   return now - getRetentionDays() * 24 * 60 * 60 * 1000;
 }
 
+// =============================================================================
+// Archive/ELK 경계 (roadmap Phase 5-7, ADR storage-evolution-adr-archive.md A2)
+// =============================================================================
+
+/**
+ * Warm Archive 경계 일수. **미설정이 기본 = 이주 비활성**(null).
+ *
+ * retention(삭제)과 달리 archive 이주는 파괴적(Hot DELETE 동반)이고 경계값 N은 로드맵상
+ * 프로덕션 실측으로 정해야 하므로, `SPYGLASS_ARCHIVE_DAYS`가 명시될 때만 활성화한다.
+ * 유효 조건: 정수 && `0 < N < retentionDays`(retention 이내여야 Warm 구간이 성립).
+ * 그 외(미설정/음수/0/retention 이상/non-numeric)는 null → 이주 안 함(읽기 병합은 항상 동작).
+ *
+ * @returns 경계 일수 또는 null(비활성)
+ */
+export function getArchiveDays(): number | null {
+  const raw = parseInt(process.env.SPYGLASS_ARCHIVE_DAYS ?? '', 10);
+  if (!Number.isFinite(raw) || raw <= 0) return null;
+  return raw < getRetentionDays() ? raw : null;
+}
+
+/**
+ * Archive 경계 타임스탬프(ms). 이 시각 이전(&& retention 이후 생존) 데이터가 이주 후보.
+ * 비활성이면 null. `now` 인자는 테스트 결정론용.
+ *
+ * ⚠️ UTC 일 경계 floor(파일=하루, hour 버킷 무분할 불변식)는 이주 로직(단계2)이 적용한다 —
+ *    여기서는 raw 경계만 반환.
+ */
+export function getArchiveCutoffTs(now: number = Date.now()): number | null {
+  const days = getArchiveDays();
+  return days == null ? null : now - days * 24 * 60 * 60 * 1000;
+}
+
 /**
  * 파일 로그 버킷(`~/.spyglass/logs/{hook-raw,server,collect}/YYYY-MM-DD.*`) 보존 기간 기본값.
  *
