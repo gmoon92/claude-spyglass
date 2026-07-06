@@ -17,7 +17,7 @@ import { join } from 'node:path';
 import { Database } from 'bun:sqlite';
 import { runMigrations } from '../migrator';
 import { createRequest } from '../queries/request/write';
-import { getAllRequests } from '../queries/request/read';
+import { getAllRequests, getRequestsByType } from '../queries/request/read';
 import { archiveOldData } from '../archive/migrate-to-archive';
 import { FileArchiveStore, getArchiveDir } from '../archive';
 
@@ -89,5 +89,29 @@ describe('getAllRequests — 이주 전/후 동일 (회귀 가드)', () => {
     seed('y', DAY * 11);
     const rows = getAllRequests(db, 100);
     expect(rows.map((r) => r.id)).toEqual(['y', 'x']);
+  });
+});
+
+describe('getRequestsByType — 병합 + type 필터 + offset', () => {
+  test('이주 전/후 동일 (type 필터·offset 통합 정확)', () => {
+    seed('t1', DAY * 10, { toolName: 'Read' });
+    seed('t2', DAY * 11, { toolName: 'Bash' });
+    seed('t3', DAY * 50, { toolName: 'Read' });
+    const before = getRequestsByType(db, 'tool_call', 100);
+    expect(before.map((r) => r.id)).toEqual(['t3', 't2', 't1']);
+
+    archiveOldData(db, { safeArchiveTs: DAY * 20, store }); // t1,t2 이주
+    const after = getRequestsByType(db, 'tool_call', 100);
+    expect(after.map((r) => r.id)).toEqual(['t3', 't2', 't1']); // 병합 동일
+    expect(after).toEqual(before);
+  });
+
+  test('offset은 Hot+Archive 통합 순서 기준', () => {
+    seed('a', DAY * 10);
+    seed('b', DAY * 11);
+    seed('c', DAY * 50);
+    archiveOldData(db, { safeArchiveTs: DAY * 20, store }); // a,b 이주
+    // 전체 DESC: c,b,a. offset=1,limit=1 → b
+    expect(getRequestsByType(db, 'tool_call', 1, 1).map((r) => r.id)).toEqual(['b']);
   });
 });

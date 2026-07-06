@@ -202,10 +202,22 @@ export function getRequestsByType(
   const params: (string | number)[] = [type];
   if (fromTs !== undefined) { conditions.push('timestamp >= ?'); params.push(fromTs); }
   if (toTs   !== undefined) { conditions.push('timestamp <= ?'); params.push(toTs); }
-  params.push(limit, offset);
-  return decodeRequestRows(db.query(
-    `SELECT * FROM requests WHERE ${conditions.join(' AND ')} ORDER BY timestamp DESC LIMIT ? OFFSET ?`
-  ).all(...params) as RequestQueryResult[]);
+  // offset은 Hot+Archive 통합 순서 기준 → cap(limit+offset)개를 병합 후 slice(offset). archive_index
+  // 비면 merged=hot(cap개) → slice가 기존 LIMIT/OFFSET과 동일(무변경).
+  const cap = limit + offset;
+  const merged = queryPartitioned<RequestQueryResult>(db, {
+    srcTable: 'requests',
+    fromTs: fromTs ?? null,
+    boundaryTs: toTs ?? null,
+    limit: cap,
+    order: 'DESC',
+    hotQuery: () =>
+      db.query(`SELECT * FROM requests WHERE ${conditions.join(' AND ')} ORDER BY timestamp DESC LIMIT ?`)
+        .all(...params, cap) as RequestQueryResult[],
+    loadArchive: (idx) => loadRequestArchiveRows(db, idx).filter((r) => r.type === type),
+    tsOf: (r) => r.timestamp,
+  });
+  return decodeRequestRows(merged.slice(offset, offset + limit));
 }
 
 /**
