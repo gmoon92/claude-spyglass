@@ -382,6 +382,8 @@ export {
   floorToUtcDay,
   computeSafeArchiveTs,
   archiveOldData,
+  getArchiveDir,
+  loadArchiveRows,
   type ArchiveIndexRow,
   type ArchiveIndexQuery,
   type PartitionedQuery,

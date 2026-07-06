@@ -20,8 +20,14 @@ import {
   getRawLogRetentionDays,
   getRawLogRetentionCutoffTs,
   getDiskStatus,
+  getArchiveCutoffTs,
+  getOldestUnflushedTs,
+  computeSafeArchiveTs,
+  archiveOldData,
+  FileArchiveStore,
+  getArchiveDir,
 } from '@spyglass/storage';
-import { deleteOldGraphData } from '@spyglass/storage-graph';
+import { deleteOldGraphData, getSyncCursor } from '@spyglass/storage-graph';
 import { PRUNE_TARGETS, LEGACY_FLAT_LOGS } from './log-paths';
 
 const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000; // 1시간마다 조건 체크
@@ -134,6 +140,10 @@ export interface CleanupResult {
  *   3) 로그 버킷 정리 (server·collect·hook-raw) + 레거시 평탄 파일 제거 — 실패는 흡수
  */
 export async function runCleanupNow(database: SpyglassDatabase): Promise<CleanupResult> {
+  // 0) Archive 이주 (선택 — SPYGLASS_ARCHIVE_DAYS 설정 시에만). retention 삭제 '앞'에서 Hot→Warm 이동.
+  //    best-effort: 실패는 흡수(자동업데이트·retention 체인 안 깨짐, vacuum.ts 정신).
+  archiveOldDataIfEnabled(database);
+
   const retentionDays = getRetentionDays();
   const cutoff = getRetentionCutoffTs();
   // 실제 DB 경로를 함께 넘겨 full VACUUM의 임시 공간 disk 가드가 올바른 파일시스템을 보게 한다.
@@ -161,6 +171,31 @@ export async function runCleanupNow(database: SpyglassDatabase): Promise<Cleanup
     prunedLogBuckets,
     logRetentionDays: getRawLogRetentionDays(),
   };
+}
+
+/**
+ * Archive 이주 스텝 — `SPYGLASS_ARCHIVE_DAYS` 설정 시에만 Hot→Warm 이동(ADR A1·A3).
+ *
+ * 안전 게이트:
+ *  - getArchiveCutoffTs()가 null(미설정/무효)이면 즉시 반환 — 기본 비활성.
+ *  - graph flush cursor를 통과(getOldestUnflushedTs)한 데이터만 이주(미-flush 이주 시 Ladybug 투영 누락).
+ *  - best-effort: 실패는 흡수(retention/자동업데이트 체인 보호).
+ */
+function archiveOldDataIfEnabled(database: SpyglassDatabase): void {
+  const archiveCutoff = getArchiveCutoffTs();
+  if (archiveCutoff == null) return; // 비활성(기본)
+  try {
+    const db = database.instance;
+    const cursor = getSyncCursor().current; // 마지막으로 graph flush된 outbox id
+    const safeTs = computeSafeArchiveTs(archiveCutoff, getOldestUnflushedTs(db, cursor));
+    const store = new FileArchiveStore(getArchiveDir(db));
+    const r = archiveOldData(db, { safeArchiveTs: safeTs, store });
+    if (r.archived > 0) {
+      console.log(`[Maintenance] archived ${r.archived} rows to Warm`, r.byTable);
+    }
+  } catch (err) {
+    console.warn('[Maintenance] archive migration skipped:', err);
+  }
 }
 
 /**
