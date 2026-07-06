@@ -17,27 +17,25 @@
 
 ---
 
-## 1. 바로 다음 할 일 — Phase 5-7 단계 2 마무리 (내일)
+## 1. 바로 다음 할 일 — Phase 5-7 단계 2 마무리
 
-빌딩블록(FileArchiveStore·flush-gate·archive-index·partition-router)과 이주 코어(`archiveOldData`,
-claude_events+requests)는 완료(progress 문서). **남은 3가지**를 이으면 단계 2 완성:
+빌딩블록·이주 코어(claude_events+requests)·**getAllRequests/getRequestsByType 조회 병합**·**maintenance 배선**은 완료(progress 문서, 커밋 `2efda62`·`7ed2e52`·`058fe46`). **남은 것**을 이으면 단계 2 완성:
 
-### (1) 조회/집계 병합 — `queryPartitioned`에 `loadArchive` 연결 (⚠️ 회귀 위험 큼)
-Archive된 행이 UI에서 다시 보이도록 Hot+Archive를 투명 병합한다(ADR A8). **레거시 조회를 깨지 않도록 최우선 회귀 가드.**
-- 전제: `getArchiveDir()` 헬퍼 신규(`connection.ts`, `DB_PATH` dirname + `/archive`) — 조회 시 `FileArchiveStore` 생성용.
-- `queries/request/read.ts:getAllRequests`·`getRequestsByType`, `queries/request/conversation.ts:getConversationRows`를 `queryPartitioned` 경유로. `loadArchive(indexRows)` = 파일별 `FileArchiveStore.readDay` → `JSON.parse` → `__payload/__payload_algo` 제거(목록) 또는 `request_payloads` 재구성(대화, `decodeText` 복호). `tsOf`/`order`로 정렬·limit 재적용.
-- 집계 `queries/request/aggregate-general.ts`·`queries/proxy-stats.ts`: `FROM stats_hourly`를 `stats_hourly UNION ALL archive_stats_hourly`로(가법성 exact, ADR A6). **P95**(`aggregate-latency.ts`)만 `archive_stats_hourly.duration_ms_sketch`(t-digest, 단계2에서 채움) 병합 — ε 근사.
-- **회귀 가드**: 이주 전/후 `getAllRequests`·`getConversationRows` 결과 동일(정렬·limit·truncation) / 집계 exact / 레거시(archive 빈) 무변경.
+### (1) 나머지 조회 병합 (⚠️ 활성화 전 필수 — 미병합 조회는 archive 데이터 누락)
+`getAllRequests`/`getRequestsByType` 병합 패턴(`queryPartitioned` + `loadArchive` + `loadRequestArchiveRows` + `isActiveRequest`, `read.ts`)을 나머지 조회에 확장:
+- **`getConversationRows`**(`queries/request/conversation.ts`, ⚠️ 최난): payload 포함(대화 본문) → archive 라인 `__payload`를 `request_payloads` 형태로 재구성 + `decodeText` 복호. sessions JOIN(sessions 미이주라 Hot에 있음). 정렬 `session_id ASC, timestamp ASC` linear merge + `limit+1` truncation 유지.
+- **`getRequestsBySession`**·**events**(`getEventsBySession`·`getRecentEvents`·`getEventsByType`, `queries/event.ts`): claude_events 이주 대상 → session/type 기반 병합(range 아님 → router 확장 or 전용 로더). archive_index의 `session_id`/`src_table='claude_events'` 인덱스 활용.
+- **집계 UNION**(`aggregate-general.ts`·`proxy-stats.ts`): `FROM stats_hourly` → `stats_hourly UNION ALL archive_stats_hourly`(가법성 exact, ADR A6). **P95**(`aggregate-latency.ts`)만 `archive_stats_hourly.duration_ms_sketch`(t-digest) 병합 — 이주 시 스케치 생성도 함께 구현.
+- **회귀 가드**: 각 조회 이주 전/후 동일(`archive-query-merge.test.ts` 패턴 확장) / 집계 exact / 레거시(archive 빈) 무변경.
 
-### (2) maintenance 배선 — 이주를 일일 유지보수에 연결
-- `server/src/runtime/maintenance.ts:runCleanupNow`에서 retention **앞에** 이주 스텝 추가: `getArchiveCutoffTs()`(null이면 skip) + `getOldestUnflushedTs(db, cursor)`(SyncCursor는 `storage-graph` `getSyncCursor().load()`로 조달) → `computeSafeArchiveTs` → `archiveOldData(db, {safeArchiveTs, store: new FileArchiveStore(getArchiveDir())})`.
-- **회귀 가드**: `SPYGLASS_ARCHIVE_DAYS` 미설정 시 기존 retention 동작 동일 / 활성 시 이주 후 retention 정상.
+### (2) sessions 이주 대상 추가 — `archiveOldData` SPECS
+`sessions`(started_at)를 SPECS에 추가하되 **자식 관계 정합** 검토: retention은 "자식 없는 세션만 삭제". archive도 Hot 자식(requests/events)이 남은 세션 메타는 남겨야 조회 성립 → 이주 조건에 자식 부재 or 세션 메타 항상 Hot 유지 결정. proxy_requests는 CAS ref_count로 계속 제외(ADR A7).
 
-### (3) sessions 이주 대상 추가 — `archiveOldData` SPECS
-- `sessions`(started_at 기준)를 SPECS에 추가하되 **자식 관계 정합** 검토: retention은 "자식 없는 세션만 삭제". archive도 Hot 자식(requests/events)이 남은 세션은 메타를 남겨야 조회가 성립 → 이주 조건에 자식 부재(또는 세션 메타는 항상 Hot 유지) 결정 필요. proxy_requests는 CAS ref_count 때문에 계속 제외(ADR A7).
+### (3) archive retention GC — archive 파일/index도 retention 도달 시 삭제 (ADR A1)
+현재 이주만 하고 archive 파일의 retention 삭제가 없어 **무한 축적** 위험. `retention.ts`(또는 maintenance)에서 `timestamp < retentionCutoff`인 archive_index 행 + 해당 archive 파일 삭제. proxy CAS 행 이주 시 artifact ref_count 차감도 여기서.
 
 ### 활성화(프로덕션) 조건
-위 3가지 + 프로덕션 실측 후 `SPYGLASS_ARCHIVE_DAYS` 설정(0 < N < retention 30). dev 검증: 설정 → 일일 유지보수 1회 → archive_index/파일 확인 → 조회 병합 결과 = 이주 전 동일.
+위 (1)~(3) + 프로덕션 실측 후 `SPYGLASS_ARCHIVE_DAYS` 설정(0 < N < retention 30). dev 검증: 파일 기반 DB에 설정 → `runCleanupNow` 1회 → archive_index/파일 확인 → 모든 조회 병합 결과 = 이주 전 동일.
 
 ## 2. 그 밖에 남은 것 (선택/후속)
 - **프로덕션 16GB 프로파일링 + CAS 대량 백필** — dev만 검증/전환됨. 절차는 progress 문서의 CAS 섹션 + CLI 헤더(`scripts/backfill-proxy-cas.ts` `--dry-run`→`--limit`→전체). 백필 후 CAS 행 읽기는 서버가 reconstruct 커밋 이상이어야.

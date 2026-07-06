@@ -33,8 +33,11 @@
 - **단계 1 인프라** `e44f912` — `migrations/067`(archive_index + archive_stats_hourly/proxy) + `src/archive/{archive-index, partition-router}` + `runtime/retention.ts:getArchiveDays/getArchiveCutoffTs`(미설정=비활성).
 - **단계 2 빌딩블록** `773bdaa` — `archive/{archive-store(FileArchiveStore), flush-gate(getOldestUnflushedTs/computeSafeArchiveTs)}`.
 - **단계 2 이주 코어** `91e4693`(claude_events) · `9b046b5`(requests +request_payloads off-row body) — `archive/migrate-to-archive.ts:archiveOldData`(SPECS 배열, keyset·round-trip·파일→DB 트랜잭션 원자).
+- **단계 2 조회 병합** `2efda62`(getAllRequests) · `7ed2e52`(getRequestsByType) — `partition-router`에 `loadArchive` 연결. `load-archive-rows.ts`(getArchiveDir + loadArchiveRows), read.ts `isActiveRequest`(필터 JS 미러). 이주 전/후 결과 동일(정렬·limit·offset·필터) 회귀 가드.
+- **단계 2 배선** `058fe46` — `server/runtime/maintenance.ts:runCleanupNow`에 이주 스텝(retention 앞). `getSyncCursor().current` flush 게이트 → `computeSafeArchiveTs` → `archiveOldData`. best-effort, env 미설정 시 무동작.
 
-**안전 상태**: 전부 additive, **이주 비활성**(`SPYGLASS_ARCHIVE_DAYS` 미설정 + 배선 안 됨) → 현재 동작 완전 무변경. **남은 단계 2(조회 병합·배선·sessions 이주)는 handoff 참조.**
+**안전 상태**: 전부 additive, **이주 비활성**(`SPYGLASS_ARCHIVE_DAYS` 미설정) → 현재 동작 완전 무변경.
+**⚠️ 프로덕션 활성화 전 남은 조회 병합 필수**(미병합 조회는 archive 데이터 누락) — handoff 참조.
 
 ## 변경 파일 인덱스 (누적)
 ```
