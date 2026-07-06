@@ -35,3 +35,8 @@ export {
   type ArchiveResult,
   type ArchiveOptions,
 } from './migrate-to-archive';
+
+export {
+  getArchiveDir,
+  loadArchiveRows,
+} from './load-archive-rows';

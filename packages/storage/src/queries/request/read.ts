@@ -16,6 +16,7 @@ import type { Database } from 'bun:sqlite';
 import type { Request, RequestType } from '../../schema';
 import { decodeText } from '../../payload-codec';
 import { getActiveKey } from '../../runtime/encryption';
+import { queryPartitioned, getArchiveDir, loadArchiveRows, FileArchiveStore } from '../../archive';
 
 /**
  * R3: requests.payload를 payload_algo 분기로, preview를 preview_algo 분기로 서버측 복호(평문/암호문 혼재).
@@ -62,6 +63,36 @@ export function decodeRequestRows<T extends DecodableRequestRow>(rows: T[]): T[]
  */
 export const ACTIVE_REQUEST_FILTER_SQL =
   "(event_type IS NULL OR event_type != 'pre_tool' OR tool_name = 'Agent')";
+
+/**
+ * ACTIVE_REQUEST_FILTER_SQL의 JS 미러 — Archive 병합 시 파일에서 로드한 행에 같은 가시성 정책을
+ * 적용한다(SQL은 Hot, JS는 Archive). 두 표현을 같은 파일에 나란히 둬 정책 변경을 한 곳에서 관리.
+ */
+export function isActiveRequest(row: { event_type?: string | null; tool_name?: string | null }): boolean {
+  return row.event_type == null || row.event_type !== 'pre_tool' || row.tool_name === 'Agent';
+}
+
+/**
+ * Archive된 requests 행 로드(range 내 archive_index → 파일). __payload/__payload_algo(off-row body
+ * 인라인 마커) 제거 + isActiveRequest 필터 적용 → Hot raw 행과 동일 형태(decode 전). 병합 후
+ * decodeRequestRows가 일괄 복호한다.
+ */
+function loadRequestArchiveRows(
+  db: Database,
+  indexRows: { archive_file: string; row_id: string }[],
+): RequestQueryResult[] {
+  const store = new FileArchiveStore(getArchiveDir(db));
+  const rows = loadArchiveRows(store, indexRows as never, 'id');
+  const out: RequestQueryResult[] = [];
+  for (const row of rows) {
+    delete (row as Record<string, unknown>).__payload;
+    delete (row as Record<string, unknown>).__payload_algo;
+    if (isActiveRequest(row as { event_type?: string | null; tool_name?: string | null })) {
+      out.push(row as unknown as RequestQueryResult);
+    }
+  }
+  return out;
+}
 
 // =============================================================================
 // 타입
@@ -122,8 +153,20 @@ export function getAllRequests(
   if (fromTs) { conditions.push('timestamp >= ?'); params.push(fromTs); }
   if (toTs)   { conditions.push('timestamp <= ?'); params.push(toTs); }
   const where = `WHERE ${conditions.join(' AND ')}`;
-  return decodeRequestRows(db.query(`SELECT * FROM requests ${where} ORDER BY timestamp DESC LIMIT ?`)
-    .all(...params, limit) as RequestQueryResult[]);
+  // Hot(raw) + Archive(raw) 병합 후 일괄 decode. archive_index 비면 Hot-only(무변경).
+  const merged = queryPartitioned<RequestQueryResult>(db, {
+    srcTable: 'requests',
+    fromTs: fromTs ?? null,
+    boundaryTs: toTs ?? null,
+    limit,
+    order: 'DESC',
+    hotQuery: () =>
+      db.query(`SELECT * FROM requests ${where} ORDER BY timestamp DESC LIMIT ?`)
+        .all(...params, limit) as RequestQueryResult[],
+    loadArchive: (idx) => loadRequestArchiveRows(db, idx),
+    tsOf: (r) => r.timestamp,
+  });
+  return decodeRequestRows(merged);
 }
 
 /**
