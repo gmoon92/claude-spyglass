@@ -19,14 +19,13 @@
 
 ## 1. 바로 다음 할 일 — Phase 5-7 단계 2 마무리
 
-빌딩블록·이주 코어(claude_events+requests)·**getAllRequests/getRequestsByType 조회 병합**·**maintenance 배선**은 완료(progress 문서, 커밋 `2efda62`·`7ed2e52`·`058fe46`). **남은 것**을 이으면 단계 2 완성:
+빌딩블록·이주 코어(claude_events+requests)·**조회 병합(getAllRequests·byType·bySession·conversation·events 완료)**·**maintenance 배선**은 완료(progress 문서). **남은 것**을 이으면 단계 2 완성:
 
-### (1) 나머지 조회 병합 (⚠️ 활성화 전 필수 — 미병합 조회는 archive 데이터 누락)
-`getAllRequests`/`getRequestsByType` 병합 패턴(`queryPartitioned` + `loadArchive` + `loadRequestArchiveRows` + `isActiveRequest`, `read.ts`)을 나머지 조회에 확장:
-- **`getConversationRows`**(`queries/request/conversation.ts`, ⚠️ 최난): payload 포함(대화 본문) → archive 라인 `__payload`를 `request_payloads` 형태로 재구성 + `decodeText` 복호. sessions JOIN(sessions 미이주라 Hot에 있음). 정렬 `session_id ASC, timestamp ASC` linear merge + `limit+1` truncation 유지.
-- **`getRequestsBySession`**·**events**(`getEventsBySession`·`getRecentEvents`·`getEventsByType`, `queries/event.ts`): claude_events 이주 대상 → session/type 기반 병합(range 아님 → router 확장 or 전용 로더). archive_index의 `session_id`/`src_table='claude_events'` 인덱스 활용.
-- **집계 UNION**(`aggregate-general.ts`·`proxy-stats.ts`): `FROM stats_hourly` → `stats_hourly UNION ALL archive_stats_hourly`(가법성 exact, ADR A6). **P95**(`aggregate-latency.ts`)만 `archive_stats_hourly.duration_ms_sketch`(t-digest) 병합 — 이주 시 스케치 생성도 함께 구현.
-- **회귀 가드**: 각 조회 이주 전/후 동일(`archive-query-merge.test.ts` 패턴 확장) / 집계 exact / 레거시(archive 빈) 무변경.
+### (1) 집계 조회 병합 — stats 버킷 이주 + UNION (⚠️ 활성화 전 필수)
+requests/events 조회 병합은 완료. **남은 조회는 집계뿐**:
+- **stats 버킷 이주** — `archiveOldData`(또는 별도)가 safeArchiveTs 이전 `stats_hourly`/`stats_proxy_hourly` hour 버킷을 `archive_stats_hourly`/`archive_stats_proxy_hourly`로 INSERT+DELETE(가법 컬럼 그대로). **P95 스케치**: 이주 시 해당 hour의 `requests.duration_ms`로 t-digest 만들어 `archive_stats_hourly.duration_ms_sketch`에 저장. hour 버킷은 UTC일 경계 floor(A4)라 분할 안 됨.
+- **집계 UNION 조회**(`aggregate-general.ts`·`proxy-stats.ts`·`aggregate-cache.ts`): `FROM stats_hourly` → `(SELECT ... FROM stats_hourly UNION ALL SELECT ... FROM archive_stats_hourly)`. sum/count 가법이라 UNION 후 SUM=원본 SUM exact(ADR A6, 가중치 코드 불요). **P95**(`aggregate-latency.ts`)만 Hot 원행 P95 + archive 스케치 병합(ε 근사).
+- **회귀 가드**: 집계 이주 전/후 exact(sum/count) / P95 ε / archive 빈 무변경.
 
 ### (2) sessions 이주 대상 추가 — `archiveOldData` SPECS
 `sessions`(started_at)를 SPECS에 추가하되 **자식 관계 정합** 검토: retention은 "자식 없는 세션만 삭제". archive도 Hot 자식(requests/events)이 남은 세션 메타는 남겨야 조회 성립 → 이주 조건에 자식 부재 or 세션 메타 항상 Hot 유지 결정. proxy_requests는 CAS ref_count로 계속 제외(ADR A7).
