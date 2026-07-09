@@ -16,7 +16,7 @@ import type { Database } from 'bun:sqlite';
 import type { Request, RequestType } from '../../schema';
 import { decodeText } from '../../payload-codec';
 import { getActiveKey } from '../../runtime/encryption';
-import { queryPartitioned, getArchiveDir, loadArchiveRows, FileArchiveStore } from '../../archive';
+import { queryPartitioned, getArchiveDir, loadArchiveRows, FileArchiveStore, archiveHasRowsInRange, getArchiveIndexRows } from '../../archive';
 
 /**
  * R3: requests.payload를 payload_algo 분기로, preview를 preview_algo 분기로 서버측 복호(평문/암호문 혼재).
@@ -178,13 +178,33 @@ export function getRequestsBySession(
   limit: number = 100
 ): RequestQueryResult[] {
   // 세션 상세 로그는 payload 가 필요(상세 펼침) → request_payloads LEFT JOIN(단계 C, Migration 063).
-  return decodeRequestRows(db.query(
+  const hot = db.query(
     `SELECT r.*, p.payload, p.payload_algo
        FROM requests r
        LEFT JOIN request_payloads p ON p.request_id = r.id
       WHERE r.session_id = ? AND ${ACTIVE_REQUEST_FILTER_SQL}
       ORDER BY r.timestamp DESC LIMIT ?`
-  ).all(sessionId, limit) as RequestQueryResult[]);
+  ).all(sessionId, limit) as RequestQueryResult[];
+
+  // Archive 병합(session 기반). archive 라인의 off-row body(__payload)를 payload로 매핑(상세는 payload 포함).
+  let merged = hot;
+  if (archiveHasRowsInRange(db, 'requests', null, null)) {
+    const idx = getArchiveIndexRows(db, 'requests', { sessionId, order: 'DESC', limit });
+    if (idx.length > 0) {
+      const store = new FileArchiveStore(getArchiveDir(db));
+      const arch: RequestQueryResult[] = [];
+      for (const row of loadArchiveRows(store, idx, 'id') as Record<string, unknown>[]) {
+        if (!isActiveRequest(row as { event_type?: string | null; tool_name?: string | null })) continue;
+        row.payload = row.__payload ?? null;
+        row.payload_algo = row.__payload_algo ?? null;
+        delete row.__payload;
+        delete row.__payload_algo;
+        arch.push(row as unknown as RequestQueryResult);
+      }
+      merged = [...hot, ...arch].sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
+    }
+  }
+  return decodeRequestRows(merged);
 }
 
 /**

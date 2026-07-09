@@ -17,7 +17,7 @@ import { join } from 'node:path';
 import { Database } from 'bun:sqlite';
 import { runMigrations } from '../migrator';
 import { createRequest } from '../queries/request/write';
-import { getAllRequests, getRequestsByType } from '../queries/request/read';
+import { getAllRequests, getRequestsByType, getRequestsBySession } from '../queries/request/read';
 import { archiveOldData } from '../archive/migrate-to-archive';
 import { FileArchiveStore, getArchiveDir } from '../archive';
 
@@ -113,5 +113,24 @@ describe('getRequestsByType — 병합 + type 필터 + offset', () => {
     archiveOldData(db, { safeArchiveTs: DAY * 20, store }); // a,b 이주
     // 전체 DESC: c,b,a. offset=1,limit=1 → b
     expect(getRequestsByType(db, 'tool_call', 1, 1).map((r) => r.id)).toEqual(['b']);
+  });
+});
+
+describe('getRequestsBySession — 병합 (payload 포함 상세)', () => {
+  function seedP(id: string, ts: number, body: string): void {
+    createRequest(db, {
+      id, session_id: 's1', timestamp: ts, type: 'tool_call', tool_name: 'Read', event_type: 'tool',
+      payload: body, tokens_input: 0, tokens_output: 0, tokens_total: 0,
+    });
+  }
+  test('이주 전/후 동일 + payload 복원', () => {
+    seedP('r1', DAY * 10, '{"b":"old"}');
+    seedP('r2', DAY * 50, '{"b":"new"}');
+    const before = getRequestsBySession(db, 's1', 100);
+    archiveOldData(db, { safeArchiveTs: DAY * 20, store }); // r1 이주
+    const after = getRequestsBySession(db, 's1', 100);
+    expect(after.map((r) => r.id)).toEqual(before.map((r) => r.id)); // ['r2','r1']
+    const r1 = after.find((r) => r.id === 'r1')!;
+    expect(r1.payload).toBe('{"b":"old"}'); // archive __payload → payload 복원
   });
 });
