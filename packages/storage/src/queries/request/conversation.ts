@@ -14,7 +14,8 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { ACTIVE_REQUEST_FILTER_SQL, decodeRequestRows } from './read';
+import { ACTIVE_REQUEST_FILTER_SQL, decodeRequestRows, isActiveRequest } from './read';
+import { archiveHasRowsInRange, getArchiveIndexRows, loadArchiveRows, getArchiveDir, FileArchiveStore } from '../../archive';
 
 /** 대화 행 — 세션 메타(JOIN) + 디코드된 평문 본문 */
 export interface ConversationRow {
@@ -64,7 +65,7 @@ export function getConversationRows(
   }
   params.push(limit);
 
-  const rows = db.query(`
+  const hot = db.query(`
     SELECT
       r.session_id, s.project_name, s.started_at,
       r.timestamp, r.type,
@@ -77,6 +78,67 @@ export function getConversationRows(
     LIMIT ?
   `).all(...params) as RawConversationRow[];
 
+  // Archive 병합: requests가 이주됐으면 Hot+Archive를 (session_id, timestamp) 복합 정렬로 병합.
+  // router는 단일 timestamp 정렬이라 여기선 전용 병합. archive_index 비면 Hot 그대로(무변경).
+  let merged = hot;
+  if (archiveHasRowsInRange(db, 'requests', fromTs, toTs)) {
+    const arch = loadConversationArchiveRows(db, fromTs, toTs, project);
+    if (arch.length > 0) {
+      merged = [...hot, ...arch]
+        .sort((a, b) => (a.session_id < b.session_id ? -1 : a.session_id > b.session_id ? 1 : a.timestamp - b.timestamp))
+        .slice(0, limit);
+    }
+  }
+
   // R3: 모든 read 출구에서 payload/preview를 평문으로 복원 — 복호 정책 SSoT 는 read.ts
-  return decodeRequestRows(rows).map(({ payload_algo, preview_algo, ...row }) => row);
+  return decodeRequestRows(merged).map(({ payload_algo, preview_algo, ...row }) => row);
+}
+
+/**
+ * Archive된 requests 행을 ConversationRow(raw, decode 전) 형태로 로드한다.
+ * 필터(type IN prompt/response, active, project) + Hot sessions 배치 JOIN(sessions 미이주라 Hot에 존재).
+ * archive 라인의 off-row body 마커 `__payload`/`__payload_algo`를 payload 컬럼으로 매핑.
+ */
+function loadConversationArchiveRows(
+  db: Database,
+  fromTs: number,
+  toTs: number,
+  project: string | undefined,
+): RawConversationRow[] {
+  const store = new FileArchiveStore(getArchiveDir(db));
+  const idx = getArchiveIndexRows(db, 'requests', { fromTs, toTs, order: 'ASC' });
+  const rows = loadArchiveRows(store, idx, 'id') as Record<string, unknown>[];
+
+  // type/active 1차 필터
+  const candidates = rows.filter(
+    (r) => (r.type === 'prompt' || r.type === 'response') && isActiveRequest(r as { event_type?: string | null; tool_name?: string | null }),
+  );
+  if (candidates.length === 0) return [];
+
+  // sessions 배치 JOIN(Hot) — N+1 회피. inner JOIN 시맨틱(세션 없으면 제외).
+  const sessionIds = [...new Set(candidates.map((r) => String(r.session_id)))];
+  const placeholders = sessionIds.map(() => '?').join(',');
+  const sessionMap = new Map<string, { project_name: string; started_at: number }>();
+  for (const s of db.query(`SELECT id, project_name, started_at FROM sessions WHERE id IN (${placeholders})`).all(...sessionIds) as { id: string; project_name: string; started_at: number }[]) {
+    sessionMap.set(s.id, { project_name: s.project_name, started_at: s.started_at });
+  }
+
+  const out: RawConversationRow[] = [];
+  for (const r of candidates) {
+    const s = sessionMap.get(String(r.session_id));
+    if (!s) continue; // JOIN 대응
+    if (project && s.project_name !== project) continue; // project 필터
+    out.push({
+      session_id: String(r.session_id),
+      project_name: s.project_name,
+      started_at: s.started_at,
+      timestamp: r.timestamp as number,
+      type: r.type as 'prompt' | 'response',
+      payload: (r.__payload as string | null) ?? null,
+      payload_algo: (r.__payload_algo as string | null) ?? null,
+      preview: (r.preview as string | null) ?? null,
+      preview_algo: (r.preview_algo as string | null) ?? null,
+    });
+  }
+  return out;
 }
