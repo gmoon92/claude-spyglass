@@ -1,6 +1,7 @@
 import type { Database } from 'bun:sqlite';
 import { encodeText, decodeText } from '../payload-codec';
 import { getActiveKey, shouldEncrypt } from '../runtime/encryption';
+import { archiveHasRowsInRange, getArchiveIndexRows, loadArchiveRows, getArchiveDir, FileArchiveStore } from '../archive';
 
 export interface ClaudeEvent {
   id?: number;
@@ -71,22 +72,49 @@ export function createEvent(db: Database, event: ClaudeEvent): void {
   );
 }
 
+/**
+ * claude_events 조회의 Hot/Archive 병합 — 3함수 공통(전부 timestamp DESC LIMIT + optional 필터).
+ * archive_index(claude_events)를 session/type으로 조회 → 파일 로드 → Hot과 timestamp DESC 병합 후 limit.
+ * archive 비면 Hot 그대로(무변경). 병합 후 호출자가 decodeEventRows.
+ */
+function mergeEventArchive(
+  db: Database,
+  hot: ClaudeEvent[],
+  filter: { sessionId?: string; eventType?: string },
+  limit: number,
+): ClaudeEvent[] {
+  if (!archiveHasRowsInRange(db, 'claude_events', null, null)) return hot;
+  const idx = getArchiveIndexRows(db, 'claude_events', {
+    sessionId: filter.sessionId ?? null,
+    type: filter.eventType ?? null,
+    order: 'DESC',
+    limit,
+  });
+  if (idx.length === 0) return hot;
+  const store = new FileArchiveStore(getArchiveDir(db));
+  const arch = loadArchiveRows(store, idx, 'event_id') as unknown as ClaudeEvent[];
+  return [...hot, ...arch].sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
+}
+
 export function getEventsBySession(db: Database, sessionId: string, limit = 100): ClaudeEvent[] {
-  return decodeEventRows(db.query(
+  const hot = db.query(
     'SELECT * FROM claude_events WHERE session_id = ? ORDER BY timestamp DESC LIMIT ?'
-  ).all(sessionId, limit) as ClaudeEvent[]);
+  ).all(sessionId, limit) as ClaudeEvent[];
+  return decodeEventRows(mergeEventArchive(db, hot, { sessionId }, limit));
 }
 
 export function getEventsByType(db: Database, eventType: string, limit = 100): ClaudeEvent[] {
-  return decodeEventRows(db.query(
+  const hot = db.query(
     'SELECT * FROM claude_events WHERE event_type = ? ORDER BY timestamp DESC LIMIT ?'
-  ).all(eventType, limit) as ClaudeEvent[]);
+  ).all(eventType, limit) as ClaudeEvent[];
+  return decodeEventRows(mergeEventArchive(db, hot, { eventType }, limit));
 }
 
 export function getRecentEvents(db: Database, limit = 100): ClaudeEvent[] {
-  return decodeEventRows(db.query(
+  const hot = db.query(
     'SELECT * FROM claude_events ORDER BY timestamp DESC LIMIT ?'
-  ).all(limit) as ClaudeEvent[]);
+  ).all(limit) as ClaudeEvent[];
+  return decodeEventRows(mergeEventArchive(db, hot, {}, limit));
 }
 
 export function getEventStats(db: Database): { event_type: string; count: number }[] {
