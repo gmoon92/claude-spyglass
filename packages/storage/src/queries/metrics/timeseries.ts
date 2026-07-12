@@ -9,7 +9,13 @@
 
 import type { Database } from 'bun:sqlite';
 import { ACTIVE_REQUEST_FILTER_SQL } from '../request';
+import { loadArchivedRequestRows } from '../request/read';
 import { statsHourlyUnionSource } from '../../archive/stats-bridge';
+
+/** ms timestamp → UTC 1시간 버킷(ms). Hot SQL의 CAST(timestamp/3600000 AS INTEGER)*3600000 미러. */
+function hourBucketMs(ts: number): number {
+  return Math.floor(ts / 3_600_000) * 3_600_000;
+}
 import { buildTimeWindow } from './_shared';
 import type {
   BurnRateBucketRow,
@@ -34,7 +40,7 @@ export function getBurnRateBuckets(
   const conds = ["type = 'prompt'", "tokens_confidence = 'high'"];
   conds.push(...buildTimeWindow('timestamp', fromTs, toTs, params));
 
-  return db.query(`
+  const hot = db.query(`
     SELECT
       (CAST(timestamp / 3600000 AS INTEGER) * 3600000) AS hour_ts,
       COALESCE(SUM(tokens_total), 0) AS tokens,
@@ -44,6 +50,19 @@ export function getBurnRateBuckets(
     GROUP BY hour_ts
     ORDER BY hour_ts ASC
   `).all(...params) as BurnRateBucketRow[];
+
+  // Archive 구간(동일 필터 prompt+high)을 hour 버킷 단위로 가법 병합.
+  const byHour = new Map<number, BurnRateBucketRow>();
+  for (const b of hot) byHour.set(b.hour_ts, { ...b });
+  for (const r of loadArchivedRequestRows(db, { fromTs, toTs })) {
+    if (r.type !== 'prompt' || r.tokens_confidence !== 'high') continue;
+    const h = hourBucketMs(r.timestamp);
+    const cur = byHour.get(h) ?? { hour_ts: h, tokens: 0, requests: 0 };
+    cur.tokens += r.tokens_total;
+    cur.requests += 1;
+    byHour.set(h, cur);
+  }
+  return [...byHour.values()].sort((a, b) => a.hour_ts - b.hour_ts);
 }
 
 /**
@@ -120,12 +139,29 @@ export function getAnomalyTimeSeriesInputs(
   const conds = [ACTIVE_REQUEST_FILTER_SQL];
   conds.push(...buildTimeWindow('timestamp', fromTs, toTs, params));
 
-  return db.query(`
+  // 정렬은 (timestamp, id) — 동일 ms 타이 순서를 결정화해 Hot/Archive 병합이 exact(id 2차키).
+  const hot = db.query(`
     SELECT
       id, session_id, turn_id, type, tool_name, timestamp,
       tokens_input, duration_ms
     FROM requests
     WHERE ${conds.join(' AND ')}
-    ORDER BY timestamp ASC
+    ORDER BY timestamp ASC, id ASC
   `).all(...params) as AnomalyInputRow[];
+
+  // Archive 원행(이미 isActiveRequest 통과)을 동일 shape로 매핑해 병합 후 (ts,id) 재정렬.
+  const archived: AnomalyInputRow[] = loadArchivedRequestRows(db, { fromTs, toTs }).map((r) => ({
+    id: r.id,
+    session_id: r.session_id,
+    turn_id: r.turn_id ?? null,
+    type: r.type,
+    tool_name: r.tool_name ?? null,
+    timestamp: r.timestamp,
+    tokens_input: r.tokens_input,
+    duration_ms: r.duration_ms,
+  }));
+  if (archived.length === 0) return hot;
+  return [...hot, ...archived].sort((a, b) =>
+    a.timestamp - b.timestamp || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
 }

@@ -14,6 +14,21 @@
 
 import type { Database } from 'bun:sqlite';
 import { computeP95 } from './aggregate-latency';
+import { loadArchivedRequestRows } from './read';
+
+/**
+ * tool_detail 오류 패턴 JS 미러 — getStripStats의 SQL LIKE 4종(error/[오류]/エラー/错误)을 archive
+ * 원행에 동일 적용(다국어 오류 표기). SQL 표현과 나란히 관리(정책 변경 시 함께 수정).
+ */
+function isToolError(toolDetail?: string | null): boolean {
+  if (!toolDetail) return false;
+  return (
+    toolDetail.toLowerCase().includes('error') ||
+    toolDetail.includes('[오류]') ||
+    toolDetail.includes('エラー') ||
+    toolDetail.includes('错误')
+  );
+}
 
 /** Command Center Strip 통계 */
 export interface StripStats {
@@ -52,10 +67,16 @@ export function getStripStats(
     SELECT duration_ms
     FROM requests
     WHERE ${durationRange.sql}
-    ORDER BY duration_ms ASC
   `).all(...durationRange.params) as Array<{ duration_ms: number }>;
 
-  const p95_duration_ms = computeP95(durationRows);
+  // Hot + Archive duration 합쳐 정렬 후 P95(비가법 — 전체 표본 필요). archive 원행은 동일 필터 재현.
+  const durations = [
+    ...durationRows.map((r) => r.duration_ms),
+    ...loadArchivedRequestRows(db, { fromTs, toTs })
+      .filter((r) => r.type === 'tool_call' && r.event_type === 'tool' && r.duration_ms != null && r.duration_ms > 0)
+      .map((r) => r.duration_ms),
+  ].sort((a, b) => a - b);
+  const p95_duration_ms = computeP95(durations.map((duration_ms) => ({ duration_ms })));
 
   // 2. 오류율 — 지정 기간 tool_call PostToolUse 레코드 중 오류 패턴 포함 비율
   const errorRange = buildRangeClause([
@@ -76,8 +97,16 @@ export function getStripStats(
     WHERE ${errorRange.sql}
   `).get(...errorRange.params) as { total: number; errors: number };
 
-  const error_rate =
-    errorStats.total > 0 ? errorStats.errors / errorStats.total : 0;
+  // Archive 구간 오류율 병합 — 동일 필터(tool_call/tool) + tool_detail 오류 패턴 JS 미러.
+  let total = errorStats.total;
+  let errors = errorStats.errors;
+  for (const r of loadArchivedRequestRows(db, { fromTs, toTs })) {
+    if (r.type !== 'tool_call' || r.event_type !== 'tool') continue;
+    total++;
+    if (isToolError(r.tool_detail)) errors++;
+  }
+
+  const error_rate = total > 0 ? errors / total : 0;
 
   return {
     p95_duration_ms,

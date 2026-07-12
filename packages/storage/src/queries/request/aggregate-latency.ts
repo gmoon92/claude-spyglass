@@ -14,6 +14,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
+import { loadArchivedRequestRows } from './read';
 
 /**
  * P95 duration_ms 계산 — duration_ms 오름차순 정렬된 행 배열에서 95번째 백분위 값을 반환.
@@ -25,6 +26,27 @@ export function computeP95(rows: Array<{ duration_ms: number }>): number {
   if (rows.length === 0) return 0;
   const idx = Math.ceil(rows.length * 0.95) - 1;
   return rows[Math.min(idx, rows.length - 1)].duration_ms;
+}
+
+/**
+ * tool_call PostToolUse(event_type='tool') + duration_ms>0 archive 원행의 duration_ms 배열.
+ * (1-잔여) P95/strip이 Hot durations와 합쳐 정렬하도록 archive 구간을 exact 반영한다.
+ * upperMs 지정 시 duration_ms < upperMs(avg의 이상값 컷) 추가 적용.
+ */
+function archivedToolDurations(
+  db: Database,
+  fromTs?: number,
+  toTs?: number,
+  upperMs?: number,
+): number[] {
+  const out: number[] = [];
+  for (const r of loadArchivedRequestRows(db, { fromTs, toTs })) {
+    const d = r.duration_ms;
+    if (r.type === 'tool_call' && r.event_type === 'tool' && d != null && d > 0 && (upperMs == null || d < upperMs)) {
+      out.push(d);
+    }
+  }
+  return out;
 }
 
 /**
@@ -54,12 +76,17 @@ export function getAvgPromptDurationMs(
   if (fromTs !== undefined) { conditions.push('timestamp >= ?'); params.push(fromTs); }
   if (toTs   !== undefined) { conditions.push('timestamp <= ?'); params.push(toTs); }
 
-  const row = db.query(`
-    SELECT AVG(duration_ms) as avg
+  // Hot: AVG 대신 SUM/COUNT로 받아 archive와 가법 합산 후 평균(교차 평균 오류 방지).
+  const hot = db.query(`
+    SELECT COALESCE(SUM(duration_ms), 0) AS s, COUNT(*) AS c
     FROM requests
     WHERE ${conditions.join(' AND ')}
-  `).get(...params) as { avg: number | null };
-  return row?.avg ?? 0;
+  `).get(...params) as { s: number; c: number };
+
+  let sum = hot.s;
+  let count = hot.c;
+  for (const d of archivedToolDurations(db, fromTs, toTs, 600000)) { sum += d; count++; }
+  return count > 0 ? sum / count : 0;
 }
 
 /**
@@ -85,8 +112,12 @@ export function getP95DurationMs(
     SELECT duration_ms
     FROM requests
     WHERE ${conditions.join(' AND ')}
-    ORDER BY duration_ms ASC
   `).all(...params) as Array<{ duration_ms: number }>;
 
-  return computeP95(rows);
+  // Hot + Archive duration을 합쳐 정렬 후 P95(percentile은 비가법 — 전체 표본이 필요).
+  const merged = [
+    ...rows.map((r) => r.duration_ms),
+    ...archivedToolDurations(db, fromTs, toTs),
+  ].sort((a, b) => a - b);
+  return computeP95(merged.map((duration_ms) => ({ duration_ms })));
 }

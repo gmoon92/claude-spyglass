@@ -12,24 +12,20 @@
 ## 0. 한 줄 요약
 
 저장소를 `SQLite(Hot Index) + Artifact Store(CAS) + Archive(ELK식)`로 진화 중. **원칙: 측정 → 결정 → 리팩토링.**
-현재 **Phase 0·2·3(CAS)·4(TEXT zstd) 완료, Phase 5-7(Archive) 진행 중**(→ 완료 상세는 progress 문서).
-모든 변경은 additive이고 **Archive 이주는 비활성**(`SPYGLASS_ARCHIVE_DAYS` 미설정 + 배선 안 됨)이라 현재 동작 무변경.
+현재 **Phase 0·2·3(CAS)·4(TEXT zstd) 완료, Phase 5-7(Archive) 단계2 코드 완료**(이주·조회 병합·GC·retention 정합·배선 전부 — 상세 progress 문서).
+모든 변경은 additive이고 **Archive 이주는 비활성**(`SPYGLASS_ARCHIVE_DAYS` 미설정 — 배선은 완료, env 미설정이라 무동작)이라 현재 동작 무변경. 활성화만 남음(prod 실측 후).
 
 ---
 
-## 1. 바로 다음 할 일 — Phase 5-7 단계 2 마무리
+## 1. Phase 5-7 단계 2 — ✅ 코드 완료 (활성화 전 prod 프로파일링만 남음)
 
-빌딩블록·이주 코어(claude_events+requests)·**조회 병합(getAllRequests·byType·bySession·conversation·events 완료)**·**집계 sum/count UNION(완료)**·**maintenance 배선**은 완료(progress 문서). **남은 것**을 이으면 단계 2 완성:
+빌딩블록·이주 코어·조회 병합(list/conversation/events)·**집계 병합(stats UNION + raw-requests JS-merge 전부)**·**stats/row 이주**·**archive retention GC**·**sessions retention 정합**·**maintenance 배선** 모두 완료. 아래 (1)~(3),(1-잔여)는 모두 done. **남은 것은 활성화(§ 활성화 조건)와 §2 후속뿐.**
 
 ### (1) 집계 조회 병합 — stats 버킷 이주 + UNION ✅ 완료 (sum/count exact)
 `archive/stats-bridge.ts`(컬럼 SSoT + `archiveOldStats` INSERT+DELETE·ON CONFLICT 가법 + `statsHourly/ProxyUnionSource`). 집계 4파일 6곳(`aggregate-general`·`aggregate-cache`·`proxy-stats`·`metrics/timeseries`) UNION 교체. maintenance에 `archiveOldStats` 배선(같은 safeTs). 회귀 `archive-stats-merge.test.ts`(이주 전/후 `toEqual` exact). **P95 스케치는 미착수(후순위)** — `duration_ms_sketch`는 NULL 방치.
 
-#### (1-잔여) P95 + raw-`requests` 집계 readers (⚠️ 활성화 전 필수)
-stats 버킷 UNION은 완료지만, **아직 `FROM requests`를 직접 읽어 archive 구간을 누락하는 집계**가 남음:
-- **P95/평균 duration** `aggregate-latency.ts`(`getP95DurationMs`/`getAvgPromptDurationMs`), `aggregate-strip.ts` — raw requests. archive 구간 P95 과소평가. 정공법: `archive_stats_hourly.duration_ms_sketch`를 **고정 버킷 히스토그램**(t-digest보다 단순·무의존)으로 이주 시 채우고 Hot 원행과 병합(ε 근사). 급하면 "archive 구간 근사" 주석으로 미룰 수 있음.
-- **`getRequestStatsBySession`**(`aggregate-general.ts`) — `FROM requests` 직접. 이주된 세션 요약 undercount. 세션 상세 목록(getRequestsBySession)은 이미 병합되므로 요약과 불일치.
-- **`getBurnRateBuckets`·`getAnomalyTimeSeriesInputs`**(`metrics/timeseries.ts`) — raw requests. burn/anomaly 시계열 archive 구간 누락.
-- 이들은 stats 버킷이 아니라 **행 아카이브(파일) 병합** 대상 → `partition-router`/`loadArchiveRows` 경유가 정공법. 회귀는 `archive-*-merge.test.ts` 스타일.
+#### (1-잔여) raw-`requests` 집계 readers ✅ 완료 (exact JS-merge, sketch 불요)
+`read.ts:loadArchivedRequestRows(db,{fromTs,toTs,sessionId})` 공용 헬퍼(archive 원행 로드, archiveHasRowsInRange 게이트, toTs +1 inclusive)로 Hot 집계 + archive 원행을 JS 합산. 대상: `aggregate-latency`(getP95/getAvgPromptDurationMs, sum·count/duration 배열 병합) · `aggregate-strip`(p95 + error_rate JS 미러) · `aggregate-general`(getRequestStatsBySession, sum/count 재구성) · `metrics/timeseries`(getBurnRateBuckets hour 버킷 병합 · getAnomalyTimeSeriesInputs (ts,id) 결정화 병합). **모든 지표 exact** → `duration_ms_sketch`는 미사용(예약, sketch 경로 불필요해짐). 회귀 `archive-aggregate-raw-merge.test.ts`.
 
 ### (2) sessions retention 정합 ✅ 완료 (Option A — 세션 메타 Hot 유지)
 결정: `sessions`(세션당 1행 저소용량)는 **이주하지 않고 Hot 유지**(archive로 옮겨도 Hot 압박 감소 미미 + 세션 목록 병합 복잡도만 증가). 대신 `retention.ts:deleteOldData` step4의 "살아있는 자식" UNION에 `archive_index.session_id` 추가 → archive에 자식이 남은 세션 메타 **오삭제 방지**(archive 자식 GC 후 다음 사이클에 세션 삭제, 1주기 지연). 회귀 `archive-session-retention.test.ts`. proxy_requests는 계속 제외(ADR A7).
@@ -39,14 +35,14 @@ stats 버킷 UNION은 완료지만, **아직 `FROM requests`를 직접 읽어 ar
 
 ### 검증 명령 (매 단계)
 ```bash
-cd packages/storage && bun test           # 단위/회귀 (현재 433 pass, 0 fail 기준)
+cd packages/storage && bun test           # 단위/회귀 (현재 441 pass, 0 fail 기준)
 cd packages/storage && bunx tsc --noEmit  # 타입체크
 cd packages/server  && bun test && bunx tsc --noEmit
 ```
 새 조회/이주는 반드시 `archive-*-merge.test.ts` 스타일 회귀 가드(이주 전/후 `toEqual`)부터 작성(TDD).
 
 ### 활성화(프로덕션) 조건
-위 (1-잔여) + 프로덕션 실측 후 `SPYGLASS_ARCHIVE_DAYS` 설정(0 < N < retention 30). dev 검증: 파일 기반 DB에 설정 → `runCleanupNow` 1회 → archive_index/파일 확인 → 모든 조회 병합 결과 = 이주 전 동일.
+단계2 코드 완료 → 프로덕션 실측 후 `SPYGLASS_ARCHIVE_DAYS` 설정(0 < N < retention 30). dev 검증: 파일 기반 DB에 설정 → `runCleanupNow` 1회 → archive_index/파일 확인 → 모든 조회 병합 결과 = 이주 전 동일.
 
 ## 2. 그 밖에 남은 것 (선택/후속)
 - **프로덕션 16GB 프로파일링 + CAS 대량 백필** — dev만 검증/전환됨. 절차는 progress 문서의 CAS 섹션 + CLI 헤더(`scripts/backfill-proxy-cas.ts` `--dry-run`→`--limit`→전체). 백필 후 CAS 행 읽기는 서버가 reconstruct 커밋 이상이어야.

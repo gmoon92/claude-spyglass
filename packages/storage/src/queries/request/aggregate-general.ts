@@ -14,6 +14,7 @@
 import type { Database } from 'bun:sqlite';
 import type { RequestType } from '../../schema';
 import { statsHourlyUnionSource } from '../../archive/stats-bridge';
+import { loadArchivedRequestRows } from './read';
 
 /** 요청 통계 결과 */
 export interface RequestStats {
@@ -90,17 +91,35 @@ export function getRequestStatsBySession(
   db: Database,
   sessionId: string
 ): RequestStats {
-  return db.query(`
+  // Hot: 가법 sum/count로 받아 archive 세션 원행과 합산(교차 평균 오류 방지). high=tokens_confidence.
+  const hot = db.query(`
     SELECT
-      COUNT(*) as total_requests,
-      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_input ELSE 0 END), 0) as total_tokens_input,
-      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_output ELSE 0 END), 0) as total_tokens_output,
-      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE 0 END), 0) as total_tokens,
-      COALESCE(AVG(CASE WHEN tokens_confidence='high' THEN tokens_total ELSE NULL END), 0) as avg_tokens_per_request,
-      COALESCE(AVG(duration_ms), 0) as avg_duration_ms
+      COUNT(*) AS total_requests,
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_input  ELSE 0 END), 0) AS hi,
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_output ELSE 0 END), 0) AS ho,
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN tokens_total  ELSE 0 END), 0) AS ht,
+      COALESCE(SUM(CASE WHEN tokens_confidence='high' THEN 1 ELSE 0 END), 0)             AS hc,
+      COALESCE(SUM(duration_ms), 0)                                                      AS dsum
     FROM requests
     WHERE session_id = ?
-  `).get(sessionId) as RequestStats;
+  `).get(sessionId) as { total_requests: number; hi: number; ho: number; ht: number; hc: number; dsum: number };
+
+  let { total_requests: total, hi, ho, ht, hc, dsum } = hot;
+  for (const r of loadArchivedRequestRows(db, { sessionId })) {
+    total++;
+    dsum += r.duration_ms ?? 0;
+    if (r.tokens_confidence === 'high') { hi += r.tokens_input; ho += r.tokens_output; ht += r.tokens_total; hc++; }
+  }
+
+  return {
+    total_requests: total,
+    total_tokens_input: hi,
+    total_tokens_output: ho,
+    total_tokens: ht,
+    // avg_tokens_per_request: high 레코드 평균(원본 AVG(CASE high) 재현). avg_duration_ms: 전체 평균.
+    avg_tokens_per_request: hc > 0 ? ht / hc : 0,
+    avg_duration_ms: total > 0 ? dsum / total : 0,
+  };
 }
 
 /**

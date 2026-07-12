@@ -94,6 +94,39 @@ function loadRequestArchiveRows(
   return out;
 }
 
+/**
+ * 집계 readers 공용 — 범위/세션에 해당하는 Archive requests 원행을 로드한다(단계2 (1-잔여)).
+ *
+ * @description
+ *   raw `requests`를 직접 SUM/AVG/percentile하던 집계(aggregate-latency·strip·general·metrics)가
+ *   이주 후 archive 구간을 누락하지 않도록, 같은 필터를 JS에서 적용해 Hot 집계와 합산할 수 있게
+ *   archive 원행을 반환한다. payload decode는 하지 않는다(집계는 스칼라 컬럼만 사용).
+ *
+ *   이주 비활성/무접촉이면 [] — archiveHasRowsInRange 게이트로 Hot 집계 완전 무변경. 상한 toTs는
+ *   Hot SQL의 `timestamp <= toTs`(포함)와 정합하도록 exclusive +1로 변환(archive_index는 `< toTs`).
+ *
+ * @param opts.fromTs   하한(ms, 포함). null/undefined=무한 과거.
+ * @param opts.toTs     상한(ms, 포함). null/undefined=무한 미래.
+ * @param opts.sessionId 세션 한정(getRequestStatsBySession). 미지정=전체.
+ * @returns isActiveRequest 통과한 archive 원행(raw). archive 비면 [].
+ */
+export function loadArchivedRequestRows(
+  db: Database,
+  opts: { fromTs?: number | null; toTs?: number | null; sessionId?: string | null } = {},
+): RequestQueryResult[] {
+  const fromTs = opts.fromTs ?? null;
+  // Hot의 `<= toTs`(포함)를 archive_index의 `< toTs`(미포함)에 맞추기 위해 +1(ms 정수).
+  const toExclusive = opts.toTs == null ? null : opts.toTs + 1;
+  if (!archiveHasRowsInRange(db, 'requests', fromTs, toExclusive)) return [];
+  const idx = getArchiveIndexRows(db, 'requests', {
+    fromTs,
+    toTs: toExclusive,
+    sessionId: opts.sessionId ?? null,
+    order: 'ASC',
+  });
+  return loadRequestArchiveRows(db, idx);
+}
+
 // =============================================================================
 // 타입
 // =============================================================================
