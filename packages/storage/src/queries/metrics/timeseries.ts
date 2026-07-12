@@ -9,6 +9,7 @@
 
 import type { Database } from 'bun:sqlite';
 import { ACTIVE_REQUEST_FILTER_SQL } from '../request';
+import { statsHourlyUnionSource } from '../../archive/stats-bridge';
 import { buildTimeWindow } from './_shared';
 import type {
   BurnRateBucketRow,
@@ -81,7 +82,7 @@ export function getCacheTrendBuckets(
       COALESCE(SUM(tokens_input), 0)            AS total_input,
       COALESCE(SUM(cache_read_tokens), 0)       AS cache_read,
       COALESCE(SUM(cache_creation_tokens), 0)   AS cache_create
-    FROM stats_hourly
+    FROM ${statsHourlyUnionSource()}
     WHERE ${conds.join(' AND ')}
     GROUP BY hour_ts
     ORDER BY hour_ts ASC

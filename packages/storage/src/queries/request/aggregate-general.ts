@@ -13,6 +13,7 @@
 
 import type { Database } from 'bun:sqlite';
 import type { RequestType } from '../../schema';
+import { statsHourlyUnionSource } from '../../archive/stats-bridge';
 
 /** 요청 통계 결과 */
 export interface RequestStats {
@@ -75,7 +76,7 @@ export function getRequestStats(db: Database, fromTs?: number, toTs?: number): R
       CASE WHEN SUM(duration_ms_count) > 0
            THEN CAST(SUM(duration_ms_sum) AS REAL) / SUM(duration_ms_count)
            ELSE 0 END                          AS avg_duration_ms
-    FROM stats_hourly
+    FROM ${statsHourlyUnionSource()}
     ${whereClause}
   `).get(...params) as RequestStats;
   return row;
@@ -137,7 +138,7 @@ export function getRequestStatsByType(db: Database, fromTs?: number, toTs?: numb
       CASE WHEN SUM(request_count) > 0
            THEN CAST(SUM(tokens_total) AS REAL) / SUM(request_count)
            ELSE 0 END    AS avg_tokens
-    FROM stats_hourly
+    FROM ${statsHourlyUnionSource()}
     ${whereClause}
     GROUP BY type
     ORDER BY total_tokens DESC

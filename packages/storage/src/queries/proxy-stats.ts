@@ -5,6 +5,7 @@
  * 책임: 응답 시간·비용·에러·스트리밍 비율을 단일 호출로 제공
  */
 import type { Database } from 'bun:sqlite';
+import { statsProxyUnionSource } from '../archive/stats-bridge';
 
 export interface ProxyHourlyStats {
   /** 전체 proxy 요청 수 */
@@ -97,7 +98,7 @@ export function getProxyHourlyStats(db: Database, fromTs?: number, toTs?: number
       COALESCE(SUM(first_token_ms_sum), 0)      AS first_token_ms_sum,
       COALESCE(SUM(first_token_ms_count), 0)    AS first_token_ms_count,
       COALESCE(SUM(cost_usd_sum), 0.0)          AS cost_usd_sum
-    FROM stats_proxy_hourly
+    FROM ${statsProxyUnionSource()}
     ${whereClause}
   `).get(...params) as RawProxyAgg;
 
@@ -153,7 +154,7 @@ export function getProxyHourlyStatsByModel(
       SUM(first_token_ms_sum)      AS first_token_ms_sum,
       SUM(first_token_ms_count)    AS first_token_ms_count,
       SUM(cost_usd_sum)            AS cost_usd_sum
-    FROM stats_proxy_hourly
+    FROM ${statsProxyUnionSource()}
     ${whereClause}
     GROUP BY model
     ORDER BY request_count DESC

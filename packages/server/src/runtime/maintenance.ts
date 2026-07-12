@@ -24,6 +24,7 @@ import {
   getOldestUnflushedTs,
   computeSafeArchiveTs,
   archiveOldData,
+  archiveOldStats,
   FileArchiveStore,
   getArchiveDir,
 } from '@spyglass/storage';
@@ -192,6 +193,11 @@ function archiveOldDataIfEnabled(database: SpyglassDatabase): void {
     const r = archiveOldData(db, { safeArchiveTs: safeTs, store });
     if (r.archived > 0) {
       console.log(`[Maintenance] archived ${r.archived} rows to Warm`, r.byTable);
+    }
+    // 사전집계 버킷 이주(테이블 간 INSERT+DELETE) — 같은 safeTs로 Hot/Archive 시각축 무겹침(UNION exact).
+    const s = archiveOldStats(db, { safeArchiveTs: safeTs });
+    if (s.statsHourly > 0 || s.statsProxy > 0) {
+      console.log(`[Maintenance] archived stats buckets to Warm`, s);
     }
   } catch (err) {
     console.warn('[Maintenance] archive migration skipped:', err);

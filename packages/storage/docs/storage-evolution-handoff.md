@@ -19,14 +19,17 @@
 
 ## 1. 바로 다음 할 일 — Phase 5-7 단계 2 마무리
 
-빌딩블록·이주 코어(claude_events+requests)·**조회 병합(getAllRequests·byType·bySession·conversation·events 완료)**·**maintenance 배선**은 완료(progress 문서). **남은 것**을 이으면 단계 2 완성:
+빌딩블록·이주 코어(claude_events+requests)·**조회 병합(getAllRequests·byType·bySession·conversation·events 완료)**·**집계 sum/count UNION(완료)**·**maintenance 배선**은 완료(progress 문서). **남은 것**을 이으면 단계 2 완성:
 
-### (1) 집계 조회 병합 — stats 버킷 이주 + UNION (⚠️ 활성화 전 필수)
-requests/events 조회 병합은 완료. **남은 조회는 집계뿐**:
-- **stats 버킷 이주** — `archiveOldData`(또는 별도)가 safeArchiveTs 이전 `stats_hourly`/`stats_proxy_hourly` hour 버킷을 `archive_stats_hourly`/`archive_stats_proxy_hourly`로 INSERT+DELETE(가법 컬럼 그대로). **P95 스케치**: 이주 시 해당 hour의 `requests.duration_ms`로 t-digest 만들어 `archive_stats_hourly.duration_ms_sketch`에 저장. hour 버킷은 UTC일 경계 floor(A4)라 분할 안 됨.
-- **집계 UNION 조회**(`aggregate-general.ts`·`proxy-stats.ts`·`aggregate-cache.ts`): `FROM stats_hourly` → `(SELECT ... FROM stats_hourly UNION ALL SELECT ... FROM archive_stats_hourly)`. sum/count 가법이라 UNION 후 SUM=원본 SUM exact(ADR A6, 가중치 코드 불요).
-- **P95 순서(권장)**: 먼저 sum/count 집계 UNION만 완성(exact, 여기까지가 핵심). **P95(`aggregate-latency.ts`)는 별도 후순위** — 스케치 없이 두면 archive 구간 P95는 과소평가되므로, 그때 `duration_ms_sketch`를 **고정 버킷 히스토그램**(t-digest보다 단순·무의존)으로 채우고 Hot 원행 P95와 병합(ε 근사). 급하면 P95는 Hot-only 유지 + "archive 구간 근사" 주석으로 미룰 수 있음.
-- **회귀 가드**: 집계 이주 전/후 exact(sum/count) / P95 ε / archive 빈 무변경. **기존 회귀 패턴 복제**: `src/__tests__/archive-{query,conversation,event}-merge.test.ts`(파일 기반 DB + `archiveOldData` + 이주 전/후 `toEqual`) 그대로 따라 `archive-stats-merge.test.ts` 작성.
+### (1) 집계 조회 병합 — stats 버킷 이주 + UNION ✅ 완료 (sum/count exact)
+`archive/stats-bridge.ts`(컬럼 SSoT + `archiveOldStats` INSERT+DELETE·ON CONFLICT 가법 + `statsHourly/ProxyUnionSource`). 집계 4파일 6곳(`aggregate-general`·`aggregate-cache`·`proxy-stats`·`metrics/timeseries`) UNION 교체. maintenance에 `archiveOldStats` 배선(같은 safeTs). 회귀 `archive-stats-merge.test.ts`(이주 전/후 `toEqual` exact). **P95 스케치는 미착수(후순위)** — `duration_ms_sketch`는 NULL 방치.
+
+#### (1-잔여) P95 + raw-`requests` 집계 readers (⚠️ 활성화 전 필수)
+stats 버킷 UNION은 완료지만, **아직 `FROM requests`를 직접 읽어 archive 구간을 누락하는 집계**가 남음:
+- **P95/평균 duration** `aggregate-latency.ts`(`getP95DurationMs`/`getAvgPromptDurationMs`), `aggregate-strip.ts` — raw requests. archive 구간 P95 과소평가. 정공법: `archive_stats_hourly.duration_ms_sketch`를 **고정 버킷 히스토그램**(t-digest보다 단순·무의존)으로 이주 시 채우고 Hot 원행과 병합(ε 근사). 급하면 "archive 구간 근사" 주석으로 미룰 수 있음.
+- **`getRequestStatsBySession`**(`aggregate-general.ts`) — `FROM requests` 직접. 이주된 세션 요약 undercount. 세션 상세 목록(getRequestsBySession)은 이미 병합되므로 요약과 불일치.
+- **`getBurnRateBuckets`·`getAnomalyTimeSeriesInputs`**(`metrics/timeseries.ts`) — raw requests. burn/anomaly 시계열 archive 구간 누락.
+- 이들은 stats 버킷이 아니라 **행 아카이브(파일) 병합** 대상 → `partition-router`/`loadArchiveRows` 경유가 정공법. 회귀는 `archive-*-merge.test.ts` 스타일.
 
 ### (2) sessions 이주 대상 추가 — `archiveOldData` SPECS
 `sessions`(started_at)를 SPECS에 추가하되 **자식 관계 정합** 검토: retention은 "자식 없는 세션만 삭제". archive도 Hot 자식(requests/events)이 남은 세션 메타는 남겨야 조회 성립 → 이주 조건에 자식 부재 or 세션 메타 항상 Hot 유지 결정. proxy_requests는 CAS ref_count로 계속 제외(ADR A7).
@@ -36,14 +39,14 @@ requests/events 조회 병합은 완료. **남은 조회는 집계뿐**:
 
 ### 검증 명령 (매 단계)
 ```bash
-cd packages/storage && bun test           # 단위/회귀 (현재 414 pass, 0 fail 기준)
+cd packages/storage && bun test           # 단위/회귀 (현재 425 pass, 0 fail 기준)
 cd packages/storage && bunx tsc --noEmit  # 타입체크
 cd packages/server  && bun test && bunx tsc --noEmit
 ```
 새 조회/이주는 반드시 `archive-*-merge.test.ts` 스타일 회귀 가드(이주 전/후 `toEqual`)부터 작성(TDD).
 
 ### 활성화(프로덕션) 조건
-위 (1)~(3) + 프로덕션 실측 후 `SPYGLASS_ARCHIVE_DAYS` 설정(0 < N < retention 30). dev 검증: 파일 기반 DB에 설정 → `runCleanupNow` 1회 → archive_index/파일 확인 → 모든 조회 병합 결과 = 이주 전 동일.
+위 (1-잔여)~(3) + 프로덕션 실측 후 `SPYGLASS_ARCHIVE_DAYS` 설정(0 < N < retention 30). dev 검증: 파일 기반 DB에 설정 → `runCleanupNow` 1회 → archive_index/파일 확인 → 모든 조회 병합 결과 = 이주 전 동일.
 
 ## 2. 그 밖에 남은 것 (선택/후속)
 - **프로덕션 16GB 프로파일링 + CAS 대량 백필** — dev만 검증/전환됨. 절차는 progress 문서의 CAS 섹션 + CLI 헤더(`scripts/backfill-proxy-cas.ts` `--dry-run`→`--limit`→전체). 백필 후 CAS 행 읽기는 서버가 reconstruct 커밋 이상이어야.

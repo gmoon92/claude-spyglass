@@ -13,6 +13,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
+import { statsHourlyUnionSource } from '../../archive/stats-bridge';
 
 /** 캐시 히트율·절감 토큰 통계 (USD 환산은 신뢰도 낮아 제거됨) */
 export interface CacheStats {
@@ -78,7 +79,7 @@ export function getCacheStats(
       COALESCE(SUM(tokens_input), 0)          AS tokens_input,
       COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens,
       COALESCE(SUM(cache_read_tokens), 0)     AS cache_read_tokens
-    FROM stats_hourly
+    FROM ${statsHourlyUnionSource()}
     WHERE ${conditions.join(' AND ')}
   `).get(...params) as {
     tokens_input: number;

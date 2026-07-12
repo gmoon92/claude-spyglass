@@ -40,3 +40,11 @@ export {
   getArchiveDir,
   loadArchiveRows,
 } from './load-archive-rows';
+
+export {
+  archiveOldStats,
+  statsHourlyUnionSource,
+  statsProxyUnionSource,
+  type StatsArchiveResult,
+  type StatsArchiveOptions,
+} from './stats-bridge';

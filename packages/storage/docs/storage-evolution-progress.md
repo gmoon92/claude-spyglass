@@ -36,6 +36,7 @@
 - **단계 2 조회 병합** `2efda62`(getAllRequests) · `7ed2e52`(getRequestsByType) — `partition-router`에 `loadArchive` 연결. `load-archive-rows.ts`(getArchiveDir + loadArchiveRows), read.ts `isActiveRequest`(필터 JS 미러). 이주 전/후 결과 동일(정렬·limit·offset·필터) 회귀 가드.
 - **단계 2 배선** `058fe46` — `server/runtime/maintenance.ts:runCleanupNow`에 이주 스텝(retention 앞). `getSyncCursor().current` flush 게이트 → `computeSafeArchiveTs` → `archiveOldData`. best-effort, env 미설정 시 무동작.
 - **단계 2 조회 병합 (requests/events 계열 완료)** `22b5732`(getConversationRows, payload/JOIN/복합정렬) · `9875263`(events: bySession/byType/recent, mergeEventArchive) · `6bf49a1`(getRequestsBySession, payload 매핑). getAllRequests/byType(전일)까지 포함 — 이주된 requests/claude_events가 모든 주요 조회에서 투명 병합. `load-archive-rows.ts`(getArchiveDir/loadArchiveRows) 공용.
+- **단계 2 집계 병합 (stats 버킷 sum/count exact)** — `archive/stats-bridge.ts`: 컬럼 SSoT(dims/sums) + `archiveOldStats`(stats_hourly/proxy → archive_stats_* **테이블 간 INSERT+DELETE**, `ON CONFLICT DO UPDATE` 가법 병합 = 늦은 도착 재이주 안전) + `statsHourly/ProxyUnionSource`(Hot+Archive UNION ALL, 바깥 WHERE 1회). 집계 4파일 6곳(`aggregate-general` 2·`aggregate-cache` 1·`proxy-stats` 2·`metrics/timeseries` 1) `FROM stats_*` → UNION 소스 교체. `server/runtime/maintenance.ts`에 `archiveOldStats` 배선(row 이주와 동일 safeTs → 시각축 무겹침). 회귀 `archive-stats-merge.test.ts`(이주 전/후 `toEqual` exact + 가법 재이주 + archive 빈 무변경, +11 → storage 425 pass). **P95 스케치·raw-`requests` 집계 readers(bySession/burn/anomaly/latency)는 미착수 — handoff (1-잔여).**
 
 **안전 상태**: 전부 additive, **이주 비활성**(`SPYGLASS_ARCHIVE_DAYS` 미설정) → 현재 동작 완전 무변경.
 **⚠️ 프로덕션 활성화 전 남은 조회 병합 필수**(미병합 조회는 archive 데이터 누락) — handoff 참조.
@@ -47,5 +48,7 @@ src/artifacts/**, queries/proxy-payload.ts, queries/cas-stats.ts, migrations/066
   server/src/proxy/handler/{inbound,persist,_shared}.ts, routes/proxy.ts,
   scripts/backfill-{system-prompts,proxy-cas}.ts, cli/analyze.ts, web StoragePanel  CAS 소비/백필/가시화
 src/payload-codec.ts                                                               Phase 4
-src/archive/**, migrations/067, docs/storage-evolution-adr-archive.md              Phase 5-7
+src/archive/**(+stats-bridge), migrations/067, docs/storage-evolution-adr-archive.md   Phase 5-7
+  queries/{request/aggregate-general,request/aggregate-cache,proxy-stats,metrics/timeseries}.ts,
+  server/runtime/maintenance.ts                                                    Phase 5-7 집계 UNION+배선
 ```
