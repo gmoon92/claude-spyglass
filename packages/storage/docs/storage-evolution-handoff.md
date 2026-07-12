@@ -24,14 +24,23 @@
 ### (1) 집계 조회 병합 — stats 버킷 이주 + UNION (⚠️ 활성화 전 필수)
 requests/events 조회 병합은 완료. **남은 조회는 집계뿐**:
 - **stats 버킷 이주** — `archiveOldData`(또는 별도)가 safeArchiveTs 이전 `stats_hourly`/`stats_proxy_hourly` hour 버킷을 `archive_stats_hourly`/`archive_stats_proxy_hourly`로 INSERT+DELETE(가법 컬럼 그대로). **P95 스케치**: 이주 시 해당 hour의 `requests.duration_ms`로 t-digest 만들어 `archive_stats_hourly.duration_ms_sketch`에 저장. hour 버킷은 UTC일 경계 floor(A4)라 분할 안 됨.
-- **집계 UNION 조회**(`aggregate-general.ts`·`proxy-stats.ts`·`aggregate-cache.ts`): `FROM stats_hourly` → `(SELECT ... FROM stats_hourly UNION ALL SELECT ... FROM archive_stats_hourly)`. sum/count 가법이라 UNION 후 SUM=원본 SUM exact(ADR A6, 가중치 코드 불요). **P95**(`aggregate-latency.ts`)만 Hot 원행 P95 + archive 스케치 병합(ε 근사).
-- **회귀 가드**: 집계 이주 전/후 exact(sum/count) / P95 ε / archive 빈 무변경.
+- **집계 UNION 조회**(`aggregate-general.ts`·`proxy-stats.ts`·`aggregate-cache.ts`): `FROM stats_hourly` → `(SELECT ... FROM stats_hourly UNION ALL SELECT ... FROM archive_stats_hourly)`. sum/count 가법이라 UNION 후 SUM=원본 SUM exact(ADR A6, 가중치 코드 불요).
+- **P95 순서(권장)**: 먼저 sum/count 집계 UNION만 완성(exact, 여기까지가 핵심). **P95(`aggregate-latency.ts`)는 별도 후순위** — 스케치 없이 두면 archive 구간 P95는 과소평가되므로, 그때 `duration_ms_sketch`를 **고정 버킷 히스토그램**(t-digest보다 단순·무의존)으로 채우고 Hot 원행 P95와 병합(ε 근사). 급하면 P95는 Hot-only 유지 + "archive 구간 근사" 주석으로 미룰 수 있음.
+- **회귀 가드**: 집계 이주 전/후 exact(sum/count) / P95 ε / archive 빈 무변경. **기존 회귀 패턴 복제**: `src/__tests__/archive-{query,conversation,event}-merge.test.ts`(파일 기반 DB + `archiveOldData` + 이주 전/후 `toEqual`) 그대로 따라 `archive-stats-merge.test.ts` 작성.
 
 ### (2) sessions 이주 대상 추가 — `archiveOldData` SPECS
 `sessions`(started_at)를 SPECS에 추가하되 **자식 관계 정합** 검토: retention은 "자식 없는 세션만 삭제". archive도 Hot 자식(requests/events)이 남은 세션 메타는 남겨야 조회 성립 → 이주 조건에 자식 부재 or 세션 메타 항상 Hot 유지 결정. proxy_requests는 CAS ref_count로 계속 제외(ADR A7).
 
 ### (3) archive retention GC — archive 파일/index도 retention 도달 시 삭제 (ADR A1)
 현재 이주만 하고 archive 파일의 retention 삭제가 없어 **무한 축적** 위험. `retention.ts`(또는 maintenance)에서 `timestamp < retentionCutoff`인 archive_index 행 + 해당 archive 파일 삭제. proxy CAS 행 이주 시 artifact ref_count 차감도 여기서.
+
+### 검증 명령 (매 단계)
+```bash
+cd packages/storage && bun test           # 단위/회귀 (현재 414 pass, 0 fail 기준)
+cd packages/storage && bunx tsc --noEmit  # 타입체크
+cd packages/server  && bun test && bunx tsc --noEmit
+```
+새 조회/이주는 반드시 `archive-*-merge.test.ts` 스타일 회귀 가드(이주 전/후 `toEqual`)부터 작성(TDD).
 
 ### 활성화(프로덕션) 조건
 위 (1)~(3) + 프로덕션 실측 후 `SPYGLASS_ARCHIVE_DAYS` 설정(0 < N < retention 30). dev 검증: 파일 기반 DB에 설정 → `runCleanupNow` 1회 → archive_index/파일 확인 → 모든 조회 병합 결과 = 이주 전 동일.
