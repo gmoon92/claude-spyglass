@@ -76,6 +76,11 @@ export function deleteOldData(db: Database, beforeTimestamp: number): number {
 
   // 4. sessions: started_at < cutoff 이고 살아있는 자식이 없는 것만 삭제
   //    - requests/claude_events/proxy_requests 에서 해당 session_id가 없는 세션만
+  //    - archive_index: 자식(requests/claude_events)이 Warm Archive로 이주된 경우 Hot에는 없지만
+  //      archive에 생존하므로(7~30일 구간), 그 세션 메타를 지우면 archive 자식이 고아가 되고
+  //      getRequestsBySession(병합) 결과와 세션 메타가 불일치한다. archive 자식이 모두 GC(step7)로
+  //      사라진 다음 사이클에서 비로소 세션이 삭제된다. sessions 자체는 이주하지 않음(저소용량 →
+  //      Hot 유지가 정공법, ADR A7 사이드). (이주 비활성이면 archive_index 비어 무영향.)
   const { changes } = run(
     `DELETE FROM sessions
      WHERE started_at < ?
@@ -85,6 +90,8 @@ export function deleteOldData(db: Database, beforeTimestamp: number): number {
          SELECT DISTINCT session_id FROM claude_events  WHERE session_id IS NOT NULL
          UNION
          SELECT DISTINCT session_id FROM proxy_requests WHERE session_id IS NOT NULL
+         UNION
+         SELECT DISTINCT session_id FROM archive_index  WHERE session_id IS NOT NULL
        )`,
     beforeTimestamp
   );

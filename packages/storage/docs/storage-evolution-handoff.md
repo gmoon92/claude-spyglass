@@ -31,22 +31,22 @@ stats 버킷 UNION은 완료지만, **아직 `FROM requests`를 직접 읽어 ar
 - **`getBurnRateBuckets`·`getAnomalyTimeSeriesInputs`**(`metrics/timeseries.ts`) — raw requests. burn/anomaly 시계열 archive 구간 누락.
 - 이들은 stats 버킷이 아니라 **행 아카이브(파일) 병합** 대상 → `partition-router`/`loadArchiveRows` 경유가 정공법. 회귀는 `archive-*-merge.test.ts` 스타일.
 
-### (2) sessions 이주 대상 추가 — `archiveOldData` SPECS
-`sessions`(started_at)를 SPECS에 추가하되 **자식 관계 정합** 검토: retention은 "자식 없는 세션만 삭제". archive도 Hot 자식(requests/events)이 남은 세션 메타는 남겨야 조회 성립 → 이주 조건에 자식 부재 or 세션 메타 항상 Hot 유지 결정. proxy_requests는 CAS ref_count로 계속 제외(ADR A7).
+### (2) sessions retention 정합 ✅ 완료 (Option A — 세션 메타 Hot 유지)
+결정: `sessions`(세션당 1행 저소용량)는 **이주하지 않고 Hot 유지**(archive로 옮겨도 Hot 압박 감소 미미 + 세션 목록 병합 복잡도만 증가). 대신 `retention.ts:deleteOldData` step4의 "살아있는 자식" UNION에 `archive_index.session_id` 추가 → archive에 자식이 남은 세션 메타 **오삭제 방지**(archive 자식 GC 후 다음 사이클에 세션 삭제, 1주기 지연). 회귀 `archive-session-retention.test.ts`. proxy_requests는 계속 제외(ADR A7).
 
 ### (3) archive retention GC ✅ 완료 (ADR A1)
 `archive/archive-retention.ts:deleteExpiredArchive(db, beforeTs, store)` — **완전 만료 파일**(모든 행 ts<cutoff) 단위로 archive 본문 파일 remove + `deleteArchiveIndexByFile` + `archive_stats_hourly`/`archive_stats_proxy_hourly` `hour_ts<cutoff` DELETE. `retention.ts:deleteOldData` 7단계로 배선(`getArchiveDir(db)`로 store 구성, 이주 비활성 시 no-op). FS→DB 순서로 self-healing. 회귀 `archive-retention-gc.test.ts`. **proxy CAS 행 이주 시 artifact ref_count 차감은 proxy Archive 이주(ADR A7) 도입 시 이 함수에 추가.**
 
 ### 검증 명령 (매 단계)
 ```bash
-cd packages/storage && bun test           # 단위/회귀 (현재 429 pass, 0 fail 기준)
+cd packages/storage && bun test           # 단위/회귀 (현재 433 pass, 0 fail 기준)
 cd packages/storage && bunx tsc --noEmit  # 타입체크
 cd packages/server  && bun test && bunx tsc --noEmit
 ```
 새 조회/이주는 반드시 `archive-*-merge.test.ts` 스타일 회귀 가드(이주 전/후 `toEqual`)부터 작성(TDD).
 
 ### 활성화(프로덕션) 조건
-위 (1-잔여)·(2) + 프로덕션 실측 후 `SPYGLASS_ARCHIVE_DAYS` 설정(0 < N < retention 30). dev 검증: 파일 기반 DB에 설정 → `runCleanupNow` 1회 → archive_index/파일 확인 → 모든 조회 병합 결과 = 이주 전 동일.
+위 (1-잔여) + 프로덕션 실측 후 `SPYGLASS_ARCHIVE_DAYS` 설정(0 < N < retention 30). dev 검증: 파일 기반 DB에 설정 → `runCleanupNow` 1회 → archive_index/파일 확인 → 모든 조회 병합 결과 = 이주 전 동일.
 
 ## 2. 그 밖에 남은 것 (선택/후속)
 - **프로덕션 16GB 프로파일링 + CAS 대량 백필** — dev만 검증/전환됨. 절차는 progress 문서의 CAS 섹션 + CLI 헤더(`scripts/backfill-proxy-cas.ts` `--dry-run`→`--limit`→전체). 백필 후 CAS 행 읽기는 서버가 reconstruct 커밋 이상이어야.
