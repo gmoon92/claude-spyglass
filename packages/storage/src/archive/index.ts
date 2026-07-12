@@ -48,3 +48,8 @@ export {
   type StatsArchiveResult,
   type StatsArchiveOptions,
 } from './stats-bridge';
+
+export {
+  deleteExpiredArchive,
+  type ArchiveGcResult,
+} from './archive-retention';

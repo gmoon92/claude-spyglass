@@ -8,6 +8,7 @@
 import type { Database } from 'bun:sqlite';
 import { rebuildStatsHourly } from '../stats/build-aggregate';
 import { runVacuumMaintenance } from '../../runtime/vacuum';
+import { deleteExpiredArchive, FileArchiveStore, getArchiveDir } from '../../archive';
 
 /**
  * 보관 기간이 지난 데이터 전체 삭제 (일일 유지보수용)
@@ -26,6 +27,8 @@ import { runVacuumMaintenance } from '../../runtime/vacuum';
  *  6. stats_hourly  — requests 대량 DELETE로 인한 stats 오염을 보정 (ADR-004).
  *                      AFTER DELETE 트리거를 두지 않는 대신, retention 직후 영향 받은
  *                      hour 버킷 범위만 재집계한다.
+ *  7. Warm Archive  — 이주된 데이터의 retention 경계 GC(ADR A1): archive 파일 + archive_index +
+ *                      archive_stats_* 버킷 삭제. 이주 비활성(기본)이면 no-op.
  *
  * @returns 삭제된 sessions 행 수
  */
@@ -103,6 +106,11 @@ export function deleteOldData(db: Database, beforeTimestamp: number): number {
   run('DELETE FROM stats_hourly WHERE hour_ts < ?', cutoffHourTs);
   // 경계 hour 버킷(요청 일부 삭제·일부 잔존)은 잔여 행을 다시 집계해 정확도를 맞춘다.
   rebuildStatsHourly(db, { sinceTs: cutoffHourTs, truncate: true });
+
+  // 7. Warm Archive GC (ADR A1): 이주된 데이터도 retention 경계 도달 시 Hot과 동일하게 삭제.
+  //    archive 본문 파일 + archive_index + archive_stats_* 버킷. 이주 비활성이면 전부 no-op.
+  //    파일 경로는 db.filename에서 도출(getArchiveDir) — 이주(maintenance)와 동일 디렉토리.
+  deleteExpiredArchive(db, beforeTimestamp, new FileArchiveStore(getArchiveDir(db)));
 
   return changes;
 }
