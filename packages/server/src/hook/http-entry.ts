@@ -33,6 +33,7 @@ import type { HookContext } from './event-handler';
 import { dispatchHookEvent } from './dispatcher';
 import { processHookEvent } from './processor';
 import { logDiscardedPayload } from './discard-diag';
+import { projectNameFromCwd } from './session';
 
 /**
  * raw Claude Code hook payload를 받아 dispatcher로 라우팅.
@@ -96,7 +97,7 @@ export async function handleHookHttpRequest(
   const ctx: HookContext = {
     db: db.instance,
     now: Date.now(),
-    projectName: cwd ? cwd.split('/').pop() ?? 'unknown' : 'unknown',
+    projectName: projectNameFromCwd(cwd),
   };
 
   const result = dispatchHookEvent(raw, ctx);

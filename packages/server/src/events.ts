@@ -17,7 +17,7 @@ import {
   reactivateSession,
   type ClaudeEvent,
 } from '@spyglass/storage';
-import { getLastTurnId, getTurnIdAt, parseTranscript } from './hook';
+import { ensureSession, getLastTurnId, getTurnIdAt, parseTranscript, projectNameFromCwd } from './hook';
 import { extractAssistantTextEntries } from './hook/transcript';
 import { persistAssistantTextResponses } from './hook/persist';
 import { broadcastNewRequest, broadcastSessionUpdate } from './sse';
@@ -156,6 +156,13 @@ function saveAssistantResponse(
   try {
     const sessionId = payload.session_id;
     const transcriptPath = payload.transcript_path ?? '';
+    const projectName = projectNameFromCwd(payload.cwd);
+
+    // requests.session_id → sessions(id) FK 보장. 도구 훅 경로(processor)와 동일한 SSoT 재사용.
+    // 세션 행이 없는 상태에서 Stop 이 먼저 도착하면 아래 INSERT 가 전부 FK 위반으로 실패한다.
+    if (!ensureSession(db, { session_id: sessionId, project_name: projectName, timestamp })) {
+      return;
+    }
 
     // ADR-001 P1: turn 마지막 어시스턴트 메시지를 transcript 백필로 먼저 INSERT.
     // 이렇게 하면 같은 메시지가 다음 turn의 PostToolUse 백필에서 중복 INSERT 되는 일이 없고,
@@ -168,7 +175,7 @@ function saveAssistantResponse(
         if (entries.length > 0) {
           persistAssistantTextResponses(db, entries, {
             sessionId,
-            projectName: '',
+            projectName,
           });
           lastEntryMessageId = entries[entries.length - 1].messageId;
         }

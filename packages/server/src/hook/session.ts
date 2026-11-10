@@ -13,6 +13,8 @@
  * 호출자:
  *  - handler.ts (processHookEvent): 매 요청 시 ensureSession 호출
  *  - handler.ts (processHookEvent): saveRequest 성공 후 updateSessionTotalTokens
+ *  - events.ts (saveAssistantResponse): Stop 응답 INSERT 전 ensureSession
+ *    (세션 행이 유실된 상태에서 Stop 이 먼저 오면 requests FK 위반으로 응답이 유실되던 문제 방지)
  *
  * 의존성:
  *  - @spyglass/storage: createSession, getSessionById
@@ -21,6 +23,14 @@
 import type { Database } from 'bun:sqlite';
 import { createSession, getSessionById } from '@spyglass/storage';
 import type { NormalizedHookPayload } from './types';
+
+/**
+ * cwd → project_name 파생 SSoT (마지막 경로 세그먼트, 없으면 'unknown').
+ * /collect(http-entry)와 /events(Stop) 경로가 같은 규칙으로 세션을 생성하도록 한 곳에 둔다.
+ */
+export function projectNameFromCwd(cwd: string | null | undefined): string {
+  return cwd ? cwd.split('/').pop() || 'unknown' : 'unknown';
+}
 
 /**
  * 활성 세션 캐시 (메모리).
@@ -40,7 +50,10 @@ const activeSessions = new Set<string>();
  * @returns true: 세션이 DB에 존재 (생성 또는 기존)
  *          false: 생성 실패 (FK 오류 가능성, 호출 측이 요청 거부)
  */
-export function ensureSession(db: Database, payload: NormalizedHookPayload): boolean {
+export function ensureSession(
+  db: Database,
+  payload: Pick<NormalizedHookPayload, 'session_id' | 'project_name' | 'timestamp'>,
+): boolean {
   const { session_id, project_name, timestamp } = payload;
 
   // 인메모리 캐시 히트: DB에도 실제 존재하는지 검증
