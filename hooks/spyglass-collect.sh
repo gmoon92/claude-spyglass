@@ -30,6 +30,12 @@ SPYGLASS_COLLECT_LOG="${SPYGLASS_COLLECT_LOG_DIR}/$(date '+%Y-%m-%d').log"
 SPYGLASS_RAW_LOG_DIR="${SPYGLASS_LOG_DIR}/hook-raw"
 SPYGLASS_RAW_LOG="${SPYGLASS_RAW_LOG_DIR}/$(date '+%Y-%m-%d').jsonl"
 
+# 허브 환경 태그 — 세션 환경에서 읽어 payload 의 hub_env 로 서버에 보내는 환경변수 허용 목록.
+#   이 두 개만 보낸다(목록 밖 변수는 읽지도 보내지도 않는다). 서버 hook/hub-env.ts 의 허용 목록과 같아야 한다.
+#   ORCA_TERMINAL_HANDLE    : 세션 ↔ Orca 터미널 연결 키
+#   CLAUDE_HUB_SESSION_ROLE : 허브 세션 역할(main | worker)
+SPYGLASS_HUB_ENV_KEYS="ORCA_TERMINAL_HANDLE CLAUDE_HUB_SESSION_ROLE"
+
 # DIAG 게이트 — server diag-log.ts 와 동일 판정('1'|'true'만 활성, 기본 off).
 #   ON: collect 로그·raw 원장을 일자 버킷 파일에 기록. OFF: 파일 적재 없이 콘솔(stderr)로만.
 SPYGLASS_DIAG_ENABLED_NORM="$(printf '%s' "${SPYGLASS_DIAG_ENABLED:-}" | tr '[:upper:]' '[:lower:]')"
@@ -131,15 +137,32 @@ if [[ ! -t 0 ]]; then
     # 전 이벤트 원장 기록 — DIAG 활성 + 디스크 여유 시에만 (record_raw_payload 가 게이트)
     record_raw_payload "$payload"
 
-    # hook_event_name 필드로 이벤트 유형 판별
-    hook_event=$(python3 -c "
-import sys, json
+    # hook_event_name 필드로 이벤트 유형 판별 + 허브 환경 태그(hub_env) 부착.
+    #   python 한 번으로 처리한다(이벤트마다 도는 훅이라 프로세스를 늘리지 않는다).
+    #   출력: 1행 = hook_event_name, 2행~ = 서버로 보낼 payload.
+    #   허용 목록 환경변수가 하나도 없으면 payload 를 원문 그대로 돌려준다(재직렬화 없음).
+    #   python 이 실패하면 parsed 가 비어 hook_event="" 가 되고, 아래 case 가 원본 payload 를 /collect 로 보낸다.
+    parsed=$(SPYGLASS_HUB_ENV_KEYS="$SPYGLASS_HUB_ENV_KEYS" python3 -c "
+import sys, json, os
+raw = sys.stdin.read()
 try:
-    d = json.loads(sys.stdin.read())
-    print(d.get('hook_event_name', ''))
-except:
+    d = json.loads(raw)
+    event = d.get('hook_event_name', '') if isinstance(d, dict) else ''
+    out = raw
+    if isinstance(d, dict):
+        env = {k: os.environ[k] for k in os.environ.get('SPYGLASS_HUB_ENV_KEYS', '').split() if os.environ.get(k)}
+        if env:
+            d['hub_env'] = env
+            out = json.dumps(d)
+    print(event)
+    sys.stdout.write(out)
+except Exception:
     print('')
 " 2>/dev/null <<< "$payload" || echo "")
+    hook_event="${parsed%%$'\n'*}"
+    if [[ -n "$parsed" && "$parsed" == *$'\n'* ]]; then
+        payload="${parsed#*$'\n'}"
+    fi
 
     info "Event: $hook_event"
 
