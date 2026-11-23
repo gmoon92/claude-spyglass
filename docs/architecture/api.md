@@ -54,11 +54,13 @@
 | 라우터 | 주요 라우트 |
 |--------|-------------|
 | `routes/dashboard.ts` | `GET /api/dashboard?range=...` (응답 캐시) |
-| `routes/sessions.ts` | `GET /api/sessions/active`, `/:id`, `/:id/requests`, `/:id/turns`, `/by-project` |
+| `routes/sessions.ts` | `GET /api/sessions/active`, `/:id`, `/:id/requests`, `/:id/turns`, `/by-project` — 세션 행에 `orca_terminal`·`hub_role`, `/:id` 의 `anomalies.context_saturation` 에 현재 컨텍스트 `latest_*` 포함 |
 | `routes/requests.ts` | `GET /api/requests/recent`, `/:id`, `/top-tokens` |
 | `routes/conversations.ts` | `GET /api/conversations?start=YYYY-MM-DD&end=YYYY-MM-DD&project=` |
 | `routes/stats.ts` | `GET /api/stats/sessions`, `/requests`, `/cache`, `/proxy`, `/proxy/by-model` |
 | `routes/proxy.ts` | `GET /api/proxy/recent`, `/by-session/:id`, `/:id` |
+| `routes/friction.ts` | `GET /api/friction?from=&to=&session_id=&cwd_prefix=&limit=&repeat_min=` — 도구 실패·권한 요청/거부·API 실패·압축 집계(`claude_events` 위의 읽기 전용) |
+| `routes/project-aliases.ts` | `GET/POST /api/projects/aliases`, `DELETE /api/projects/aliases/:alias` — 이름이 바뀐 프로젝트의 이력을 합쳐 조회(`project` 필터가 별칭 포함) |
 | `routes/system-prompts.ts` | `GET /api/system-prompts`, `/:hash` (lazy fetch) |
 | `routes/meta-docs.ts` | `GET /api/meta-docs`, `POST /api/meta-docs/refresh` |
 | `routes/graph.ts` | `GET /api/graph/{status,unified-flow}`, `/sessions/:id/initial`, `/turns/:id/{neighbors,path}` |

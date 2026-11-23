@@ -21,6 +21,10 @@ Claude Code 세션 단위 정보를 저장하는 테이블입니다.
 | `ended_at` | INTEGER | NULL | 세션 종료 시간 (NULL = 활성 세션) |
 | `total_tokens` | INTEGER | DEFAULT 0 | 세션 누적 토큰 수 |
 | `created_at` | INTEGER | DEFAULT (strftime('%s', 'now')) | 레코드 생성 시간 (Unix timestamp, seconds) |
+| `orca_terminal` | TEXT | NULL | `ORCA_TERMINAL_HANDLE` — 세션 ↔ Orca 터미널 연결 키 (Migration 069) |
+| `hub_role` | TEXT | NULL | `CLAUDE_HUB_SESSION_ROLE` (`main` \| `worker`). 두 값은 수집 훅이 `hub_env` 로 보내고 서버가 허용 목록·형식을 검증해 기록한다 — 검증은 `packages/server/src/hook/hub-env.ts`. 값이 없는 세션은 NULL |
+
+`project_name` 은 세션의 첫 이벤트 cwd 로 고정된다. 저장소 이름이 바뀐 경우의 합산은 `project_aliases`(Migration 070)가 읽을 때 풀어쓰며 이 컬럼은 바꾸지 않는다 — 조회 함수는 `packages/storage/src/queries/project-alias.ts`.
 
 ### 런타임 derive 컬럼 (DB 컬럼 아님)
 
