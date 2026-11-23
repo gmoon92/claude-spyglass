@@ -9,21 +9,21 @@
  *  - ANTHROPIC_UPSTREAM_URL: 기본 Anthropic 대상 (기본 https://api.anthropic.com)
  *  - MOONSHOT_UPSTREAM_URL : kimi-* 모델용 (기본 https://api.moonshot.ai/anthropic)
  *  - CUSTOM_UPSTREAMS      : "prefix1=url1,prefix2=url2" 형식의 추가 매핑
- *  - SPYGLASS_PROXY_DEBUG  : '1'이면 forward 헤더 stdout 출력
+ *  - forward 헤더 덤프는 다른 정보성 로그와 같은 스위치(SPYGLASS_DIAG_ENABLED)를 따른다.
  *
  * 외부 노출 (proxy 내부 전용):
  *  - selectUpstreamUrl(model) : 모델 prefix → upstream URL
  *  - buildForwardHeaders(req) : hop-by-hop 제거된 헤더 생성
  *  - UPSTREAM_URL             : 기본값 (handler에서 비교용)
  *
- * 의존성: 없음
+ * 의존성: @spyglass/storage#logVerbose (게이트 SSoT)
  */
+
+import { isVerboseLogging, logVerbose } from '@spyglass/storage';
 
 export const UPSTREAM_URL = (
   process.env.ANTHROPIC_UPSTREAM_URL || 'https://api.anthropic.com'
 ).replace(/\/$/, '');
-
-const DEBUG_VERBOSE = process.env.SPYGLASS_PROXY_DEBUG === '1';
 
 /**
  * 모델 prefix → 커스텀 upstream URL 매핑.
@@ -80,10 +80,10 @@ export function buildForwardHeaders(req: Request): Headers {
   req.headers.forEach((value, key) => {
     if (!HOP_BY_HOP.has(key.toLowerCase())) headers.set(key, value);
   });
-  if (DEBUG_VERBOSE) {
+  if (isVerboseLogging()) {
     const obj: Record<string, string> = {};
     headers.forEach((v, k) => { obj[k] = v; });
-    console.log('[PROXY] Request headers:', obj);
+    logVerbose('[PROXY] Request headers:', obj);
   }
   return headers;
 }

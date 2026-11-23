@@ -25,9 +25,9 @@
  *  - 동일 모듈: types, dispatcher, processor
  */
 
-import { SpyglassDatabase, getDatabase } from '@spyglass/storage';
+import { SpyglassDatabase, getDatabase, logVerbose } from '@spyglass/storage';
 import { corsHeaders } from '@spyglass/types';
-import { diagJson, isDiagEnabled } from '../diag-log';
+import { diagJson } from '../diag-log';
 import type { ClaudeHookPayload, NormalizedHookPayload, HookProcessResult } from './types';
 import type { HookContext } from './event-handler';
 import { dispatchHookEvent } from './dispatcher';
@@ -79,10 +79,8 @@ export async function handleHookHttpRequest(
     );
   }
 
-  // [RECV] 정상 수신 로그 — DIAG ON 시에만 출력 (운영 중 tool 호출마다 찍히는 노이즈 방지)
-  if (isDiagEnabled()) {
-    console.log(`[RECV] ${hook_event_name} session=${session_id}`);
-  }
+  // [RECV] 정상 수신 로그 — verbose ON 시에만 출력 (운영 중 tool 호출마다 찍히는 노이즈 방지)
+  logVerbose(`[RECV] ${hook_event_name} session=${session_id}`);
 
   // 진단: 훅 raw payload 전체를 jsonl 한 줄로 보존 (proxy 채널과 사후 비교용)
   diagJson('hook-payload', {

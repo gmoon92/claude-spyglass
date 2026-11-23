@@ -62,8 +62,8 @@ for (const pkgJson of pkgJsons) {
   }
 }
 
+// 누락이 없으면 조용히 종료 — 설치가 실제로 일어난 경우에만 출력한다.
 if (missing.size === 0) {
-  console.log('[ensure-deps] all declared dependencies present ✓');
   process.exit(0);
 }
 

@@ -8,6 +8,8 @@
  * 기본 동작 (운영):
  *  - SPYGLASS_DIAG_ENABLED 환경변수가 '1' 또는 'true' 일 때만 로그 작동.
  *  - 그 외(기본 포함)에는 diagLog/diagJson 모두 no-op → 디스크 사용량 0.
+ *  - 같은 스위치가 정보성 콘솔 출력(@spyglass/storage#logVerbose)도 함께 연다.
+ *    플래그 평가 SSoT 는 storage/runtime/log.ts — 여기서는 위임만 한다.
  *
  * 활성화 방법 (개발/디버깅):
  *  ```bash
@@ -45,17 +47,13 @@ import {
   truncateSync,
 } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { shouldSuppressNonEssentialWrites } from '@spyglass/storage';
+import { shouldSuppressNonEssentialWrites, isVerboseLogging } from '@spyglass/storage';
 
 /**
- * 플래그 평가 — '1' 또는 'true'(대소문자 무관)면 활성.
- * 모듈 로드 시점에 한 번만 평가해 호출 시 환경변수 lookup 비용을 없앤다.
- * 즉 서버 재시작해야 플래그 변경 반영됨.
+ * 플래그 평가는 storage/runtime/log.ts 가 SSoT — 진단 파일 기록과 정보성 콘솔 출력이
+ * 같은 스위치(SPYGLASS_DIAG_ENABLED)를 공유한다. 여기서 재평가하지 않는다.
  */
-const ENABLED = (() => {
-  const v = (process.env.SPYGLASS_DIAG_ENABLED || '').trim().toLowerCase();
-  return v === '1' || v === 'true';
-})();
+const ENABLED = isVerboseLogging();
 
 const HOME = process.env.HOME || process.env.USERPROFILE || process.cwd();
 const DEFAULT_LOG_DIR = resolve(HOME, '.spyglass', 'logs');
@@ -136,38 +134,24 @@ export function getDiagLogDir(): string {
 }
 
 /**
- * 서버 부팅 배너에 진단 로그 모드 안내를 출력.
+ * 진단 로그가 켜져 있을 때만 부팅 배너에 보안 경고를 출력.
  *
  * 책임:
- *  - 현재 SPYGLASS_DIAG_ENABLED 상태(ON/OFF)와 활성화 방법을 한 블록으로 표시.
- *  - 사용자가 "어떻게 켜더라" 묻지 않게 하기 위한 self-documenting 부팅 메시지.
+ *  - 평문 payload가 디스크에 쌓이고 있다는 사실을 켠 사람에게 반드시 알린다.
+ *  - OFF(기본)에서는 아무것도 출력하지 않는다 — 매 부팅 안내 블록은 콘솔 잡음이고,
+ *    켜는 방법은 docs/install-guide.md 가 SSoT.
  *
  * 호출 시점:
  *  - runtime/lifecycle.ts의 startServer()에서 서버 listen 직후 1회.
- *
- * 의존성: console (no-op safe — 항상 출력).
  */
 export function logDiagStatus(): void {
-  if (ENABLED) {
-    console.log(
-      `[Diag] SPYGLASS_DIAG_ENABLED=1 → diagnostic logs ON at ${LOG_DIR}\n`
-        + `       categories: model-trace.log, hook-payload.jsonl, proxy-payload.jsonl\n`
-        + `       ⚠ SECURITY: raw payloads (incl. conversation bodies) are written to disk in plaintext (0o600, truncated on restart).\n`
-        + `         Exclude them from backups/sharing. (To disable: unset SPYGLASS_DIAG_ENABLED and restart)`,
-    );
-  } else {
-    console.log(
-      `[Diag] Diagnostic logs OFF (default). To enable raw hook/proxy payload capture, restart with one of:\n`
-        + `       1) inline prefix : SPYGLASS_DIAG_ENABLED=1 bun run dev    # space, no '&'\n`
-        + `       2) env wrapper   : env SPYGLASS_DIAG_ENABLED=1 bun run dev\n`
-        + `       3) export (shell): export SPYGLASS_DIAG_ENABLED=1 && bun run dev\n`
-        + `       NOTE: 'SPYGLASS_DIAG_ENABLED=1 && bun run dev' is WRONG — '&' backgrounds the\n`
-        + `             assignment as a separate process; the var won't reach 'bun run dev'.\n`
-        + `       optional flags : SPYGLASS_DIAG_LOG_DIR=<path>  SPYGLASS_DIAG_RAW_SSE=1\n`
-        + `       categories ON  : model-trace.log, hook-payload.jsonl, proxy-payload.jsonl\n`
-        + `       default log dir: ${DEFAULT_LOG_DIR}`,
-    );
-  }
+  if (!ENABLED) return;
+  console.warn(
+    `[Diag] SPYGLASS_DIAG_ENABLED=1 → diagnostic logs ON at ${LOG_DIR}\n`
+      + `       categories: model-trace.log, hook-payload.jsonl, proxy-payload.jsonl\n`
+      + `       ⚠ SECURITY: raw payloads (incl. conversation bodies) are written to disk in plaintext (0o600, truncated on restart).\n`
+      + `         Exclude them from backups/sharing. (To disable: unset SPYGLASS_DIAG_ENABLED and restart)`,
+  );
 }
 
 /**

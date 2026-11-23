@@ -34,6 +34,7 @@ import {
   type MetaDocSource,
   type MetaDocType,
   type UpsertMetaDocParams,
+  logVerbose,
 } from '@spyglass/storage';
 import { scanGlobalUserDir, scanRoot, type MetaDocCandidate } from './scanner';
 import { normalizeCwd, resolveProjectChain } from './resolver';
@@ -208,7 +209,7 @@ export function pruneDeadSourceRoots(db: Database): string[] {
     if (!existsSync(source_root)) {
       softDeleteBySourceRoot(db, source_root, 'projectSettings');
       pruned.push(source_root);
-      console.log(`[meta-docs] pruned dead source_root: ${source_root}`);
+      logVerbose(`[meta-docs] pruned dead source_root: ${source_root}`);
     }
   }
   return pruned;

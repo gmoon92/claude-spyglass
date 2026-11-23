@@ -21,12 +21,10 @@ import {
 const force = process.argv.includes('--force');
 const today = new Date().toISOString().slice(0, 10);
 
+// 오늘 이미 돌았으면 조용히 종료 — 아무 일도 하지 않았음을 알리는 줄은 콘솔 잡음이다.
 if (!force && getLastCleanupDate() === today) {
-  console.log(`[Cleanup] Already done today (${today}), skip. Use --force to override.`);
   process.exit(0);
 }
-
-console.log(`[Cleanup] Starting${force ? ' (forced)' : ''} — ${today}`);
 
 const db = new SpyglassDatabase();
 try {

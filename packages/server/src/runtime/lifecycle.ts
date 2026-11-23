@@ -26,7 +26,7 @@
  *  - server.test (단위 테스트)
  */
 
-import { SpyglassDatabase, getDatabase, closeDatabase } from '@spyglass/storage';
+import { SpyglassDatabase, getDatabase, closeDatabase, logVerbose } from '@spyglass/storage';
 import {
   startGraphSyncWorker,
   stopGraphSyncWorker,
@@ -84,12 +84,12 @@ export function startServer(options: {
   // 진단 로그 디렉토리 정리 — DIAG ON/OFF 무관, 새 서버 라이프사이클은 깨끗한 상태에서 시작
   const cleared = clearDiagLogs();
   if (cleared > 0) {
-    console.log(`[Server] Cleared ${cleared} diagnostic log file(s) at ${getDiagLogDir()}`);
+    logVerbose(`[Server] Cleared ${cleared} diagnostic log file(s) at ${getDiagLogDir()}`);
   }
 
   // 데이터베이스 연결
   db = getDatabase({ dbPath });
-  console.log(`[Server] Database connected: ${dbPath}`);
+  logVerbose(`[Server] Database connected: ${dbPath}`);
 
   // Graph projection sync worker — 그래프는 항상 켜진 상태로 고정 (v4.3.x).
   //   - native binding 의 lazy import 까지 모두 본 호출 안에서 일어남.
@@ -113,7 +113,7 @@ export function startServer(options: {
   try {
     const dbInstance = db.instance;
     const knownCwds = discoverKnownCwds(dbInstance);
-    console.log(`[Server] meta-docs known cwds discovered: ${knownCwds.length}`);
+    logVerbose(`[Server] meta-docs known cwds discovered: ${knownCwds.length}`);
 
     if (knownCwds.length <= 10) {
       // 적으면 동기 부팅 (즉시 일관성 확보).
@@ -152,9 +152,8 @@ export function startServer(options: {
   });
 
   console.log(`[Server] Running on http://${host}:${port}`);
-  console.log(`[Server] Health check: http://${host}:${port}/health`);
 
-  // 진단 로그 모드 상태/활성화 방법을 부팅 배너에 출력 (self-documenting boot message)
+  // 진단 로그가 켜져 있으면 평문 payload 적재 경고를 부팅 배너에 출력.
   logDiagStatus();
 
   return server;
@@ -231,7 +230,7 @@ export async function stopServer(): Promise<void> {
   if (db) {
     closeDatabase();
     db = null;
-    console.log('[Server] Database closed');
+    logVerbose('[Server] Database closed');
   }
 }
 

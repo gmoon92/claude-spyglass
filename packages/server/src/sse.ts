@@ -12,6 +12,7 @@
 
 import type { NormalizedRequest } from './domain/request-normalizer';
 import { corsHeaders } from '@spyglass/types';
+import { logVerbose } from '@spyglass/storage';
 
 // =============================================================================
 // 타입 정의
@@ -55,7 +56,7 @@ const connections = new Set<ReadableStreamDefaultController<Uint8Array>>();
  */
 function addConnection(controller: ReadableStreamDefaultController<Uint8Array>): void {
   connections.add(controller);
-  console.log(`[SSE] Client connected. Total: ${connections.size}`);
+  logVerbose(`[SSE] Client connected. Total: ${connections.size}`);
 
   // 초기 연결 메시지 전송
   sendEvent(controller, {
@@ -70,7 +71,7 @@ function addConnection(controller: ReadableStreamDefaultController<Uint8Array>):
  */
 function removeConnection(controller: ReadableStreamDefaultController<Uint8Array>): void {
   connections.delete(controller);
-  console.log(`[SSE] Client disconnected. Total: ${connections.size}`);
+  logVerbose(`[SSE] Client disconnected. Total: ${connections.size}`);
 }
 
 // =============================================================================
@@ -116,7 +117,7 @@ export function broadcastUpdate(event: Omit<SSEEvent, 'timestamp'>): void {
   });
 
   if (failedCount > 0) {
-    console.log(`[SSE] Removed ${failedCount} failed connections`);
+    logVerbose(`[SSE] Removed ${failedCount} failed connections`);
   }
 }
 
@@ -329,5 +330,5 @@ export function closeAllConnections(): void {
     }
   });
   connections.clear();
-  console.log('[SSE] All connections closed');
+  logVerbose('[SSE] All connections closed');
 }

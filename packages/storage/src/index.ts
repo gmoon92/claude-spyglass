@@ -411,6 +411,9 @@ export {
 } from './runtime/disk-space';
 export type { DiskStatus, DiskSpaceReport } from './runtime/disk-space';
 
+// 정보성 콘솔 출력 게이트 (server·storage-graph·meta-docs 가 동일 스위치를 보는 SSoT)
+export { isVerboseLogging, logVerbose } from './runtime/log';
+
 // =============================================================================
 // At-rest 컬럼 암호화 (R3) — AES-256-GCM + payload_algo 분기 codec SSoT
 // 소비처: 본문 컬럼(payload/content) 쓰기·읽기 전 경로. 기본 OFF(옵트인).

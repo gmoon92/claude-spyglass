@@ -31,7 +31,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
-import { getDatabase } from '@spyglass/storage';
+import { getDatabase, logVerbose } from '@spyglass/storage';
 import { getCircuitBreaker } from '../runtime/circuit-breaker';
 import { getLadybugClient, closeLadybugClient, LadybugUnavailableError } from '../client';
 import { getSyncCursor } from './cursor';
@@ -105,7 +105,7 @@ export function resetSyncWorkerStateForTests(): void {
  */
 export function startGraphSyncWorker(): void {
   if (timer !== null) return; // 멱등.
-  console.log(`[graph-sync] worker starting (tick=${TICK_INTERVAL_MS}ms)`);
+  logVerbose(`[graph-sync] worker starting (tick=${TICK_INTERVAL_MS}ms)`);
   // load cursor 즉시 — tick 첫 호출 전에 file IO 끝내 두면 첫 응답이 빠르다.
   getSyncCursor().load();
   timer = setInterval(() => {

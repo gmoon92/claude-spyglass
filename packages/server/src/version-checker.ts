@@ -6,6 +6,7 @@
 
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
+import { logVerbose } from '@spyglass/storage';
 
 const REPO_OWNER = 'gmoon92';
 const REPO_NAME = 'claude-spyglass';
@@ -138,7 +139,7 @@ export async function check(): Promise<void> {
   const currentVersion = readCurrentVersion();
   const latestTag = await fetchLatestTag();
   cache = buildCache(currentVersion, latestTag);
-  console.log(
+  logVerbose(
     `[VersionChecker] current=${cache.currentVersion} latest=${cache.latestTag} updateAvailable=${cache.updateAvailable}`
   );
 }
@@ -150,7 +151,7 @@ export async function check(): Promise<void> {
 export function refreshAfterUpdate(): void {
   const currentVersion = readCurrentVersion();
   cache = buildCache(currentVersion, cache?.latestTag ?? null);
-  console.log(
+  logVerbose(
     `[VersionChecker] Refreshed after update: current=${cache.currentVersion} updateAvailable=${cache.updateAvailable}`
   );
 }
