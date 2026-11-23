@@ -14,6 +14,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
+import { projectNameIn, resolveProjectNames } from '../project-alias';
 import { ACTIVE_REQUEST_FILTER_SQL, decodeRequestRows, isActiveRequest } from './read';
 import { archiveHasRowsInRange, getArchiveIndexRows, loadArchiveRows, getArchiveDir, FileArchiveStore } from '../../archive';
 
@@ -60,8 +61,10 @@ export function getConversationRows(
   ];
   const params: (string | number)[] = [fromTs, toTs];
   if (project) {
-    conditions.push('s.project_name = ?');
-    params.push(project);
+    // 프로젝트 별칭(Migration 070) 포함
+    const match = projectNameIn(db, 's.project_name', project);
+    conditions.push(match.sql);
+    params.push(...match.params);
   }
   params.push(limit);
 
@@ -123,11 +126,12 @@ function loadConversationArchiveRows(
     sessionMap.set(s.id, { project_name: s.project_name, started_at: s.started_at });
   }
 
+  const projectNames = project ? new Set(resolveProjectNames(db, project)) : null; // 별칭 포함(Migration 070)
   const out: RawConversationRow[] = [];
   for (const r of candidates) {
     const s = sessionMap.get(String(r.session_id));
     if (!s) continue; // JOIN 대응
-    if (project && s.project_name !== project) continue; // project 필터
+    if (projectNames && !projectNames.has(s.project_name)) continue; // project 필터
     out.push({
       session_id: String(r.session_id),
       project_name: s.project_name,

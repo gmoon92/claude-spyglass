@@ -8,6 +8,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
+import { projectNameIn } from '../project-alias';
 import { buildTimeWindow } from './_shared';
 import type {
   ModelUsageRow,
@@ -38,8 +39,10 @@ export function getModelUsageStats(
   const conds = [`${col('type')} = 'prompt'`, `${col('model')} IS NOT NULL`, `${col('model')} NOT LIKE '<%>'`];
   conds.push(...buildTimeWindow(col('timestamp'), fromTs, toTs, params as number[]));
   if (scoped) {
-    conds.push('s.project_name = ?');
-    params.push(project);
+    // 프로젝트 별칭(Migration 070) 포함
+    const match = projectNameIn(db, 's.project_name', project);
+    conds.push(match.sql);
+    params.push(...match.params);
   }
 
   const from = scoped

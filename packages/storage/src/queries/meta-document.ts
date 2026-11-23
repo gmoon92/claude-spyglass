@@ -28,6 +28,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
+import { projectNameIn } from './project-alias';
 
 // =============================================================================
 // 타입 정의
@@ -329,8 +330,10 @@ export function listMetaDocsWithUsage(
   const useInline = hasRange || hasProject;
   const rangeFrom = filter.fromTs !== undefined ? filter.fromTs : 0;
   const rangeTo   = filter.toTs   !== undefined ? filter.toTs   : Number.MAX_SAFE_INTEGER;
-  const projectClause = hasProject
-    ? 'AND session_id IN (SELECT id FROM sessions WHERE project_name = ?)'
+  // 프로젝트 별칭(Migration 070): 개명 전 이름의 세션도 같은 프로젝트로 묶어 IN 목록으로 푼다.
+  const projectMatch = hasProject ? projectNameIn(db, 'project_name', filter.project!) : null;
+  const projectClause = projectMatch
+    ? `AND session_id IN (SELECT id FROM sessions WHERE ${projectMatch.sql})`
     : '';
 
   // meta-docs-query-cte (2026-06-07): 사용 집계를 단일 `WITH usage` CTE 로 묶어
@@ -373,10 +376,10 @@ export function listMetaDocsWithUsage(
   ` : `SELECT * FROM v_meta_doc_usage`;
 
   // CTE 는 1회만 바인딩(materialize). useInline 시 2 분기 × (from, to, project?) 파라미터.
-  //   range만이면 4개, project까지면 6개. range='all' 이면 0개.
+  //   range만이면 4개, project까지면 4 + 2×(별칭 포함 이름 수)개. range='all' 이면 0개.
   const usageCteParams: (string | number)[] = useInline
-    ? (hasProject
-        ? [rangeFrom, rangeTo, filter.project!, rangeFrom, rangeTo, filter.project!]
+    ? (projectMatch
+        ? [rangeFrom, rangeTo, ...projectMatch.params, rangeFrom, rangeTo, ...projectMatch.params]
         : [rangeFrom, rangeTo, rangeFrom, rangeTo])
     : [];
 
@@ -421,7 +424,7 @@ export function listMetaDocsWithUsage(
   `;
 
   // 바인딩 순서 (CTE materialize 로 usage 파라미터는 1회만):
-  //   1) WITH usage 의 CTE 파라미터 (useInline 시 range만 4개 / project까지 6개, 'all'이면 0개)
+  //   1) WITH usage 의 CTE 파라미터 (useInline 시 range만 4개 / project까지 4 + 2×이름 수, 'all'이면 0개)
   //   2) 카탈로그 LEFT 조건 (type/source_root)
   //   3) (orphan) type 필터 파라미터 — usage 는 CTE 재참조라 추가 바인딩 없음
   const allParams: (string | number)[] = [
@@ -523,10 +526,12 @@ export function getMetaFlowAggregate(db: Database, filter: MetaFlowFilter = {}):
   // 공통 WHERE 조각 — requests 행이 매칭해야 할 조건.
   //   - project 필터는 session_id IN (SELECT id FROM sessions WHERE project_name=?) 패턴(SSoT: getProjectToolStats).
   //   - 시간 윈도우는 timestamp 양 끝 inclusive.
-  const projectClause = filter.project
-    ? 'AND session_id IN (SELECT id FROM sessions WHERE project_name = ?)'
+  // 프로젝트 별칭(Migration 070) 포함 — 이름 하나가 IN 목록으로 풀린다(projectParam 은 그 바인딩 배열).
+  const projectMatch = filter.project ? projectNameIn(db, 'project_name', filter.project) : null;
+  const projectClause = projectMatch
+    ? `AND session_id IN (SELECT id FROM sessions WHERE ${projectMatch.sql})`
     : '';
-  const projectParam: string[] = filter.project ? [filter.project] : [];
+  const projectParam: string[] = projectMatch ? projectMatch.params : [];
 
   // turn 분모 — DISTINCT turn_id. tool_call/prompt 무관하게 turn_id가 있는 행을 기준으로 잡는다.
   const totalTurnsRow = db.query(`

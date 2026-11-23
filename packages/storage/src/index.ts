@@ -217,6 +217,18 @@ export {
   type ClaudeEvent,
 } from './queries/event';
 
+// 프로젝트 별칭 — 이름이 바뀐 프로젝트의 이력을 합쳐 조회 (Migration 070, /api/projects/aliases)
+export {
+  resolveProjectNames,
+  projectNameIn,
+  canonicalProjectNameExpr,
+  listProjectAliases,
+  upsertProjectAlias,
+  deleteProjectAlias,
+  type ProjectAliasRow,
+  type UpsertProjectAliasResult,
+} from './queries/project-alias';
+
 // 마찰 신호 집계 (GET /api/friction) — claude_events 위의 읽기 전용 집계, 새 테이블 없음
 export {
   getFrictionSummary,

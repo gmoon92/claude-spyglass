@@ -15,6 +15,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
+import { projectNameIn } from '../project-alias';
 
 /** 도구별 통계 (tool_call 타입만, tool_name 단위 집계) */
 export interface ToolStats {
@@ -150,8 +151,10 @@ export function getProjectToolStats(
 ): SessionToolStats[] {
   // projectName null → project_name 필터 제거(전체 세션). 그 외엔 sessions JOIN 으로 프로젝트 한정.
   const hasProject = projectName != null;
-  const projectClause = hasProject
-    ? 'session_id IN (SELECT id FROM sessions WHERE project_name = ?)'
+  // 프로젝트 별칭(Migration 070): 이름 하나를 별칭 포함 IN 목록으로 푼다.
+  const projectMatch = hasProject ? projectNameIn(db, 'project_name', projectName as string) : null;
+  const projectClause = projectMatch
+    ? `session_id IN (SELECT id FROM sessions WHERE ${projectMatch.sql})`
     : '1=1';
 
   const tsConds: string[] = [];
@@ -161,10 +164,10 @@ export function getProjectToolStats(
 
   // params 순서: [project(CTE)], [from(CTE)], [to(CTE)], [project(main)], [from(main)], [to(main)].
   //   projectClause 가 1=1 이면 project 바인딩은 생략한다.
-  const cteParams: (number | string)[] = hasProject ? [projectName as string] : [];
+  const cteParams: (number | string)[] = projectMatch ? [...projectMatch.params] : [];
   if (fromTs) cteParams.push(fromTs);
   if (toTs)   cteParams.push(toTs);
-  const params: (number | string)[] = hasProject ? [projectName as string] : [];
+  const params: (number | string)[] = projectMatch ? [...projectMatch.params] : [];
   if (fromTs) params.push(fromTs);
   if (toTs)   params.push(toTs);
 

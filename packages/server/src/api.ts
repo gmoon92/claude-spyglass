@@ -13,6 +13,7 @@
  *   - routes/dashboard.ts      — 대시보드 + 응답 캐시
  *   - routes/events.ts         — Wildcard hook 이벤트 (3개 라우트)
  *   - routes/friction.ts       — 마찰 신호 집계 (1개 라우트)
+ *   - routes/project-aliases.ts — 프로젝트 별칭 관리 (3개 라우트, 비동기)
  *   - routes/proxy.ts          — Proxy 도메인 (3개 라우트)
  *   - routes/system-prompts.ts — System Prompt 카탈로그 (2개 라우트)
  *   - metrics.ts (별도)        — UI Redesign Phase 2 시각 지표 (8개 라우트)
@@ -32,6 +33,7 @@ import { statsRouter } from './routes/stats';
 import { dashboardRouter, invalidateDashboardCache } from './routes/dashboard';
 import { eventsRouter } from './routes/events';
 import { frictionRouter } from './routes/friction';
+import { projectAliasesRouter } from './routes/project-aliases';
 import { proxyRouter } from './routes/proxy';
 import { systemPromptsRouter } from './routes/system-prompts';
 import { metaDocsRouter } from './routes/meta-docs';
@@ -95,6 +97,11 @@ async function dispatchApi(req: Request, db: Database): Promise<Response> {
   // /api/meta-docs/* — 비동기 라우터 (POST refresh 본문 파싱이 async)
   const metaDocsResponse = await metaDocsRouter(req, db);
   if (metaDocsResponse) return metaDocsResponse;
+
+  // /api/projects/aliases — 프로젝트 별칭 관리 (비동기 — POST 본문 파싱). sessions 라우터의
+  //   `/api/projects/:name/...` 보다 먼저 시도하지만 경로가 겹치지 않는다(세그먼트 수가 다름).
+  const aliasesResponse = await projectAliasesRouter(req, db);
+  if (aliasesResponse) return aliasesResponse;
 
   // /api/graph/* — 비동기 라우터 (LadybugClient.query 가 async). 기존 SQLite 라우트와
   //   완전히 분리된 prefix 라 우선순위는 상대적이지 않다.

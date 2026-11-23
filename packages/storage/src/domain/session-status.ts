@@ -41,6 +41,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
+import { canonicalProjectNameExpr, projectNameIn } from '../queries/project-alias';
 import type { Session } from '../schema';
 import { decodeText } from '../payload-codec';
 import { getActiveKey } from '../runtime/encryption';
@@ -103,10 +104,15 @@ interface CompiledWhere {
  * SessionStatusFilter를 sessions 테이블 WHERE 절로 컴파일.
  * 항상 's' 별칭을 가정한다 (도메인 모듈은 한 별칭으로 SSoT).
  */
-function compileFilter(f: SessionStatusFilter): CompiledWhere {
+function compileFilter(db: Database, f: SessionStatusFilter): CompiledWhere {
   const conds: string[] = [];
   const params: (number | string)[] = [];
-  if (f.projectName) { conds.push('s.project_name = ?'); params.push(f.projectName); }
+  if (f.projectName) {
+    // 프로젝트 별칭(Migration 070): 개명 전 이름의 세션도 같은 프로젝트로 묶는다.
+    const match = projectNameIn(db, 's.project_name', f.projectName);
+    conds.push(match.sql);
+    params.push(...match.params);
+  }
   // 날짜 범위는 "세션 시작 시각(started_at)"이 아니라 "범위 내 요청 활동(r.timestamp)" 기준.
   //   요청 통계(getRequestStats: hour_ts)와 일관 — 어제 시작해 오늘 활동 중인 세션도
   //   '오늘' 범위에 포함되어야 한다. started_at 기준이면 그런 세션이 누락되어
@@ -138,7 +144,7 @@ export function countLiveSessions(
   filter: SessionStatusFilter = {},
 ): number {
   const live = buildLiveSessionPredicate(now, 's');
-  const where = compileFilter(filter);
+  const where = compileFilter(db, filter);
   const whereSql = where.sql ? `${where.sql} AND ${live.sql}` : `WHERE ${live.sql}`;
   const row = db.query(`SELECT COUNT(*) as c FROM sessions s ${whereSql}`)
     .get(...where.params, ...live.params) as { c: number } | undefined;
@@ -155,7 +161,7 @@ export function countVisibleSessions(
   filter: SessionStatusFilter = {},
 ): number {
   const visible = buildVisibleSessionPredicate('s');
-  const where = compileFilter(filter);
+  const where = compileFilter(db, filter);
   const whereSql = where.sql ? `${where.sql} AND ${visible}` : `WHERE ${visible}`;
   const row = db.query(`SELECT COUNT(*) as c FROM sessions s ${whereSql}`)
     .get(...where.params) as { c: number } | undefined;
@@ -204,7 +210,7 @@ export function listVisibleSessions(
   now: number = Date.now(),
 ): Session[] {
   const liveStateCol = buildLiveStateColumn(now, 's.ended_at', 'MAX(r.timestamp)');
-  const where = compileFilter(filter);
+  const where = compileFilter(db, filter);
 
   // R3: first_prompt_payload는 클라이언트가 JSON.parse하므로 algo를 함께 가져와 서버측 복호한다.
   // storage-payload-detach 단계 C(063): payload 는 request_payloads off-row 테이블에 있으므로
@@ -254,7 +260,7 @@ export function aggregateSessionStatus(
 ): SessionStatusAggregate {
   const live = buildLiveSessionPredicate(now, 's');
   const visible = buildVisibleSessionPredicate('s');
-  const where = compileFilter(filter);
+  const where = compileFilter(db, filter);
 
   const row = db.query(`
     SELECT
@@ -293,17 +299,19 @@ export function aggregateProjectStatus(
 ): ProjectStatusMetrics[] {
   const live = buildLiveSessionPredicate(now, 's');
   const visible = buildVisibleSessionPredicate('s');
-  const where = compileFilter(filter);
+  const where = compileFilter(db, filter);
 
+  // 프로젝트 별칭(Migration 070): 별칭은 대표 이름 그룹으로 합쳐 한 프로젝트로 집계한다.
+  const projectKey = canonicalProjectNameExpr(db, 's.project_name');
   return db.query(`
     SELECT
-      s.project_name,
+      ${projectKey} AS project_name,
       SUM(CASE WHEN ${visible} THEN 1 ELSE 0 END) as session_count,
       SUM(CASE WHEN ${live.sql} THEN 1 ELSE 0 END) as active_count,
       SUM(CASE WHEN ${visible} THEN s.total_tokens ELSE 0 END) as total_tokens
     FROM sessions s
     ${where.sql}
-    GROUP BY s.project_name
+    GROUP BY ${projectKey}
     HAVING session_count > 0
     ORDER BY total_tokens DESC
     LIMIT ?

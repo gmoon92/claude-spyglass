@@ -15,6 +15,7 @@
  */
 
 import type { Database } from 'bun:sqlite';
+import { projectNameIn } from '../project-alias';
 import type { SessionFilterOptions, SessionQueryResult } from './types';
 import {
   listLiveSessions,
@@ -58,8 +59,10 @@ export function getSessionsWithFilter(
   const params: (string | number)[] = [];
 
   if (options.project_name) {
-    conditions.push('project_name = ?');
-    params.push(options.project_name);
+    // 프로젝트 별칭(Migration 070) 포함
+    const match = projectNameIn(db, 'project_name', options.project_name);
+    conditions.push(match.sql);
+    params.push(...match.params);
   }
   if (options.started_after) {
     conditions.push('started_at >= ?');
