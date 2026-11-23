@@ -117,6 +117,59 @@ export function getRecentEvents(db: Database, limit = 100): ClaudeEvent[] {
   return decodeEventRows(mergeEventArchive(db, hot, {}, limit));
 }
 
+/** getEventsByTypesInRange 필터. 시각은 ms epoch, from·to 모두 포함(다른 stats 조회와 같은 규약). */
+export interface EventRangeFilter {
+  eventTypes: string[];
+  fromTs?: number;
+  toTs?: number;
+  sessionId?: string;
+  /** cwd 가 이 문자열로 시작하는 이벤트만. LIKE 를 쓰지 않아 `%`·`_` 를 이스케이프할 필요가 없다. */
+  cwdPrefix?: string;
+  limit: number;
+}
+
+/**
+ * 여러 event_type 을 기간·세션·cwd 로 한 번에 거른 이벤트(최신순, payload 복호 완료).
+ *
+ * 기존 getEventsBySession/getEventsByType 은 타입이나 세션 하나에 limit 만 받아, 세션 이벤트의 절반을
+ * 차지하는 CwdChanged·ConfigChange 에 밀려 원하는 타입이 limit 밖으로 나갈 수 있다. 이 함수는 타입을
+ * SQL 에서 먼저 거르기 때문에 그 문제가 없다.
+ *
+ * Hot/Archive 병합은 mergeEventArchive 와 같은 규칙 — archive 가 범위에 없으면 Hot 그대로.
+ *
+ * 호출자: friction.ts getFrictionSummary (GET /api/friction).
+ */
+export function getEventsByTypesInRange(db: Database, f: EventRangeFilter): ClaudeEvent[] {
+  if (f.eventTypes.length === 0) return [];
+  const where: string[] = [`event_type IN (${f.eventTypes.map(() => '?').join(',')})`];
+  const params: unknown[] = [...f.eventTypes];
+  if (f.fromTs !== undefined) { where.push('timestamp >= ?'); params.push(f.fromTs); }
+  if (f.toTs !== undefined) { where.push('timestamp <= ?'); params.push(f.toTs); }
+  if (f.sessionId) { where.push('session_id = ?'); params.push(f.sessionId); }
+  if (f.cwdPrefix) { where.push('substr(cwd, 1, ?) = ?'); params.push(f.cwdPrefix.length, f.cwdPrefix); }
+  const hot = db.query(
+    `SELECT * FROM claude_events WHERE ${where.join(' AND ')} ORDER BY timestamp DESC LIMIT ?`,
+  ).all(...(params as []), f.limit) as ClaudeEvent[];
+
+  let merged = hot;
+  // archive_index 는 timestamp < ? (배타) 규약이라 to 를 +1 해 포함 범위로 맞춘다. cwd 는 인덱스에 없어 로드 뒤 거른다.
+  const archFrom = f.fromTs ?? null;
+  const archTo = f.toTs !== undefined ? f.toTs + 1 : null;
+  if (archiveHasRowsInRange(db, 'claude_events', archFrom, archTo)) {
+    const store = new FileArchiveStore(getArchiveDir(db));
+    for (const type of f.eventTypes) {
+      const idx = getArchiveIndexRows(db, 'claude_events', {
+        fromTs: archFrom, toTs: archTo, sessionId: f.sessionId ?? null, type, order: 'DESC', limit: f.limit,
+      });
+      if (idx.length === 0) continue;
+      const arch = loadArchiveRows(store, idx, 'event_id') as unknown as ClaudeEvent[];
+      merged = merged.concat(f.cwdPrefix ? arch.filter((e) => (e.cwd ?? '').startsWith(f.cwdPrefix!)) : arch);
+    }
+    merged = merged.sort((a, b) => b.timestamp - a.timestamp).slice(0, f.limit);
+  }
+  return decodeEventRows(merged);
+}
+
 export function getEventStats(db: Database): { event_type: string; count: number }[] {
   return db.query(
     'SELECT event_type, COUNT(*) as count FROM claude_events GROUP BY event_type ORDER BY count DESC'

@@ -35,6 +35,8 @@ export interface ApiResponse<T = unknown> {
     implicit_turn?: boolean;
     /** /api/conversations: MAX_ROWS 상한에 걸려 결과가 잘렸는지 표지 */
     truncated?: boolean;
+    /** /api/friction: 집계에 쓴 이벤트 수(상한에 걸렸으면 truncated=true) */
+    scanned_events?: number;
   };
 }
 

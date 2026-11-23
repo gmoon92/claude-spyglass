@@ -12,6 +12,7 @@
  *   - routes/stats.ts          — 통계 도메인 (7개 라우트)
  *   - routes/dashboard.ts      — 대시보드 + 응답 캐시
  *   - routes/events.ts         — Wildcard hook 이벤트 (3개 라우트)
+ *   - routes/friction.ts       — 마찰 신호 집계 (1개 라우트)
  *   - routes/proxy.ts          — Proxy 도메인 (3개 라우트)
  *   - routes/system-prompts.ts — System Prompt 카탈로그 (2개 라우트)
  *   - metrics.ts (별도)        — UI Redesign Phase 2 시각 지표 (8개 라우트)
@@ -30,6 +31,7 @@ import { conversationsRouter } from './routes/conversations';
 import { statsRouter } from './routes/stats';
 import { dashboardRouter, invalidateDashboardCache } from './routes/dashboard';
 import { eventsRouter } from './routes/events';
+import { frictionRouter } from './routes/friction';
 import { proxyRouter } from './routes/proxy';
 import { systemPromptsRouter } from './routes/system-prompts';
 import { metaDocsRouter } from './routes/meta-docs';
@@ -60,6 +62,7 @@ const SYNC_ROUTERS = [
   statsRouter,
   dashboardRouter,
   eventsRouter,
+  frictionRouter,
   proxyRouter,
   systemPromptsRouter,
   versionRouter,

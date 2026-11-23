@@ -210,8 +210,25 @@ export {
   getEventsByType,
   getRecentEvents,
   getEventStats,
+  getEventsByTypesInRange,
+  type EventRangeFilter,
   type ClaudeEvent,
 } from './queries/event';
+
+// 마찰 신호 집계 (GET /api/friction) — claude_events 위의 읽기 전용 집계, 새 테이블 없음
+export {
+  getFrictionSummary,
+  summarizeFriction,
+  FRICTION_EVENT_TYPES,
+  FRICTION_DEFAULT_LIMIT,
+  FRICTION_MAX_LIMIT,
+  type FrictionFilter,
+  type FrictionSummary,
+  type FrictionCounts,
+  type FrictionSessionRow,
+  type FrictionToolRow,
+  type FrictionRepeatRow,
+} from './queries/friction';
 
 // =============================================================================
 // Observability Metrics (UI Redesign Phase 2 — Tier 1+2+3 시각 지표)
