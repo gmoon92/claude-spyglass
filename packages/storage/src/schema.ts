@@ -111,6 +111,10 @@ export interface Session {
   first_prompt_payload?: string | null;
   last_activity_at?: number | null;
   live_state?: SessionLiveState;
+  /** Migration 069: ORCA_TERMINAL_HANDLE — 세션 ↔ Orca 터미널 연결 키. 태그 없으면 null/미존재. */
+  orca_terminal?: string | null;
+  /** Migration 069: CLAUDE_HUB_SESSION_ROLE('main'|'worker'). 태그 없으면 null/미존재. */
+  hub_role?: string | null;
 }
 
 /**

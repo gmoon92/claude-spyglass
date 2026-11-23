@@ -17,7 +17,7 @@ import {
   reactivateSession,
   type ClaudeEvent,
 } from '@spyglass/storage';
-import { ensureSession, getLastTurnId, getTurnIdAt, parseTranscript, projectNameFromCwd } from './hook';
+import { ensureSession, getLastTurnId, getTurnIdAt, parseTranscript, projectNameFromCwd, recordSessionHubEnv, takeHubEnv } from './hook';
 import { extractAssistantTextEntries } from './hook/transcript';
 import { persistAssistantTextResponses } from './hook/persist';
 import { broadcastNewRequest, broadcastSessionUpdate } from './sse';
@@ -60,6 +60,9 @@ export async function eventsCollectHandler(req: Request, db: Database): Promise<
     }
     return json(req, { error: 'Missing required fields: hook_event_name, session_id' }, 400);
   }
+
+  // 허브 환경 태그(hub_env) — 검증해 꺼내고 payload 에서는 지운다(claude_events.payload 에는 원본만 남긴다).
+  const hubEnv = takeHubEnv(payload);
 
   // /collect와 동일하게 hook-payload.jsonl로 raw 보존 (SessionStart/End/Stop/Notification 등)
   diagJson('hook-payload', {
@@ -131,6 +134,10 @@ export async function eventsCollectHandler(req: Request, db: Database): Promise<
       // Stop: 사용자가 본 Claude 응답 텍스트를 requests 테이블에 'response' 타입으로 저장
       saveAssistantResponse(db, payload, event.timestamp);
     }
+
+    // Stop 은 위 saveAssistantResponse 에서 세션 행이 보장된다. 그 외 이벤트는 행이 있을 때만 기록되고
+    // 없으면 /collect 첫 이벤트나 다음 Stop 에서 다시 시도된다.
+    recordSessionHubEnv(db, event.session_id, hubEnv);
 
     return json(req, { success: true, event_id: event.event_id });
   } catch (error) {

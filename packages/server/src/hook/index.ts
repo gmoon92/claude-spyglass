@@ -49,6 +49,7 @@ export { processHookEvent } from './processor';
 export { parseTranscript } from './transcript';
 export { getLastTurnId, getTurnIdAt } from './turn';
 export { ensureSession, projectNameFromCwd } from './session';
+export { takeHubEnv, recordSessionHubEnv } from './hub-env';
 export { dispatchHookEvent, listRegisteredEventTypes } from './dispatcher';
 export type { HookEventHandler, HookContext } from './event-handler';
 

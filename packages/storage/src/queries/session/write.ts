@@ -118,6 +118,45 @@ export function reactivateSession(db: Database, id: string): boolean {
   return result.changes > 0;
 }
 
+/** 세션에 저장하는 허브 환경 태그(허용 목록 검증은 호출자 hook/hub-env.ts 책임). */
+export interface SessionHubEnv {
+  /** ORCA_TERMINAL_HANDLE — 세션 ↔ Orca 터미널 연결 키 */
+  orca_terminal?: string | null;
+  /** CLAUDE_HUB_SESSION_ROLE — 'main' | 'worker' */
+  hub_role?: string | null;
+}
+
+/**
+ * 세션의 허브 환경 태그(orca_terminal, hub_role) 기록 — Migration 069.
+ *
+ * 값이 있는 필드만 덮어쓴다(마지막 값이 이긴다: --resume 으로 다른 터미널에서 이어 열면 핸들이 바뀐다).
+ * 이미 같은 값이면 쓰기를 건너뛴다. 세션 행이 아직 없으면 false — 다음 이벤트에서 다시 시도된다.
+ *
+ * 호출자: server hook/hub-env.ts recordSessionHubEnv (/collect·/events 수신 직후)
+ *
+ * @returns 세션 행이 존재하면 true(값 변경 여부와 무관), 없으면 false
+ */
+export function setSessionHubEnv(db: Database, id: string, env: SessionHubEnv): boolean {
+  const row = db.query('SELECT orca_terminal, hub_role FROM sessions WHERE id = ?').get(id) as
+    { orca_terminal: string | null; hub_role: string | null } | null;
+  if (!row) return false;
+
+  const terminal = env.orca_terminal ?? null;
+  const role = env.hub_role ?? null;
+  const terminalChanged = terminal !== null && terminal !== row.orca_terminal;
+  const roleChanged = role !== null && role !== row.hub_role;
+  if (!terminalChanged && !roleChanged) return true;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (db as any).run(
+    'UPDATE sessions SET orca_terminal = COALESCE(?, orca_terminal), hub_role = COALESCE(?, hub_role) WHERE id = ?',
+    terminal,
+    role,
+    id
+  );
+  return true;
+}
+
 /**
  * 세션 토큰 수 업데이트
  */

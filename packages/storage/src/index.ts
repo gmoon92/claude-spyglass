@@ -79,6 +79,8 @@ export {
   updateSession,
   endSession,
   reactivateSession,
+  setSessionHubEnv,
+  type SessionHubEnv,
   updateSessionTokens,
   // 삭제
   deleteSession,

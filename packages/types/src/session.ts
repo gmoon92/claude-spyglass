@@ -34,4 +34,8 @@ export interface Session {
   last_activity_at?: number | null;
   /** v(이번)+: 서버가 결정한 라이브 상태. /api/sessions* 응답 derived 컬럼. */
   live_state?: SessionLiveState;
+  /** ORCA_TERMINAL_HANDLE — 세션 ↔ Orca 터미널 연결 키(수집 훅이 hub_env 로 전달). 태그 없으면 null/미존재. */
+  orca_terminal?: string | null;
+  /** CLAUDE_HUB_SESSION_ROLE('main'|'worker'). 태그 없으면 null/미존재 = 허브 태그 없는 세션. */
+  hub_role?: string | null;
 }

@@ -34,6 +34,7 @@ import { dispatchHookEvent } from './dispatcher';
 import { processHookEvent } from './processor';
 import { logDiscardedPayload } from './discard-diag';
 import { projectNameFromCwd } from './session';
+import { recordSessionHubEnv, takeHubEnv } from './hub-env';
 
 /**
  * raw Claude Code hook payload를 받아 dispatcher로 라우팅.
@@ -65,6 +66,9 @@ export async function handleHookHttpRequest(
       { status: 400, headers: { 'Content-Type': 'application/json' } },
     );
   }
+
+  // 허브 환경 태그(hub_env) — 검증해 꺼내고 payload 에서는 지운다. 기록은 세션 행이 생긴 뒤(아래 dispatch 뒤).
+  const hubEnv = takeHubEnv(raw as unknown as Record<string, unknown>);
 
   const { hook_event_name, session_id, cwd, tool_name, tool_use_id } = raw;
 
@@ -99,6 +103,7 @@ export async function handleHookHttpRequest(
   };
 
   const result = dispatchHookEvent(raw, ctx);
+  recordSessionHubEnv(db.instance, session_id, hubEnv);
 
   return jsonResponse(req, result);
 }
