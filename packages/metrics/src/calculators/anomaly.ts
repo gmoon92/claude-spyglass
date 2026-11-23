@@ -24,6 +24,7 @@
 
 import type { Database } from 'bun:sqlite';
 import {
+  getLatestContextProxyForSession,
   getMaxContextProxyForSession,
   getModelMaxTokens,
   getAnomalyThresholds,
@@ -629,6 +630,18 @@ export interface ContextSaturationResult {
   /** 임계값 (0~1 fraction). 클라이언트가 게이지 색·툴팁 표기에 사용. */
   threshold_warn: number;
   threshold_critical: number;
+  /**
+   * 세션의 "현재" 컨텍스트 토큰 — 가장 최근 대화 요청의 값. 위 context_tokens(세션 최고점)와 달리
+   * /compact·/clear 로 줄어들면 따라 내려간다. 도구 없는 부가 질의는 제외(getLatestContextProxyForSession).
+   * 요청이 없으면 0.
+   */
+  latest_context_tokens: number;
+  /** latest_context_tokens / (그 요청의 model + beta 기준 한도). 한도 0 이면 0. */
+  latest_pct: number;
+  /** 그 요청의 timestamp(ms). 오래됐으면 소비자가 무시할 수 있게 노출. 요청이 없으면 null. */
+  latest_at: number | null;
+  /** 그 요청의 model. 요청이 없으면 null. */
+  latest_model: string | null;
 }
 
 /** API 응답 직렬화용 — 추가 필드 없으면 ContextSaturationResult와 동일 shape. */
@@ -639,6 +652,8 @@ export type ContextSaturationField = ContextSaturationResult;
  *
  * 알고리즘:
  *   1) getMaxContextProxyForSession — 그 세션에서 가장 큰 context(input+caches) proxy 행.
+ *      (stage·pct·context_tokens 는 이 "최고점" 기준 — 기존 계약 그대로.)
+ *   1') getLatestContextProxyForSession — 가장 최근 대화 요청 행. latest_* 필드만 채운다.
  *   2) windowMax = getModelMaxTokens(db, row.model, row.anthropic_beta) — 동적 한도.
  *   3) contextTokens = tokens_input + cache_read + cache_creation.
  *   4) pct = contextTokens / windowMax (windowMax 0 가드).
@@ -670,6 +685,13 @@ export function detectContextSaturation(
   if (pct >= criticalFrac) stage = 'critical';
   else if (pct >= warnFrac) stage = 'warn';
 
+  // latest_*: 최고점이 아니라 "지금" 값. 한도는 그 요청의 model 기준(최고점 요청과 모델이 다를 수 있다).
+  const latest = getLatestContextProxyForSession(db, sessionId);
+  const latestTokens = latest
+    ? (latest.tokens_input ?? 0) + (latest.cache_read_tokens ?? 0) + (latest.cache_creation_tokens ?? 0)
+    : 0;
+  const latestWindowMax = latest ? getModelMaxTokens(db, latest.model, latest.anthropic_beta) : 0;
+
   return {
     stage,
     context_tokens: contextTokens,
@@ -677,6 +699,10 @@ export function detectContextSaturation(
     pct,
     threshold_warn: warnFrac,
     threshold_critical: criticalFrac,
+    latest_context_tokens: latestTokens,
+    latest_pct: latestWindowMax > 0 ? latestTokens / latestWindowMax : 0,
+    latest_at: latest?.timestamp ?? null,
+    latest_model: latest?.model ?? null,
   };
 }
 
@@ -688,6 +714,10 @@ function emptyContextSaturation(warnFrac: number, criticalFrac: number): Context
     pct: 0,
     threshold_warn: warnFrac,
     threshold_critical: criticalFrac,
+    latest_context_tokens: 0,
+    latest_pct: 0,
+    latest_at: null,
+    latest_model: null,
   };
 }
 
@@ -700,6 +730,10 @@ export function toContextSaturationField(r: ContextSaturationResult): ContextSat
     pct: r.pct,
     threshold_warn: r.threshold_warn,
     threshold_critical: r.threshold_critical,
+    latest_context_tokens: r.latest_context_tokens,
+    latest_pct: r.latest_pct,
+    latest_at: r.latest_at,
+    latest_model: r.latest_model,
   };
 }
 

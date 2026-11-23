@@ -579,17 +579,11 @@ export function getLatestProxyResponseBefore(
 // =============================================================================
 
 /**
- * 세션의 "최대 컨텍스트" proxy 행을 반환.
+ * 세션 컨텍스트 조회가 돌려주는 proxy 행 모양 (최대 컨텍스트·최근 컨텍스트 공용).
  *
- * 사용처: prompt 행이 0건인 세션(서버 재시작 직후 진행 중 세션 등)에서
- * implicit turn의 prompt context를 합성할 때 입력 토큰 + 캐시 합이 가장 큰 행을 사용.
- *
- * @returns 후보 없으면 null
+ * 컨텍스트 토큰 = tokens_input + cache_read_tokens + cache_creation_tokens (클라이언트 차트 정의와 동일).
  */
-export function getMaxContextProxyForSession(
-  db: Database,
-  sessionId: string,
-): {
+export interface SessionContextProxyRow {
   timestamp: number;
   model: string | null;
   tokens_input: number;
@@ -598,16 +592,22 @@ export function getMaxContextProxyForSession(
   cache_creation_tokens: number;
   /** context-window-derivation: orphan turn fallback에서도 클라이언트가 한도 추론 가능하도록 함께 노출. */
   anthropic_beta: string | null;
-} | null {
-  const row = db.query<{
-    timestamp: number;
-    model: string | null;
-    tokens_input: number;
-    tokens_output: number;
-    cache_read_tokens: number;
-    cache_creation_tokens: number;
-    anthropic_beta: string | null;
-  }, [string]>(
+}
+
+/**
+ * 세션의 "최대 컨텍스트" proxy 행을 반환.
+ *
+ * 사용처: prompt 행이 0건인 세션(서버 재시작 직후 진행 중 세션 등)에서
+ * implicit turn의 prompt context를 합성할 때 입력 토큰 + 캐시 합이 가장 큰 행을 사용.
+ * 세션 전체의 "최고점"이라 /compact 이후에도 내려가지 않는다 — 지금 값은 getLatestContextProxyForSession.
+ *
+ * @returns 후보 없으면 null
+ */
+export function getMaxContextProxyForSession(
+  db: Database,
+  sessionId: string,
+): SessionContextProxyRow | null {
+  const row = db.query<SessionContextProxyRow, [string]>(
     `SELECT timestamp, model, tokens_input, tokens_output,
             cache_read_tokens, cache_creation_tokens, anthropic_beta
        FROM proxy_requests
@@ -619,6 +619,37 @@ export function getMaxContextProxyForSession(
       LIMIT 1`,
   ).get(sessionId);
   return row ?? null;
+}
+
+/**
+ * 세션의 "현재 컨텍스트" proxy 행 — 가장 최근 요청을 반환.
+ *
+ * 부가 질의 제외: 한 세션의 proxy 행에는 대화 본체 요청 말고도 도구 정의가 없는 부가 질의
+ * (제목 생성·압축 요약 등, tools_count = 0)가 섞여 있고 컨텍스트 규모가 전혀 다르다.
+ * 그래서 tools_count > 0 인 가장 최근 행을 우선하고, 그런 행이 하나도 없으면 가장 최근 행을 쓴다.
+ * 서브에이전트 요청도 도구를 갖기 때문에 대화 본체와 완전히 구분되지는 않는다(근사).
+ *
+ * 인덱스: idx_proxy_requests_session_id(session_id, timestamp DESC) 를 뒤에서부터 훑어 첫 일치 행에서 멈춘다.
+ *
+ * 호출자: metrics detectContextSaturation (GET /api/sessions/:id 의 latest_* 필드 — Stop 훅 가드용).
+ *
+ * @returns 후보 없으면 null
+ */
+export function getLatestContextProxyForSession(
+  db: Database,
+  sessionId: string,
+): SessionContextProxyRow | null {
+  const base = `SELECT timestamp, model, tokens_input, tokens_output,
+            cache_read_tokens, cache_creation_tokens, anthropic_beta
+       FROM proxy_requests
+      WHERE session_id = ?`;
+  const withTools = db.query<SessionContextProxyRow, [string]>(
+    `${base} AND COALESCE(tools_count, 0) > 0 ORDER BY timestamp DESC LIMIT 1`,
+  ).get(sessionId);
+  if (withTools) return withTools;
+  return db.query<SessionContextProxyRow, [string]>(
+    `${base} ORDER BY timestamp DESC LIMIT 1`,
+  ).get(sessionId) ?? null;
 }
 
 // =============================================================================

@@ -43,7 +43,8 @@ function createTestDb(): Database {
       tokens_output INTEGER DEFAULT 0,
       cache_creation_tokens INTEGER DEFAULT 0,
       cache_read_tokens INTEGER DEFAULT 0,
-      anthropic_beta TEXT
+      anthropic_beta TEXT,
+      tools_count INTEGER DEFAULT 0
     );
   `);
   return db;
@@ -60,12 +61,13 @@ function insertProxy(
     cache_creation_tokens: number;
     cache_read_tokens: number;
     anthropic_beta: string;
+    tools_count: number;
   }>,
 ): void {
   db.prepare(
     `INSERT INTO proxy_requests
-     (id, timestamp, session_id, model, tokens_input, cache_creation_tokens, cache_read_tokens, anthropic_beta)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+     (id, timestamp, session_id, model, tokens_input, cache_creation_tokens, cache_read_tokens, anthropic_beta, tools_count)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     overrides.id ?? `r-${Math.random().toString(36).slice(2, 8)}`,
     overrides.timestamp ?? Date.now(),
@@ -75,6 +77,7 @@ function insertProxy(
     overrides.cache_creation_tokens ?? 0,
     overrides.cache_read_tokens ?? 0,
     overrides.anthropic_beta ?? null,
+    overrides.tools_count ?? 10, // 기본: 도구를 가진 대화 본체 요청
   );
 }
 
@@ -166,5 +169,74 @@ describe('toContextSaturationField', () => {
     const r = detectContextSaturation(db, 's');
     const f = toContextSaturationField(r);
     expect(f).toEqual(r);
+  });
+});
+
+describe('detectContextSaturation — latest_* (세션의 현재 컨텍스트)', () => {
+  it('proxy 행 없는 세션 → latest 0 / null', () => {
+    const db = createTestDb();
+    const r = detectContextSaturation(db, 'empty-session');
+    expect(r.latest_context_tokens).toBe(0);
+    expect(r.latest_pct).toBe(0);
+    expect(r.latest_at).toBeNull();
+    expect(r.latest_model).toBeNull();
+  });
+
+  it('/compact 뒤처럼 컨텍스트가 줄면 context_tokens(최고점)은 그대로, latest 는 내려간다', () => {
+    const db = createTestDb();
+    insertProxy(db, { session_id: 's', model: 'claude-haiku-4-5', tokens_input: 180_000, timestamp: 1_000 });
+    insertProxy(db, { session_id: 's', model: 'claude-haiku-4-5', tokens_input: 20_000, timestamp: 2_000 });
+    const r = detectContextSaturation(db, 's');
+    expect(r.context_tokens).toBe(180_000); // 기존 계약 — 최고점 유지
+    expect(r.stage).toBe('critical');
+    expect(r.latest_context_tokens).toBe(20_000);
+    expect(r.latest_pct).toBeCloseTo(0.1, 3);
+    expect(r.latest_at).toBe(2_000);
+    expect(r.latest_model).toBe('claude-haiku-4-5');
+  });
+
+  it('latest 도 input + cache_read + cache_creation 합산', () => {
+    const db = createTestDb();
+    insertProxy(db, {
+      session_id: 's', model: 'claude-haiku-4-5', timestamp: 1_000,
+      tokens_input: 100_000, cache_creation_tokens: 30_000, cache_read_tokens: 25_000,
+    });
+    expect(detectContextSaturation(db, 's').latest_context_tokens).toBe(155_000);
+  });
+
+  it('도구 없는 부가 질의(tools_count 0)가 더 최근이어도 건너뛴다', () => {
+    const db = createTestDb();
+    insertProxy(db, { session_id: 's', model: 'claude-haiku-4-5', tokens_input: 150_000, timestamp: 1_000 });
+    insertProxy(db, { session_id: 's', model: 'claude-haiku-4-5', tokens_input: 500, timestamp: 2_000, tools_count: 0 });
+    const r = detectContextSaturation(db, 's');
+    expect(r.latest_context_tokens).toBe(150_000);
+    expect(r.latest_at).toBe(1_000);
+  });
+
+  it('도구를 가진 행이 하나도 없으면 가장 최근 행으로 폴백', () => {
+    const db = createTestDb();
+    insertProxy(db, { session_id: 's', model: 'claude-haiku-4-5', tokens_input: 40_000, timestamp: 1_000, tools_count: 0 });
+    insertProxy(db, { session_id: 's', model: 'claude-haiku-4-5', tokens_input: 60_000, timestamp: 2_000, tools_count: 0 });
+    const r = detectContextSaturation(db, 's');
+    expect(r.latest_context_tokens).toBe(60_000);
+    expect(r.latest_at).toBe(2_000);
+  });
+
+  it('latest_pct 의 분모는 최고점 행이 아니라 그 요청의 모델 한도', () => {
+    const db = createTestDb();
+    // 최고점: haiku(200K) 150K / 최근: opus-4-7(1M) 100K → latest_pct = 0.1
+    insertProxy(db, { session_id: 's', model: 'claude-haiku-4-5', tokens_input: 150_000, timestamp: 1_000 });
+    insertProxy(db, { session_id: 's', model: 'claude-opus-4-7', tokens_input: 100_000, timestamp: 2_000 });
+    const r = detectContextSaturation(db, 's');
+    expect(r.window_max).toBe(200_000);
+    expect(r.latest_pct).toBeCloseTo(0.1, 3);
+    expect(r.latest_model).toBe('claude-opus-4-7');
+  });
+
+  it('다른 세션의 행은 섞이지 않는다', () => {
+    const db = createTestDb();
+    insertProxy(db, { session_id: 'other', model: 'claude-haiku-4-5', tokens_input: 190_000, timestamp: 9_000 });
+    insertProxy(db, { session_id: 's', model: 'claude-haiku-4-5', tokens_input: 10_000, timestamp: 1_000 });
+    expect(detectContextSaturation(db, 's').latest_context_tokens).toBe(10_000);
   });
 });

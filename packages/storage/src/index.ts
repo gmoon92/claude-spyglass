@@ -260,6 +260,8 @@ export {
   getProxyStats,
   getLatestProxyResponseBefore,
   getMaxContextProxyForSession,
+  getLatestContextProxyForSession,
+  type SessionContextProxyRow,
   // anomaly-bloated-sys (Migration 033/034): 세션 system context 메타 조회
   getSessionSystemContextMeta,
   // ADR-001 P1-E (v23): tool_use_id ↔ api_request_id 정확 매핑
