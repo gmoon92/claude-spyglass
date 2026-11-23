@@ -469,4 +469,11 @@ export {
   type BackfillCasResult,
 } from './queries/proxy-payload';
 
+export {
+  backfillTextPayloads,
+  type TextBackfillOptions,
+  type TextBackfillResult,
+  type TextBackfillTableResult,
+} from './queries/backfill-text-payloads';
+
 export { getCasStats, type CasStats } from './queries/cas-stats';
