@@ -54,20 +54,30 @@
 | 라우터 | 주요 라우트 |
 |--------|-------------|
 | `routes/dashboard.ts` | `GET /api/dashboard?range=...` (응답 캐시) |
-| `routes/sessions.ts` | `GET /api/sessions/active`, `/:id`, `/:id/requests`, `/:id/turns`, `/by-project` — 세션 행에 `orca_terminal`·`hub_role`, `/:id` 의 `anomalies.context_saturation` 에 현재 컨텍스트 `latest_*` 포함 |
+| `routes/session-summary.ts` | `GET /api/sessions/:id/summary`, `GET /api/sessions/summary?hub_role=&active=1&limit=` — 세션 한 장 요약(메타·토큰·스킬/에이전트/명령·컨텍스트 `latest_*`·마찰). `sessionsRouter` 의 `/:id` catch-all 보다 먼저 등록 |
+| `routes/sessions.ts` | `GET /api/sessions/active`, `/:id`, `/:id/requests`, `/:id/turns`, `/by-project` — 세션 행에 `orca_terminal`·`hub_role`, `/:id` 의 `anomalies.context_saturation` 에 현재 컨텍스트 `latest_*` 포함. `/:id/turns` 는 `?payload=0`·`?limit=N`(최근 N턴)·`?since_turn=N` |
 | `routes/requests.ts` | `GET /api/requests/recent`, `/:id`, `/top-tokens` |
-| `routes/conversations.ts` | `GET /api/conversations?start=YYYY-MM-DD&end=YYYY-MM-DD&project=` |
-| `routes/stats.ts` | `GET /api/stats/sessions`, `/requests`, `/cache`, `/proxy`, `/proxy/by-model` |
+| `routes/conversations.ts` | `GET /api/conversations?start=YYYY-MM-DD&end=YYYY-MM-DD&project=` 또는 `?from=&to=`(ms) — `fields=summary` 면 원문 대신 세션별 첫 줄 프롬프트·수·토큰·스킬 |
+| `routes/stats.ts` | `GET /api/stats/sessions`, `/requests`, `/cache`, `/proxy`, `/proxy/by-model`, `/sessions/daily?from=&to=&tz=&project=&session_id=`(세션 × 일자 토큰·캐시 적중률, `stats_session_hourly`), `/subagents?from=&to=&project=&max_tier=`(서브에이전트 종류 × 실제 모델, proxy 실측 우선, `over_cap`) |
 | `routes/proxy.ts` | `GET /api/proxy/recent`, `/by-session/:id`, `/:id` |
 | `routes/friction.ts` | `GET /api/friction?from=&to=&session_id=&cwd_prefix=&limit=&repeat_min=` — 도구 실패·권한 요청/거부·API 실패·압축 집계(`claude_events` 위의 읽기 전용) |
 | `routes/instructions.ts` | `GET /api/instructions/footprint?from=&to=&path_prefix=&limit=&trend=` — 지침 문서(CLAUDE.md·rules·메모리 색인)별 컨텍스트 주입 바이트와 로드 횟수(`proxy_requests.system_reminder` 블록 파싱 + `InstructionsLoaded` 이벤트, 읽기 전용) |
 | `routes/project-aliases.ts` | `GET/POST /api/projects/aliases`, `DELETE /api/projects/aliases/:alias` — 이름이 바뀐 프로젝트의 이력을 합쳐 조회(`project` 필터가 별칭 포함) |
 | `routes/system-prompts.ts` | `GET /api/system-prompts`, `/:hash` (lazy fetch) |
-| `routes/meta-docs.ts` | `GET /api/meta-docs`, `POST /api/meta-docs/refresh` |
+| `routes/meta-docs.ts` | `GET /api/meta-docs`(`?group=name` 이면 (type,name) 당 1행, `source_roots[]`), `GET /api/meta-docs/usage/daily?from=&to=&tz=&project=&kind=&name=`(호출·실패·실패율, `stats_meta_usage_hourly`), `POST /api/meta-docs/refresh` |
 | `routes/graph.ts` | `GET /api/graph/{status,unified-flow}`, `/sessions/:id/initial`, `/turns/:id/{neighbors,path}` |
 | `routes/settings.ts` | `GET /api/settings/{diag,sqlite/info,logs}`, `GET/POST /api/settings/{hooks,proxy,graph,graph-db}/*` |
 | `routes/version.ts` | `GET /api/version` (current + latest) |
 | `metrics/router.ts` | `GET /api/metrics/{model-usage,cache-matrix,context-usage,activity-heatmap,turn-distribution,agent-depth,tool-categories,anomalies-timeseries,burn-rate,cache-trend,proxy-trend}` |
+
+**허브 요약 테이블** — 원본(30일)과 별개로 **365일** 보존(`SPYGLASS_SUMMARY_RETENTION_DAYS`, `queries/session/retention.ts` `pruneSummaryTables`). 시간 버킷으로 저장하고 일자는 API 가 `tz` 로 묶는다.
+
+| 테이블 | 갱신 | 쓰는 API |
+|---|---|---|
+| `stats_session_hourly` (Migration 072) | `proxy_requests` INSERT 트리거 | `/api/stats/sessions/daily`, `/api/sessions/*/summary`, `/api/conversations?fields=summary` |
+| `stats_meta_usage_hourly` (Migration 073) | 호출: `requests` 트리거(pre_tool → tool 확정 시). 실패: `events.ts` 가 `PostToolUseFailure`(Skill/Agent, 중단 제외)를 받을 때 + 서버 기동 시 1회 백필 | `/api/meta-docs/usage/daily` |
+
+수치 출처가 다르다: `/api/dashboard` 는 `sessions`·`requests`(훅) 기준, 위 요약 API 는 `proxy_requests`(실제 API 호출) 기준이라 세션·요청 수가 다를 수 있다.
 
 ### 2.5 프록시 (opt-in)
 
