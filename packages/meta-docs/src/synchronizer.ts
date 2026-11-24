@@ -69,6 +69,19 @@ const GLOBAL_SYNC_TTL_MS = 60_000;
 let lastGlobalSyncAt = 0;
 
 /**
+ * 스캔 시각(seen_at) 발급 — 프로세스 안에서 호출마다 엄격히 증가한다.
+ *
+ * soft-delete 는 `last_seen_at < seenAt` 로 "이번 스캔에 없던 행" 을 고른다. 같은 밀리초에
+ * 동기화가 두 번 돌면(강제 재동기화 연속 호출 등) seenAt 이 같아져, 사라진 문서가 삭제되지
+ * 않고 active 로 남는다. 직전 값보다 최소 1ms 크게 발급해 비교가 항상 성립하게 한다.
+ */
+let lastSeenAt = 0;
+function nextSeenAt(now: number): number {
+  lastSeenAt = Math.max(now, lastSeenAt + 1);
+  return lastSeenAt;
+}
+
+/**
  * 특정 cwd 기준으로 동기화.
  *  1) project chain 모든 root 스캔
  *  2) 발견된 모든 candidate를 upsert
@@ -92,7 +105,7 @@ export function syncCwd(db: Database, cwd: string, options: { force?: boolean } 
   recentSyncByCwd.set(normalized, t0);
 
   const chain = resolveProjectChain(normalized);
-  const seenAt = t0;
+  const seenAt = nextSeenAt(t0);
 
   // 1) chain 스캔 — root별로 따로 모아 둠 (resolution 우선순위 계산을 위해)
   const candidatesByRoot: Array<{ root: string; rows: MetaDocCandidate[] }> = [];
@@ -156,7 +169,7 @@ export function syncGlobalOnce(db: Database, options: { force?: boolean } = {}):
   }
   const sourceRoot = candidates[0].source_root; // 모두 같은 ~/.claude
 
-  const seenAt = t0;
+  const seenAt = nextSeenAt(t0);
   let upserted = 0;
   const tx = db.transaction(() => {
     for (const c of candidates) {

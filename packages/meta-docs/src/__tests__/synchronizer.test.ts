@@ -211,6 +211,26 @@ describe('syncCwd', () => {
     expect(r.softDeleted).toBe(1);
     expect(countMetaDocs(db.instance).active).toBe(1);
   });
+
+  it('같은 밀리초에 연속 재동기화해도 사라진 정의를 soft-delete (seenAt 단조 증가 회귀 가드)', () => {
+    const repo = path.join(HOME, 'repo');
+    fs.mkdirSync(repo, { recursive: true });
+    mkGit(repo);
+    mkClaudeDoc(repo, 'agents', 'keep');
+    mkClaudeDoc(repo, 'agents', 'drop');
+    const realNow = Date.now;
+    const frozen = realNow();
+    Date.now = () => frozen; // 두 동기화가 같은 ms 에 도는 상황을 결정적으로 재현
+    try {
+      syncCwd(db.instance, repo, { force: true });
+      fs.rmSync(path.join(repo, '.claude', 'agents', 'drop.md'));
+      const r = syncCwd(db.instance, repo, { force: true });
+      expect(r.softDeleted).toBe(1);
+      expect(countMetaDocs(db.instance).active).toBe(1);
+    } finally {
+      Date.now = realNow;
+    }
+  });
 });
 
 // =============================================================================
