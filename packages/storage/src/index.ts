@@ -88,6 +88,7 @@ export {
   deleteOldSessions,
   deleteOldData,
   runRetentionCycle,
+  pruneSummaryTables,
   // 집계
   getSessionStats,
   getProjectStats,
@@ -411,6 +412,8 @@ export {
   DEFAULT_RAW_LOG_RETENTION_DAYS,
   getRawLogRetentionDays,
   getRawLogRetentionCutoffTs,
+  DEFAULT_SUMMARY_RETENTION_DAYS,
+  getSummaryRetentionDays,
 } from './runtime/retention';
 
 // =============================================================================
@@ -533,3 +536,12 @@ export {
   type SubagentUsageOptions,
   type SubagentUsageRow,
 } from './queries/stats/subagent-usage';
+
+// 허브 연동 요약 — 세션 × 일자 토큰 합계 (GET /api/stats/sessions/daily, 원천 stats_session_hourly)
+export {
+  getSessionDailyStats,
+  isValidTimeZone,
+  type SessionDailyOptions,
+  type SessionDailyRow,
+  type SessionDailyModel,
+} from './queries/stats/session-daily';

@@ -41,7 +41,7 @@ export {
 } from './write';
 
 // 멀티테이블 retention
-export { deleteOldData, runRetentionCycle } from './retention';
+export { deleteOldData, runRetentionCycle, pruneSummaryTables } from './retention';
 
 // 집계
 export { getSessionStats, getProjectStats } from './aggregate';

@@ -9,6 +9,7 @@ import type { Database } from 'bun:sqlite';
 import { rebuildStatsHourly } from '../stats/build-aggregate';
 import { runVacuumMaintenance } from '../../runtime/vacuum';
 import { deleteExpiredArchive, FileArchiveStore, getArchiveDir } from '../../archive';
+import { getSummaryRetentionDays } from '../../runtime/retention';
 
 /**
  * 보관 기간이 지난 데이터 전체 삭제 (일일 유지보수용)
@@ -27,6 +28,8 @@ import { deleteExpiredArchive, FileArchiveStore, getArchiveDir } from '../../arc
  *  6. stats_hourly  — requests 대량 DELETE로 인한 stats 오염을 보정 (ADR-004).
  *                      AFTER DELETE 트리거를 두지 않는 대신, retention 직후 영향 받은
  *                      hour 버킷 범위만 재집계한다.
+ *  8. 허브 요약 테이블 — 원본 cutoff 가 아니라 요약 보존 기간(기본 365일)으로 따로 자른다
+ *                      (pruneSummaryTables). 원본이 지워져도 요약은 남는 것이 목적이다.
  *  7. Warm Archive  — 이주된 데이터의 retention 경계 GC(ADR A1): archive 파일 + archive_index +
  *                      archive_stats_* 버킷 삭제. 이주 비활성(기본)이면 no-op.
  *
@@ -119,7 +122,28 @@ export function deleteOldData(db: Database, beforeTimestamp: number): number {
   //    파일 경로는 db.filename에서 도출(getArchiveDir) — 이주(maintenance)와 동일 디렉토리.
   deleteExpiredArchive(db, beforeTimestamp, new FileArchiveStore(getArchiveDir(db)));
 
+  // 8. 허브 요약 테이블 — 자체 보존 기간(기본 365일).
+  pruneSummaryTables(db, Date.now());
+
   return changes;
+}
+
+/** 요약 보존 기간을 따르는 테이블 — 새 요약 테이블은 여기에만 추가한다. */
+const SUMMARY_TABLES = ['stats_session_hourly', 'stats_meta_usage_hourly'] as const;
+
+/**
+ * 허브 요약 테이블에서 보존 기간이 지난 hour 버킷을 지운다. 없는 테이블은 건너뛴다.
+ * @returns 테이블별 삭제 행 수
+ */
+export function pruneSummaryTables(db: Database, nowMs: number, days = getSummaryRetentionDays()): Record<string, number> {
+  const cutoffHourTs = Math.floor((nowMs - days * 86_400_000) / 1000 / 3600) * 3600;
+  const out: Record<string, number> = {};
+  for (const t of SUMMARY_TABLES) {
+    const exists = db.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(t);
+    if (!exists) continue;
+    out[t] = Number(db.run(`DELETE FROM ${t} WHERE hour_ts < ?`, [cutoffHourTs]).changes ?? 0);
+  }
+  return out;
 }
 
 /**

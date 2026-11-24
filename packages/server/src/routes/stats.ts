@@ -13,6 +13,7 @@
  *   - GET /api/stats/by-type
  *   - GET /api/stats/strip
  *   - GET /api/stats/cache
+ *   - GET /api/stats/sessions/daily?from=&to=&tz=&project=&session_id=  (세션 × 일자 토큰, 365일 보존 요약)
  *   - GET /api/stats/subagents?from=&to=&project=&max_tier=  (서브에이전트 종류 × 실제 모델, 상한 초과 표시)
  *
  *   참고: /api/dashboard는 캐시 정책이 있어 별도 routes/dashboard.ts로 분리.
@@ -29,12 +30,33 @@ import {
   getSessionStats,
   getStripStats,
   getSubagentUsage,
+  getSessionDailyStats,
+  isValidTimeZone,
   parseModelTier,
   getToolStats,
 } from '@spyglass/storage';
 import { jsonResponse, type RouteHandler } from './_shared';
 
 export const statsRouter: RouteHandler = (_req, db, url, path, method) => {
+  // GET /api/stats/sessions/daily — 허브 업무일지용 세션 × 일자 토큰 합계 (stats_session_hourly)
+  if (path === '/api/stats/sessions/daily' && method === 'GET') {
+    const from = parseMsParam(url.searchParams.get('from'));
+    const to = parseMsParam(url.searchParams.get('to'));
+    if (from === undefined || to === undefined) {
+      return jsonResponse({ success: false, error: 'from/to must be ms epoch integers' }, 400);
+    }
+    const tz = url.searchParams.get('tz') || null;
+    if (tz && !isValidTimeZone(tz)) {
+      return jsonResponse({ success: false, error: `invalid tz: ${tz}` }, 400);
+    }
+    const data = getSessionDailyStats(db, {
+      from, to, tz,
+      project: url.searchParams.get('project') || null,
+      sessionId: url.searchParams.get('session_id') || null,
+    });
+    return jsonResponse({ success: true, data, meta: { total: data.length } });
+  }
+
   // GET /api/stats/subagents — 허브 서브에이전트 모델 상한 점검. 모델은 proxy 실측 우선.
   if (path === '/api/stats/subagents' && method === 'GET') {
     const from = parseMsParam(url.searchParams.get('from'));

@@ -101,3 +101,17 @@ export function getRawLogRetentionDays(): number {
 export function getRawLogRetentionCutoffTs(now: number = Date.now()): number {
   return now - getRawLogRetentionDays() * 24 * 60 * 60 * 1000;
 }
+
+/**
+ * 허브 요약 테이블(stats_session_hourly 등) 보존 기간 기본값 — 원본(30일)과 별개.
+ *
+ *   요약은 세션·시간 단위로 접힌 작은 행이라 길게 둬도 부담이 적고, 30일 넘는 추이(주간·월간
+ *   업무일지)를 남기는 것이 존재 이유다. `SPYGLASS_SUMMARY_RETENTION_DAYS` 로 덮어쓴다.
+ */
+export const DEFAULT_SUMMARY_RETENTION_DAYS = 365;
+
+/** 요약 테이블 보존 일수. 잘못된 값(0/음수/non-numeric)은 default 폴백. */
+export function getSummaryRetentionDays(): number {
+  const raw = parseInt(process.env.SPYGLASS_SUMMARY_RETENTION_DAYS ?? '', 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_SUMMARY_RETENTION_DAYS;
+}
