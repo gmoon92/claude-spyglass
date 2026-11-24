@@ -16,7 +16,7 @@ Claude Code 세션 단위 정보를 저장하는 테이블입니다.
 | 컬럼명 | 타입 | 제약조건 | 설명 |
 |--------|------|----------|------|
 | `id` | TEXT | PRIMARY KEY | 세션 고유 ID (Claude Code에서 생성) |
-| `project_name` | TEXT | NOT NULL | 프로젝트명 (cwd의 basename) |
+| `project_name` | TEXT | NOT NULL | 프로젝트명 — 수집 훅이 git 으로 구한 저장소 루트의 basename(워크트리면 원본 저장소 루트), git 저장소가 아니거나 옛 훅이면 cwd 의 basename. 세션 생성 때 한 번만 정해진다 |
 | `started_at` | INTEGER | NOT NULL | 세션 시작 시간 (Unix timestamp, milliseconds) |
 | `ended_at` | INTEGER | NULL | 세션 종료 시간 (NULL = 활성 세션) |
 | `total_tokens` | INTEGER | DEFAULT 0 | 세션 누적 토큰 수 |
@@ -24,7 +24,7 @@ Claude Code 세션 단위 정보를 저장하는 테이블입니다.
 | `orca_terminal` | TEXT | NULL | `ORCA_TERMINAL_HANDLE` — 세션 ↔ Orca 터미널 연결 키 (Migration 069) |
 | `hub_role` | TEXT | NULL | `CLAUDE_HUB_SESSION_ROLE` (`main` \| `worker`). 두 값은 수집 훅이 `hub_env` 로 보내고 서버가 허용 목록·형식을 검증해 기록한다 — 검증은 `packages/server/src/hook/hub-env.ts`. 값이 없는 세션은 NULL |
 
-`project_name` 은 세션의 첫 이벤트 cwd 로 고정된다. 저장소 이름이 바뀐 경우의 합산은 `project_aliases`(Migration 070)가 읽을 때 풀어쓰며 이 컬럼은 바꾸지 않는다 — 조회 함수는 `packages/storage/src/queries/project-alias.ts`.
+`project_name` 은 세션의 첫 이벤트에서 한 번 정해진 뒤 바뀌지 않는다(이름 파생 규칙은 `packages/server/src/hook/session.ts` 의 `projectNameFromCwd`). 이전에 만들어진 세션은 cwd 기준 이름 그대로다. 저장소 이름이 바뀐 경우의 합산은 `project_aliases`(Migration 070)가 읽을 때 풀어쓰며 이 컬럼은 바꾸지 않는다 — 조회 함수는 `packages/storage/src/queries/project-alias.ts`.
 
 ### 런타임 derive 컬럼 (DB 컬럼 아님)
 
