@@ -261,3 +261,58 @@ describe('backfillRequestFromProxy — affected ID 합집합', () => {
     expect(ids).toEqual([]);
   });
 });
+
+// =============================================================================
+// 메인/서브에이전트 구분 — 서브에이전트 첫 도구 행에 부모 모델이 채워지던 버그 회귀 가드
+// =============================================================================
+
+describe('backfillRequestFromProxy — isSubagent 로 메인/서브 행 구분', () => {
+  function dbWithAgent(): Database {
+    const db = createTestDb();
+    db.run('ALTER TABLE requests ADD COLUMN agent_id TEXT');
+    return db;
+  }
+
+  test('메인 요청(isSubagent=false) 응답은 같은 윈도우의 서브에이전트 행을 채우지 않는다', () => {
+    const db = dbWithAgent();
+    const main = insertRow(db, { id: 'main-1' });
+    const sub = insertRow(db, { id: 'sub-1' });
+    db.run("UPDATE requests SET agent_id = 'agent-x' WHERE id = 'sub-1'");
+
+    const ids = backfillRequestFromProxy(db, { ...baseParams, model: 'claude-fable-5-2', isSubagent: false });
+    expect(ids).toEqual([main]);
+    expect(getRow(db, main)!.model).toBe('claude-fable-5-2');
+    expect(getRow(db, sub)!.model).toBeNull();
+  });
+
+  test('서브에이전트 요청(isSubagent=true) 응답은 서브에이전트 행만 채운다', () => {
+    const db = dbWithAgent();
+    const main = insertRow(db, { id: 'main-1' });
+    const sub = insertRow(db, { id: 'sub-1' });
+    db.run("UPDATE requests SET agent_id = 'agent-x' WHERE id = 'sub-1'");
+
+    const ids = backfillRequestFromProxy(db, { ...baseParams, model: 'claude-opus-5-5', isSubagent: true });
+    expect(ids).toEqual([sub]);
+    expect(getRow(db, sub)!.model).toBe('claude-opus-5-5');
+    expect(getRow(db, main)!.model).toBeNull();
+  });
+
+  test('토큰 보정(단계 2)도 같은 구분을 따른다', () => {
+    const db = dbWithAgent();
+    const sub = insertRow(db, { id: 'sub-1', model: 'claude-opus-5-5', tokens_source: 'unavailable' });
+    db.run("UPDATE requests SET agent_id = 'agent-x' WHERE id = 'sub-1'");
+
+    expect(backfillRequestFromProxy(db, { ...baseParams, isSubagent: false })).toEqual([]);
+    expect(getRow(db, sub)!.tokens_source).toBe('unavailable');
+    expect(backfillRequestFromProxy(db, { ...baseParams, isSubagent: true })).toEqual([sub]);
+    expect(getRow(db, sub)!.tokens_source).toBe('proxy');
+  });
+
+  test('판정 불가(isSubagent 미지정)는 기존처럼 구분 없이 채운다', () => {
+    const db = dbWithAgent();
+    insertRow(db, { id: 'main-1' });
+    insertRow(db, { id: 'sub-1' });
+    db.run("UPDATE requests SET agent_id = 'agent-x' WHERE id = 'sub-1'");
+    expect(backfillRequestFromProxy(db, baseParams).sort()).toEqual(['main-1', 'sub-1']);
+  });
+});

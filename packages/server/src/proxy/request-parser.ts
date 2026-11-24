@@ -72,6 +72,8 @@ export function parseRequestBody(buffer: ArrayBuffer): RequestMeta {
       meta.systemPreview = joined.slice(0, 200) || null;
     }
 
+    meta.isSubagent = detectSubagent(body.system);
+
     // v22: body.system 정규화 + SHA-256 hash (system_prompts 테이블 dedup용).
     // billing-header(매 요청 변동 prefix)·cache_control(메타) 제외 후 idx[1]+ text만 결합.
     // 정규화 단일 진입점 — ADR-002. 같은 페르소나는 항상 동일 hash 보장.
@@ -160,4 +162,27 @@ function extractLastUserPreview(messages: ReadonlyArray<unknown>): string | null
     return text.slice(0, 200) || null;
   }
   return null;
+}
+
+/** billing-header 접두어 — Claude Code 가 body.system 첫 text 에 붙이는 요청 메타. */
+const BILLING_HEADER_PREFIX = 'x-anthropic-billing-header:';
+
+/**
+ * body.system 의 billing-header 로 서브에이전트 요청인지 판정한다.
+ * header 가 없으면 null(판정 불가) — 호출 측은 구분 없이 기존 동작을 유지한다.
+ */
+export function detectSubagent(system: unknown): boolean | null {
+  let header: string | null = null;
+  if (typeof system === 'string') {
+    if (system.startsWith(BILLING_HEADER_PREFIX)) header = system.split('\n', 1)[0];
+  } else if (Array.isArray(system)) {
+    for (const s of system as Array<{ type?: string; text?: string }>) {
+      if (s?.type === 'text' && typeof s.text === 'string' && s.text.startsWith(BILLING_HEADER_PREFIX)) {
+        header = s.text.split('\n', 1)[0];
+        break;
+      }
+    }
+  }
+  if (header === null) return null;
+  return /\bcc_is_subagent=true\b/.test(header);
 }

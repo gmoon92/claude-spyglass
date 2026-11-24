@@ -175,6 +175,7 @@ export function persistProxyRequest(
       cacheCreationTokens: state.usage.cache_creation_input_tokens ?? 0,
       cacheReadTokens: state.usage.cache_read_input_tokens ?? 0,
       proxyStartMs: ctx.startMs,
+      isSubagent: ctx.reqMeta.isSubagent ?? null,
     });
   })();
   return backfilledIds;

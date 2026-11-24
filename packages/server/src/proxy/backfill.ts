@@ -38,6 +38,15 @@ interface BackfillParams {
   tokensOutput: number;
   cacheCreationTokens: number;
   cacheReadTokens: number;
+  /**
+   * proxy 요청이 서브에이전트 요청인가(request-parser detectSubagent).
+   *  - true : 서브에이전트 행(agent_id NOT NULL)만 채운다
+   *  - false: 메인 행(agent_id IS NULL)만 채운다
+   *  - null/undefined: 판정 불가 → 구분 없이(기존 동작)
+   * 같은 세션에서 메인과 서브에이전트 요청이 동시에 오가면 시간 윈도우만으로는 서로의 행을
+   * 채워 버린다(서브에이전트 첫 도구 행에 부모 모델이 기록되던 버그).
+   */
+  isSubagent?: boolean | null;
   proxyStartMs: number;
 }
 
@@ -63,6 +72,11 @@ export function backfillRequestFromProxy(db: Database, p: BackfillParams): strin
   const hi = p.proxyStartMs + 5_000;
 
   const affected = new Set<string>();
+  // 메인/서브에이전트 구분 조건 — 판정 불가면 빈 문자열(기존 동작).
+  const agentCond =
+    p.isSubagent === true ? ' AND agent_id IS NOT NULL'
+      : p.isSubagent === false ? ' AND agent_id IS NULL'
+        : '';
 
   try {
     // 단계 1: model NULL 후보 ID 수집 → UPDATE
@@ -70,7 +84,7 @@ export function backfillRequestFromProxy(db: Database, p: BackfillParams): strin
       `SELECT id FROM requests
         WHERE session_id = ?
           AND model IS NULL
-          AND timestamp BETWEEN ? AND ?`,
+          AND timestamp BETWEEN ? AND ?${agentCond}`,
     ).all(p.sessionId, lo, hi) as Array<{ id: string }>;
 
     if (stage1Candidates.length > 0) {
@@ -81,7 +95,7 @@ export function backfillRequestFromProxy(db: Database, p: BackfillParams): strin
              api_request_id = COALESCE(api_request_id, ?)
          WHERE session_id = ?
            AND model IS NULL
-           AND timestamp BETWEEN ? AND ?`,
+           AND timestamp BETWEEN ? AND ?${agentCond}`,
         p.model,
         p.apiRequestId,
         p.sessionId,
@@ -98,7 +112,7 @@ export function backfillRequestFromProxy(db: Database, p: BackfillParams): strin
       `SELECT id FROM requests
         WHERE session_id = ?
           AND tokens_source = 'unavailable'
-          AND timestamp BETWEEN ? AND ?`,
+          AND timestamp BETWEEN ? AND ?${agentCond}`,
     ).all(p.sessionId, lo, hi) as Array<{ id: string }>;
 
     if (stage2Candidates.length > 0) {
@@ -115,7 +129,7 @@ export function backfillRequestFromProxy(db: Database, p: BackfillParams): strin
              api_request_id = COALESCE(api_request_id, ?)
          WHERE session_id = ?
            AND tokens_source = 'unavailable'
-           AND timestamp BETWEEN ? AND ?`,
+           AND timestamp BETWEEN ? AND ?${agentCond}`,
         p.tokensInput,
         p.tokensOutput,
         p.tokensInput + p.tokensOutput,

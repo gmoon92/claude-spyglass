@@ -41,6 +41,12 @@ export interface RequestMeta {
   systemByteSize?: number | null;
   /** 정규화에 사용된 text 항목 수. system_prompts.segment_count INSERT용. */
   systemSegmentCount?: number | null;
+  /**
+   * 서브에이전트가 보낸 요청인가 — body.system 의 billing-header `cc_is_subagent=true` 로 판정.
+   * true/false: header 로 판정됨, null/undefined: header 없음(판정 불가 → backfill 이 구분 없이 동작).
+   * backfill 이 서브에이전트 응답 값을 메인 행에(또는 반대로) 채우지 않게 하는 데 쓴다.
+   */
+  isSubagent?: boolean | null;
 }
 
 /** Anthropic API usage 구조 (요청·응답 본문에서 추출) */
