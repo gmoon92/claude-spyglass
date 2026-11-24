@@ -46,7 +46,7 @@ cd packages/server  && bun test && bunx tsc --noEmit
 
 ## 2. 그 밖에 남은 것 (선택/후속)
 - **프로덕션 16GB 프로파일링 + CAS 대량 백필** — dev만 검증/전환됨. 절차는 progress 문서의 CAS 섹션 + CLI 헤더(`scripts/backfill-proxy-cas.ts` `--dry-run`→`--limit`→전체). 백필 후 CAS 행 읽기는 서버가 reconstruct 커밋 이상이어야.
-- **Phase 4 기존 TEXT payload 백필**(선택) — 도구 완료(`queries/backfill-text-payloads.ts`, CLI `bun run backfill:text-payloads` `--dry-run`→`--limit`→전체), 실DB 실행은 미실행(신규만 압축됨).
+- **Phase 4 기존 TEXT payload 백필**(선택) — 도구 완료(`queries/backfill-text-payloads.ts`, CLI `bun run backfill:text-payloads` `--dry-run`→`--limit`→전체), dev DB 2026-11-24 dry-run 결과 대상 0건(미압축 행은 전부 512B 미만, 512B 이상은 이미 압축). 다른 환경 DB는 `--dry-run`으로 먼저 확인.
 - **proxy_requests CAS 행 Archive 이주** — ref_count를 archive까지 확장하는 후속(ADR A7).
 
 ## 3. 미해결 결정 / 주의사항
