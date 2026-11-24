@@ -136,3 +136,38 @@ export function listSessionIdsForSummary(db: Database, opts: SessionSummaryListO
     : db.query('SELECT id FROM sessions ORDER BY started_at DESC LIMIT ?').all(limit);
   return (rows as Array<{ id: string }>).map((r) => r.id);
 }
+
+export interface SessionWindowActivity {
+  tokens: { requests: number; input: number; output: number; cache_creation: number; cache_read: number; total: number };
+  skills: Array<{ name: string; calls: number }>;
+  agents: Array<{ type: string; calls: number }>;
+}
+
+/**
+ * 기간 안의 세션 활동(토큰·스킬·에이전트) — /api/conversations?fields=summary 용.
+ * 토큰은 stats_session_hourly 시간 버킷 단위라 기간 경계 시간의 토큰이 통째로 들어가거나 빠진다.
+ */
+export function getSessionWindowActivity(db: Database, sessionId: string, fromTs: number, toTs: number): SessionWindowActivity {
+  const fromHour = Math.floor(fromTs / 1000 / 3600) * 3600;
+  const toHour = Math.floor(toTs / 1000);
+  const t = db.query(`
+    SELECT COALESCE(SUM(request_count),0) AS requests, COALESCE(SUM(tokens_input),0) AS ti,
+           COALESCE(SUM(tokens_output),0) AS t_out, COALESCE(SUM(cache_creation_tokens),0) AS tcc,
+           COALESCE(SUM(cache_read_tokens),0) AS tcr
+      FROM stats_session_hourly WHERE session_id = ? AND hour_ts >= ? AND hour_ts <= ?`,
+  ).get(sessionId, fromHour, toHour) as { requests: number; ti: number; t_out: number; tcc: number; tcr: number };
+  const named = (tool: string) => db.query(`
+    SELECT tool_detail AS name, COUNT(*) AS calls FROM requests
+     WHERE session_id = ? AND tool_name = ? AND tool_detail IS NOT NULL
+       AND (event_type IS NULL OR event_type != 'pre_tool')
+       AND timestamp >= ? AND timestamp <= ?
+     GROUP BY tool_detail ORDER BY calls DESC, name`).all(sessionId, tool, fromTs, toTs) as Array<{ name: string; calls: number }>;
+  return {
+    tokens: {
+      requests: t.requests, input: t.ti, output: t.t_out, cache_creation: t.tcc, cache_read: t.tcr,
+      total: t.ti + t.t_out + t.tcc + t.tcr,
+    },
+    skills: named('Skill'),
+    agents: named('Agent').map((a) => ({ type: a.name, calls: a.calls })),
+  };
+}

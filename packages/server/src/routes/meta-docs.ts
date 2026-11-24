@@ -13,6 +13,10 @@
  *      ?fromTs=<unixMs>                      (선택 — 사용 집계 시간 윈도우 시작)
  *      ?toTs=<unixMs>                        (선택 — 사용 집계 시간 윈도우 끝)
  *      ?project=<name>                       (선택 — sessions JOIN 으로 좁힘)
+ *      ?group=name                           (선택 — (type,name) 당 1행. 같은 스킬이 source_root 별
+ *                                             여러 행으로 나와 호출 수를 더하면 부풀던 문제 회피.
+ *                                             카탈로그 위치는 source_roots[]·sources[] 로 접는다.
+ *                                             기본 응답은 그대로)
  *  - POST /api/meta-docs/refresh             — 동기화 재실행
  *      body: {
  *        scope?: 'global'|'project'|'all',
@@ -98,6 +102,15 @@ export async function metaDocsRouter(req: Request, db: Database): Promise<Respon
       source_root_exists: r.source_root != null ? (existsCache.get(r.source_root) ?? false) : null,
     }));
 
+    const group = url.searchParams.get('group');
+    if (group && group !== 'name') {
+      return jsonResponse({ success: false, error: 'group must be "name"' }, 400);
+    }
+    if (group === 'name') {
+      const grouped = groupMetaDocsByName(dataWithExists);
+      return jsonResponse({ success: true, data: grouped, meta: { total: grouped.length } });
+    }
+
     return jsonResponse({ success: true, data: dataWithExists, meta: { total: dataWithExists.length } });
   }
 
@@ -162,4 +175,54 @@ async function refreshHandler(req: Request, db: Database): Promise<Response> {
   }
 
   return jsonResponse({ success: true, data: result });
+}
+
+// =============================================================================
+// group=name — (type, name) 당 1행으로 접기 (허브 API 함정 2)
+// =============================================================================
+
+type MetaDocRowWithExists = ReturnType<typeof listMetaDocsWithUsage>[number] & { source_root_exists: boolean | null };
+
+/**
+ * 같은 (type, name) 의 카탈로그 행들을 하나로 접는다.
+ *
+ * 사용 집계(invocations·tokens·duration·used_at)는 이름·프로젝트 기준이라 각 행에 **같은 값이 복사**돼
+ * 있다 — 더하지 않고 하나만 쓴다(행마다 다를 수 없지만 안전하게 최댓값/최솟값).
+ * 대표 행(id·description·file_path 등)은 삭제 안 된 행 → 실제 존재하는 source_root → 먼저 나온 행 순.
+ */
+export function groupMetaDocsByName(rows: MetaDocRowWithExists[]) {
+  const groups = new Map<string, MetaDocRowWithExists[]>();
+  for (const r of rows) {
+    const k = `${r.type}\u0000${r.name}`;
+    const g = groups.get(k);
+    if (g) g.push(r); else groups.set(k, [r]);
+  }
+  const rank = (r: MetaDocRowWithExists) => (r.deleted_at == null ? 0 : 2) + (r.source_root_exists === false ? 1 : 0);
+  const maxOf = (vs: Array<number | null>) => vs.reduce<number | null>((a, v) => (v == null ? a : a == null ? v : Math.max(a, v)), null);
+  const minOf = (vs: Array<number | null>) => vs.reduce<number | null>((a, v) => (v == null ? a : a == null ? v : Math.min(a, v)), null);
+
+  return [...groups.values()].map((g) => {
+    const rep = [...g].sort((a, b) => rank(a) - rank(b))[0];
+    const roots = [...new Set(g.map((r) => r.source_root).filter((v): v is string => v != null))];
+    return {
+      id: rep.id,
+      type: rep.type,
+      name: rep.name,
+      description: rep.description,
+      user_invocable: rep.user_invocable,
+      file_path: rep.file_path,
+      invocations: Math.max(...g.map((r) => r.invocations)),
+      total_tokens: Math.max(...g.map((r) => r.total_tokens)),
+      total_duration_ms: Math.max(...g.map((r) => r.total_duration_ms)),
+      last_used_at: maxOf(g.map((r) => r.last_used_at)),
+      first_used_at: minOf(g.map((r) => r.first_used_at)),
+      first_seen_at: minOf(g.map((r) => r.first_seen_at)),
+      deleted_at: g.some((r) => r.deleted_at == null) ? null : maxOf(g.map((r) => r.deleted_at)),
+      source_roots: roots,
+      sources: g.map((r) => ({
+        id: r.id, source: r.source, source_root: r.source_root, file_path: r.file_path,
+        deleted_at: r.deleted_at, source_root_exists: r.source_root_exists,
+      })),
+    };
+  });
 }

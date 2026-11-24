@@ -50,6 +50,8 @@ export { getSessionStats, getProjectStats } from './aggregate';
 export {
   getSessionSummaryCore,
   listSessionIdsForSummary,
+  getSessionWindowActivity,
+  type SessionWindowActivity,
   type SessionSummaryCore,
   type SessionSummaryListOptions,
 } from './summary';

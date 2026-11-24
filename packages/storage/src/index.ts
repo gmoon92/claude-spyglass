@@ -91,6 +91,8 @@ export {
   pruneSummaryTables,
   getSessionSummaryCore,
   listSessionIdsForSummary,
+  getSessionWindowActivity,
+  type SessionWindowActivity,
   type SessionSummaryCore,
   type SessionSummaryListOptions,
   // 집계

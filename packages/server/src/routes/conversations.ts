@@ -7,13 +7,17 @@
  *   requests.ts(정규화+anomaly 노출)와 변경 축이 달라 분리.
  *
  *   GET /api/conversations?start=YYYY-MM-DD&end=YYYY-MM-DD&project=<optional>
+ *   GET /api/conversations?from=<ms>&to=<ms>&project=<optional>        (허브 API 함정 4)
  *   - 날짜는 로컬 타임존 기준 start 00:00:00.000 ~ end 23:59:59.999 로 해석
+ *   - from·to(ms epoch, 둘 다 포함)를 주면 start·end 대신 쓴다. 섞어 쓰면 400.
+ *   - fields=summary: 원문 대신 세션별 {id, project, started_at, prompts(첫 줄 120자), prompt_count,
+ *     response_count, first_at, last_at, tokens, skills, agents} — 허브 업무일지용. 기본은 원문 그대로.
  *   - 본문은 payload JSON에서 전문 추출, 실패 시 preview(≤2000자) 폴백
  *     (text_source: 'full' | 'preview' 로 절단 가능성 노출)
  *   - 툴 호출 행은 storage 쿼리에서 제외 (type IN ('prompt','response'))
  */
 
-import { getConversationRows } from '@spyglass/storage';
+import { getConversationRows, getSessionWindowActivity } from '@spyglass/storage';
 import { jsonResponse, type RouteHandler } from './_shared';
 
 /** 한 번에 fetch 하는 행 상한 — 일주일치 전문 payload 디코딩 비용 안전장치 */
@@ -21,6 +25,9 @@ const MAX_ROWS = 5000;
 /** 날짜 범위 상한 (일) — 과대 범위 요청 차단 */
 const MAX_RANGE_DAYS = 31;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MS_RE = /^\d+$/;
+/** fields=summary 에서 프롬프트 한 줄 미리보기 길이 */
+const SUMMARY_PROMPT_CHARS = 120;
 
 /** 응답 메시지 1건 — 세션 그룹 내 시간순 */
 interface ConversationMessage {
@@ -79,14 +86,33 @@ export const conversationsRouter: RouteHandler = (_req, db, url, path, method) =
 
   const start = url.searchParams.get('start');
   const end = url.searchParams.get('end');
+  const fromParam = url.searchParams.get('from');
+  const toParam = url.searchParams.get('to');
   const project = url.searchParams.get('project') || undefined;
-
-  if (!start || !end || !DATE_RE.test(start) || !DATE_RE.test(end)) {
-    return jsonResponse({ success: false, error: 'start/end must be YYYY-MM-DD' }, 400);
+  const fields = url.searchParams.get('fields');
+  if (fields && fields !== 'summary') {
+    return jsonResponse({ success: false, error: 'fields must be "summary"' }, 400);
   }
-  // 로컬 타임존 해석 — 단일 사용자 로컬 도구라 서버 TZ = 사용자 TZ 가정
-  const fromTs = new Date(`${start}T00:00:00.000`).getTime();
-  const toTs = new Date(`${end}T23:59:59.999`).getTime();
+
+  let fromTs: number;
+  let toTs: number;
+  if (fromParam != null || toParam != null) {
+    if (start != null || end != null) {
+      return jsonResponse({ success: false, error: 'use either start/end or from/to, not both' }, 400);
+    }
+    if (!fromParam || !toParam || !MS_RE.test(fromParam) || !MS_RE.test(toParam)) {
+      return jsonResponse({ success: false, error: 'from/to must be ms epoch integers' }, 400);
+    }
+    fromTs = Number(fromParam);
+    toTs = Number(toParam);
+  } else {
+    if (!start || !end || !DATE_RE.test(start) || !DATE_RE.test(end)) {
+      return jsonResponse({ success: false, error: 'start/end must be YYYY-MM-DD (or use from/to ms)' }, 400);
+    }
+    // 로컬 타임존 해석 — 단일 사용자 로컬 도구라 서버 TZ = 사용자 TZ 가정
+    fromTs = new Date(`${start}T00:00:00.000`).getTime();
+    toTs = new Date(`${end}T23:59:59.999`).getTime();
+  }
   if (Number.isNaN(fromTs) || Number.isNaN(toTs) || toTs < fromTs) {
     return jsonResponse({ success: false, error: 'invalid date range' }, 400);
   }
@@ -116,9 +142,38 @@ export const conversationsRouter: RouteHandler = (_req, db, url, path, method) =
     });
   }
 
+  if (fields === 'summary') {
+    const data = sessions.map((s) => summarizeSession(db, s, fromTs, toTs));
+    return jsonResponse({ success: true, data, meta: { total: data.length, truncated } });
+  }
+
   return jsonResponse({
     success: true,
     data: sessions,
     meta: { total: used.length, truncated },
   });
 };
+
+/** fields=summary — 원문 없이 세션 한 줄 요약. 프롬프트는 첫 줄만 잘라 담는다. */
+function summarizeSession(db: Parameters<RouteHandler>[1], s: ConversationSession, fromTs: number, toTs: number) {
+  const prompts = s.messages.filter((m) => m.role === 'user');
+  const activity = getSessionWindowActivity(db, s.id, fromTs, toTs);
+  return {
+    id: s.id,
+    project: s.project,
+    started_at: s.started_at,
+    first_at: s.messages[0]?.ts ?? null,
+    last_at: s.messages[s.messages.length - 1]?.ts ?? null,
+    prompt_count: prompts.length,
+    response_count: s.messages.length - prompts.length,
+    prompts: prompts.map((m) => ({ ts: m.ts, text: firstLine(m.text, SUMMARY_PROMPT_CHARS) })),
+    tokens: activity.tokens,
+    skills: activity.skills,
+    agents: activity.agents,
+  };
+}
+
+function firstLine(text: string, max: number): string {
+  const line = text.split('\n').find((l) => l.trim() !== '')?.trim() ?? '';
+  return line.length > max ? `${line.slice(0, max)}…` : line;
+}
