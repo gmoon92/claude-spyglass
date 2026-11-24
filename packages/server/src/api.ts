@@ -13,6 +13,7 @@
  *   - routes/dashboard.ts      — 대시보드 + 응답 캐시
  *   - routes/events.ts         — Wildcard hook 이벤트 (3개 라우트)
  *   - routes/friction.ts       — 마찰 신호 집계 (1개 라우트)
+ *   - routes/instructions.ts   — 지침 문서 주입 현황 (1개 라우트)
  *   - routes/project-aliases.ts — 프로젝트 별칭 관리 (3개 라우트, 비동기)
  *   - routes/proxy.ts          — Proxy 도메인 (3개 라우트)
  *   - routes/system-prompts.ts — System Prompt 카탈로그 (2개 라우트)
@@ -33,6 +34,7 @@ import { statsRouter } from './routes/stats';
 import { dashboardRouter, invalidateDashboardCache } from './routes/dashboard';
 import { eventsRouter } from './routes/events';
 import { frictionRouter } from './routes/friction';
+import { instructionsRouter } from './routes/instructions';
 import { projectAliasesRouter } from './routes/project-aliases';
 import { proxyRouter } from './routes/proxy';
 import { systemPromptsRouter } from './routes/system-prompts';
@@ -65,6 +67,7 @@ const SYNC_ROUTERS = [
   dashboardRouter,
   eventsRouter,
   frictionRouter,
+  instructionsRouter,
   proxyRouter,
   systemPromptsRouter,
   versionRouter,

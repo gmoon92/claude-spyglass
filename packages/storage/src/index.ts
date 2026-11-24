@@ -217,6 +217,19 @@ export {
   type ClaudeEvent,
 } from './queries/event';
 
+// 지침 문서 주입 현황 (GET /api/instructions/footprint) — system_reminder 블록 파싱 + InstructionsLoaded 집계, 새 테이블 없음
+export {
+  getInstructionFootprint,
+  parseInstructionBlocks,
+  FOOTPRINT_DEFAULT_SESSIONS,
+  FOOTPRINT_MAX_SESSIONS,
+  FOOTPRINT_DEFAULT_WINDOW_MS,
+  type FootprintFilter,
+  type FootprintFile,
+  type FootprintSummary,
+  type InstructionBlock,
+} from './queries/instruction-footprint';
+
 // 프로젝트 별칭 — 이름이 바뀐 프로젝트의 이력을 합쳐 조회 (Migration 070, /api/projects/aliases)
 export {
   resolveProjectNames,
