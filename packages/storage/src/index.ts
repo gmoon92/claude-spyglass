@@ -523,3 +523,13 @@ export {
 } from './queries/backfill-text-payloads';
 
 export { getCasStats, type CasStats } from './queries/cas-stats';
+
+// 허브 연동 요약 — 서브에이전트 종류 × 실제 모델 사용량 (GET /api/stats/subagents)
+export {
+  getSubagentUsage,
+  modelTier,
+  parseModelTier,
+  type ModelTier,
+  type SubagentUsageOptions,
+  type SubagentUsageRow,
+} from './queries/stats/subagent-usage';

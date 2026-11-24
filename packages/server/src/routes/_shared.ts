@@ -37,6 +37,9 @@ export interface ApiResponse<T = unknown> {
     truncated?: boolean;
     /** /api/friction: 집계에 쓴 이벤트 수(상한에 걸렸으면 truncated=true) */
     scanned_events?: number;
+    /** /api/stats/subagents: 적용한 모델 상한 등급과 초과 행 수 */
+    max_tier?: string | null;
+    over_cap_count?: number;
   };
 }
 
