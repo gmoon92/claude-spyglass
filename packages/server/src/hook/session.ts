@@ -25,10 +25,21 @@ import { createSession, getSessionById } from '@spyglass/storage';
 import type { NormalizedHookPayload } from './types';
 
 /**
- * cwd → project_name 파생 SSoT (마지막 경로 세그먼트, 없으면 'unknown').
+ * project_name 파생 SSoT.
+ *
+ *  1. projectRoot(훅이 git 으로 구한 저장소 루트)가 있으면 그 마지막 경로 세그먼트 — 하위 폴더·워크트리에서
+ *     세션을 열어도 같은 프로젝트로 묶인다.
+ *  2. 없으면(git 저장소가 아니거나 옛 훅) cwd 의 마지막 경로 세그먼트, 그것도 없으면 'unknown'.
+ *
  * /collect(http-entry)와 /events(Stop) 경로가 같은 규칙으로 세션을 생성하도록 한 곳에 둔다.
+ * 세션 생성 때 한 번만 정해지고 이후 바뀌지 않는다(ensureSession 의 INSERT OR IGNORE) — 기존 세션 행은 그대로다.
  */
-export function projectNameFromCwd(cwd: string | null | undefined): string {
+export function projectNameFromCwd(
+  cwd: string | null | undefined,
+  projectRoot?: string | null,
+): string {
+  const fromRoot = projectRoot ? projectRoot.split('/').filter(Boolean).pop() : undefined;
+  if (fromRoot) return fromRoot;
   return cwd ? cwd.split('/').pop() || 'unknown' : 'unknown';
 }
 

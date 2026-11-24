@@ -137,22 +137,50 @@ if [[ ! -t 0 ]]; then
     # 전 이벤트 원장 기록 — DIAG 활성 + 디스크 여유 시에만 (record_raw_payload 가 게이트)
     record_raw_payload "$payload"
 
-    # hook_event_name 필드로 이벤트 유형 판별 + 허브 환경 태그(hub_env) 부착.
+    # hook_event_name 필드로 이벤트 유형 판별 + 서버로 보낼 payload 에 부가 정보 부착.
     #   python 한 번으로 처리한다(이벤트마다 도는 훅이라 프로세스를 늘리지 않는다).
     #   출력: 1행 = hook_event_name, 2행~ = 서버로 보낼 payload.
-    #   허용 목록 환경변수가 하나도 없으면 payload 를 원문 그대로 돌려준다(재직렬화 없음).
+    #   부착하는 것 (둘 다 없으면 payload 를 원문 그대로 돌려준다 — 재직렬화 없음):
+    #     - hub_env               : 허용 목록 환경변수(SPYGLASS_HUB_ENV_KEYS) 중 값이 있는 것
+    #     - spyglass_project_root : cwd 가 속한 git 저장소의 루트. 워크트리면 원본 저장소 루트
+    #                               (git rev-parse --git-common-dir). 서버가 project_name 을 이 이름으로 정한다
+    #                               — 하위 폴더·워크트리에서 열어도 같은 프로젝트. git 저장소가 아니면 붙이지 않는다.
     #   python 이 실패하면 parsed 가 비어 hook_event="" 가 되고, 아래 case 가 원본 payload 를 /collect 로 보낸다.
     parsed=$(SPYGLASS_HUB_ENV_KEYS="$SPYGLASS_HUB_ENV_KEYS" python3 -c "
-import sys, json, os
+import sys, json, os, subprocess
+
+def git_out(cwd, *args):
+    try:
+        r = subprocess.run(['git', '-C', cwd, 'rev-parse', *args], capture_output=True, text=True, timeout=1,
+                           env=dict(os.environ, GIT_OPTIONAL_LOCKS='0'))
+        return r.stdout.strip() if r.returncode == 0 else ''
+    except Exception:
+        return ''
+
+def project_root(cwd):
+    if not isinstance(cwd, str) or not os.path.isabs(cwd) or not os.path.isdir(cwd):
+        return ''
+    common = git_out(cwd, '--path-format=absolute', '--git-common-dir')  # git 2.31+. 없으면 빈 값 → 아래 폴백
+    if common.endswith('/.git'):
+        return common[:-len('/.git')]
+    return git_out(cwd, '--show-toplevel')
+
 raw = sys.stdin.read()
 try:
     d = json.loads(raw)
     event = d.get('hook_event_name', '') if isinstance(d, dict) else ''
     out = raw
     if isinstance(d, dict):
+        changed = False
         env = {k: os.environ[k] for k in os.environ.get('SPYGLASS_HUB_ENV_KEYS', '').split() if os.environ.get(k)}
         if env:
             d['hub_env'] = env
+            changed = True
+        root = project_root(d.get('cwd'))
+        if root:
+            d['spyglass_project_root'] = root
+            changed = True
+        if changed:
             out = json.dumps(d)
     print(event)
     sys.stdout.write(out)

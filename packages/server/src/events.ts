@@ -17,7 +17,7 @@ import {
   reactivateSession,
   type ClaudeEvent,
 } from '@spyglass/storage';
-import { ensureSession, getLastTurnId, getTurnIdAt, parseTranscript, projectNameFromCwd, recordSessionHubEnv, takeHubEnv } from './hook';
+import { ensureSession, getLastTurnId, getTurnIdAt, parseTranscript, projectNameFromCwd, recordSessionHubEnv, takeHubEnv, takeProjectRoot } from './hook';
 import { extractAssistantTextEntries } from './hook/transcript';
 import { persistAssistantTextResponses } from './hook/persist';
 import { broadcastNewRequest, broadcastSessionUpdate } from './sse';
@@ -63,6 +63,8 @@ export async function eventsCollectHandler(req: Request, db: Database): Promise<
 
   // 허브 환경 태그(hub_env) — 검증해 꺼내고 payload 에서는 지운다(claude_events.payload 에는 원본만 남긴다).
   const hubEnv = takeHubEnv(payload);
+  // 프로젝트 루트 — 세션 이름 파생(Stop 의 ensureSession)에만 쓰고 payload 에서는 지운다.
+  const projectRoot = takeProjectRoot(payload);
 
   // /collect와 동일하게 hook-payload.jsonl로 raw 보존 (SessionStart/End/Stop/Notification 등)
   diagJson('hook-payload', {
@@ -132,7 +134,7 @@ export async function eventsCollectHandler(req: Request, db: Database): Promise<
       }
     } else if (event.event_type === 'Stop') {
       // Stop: 사용자가 본 Claude 응답 텍스트를 requests 테이블에 'response' 타입으로 저장
-      saveAssistantResponse(db, payload, event.timestamp);
+      saveAssistantResponse(db, payload, event.timestamp, projectRoot);
     }
 
     // Stop 은 위 saveAssistantResponse 에서 세션 행이 보장된다. 그 외 이벤트는 행이 있을 때만 기록되고
@@ -159,11 +161,12 @@ function saveAssistantResponse(
   db: Database,
   payload: RawHookPayload,
   timestamp: number,
+  projectRoot: string | null,
 ): void {
   try {
     const sessionId = payload.session_id;
     const transcriptPath = payload.transcript_path ?? '';
-    const projectName = projectNameFromCwd(payload.cwd);
+    const projectName = projectNameFromCwd(payload.cwd, projectRoot);
 
     // requests.session_id → sessions(id) FK 보장. 도구 훅 경로(processor)와 동일한 SSoT 재사용.
     // 세션 행이 없는 상태에서 Stop 이 먼저 도착하면 아래 INSERT 가 전부 FK 위반으로 실패한다.
