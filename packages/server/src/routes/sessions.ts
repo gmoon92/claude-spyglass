@@ -10,7 +10,7 @@
  *   - GET /api/sessions/active
  *   - GET /api/sessions/:id/requests
  *   - GET /api/sessions/:id/stats
- *   - GET /api/sessions/:id/turns
+ *   - GET /api/sessions/:id/turns  (?payload=0, ?limit=N 최근 N턴, ?since_turn=N turn_index>N)
  *   - GET /api/sessions/:id/tool-stats
  *   - GET /api/sessions/:id/events
  *   - GET /api/sessions/:id  (catch-all — 마지막에 배치)
@@ -111,29 +111,34 @@ export const sessionsRouter: RouteHandler = (_req, db, url, path, method) => {
     //   클라이언트는 초기 fast(payload=0) → 직후 background full(기본) prefetch 로 payload 를 채운다.
     //   기본값(파라미터 없음)은 payload 포함 — TUI·외부 소비자·background fetch 계약 불변.
     const includePayload = url.searchParams.get('payload') !== '0';
+    // 허브 요약 #3: limit(최근 N턴)·since_turn(turn_index > N) — 기본은 전 턴(기존 계약 불변).
+    const window = parseTurnWindow(url);
+    if (!window.ok) return jsonResponse({ success: false, error: window.error }, 400);
     const rawTurns = getTurnsBySession(db, sessionId, { includePayload });
     const rawOrphans = getOrphanRowsBySession(db, sessionId);
 
     if (rawTurns.length === 0 && rawOrphans.length > 0) {
       const implicit = buildImplicitTurnFromOrphans(db, sessionId, rawOrphans);
-      const turns = enrichTurnsWithWindowMax(db, normalizeTurns([implicit], sessionId));
+      const all = normalizeTurns([implicit], sessionId);
+      const turns = enrichTurnsWithWindowMax(db, sliceTurns(all, window));
       return jsonResponse({
         success: true,
         data: turns,
         prologue: [],
-        meta: { total: turns.length, prologue_count: 0, implicit_turn: true },
+        meta: { total: all.length, prologue_count: 0, implicit_turn: true, ...windowMeta(window, turns.length) },
       });
     }
 
     const mergedTurns = rawOrphans.length > 0
       ? absorbOrphansIntoFirstTurn(rawTurns, rawOrphans)
       : rawTurns;
-    const turns = enrichTurnsWithWindowMax(db, normalizeTurns(mergedTurns, sessionId));
+    const all = normalizeTurns(mergedTurns, sessionId);
+    const turns = enrichTurnsWithWindowMax(db, sliceTurns(all, window));
     return jsonResponse({
       success: true,
       data: turns,
       prologue: [],
-      meta: { total: turns.length, prologue_count: 0 },
+      meta: { total: all.length, prologue_count: 0, ...windowMeta(window, turns.length) },
     });
   }
 
@@ -413,3 +418,45 @@ const helperFallthrough: RouteHandler = (_req, db, url, path, method) => {
 
   return null;
 };
+
+// =============================================================================
+// turns 범위 파라미터 (허브 요약 #3)
+// =============================================================================
+
+type TurnWindow =
+  | { ok: true; limit: number | null; sinceTurn: number | null }
+  | { ok: false; error: string };
+
+/** `limit`(최근 N턴)·`since_turn`(turn_index 초과) 해석. 둘 다 없으면 전체(기존 동작). */
+function parseTurnWindow(url: URL): TurnWindow {
+  const int = (name: string, min: number): number | null | undefined => {
+    const v = url.searchParams.get(name);
+    if (v == null || v === '') return null;
+    if (!/^\d+$/.test(v) || Number(v) < min) return undefined;
+    return Number(v);
+  };
+  const limit = int('limit', 1);
+  const sinceTurn = int('since_turn', 0);
+  if (limit === undefined) return { ok: false, error: 'limit must be a positive integer' };
+  if (sinceTurn === undefined) return { ok: false, error: 'since_turn must be a non-negative integer' };
+  return { ok: true, limit, sinceTurn };
+}
+
+/**
+ * since_turn 으로 먼저 자르고, limit 이면 turn_index 가 큰(최근) N턴만 남긴다.
+ * 응답 순서(최신 턴 먼저)는 그대로 둔다 — 배열 위치가 아니라 turn_index 로 고른다.
+ */
+function sliceTurns<T extends { turn_index: number }>(turns: T[], w: { limit: number | null; sinceTurn: number | null }): T[] {
+  let out = w.sinceTurn == null ? turns : turns.filter((t) => t.turn_index > (w.sinceTurn as number));
+  if (w.limit != null && out.length > w.limit) {
+    const keep = new Set([...out].sort((a, b) => b.turn_index - a.turn_index).slice(0, w.limit));
+    out = out.filter((t) => keep.has(t));
+  }
+  return out;
+}
+
+/** 범위를 줬을 때만 meta 에 싣는다 — 기본 응답 모양 불변. */
+function windowMeta(w: { limit: number | null; sinceTurn: number | null }, returned: number) {
+  if (w.limit == null && w.sinceTurn == null) return {};
+  return { limit: w.limit ?? undefined, since_turn: w.sinceTurn ?? undefined, returned };
+}

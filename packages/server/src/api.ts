@@ -28,6 +28,7 @@ import { metricsRouter } from '@spyglass/metrics';
 import { applyCorsHeaders } from '@spyglass/types';
 import { jsonResponse, compressResponse } from './routes/_shared';
 import { sessionsRouter } from './routes/sessions';
+import { sessionSummaryRouter } from './routes/session-summary';
 import { requestsRouter } from './routes/requests';
 import { conversationsRouter } from './routes/conversations';
 import { statsRouter } from './routes/stats';
@@ -60,6 +61,8 @@ export { invalidateDashboardCache };
  *   파일 간 순서는 도메인 분리도 명확하면 서로 영향 없음.
  */
 const SYNC_ROUTERS = [
+  // sessionsRouter 의 /api/sessions/:id catch-all 보다 먼저 — /api/sessions/summary·/:id/summary
+  sessionSummaryRouter,
   sessionsRouter,
   requestsRouter,
   conversationsRouter,

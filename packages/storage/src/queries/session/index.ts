@@ -46,5 +46,13 @@ export { deleteOldData, runRetentionCycle, pruneSummaryTables } from './retentio
 // 집계
 export { getSessionStats, getProjectStats } from './aggregate';
 
+// 허브 세션 요약(#3) — 메타·토큰·스킬/에이전트/명령
+export {
+  getSessionSummaryCore,
+  listSessionIdsForSummary,
+  type SessionSummaryCore,
+  type SessionSummaryListOptions,
+} from './summary';
+
 // LIVE 술어 SSoT (외부 라우트 캐시 키 버킷화 등에서 참조)
 export { LIVE_STALE_THRESHOLD_MS } from './_shared';

@@ -89,6 +89,10 @@ export {
   deleteOldData,
   runRetentionCycle,
   pruneSummaryTables,
+  getSessionSummaryCore,
+  listSessionIdsForSummary,
+  type SessionSummaryCore,
+  type SessionSummaryListOptions,
   // 집계
   getSessionStats,
   getProjectStats,

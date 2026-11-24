@@ -43,6 +43,9 @@ export interface ApiResponse<T = unknown> {
     /** /api/instructions/footprint: 표본 세션 수와 읽은 InstructionsLoaded 이벤트 수 */
     sampled_sessions?: number;
     load_events?: number;
+    /** /api/sessions/:id/turns: since_turn 범위와 실제 반환한 턴 수(total 은 전체 턴 수) */
+    since_turn?: number;
+    returned?: number;
   };
 }
 
