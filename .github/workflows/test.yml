@@ -20,7 +20,7 @@ jobs:
         #   storage-graph 를 정식 unit 매트릭스로 승격(137 테스트, Ladybug 미설치 환경에서도 통과).
         package: [storage, server, storage-graph]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: '1.2.x' }
       - uses: actions/cache@v4
@@ -44,7 +44,7 @@ jobs:
     # P5-07: Vite 생태계 통일 — web 단위 테스트 러너를 bun test → Vitest 로 전환(단계적 전환의 마지막).
     #   package.json "test": "vitest run" 을 bun 으로 구동. jsdom 환경·TZ=UTC 는 vitest.config.ts/setup 에서 고정.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: '1.2.x' }
       - uses: actions/cache@v4
@@ -60,7 +60,7 @@ jobs:
     # R5(2026-05-30): @ts-check + JSDoc 보강으로 181개 에러를 0으로 줄임.
     # globals.d.ts ambient 보강 + 파일별 수정으로 타입 계약 확정 → CI 차단 모드 승격.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: '1.2.x' }
       - uses: actions/cache@v4
@@ -75,7 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [unit]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: '1.2.x' }
       - uses: actions/cache@v4
@@ -89,7 +89,7 @@ jobs:
     name: isolation gate (grep)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
       - name: PR diff must not touch ACTIVE_REQUEST_FILTER_SQL
         run: |
