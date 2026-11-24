@@ -60,6 +60,7 @@
 | `routes/stats.ts` | `GET /api/stats/sessions`, `/requests`, `/cache`, `/proxy`, `/proxy/by-model` |
 | `routes/proxy.ts` | `GET /api/proxy/recent`, `/by-session/:id`, `/:id` |
 | `routes/friction.ts` | `GET /api/friction?from=&to=&session_id=&cwd_prefix=&limit=&repeat_min=` — 도구 실패·권한 요청/거부·API 실패·압축 집계(`claude_events` 위의 읽기 전용) |
+| `routes/instructions.ts` | `GET /api/instructions/footprint?from=&to=&path_prefix=&limit=&trend=` — 지침 문서(CLAUDE.md·rules·메모리 색인)별 컨텍스트 주입 바이트와 로드 횟수(`proxy_requests.system_reminder` 블록 파싱 + `InstructionsLoaded` 이벤트, 읽기 전용) |
 | `routes/project-aliases.ts` | `GET/POST /api/projects/aliases`, `DELETE /api/projects/aliases/:alias` — 이름이 바뀐 프로젝트의 이력을 합쳐 조회(`project` 필터가 별칭 포함) |
 | `routes/system-prompts.ts` | `GET /api/system-prompts`, `/:hash` (lazy fetch) |
 | `routes/meta-docs.ts` | `GET /api/meta-docs`, `POST /api/meta-docs/refresh` |
