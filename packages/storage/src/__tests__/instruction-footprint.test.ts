@@ -81,7 +81,7 @@ describe('getInstructionFootprint', () => {
       session_id: session, system_reminder: text,
     });
     if (systemBytes !== undefined) {
-      db.run('UPDATE proxy_requests SET system_byte_size = ? WHERE id = ?', systemBytes, `p-${seq}`);
+      db.run('UPDATE proxy_requests SET system_byte_size = ? WHERE id = ?', [systemBytes, `p-${seq}`]);
     }
   }
   function loaded(session: string, ts: number, file: string, reason: string, memoryType = 'Project'): void {

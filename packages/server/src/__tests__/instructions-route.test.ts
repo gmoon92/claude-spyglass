@@ -46,7 +46,7 @@ interface Body {
     path_prefix: string | null;
     files: Array<{ file_path: string; rel_path: string | null; loads: number; avg_bytes: number | null }>;
     reminder_bytes: { sessions: number; by_day: Array<{ day: string; requests: number }> | null };
-    system_prompt_bytes: { latest: number | null };
+    system_prompt_bytes: { latest: number | null; max: number | null; latest_at: number | null };
   };
   meta: { sampled_sessions: number; load_events: number };
 }

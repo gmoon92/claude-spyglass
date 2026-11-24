@@ -40,6 +40,9 @@ export interface ApiResponse<T = unknown> {
     /** /api/stats/subagents: 적용한 모델 상한 등급과 초과 행 수 */
     max_tier?: string | null;
     over_cap_count?: number;
+    /** /api/instructions/footprint: 표본 세션 수와 읽은 InstructionsLoaded 이벤트 수 */
+    sampled_sessions?: number;
+    load_events?: number;
   };
 }
 
