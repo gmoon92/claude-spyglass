@@ -4,11 +4,17 @@
 # 지원 범위: **macOS 전용** (darwin-arm64, darwin-x64). windows/linux 및 앱·설치형 배포는 미지원.
 #
 # 책임:
-#   1) macos-14 runner 에서 standalone bun bin(darwin arm64/x64) + 자원 staging.
+#   1) macos-latest runner 에서 standalone bun bin(darwin arm64/x64) + 자원 staging.
 #   2) 각 tar.gz + sha256 을 동일 GitHub Release 에 업로드(GitHub Release 직접 다운로드 배포).
 #
 # 트리거:
 #   git tag v3.1.0 && git push origin v3.1.0
+#   재빌드: gh workflow run release.yml -f tag=v3.1.0   # 이미 있는 태그의 자산만 다시 빌드·업로드
+#
+# runner 라벨:
+#   macos-latest 를 쓴다. 버전 고정 라벨(macos-14 등)은 GitHub 이 이미지를 퇴역시키면 잡이 시작도 못 하고
+#   실패한다(macos-14 는 2026-11-02 퇴역 → v4.11.8 자산 누락). darwin-x64 는 bun --target 교차 빌드라
+#   arm64 runner 에서도 만들어진다.
 #
 # 의존성:
 #   - scripts/build-release-tarball.sh (web staging 은 tar 파이프 — rsync 비의존)
@@ -28,6 +34,15 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "다시 빌드할 기존 태그 (예: v4.11.8)"
+        required: true
+
+# 태그 SSoT — push 는 ref 이름, 수동 실행은 입력값. 모든 잡·스텝이 이 값만 본다.
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 permissions:
   contents: write   # GitHub Release 생성
@@ -45,7 +60,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ env.RELEASE_TAG }}
         run: |
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "[release] $TAG 이미 존재 — 재사용(자산은 build 잡이 --clobber 업로드)"
@@ -69,14 +84,16 @@ jobs:
           # macOS 전용 — Apple Silicon + Intel.
           - os: darwin
             arch: arm64
-            runner: macos-14
+            runner: macos-latest
           - os: darwin
             arch: x64
-            runner: macos-14
+            runner: macos-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -89,14 +106,15 @@ jobs:
         id: ver
         shell: bash
         run: |
-          V="${GITHUB_REF_NAME#v}"
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]] || { echo "invalid tag: $RELEASE_TAG"; exit 1; }
+          V="${RELEASE_TAG#v}"
           echo "version=${V}" >> "$GITHUB_OUTPUT"
-          echo "is_prerelease=$([[ "${GITHUB_REF_NAME}" == *-* ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$([[ "${RELEASE_TAG}" == *-* ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
       - name: Install workspace deps
         run: bun install --frozen-lockfile
 
-      # build-release-tarball.sh 는 bash 스크립트 — macos-14 runner 에서 실행.
+      # build-release-tarball.sh 는 bash 스크립트 — macos runner 에서 실행.
       - name: Build release archive (${{ matrix.os }}-${{ matrix.arch }})
         shell: bash
         run: |
@@ -125,7 +143,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ env.RELEASE_TAG }}
           VER: ${{ steps.ver.outputs.version }}
           OSN: ${{ matrix.os }}
           ARCHN: ${{ matrix.arch }}
