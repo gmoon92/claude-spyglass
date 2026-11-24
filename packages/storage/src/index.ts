@@ -551,3 +551,15 @@ export {
   type SessionDailyRow,
   type SessionDailyModel,
 } from './queries/stats/session-daily';
+
+// 허브 연동 요약 — 스킬·에이전트·명령 호출/실패 (stats_meta_usage_hourly, GET /api/meta-docs/usage/daily)
+export {
+  recordMetaUsageFailure,
+  metaUsageFailureTarget,
+  metaUsageTarget,
+  backfillMetaUsageFailures,
+  getMetaUsageDaily,
+  type MetaUsageKind,
+  type MetaUsageDailyOptions,
+  type MetaUsageDailyRow,
+} from './queries/stats/meta-usage';

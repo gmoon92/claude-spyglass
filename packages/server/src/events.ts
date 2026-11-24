@@ -14,7 +14,9 @@ import {
   getLatestProxyResponseBefore,
   getRequestById,
   getSessionById,
+  metaUsageFailureTarget,
   reactivateSession,
+  recordMetaUsageFailure,
   type ClaudeEvent,
 } from '@spyglass/storage';
 import { ensureSession, getLastTurnId, getTurnIdAt, parseTranscript, projectNameFromCwd, recordSessionHubEnv, takeHubEnv, takeProjectRoot } from './hook';
@@ -104,6 +106,17 @@ export async function eventsCollectHandler(req: Request, db: Database): Promise<
 
   try {
     createEvent(db, event);
+
+    // 허브 요약 #1: Skill/Agent 호출 자체 오류를 stats_meta_usage_hourly 에 +1 (사용자 중단 제외).
+    //   실패 정보는 payload 안에만 있어 SQL 트리거로 셀 수 없다. 요약 실패가 이벤트 저장을 막지 않게 격리.
+    if (event.event_type === 'PostToolUseFailure') {
+      try {
+        const target = metaUsageFailureTarget(payload);
+        if (target) recordMetaUsageFailure(db, { sessionId: event.session_id, timestamp: event.timestamp, ...target });
+      } catch (err) {
+        console.warn('[events] meta usage failure record skipped:', err);
+      }
+    }
 
     if (event.event_type === 'SessionEnd') {
       endSession(db, event.session_id, event.timestamp);

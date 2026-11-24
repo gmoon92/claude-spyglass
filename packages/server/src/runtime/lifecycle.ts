@@ -26,7 +26,7 @@
  *  - server.test (단위 테스트)
  */
 
-import { SpyglassDatabase, getDatabase, closeDatabase, logVerbose } from '@spyglass/storage';
+import { SpyglassDatabase, getDatabase, closeDatabase, logVerbose, backfillMetaUsageFailures } from '@spyglass/storage';
 import {
   startGraphSyncWorker,
   stopGraphSyncWorker,
@@ -90,6 +90,14 @@ export function startServer(options: {
   // 데이터베이스 연결
   db = getDatabase({ dbPath });
   logVerbose(`[Server] Database connected: ${dbPath}`);
+
+  // 허브 요약 #1: 과거 Skill/Agent 실패를 stats_meta_usage_hourly 에 1회 반영(metadata 키로 재실행 방지).
+  try {
+    const n = backfillMetaUsageFailures(db.instance);
+    if (n !== null) logVerbose(`[Server] meta usage failures backfilled: ${n}`);
+  } catch (err) {
+    console.warn('[Server] meta usage failure backfill skipped:', err);
+  }
 
   // Graph projection sync worker — 그래프는 항상 켜진 상태로 고정 (v4.3.x).
   //   - native binding 의 lazy import 까지 모두 본 호출 안에서 일어남.

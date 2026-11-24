@@ -17,6 +17,9 @@
  *                                             여러 행으로 나와 호출 수를 더하면 부풀던 문제 회피.
  *                                             카탈로그 위치는 source_roots[]·sources[] 로 접는다.
  *                                             기본 응답은 그대로)
+ *  - GET  /api/meta-docs/usage/daily         — 스킬·에이전트·명령 일자별 호출/실패 (허브 요약 #1)
+ *      ?from=&to=(ms) ?tz=<IANA> ?project= ?kind=skill|agent|command ?name=
+ *      원천 stats_meta_usage_hourly(365일 보존). 실패율 = failures / (calls + failures).
  *  - POST /api/meta-docs/refresh             — 동기화 재실행
  *      body: {
  *        scope?: 'global'|'project'|'all',
@@ -37,7 +40,7 @@
 
 import { existsSync } from 'node:fs';
 import type { Database } from 'bun:sqlite';
-import { listMetaDocsWithUsage, type MetaDocType } from '@spyglass/storage';
+import { getMetaUsageDaily, isValidTimeZone, listMetaDocsWithUsage, type MetaDocType, type MetaUsageKind } from '@spyglass/storage';
 import { jsonResponse } from './_shared';
 import { syncCwd, syncGlobalOnce, syncAllKnownCwds, pruneDeadSourceRoots } from '@spyglass/meta-docs';
 
@@ -112,6 +115,30 @@ export async function metaDocsRouter(req: Request, db: Database): Promise<Respon
     }
 
     return jsonResponse({ success: true, data: dataWithExists, meta: { total: dataWithExists.length } });
+  }
+
+  // GET /api/meta-docs/usage/daily
+  if (path === '/api/meta-docs/usage/daily' && method === 'GET') {
+    const ms = (v: string | null): number | null | undefined =>
+      v == null || v === '' ? null : /^\d+$/.test(v) ? Number(v) : undefined;
+    const from = ms(url.searchParams.get('from'));
+    const to = ms(url.searchParams.get('to'));
+    if (from === undefined || to === undefined) {
+      return jsonResponse({ success: false, error: 'from/to must be ms epoch integers' }, 400);
+    }
+    const tz = url.searchParams.get('tz') || null;
+    if (tz && !isValidTimeZone(tz)) return jsonResponse({ success: false, error: `invalid tz: ${tz}` }, 400);
+    const kind = url.searchParams.get('kind') || null;
+    if (kind && !['skill', 'agent', 'command'].includes(kind)) {
+      return jsonResponse({ success: false, error: 'kind must be one of skill|agent|command' }, 400);
+    }
+    const data = getMetaUsageDaily(db, {
+      from, to, tz,
+      project: url.searchParams.get('project') || null,
+      kind: kind as MetaUsageKind | null,
+      name: url.searchParams.get('name') || null,
+    });
+    return jsonResponse({ success: true, data, meta: { total: data.length } });
   }
 
   // POST /api/meta-docs/refresh
